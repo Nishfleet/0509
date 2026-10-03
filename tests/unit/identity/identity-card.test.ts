@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
-import { ArrivalLine, Fields } from "../../../app/components/identity-card";
+import { ArrivalLine, CheckHint, Fields } from "../../../app/components/identity-card";
 import type { CardDraft, CardReview, SiteFields } from "../../../app/lib/identity/card-fields";
 
 const INSTAGRAM = "https://instagram.com/gymshark";
@@ -64,7 +64,7 @@ describe("the identity card fields", () => {
 
     expect(input(html, 'name="name"')).toContain('value="Gymshark"');
     expect(html).toContain(`value="${INSTAGRAM}"`);
-    expect(html).not.toContain("check this");
+    expect(html).not.toContain("please check");
   });
 
   it("names each edit button by its field and its current value", () => {
@@ -83,7 +83,7 @@ describe("the identity card fields", () => {
     const id = /aria-describedby="([^"]+)"/.exec(html)?.[1];
     expect(id).toBeDefined();
     const marker = new RegExp(`<span id="${id}"[^>]*>([^<]*)</span>`).exec(html);
-    expect(marker?.[1].trim()).toBe("check this");
+    expect(marker?.[1].trim()).toBe("please check");
     expect(accessibleName(html, `aria-describedby="${id}"`)).toBe("edit name: Gymshark");
   });
 
@@ -96,38 +96,35 @@ describe("the identity card fields", () => {
     expect(label).toContain(`>${INSTAGRAM}</span>`);
   });
 
-  it("holds a name Jev was unsure about as placeholder text inside a check-this row, never as the value", () => {
+  it("submits a name Jev was unsure about as the value, so That's me works without typing", () => {
     const html = render(site({ name: "check", description: "fill", socials: "fill" }));
 
-    const name = input(html, 'name="name"');
-    expect(name).toContain('value=""');
-    expect(name).not.toContain('value="Gymshark"');
-    expect(html).toContain(">Gymshark</span>");
-    expect(html).toContain("check this");
+    expect(input(html, 'name="name"')).toContain('value="Gymshark"');
+    expect(html).toContain("please check");
   });
 
   it("leaves a rejected field empty and says what will fill it", () => {
     const html = render(site({ name: "fill", description: "empty", socials: "fill" }, { description: null }));
 
-    expect(html).toContain("fill this after the first crawl");
+    expect(html).toContain("fill this in after our first look at your site");
     expect(html).not.toContain("performance apparel");
   });
 
   it("leaves the socials empty with the same line, never the bare none-found wording", () => {
     const html = render(site({ name: "fill", description: "fill", socials: "empty" }, { socials: [] }));
 
-    expect(html).toContain("fill this after the first crawl");
+    expect(html).toContain("fill this in after our first look at your site");
     expect(html).not.toContain("none found on the site");
   });
 
-  it("offers a social Jev was unsure about as an unchecked box carrying the url", () => {
+  it("offers a social Jev was unsure about as a ticked box carrying the url, so unticking removes it", () => {
     const html = render(site({ name: "fill", description: "fill", socials: "check" }));
 
     const social = input(html, 'name="social.instagram"');
     expect(social).toContain('type="checkbox"');
     expect(social).toContain(`value="${INSTAGRAM}"`);
-    expect(social).not.toContain("checked");
-    expect(html).toContain("check this");
+    expect(social).toContain("checked");
+    expect(html).toContain("please check");
   });
 
   it("shows a saved draft over the value Jev read, so a reload keeps the edit", () => {
@@ -151,13 +148,13 @@ describe("the identity card fields", () => {
     expect(input(html, 'name="description"')).toContain('value="my line"');
   });
 
-  it("promises the hourly fill on an unread site, never the after-first-crawl line", () => {
+  it("promises the hourly fill on an unread site, never the after-first-look line", () => {
     const html = render(
       site({ name: "fill", description: "empty", socials: "empty" }, { description: null, socials: [], unfound: true }),
     );
 
-    expect(html).toContain("on the first crawl, within the hour");
-    expect(html).not.toContain("after the first crawl");
+    expect(html).toContain("within the hour");
+    expect(html).not.toContain("after our first look");
   });
 
   it("names the hourly fill on the logo row of an unread site, never none found", () => {
@@ -197,13 +194,31 @@ describe("ArrivalLine", () => {
         fields: site({ name: "check", description: "fill", socials: "check" }),
       }),
     );
-    expect(drawn).toBe('<span class="sr-only">Your card is drawn. Check this: name, socials.</span>');
+    expect(drawn).toBe('<span class="sr-only">Your details are ready. Please check: name, social links.</span>');
 
     const clean = renderToStaticMarkup(
       createElement(ArrivalLine, {
         fields: site({ name: "fill", description: "fill", socials: "fill" }),
       }),
     );
-    expect(clean).toBe('<span class="sr-only">Your card is drawn.</span>');
+    expect(clean).toBe('<span class="sr-only">Your details are ready.</span>');
+  });
+});
+
+describe("CheckHint", () => {
+  function hint(fields: ReturnType<typeof site>): string {
+    return renderToStaticMarkup(createElement(CheckHint, { fields }));
+  }
+
+  it("says what please check means, and asks to untick social links that are not theirs", () => {
+    const text = hint(site({ name: "check", description: "fill", socials: "check" }));
+
+    expect(text).toContain("may not be right. Tap a row to fix it.");
+    expect(text).toContain("Untick any social link that isn&#x27;t yours.");
+  });
+
+  it("leaves out the social line when the links are sure, and says nothing when nothing needs a check", () => {
+    expect(hint(site({ name: "check", description: "fill", socials: "fill" }))).not.toContain("Untick");
+    expect(hint(site({ name: "fill", description: "fill", socials: "fill" }))).toBe("");
   });
 });

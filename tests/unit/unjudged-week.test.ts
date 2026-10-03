@@ -113,6 +113,12 @@ function visible(html: string): string {
   return html.replace(/&#(?:x27|39);|&apos;/gi, "'");
 }
 
+function headline(html: string): string {
+  const match = /<section data-brief-block="headline">([\s\S]*?)<\/section>/.exec(html);
+  if (match === null) throw new Error("no headline block in the brief markup");
+  return match[1] ?? "";
+}
+
 describe("unjudged week readers", () => {
   it("renders the not-judged state on the brief, Home rank, share card and read-this-first, never a quiet week or a rank", () => {
     const payload = unjudgedPayload();
@@ -141,10 +147,35 @@ describe("unjudged week readers", () => {
       expect(text).not.toContain(QUIET);
       expect(text).not.toMatch(RANK);
       expect(text).not.toContain("Quiet week");
-      expect(text).not.toContain("gathering the first week");
+      expect(text).not.toContain("collecting your first week of data");
     }
     expect(email.subject).toBe(UNJUDGED_WEEK_LINE);
     expect(standing.kind).toBe("unjudged");
     expect(share).toBeNull();
+  });
+
+  it("prints the unjudged line once in the brief headline block (0509#6624)", () => {
+    const payload = unjudgedPayload();
+
+    const brief = renderToStaticMarkup(createElement(BriefView, { payload }));
+
+    expect(visible(headline(brief)).split(UNJUDGED_WEEK_LINE).length - 1).toBe(1);
+  });
+
+  it("prints the rank heading and the why-line paragraph on a judged week", () => {
+    const WHY_LINE = "Kindred is the mover: 3 new ads and the loudest mention spike";
+    const payload: BriefPayload = {
+      ...unjudgedPayload(),
+      headline_rank: 2,
+      why_line: WHY_LINE,
+      is_unjudged: false,
+    };
+
+    const brief = renderToStaticMarkup(createElement(BriefView, { payload }));
+
+    expect(visible(headline(brief))).toContain("You're #2 of 3 this week");
+    expect(visible(headline(brief))).toContain(WHY_LINE);
+    expect(visible(headline(brief)).split(WHY_LINE).length - 1).toBe(1);
+    expect(visible(headline(brief))).not.toContain(UNJUDGED_WEEK_LINE);
   });
 });

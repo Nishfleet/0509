@@ -35,19 +35,19 @@ export interface WorkspaceDb {
   };
 }
 
-const INSERT_WORKSPACE = `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
-VALUES (?, ?, ?, ?, 1, 8, ?)
+const INSERT_WORKSPACE = `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at, fixture)
+VALUES (?, ?, ?, ?, 1, 8, ?, ?)
 ON CONFLICT(id) DO NOTHING`;
 
 const FILL_TIMEZONE = `UPDATE workspace SET timezone = ? WHERE id = ? AND timezone = 'UTC'`;
 
 export async function insertWorkspace(
   db: WorkspaceDb,
-  input: { id: string; name: string; ownerUserId: string; timezone: string; createdAt: string },
+  input: { id: string; name: string; ownerUserId: string; timezone: string; createdAt: string; fixture: boolean },
 ): Promise<void> {
   await db
     .prepare(INSERT_WORKSPACE)
-    .bind(input.id, input.name, input.ownerUserId, input.timezone, input.createdAt)
+    .bind(input.id, input.name, input.ownerUserId, input.timezone, input.createdAt, input.fixture ? 1 : 0)
     .run();
 }
 
@@ -59,7 +59,7 @@ export async function readWorkspaceR2Prefixes(workspaceId: string): Promise<stri
   const { results } = await env.DB.prepare(SELECT_WORKSPACE_WATCHES).bind(workspaceId).all<{ id: string }>();
   return [
     `card/${workspaceId}/`,
-    ...results.flatMap((row) => [`snapshot/site/${row.id}/`, `snapshot/hiring/${row.id}/`]),
+    ...results.flatMap((row) => [`snapshot/site/${row.id}/`, `snapshot/hiring/${row.id}/`, `snapshot/feed/${row.id}/`]),
   ];
 }
 
@@ -124,5 +124,20 @@ export async function readOwnSiteAlerts(workspaceId: string): Promise<boolean> {
 export async function setOwnSiteAlerts(workspaceId: string, ownSiteAlerts: boolean): Promise<void> {
   await env.DB.prepare(UPDATE_OWN_SITE_ALERTS)
     .bind(ownSiteAlerts ? 1 : 0, workspaceId)
+    .run();
+}
+
+const SELECT_CHANGE_ALERTS = "SELECT change_alerts FROM workspace WHERE id = ?";
+
+const UPDATE_CHANGE_ALERTS = "UPDATE workspace SET change_alerts = ? WHERE id = ?";
+
+export async function readChangeAlerts(workspaceId: string): Promise<boolean> {
+  const row = await env.DB.prepare(SELECT_CHANGE_ALERTS).bind(workspaceId).first<{ change_alerts: number | null }>();
+  return (row?.change_alerts ?? 1) === 1;
+}
+
+export async function setChangeAlerts(workspaceId: string, changeAlerts: boolean): Promise<void> {
+  await env.DB.prepare(UPDATE_CHANGE_ALERTS)
+    .bind(changeAlerts ? 1 : 0, workspaceId)
     .run();
 }

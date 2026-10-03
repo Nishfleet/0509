@@ -73,6 +73,8 @@ describe("a site change, as a customer reads it", () => {
       transport: "fetch",
     };
     expect(parseSiteChangePayload(JSON.stringify(payload))?.after.screenshotKey).toBe("snapshot/site/w/b.png");
+    expect(parseSiteChangePayload(JSON.stringify({ ...payload, viaArchive: true }))?.viaArchive).toBe(true);
+    expect(parseSiteChangePayload(JSON.stringify(payload))?.viaArchive).toBeUndefined();
     expect(parseSiteChangePayload("{not json")).toBeNull();
     expect(parseSiteChangePayload(JSON.stringify({ page: {} }))).toBeNull();
     expect(parseDiffHunks(JSON.stringify({ hunks: [{ lines: ["-a", "+b"], oldStart: 1 }] }))).toEqual([["-a", "+b"]]);

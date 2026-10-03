@@ -22,6 +22,7 @@ export type CheckPageResult =
       screenshotKey: string | null;
       status: number;
       transport: "fetch" | "browser";
+      viaArchive: boolean;
     };
 
 const NO_CUTOFF = "9999-12-31T23:59:59.999Z";
@@ -159,5 +160,6 @@ export async function checkPage(input: CheckPageInput): Promise<CheckPageResult>
     screenshotKey,
     status: read.status,
     transport: read.transport,
+    viaArchive: read.fromArchive === true,
   };
 }

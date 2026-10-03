@@ -6,6 +6,7 @@ const PING_URL = "https://monitor.example.com/ping";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("pingLiveness", () => {
@@ -16,34 +17,49 @@ describe("pingLiveness", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("POSTs with an abort signal that fires at the deadline", async () => {
-    let seen: RequestInit | undefined;
+  it("POSTs with an abort signal set to the 10 s deadline", async () => {
+    const seen: (RequestInit | undefined)[] = [];
     const fetchSpy = vi.fn((_url: string, init?: RequestInit) => {
-      seen = init;
+      seen.push(init);
       return new Promise(() => undefined);
     });
     vi.stubGlobal("fetch", fetchSpy);
+
+    // A plain spy calls through, so the module's AbortSignal.timeout(10_000)
+    // really runs and hands fetch a live signal.
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
 
     const pending = pingLiveness(PING_URL);
     expect(pending).toBeInstanceOf(Promise);
     expect(fetchSpy).toHaveBeenCalledOnce();
     expect(fetchSpy).toHaveBeenCalledWith(PING_URL, expect.any(Object));
-    const signal = seen?.signal;
+    expect(timeoutSpy).toHaveBeenCalledOnce();
+    expect(timeoutSpy).toHaveBeenCalledWith(10_000);
+    const signal = seen[0]?.signal;
     expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal).toBe(timeoutSpy.mock.results[0].value);
     expect(signal?.aborted).toBe(false);
 
-    const started = Date.now();
-    await new Promise((resolve) => signal?.addEventListener("abort", resolve));
-    const elapsed = Date.now() - started;
-    expect(elapsed).toBeGreaterThanOrEqual(9_000);
-    expect(elapsed).toBeLessThan(20_000);
-    expect(signal?.aborted).toBe(true);
-    expect(signal?.reason).toBeInstanceOf(DOMException);
-    expect((signal?.reason as DOMException).name).toBe("TimeoutError");
+    // The abort reason is proven without waiting on the clock: the spy now
+    // returns an already-aborted signal carrying the timeout's own reason.
+    timeoutSpy.mockReturnValue(AbortSignal.abort(new DOMException("timed out", "TimeoutError")));
+    const pendingAgain = pingLiveness(PING_URL);
+    expect(pendingAgain).toBeInstanceOf(Promise);
+    expect(timeoutSpy).toHaveBeenCalledTimes(2);
+    const abortedSignal = seen[1]?.signal;
+    expect(abortedSignal).toBe(timeoutSpy.mock.results[1].value);
+    expect(abortedSignal?.aborted).toBe(true);
+    expect(abortedSignal?.reason).toBeInstanceOf(DOMException);
+    expect((abortedSignal?.reason as DOMException).name).toBe("TimeoutError");
 
-    const settled = await Promise.race([pending?.then(() => "resolved"), Promise.resolve("still-pending")]);
+    // fetch never settles, so the returned promises stay pending.
+    const settled = await Promise.race([
+      pending?.then(() => "resolved"),
+      pendingAgain?.then(() => "resolved"),
+      Promise.resolve("still-pending"),
+    ]);
     expect(settled).toBe("still-pending");
-  }, 30_000);
+  });
 
   it("swallows a rejected fetch instead of surfacing it", async () => {
     vi.stubGlobal(

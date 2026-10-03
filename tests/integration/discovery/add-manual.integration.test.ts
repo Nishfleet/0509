@@ -66,8 +66,9 @@ afterEach(() => {
 });
 
 describe("handleCompetitorIntent intent=add", () => {
-  it("stores a typed website with no stored name", async () => {
+  it("names a typed website after its domain when the site gives no name", async () => {
     const workspaceId = await seedWorkspace();
+    vi.stubGlobal("fetch", NOT_FOUND);
     const result = await handleCompetitorIntent(workspaceId, addForm("gymshark.com"));
     expect(result).toEqual({ message: null });
 
@@ -90,12 +91,29 @@ describe("handleCompetitorIntent intent=add", () => {
       workspace_id: workspaceId,
       role: "competitor",
       domain: "gymshark.com",
-      name: null,
+      name: "Gymshark",
       origin: "manual",
       state: "on",
     });
     expect(typeof row?.id).toBe("string");
     expect(row?.id.length).toBeGreaterThan(0);
+  });
+
+  it("stores the brand name the site gives for itself, so the customer never sees a bare domain", async () => {
+    const workspaceId = await seedWorkspace();
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(
+        new Response('<html><head><meta property="og:site_name" content="Gymshark"></head></html>', {
+          headers: { "content-type": "text/html" },
+        }),
+      ),
+    );
+    const result = await handleCompetitorIntent(workspaceId, addForm("gymshark.com"));
+    expect(result).toEqual({ message: null });
+    const row = await env.DB.prepare("SELECT name FROM entity WHERE workspace_id = ? AND domain = 'gymshark.com'")
+      .bind(workspaceId)
+      .first<{ name: string | null }>();
+    expect(row?.name).toBe("Gymshark");
   });
 
   it("resolves a typed brand name through resolveDomain and stores it as typed", async () => {

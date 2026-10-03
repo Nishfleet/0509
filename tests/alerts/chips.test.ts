@@ -17,6 +17,7 @@ describe("ALERT_CHIPS", () => {
       "ads",
       "mentions",
       "hiring",
+      "content",
       "your-site",
     ]);
     expect(ALERT_CHIPS.map((chip) => chip.label)).toEqual([
@@ -25,6 +26,7 @@ describe("ALERT_CHIPS", () => {
       "Ads",
       "Mentions",
       "Hiring",
+      "Blog posts",
       "Your site",
     ]);
   });
@@ -52,6 +54,7 @@ describe("chipOfKind", () => {
       ["signal", "ads"],
       ["mention", "mentions"],
       ["hiring", "hiring"],
+      ["content", "content"],
       ["note", null],
       ["failure", null],
     ];
@@ -75,18 +78,26 @@ describe("itemInChip", () => {
     expect(itemInChip("hiring", "mentions")).toBe(false);
     expect(itemInChip("mention", "your-site")).toBe(false);
   });
+
+  it("keeps blog posts under Blog posts only", () => {
+    expect(itemInChip("content", "content")).toBe(true);
+    expect(itemInChip("content", "all")).toBe(true);
+    expect(itemInChip("content", "hiring")).toBe(false);
+    expect(itemInChip("change", "content")).toBe(false);
+  });
 });
 
 describe("countAlertChips", () => {
   it("counts All with incidents, and each filtered chip from the kinds", () => {
     expect(
-      countAlertChips(["change", "signal", "signal", "mention", "hiring", "hiring", "note", "failure"], 1),
+      countAlertChips(["change", "signal", "signal", "mention", "hiring", "hiring", "content", "note", "failure"], 1),
     ).toEqual({
-      all: 9,
+      all: 10,
       "site-changes": 1,
       ads: 2,
       mentions: 1,
       hiring: 2,
+      content: 1,
       "your-site": 1,
     });
   });
@@ -99,6 +110,7 @@ describe("countAlertChips", () => {
       ads: 0,
       mentions: 0,
       hiring: 0,
+      content: 0,
       "your-site": 0,
     });
     const other = countAlertChips([], 0);

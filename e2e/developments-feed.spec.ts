@@ -45,7 +45,7 @@ test("the developments feed filters by kind and keeps its layout across filters 
 
   // Read-only test: any watched competitor serves, so it opens the first row.
   await page.goto("/app/competitors");
-  await page.getByRole("list", { name: "Competitors" }).getByRole("link").first().click();
+  await page.getByRole("list", { name: "Competitors", exact: true }).getByRole("link").first().click();
   await expect(page).toHaveURL(/\/app\/competitors\/[^/]+$/);
 
   // The frame renders the feed only when the competitor has developments; a

@@ -30,12 +30,12 @@ test.describe("signed in", () => {
     const watched = watchConsole(page);
 
     await page.goto("/onboarding");
-    const input = page.getByRole("textbox", { name: "your website, or a handle" });
+    const input = page.getByRole("textbox", { name: /your website address or social username/i });
     await input.fill("gymshark.com");
     await input.press("Enter");
 
     await expect(page).toHaveURL(/\/onboarding\/identity\?subject=gymshark\.com$/);
-    await expect(page.getByRole("heading", { name: "This is you. Fix anything we got wrong." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Check your details. Fix anything that's wrong." })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Onboarding progress" })).toBeVisible();
     await expect(page.getByText("gymshark.com", { exact: true })).toBeVisible();
 
@@ -78,12 +78,12 @@ test.describe("signed in", () => {
       const watched = watchConsole(page);
 
       await page.goto("/onboarding");
-      const input = page.getByRole("textbox", { name: "your website, or a handle" });
+      const input = page.getByRole("textbox", { name: /your website address or social username/i });
       await input.fill("gymshark.com");
       const started = Date.now();
       await input.press("Enter");
 
-      await expect(page.getByRole("heading", { name: "This is you. Fix anything we got wrong." })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Check your details. Fix anything that's wrong." })).toBeVisible();
       const editName = page.getByRole("button", { name: "edit name" });
       await expect(editName).toBeVisible({ timeout: 30_000 });
       const firstField = Date.now() - started;
@@ -100,11 +100,13 @@ test.describe("signed in", () => {
           { type: "input-to-card-complete-ms", description: String(complete) },
         );
 
-      await expect(page.getByRole("heading", { name: "This is you. Fix anything we got wrong." })).toBeInViewport();
+      await expect(
+        page.getByRole("heading", { name: "Check your details. Fix anything that's wrong." }),
+      ).toBeInViewport();
       await expect(page.getByRole("button", { name: "edit name" })).toBeInViewport();
       await expect(page.getByText("logo", { exact: true })).toBeInViewport();
       await expect(page.getByRole("button", { name: "edit about" })).toBeInViewport();
-      await expect(page.getByText("socials", { exact: true })).toBeInViewport();
+      await expect(page.getByText("social links", { exact: true })).toBeInViewport();
 
       const noHorizontalScroll = await page.evaluate(
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,

@@ -171,16 +171,29 @@ function readOrganization(blocks: readonly string[]): {
   };
 }
 
+const YOUTUBE_CHANNEL_PATH = /^\/(?:channel\/UC[0-9A-Za-z_-]{22}|@[^/]+)\/?$/;
+const YOUTUBE_NAMED_PATH = /^\/(?:c|user)\/[^/]+\/?$/;
+
+function youtubeRank(href: string): number {
+  const { pathname } = new URL(href);
+  if (YOUTUBE_CHANNEL_PATH.test(pathname)) return 0;
+  return YOUTUBE_NAMED_PATH.test(pathname) ? 1 : 2;
+}
+
+function socialRank(platform: SocialPlatform, href: string): number {
+  return platform === "youtube" ? youtubeRank(href) : 0;
+}
+
 function collectSocials(sameAs: readonly string[], anchors: readonly string[]): SocialLink[] {
-  const socials: SocialLink[] = [];
-  const seen = new Set<SocialPlatform>();
+  const best = new Map<SocialPlatform, { url: string; rank: number }>();
   for (const href of [...sameAs, ...anchors]) {
     const platform = platformForUrl(href);
-    if (platform === null || seen.has(platform)) continue;
-    seen.add(platform);
-    socials.push({ platform, url: new URL(href).href });
+    if (platform === null) continue;
+    const rank = socialRank(platform, href);
+    const held = best.get(platform);
+    if (held === undefined || rank < held.rank) best.set(platform, { url: new URL(href).href, rank });
   }
-  return socials;
+  return [...best].map(([platform, { url }]) => ({ platform, url }));
 }
 
 type MetaField = "ogSiteName" | "ogDescription" | "ogImage" | "metaDescription";

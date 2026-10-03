@@ -59,7 +59,7 @@ const brief = (headlineRank: number): BriefPayload => ({
   headline_total: 9,
   headline_movement: 1,
   headline_is_new: false,
-  why_line: "Quiet week: 3 mentions checked, no site changes, no new ads.",
+  why_line: "Quiet week: 3 mentions, no site changes, no new ads.",
   is_quiet_week: true,
   is_unjudged: false,
   read_this_first: [],
@@ -372,8 +372,10 @@ describe("send lane (0509#3979)", () => {
     expect(row.status).toBe("sent");
 
     const second = await deliver(envWith(bindingFor(rec)), message(digestId));
-    expect(second.outcome).toBe("duplicate");
+    expect(second.outcome).toBe("sent");
     expect(rec.sent).toHaveLength(1);
+    const third = await deliver(envWith(bindingFor(rec)), message(digestId));
+    expect(third.outcome).toBe("duplicate");
   });
 
   it("returns no_digest for a work item whose digest row is gone", async () => {
@@ -476,7 +478,7 @@ describe("send lane (0509#3979)", () => {
     expect(result.outcome).toBe("sent");
     expect(rec.sent[0].subject).toBe("You're #3 of 9 this week, up 1");
     expect(rec.sent[0].text).toContain("You're #3 of 9 this week");
-    expect(rec.sent[0].text).toContain("Quiet week: 3 mentions checked");
+    expect(rec.sent[0].text).toContain("Quiet week: 3 mentions");
     expect(rec.sent[0].text).toMatch(/Unsubscribe: https:\/\/0509\.io\/u\/[0-9a-f]{64}/);
     expect(rec.sent[0].html).toContain("<!doctype html>");
   });

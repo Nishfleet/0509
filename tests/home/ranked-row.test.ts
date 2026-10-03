@@ -82,6 +82,7 @@ const MOVE: SiteChangeView = {
   observedAt: "2026-09-20T10:00:00.000Z",
   capturedAt: "2026-09-20 10:05 UTC",
   wordsChanged: 42,
+  provenance: null,
   sentence: "30 words added, 12 removed.",
   mark: { removed: "Free for every team", added: "Free for open source" },
   before: { missing: "No screenshot of the earlier version" },
@@ -149,7 +150,8 @@ describe("RankedRow", () => {
     expect(row.signals).toBe(0);
     expect(row.position).toBeNull();
     const html = render(row);
-    expect(html).toContain(">—</span>");
+    expect(html).toContain('aria-hidden="true">—</span>');
+    expect(html).toContain("No rank yet");
     expect(html).not.toContain(">#");
   });
 
@@ -157,19 +159,19 @@ describe("RankedRow", () => {
     expect(render(rowFor("ent_kindred"))).toContain(">#1</span>");
   });
 
-  it("prints a none source as label — none and a degraded source as label — degraded", () => {
+  it("prints a none source as label · nothing new and a degraded source as label · not answering", () => {
     const html = render(rowFor("ent_casetta"));
-    expect(html).toContain("Your site checks source — none");
-    expect(html).toContain("Reddit mentions — degraded");
+    expect(html).toContain("Website checks · nothing new");
+    expect(html).toContain("Reddit mentions · not answering");
   });
 
-  it("prints a source that produced nothing as label — none", () => {
+  it("prints a source that produced nothing as label · nothing new", () => {
     const html = render(rowFor("ent_casetta", { ...PAYLOAD, checked: { ...PAYLOAD.checked, degraded_sources: [] } }));
-    expect(html).toContain("Reddit mentions — none");
+    expect(html).toContain("Reddit mentions · nothing new");
   });
 
   it("prints a live source with its count", () => {
-    expect(render(rowFor("ent_kindred"))).toContain("Your site checks source · 3");
+    expect(render(rowFor("ent_kindred"))).toContain("Website checks · 3");
   });
 
   it("prints Why it moved only when the row has a why", () => {

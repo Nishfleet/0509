@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { FirstFilePanel } from "../../app/components/first-file-panel";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
 import { firstSiteSweepAt } from "../../app/lib/onboarding/arrival-estimate";
+import { arrivalAround } from "../../app/lib/home-standing";
 import type { HomeEntity, HomeSource } from "../../app/lib/home-standing";
 import { homeView } from "../../app/lib/home-standing";
 
@@ -19,17 +20,32 @@ const TWO_ON: readonly HomeEntity[] = [
 ];
 
 describe("firstSiteSweepAt", () => {
-  it("lands the sweep on the next 02:00Z when a site source is enabled", () => {
+  it("lands the arrival after the next 02:00Z sweep has had time to finish", () => {
     expect(firstSiteSweepAt({ now: new Date("2026-09-24T01:00:00Z"), sources: SITE_SOURCES })).toEqual(
-      new Date("2026-09-24T02:00:00Z"),
+      new Date("2026-09-24T06:00:00Z"),
     );
     expect(firstSiteSweepAt({ now: new Date("2026-09-24T02:00:00Z"), sources: SITE_SOURCES })).toEqual(
-      new Date("2026-09-25T02:00:00Z"),
+      new Date("2026-09-25T06:00:00Z"),
     );
   });
 
   it("has no sweep to point at when only mentions are enabled", () => {
     expect(firstSiteSweepAt({ now: new Date("2026-09-24T01:00:00Z"), sources: MENTION_SOURCES })).toBeNull();
+  });
+});
+
+describe("arrivalAround", () => {
+  it("names the weekday, date and the UTC label", () => {
+    expect(arrivalAround("UTC", new Date("2026-10-03T06:00:00Z"))).toBe("Saturday 3 October, around 06:00 UTC");
+  });
+
+  it("renders in a non-UTC workspace timezone with its own label and date", () => {
+    expect(arrivalAround("Europe/London", new Date("2026-10-03T06:00:00Z"))).toBe(
+      "Saturday 3 October, around 07:00 BST",
+    );
+    expect(arrivalAround("America/New_York", new Date("2026-10-03T03:00:00Z"))).toBe(
+      "Friday 2 October, around 23:00 GMT-4",
+    );
   });
 });
 
@@ -53,11 +69,22 @@ describe("homeView gathering standing", () => {
 });
 
 describe("FirstFilePanel", () => {
+  it("promises a dated arrival with a timezone label", () => {
+    const html = renderToStaticMarkup(
+      createElement(FirstFilePanel, {
+        brands: 2,
+        firstSweepAt: "Saturday 3 October, around 06:00 UTC",
+        briefAt: "Monday 08:00",
+      }),
+    );
+    expect(html).toContain("Your first site snapshots arrive on Saturday 3 October, around 06:00 UTC.");
+  });
+
   it("says what is being gathered and never says soon when no sweep is scheduled", () => {
     const html = renderToStaticMarkup(
       createElement(FirstFilePanel, { brands: 2, firstSweepAt: null, briefAt: "Monday 08:00" }),
     );
-    expect(html).toContain("as soon as the first sweep is scheduled");
+    expect(html).toContain("once the first check is scheduled");
     expect(html).not.toContain("soon,");
     expect(html).not.toContain("soon.");
   });

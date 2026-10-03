@@ -36,7 +36,7 @@ describe("freshness entries", () => {
     const entry = entryFor(reddit, freshSnapshot);
 
     expect(entry.state).toBe("live");
-    expect(freshnessText(entry)).toContain("landed 2026-09-24 07:00 UTC");
+    expect(freshnessText(entry)).toContain("updated 2026-09-24 07:00 UTC");
   });
 
   it("hides a disabled source", () => {
@@ -56,8 +56,9 @@ describe("freshness entries", () => {
     const text = freshnessText(entry);
 
     expect(entry.state).toBe("degraded");
-    expect(text).toContain("blocked by login wall");
-    expect(text).toContain("last good 2026-09-20 06:00 UTC");
+    expect(text).toContain("not updating right now");
+    expect(text).not.toContain("login wall");
+    expect(text).toContain("last updated 2026-09-20 06:00 UTC");
   });
 
   it("includes a zero-canary source in the blind list", () => {
@@ -79,7 +80,7 @@ describe("freshness entries", () => {
     const text = freshnessText(entry);
 
     expect(entry.state).toBe("degraded");
-    expect(text).toContain("last good never");
+    expect(text).not.toContain("last updated");
     expect(text).not.toMatch(/\b0\b/);
   });
 

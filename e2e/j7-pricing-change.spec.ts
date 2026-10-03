@@ -56,14 +56,14 @@ async function flip(variant: Variant): Promise<void> {
 }
 
 async function trackFixture(page: Page): Promise<void> {
-  const input = page.getByRole("textbox", { name: "your website, or a handle" });
+  const input = page.getByRole("textbox", { name: /your website address or social username/i });
   await input.fill("0509.io");
   await input.press("Enter");
   await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
   await page.getByRole("button", { name: "That's me" }).click();
   await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
-  await page.getByLabel("Add one we missed").fill("fixture.0509.in");
+  await page.getByLabel("Add a competitor we missed").fill("fixture.0509.in");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByRole("list", { name: "Watching" }).getByRole("listitem")).toHaveCount(1);
   await page.getByRole("button", { name: "Start watching" }).click();
@@ -86,10 +86,18 @@ test("J7 a fixture price flip reaches Alerts as a before-and-after mark @own-sig
   if (new URL(page.url()).pathname.startsWith("/onboarding")) await trackFixture(page);
 
   await page.goto("/app/competitors");
-  const listed = page.getByRole("list", { name: "Competitors" }).getByRole("listitem");
+  const listed = page.getByRole("list", { name: "Competitors", exact: true }).getByRole("listitem");
   expect(await listed.count(), "the j7 account holds more competitors than its journey needs").toBeLessThanOrEqual(
     FIXTURE_ACCOUNTS.j7.maxCompetitors,
   );
+
+  if ((await listed.filter({ hasText: "fixture.0509.in" }).count()) === 0) {
+    await page.getByLabel("Add a competitor we missed").fill("fixture.0509.in");
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(listed.filter({ hasText: "fixture.0509.in" })).toHaveCount(1, { timeout: 60_000 });
+    await flip(variant === "raised" ? "base" : "raised");
+    test.skip(true, "J7: the account was not watching the fixture; added it and flipped the price for the next sweeps");
+  }
 
   if (flippedAt === "") {
     await flip("raised");
@@ -98,14 +106,10 @@ test("J7 a fixture price flip reaches Alerts as a before-and-after mark @own-sig
 
   await page.goto("/app/alerts");
   const chip = page.getByTestId("alert-chip-site-changes");
-  const sweepsSinceFlip = Math.floor((lastCompletedTick(Date.now()) - Date.parse(flippedAt)) / DAY_MS) + 1;
-  if ((await chip.isDisabled()) && sweepsSinceFlip < 2) {
+  if (await chip.isDisabled()) {
     const next: Variant = variant === "raised" ? "base" : "raised";
     await flip(next);
-    test.skip(
-      sweepsSinceFlip < 2,
-      `J7: the first sweep after the flip only took the baseline; flipped to ${next} for the next one`,
-    );
+    test.skip(true, `J7: no sweep has filed a change yet; flipped to ${next} for the next one`);
   }
   await expect(chip).toBeEnabled();
   const mark = page

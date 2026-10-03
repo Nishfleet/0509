@@ -33,7 +33,7 @@ test("a signed-in user reaches the four places by tapping and by Tab+Enter", asy
   test.setTimeout(120_000);
   const watched = watchConsole(page);
 
-  const nav = page.getByRole("navigation", { name: "Places" });
+  const nav = page.getByRole("navigation", { name: "Primary" });
   const noOverflow = () =>
     page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
@@ -62,12 +62,12 @@ test("a signed-in user reaches the four places by tapping and by Tab+Enter", asy
   await page.waitForURL(/\/app$/);
 
   // Keyboard: a fresh page load before tabbing pins the count from the top of
-  // the document — the nav is the first focusable content in the shell, so
-  // Home = 1 Tab, Competitors = 2, Alerts = 3, Settings = 4.
+  // the document — the skip link is first, then the four Places, so
+  // Home = 2 Tabs, Competitors = 3, Alerts = 4, Settings = 5.
   for (const [, path, tabs] of [
-    ["Competitors", "/app/competitors", 2],
-    ["Alerts", "/app/alerts", 3],
-    ["Settings", "/app/settings", 4],
+    ["Competitors", "/app/competitors", 3],
+    ["Alerts", "/app/alerts", 4],
+    ["Settings", "/app/settings", 5],
   ] as const) {
     await page.goto("/app/alerts");
     for (let index = 0; index < tabs; index += 1) {
@@ -81,6 +81,8 @@ test("a signed-in user reaches the four places by tapping and by Tab+Enter", asy
   }
 
   await page.goto("/app/alerts");
+  await page.keyboard.press("Tab");
+  await expect(page.locator(":focus")).toHaveAttribute("href", "#app-content");
   await page.keyboard.press("Tab");
   await expect(page.locator(":focus")).toHaveAttribute("href", "/app");
   await page.keyboard.press("Enter");

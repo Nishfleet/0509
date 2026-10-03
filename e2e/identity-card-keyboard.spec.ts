@@ -87,7 +87,7 @@ test("the identity card editor saves and closes on Enter, with focus back on the
 
   const response = await page.goto(`/onboarding/identity?subject=${subject}`);
   expect(response?.status()).toBe(200);
-  await expect(page.getByRole("heading", { name: "This is you. Fix anything we got wrong." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Check your details. Fix anything that's wrong." })).toBeVisible();
 
   const trigger = page.getByRole("button", { name: TRIGGERS.name });
   const name = await openEditor(page, "name");
@@ -123,7 +123,7 @@ test("the identity card editor ignores the Enter that confirms an IME compositio
 
   const response = await page.goto(`/onboarding/identity?subject=${subject}`);
   expect(response?.status()).toBe(200);
-  await expect(page.getByRole("heading", { name: "This is you. Fix anything we got wrong." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Check your details. Fix anything that's wrong." })).toBeVisible();
 
   const trigger = page.getByRole("button", { name: TRIGGERS.name });
   const name = await openEditor(page, "name");
@@ -173,7 +173,7 @@ test("the identity card editor saves and closes on Escape, with focus back on th
 
   const response = await page.goto(`/onboarding/identity?subject=${subject}`);
   expect(response?.status()).toBe(200);
-  await expect(page.getByRole("heading", { name: "This is you. Fix anything we got wrong." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Check your details. Fix anything that's wrong." })).toBeVisible();
 
   const trigger = page.getByRole("button", { name: TRIGGERS.about });
   const about = await openEditor(page, "about");

@@ -10,7 +10,7 @@ const places = [
 export function Nav() {
   return (
     <nav
-      aria-label="Places"
+      aria-label="Primary"
       data-slot="nav"
       className="fixed inset-x-0 bottom-0 z-10 border-t border-ink bg-card pb-[env(safe-area-inset-bottom)] min-[860px]:static min-[860px]:min-h-dvh min-[860px]:w-52 min-[860px]:shrink-0 min-[860px]:border-t-0 min-[860px]:border-r min-[860px]:pb-0"
     >

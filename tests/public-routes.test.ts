@@ -9,6 +9,7 @@ import routes from "../app/routes";
 import { LEGAL_UPDATED } from "../app/lib/legal/document";
 import type { SourceRow, SourceSnapshot } from "../app/components/source-pill";
 import {
+  AGENT_PATHS,
   DISALLOWED_PREFIXES,
   MCP_URL,
   PUBLIC_PATHS,
@@ -74,7 +75,10 @@ describe("public-route manifest", () => {
         continue;
       }
       const urlPath = `/${path}`;
-      const classified = (PUBLIC_PATHS as readonly string[]).includes(urlPath) || isDisallowed(urlPath);
+      const classified =
+        (PUBLIC_PATHS as readonly string[]).includes(urlPath) ||
+        (AGENT_PATHS as readonly string[]).includes(urlPath) ||
+        isDisallowed(urlPath);
       expect(classified, `route "${path}" is not classified in app/lib/public-routes.ts`).toBe(true);
     }
   });
@@ -91,8 +95,39 @@ describe("public-route manifest", () => {
     const body = robotsTxt("https://0509.io");
     expect(body).toContain("Disallow: /app");
     expect(body).toContain("Disallow: /api");
-    expect(body).toContain("Disallow: /mcp");
+    expect(body).toContain("Allow: /mcp");
+    expect(body).toContain("Allow: /api/v1/openapi.json");
+    expect(body).not.toContain("Disallow: /mcp");
     expect(body).toContain("Sitemap: https://0509.io/sitemap.xml");
+  });
+
+  // 0509#5599: /llms.txt told agents to open /mcp and the OpenAPI document
+  // while robots.txt disallowed both. The longest matching rule wins, as in
+  // RFC 9309.
+  it("never links from /llms.txt a url that robots.txt disallows", () => {
+    const rules = robotsTxt("https://0509.io")
+      .split("\n")
+      .flatMap((line) => {
+        const match = /^(Allow|Disallow): (\/.*)$/.exec(line);
+        return match === null ? [] : [{ allow: match[1] === "Allow", path: match[2] as string }];
+      });
+    const verdict = (urlPath: string) =>
+      rules
+        .filter((rule) => urlPath.startsWith(rule.path))
+        .reduce<{
+          allow: boolean;
+          length: number;
+        }>((best, rule) => (rule.path.length > best.length ? { allow: rule.allow, length: rule.path.length } : best), {
+          allow: true,
+          length: -1,
+        }).allow;
+    const linked = [...llmsTxt("https://0509.io", []).matchAll(/\]\(https:\/\/0509\.io(\/[^)]*)\)/g)].map(
+      (match) => match[1] as string,
+    );
+    expect(linked.length).toBeGreaterThan(0);
+    for (const urlPath of linked) {
+      expect(verdict(urlPath), `/llms.txt links ${urlPath}, which robots.txt disallows`).toBe(true);
+    }
   });
 
   it("sitemap.xml lists every sitemap path as an absolute url in a sitemaps.org urlset", () => {
@@ -202,7 +237,7 @@ describe("public-route manifest", () => {
     );
     expect(body).toMatch(/^- Site changes: Homepage$/m);
     expect(body).toMatch(/^- Mentions: Hacker News$/m);
-    expect(body).toContain("- Mentions: News (degraded: timed out — not answering today)");
+    expect(body).toContain("- Mentions: News (not answering today: slow to answer)");
     expect(body).toContain("- Mentions: YouTube (no data yet)");
     expect(body).toContain("Some sources are not answering today; those lines say so.");
     expect(body).toContain("- Your own site: Breakage alerts (Starter and up)");

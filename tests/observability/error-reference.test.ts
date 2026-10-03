@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const streamErrorHook = vi.hoisted(() => ({ current: null as ((error: unknown) => void) | null }));
+
 vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn() }));
 vi.mock("react-dom/server", () => ({
-  renderToReadableStream: vi.fn(() =>
-    Promise.resolve(Object.assign(new ReadableStream(), { allReady: Promise.resolve() })),
-  ),
+  renderToReadableStream: vi.fn((_element: unknown, options: { onError: (error: unknown) => void }) => {
+    streamErrorHook.current = options.onError;
+    return Promise.resolve(Object.assign(new ReadableStream(), { allReady: Promise.resolve() }));
+  }),
 }));
 
 import { captureException } from "@sentry/cloudflare";
@@ -36,5 +39,17 @@ describe("X-Error-Reference", () => {
     const response = await handleRequest(request, 200, new Headers(), routerContext, new RouterContextProvider());
 
     expect(response.headers.has("X-Error-Reference")).toBe(false);
+  });
+});
+
+describe("errors thrown while the page streams", () => {
+  it("reaches Sentry, because handleError never sees a render error", async () => {
+    const request = new Request("https://0509.io/onboarding/identity?subject=bluorng.com");
+    await handleRequest(request, 200, new Headers(), routerContext, new RouterContextProvider());
+    const error = new Error("deferred card rejected");
+
+    streamErrorHook.current?.(error);
+
+    expect(captureException).toHaveBeenCalledWith(error, { tags: { route: "stream" } });
   });
 });

@@ -1,0 +1,1474 @@
+[
+  {
+    "id": "allbirds-on",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "Sustainable wool and tree-fibre sneakers and everyday shoes"
+    },
+    "competitors": [],
+    "item": {
+      "name": "On",
+      "domain": "on.com",
+      "evidence": [
+        {
+          "source": "allbirds.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells performance running and lifestyle sneakers to the same shoe buyers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "a shoe brand a sneaker buyer could switch to"
+  },
+  {
+    "id": "allbirds-hoka",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "Sustainable wool and tree-fibre sneakers and everyday shoes"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Hoka",
+      "domain": "hoka.com",
+      "evidence": [
+        {
+          "source": "allbirds.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells cushioned running and walking shoes to comfort-minded buyers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "same product: everyday sneakers"
+  },
+  {
+    "id": "allbirds-patagonia",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "Sustainable wool and tree-fibre sneakers and everyday shoes"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Patagonia",
+      "domain": "patagonia.com",
+      "evidence": [
+        {
+          "source": "allbirds.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells sustainable outdoor clothing to the same eco-conscious customers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "clothing, not shoes; shares values only"
+  },
+  {
+    "id": "allbirds-reformation",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "Sustainable wool and tree-fibre sneakers and everyday shoes"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Reformation",
+      "domain": "thereformation.com",
+      "evidence": [
+        {
+          "source": "allbirds.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells sustainable women's fashion to environmentally aware shoppers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "clothing, not shoes; shares values only"
+  },
+  {
+    "id": "oatly-alpro",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Oatly",
+      "domain": "oatly.com",
+      "description": "Oat-based milk and dairy alternatives"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Alpro",
+      "domain": "alpro.com",
+      "evidence": [
+        {
+          "source": "oatly.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells plant-based milk and yoghurt alternatives to the same shoppers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "plant-based milk, same product"
+  },
+  {
+    "id": "oatly-califia-farms",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Oatly",
+      "domain": "oatly.com",
+      "description": "Oat-based milk and dairy alternatives"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Califia Farms",
+      "domain": "califiafarms.com",
+      "evidence": [
+        {
+          "source": "oatly.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells almond and oat milks and plant-based creamers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "plant-based milk, same product"
+  },
+  {
+    "id": "oatly-beyond-meat",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Oatly",
+      "domain": "oatly.com",
+      "description": "Oat-based milk and dairy alternatives"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Beyond Meat",
+      "domain": "beyondmeat.com",
+      "evidence": [
+        {
+          "source": "oatly.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells plant-based meat to the same sustainability-minded shoppers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "plant-based meat, not milk; shares values only"
+  },
+  {
+    "id": "oatly-impossible-foods",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Oatly",
+      "domain": "oatly.com",
+      "description": "Oat-based milk and dairy alternatives"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Impossible Foods",
+      "domain": "impossiblefoods.com",
+      "evidence": [
+        {
+          "source": "oatly.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells plant-based burgers to the same environmentally minded customers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "plant-based meat, not milk; shares values only"
+  },
+  {
+    "id": "casper-purple",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Casper",
+      "domain": "casper.com",
+      "description": "Mattresses and sleep products sold direct to consumers"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Purple",
+      "domain": "purple.com",
+      "evidence": [
+        {
+          "source": "casper.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells mattresses with a distinctive grid comfort layer to online buyers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "mattress brand"
+  },
+  {
+    "id": "casper-tempur-pedic",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Casper",
+      "domain": "casper.com",
+      "description": "Mattresses and sleep products sold direct to consumers"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Tempur-Pedic",
+      "domain": "tempurpedic.com",
+      "evidence": [
+        {
+          "source": "casper.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells premium memory-foam mattresses."
+        }
+      ]
+    },
+    "label": true,
+    "why": "mattress brand"
+  },
+  {
+    "id": "casper-calm",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Casper",
+      "domain": "casper.com",
+      "description": "Mattresses and sleep products sold direct to consumers"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Calm",
+      "domain": "calm.com",
+      "evidence": [
+        {
+          "source": "casper.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a sleep and meditation app to the same people who want better sleep."
+        }
+      ]
+    },
+    "label": false,
+    "why": "an app, not a mattress; shares the sleep audience only"
+  },
+  {
+    "id": "casper-brooklinen",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Casper",
+      "domain": "casper.com",
+      "description": "Mattresses and sleep products sold direct to consumers"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Brooklinen",
+      "domain": "brooklinen.com",
+      "evidence": [
+        {
+          "source": "casper.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells luxury sheets and bedding to the same home-comfort shoppers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "bedding, not mattresses"
+  },
+  {
+    "id": "peloton-nordictrack",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Peloton",
+      "domain": "onepeloton.com",
+      "description": "Connected indoor bikes, treadmills and live fitness classes"
+    },
+    "competitors": [],
+    "item": {
+      "name": "NordicTrack",
+      "domain": "nordictrack.com",
+      "evidence": [
+        {
+          "source": "onepeloton.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells connected treadmills, bikes and rowers with streamed classes."
+        }
+      ]
+    },
+    "label": true,
+    "why": "connected home cardio equipment"
+  },
+  {
+    "id": "peloton-echelon",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Peloton",
+      "domain": "onepeloton.com",
+      "description": "Connected indoor bikes, treadmills and live fitness classes"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Echelon",
+      "domain": "echelonfit.com",
+      "evidence": [
+        {
+          "source": "onepeloton.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells connected exercise bikes and rowers with live classes."
+        }
+      ]
+    },
+    "label": true,
+    "why": "connected home bikes"
+  },
+  {
+    "id": "peloton-whoop",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Peloton",
+      "domain": "onepeloton.com",
+      "description": "Connected indoor bikes, treadmills and live fitness classes"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Whoop",
+      "domain": "whoop.com",
+      "evidence": [
+        {
+          "source": "onepeloton.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a fitness wearable to the same fitness-minded customers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "a wearable, not exercise equipment"
+  },
+  {
+    "id": "peloton-strava",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Peloton",
+      "domain": "onepeloton.com",
+      "description": "Connected indoor bikes, treadmills and live fitness classes"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Strava",
+      "domain": "strava.com",
+      "evidence": [
+        {
+          "source": "onepeloton.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a fitness tracking app to the same active customers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "an app for tracking, not equipment"
+  },
+  {
+    "id": "glossier-fenty-beauty",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Glossier",
+      "domain": "glossier.com",
+      "description": "Minimal skincare and makeup sold direct to consumers"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Fenty Beauty",
+      "domain": "fentybeauty.com",
+      "evidence": [
+        {
+          "source": "glossier.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells makeup and skincare to the same beauty shoppers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "makeup and skincare brand"
+  },
+  {
+    "id": "glossier-rare-beauty",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Glossier",
+      "domain": "glossier.com",
+      "description": "Minimal skincare and makeup sold direct to consumers"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Rare Beauty",
+      "domain": "rarebeauty.com",
+      "evidence": [
+        {
+          "source": "glossier.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells makeup and skincare to young beauty shoppers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "makeup and skincare brand"
+  },
+  {
+    "id": "glossier-alo-yoga",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Glossier",
+      "domain": "glossier.com",
+      "description": "Minimal skincare and makeup sold direct to consumers"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Alo Yoga",
+      "domain": "aloyoga.com",
+      "evidence": [
+        {
+          "source": "glossier.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells yoga and athleisure clothing to the same young women."
+        }
+      ]
+    },
+    "label": false,
+    "why": "apparel, not beauty; shares the audience only"
+  },
+  {
+    "id": "glossier-skims",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Glossier",
+      "domain": "glossier.com",
+      "description": "Minimal skincare and makeup sold direct to consumers"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Skims",
+      "domain": "skims.com",
+      "evidence": [
+        {
+          "source": "glossier.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells shapewear and basics to the same style-led shoppers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "apparel, not beauty; shares the audience only"
+  },
+  {
+    "id": "dollar-shave-club-harrys",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Dollar Shave Club",
+      "domain": "dollarshaveclub.com",
+      "description": "Razors and grooming products sold by subscription"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Harry's",
+      "domain": "harrys.com",
+      "evidence": [
+        {
+          "source": "dollarshaveclub.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells razors and shaving products by subscription."
+        }
+      ]
+    },
+    "label": true,
+    "why": "razors, same product"
+  },
+  {
+    "id": "dollar-shave-club-gillette",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Dollar Shave Club",
+      "domain": "dollarshaveclub.com",
+      "description": "Razors and grooming products sold by subscription"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Gillette",
+      "domain": "gillette.com",
+      "evidence": [
+        {
+          "source": "dollarshaveclub.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells razors and shaving products."
+        }
+      ]
+    },
+    "label": true,
+    "why": "razors, same product"
+  },
+  {
+    "id": "dollar-shave-club-quip",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Dollar Shave Club",
+      "domain": "dollarshaveclub.com",
+      "description": "Razors and grooming products sold by subscription"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Quip",
+      "domain": "getquip.com",
+      "evidence": [
+        {
+          "source": "dollarshaveclub.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells electric toothbrushes by subscription to the same direct-to-consumer shoppers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "oral care, not shaving; shares the subscription model only"
+  },
+  {
+    "id": "dollar-shave-club-hims",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Dollar Shave Club",
+      "domain": "dollarshaveclub.com",
+      "description": "Razors and grooming products sold by subscription"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Hims",
+      "domain": "forhims.com",
+      "evidence": [
+        {
+          "source": "dollarshaveclub.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells men's hair-loss and wellness treatments to the same men."
+        }
+      ]
+    },
+    "label": false,
+    "why": "telehealth treatments, not shaving"
+  },
+  {
+    "id": "slack-mattermost",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Slack",
+      "domain": "slack.com",
+      "description": "Team messaging and collaboration platform"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Mattermost",
+      "domain": "mattermost.com",
+      "evidence": [
+        {
+          "source": "slack.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a team messaging and collaboration platform."
+        }
+      ]
+    },
+    "label": true,
+    "why": "team chat platform"
+  },
+  {
+    "id": "slack-zulip",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Slack",
+      "domain": "slack.com",
+      "description": "Team messaging and collaboration platform"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Zulip",
+      "domain": "zulip.com",
+      "evidence": [
+        {
+          "source": "slack.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a threaded team chat platform."
+        }
+      ]
+    },
+    "label": true,
+    "why": "team chat platform"
+  },
+  {
+    "id": "slack-asana",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Slack",
+      "domain": "slack.com",
+      "description": "Team messaging and collaboration platform"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Asana",
+      "domain": "asana.com",
+      "evidence": [
+        {
+          "source": "slack.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells project management software to the same teams."
+        }
+      ]
+    },
+    "label": false,
+    "why": "project management, not chat"
+  },
+  {
+    "id": "slack-dropbox",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Slack",
+      "domain": "slack.com",
+      "description": "Team messaging and collaboration platform"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Dropbox",
+      "domain": "dropbox.com",
+      "evidence": [
+        {
+          "source": "slack.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells file storage and sharing to the same teams."
+        }
+      ]
+    },
+    "label": false,
+    "why": "file storage, not chat"
+  },
+  {
+    "id": "ring-arlo",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Ring",
+      "domain": "ring.com",
+      "description": "Video doorbells and home security cameras"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Arlo",
+      "domain": "arlo.com",
+      "evidence": [
+        {
+          "source": "ring.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells wireless home security cameras and doorbells."
+        }
+      ]
+    },
+    "label": true,
+    "why": "home security cameras"
+  },
+  {
+    "id": "ring-wyze",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Ring",
+      "domain": "ring.com",
+      "description": "Video doorbells and home security cameras"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Wyze",
+      "domain": "wyze.com",
+      "evidence": [
+        {
+          "source": "ring.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells low-cost smart home cameras and doorbells."
+        }
+      ]
+    },
+    "label": true,
+    "why": "home security cameras"
+  },
+  {
+    "id": "ring-sonos",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Ring",
+      "domain": "ring.com",
+      "description": "Video doorbells and home security cameras"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Sonos",
+      "domain": "sonos.com",
+      "evidence": [
+        {
+          "source": "ring.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells wireless speakers to the same smart-home customers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "speakers, not cameras"
+  },
+  {
+    "id": "ring-ecobee",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Ring",
+      "domain": "ring.com",
+      "description": "Video doorbells and home security cameras"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Ecobee",
+      "domain": "ecobee.com",
+      "evidence": [
+        {
+          "source": "ring.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells smart thermostats to the same smart-home customers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "thermostats, not cameras"
+  },
+  {
+    "id": "chewy-petco",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Chewy",
+      "domain": "chewy.com",
+      "description": "Online retailer of pet food, treats and supplies"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Petco",
+      "domain": "petco.com",
+      "evidence": [
+        {
+          "source": "chewy.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells pet food and supplies to the same pet owners."
+        }
+      ]
+    },
+    "label": true,
+    "why": "pet supplies retailer"
+  },
+  {
+    "id": "chewy-petsmart",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Chewy",
+      "domain": "chewy.com",
+      "description": "Online retailer of pet food, treats and supplies"
+    },
+    "competitors": [],
+    "item": {
+      "name": "PetSmart",
+      "domain": "petsmart.com",
+      "evidence": [
+        {
+          "source": "chewy.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells pet food and supplies to the same pet owners."
+        }
+      ]
+    },
+    "label": true,
+    "why": "pet supplies retailer"
+  },
+  {
+    "id": "chewy-rover",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Chewy",
+      "domain": "chewy.com",
+      "description": "Online retailer of pet food, treats and supplies"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Rover",
+      "domain": "rover.com",
+      "evidence": [
+        {
+          "source": "chewy.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells pet sitting and dog walking to the same pet owners."
+        }
+      ]
+    },
+    "label": false,
+    "why": "pet-care services, not goods"
+  },
+  {
+    "id": "chewy-wag",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Chewy",
+      "domain": "chewy.com",
+      "description": "Online retailer of pet food, treats and supplies"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Wag",
+      "domain": "wagwalking.com",
+      "evidence": [
+        {
+          "source": "chewy.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells dog walking services to the same pet owners."
+        }
+      ]
+    },
+    "label": false,
+    "why": "pet-care services, not goods"
+  },
+  {
+    "id": "spotify-tidal",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Spotify",
+      "domain": "spotify.com",
+      "description": "Music and podcast streaming service"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Tidal",
+      "domain": "tidal.com",
+      "evidence": [
+        {
+          "source": "spotify.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a music streaming subscription."
+        }
+      ]
+    },
+    "label": true,
+    "why": "music streaming"
+  },
+  {
+    "id": "spotify-deezer",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Spotify",
+      "domain": "spotify.com",
+      "description": "Music and podcast streaming service"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Deezer",
+      "domain": "deezer.com",
+      "evidence": [
+        {
+          "source": "spotify.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a music streaming subscription."
+        }
+      ]
+    },
+    "label": true,
+    "why": "music streaming"
+  },
+  {
+    "id": "spotify-netflix",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Spotify",
+      "domain": "spotify.com",
+      "description": "Music and podcast streaming service"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Netflix",
+      "domain": "netflix.com",
+      "evidence": [
+        {
+          "source": "spotify.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a video streaming subscription to the same entertainment customers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "video, not music"
+  },
+  {
+    "id": "spotify-twitch",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Spotify",
+      "domain": "spotify.com",
+      "description": "Music and podcast streaming service"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Twitch",
+      "domain": "twitch.tv",
+      "evidence": [
+        {
+          "source": "spotify.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells live video streaming to the same online audiences."
+        }
+      ]
+    },
+    "label": false,
+    "why": "live video, not music"
+  },
+  {
+    "id": "squarespace-wix",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Squarespace",
+      "domain": "squarespace.com",
+      "description": "Website builder and hosting for small businesses"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Wix",
+      "domain": "wix.com",
+      "evidence": [
+        {
+          "source": "squarespace.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a drag-and-drop website builder to small businesses."
+        }
+      ]
+    },
+    "label": true,
+    "why": "website builder"
+  },
+  {
+    "id": "squarespace-webflow",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Squarespace",
+      "domain": "squarespace.com",
+      "description": "Website builder and hosting for small businesses"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Webflow",
+      "domain": "webflow.com",
+      "evidence": [
+        {
+          "source": "squarespace.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a visual website builder."
+        }
+      ]
+    },
+    "label": true,
+    "why": "website builder"
+  },
+  {
+    "id": "squarespace-mailchimp",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Squarespace",
+      "domain": "squarespace.com",
+      "description": "Website builder and hosting for small businesses"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Mailchimp",
+      "domain": "mailchimp.com",
+      "evidence": [
+        {
+          "source": "squarespace.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells email marketing tools to the same small businesses."
+        }
+      ]
+    },
+    "label": false,
+    "why": "email marketing, not website building"
+  },
+  {
+    "id": "squarespace-canva",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Squarespace",
+      "domain": "squarespace.com",
+      "description": "Website builder and hosting for small businesses"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Canva",
+      "domain": "canva.com",
+      "evidence": [
+        {
+          "source": "squarespace.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a design tool to the same small business owners."
+        }
+      ]
+    },
+    "label": false,
+    "why": "design software, not website building"
+  },
+  {
+    "id": "patagonia-the-north-face",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Patagonia",
+      "domain": "patagonia.com",
+      "description": "Outdoor clothing and gear made with recycled and organic materials"
+    },
+    "competitors": [],
+    "item": {
+      "name": "The North Face",
+      "domain": "thenorthface.com",
+      "evidence": [
+        {
+          "source": "patagonia.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells outdoor clothing and gear."
+        }
+      ]
+    },
+    "label": true,
+    "why": "outdoor apparel"
+  },
+  {
+    "id": "patagonia-arcteryx",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Patagonia",
+      "domain": "patagonia.com",
+      "description": "Outdoor clothing and gear made with recycled and organic materials"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Arc'teryx",
+      "domain": "arcteryx.com",
+      "evidence": [
+        {
+          "source": "patagonia.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells technical outdoor clothing and gear."
+        }
+      ]
+    },
+    "label": true,
+    "why": "outdoor apparel"
+  },
+  {
+    "id": "patagonia-allbirds",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Patagonia",
+      "domain": "patagonia.com",
+      "description": "Outdoor clothing and gear made with recycled and organic materials"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "evidence": [
+        {
+          "source": "patagonia.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells sustainable shoes to the same environmentally minded customers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "shoes, not outdoor clothing; shares values only"
+  },
+  {
+    "id": "patagonia-yeti",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Patagonia",
+      "domain": "patagonia.com",
+      "description": "Outdoor clothing and gear made with recycled and organic materials"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Yeti",
+      "domain": "yeti.com",
+      "evidence": [
+        {
+          "source": "patagonia.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells coolers and drinkware to the same outdoor customers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "coolers and drinkware, not clothing"
+  },
+  {
+    "id": "warby-parker-zenni-optical",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Warby Parker",
+      "domain": "warbyparker.com",
+      "description": "Prescription glasses and contact lenses sold online and in stores"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Zenni Optical",
+      "domain": "zennioptical.com",
+      "evidence": [
+        {
+          "source": "warbyparker.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells low-cost prescription glasses online."
+        }
+      ]
+    },
+    "label": true,
+    "why": "prescription glasses"
+  },
+  {
+    "id": "warby-parker-eyebuydirect",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Warby Parker",
+      "domain": "warbyparker.com",
+      "description": "Prescription glasses and contact lenses sold online and in stores"
+    },
+    "competitors": [],
+    "item": {
+      "name": "EyeBuyDirect",
+      "domain": "eyebuydirect.com",
+      "evidence": [
+        {
+          "source": "warbyparker.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells prescription glasses online."
+        }
+      ]
+    },
+    "label": true,
+    "why": "prescription glasses"
+  },
+  {
+    "id": "warby-parker-away",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Warby Parker",
+      "domain": "warbyparker.com",
+      "description": "Prescription glasses and contact lenses sold online and in stores"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Away",
+      "domain": "awaytravel.com",
+      "evidence": [
+        {
+          "source": "warbyparker.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells suitcases to the same direct-to-consumer shoppers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "luggage, not eyewear"
+  },
+  {
+    "id": "warby-parker-harrys",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Warby Parker",
+      "domain": "warbyparker.com",
+      "description": "Prescription glasses and contact lenses sold online and in stores"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Harry's",
+      "domain": "harrys.com",
+      "evidence": [
+        {
+          "source": "warbyparker.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells razors to the same direct-to-consumer shoppers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "razors, not eyewear"
+  },
+  {
+    "id": "doordash-uber-eats",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "DoorDash",
+      "domain": "doordash.com",
+      "description": "Restaurant food delivery marketplace"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Uber Eats",
+      "domain": "ubereats.com",
+      "evidence": [
+        {
+          "source": "doordash.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells restaurant food delivery."
+        }
+      ]
+    },
+    "label": true,
+    "why": "restaurant delivery marketplace"
+  },
+  {
+    "id": "doordash-grubhub",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "DoorDash",
+      "domain": "doordash.com",
+      "description": "Restaurant food delivery marketplace"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Grubhub",
+      "domain": "grubhub.com",
+      "evidence": [
+        {
+          "source": "doordash.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells restaurant food delivery."
+        }
+      ]
+    },
+    "label": true,
+    "why": "restaurant delivery marketplace"
+  },
+  {
+    "id": "doordash-lyft",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "DoorDash",
+      "domain": "doordash.com",
+      "description": "Restaurant food delivery marketplace"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Lyft",
+      "domain": "lyft.com",
+      "evidence": [
+        {
+          "source": "doordash.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells on-demand rides using the same gig-worker marketplace model."
+        }
+      ]
+    },
+    "label": false,
+    "why": "rides, not food delivery"
+  },
+  {
+    "id": "doordash-airbnb",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "DoorDash",
+      "domain": "doordash.com",
+      "description": "Restaurant food delivery marketplace"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Airbnb",
+      "domain": "airbnb.com",
+      "evidence": [
+        {
+          "source": "doordash.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells short-term lodging through a similar two-sided marketplace."
+        }
+      ]
+    },
+    "label": false,
+    "why": "lodging, not food delivery"
+  },
+  {
+    "id": "stripe-adyen",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Stripe",
+      "domain": "stripe.com",
+      "description": "Online payment processing for businesses"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Adyen",
+      "domain": "adyen.com",
+      "evidence": [
+        {
+          "source": "stripe.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells online payment processing to businesses."
+        }
+      ]
+    },
+    "label": true,
+    "why": "payment processing"
+  },
+  {
+    "id": "stripe-square",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Stripe",
+      "domain": "stripe.com",
+      "description": "Online payment processing for businesses"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Square",
+      "domain": "squareup.com",
+      "evidence": [
+        {
+          "source": "stripe.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells payment processing to businesses."
+        }
+      ]
+    },
+    "label": true,
+    "why": "payment processing"
+  },
+  {
+    "id": "stripe-quickbooks",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Stripe",
+      "domain": "stripe.com",
+      "description": "Online payment processing for businesses"
+    },
+    "competitors": [],
+    "item": {
+      "name": "QuickBooks",
+      "domain": "intuit.com",
+      "evidence": [
+        {
+          "source": "stripe.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells accounting software to the same small businesses."
+        }
+      ]
+    },
+    "label": false,
+    "why": "accounting software, not payments"
+  },
+  {
+    "id": "stripe-gusto",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Stripe",
+      "domain": "stripe.com",
+      "description": "Online payment processing for businesses"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Gusto",
+      "domain": "gusto.com",
+      "evidence": [
+        {
+          "source": "stripe.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells payroll software to the same small businesses."
+        }
+      ]
+    },
+    "label": false,
+    "why": "payroll software, not payments"
+  },
+  {
+    "id": "sweetgreen-chipotle",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Sweetgreen",
+      "domain": "sweetgreen.com",
+      "description": "Fast-casual restaurants serving salads and grain bowls"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Chipotle",
+      "domain": "chipotle.com",
+      "evidence": [
+        {
+          "source": "sweetgreen.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Runs fast-casual restaurants serving bowls and burritos."
+        }
+      ]
+    },
+    "label": true,
+    "why": "fast-casual restaurant chain"
+  },
+  {
+    "id": "sweetgreen-cava",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Sweetgreen",
+      "domain": "sweetgreen.com",
+      "description": "Fast-casual restaurants serving salads and grain bowls"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Cava",
+      "domain": "cava.com",
+      "evidence": [
+        {
+          "source": "sweetgreen.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Runs fast-casual restaurants serving Mediterranean bowls."
+        }
+      ]
+    },
+    "label": true,
+    "why": "fast-casual restaurant chain"
+  },
+  {
+    "id": "sweetgreen-whole-foods",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Sweetgreen",
+      "domain": "sweetgreen.com",
+      "description": "Fast-casual restaurants serving salads and grain bowls"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Whole Foods",
+      "domain": "wholefoodsmarket.com",
+      "evidence": [
+        {
+          "source": "sweetgreen.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells groceries to the same healthy-eating customers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "a grocer, not a restaurant"
+  },
+  {
+    "id": "sweetgreen-blue-apron",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Sweetgreen",
+      "domain": "sweetgreen.com",
+      "description": "Fast-casual restaurants serving salads and grain bowls"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Blue Apron",
+      "domain": "blueapron.com",
+      "evidence": [
+        {
+          "source": "sweetgreen.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells meal kits to the same healthy-eating customers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "meal kits, not restaurant meals"
+  }
+]

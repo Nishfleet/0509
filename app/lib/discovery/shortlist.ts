@@ -4,6 +4,8 @@ import type { Candidate, Evidence, GeneratorKey } from "./types";
 
 export const SHORTLIST_TOP = 20;
 
+export const AI_GUARANTEED = 5;
+
 export const GENERATOR_ORDER: readonly GeneratorKey[] = ["news", "hn", "ads", "ai"];
 
 export interface ShortlistEntry {
@@ -112,29 +114,6 @@ function isSoleGenerator(generators: GeneratorKey[], key: GeneratorKey): boolean
   return generators.length === 1 && generators[0] === key;
 }
 
-export function evidenceLine(entry: ShortlistEntry): string {
-  return GENERATOR_ORDER.flatMap((key) => {
-    if (!entry.generators.includes(key)) return [];
-    if (key === "news") {
-      const hosts = new Set(
-        entry.evidence.flatMap((item) => {
-          if (item.generator !== "news") return [];
-          const publisher = publisherOf(item.sourceUrl);
-          return publisher === null ? [] : [publisher];
-        }),
-      );
-      const count = Math.max(1, hosts.size);
-      return [`named by ${String(count)} news publisher${count !== 1 ? "s" : ""}`];
-    }
-    if (key === "hn") {
-      const urls = new Set(entry.evidence.flatMap((item) => (item.generator === "hn" ? [item.sourceUrl] : [])));
-      return [`mentioned in ${String(urls.size)} Hacker News thread${urls.size !== 1 ? "s" : ""}`];
-    }
-    if (key === "ai") return ["suggested from your site, not yet seen elsewhere"];
-    return ["advertises in the same category"];
-  }).join(", ");
-}
-
 export function partitionShortlist(candidates: readonly Candidate[]): {
   entries: ShortlistEntry[];
   rest: Candidate[];
@@ -158,11 +137,15 @@ export function partitionShortlist(candidates: readonly Candidate[]): {
   const placed = new Set<Scored>(top);
 
   for (const key of GENERATOR_ORDER) {
-    if (entries.some((entry) => isSoleGenerator(entry.generators, key))) continue;
-    const next = sorted.find((item) => !placed.has(item) && isSoleGenerator(item.generators, key));
-    if (next === undefined) continue;
-    placed.add(next);
-    entries.push(toEntry(next, "guaranteed"));
+    const wanted = key === "ai" ? AI_GUARANTEED : 1;
+    const held = entries.filter((entry) => isSoleGenerator(entry.generators, key)).length;
+    const next = sorted
+      .filter((item) => !placed.has(item) && isSoleGenerator(item.generators, key))
+      .slice(0, Math.max(0, wanted - held));
+    for (const item of next) {
+      placed.add(item);
+      entries.push(toEntry(item, "guaranteed"));
+    }
   }
 
   const rest: Candidate[] = sorted

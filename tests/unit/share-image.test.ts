@@ -78,6 +78,35 @@ describe("share card", () => {
       shareCard({ payload: payload(), entities: ENTITIES.slice(0, 1), schedule: SCHEDULE, history: [], now: NOW }),
     ).toBeNull();
   });
+
+  it("shows This week when period_end cannot be parsed (share-card.ts:15)", () => {
+    const unparseable = card({ period_end: "not-a-date" });
+    if (unparseable === null)
+      throw new Error("expected the card to fall back to 'This week' but shareCard returned null");
+    expect(unparseable.week).toBe("This week");
+  });
+
+  it("formats the week in the schedule's time zone, not in UTC (share-card.ts:16)", () => {
+    const london = shareCard({
+      payload: payload({ period_end: "2026-09-21T20:00:00.000Z" }),
+      entities: ENTITIES,
+      schedule: { timezone: "Europe/London", weekday: 1, hour: 8 },
+      history: [],
+      now: NOW,
+    });
+    if (london === null) throw new Error("London fixture has no ranking");
+    expect(london.week).toBe("Week to 21 September");
+
+    const tokyo = shareCard({
+      payload: payload({ period_end: "2026-09-21T20:00:00.000Z" }),
+      entities: ENTITIES,
+      schedule: { timezone: "Asia/Tokyo", weekday: 1, hour: 8 },
+      history: [],
+      now: NOW,
+    });
+    if (tokyo === null) throw new Error("Tokyo schedule fixture has no ranking");
+    expect(tokyo.week).toBe("Week to 22 September");
+  });
 });
 
 describe("share document", () => {

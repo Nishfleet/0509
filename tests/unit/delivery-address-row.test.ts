@@ -41,7 +41,7 @@ describe("DeliveryAddress", () => {
       suppressed: true,
     });
     expect(html).toContain('name="resume"');
-    expect(html).toContain("Send to it again");
+    expect(html).toContain("Send the brief to this address again");
     expect(html).toContain('role="alert"');
     expect(html).toContain("This address unsubscribed from the brief.");
   });
@@ -52,20 +52,20 @@ describe("DeliveryAddress", () => {
       error: null,
       suppressed: false,
     });
-    expect(unconfirmed).toContain("This address is unconfirmed. We emailed a confirmation link");
+    expect(unconfirmed).toContain("This address isn&#x27;t confirmed yet. We emailed you a confirmation link");
 
     const confirmed = render({
       delivery: { address: "me@brand.com", verified: true },
       error: null,
       suppressed: false,
     });
-    expect(confirmed).not.toContain("This address is unconfirmed.");
+    expect(confirmed).not.toContain("This address isn&#x27;t confirmed yet.");
 
     const failedSend = render({
       delivery: { address: "me@brand.com", verified: false },
       error: "We could not send the confirmation email. Save again to retry.",
       suppressed: false,
     });
-    expect(failedSend).not.toContain("This address is unconfirmed.");
+    expect(failedSend).not.toContain("This address isn&#x27;t confirmed yet.");
   });
 });

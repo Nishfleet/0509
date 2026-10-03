@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 
 import { type DeliveryFailureItem, type SignalAlertItem, type TakedownNoteItem } from "../components/alert-row";
+import { type ContentAlertItem } from "../components/content-row";
 import { type HiringAlertItem } from "../components/hiring-row";
 import { type AlertChipKey, countAlertChips, itemInChip } from "./alert-chips";
 import { groupByDay } from "./alert-day";
@@ -12,32 +13,64 @@ import {
   readSignalAlerts,
   readTakedownNotes,
 } from "./data/alert.server";
-import { readWorkspaceHiring } from "./data/signal.server";
+import { readWorkspaceContent, readWorkspaceHiring } from "./data/signal.server";
 import { readCompetitors } from "./data/entity.server";
 import { readMentionFeed } from "./data/mention.server";
 import { readWorkspaceMentionSources } from "./data/source.server";
 import { readWorkspaceIdForOwner, readWorkspaceTimezone } from "./data/workspace.server";
 import { daysAgoLabel } from "./delivery-alert";
-import { nextOwnSiteCheck } from "./incident-recheck";
+import { nextHour } from "./home-standing";
 import { withoutMentionAlerts } from "./mention-feed";
 import { offBrandsSentence } from "./off-brands";
 import { daysBefore, readSiteChangeViews } from "./site-changes.server";
 
 const HIRING_LIMIT = 100;
 
+const CONTENT_LIMIT = 100;
+
 async function readWorkspaceAlertInputs(workspaceId: string, now: Date) {
-  const competitors = (await readCompetitors(workspaceId)).competitors;
-  const failures = await readDeliveryFailures(env.DB, workspaceId);
-  const notes = await readTakedownNotes(env.DB, workspaceId);
-  const incidents = await readOwnSiteIncidents(env.DB, workspaceId);
-  const signals = await readSignalAlerts(env.DB, workspaceId);
-  const mentions = await readMentionFeed(workspaceId, now);
-  const hiring = await readWorkspaceHiring(workspaceId, daysBefore(now, 30), HIRING_LIMIT);
-  const sources = await readWorkspaceMentionSources(workspaceId);
-  const changes = await readSiteChangeViews({ workspaceId, entityId: null, since: daysBefore(now, 30), limit: 30 });
-  const timeZone = await readWorkspaceTimezone(workspaceId);
-  const open = await readOpenIncidentBlock(env.DB, workspaceId);
-  return { competitors, failures, notes, incidents, signals, mentions, hiring, sources, changes, timeZone, open };
+  const [
+    competitorList,
+    failures,
+    notes,
+    incidents,
+    signals,
+    mentions,
+    hiring,
+    content,
+    sources,
+    changes,
+    timeZone,
+    open,
+  ] = await Promise.all([
+    readCompetitors(workspaceId),
+    readDeliveryFailures(env.DB, workspaceId),
+    readTakedownNotes(env.DB, workspaceId),
+    readOwnSiteIncidents(env.DB, workspaceId),
+    readSignalAlerts(env.DB, workspaceId),
+    readMentionFeed(workspaceId, now),
+    readWorkspaceHiring(workspaceId, daysBefore(now, 30), HIRING_LIMIT),
+    readWorkspaceContent(workspaceId, daysBefore(now, 30), CONTENT_LIMIT),
+    readWorkspaceMentionSources(workspaceId),
+    readSiteChangeViews({ workspaceId, entityId: null, since: daysBefore(now, 30), limit: 30 }),
+    readWorkspaceTimezone(workspaceId),
+    readOpenIncidentBlock(env.DB, workspaceId),
+  ]);
+  const competitors = competitorList.competitors;
+  return {
+    competitors,
+    failures,
+    notes,
+    incidents,
+    signals,
+    mentions,
+    hiring,
+    content,
+    sources,
+    changes,
+    timeZone,
+    open,
+  };
 }
 
 type AlertInputs = Awaited<ReturnType<typeof readWorkspaceAlertInputs>>;
@@ -50,6 +83,7 @@ const EMPTY_ALERT_INPUTS: AlertInputs = {
   signals: [],
   mentions: [],
   hiring: [],
+  content: [],
   sources: [],
   changes: [],
   timeZone: "UTC",
@@ -78,6 +112,23 @@ function hiringItems(hiring: AlertInputs["hiring"], now: Date) {
   }));
 }
 
+function contentItems(content: AlertInputs["content"], now: Date) {
+  return content.map((post) => ({
+    kind: "content" as const,
+    id: post.id,
+    at: post.published_at ?? post.observed_at,
+    content: {
+      id: post.id,
+      title: post.title,
+      brand: post.brand,
+      excerpt: post.summary,
+      url: post.url,
+      at: post.published_at ?? post.observed_at,
+      when: daysAgoLabel(post.published_at ?? post.observed_at, now),
+    } satisfies ContentAlertItem,
+  }));
+}
+
 function signalItems(signals: AlertInputs["signals"], now: Date) {
   return withoutMentionAlerts(signals).map((signal) => ({
     kind: "signal" as const,
@@ -95,7 +146,7 @@ function signalItems(signals: AlertInputs["signals"], now: Date) {
 }
 
 function buildAlertItems(inputs: AlertInputs, now: Date) {
-  const { changes, notes, failures, signals, mentions, hiring } = inputs;
+  const { changes, notes, failures, signals, mentions, hiring, content } = inputs;
   return [
     ...changes.map((change) => ({
       kind: "change" as const,
@@ -117,6 +168,7 @@ function buildAlertItems(inputs: AlertInputs, now: Date) {
     })),
     ...signalItems(signals, now),
     ...hiringItems(hiring, now),
+    ...contentItems(content, now),
     ...mentions.map((mention) => ({
       kind: "mention" as const,
       id: mention.id,
@@ -129,7 +181,7 @@ function buildAlertItems(inputs: AlertInputs, now: Date) {
 function buildOpenIncident(inputs: AlertInputs, now: Date) {
   const { open, timeZone } = inputs;
   if (open === null) return null;
-  const recheckAt = nextOwnSiteCheck(now);
+  const recheckAt = nextHour(now).toISOString();
   return {
     alertId: open.alert_id,
     title: open.title,
@@ -156,9 +208,8 @@ function buildPastIncidents(inputs: AlertInputs, now: Date) {
     }));
 }
 
-export async function loadAlertsPage(userId: string, chip: AlertChipKey) {
+export async function loadAlertsPage(workspaceId: string | null, chip: AlertChipKey) {
   const now = new Date();
-  const workspaceId = await readWorkspaceIdForOwner(userId);
   const inputs = await readAlertInputs(workspaceId, now);
   const items = buildAlertItems(inputs, now);
   return {

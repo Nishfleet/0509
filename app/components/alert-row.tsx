@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import type { BriefPayload } from "../lib/brief-payload";
 import type { MentionRowModel } from "../lib/mention-feed";
 import { BriefView } from "./brief-view";
+import { ContentRow, type ContentAlertItem } from "./content-row";
 import { HiringRow, type HiringAlertItem } from "./hiring-row";
 import { MentionRow } from "./mention-row";
 import { SiteChangeItem, type SiteChangeItemData } from "./site-change-item";
@@ -14,7 +15,7 @@ const CARD = "mt-8 border-t border-line pt-6";
 const TITLE = "font-display text-row-name font-bold [overflow-wrap:anywhere]";
 const BODY = "mt-2 leading-[1.65]";
 const DETAILS = "mt-4";
-const SUMMARY = "cursor-pointer underline decoration-1 underline-offset-4";
+const SUMMARY = "inline-flex min-h-11 cursor-pointer items-center underline decoration-1 underline-offset-4";
 const READ_BRIEF = buttonVariants({ variant: "tertiary", className: "cursor-pointer" });
 const BRIEF = "mt-4";
 
@@ -50,7 +51,8 @@ export type AlertFeedItem =
   | { kind: "failure"; id: string; at: string; failure: DeliveryFailureItem }
   | { kind: "signal"; id: string; at: string; signal: SignalAlertItem }
   | { kind: "mention"; id: string; at: string; mention: MentionRowModel }
-  | { kind: "hiring"; id: string; at: string; hiring: HiringAlertItem };
+  | { kind: "hiring"; id: string; at: string; hiring: HiringAlertItem }
+  | { kind: "content"; id: string; at: string; content: ContentAlertItem };
 
 function TakedownNote({ note }: { note: TakedownNoteItem }): ReactElement {
   return (
@@ -72,6 +74,7 @@ function SignalAlert({ signal }: { signal: SignalAlertItem }): ReactElement {
         ) : (
           <a href={signal.url} rel="noopener noreferrer nofollow" target="_blank" className={SUMMARY}>
             {signal.title}
+            <span className="sr-only"> (opens in a new tab)</span>
           </a>
         )}
       </h3>
@@ -87,7 +90,7 @@ function DeliveryFailure({ failure }: { failure: DeliveryFailureItem }): ReactEl
   return (
     <article id={failure.id} data-testid="delivery-failure" className={CARD}>
       <h3 className={TITLE}>{failure.title}</h3>
-      <p className={BODY}>{failure.body}</p>
+      {failure.body === null ? null : <p className={BODY}>{failure.body}</p>}
       <time dateTime={failure.created_at} className={WHEN_CLASS}>
         {failure.when}
       </time>
@@ -121,6 +124,10 @@ export function AlertFeedRow({ item, eager }: { item: AlertFeedItem; eager: bool
 
   if (item.kind === "hiring") {
     return <HiringRow hiring={item.hiring} />;
+  }
+
+  if (item.kind === "content") {
+    return <ContentRow content={item.content} />;
   }
 
   if (item.kind === "mention") {

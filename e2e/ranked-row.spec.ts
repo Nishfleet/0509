@@ -102,10 +102,10 @@ test("a row's source pills read live, degraded and none for the same week @smoke
   // Kindred answered two site checks and one mention, Hacker News did not
   // answer at all, and YouTube produced nothing this week — the three pill
   // states one row can carry, asserted on the route that draws them.
-  await expect(pills.filter({ hasText: "Your site checks source · 2" })).toHaveAttribute("data-state", "live");
+  await expect(pills.filter({ hasText: "Website checks · 2" })).toHaveAttribute("data-state", "live");
   await expect(pills.filter({ hasText: "News mentions · 1" })).toHaveAttribute("data-state", "live");
   await expect(pills.filter({ hasText: "Hacker News mentions" })).toHaveAttribute("data-state", "degraded");
-  await expect(pills.filter({ hasText: "YouTube mentions — none" })).toHaveAttribute("data-state", "none");
+  await expect(pills.filter({ hasText: "YouTube mentions · nothing new" })).toHaveAttribute("data-state", "none");
 
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

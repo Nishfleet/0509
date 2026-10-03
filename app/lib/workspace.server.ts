@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 
 import { readWorkspaceSelfId } from "./data/entity.server";
 import { ensureOwnerEmailTarget } from "./data/send_target.server";
+import { isPerRunFixtureEmail } from "./fixture-accounts";
 import { fillWorkspaceTimezone, insertWorkspace } from "./data/workspace.server";
 import type { WorkspaceDb } from "./data/workspace.server";
 import { subjectRedirect } from "./onboarding-subject";
@@ -60,6 +61,7 @@ export async function ensureWorkspace(
       ownerUserId: input.userId,
       timezone,
       createdAt,
+      fixture: isPerRunFixtureEmail(input.email),
     });
   } catch (error) {
     const raced = await readWorkspace(db, input.userId);

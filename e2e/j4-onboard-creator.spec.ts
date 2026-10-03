@@ -40,12 +40,12 @@ test.describe("J4 onboard a creator handle", () => {
       const watched = watchConsole(page);
 
       await page.goto("/onboarding");
-      const input = page.getByRole("textbox", { name: "your website, or a handle" });
+      const input = page.getByRole("textbox", { name: /your website address or social username/i });
       await input.fill(SUBJECT);
       const started = Date.now();
       await input.press("Enter");
 
-      await expect(page.getByRole("heading", { name: "This is you. Fix anything we got wrong." })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Check your details. Fix anything that's wrong." })).toBeVisible();
       const editName = page.getByRole("button", { name: "edit name" });
       await expect(editName).toBeVisible({ timeout: 30_000 });
       const firstField = Date.now() - started;
@@ -64,9 +64,9 @@ test.describe("J4 onboard a creator handle", () => {
 
       await expect(page.getByText("channel", { exact: true })).toBeVisible();
       await expect(page.getByText("YouTube", { exact: true })).toBeVisible();
-      await expect(page.getByText("handle", { exact: true })).toBeVisible();
+      await expect(page.getByText("username", { exact: true })).toBeVisible();
       await expect(page.getByText("@veritasium", { exact: true })).toBeVisible();
-      await expect(page.getByText("socials", { exact: true })).toBeVisible();
+      await expect(page.getByText("social links", { exact: true })).toBeVisible();
       test
         .info()
         .annotations.push(
@@ -79,7 +79,7 @@ test.describe("J4 onboard a creator handle", () => {
       await page.getByRole("button", { name: "That's me" }).click();
       await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
 
-      const competitorRows = page.locator('ul[aria-label="Watching"] li, ul[aria-label="Maybe"] li');
+      const competitorRows = page.locator('ul[aria-label="Watching"] li, ul[aria-label="Possible competitors"] li');
       await expect.poll(async () => competitorRows.count(), { timeout: 60_000 }).toBeGreaterThan(0);
       const competitors = Date.now() - started;
       expect(competitors).toBeLessThan(60_000);

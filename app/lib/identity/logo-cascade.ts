@@ -13,3 +13,7 @@ export function logoCandidateUrls(candidates: LogoCandidates): string[] {
   urls.push(`https://icons.duckduckgo.com/ip3/${candidates.registrableDomain}.ico`);
   return urls;
 }
+
+export function logoCandidatesFor(kind: "domain" | "profile", candidates: LogoCandidates): LogoCandidates {
+  return kind === "domain" ? { ...candidates, ogImage: null } : candidates;
+}

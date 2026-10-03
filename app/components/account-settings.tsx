@@ -1,15 +1,17 @@
-import { Form } from "react-router";
+import { Form, useNavigation } from "react-router";
 
 import { BLOCK_HEADING } from "./page-heading";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
 export function SignOut() {
+  const navigation = useNavigation();
+  const signingOut = navigation.state !== "idle" && navigation.formData?.get("intent") === "sign-out";
   return (
     <Form method="post" action="/app/settings">
       <input type="hidden" name="intent" value="sign-out" />
-      <Button type="submit" variant="tertiary">
-        Sign out
+      <Button type="submit" variant="tertiary" disabled={signingOut}>
+        {signingOut ? "Signing out…" : "Sign out"}
       </Button>
     </Form>
   );
@@ -36,6 +38,8 @@ export function ExportData() {
 }
 
 export function DeleteAccount({ email, error }: { email: string; error: string | null }) {
+  const navigation = useNavigation();
+  const working = navigation.state !== "idle" && navigation.formData?.get("intent") === "delete-account";
   return (
     <section aria-labelledby="delete-account" className="mt-10 border-t border-line pt-4">
       <h2 id="delete-account" className={BLOCK_HEADING}>
@@ -44,10 +48,10 @@ export function DeleteAccount({ email, error }: { email: string; error: string |
       <p className="mt-2 max-w-prose leading-[1.55]">Deleting your account removes, for good:</p>
       <ul data-delete="removes" className="mt-2 flex max-w-prose list-disc flex-col gap-1 pl-5 leading-[1.55]">
         <li>Every brand you track, yours included</li>
-        <li>Every signal: site changes, ads, mentions and roles</li>
-        <li>Every site snapshot</li>
+        <li>Everything we found: site changes, ads, mentions and job listings</li>
+        <li>Every saved copy of a website page</li>
         <li>Every screenshot</li>
-        <li>Your published standing card</li>
+        <li>Your shared ranking image</li>
         <li>Your send history and every brief</li>
         <li>Your account, its API keys and connected AI apps</li>
       </ul>
@@ -61,7 +65,11 @@ export function DeleteAccount({ email, error }: { email: string; error: string |
           id="confirm-email"
           name="confirm"
           type="email"
+          inputMode="email"
           autoComplete="off"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           required
           aria-invalid={error === null ? undefined : true}
           aria-describedby={error === null ? undefined : "delete-account-error"}
@@ -71,8 +79,8 @@ export function DeleteAccount({ email, error }: { email: string; error: string |
             {error}
           </p>
         )}
-        <Button type="submit" variant="secondary" size="lg" className="self-start border-red">
-          Delete my account
+        <Button type="submit" variant="secondary" size="lg" className="self-start border-red" disabled={working}>
+          {working ? "Deleting…" : "Delete my account"}
         </Button>
       </Form>
     </section>

@@ -114,7 +114,7 @@ test("J9: news, Hacker News and YouTube mentions are listed and the homonym is n
   const competitorsPage = await page.context().newPage();
   await competitorsPage.setExtraHTTPHeaders({ cookie });
   await competitorsPage.goto("/app/competitors");
-  const items = competitorsPage.getByRole("list", { name: "Competitors" }).getByRole("listitem");
+  const items = competitorsPage.getByRole("list", { name: "Competitors", exact: true }).getByRole("listitem");
   expect(
     await items.count(),
     "the j9-mentions account holds more competitors than its journey needs",

@@ -8,6 +8,11 @@ test.skip(
   "J8 needs the production fixture Worker on j8-hard.fixture.0509.in and j8-soft.fixture.0509.in, the hourly own-site check and the mail inbox; the preview lane has none of them",
 );
 
+// Soft mode needs a good baseline: a nightly sweep only reports a change against
+// the page it read the night before. Dispatch j8-soft about 00:30 UTC, on an
+// account that already went through one 02:00 UTC sweep with the fixture off, so
+// the break lands before the next sweep (run 36952916004 broke a fresh account
+// minutes before its first sweep, which then took the broken page as its baseline).
 const POLL_INTERVAL_MS = 30_000;
 const TICK_WAIT_MS = 75 * 60_000;
 const SWEEP_WAIT_MS = 90 * 60_000;
@@ -56,6 +61,17 @@ function header(raw: string, pattern: RegExp): string {
   return pattern.exec(raw)?.[1]?.trim() ?? "";
 }
 
+// The inbox keeps a message for one hour and the second break can take longer
+// than that to open, so an expired fixed email (404) means nothing newer arrived.
+async function latestMessageId(to: string, token: string): Promise<string | null> {
+  try {
+    return header(await readRawMessage(to, token), MESSAGE_ID);
+  } catch (error) {
+    if (error instanceof InboxReadError && error.status === 404) return null;
+    throw error;
+  }
+}
+
 async function waitForMail(
   to: string,
   token: string,
@@ -100,7 +116,7 @@ async function signInAndWatchFixture(
 ): Promise<void> {
   await signInWithMagicLink(page, account.email, token, /\/(app|onboarding)/);
   if (page.url().includes("/onboarding")) {
-    const input = page.getByRole("textbox", { name: "your website, or a handle" });
+    const input = page.getByRole("textbox", { name: /your website address or social username/i });
     await input.fill(host);
     await input.press("Enter");
     const business = page.getByRole("button", { name: "Yes, a business or creator" });
@@ -122,7 +138,7 @@ async function signInAndWatchFixture(
     await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
   }
   await page.goto("/app/competitors");
-  const items = page.getByRole("list", { name: "Competitors" }).getByRole("listitem");
+  const items = page.getByRole("list", { name: "Competitors", exact: true }).getByRole("listitem");
   expect(await items.count(), "the J8 account holds a competitor its journey never adds").toBeLessThanOrEqual(
     account.maxCompetitors,
   );
@@ -196,8 +212,8 @@ for (const { mode, kind, waitMs, account, host } of MODES) {
         "the second break opened on the same UTC day as the first email",
       ).toBe(openDay);
 
-      const later = await readRawMessage(email, token);
-      expect(header(later, MESSAGE_ID), "the second incident sent no second open email that day").toBe(fixedId);
+      const laterId = await latestMessageId(email, token);
+      expect([fixedId, null], "the second incident sent no second open email that day").toContain(laterId);
 
       console.log(
         `j8 mode=${mode} broken-at=${brokenAt.toISOString()} open-message-id=${openId} open-sent-utc=${openSentAt.toISOString()} ` +

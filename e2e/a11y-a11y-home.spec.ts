@@ -78,14 +78,15 @@ test("ranked home passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and
         if (active instanceof HTMLElement) active.blur();
       });
       const order: string[] = [];
-      // The app shell's nav is the first focusable content, then Home's own
+      // Skip to content is first, then the app shell's nav, then Home's own
       // **How this is ranked** button, then the standing rows in rank order —
       // the self row's switch is disabled and reads YOU, so it is skipped.
-      for (let i = 0; i < 10; i += 1) {
+      for (let i = 0; i < 11; i += 1) {
         await page.keyboard.press("Tab");
         order.push(await page.evaluate(activeName));
       }
       expect(order).toEqual([
+        "Skip to content",
         "HOME",
         "COMPETITORS",
         "ALERTS",

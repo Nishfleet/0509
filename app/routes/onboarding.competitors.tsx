@@ -30,7 +30,7 @@ async function workspaceFor(request: Request, fresh = false): Promise<string> {
 }
 
 export function meta() {
-  return [{ title: "Who you're up against · Five to Nine" }];
+  return [{ title: "Your competitors · Five to Nine" }];
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -79,10 +79,12 @@ function useDiscoveryPolling(discovery: DiscoveryState): DiscoveryState {
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   const { on, maybes, discovery } = loaderData;
+  const navigation = useNavigation();
+  const starting = navigation.state !== "idle" && navigation.formData?.get("intent") === "start";
   const notice = discoveryNotice(useDiscoveryPolling(discovery), on.length + maybes.length);
 
   return (
-    <OnboardingFrame step={3} heading="Who you're up against">
+    <OnboardingFrame step={3} heading="Your competitors">
       {notice === null ? null : (
         <p role="status" className="mt-3 max-w-prose leading-[1.55] text-ink-soft">
           {notice}
@@ -108,8 +110,8 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       <AddCompetitor message={actionData?.message} />
       <Form method="post" className="mt-12 border-t border-line pt-8">
         <input type="hidden" name="intent" value="start" />
-        <Button type="submit" size="lg">
-          Start watching
+        <Button type="submit" size="lg" disabled={starting}>
+          {starting ? "Starting…" : "Start watching"}
         </Button>
         <p className="mt-3 text-body-sm text-ink-soft">You can switch any of them on or off later in Competitors.</p>
       </Form>

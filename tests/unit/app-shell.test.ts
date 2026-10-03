@@ -24,7 +24,7 @@ function anchor(html: string, href: string): string {
 describe("the app shell", () => {
   it("draws the nav on a signed-in route and marks that place current", () => {
     const html = render("/app/alerts");
-    expect(html).toContain('aria-label="Places"');
+    expect(html).toContain('aria-label="Primary"');
     expect(html).toContain('href="/app"');
     expect(html).toContain('href="/app/competitors"');
     expect(html).toContain('href="/app/alerts"');
@@ -44,5 +44,18 @@ describe("the app shell", () => {
     const html = render("/app/competitors/abc");
     expect(anchor(html, "/app/competitors")).toContain('aria-current="page"');
     expect(anchor(html, "/app")).not.toContain('aria-current="page"');
+  });
+
+  it("puts a skip link before the nav and names the content wrapper", () => {
+    const html = render("/app");
+    const skipAt = html.indexOf('href="#app-content"');
+    const navAt = html.indexOf("<nav");
+    expect(skipAt).toBeGreaterThan(-1);
+    expect(navAt).toBeGreaterThan(skipAt);
+    expect(html).toContain('id="app-content"');
+    expect(html).toContain('tabindex="-1"');
+    expect(anchor(html, "#app-content")).toContain("min-h-11");
+    expect(anchor(html, "#app-content")).toContain("sr-only");
+    expect(anchor(html, "#app-content")).toContain("focus:not-sr-only");
   });
 });

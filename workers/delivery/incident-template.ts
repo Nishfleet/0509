@@ -1,9 +1,10 @@
 import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
+import { renderAlertFooter, type AlertFooterContext } from "./alert-footer";
 import { formatDate } from "./brief-template";
 import { EYEBROW, FONT, emailDocument } from "./email-shell";
 
-export interface IncidentOpenContext {
+export interface IncidentOpenContext extends AlertFooterContext {
   site: string;
   kind: string;
   opened_at: string;
@@ -13,7 +14,7 @@ export interface IncidentOpenContext {
   timezone: string;
 }
 
-export interface IncidentFixedContext {
+export interface IncidentFixedContext extends AlertFooterContext {
   site: string;
   kind: string;
   closed_at: string;
@@ -49,9 +50,10 @@ export function renderIncidentOpen(ctx: IncidentOpenContext): RenderedBrief {
     ...(ctx.mark === null ? [] : [COPY.mark(ctx.mark)]),
     COPY.recheck(ctx.recheck_at, ctx.timezone),
   ];
+  const footer = renderAlertFooter(ctx);
   return {
     subject,
-    text: [...lines, COPY.openLink(ctx.link)].join("\n"),
+    text: [...lines, COPY.openLink(ctx.link), footer.text].join("\n"),
     html: emailDocument(
       subject,
       [
@@ -59,6 +61,7 @@ export function renderIncidentOpen(ctx: IncidentOpenContext): RenderedBrief {
         `<p style="${HEADLINE}">${escapeHtml(subject)}</p>`,
         ...lines.slice(1).map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`),
         linkLine(ctx.link),
+        footer.html,
       ].join(""),
     ),
   };
@@ -67,9 +70,10 @@ export function renderIncidentOpen(ctx: IncidentOpenContext): RenderedBrief {
 export function renderIncidentFixed(ctx: IncidentFixedContext): RenderedBrief {
   const subject = COPY.fixedSubject(ctx.site, ctx.kind);
   const line = COPY.fixedLine(ctx.site, ctx.closed_at, ctx.timezone);
+  const footer = renderAlertFooter(ctx);
   return {
     subject,
-    text: `${line} ${ctx.link}`,
+    text: `${line} ${ctx.link}\n${footer.text}`,
     html: emailDocument(
       subject,
       [
@@ -77,6 +81,7 @@ export function renderIncidentFixed(ctx: IncidentFixedContext): RenderedBrief {
         `<p style="${HEADLINE}">${escapeHtml(subject)}</p>`,
         `<p style="${BODY}">${escapeHtml(line)}</p>`,
         linkLine(ctx.link),
+        footer.html,
       ].join(""),
     ),
   };

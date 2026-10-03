@@ -56,3 +56,20 @@ for (const scheme of ["light", "dark"] as const) {
     expect(results.violations).toEqual([]);
   });
 }
+
+// 0509#6531: DESIGN.md:473 sets a 44px minimum tap target. The wordmark is the
+// home link on /login and on the sign-in-sent screen, and with no height class
+// its box is one text line, about 19px. Measured on the rendered page at both
+// widths rather than read back out of the class string, and covering both
+// projects' viewports from one run.
+test("the wordmark home link is a 44px tap target on /login (#6531) @smoke", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop-1440", "this spec sets 1440 and 390 itself");
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto("/login");
+
+    const box = await page.getByRole("link", { name: "Five to Nine" }).boundingBox();
+    if (box === null) throw new Error(`the wordmark link has no box at ${String(width)}px`);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+  }
+});

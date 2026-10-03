@@ -1,4 +1,9 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
+
+const identitySocials = z.object({
+  socials: z.array(z.object({ platform: z.string(), url: z.string() })).optional(),
+});
 
 export type CompetitorState = "on" | "off";
 
@@ -100,6 +105,45 @@ export async function readCompetitor(workspaceId: string, entityId: string): Pro
     stateChangedAt: row.state_changed_at,
     stateReason: row.state_reason,
   };
+}
+
+const SELECT_COMPETITOR_IDENTITY =
+  "SELECT identity_json FROM entity WHERE id = ? AND workspace_id = ? AND role = 'competitor' AND json_valid(identity_json)";
+
+const REPLACE_COMPETITOR_YOUTUBE = `UPDATE entity SET identity_json = json_set(identity_json, '$.socials', json_insert(
+  (SELECT json_group_array(json(je.value)) FROM json_each(identity_json, '$.socials') je
+   WHERE je.type = 'object' AND CASE WHEN je.type = 'object' THEN json_extract(je.value, '$.platform') END IS NOT 'youtube'),
+  '$[#]', json(?3)))
+WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor' AND json_valid(identity_json)
+  AND coalesce(json_type(identity_json, '$.socials'), 'array') = 'array'`;
+
+const RESET_YOUTUBE_WATCH =
+  "UPDATE watch SET config_json = json_remove(CASE WHEN json_valid(config_json) THEN config_json ELSE '{}' END, '$.channelId', '$.pendingChannelId', '$.degraded', '$.noChannel'), last_polled_at = NULL WHERE entity_id = ?1 AND source_id = 'src_mentions_youtube' AND entity_id IN (SELECT id FROM entity WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor' AND json_valid(identity_json) AND coalesce(json_type(identity_json, '$.socials'), 'array') = 'array')";
+
+export async function readCompetitorSocials(
+  workspaceId: string,
+  entityId: string,
+): Promise<readonly { platform: string; url: string }[] | null> {
+  const row = await env.DB.prepare(SELECT_COMPETITOR_IDENTITY)
+    .bind(entityId, workspaceId)
+    .first<{ identity_json: string }>();
+  if (row === null) return null;
+  const parsed = identitySocials.safeParse(JSON.parse(row.identity_json));
+  return parsed.success ? (parsed.data.socials ?? []) : null;
+}
+
+export async function replaceCompetitorYoutube(input: {
+  workspaceId: string;
+  entityId: string;
+  url: string;
+}): Promise<boolean> {
+  const { workspaceId, entityId, url } = input;
+  const social = JSON.stringify({ platform: "youtube", url });
+  const [updated] = await env.DB.batch([
+    env.DB.prepare(REPLACE_COMPETITOR_YOUTUBE).bind(entityId, workspaceId, social),
+    env.DB.prepare(RESET_YOUTUBE_WATCH).bind(entityId, workspaceId),
+  ]);
+  return (updated?.meta.changes ?? 0) > 0;
 }
 
 export async function readEntityDomain(workspaceId: string, entityId: string): Promise<string | null> {
@@ -213,7 +257,8 @@ const SELECT_SELF =
 const SELECT_KNOWN =
   "SELECT domain, name, role, state FROM entity WHERE workspace_id = ?1 UNION ALL SELECT candidate_domain, candidate_name, 'suggestion', status FROM suggestion WHERE workspace_id = ?1 AND status <> 'pending'";
 
-const SELECT_SELF_WORKSPACES = "SELECT workspace_id FROM entity WHERE role = 'self' ORDER BY workspace_id";
+const SELECT_DISCOVERABLE_WORKSPACES =
+  "SELECT e.workspace_id AS workspace_id, w.created_at AS created_at, p.status AS status, p.current_period_end AS current_period_end FROM entity e JOIN workspace w ON w.id = e.workspace_id JOIN plan p ON p.workspace_id = w.id WHERE e.role = 'self' AND w.fixture = 0 ORDER BY e.workspace_id";
 
 interface SelfRow {
   workspace_id: string;
@@ -255,9 +300,26 @@ export async function readDiscoveryContext(workspaceId: string): Promise<Discove
   };
 }
 
-export async function readSelfWorkspaceIds(): Promise<string[]> {
-  const rows = await env.DB.prepare(SELECT_SELF_WORKSPACES).all<{ workspace_id: string }>();
-  return rows.results.map((row) => row.workspace_id);
+interface DiscoverableWorkspace {
+  workspaceId: string;
+  createdAt: string;
+  status: string;
+  currentPeriodEnd: string | null;
+}
+
+export async function readDiscoverableWorkspaces(): Promise<DiscoverableWorkspace[]> {
+  const rows = await env.DB.prepare(SELECT_DISCOVERABLE_WORKSPACES).all<{
+    workspace_id: string;
+    created_at: string;
+    status: string;
+    current_period_end: string | null;
+  }>();
+  return rows.results.map((row) => ({
+    workspaceId: row.workspace_id,
+    createdAt: row.created_at,
+    status: row.status,
+    currentPeriodEnd: row.current_period_end,
+  }));
 }
 
 const SELECT_REFRESH_TARGETS =
@@ -412,6 +474,21 @@ export async function readCompetitors(
       reason: row.reason,
     })),
   };
+}
+
+const FILL_COMPETITOR_SOCIALS =
+  "UPDATE entity SET identity_json = json_set(identity_json, '$.socials', json(?3), '$.socialsReadAt', ?4) WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor' AND json_valid(identity_json) AND coalesce(json_array_length(identity_json, '$.socials'), 0) = 0";
+
+export async function fillCompetitorSocials(input: {
+  workspaceId: string;
+  entityId: string;
+  socialsJson: string;
+  readAt: string;
+}): Promise<boolean> {
+  const result = await env.DB.prepare(FILL_COMPETITOR_SOCIALS)
+    .bind(input.entityId, input.workspaceId, input.socialsJson, input.readAt)
+    .run();
+  return result.meta.changes === 1;
 }
 
 export type SiteFillState = "pending" | "filled" | "gave_up";

@@ -2,8 +2,8 @@ import { Section } from "./section";
 
 const STEPS = [
   {
-    title: "Paste your site or handle",
-    body: "We read it and draw your card field by field while you watch: what you sell, who it is for, the words you use. Tap any field to fix it. The card is the form.",
+    title: "Enter your website or social username",
+    body: "We read it and fill in your details while you watch: what you sell, who it is for, the words you use. Tap any field to fix it.",
   },
   {
     title: "Meet who you’re up against",
@@ -11,7 +11,7 @@ const STEPS = [
   },
   {
     title: "Read one email on Monday",
-    body: "Where you stand this week, the three things worth knowing, and the proof behind each. Tap any line for the screenshots. Nothing else lands in your inbox.",
+    body: "Where you stand this week, the three things worth knowing, and the proof behind each. Tap any line for the screenshots. No daily noise.",
   },
 ] as const;
 

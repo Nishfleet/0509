@@ -35,6 +35,7 @@ test("a passkey registered on first sign-in signs in on its own @own-signin", as
   createdEmail = email;
 
   await signInWithMagicLink(page, email, token);
+  await page.goto("/app/settings");
 
   const watched = watchConsole(page);
 
@@ -85,6 +86,69 @@ test("a passkey registered on first sign-in signs in on its own @own-signin", as
     console.log(`passkey sign-in email=${email} sessionAt=${new Date().toISOString()}`);
   } finally {
     // A teardown rejection must not mask the ceremony's own failure.
+    await cdp.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId }).catch(() => undefined);
+  }
+});
+
+test("a registered passkey is listed in Settings and can be removed @own-signin", async ({
+  page,
+  context,
+}, testInfo) => {
+  const token = requireInboxToken();
+  const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+  createdEmail = email;
+
+  await signInWithMagicLink(page, email, token);
+  await page.goto("/app/settings");
+
+  const watched = watchConsole(page);
+
+  const cdp = await context.newCDPSession(page);
+  await cdp.send("WebAuthn.enable");
+  const { authenticatorId } = (await cdp.send("WebAuthn.addVirtualAuthenticator", {
+    options: {
+      protocol: "ctap2",
+      transport: "internal",
+      hasResidentKey: true,
+      hasUserVerification: true,
+      isUserVerified: true,
+      automaticPresenceSimulation: true,
+    },
+  })) as { authenticatorId: string };
+
+  try {
+    const registered = page.waitForResponse((response) =>
+      response.url().includes("/api/auth/passkey/verify-registration"),
+    );
+    // The new passkey must appear in the list without a full-page reload, and
+    // the in-place revalidation must re-run the Settings loader (a ?_data= fetch).
+    // A reload would miss the heading and then pass; a client-side navigate()
+    // would also pass, so require the data fetch react-router issues for it.
+    const fullReloads: string[] = [];
+    const loaderRevalidations: string[] = [];
+    page.on("request", (request) => {
+      if (request.isNavigationRequest()) fullReloads.push(request.url());
+      if (new URL(request.url()).searchParams.has("_data")) loaderRevalidations.push(request.url());
+    });
+    await page.getByRole("button", { name: /add a passkey/i }).click();
+    expect((await registered).status()).toBe(200);
+
+    await expect(page.getByRole("heading", { name: "Your passkeys" })).toBeVisible();
+    expect(fullReloads, `unexpected reload: ${fullReloads.join(", ")}`).toEqual([]);
+    expect(loaderRevalidations.length, "Settings loader did not re-run").toBeGreaterThanOrEqual(1);
+    await page.screenshot({ path: testInfo.outputPath("passkey-listed.png") });
+
+    await page.getByRole("button", { name: /^Remove /i }).click();
+    await expect(page.getByText("Remove this passkey?")).toBeVisible();
+    await page.getByRole("button", { name: /^Yes, remove /i }).click();
+
+    await expect(page.getByRole("heading", { name: "Your passkeys" })).toBeHidden();
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Your passkeys" })).toBeHidden();
+    await page.screenshot({ path: testInfo.outputPath("passkey-removed.png") });
+    expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
+    console.log(`passkey list+remove email=${email} at=${new Date().toISOString()}`);
+  } finally {
     await cdp.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId }).catch(() => undefined);
   }
 });

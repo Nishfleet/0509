@@ -11,7 +11,7 @@ export function Marks({ marks, now }: { marks: readonly PairedSiteChange[]; now:
   return (
     <Section
       id="mark"
-      kicker="The mark"
+      kicker="Proof"
       title="Every change, in one line."
       lead="When a brand you watch changes something, we strike the old words and put the new ones on a green marker, with the screenshot and a link to where we saw it."
     >

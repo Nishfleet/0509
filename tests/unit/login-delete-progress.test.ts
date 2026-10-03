@@ -36,26 +36,56 @@ describe("Login account-delete progress", () => {
     const html = render({ id: "wf-1", progress: { rows: "removed", files: "removing", deleted: null } });
     expect(html).toContain('data-delete="progress"');
     expect(html).toContain("Your account is deleted");
-    expect(html).toContain("Brands, signals, briefs, send history, card, API keys and connected apps: removed");
-    expect(html).toContain("Snapshots and screenshots: still removing");
+    expect(html).toContain(
+      "Brands, everything we found, briefs, send history, share image, API keys and connected apps: removed",
+    );
+    expect(html).toContain("Saved page copies and screenshots: still removing");
     expect(html).toContain('href="/login?deleted=wf-1"');
     expect(html).toContain("Check again");
   });
 
   it("counts the files removed and drops Check again", () => {
     const html = render({ id: "wf-2", progress: { rows: "removed", files: "removed", deleted: 3 } });
-    expect(html).toContain("Snapshots and screenshots: removed (3 files)");
+    expect(html).toContain("Saved page copies and screenshots: removed (3 files)");
     expect(html).not.toContain("Check again");
+  });
+
+  it("says file for one removed file", () => {
+    const html = render({ id: "wf-6", progress: { rows: "removed", files: "removed", deleted: 1 } });
+    expect(html).toContain("Saved page copies and screenshots: removed (1 file)");
+    expect(html).not.toContain("1 files");
+  });
+
+  it("keeps files for zero removed files", () => {
+    const html = render({ id: "wf-7", progress: { rows: "removed", files: "removed", deleted: 0 } });
+    expect(html).toContain("Saved page copies and screenshots: removed (0 files)");
   });
 
   it("says removed without a count when the Workflow reported none", () => {
     const html = render({ id: "wf-3", progress: { rows: "removed", files: "removed", deleted: null } });
-    expect(html).toContain("Snapshots and screenshots: removed");
+    expect(html).toContain("Saved page copies and screenshots: removed");
     expect(html).not.toContain("removed (");
   });
 
   it("tells the customer to write to support when the Workflow stopped", () => {
     const html = render({ id: "wf-4", progress: { rows: "removed", files: "failed", deleted: null } });
-    expect(html).toContain("Snapshots and screenshots: stopped. Write to support@0509.io and we&#x27;ll finish it.");
+    expect(html).toContain(
+      "Saved page copies and screenshots: stopped. Write to support@0509.io and we&#x27;ll finish it.",
+    );
+  });
+
+  // DESIGN.md: tap targets are 44px minimum. min-h-11 is 44px in this repo
+  // (tests/unit/onboarding-competitors.test.ts), and a box only reaches that
+  // height when inline-flex puts the text in a line box and items-center keeps
+  // it centred, so all three tokens are asserted.
+  it('gives "Check again" a 44px-tall tap target', () => {
+    const html = render({ id: "wf-5", progress: { rows: "removed", files: "removing", deleted: null } });
+
+    const link = html.match(/<a\b[^>]*href="\/login\?deleted=wf-5"[^>]*>/)?.[0] ?? "";
+
+    expect(link).toContain("min-h-11");
+    expect(link).toContain("inline-flex");
+    expect(link).toContain("items-center");
+    expect(link).toContain("underline");
   });
 });

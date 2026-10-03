@@ -4,6 +4,7 @@ import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule, BriefWeek } from "../../app/lib/brief-schedule";
 import { nextBriefAt } from "../../app/lib/brief-schedule";
 import { UNJUDGED_WEEK_LINE, readThisFirstLine } from "../../app/lib/read-this-first";
+import { effectiveKindSql } from "../../app/lib/source-kind";
 import { sourceName } from "../../app/lib/source-name";
 import { countPhrase } from "../delivery/brief-template";
 import type { JudgedWeek } from "./read-this-first";
@@ -34,7 +35,7 @@ WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.i
 GROUP BY s.entity_id`;
 
 const SOURCE_COVERAGE = `SELECT src.key AS key,
-       src.kind AS kind,
+       ${effectiveKindSql("src")} AS kind,
        src.platform AS platform,
        MAX(CASE WHEN COALESCE(sn.canary_count, 1) > 0 THEN sn.fetched_at END) AS last_landed_at,
        MAX(CASE WHEN sn.fetched_at >= ?2 AND sn.fetched_at < ?3 AND COALESCE(sn.canary_count, 1) > 0 THEN 1 ELSE 0 END) AS answered
@@ -43,7 +44,7 @@ JOIN entity e ON e.id = w.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
 JOIN source src ON src.id = w.source_id AND src.is_enabled = 1
 LEFT JOIN snapshot sn ON sn.watch_id = w.id
 WHERE w.is_active = 1
-GROUP BY src.key, src.kind, src.platform
+GROUP BY src.key, kind, src.platform
 ORDER BY src.key`;
 
 const OWN_SITE_INCIDENTS = `SELECT p.url AS page_url, i.kind AS kind, i.opened_at AS opened_at, i.closed_at AS closed_at
@@ -60,7 +61,7 @@ ORDER BY state_changed_at ASC`;
 
 const PICKED_SIGNALS = `SELECT s.id AS signal_id, s.entity_id AS entity_id, COALESCE(NULLIF(e.name, ''), e.domain) AS entity_name,
        s.title AS title, s.summary AS summary, s.url AS url, s.observed_at AS observed_at,
-       src.kind AS source_kind, src.platform AS source_platform,
+       ${effectiveKindSql("src")} AS source_kind, src.platform AS source_platform,
        (SELECT v.reason FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id IN ('noteworthy_change', 'mention_matters') AND v.reason IS NOT NULL ORDER BY v.decided_at DESC LIMIT 1) AS verdict_reason
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1
@@ -133,7 +134,7 @@ export interface ComposeInput {
 }
 
 function quietWeekLine(mentions: number, siteChanges: number, newAds: number): string {
-  return `Quiet week: ${countPhrase(mentions, "mention", "mentions")} checked, ${countPhrase(siteChanges, "site change", "site changes")}, ${countPhrase(newAds, "new ad", "new ads")}.`;
+  return `Quiet week: ${countPhrase(mentions, "mention", "mentions")}, ${countPhrase(siteChanges, "site change", "site changes")}, ${countPhrase(newAds, "new ad", "new ads")}.`;
 }
 
 export function pausedSentence(names: readonly string[]): string | null {

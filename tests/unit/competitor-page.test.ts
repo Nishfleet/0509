@@ -10,7 +10,6 @@ import type { BiggestMoveView } from "../../app/lib/biggest-move";
 import { LOST_CHANNEL_REASON } from "../../app/lib/mentions/youtube-channel";
 import {
   CompetitorHeader,
-  CompetitorSwitch,
   competitorPausedLine,
   type CompetitorHeaderProps,
 } from "../../app/components/competitor-header";
@@ -29,6 +28,7 @@ const change: SiteChangeItemData = {
   observedAt: "2026-09-24T02:10:00.000Z",
   capturedAt: "2026-09-24 02:09 UTC",
   wordsChanged: 5,
+  provenance: null,
   sentence: "3 words added, 2 removed.",
   mark: { removed: "Plans from $10.", added: "Plans from $12." },
   before: { src: "/app/changes/sig-1/before", capturedAt: "2026-09-23 02:09 UTC" },
@@ -55,10 +55,12 @@ const quiet: CompetitorFrameProps = {
   developments: [],
   weekCount: 0,
   biggestMove: null,
-  quiet: "Nothing scored for this brand in the last 7 days. We checked website, last at 2026-09-24 02:09 UTC.",
+  quiet:
+    "Nothing worth scoring for this competitor in the last 7 days. We checked website, last at 2026-09-24 02:09 UTC.",
   pages: 0,
   lastChecked: null,
   pausedOn: null,
+  unreadable: false,
   rail: {
     entityId: "ent-1",
     peers: [],
@@ -78,9 +80,17 @@ function header(props: CompetitorHeaderProps): string {
 }
 
 describe("the competitor page frame", () => {
+  it("says plainly when the rival's website could not be read, and says nothing otherwise", () => {
+    expect(frame({ unreadable: true })).toContain("We couldn&#x27;t read their website");
+    expect(frame({ unreadable: true })).toContain("keep trying");
+    expect(frame()).not.toContain("read their website");
+  });
+
   it("formats the paused line in en-GB UTC", () => {
     expect(competitorPausedLine("2026-09-22T12:00:00.000Z")).toBe("Paused 22 Sept");
     expect(competitorPausedLine(null)).toBe("Paused");
+    expect(competitorPausedLine("not a date")).toBe("Paused");
+    expect(competitorPausedLine("not a date", "shut_down")).toBe("Paused · looks like it shut down");
   });
 
   it("reads state_reason in lowercase customer words and never shows a code", () => {
@@ -101,6 +111,12 @@ describe("the competitor page frame", () => {
     });
     expect(html).toContain("looks like it shut down");
     expect(html).not.toContain("shut_down");
+  });
+
+  it("makes the breadcrumb link a 44px-tall tap target", () => {
+    const html = header({ name: "Kindred", domain: "kindred.example", state: "on", stateChangedAt: null });
+    const link = html.match(/<a\b[^>]*href="\/app\/competitors"[^>]*>/)?.[0] ?? "";
+    expect(link).toContain("min-h-11");
   });
 
   it("renders the blocks in DESIGN.md 2.5 order", () => {
@@ -136,18 +152,6 @@ describe("the competitor page frame", () => {
       const index = html.indexOf(marker);
       expect(index).toBeGreaterThan(at);
       at = index;
-    }
-  });
-
-  it("prints the DESIGN.md 2.5 consequence beside the switch in both states, never a dialog", () => {
-    for (const state of ["on", "off"] as const) {
-      const html = render(createElement(CompetitorSwitch, { state, brandName: "Kindred" }));
-      expect(html).toContain('data-slot="competitor-switch"');
-      expect(html).toContain('role="switch"');
-      expect(html).toContain(
-        "Off stops the watching and the alerts. The history stays, and turning it back on picks up where it left off.",
-      );
-      expect(html).not.toContain('role="dialog"');
     }
   });
 
@@ -200,7 +204,7 @@ describe("the competitor page frame", () => {
     ];
     const html = frame({ rail: { ...quiet.rail, sources } });
     expect(html).toContain('data-state="degraded"');
-    expect(html).toContain(LOST_CHANNEL_REASON);
+    expect(html).toContain("finding the channel again");
     expect(html).not.toMatch(/>\s*Website\s*</);
   });
 

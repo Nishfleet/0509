@@ -3,12 +3,14 @@ import { Link } from "react-router";
 
 import { adLibraryLinks } from "../lib/competitor/ad-library-links";
 import { pausedReasonLine } from "../lib/competitor/reason-customer";
-import { BrandSwitch, DAY_MONTH } from "./brand-switch";
+import { DAY_MONTH, dayMonthLabel } from "./brand-switch";
 
-export { DAY_MONTH };
+export { dayMonthLabel };
 
 export function competitorPausedLine(stateChangedAt: string | null, stateReason: string | null = null): string {
-  const base = stateChangedAt === null ? "Paused" : `Paused ${DAY_MONTH.format(new Date(stateChangedAt))}`;
+  const pausedDate = stateChangedAt === null ? null : new Date(stateChangedAt);
+  const base =
+    pausedDate === null || Number.isNaN(pausedDate.getTime()) ? "Paused" : `Paused ${DAY_MONTH.format(pausedDate)}`;
   const why = pausedReasonLine(stateReason);
   return why === undefined ? base : `${base} · ${why}`;
 }
@@ -61,14 +63,21 @@ export function CompetitorHeader({
 }: CompetitorHeaderProps): ReactElement {
   return (
     <header data-slot="competitor-header" className="flex min-w-0 flex-col gap-3">
-      <nav aria-label="Breadcrumb" className="font-mono text-meta text-ink-soft uppercase">
-        <Link to="/app/competitors" prefetch="intent" className="underline decoration-1 underline-offset-4">
+      <nav aria-label="Breadcrumb" className="flex items-center font-mono text-meta text-ink-soft uppercase">
+        <Link
+          to="/app/competitors"
+          prefetch="intent"
+          className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4"
+        >
           Competitors
         </Link>
         <span aria-hidden="true"> / </span>
         <span aria-current="page">{name}</span>
       </nav>
-      <div data-slot="competitor-identity" className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-3">
+      <div
+        data-slot="competitor-identity"
+        className="flex min-w-0 flex-wrap items-start justify-between gap-x-6 gap-y-3"
+      >
         <div className="min-w-0">
           <h1 className="font-display text-display-2 font-extrabold break-words uppercase">{name}</h1>
           <p className="text-body-sm [overflow-wrap:anywhere] text-ink-soft">{domain}</p>
@@ -82,25 +91,5 @@ export function CompetitorHeader({
         {control}
       </div>
     </header>
-  );
-}
-
-const CONSEQUENCE =
-  "Off stops the watching and the alerts. The history stays, and turning it back on picks up where it left off.";
-
-export function CompetitorSwitch({
-  state,
-  brandName,
-  onCheckedChange,
-}: {
-  state: "on" | "off";
-  brandName: string;
-  onCheckedChange?: (checked: boolean) => void;
-}): ReactElement {
-  return (
-    <div data-slot="competitor-switch" className="flex max-w-[26rem] min-w-0 items-center gap-3">
-      <BrandSwitch state={state} brandName={brandName} onCheckedChange={onCheckedChange} />
-      <p className="min-w-0 text-body-sm text-ink-soft">{CONSEQUENCE}</p>
-    </div>
   );
 }

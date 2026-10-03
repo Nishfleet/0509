@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 import { Link } from "react-router";
 
-import { DAY_MONTH } from "./competitor-header";
+import { dayMonthLabel } from "./competitor-header";
 import { EmptyState } from "./empty-state";
 import { SourcePill } from "./source-pill";
 import type { SourceRow, SourceSnapshot } from "./source-pill";
@@ -21,9 +21,10 @@ const VERDICT_WORDS: Record<string, string> = {
 
 const FACT_NOUNS: Record<string, [string, string]> = {
   change: ["site change", "site changes"],
-  hiring: ["new role", "new roles"],
+  hiring: ["new job opening", "new job openings"],
   ad: ["ad", "ads"],
   mention: ["mention", "mentions"],
+  content: ["new post", "new posts"],
 };
 
 export interface RailPeer {
@@ -71,7 +72,7 @@ export function factLabel(kind: string, count: number): string | null {
 
 function Peers({ entityId, peers }: { entityId: string; peers: readonly RailPeer[] }): ReactElement {
   if (peers.length === 0) {
-    return <EmptyState sentence="No standing yet. It comes with your first weekly brief." />;
+    return <EmptyState sentence="No ranking yet. It arrives with your first weekly brief." />;
   }
   return (
     <ol className={ROW}>
@@ -97,6 +98,7 @@ function Peers({ entityId, peers }: { entityId: string; peers: readonly RailPeer
                 {peer.name}
               </Link>
             )}
+            {peer.state === "off" ? <span className="sr-only"> (paused)</span> : null}
           </li>
         );
       })}
@@ -153,12 +155,15 @@ function Sources({
 function StillCompetitor({ verdict }: { verdict: RailVerdict | null }): ReactElement {
   const words = verdict === null ? null : verdictWords(verdict.choice);
   if (verdict === null || words === null) {
-    return <EmptyState sentence="We ask this every week. The first answer lands after a week of watching." />;
+    return <EmptyState sentence="We check this every week. The first answer arrives after a week of watching." />;
   }
+  const checkedLabel = dayMonthLabel(verdict.decidedAt);
   return (
     <>
       <p className="font-display text-[1.02rem]">{words}</p>
-      <p className="text-meta text-ink-soft">Checked {DAY_MONTH.format(new Date(verdict.decidedAt))}</p>
+      <p className="text-meta text-ink-soft">
+        {checkedLabel === null ? "Checked recently" : `Checked ${checkedLabel}`}
+      </p>
     </>
   );
 }
@@ -176,19 +181,19 @@ export function CompetitorRail({
     <aside data-slot="competitor-rail" className="flex min-w-0 flex-col gap-10">
       <section data-section="peers" aria-labelledby="competitor-peers" className="min-w-0">
         <h2 id="competitor-peers" className={HEADING}>
-          Peers
+          How you rank
         </h2>
         <Peers entityId={entityId} peers={peers} />
       </section>
       <section data-section="facts" aria-labelledby="competitor-facts" className="min-w-0">
         <h2 id="competitor-facts" className={HEADING}>
-          Thirty days
+          Last 30 days
         </h2>
         <Facts facts={facts} />
       </section>
       <section data-section="sources" aria-labelledby="competitor-sources" className="min-w-0">
         <h2 id="competitor-sources" className={HEADING}>
-          Sources on this brand
+          What we watch here
         </h2>
         <Sources sources={sources} lastChecked={lastChecked} now={now} />
       </section>

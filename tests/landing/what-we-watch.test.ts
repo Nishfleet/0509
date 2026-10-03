@@ -27,13 +27,13 @@ function markup(sources: readonly WatchedSource[], now: number = NOW): string {
 // React serializes the apostrophe in a text node as an entity; decode it so an
 // assertion is against the copy as written, not React's escaping.
 function decoded(html: string): string {
-  return html.replaceAll("&#x27;", "'");
+  return html.replaceAll("&#x27;", "'").replaceAll("&quot;", '"');
 }
 
 const LIVE: SourceSnapshot = { fetched_at: "2026-09-26T11:00:00.000Z", item_count: 12 };
 
 describe("landing what we watch", () => {
-  it("renders one pill per enabled registry source, named by plugin_key, in a wrapped row", () => {
+  it("renders one pill per enabled registry source, named in plain words, in a wrapped row", () => {
     const html = markup([
       entry({ source: { key: "gdelt.doc", name: "gdelt.doc", platform: "gdelt", is_enabled: 1 }, snapshot: LIVE }),
       entry({ source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
@@ -43,9 +43,12 @@ describe("landing what we watch", () => {
         snapshot: LIVE,
       }),
     ]);
-    expect(html).toContain("gdelt.doc");
-    expect(html).toContain("hn.algolia");
-    expect(html).toContain("site.page");
+    expect(html).toContain("News mentions");
+    expect(html).toContain("Hacker News mentions");
+    expect(html).toContain("Website checks");
+    expect(html).not.toContain("gdelt.doc");
+    expect(html).not.toContain("hn.algolia");
+    expect(html).not.toContain("site.page");
     expect(html.match(/data-state="live"/g)).toHaveLength(3);
     expect(html).toMatch(/<ul class="[^"]*flex-wrap[^"]*"/);
   });
@@ -66,8 +69,8 @@ describe("landing what we watch", () => {
       entry({ source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
     ]);
     expect(html).toContain('data-state="degraded"');
-    expect(html).toContain("degraded: not answering");
-    expect(html).toContain("last good 2026-09-20 03:04 UTC");
+    expect(html).toContain("· not answering right now");
+    expect(html).toContain("last updated 2026-09-20 03:04 UTC");
   });
 
   it("dims an enabled source with no snapshot as degraded, not as live", () => {
@@ -79,7 +82,7 @@ describe("landing what we watch", () => {
       }),
     ]);
     expect(html).toContain('data-state="degraded"');
-    expect(html).toContain("degraded: no fresh data");
+    expect(html).toContain("· no new data yet");
     expect(html).not.toContain('data-state="live"');
   });
 
@@ -96,8 +99,8 @@ describe("landing what we watch", () => {
       entry({ source: { key: "c.three", name: "c.three", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
     ]);
     expect(html.match(/data-state="degraded"/g)).toHaveLength(2);
-    expect(html).toContain("degraded: no fresh data");
-    expect(html).toContain("degraded: not answering");
+    expect(html).toContain("· no new data yet");
+    expect(html).toContain("· not answering right now");
   });
 
   it("replaces the pill row with the one rebuilding line when every visible mentions source is degraded and site changes are live", () => {
@@ -121,10 +124,10 @@ describe("landing what we watch", () => {
     ]);
     const text = decoded(html);
     expect(text).toContain(
-      "We're rebuilding coverage of news mentions. Briefs and standing still arrive from site changes; mentions resume as their sources come back.",
+      "We're rebuilding our coverage of news mentions. Your Monday brief and ranking still come from website changes. Mentions will return as their sources come back.",
     );
     expect(html).not.toContain("data-state=");
-    expect(html).not.toContain("last good");
+    expect(html).not.toContain("· last updated");
   });
 
   it("keeps the dimmed rows with their reasons when site changes are degraded too", () => {
@@ -142,8 +145,8 @@ describe("landing what we watch", () => {
     const text = decoded(html);
     expect(text).not.toContain("We're rebuilding coverage of news mentions");
     expect(html.match(/data-state="degraded"/g)).toHaveLength(2);
-    expect(html).toContain("degraded: timed out");
-    expect(html).toContain("degraded: no fresh data");
+    expect(html).toContain("· slow to answer");
+    expect(html).toContain("· no new data yet");
   });
 
   it("keeps the degraded pills, with their reasons, when a live source is visible too", () => {
@@ -160,8 +163,9 @@ describe("landing what we watch", () => {
     ]);
     const text = decoded(html);
     expect(text).not.toContain("We're rebuilding coverage of news mentions");
-    expect(html).toContain("degraded: not answering");
-    expect(html).toContain("degraded: rate limited");
+    expect(html).toContain("· not answering right now");
+    expect(html).toContain("· not updating right now");
+    expect(html).not.toContain("rate limited");
     expect(html.match(/data-state="degraded"/g)).toHaveLength(2);
     expect(html.match(/data-state="live"/g)).toHaveLength(1);
   });
@@ -187,7 +191,7 @@ describe("landing what we watch", () => {
     expect(text).not.toContain("We're rebuilding coverage of news mentions");
     expect(html).toContain('data-state="degraded"');
     expect(html).toContain('data-state="none"');
-    expect(html).toContain("degraded: not answering");
+    expect(html).toContain("· not answering right now");
   });
 
   it("does not replace the row when every source is disabled", () => {
@@ -220,12 +224,12 @@ describe("landing what we watch", () => {
     expect(html).not.toContain("ads");
   });
 
-  it("explains last good unknown in the lead, above the pill row", () => {
+  it("explains a missing last-updated time in the lead, above the pill row", () => {
     const html = markup([
       entry({ source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
     ]);
     const sentence =
-      "Last good unknown means we haven't yet checked this kind of source. The first check lands in the daily sweep.";
+      'A source with no "last updated" time hasn\'t been checked yet. The first check happens in the next daily check.';
     const text = decoded(html);
     expect(text.indexOf(sentence)).toBeGreaterThanOrEqual(0);
     expect(text.indexOf(sentence)).toBeLessThan(text.indexOf("<ul"));

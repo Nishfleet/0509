@@ -2,6 +2,7 @@ import { Link } from "react-router";
 
 import { BLOCK_HEADING } from "./page-heading";
 import { AddPasskey } from "./passkey-button";
+import { PasskeyList } from "./passkey-list";
 import { BriefScheduleSettings } from "./brief-schedule-settings";
 import { ChangeSignInEmail } from "./change-sign-in-email";
 import { DeliveryAddress } from "./delivery-address";
@@ -9,6 +10,38 @@ import { SignOut } from "./account-settings";
 import type { ComponentProps } from "react";
 
 const BLOCK = "mt-10 border-t border-line pt-4";
+
+const JUMPS = [
+  { href: "#settings-brief", label: "Brief and alerts" },
+  { href: "#settings-agents", label: "Agents and API" },
+  { href: "#settings-plan", label: "Plan" },
+  { href: "#settings-account", label: "Account" },
+  { href: "#export-data", label: "Your data" },
+] as const;
+
+export function SettingsJumps({ hasBrief, hasPlan }: { hasBrief: boolean; hasPlan: boolean }) {
+  return (
+    <nav
+      aria-label="Settings sections"
+      className="mt-6 min-[1000px]:sticky min-[1000px]:top-10 min-[1000px]:mt-14 min-[1000px]:self-start"
+    >
+      <ul className="flex flex-wrap gap-x-5 gap-y-1 min-[1000px]:flex-col min-[1000px]:gap-y-0">
+        {JUMPS.filter(
+          (jump) => (jump.href !== "#settings-brief" || hasBrief) && (jump.href !== "#settings-plan" || hasPlan),
+        ).map((jump) => (
+          <li key={jump.href}>
+            <a
+              href={jump.href}
+              className="inline-flex min-h-11 items-center font-mono text-eyebrow text-ink-soft uppercase underline decoration-1 underline-offset-4 hover:text-ink"
+            >
+              {jump.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
 
 export function BriefSection({ schedule }: { schedule: ComponentProps<typeof BriefScheduleSettings>["schedule"] }) {
   return (
@@ -36,7 +69,7 @@ export function AgentsSection() {
         prefetch="intent"
         className="mt-3 inline-flex min-h-11 items-center gap-2 font-display font-bold underline decoration-1 underline-offset-4"
       >
-        Connect an agent <span aria-hidden="true">→</span>
+        Connect an AI app <span aria-hidden="true">→</span>
       </Link>
     </section>
   );
@@ -52,10 +85,12 @@ interface AccountResult {
 export function AccountSection({
   email,
   delivery,
+  passkeys,
   result,
 }: {
   email: string;
   delivery: ComponentProps<typeof DeliveryAddress>["delivery"];
+  passkeys: ComponentProps<typeof PasskeyList>["passkeys"];
   result: AccountResult | undefined;
 }) {
   return (
@@ -72,6 +107,7 @@ export function AccountSection({
         error={result?.deliveryError ?? null}
         suppressed={result?.deliverySuppressed ?? false}
       />
+      <PasskeyList passkeys={passkeys} />
       <div className="mt-2 flex flex-wrap items-start gap-x-6">
         <AddPasskey />
         <SignOut />

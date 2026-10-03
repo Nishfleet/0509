@@ -38,7 +38,7 @@ test("/login keyboard path, landmarks and the sent-state announcement (#4148) @o
   await test.info().attach("focus-email", { body: await page.screenshot(), contentType: "image/png" });
 
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Email me a link" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Send sign-in link" })).toBeFocused();
   await test.info().attach("focus-submit", { body: await page.screenshot(), contentType: "image/png" });
 
   await page.keyboard.press("Tab");

@@ -38,7 +38,7 @@ describe("mcpInstructions", () => {
       NOW,
     );
     expect(instructions).toBe(
-      "Five to Nine watches the user's competitors (public sources) and ranks the user against them every week. Everything here is read-only and limited to the signed-in user's own workspace.",
+      "Five to Nine watches the user's competitors (public sources) and ranks the user against them every week. Everything here is read-only and limited to the signed-in user's own account.",
     );
   });
 
@@ -55,7 +55,7 @@ describe("mcpInstructions", () => {
       NOW,
     );
     expect(instructions).toBe(
-      "Five to Nine watches the user's competitors (ads, mentions, and site checks) and ranks the user against them every week. Everything here is read-only and limited to the signed-in user's own workspace.",
+      "Five to Nine watches the user's competitors (ads, mentions, and site checks) and ranks the user against them every week. Everything here is read-only and limited to the signed-in user's own account.",
     );
   });
 });

@@ -1,14 +1,13 @@
 import robotsParser from "robots-parser";
 
+import { CRAWLER_USER_AGENT, ROBOTS_AGENT } from "./crawler-identity";
 import { cappedText, fetchOutbound } from "./outbound.server";
+
+export { CRAWLER_USER_AGENT };
 
 const ROBOTS_TIMEOUT_MS = 5_000;
 
 const MAX_ROBOTS_BYTES = 256 * 1024;
-
-const ROBOTS_AGENT = "FiveToNineBot";
-
-export const CRAWLER_USER_AGENT = `${ROBOTS_AGENT}/1.0 (+https://0509.io)`;
 
 const ROBOTS_HEADERS = { "user-agent": CRAWLER_USER_AGENT };
 

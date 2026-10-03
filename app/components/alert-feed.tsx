@@ -25,16 +25,25 @@ export function AlertFeed({ groups }: { groups: { group: string; items: AlertFee
           ))}
         </section>
       ))}
-      {hidden > 0 && !showAll ? (
+      {hidden > 0 ? (
         <button
           type="button"
           data-testid="mentions-show-all"
+          aria-expanded={showAll}
           className="mt-6 inline-flex min-h-11 items-center font-mono text-meta text-ink-soft uppercase underline"
           onClick={() => {
-            setShowAll(true);
+            setShowAll((open) => !open);
           }}
         >
-          Show all · {hidden} hidden as not a move
+          {showAll ? (
+            <>
+              Hide the {hidden} we think {hidden === 1 ? "does not matter" : "do not matter"}
+            </>
+          ) : (
+            <>
+              Show all, including {hidden} we think {hidden === 1 ? "does not matter" : "do not matter"}
+            </>
+          )}
         </button>
       ) : null}
     </>

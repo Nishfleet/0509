@@ -3,12 +3,25 @@ import type { ReactElement } from "react";
 import { useSearchParams } from "react-router";
 
 import type { DevelopmentItem } from "../lib/developments";
-import { FEED_FILTERS, FEED_PARAM, SOURCE_LABEL, countByKind, filterFeed, parseFeedFilter } from "../lib/developments";
+import {
+  FEED_FILTERS,
+  FEED_PARAM,
+  SOURCE_LABEL,
+  countByKind,
+  emptyFeedSentence,
+  filterFeed,
+  parseFeedFilter,
+} from "../lib/developments";
+import { httpUrl } from "../lib/http-url";
 import { EmptyState } from "./empty-state";
 import { SiteChangeItem, type SiteChangeItemData } from "./site-change-item";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 
 type FeedRow = DevelopmentItem & { when: string };
+
+const LINK = "inline-flex min-h-11 items-center underline decoration-1 underline-offset-4";
+
+const NEW_TAB_HINT = " (opens in a new tab)";
 
 function findChange(changes: readonly SiteChangeItemData[], id: string): SiteChangeItemData | undefined {
   return changes.find((entry) => entry.id === id);
@@ -16,9 +29,19 @@ function findChange(changes: readonly SiteChangeItemData[], id: string): SiteCha
 
 function DevelopmentArticle({ item }: { item: FeedRow }): ReactElement {
   const heading = item.title ?? item.summary ?? SOURCE_LABEL[item.kind];
+  const href = item.url === null ? null : httpUrl(item.url);
   return (
     <article data-testid="development" className="mt-8 min-w-0 border-t border-line pt-6">
-      <h3 className="font-display text-row-name font-bold [overflow-wrap:anywhere]">{heading}</h3>
+      <h3 className="font-display text-row-name font-bold [overflow-wrap:anywhere]">
+        {href === null ? (
+          heading
+        ) : (
+          <a href={href} rel="noopener noreferrer nofollow" target="_blank" className={LINK}>
+            {heading}
+            <span className="sr-only">{NEW_TAB_HINT}</span>
+          </a>
+        )}
+      </h3>
       {item.title !== null && item.summary !== null ? (
         <p className="leading-[1.65] [overflow-wrap:anywhere]">{item.summary}</p>
       ) : null}
@@ -56,7 +79,7 @@ export function DevelopmentsFeed({
   return (
     <div data-slot="developments-feed" className="flex min-w-0 flex-col gap-4">
       <ToggleGroup
-        aria-label="Filter developments"
+        aria-label="Filter updates"
         value={[filter]}
         onValueChange={(values) => {
           const next = parseFeedFilter(values[0] ?? null);
@@ -74,7 +97,7 @@ export function DevelopmentsFeed({
       <ol data-slot="developments-list" className="flex min-w-0 flex-col">
         {visible.length === 0 ? (
           <li>
-            <EmptyState sentence="Nothing of this kind in the last 90 days." />
+            <EmptyState sentence={emptyFeedSentence(filter)} />
           </li>
         ) : (
           visible.map((item) => <DevelopmentRow key={item.id} item={item} changes={changes} />)

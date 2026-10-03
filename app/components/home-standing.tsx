@@ -5,6 +5,7 @@ import { Form } from "react-router";
 import { BrandChipRow } from "./brand-chip";
 import { EmptyState, fewerThanTwoOnBrands } from "./empty-state";
 import { FirstFilePanel } from "./first-file-panel";
+import { FirstWeekSteps } from "./first-week-steps";
 import { FourWeekLine } from "./four-week-line";
 import { HowRankedSheet } from "./how-ranked-sheet";
 import { PAGE } from "./page-heading";
@@ -110,6 +111,7 @@ function body({ view, howRanked, onSwitch, openId, evidence }: BodyInput): React
     return (
       <div className="mt-6">
         <FirstFilePanel brands={standing.brands} firstSweepAt={standing.firstSweepAt} briefAt={standing.briefAt} />
+        <FirstWeekSteps />
       </div>
     );
   }
@@ -146,11 +148,11 @@ function rankedBody({
         </div>
       ) : null}
       <ReadThisFirst marks={standing.readThisFirst} unjudged={standing.unjudged} headingLevel={2} />
-      <h2 className={cn(EYEBROW, "mt-8 border-t border-line pt-4")}>Four weeks</h2>
+      <h2 className={cn(EYEBROW, "mt-8 border-t border-line pt-4")}>Your last four weeks</h2>
       <div className="mt-2">
         <FourWeekLine chart={standing.chart} />
       </div>
-      <h2 className={cn(EYEBROW, "mt-8 border-t border-line pt-4")}>This week's standing</h2>
+      <h2 className={cn(EYEBROW, "mt-8 border-t border-line pt-4")}>This week's ranking</h2>
       <ol className="mt-2">
         {standing.rows.map((row) => (
           <RankedRow key={row.entityId} row={row} onSwitch={onSwitch} openId={openId} evidence={evidence} />

@@ -194,7 +194,7 @@ describe("mentions feed", () => {
     expect(unjudged.whyFlagged).toBeNull();
   });
 
-  it("shows a judged mention and a pending one, the unjudged row labelled as waiting for judgment", () => {
+  it("shows a judged mention and a pending one, the unjudged row labelled as still being checked", () => {
     const mentions = mentionsFromRows(
       [
         row({ id: "judged", p: 0.95, title: "Zephyrwear opens a London flagship", state: "judged" }),
@@ -204,13 +204,13 @@ describe("mentions feed", () => {
     );
     expect(mentions.map((mention) => mention.treatment)).toEqual(["shown", "pending"]);
     const html = renderToStaticMarkup(
-      createElement(AlertFeed, { groups: [{ group: "New", items: mentions.map(item) }] }),
+      createElement(AlertFeed, { groups: [{ group: "Today", items: mentions.map(item) }] }),
     );
     expect(html.match(/data-testid="mention-row"/g)).toHaveLength(2);
     expect(html).toContain('data-treatment="shown"');
     expect(html).toContain('data-treatment="pending"');
     expect(html).toContain(PENDING_LINE);
-    expect(html).toContain("waiting for judgment");
+    expect(html).toContain("Still being checked");
     expect(html).toContain("bg-bone");
     expect(html).not.toMatch(/data-treatment="pending"[^>]*bg-card/);
     expect(html).not.toMatch(BANNED);
@@ -225,7 +225,7 @@ describe("mentions feed", () => {
       NOW,
     );
     const html = renderToStaticMarkup(
-      createElement(AlertFeed, { groups: [{ group: "New", items: mentions.map(item) }] }),
+      createElement(AlertFeed, { groups: [{ group: "Today", items: mentions.map(item) }] }),
     );
     expect(html).toContain("Zephyrwear opens a London flagship");
     expect(html).not.toContain("Zephyrwear ticker line");

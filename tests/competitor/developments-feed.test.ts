@@ -110,6 +110,7 @@ const MATCHED_CHANGE: SiteChangeItemData = {
   observedAt: "2026-09-13T10:00:00Z",
   capturedAt: "2026-09-13T10:05:00Z",
   wordsChanged: 8,
+  provenance: null,
   sentence: "The compare table moved above the fold.",
   mark: { removed: "Facts and numbers", added: "Now with anecdotes" },
   before: { src: "https://shots.example/before.png", capturedAt: "2026-09-12T10:05:00Z" },
@@ -159,18 +160,23 @@ function sourcePill(html: string): string {
   return match && match[1] !== undefined ? match[1] : "";
 }
 
+function headingAnchor(html: string): string | null {
+  const match = html.match(/<h3[^>]*>([\s\S]*?)<\/h3>/);
+  return match && match[1] !== undefined ? match[1] : null;
+}
+
 describe("the developments feed", () => {
   beforeEach(() => {
     feedFilterHarness.onValueChange = null;
     feedFilterHarness.setSearchParams = null;
   });
 
-  it("lists every row under five labelled count chips on the bare page", () => {
+  it("lists every row under six labelled count chips on the bare page", () => {
     const html = render("/");
     expect(kinds(html)).toEqual(["hiring", "ad", "change", "mention", "hiring"]);
     expect(html.match(/data-kind=/g)).toHaveLength(5);
-    expect(chips(html)).toEqual(["All5", "Ads1", "Site changes1", "Mentions1", "Hiring2"]);
-    expect(html).toContain('aria-label="Filter developments"');
+    expect(chips(html)).toEqual(["All5", "Ads1", "Site changes1", "Mentions1", "Hiring2", "Blog posts0"]);
+    expect(html).toContain('aria-label="Filter updates"');
     expect(html).toContain('data-slot="developments-list"');
     expect(html).toContain('data-slot="source-pill"');
     expect(html).toContain('data-testid="development"');
@@ -180,14 +186,14 @@ describe("the developments feed", () => {
     const html = render("/?kind=hiring");
     expect(html.match(/data-kind=/g)).toHaveLength(2);
     expect(kinds(html)).toEqual(["hiring", "hiring"]);
-    expect(chips(html)).toEqual(["All5", "Ads1", "Site changes1", "Mentions1", "Hiring2"]);
+    expect(chips(html)).toEqual(["All5", "Ads1", "Site changes1", "Mentions1", "Hiring2", "Blog posts0"]);
   });
 
   it("falls back to the whole feed for an unknown kind", () => {
     const html = render("/?kind=bogus");
     expect(html.match(/data-kind=/g)).toHaveLength(5);
     expect(kinds(html)).toEqual(["hiring", "ad", "change", "mention", "hiring"]);
-    expect(chips(html)).toEqual(["All5", "Ads1", "Site changes1", "Mentions1", "Hiring2"]);
+    expect(chips(html)).toEqual(["All5", "Ads1", "Site changes1", "Mentions1", "Hiring2", "Blog posts0"]);
   });
 
   it("keeps one list element for every filter, empty rows included", () => {
@@ -198,6 +204,12 @@ describe("the developments feed", () => {
     expect(empty.match(/data-slot="developments-list"/g)).toHaveLength(1);
     expect(empty).not.toContain('data-testid="development"');
     expect(empty).toContain("Nothing of this kind in the last 90 days.");
+  });
+
+  it("promises updates will arrive on the empty All filter, not a filtered-out message", () => {
+    const empty = render("/", []);
+    expect(empty).toContain("Nothing yet. Site changes, mentions, ads and jobs show up here as we find them.");
+    expect(empty).not.toContain("Nothing of this kind in the last 90 days.");
   });
 
   it("titles a row by title, then summary, then the source label", () => {
@@ -219,6 +231,36 @@ describe("the developments feed", () => {
     expect(change.match(/<p[ >]/g)).toBeNull();
     expect(sourcePill(change)).toBe("Website");
     expect(change).toContain("12 Sept");
+  });
+  it("links a heading that carries an accepted https url out to that url in a new tab", () => {
+    const html = render("/?kind=mention");
+    const anchor = headingAnchor(html);
+    expect(anchor).toContain('href="https://forum.example/t/1"');
+    expect(anchor).toContain('rel="noopener noreferrer nofollow"');
+    expect(anchor).toContain('target="_blank"');
+    expect(anchor).toContain('class="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4"');
+    expect(anchor).toContain("Designer role posted");
+    expect(anchor).toContain("opens in a new tab");
+  });
+
+  it("keeps the heading plain when the url is null or not an http url", () => {
+    const hiring = render("/?kind=hiring");
+    expect(hiring).not.toContain("<a ");
+    expect(headingAnchor(hiring)).toBe("Staff engineer, billing");
+    const denied: readonly FeedRow[] = [
+      {
+        id: "d9",
+        kind: "mention",
+        title: "Kept plain",
+        summary: null,
+        url: "javascript:alert(1)",
+        observedAt: "2026-09-16T13:00:00Z",
+        when: "9 Sept",
+      },
+    ];
+    const html = render("/?kind=mention", denied);
+    expect(html).not.toContain("<a ");
+    expect(html).toContain(">Kept plain<");
   });
 
   it("hands a change row whose id matches to the site-change item, which carries the mark", () => {

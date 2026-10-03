@@ -137,4 +137,30 @@ test.describe("a signed-in customer's key", () => {
     await expect(page.getByTestId("api-key")).toHaveCount(0);
     expect((await page.request.get("/api/v1/competitors", { headers: auth })).status()).toBe(401);
   });
+
+  test("a repeated submit of the create-key form makes one key and shows no second secret @own-signin", async ({
+    page,
+  }) => {
+    const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+    createdEmail = email;
+    await signInWithMagicLink(page, email, requireInboxToken());
+    await page.goto("/app/settings/agents");
+    const submission = await page.locator('input[name="submission"]').inputValue();
+    await page.getByLabel("Name").fill("e2e once");
+    await page.getByRole("button", { name: "Make a key" }).click();
+    await expect(page.getByTestId("new-api-key")).toBeVisible();
+
+    const origin = new URL(page.url()).origin;
+    const repeat = await page.request.post("/app/settings/agents", {
+      form: { intent: "create-key", name: "e2e once", submission },
+      headers: { origin },
+    });
+    expect(repeat.status()).toBe(200);
+    const body = await repeat.text();
+    expect(body).toContain("That key was already created.");
+    expect(body).not.toContain("new-api-key");
+
+    await page.goto("/app/settings/agents");
+    await expect(page.getByTestId("api-key")).toHaveCount(1);
+  });
 });

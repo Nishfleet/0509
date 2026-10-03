@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { insertVerdict } from "../../../app/lib/data/jev_verdict.server";
 import { computeBreakageEvidence } from "../../../app/lib/site/breakage-evidence";
@@ -303,7 +303,7 @@ describe("judgeChange", () => {
     expect(judgment.noteworthy?.band).toBe("publish");
   });
 
-  it("case g: history_30d sends the recent change summaries of the entity to Jev", async () => {
+  it("case g: history_30d sends the kind and time of the recent changes of the entity to Jev", async () => {
     jevAnswers.noul.set("noteworthy_change", 0.95);
     jevAnswers.choice.set("change_kind", "pricing");
     await seedHistory("rival", 3);
@@ -317,27 +317,28 @@ describe("judgeChange", () => {
 
     await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
 
-    const sent = jevAnswers.states[0] as { history_30d: (string | null)[] };
-    expect([...sent.history_30d].sort()).toEqual(["change 0", "change 1", "change 2"]);
+    const sent = jevAnswers.states[0] as { history_30d: { kind: string | null; at: string }[] };
+    expect(sent.history_30d).toEqual([
+      { kind: "home", at: NOW },
+      { kind: "home", at: NOW },
+      { kind: "home", at: NOW },
+    ]);
   });
 
-  it("case g2: history_30d falls back to the title and leaves out rows with neither", async () => {
+  it("case g2: history_30d leaves out signals that are not changes", async () => {
     jevAnswers.noul.set("noteworthy_change", 0.95);
     jevAnswers.choice.set("change_kind", "pricing");
-    const insert = env.DB.prepare(
-      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, summary, aspect, url, dedup_key, observed_at, last_seen_at)
-       VALUES (?, 'ws-mine', 'rival', 'src_site_web', 'change', ?, ?, 'home', 'https://rival.example/', ?, ?, ?)`,
-    );
-    await env.DB.batch([
-      insert.bind("sig-t", "titled", null, "dedup-t", NOW, NOW),
-      insert.bind("sig-s", "ignored", "summed", "dedup-s", NOW, NOW),
-      insert.bind("sig-n", null, null, "dedup-n", NOW, NOW),
-    ]);
+    await env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, aspect, url, dedup_key, observed_at, last_seen_at)
+       VALUES ('sig-post', 'ws-mine', 'rival', 'src_site_web', 'content', 'a post', 'blog', 'https://rival.example/', 'dedup-post', ?, ?)`,
+    )
+      .bind(NOW, NOW)
+      .run();
 
     await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
 
-    const sent = jevAnswers.states[0] as { history_30d: (string | null)[] };
-    expect([...sent.history_30d].sort()).toEqual(["summed", "titled"]);
+    const sent = jevAnswers.states[0] as { history_30d: unknown[] };
+    expect(sent.history_30d).toEqual([]);
   });
 
   it("case h: Jev unavailable defers without writing verdicts", async () => {
@@ -350,6 +351,19 @@ describe("judgeChange", () => {
     expect(judgment.deferred).toBe(true);
     expect(judgment.noteworthy).toBeNull();
     expect(await rowsFor("rival")).toEqual([]);
+  });
+
+  it("case h2: a Jev outage during a site judgment is logged", async () => {
+    jevAnswers.noul.set("noteworthy_change", 0.95);
+    jevAnswers.choice.set("change_kind", "pricing");
+    jevFailures.next = 1;
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
+
+    const events = logged.mock.calls.map(([line]) => JSON.parse(String(line)).event);
+    logged.mockRestore();
+    expect(events).toContain("site.jev_unavailable");
   });
 
   it("case i: Jev unavailable for the self breakage question defers too", async () => {
