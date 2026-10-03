@@ -144,8 +144,15 @@ function RowMove({ move }: { move: SiteChangeView }): ReactElement | null {
   );
 }
 
-function positionLabel(row: HomeRow): string {
-  if (row.signals === 0 || row.position === null) return "—";
+function positionLabel(row: HomeRow): React.ReactNode {
+  if (row.signals === 0 || row.position === null) {
+    return (
+      <>
+        <span aria-hidden="true">—</span>
+        <span className="sr-only">No rank yet</span>
+      </>
+    );
+  }
   return `#${String(row.position)}`;
 }
 

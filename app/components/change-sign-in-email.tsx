@@ -17,6 +17,10 @@ export function ChangeSignInEmail({ sent, error }: { sent: boolean; error: strin
         name="newEmail"
         type="email"
         autoComplete="off"
+        inputMode="email"
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
         required
         aria-invalid={error === null ? undefined : true}
         aria-describedby={error === null ? undefined : "new-sign-in-email-error"}

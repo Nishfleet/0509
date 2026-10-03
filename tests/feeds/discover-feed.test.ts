@@ -58,6 +58,36 @@ describe("feedLinksFromHtml", () => {
   });
 });
 
+describe("feedLinksFromHtml edge cases", () => {
+  it("skips blank, whitespace-only and unresolvable hrefs and keeps a valid sibling", () => {
+    const html = `
+      <link rel="alternate" type="application/rss+xml" href="">
+      <link rel="alternate" type="application/rss+xml" href="   ">
+      <link rel="alternate" type="application/rss+xml" href="http://">
+      <link rel="alternate" type="application/rss+xml" href="/valid.xml">
+    `;
+    expect(feedLinksFromHtml(html, HOME)).toEqual([new URL("/valid.xml", HOME).href]);
+  });
+
+  it("skips a feed link with no rel attribute and keeps one with rel=alternate", () => {
+    const html = `
+      <link type="application/rss+xml" href="/norel.xml">
+      <link rel="alternate" type="application/rss+xml" href="/withrel.xml">
+    `;
+    expect(feedLinksFromHtml(html, HOME)).toEqual([new URL("/withrel.xml", HOME).href]);
+  });
+
+  it("keeps the https sibling when the same page declares a plain-http feed", () => {
+    // Only the http declaration is dropped, so this also proves a secure feed
+    // is not discarded along with it.
+    const html = `
+      <link rel="alternate" type="application/rss+xml" href="http://rival.com/insecure.xml">
+      <link rel="alternate" type="application/rss+xml" href="/secure.xml">
+    `;
+    expect(feedLinksFromHtml(html, HOME)).toEqual([new URL("/secure.xml", HOME).href]);
+  });
+});
+
 describe("feedCandidates", () => {
   it("puts the declared feed first, then the common paths, without repeats", () => {
     const html = `<link rel="alternate" type="application/atom+xml" href="/atom.xml">`;
@@ -70,6 +100,10 @@ describe("feedCandidates", () => {
       "https://rival.com/rss.xml",
       "https://rival.com/blog/feed",
       "https://rival.com/changelog.xml",
+      "https://rival.com/changelog/rss.xml",
+      "https://rival.com/changelog/feed.xml",
+      "https://rival.com/blog/rss.xml",
+      "https://rival.com/feed.xml",
     ]);
   });
 
@@ -77,6 +111,16 @@ describe("feedCandidates", () => {
     expect(feedCandidates(null, "https://rival.com/")).toEqual(
       COMMON_FEED_PATHS.map((path) => `https://rival.com${path}`),
     );
+  });
+
+  it("returns nothing for a plain-http homepage and every common path for an https one", () => {
+    expect(feedCandidates(null, "http://rival.com/")).toEqual([]);
+    // The declared feed goes through the same https only guard: a site that
+    // serves its whole page over plain http contributes no https candidate.
+    expect(
+      feedCandidates(`<link rel="alternate" type="application/rss+xml" href="/feed.xml">`, "http://rival.com/"),
+    ).toEqual([]);
+    expect(feedCandidates(null, HOME)).toEqual(COMMON_FEED_PATHS.map((path) => new URL(path, HOME).href));
   });
 
   it("caps the list", () => {

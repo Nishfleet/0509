@@ -149,6 +149,26 @@ describe("parseFeed", () => {
   });
 });
 
+describe("parseFeed, items it must drop or keep", () => {
+  it("keeps an unparseable date and a later textual link, and drops a blank title, blank link, or non-http link", () => {
+    const items = parseFeed(
+      rss(
+        `<item><title>A</title><link>https://rival.com/a</link><pubDate>garbage</pubDate></item>` +
+          `<item><title>   </title><link>https://rival.com/b</link></item>` +
+          `<item><title>C</title><link>   </link></item>` +
+          `<item><title>D</title><link>javascript:alert(1)</link></item>` +
+          `<item><title>E</title><link rel="self"/><link>https://rival.com/e</link></item>`,
+      ),
+      BASE,
+      { now: NOW },
+    );
+
+    expect(items?.map((item) => item.title)).toEqual(["A", "E"]);
+    expect(items?.[0]).toMatchObject({ id: "https://rival.com/a", publishedAt: null });
+    expect(items?.[1]?.url).toBe("https://rival.com/e");
+  });
+});
+
 describe("isFeedDocument", () => {
   it("accepts rss and feed roots only", () => {
     expect(isFeedDocument("<?xml version='1.0'?><rss version='2.0'></rss>")).toBe(true);

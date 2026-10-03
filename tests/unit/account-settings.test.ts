@@ -119,6 +119,11 @@ describe("DeleteAccount", () => {
     expect(input).toContain('autoCorrect="off"');
     expect(input).toContain('spellCheck="false"');
   });
+
+  it("asks the phone for an email keyboard", () => {
+    const input = confirmInput(renderDeleteAccount());
+    expect(input).toContain('inputMode="email"');
+  });
 });
 
 describe("SignOut", () => {
