@@ -16,7 +16,7 @@ import type { BreakageEvidence } from "../../app/lib/site/breakage-evidence";
 
 const REPEATS = 1;
 
-const PROBE_CAP = 12;
+const PROBE_CAP = 1000;
 
 const PROBE_QUESTIONS = new Set([
   "is_competitor",
