@@ -14,10 +14,7 @@ import { runCostGuard, runNightlyCostGuard } from "../../app/lib/observability/r
  * run idempotent. Real local D1 with every migration applied.
  */
 
-vi.mock("@sentry/cloudflare", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@sentry/cloudflare")>()),
-  captureMessage: vi.fn(),
-}));
+vi.mock("@sentry/cloudflare", () => ({ captureMessage: vi.fn() }));
 
 const usageBody = (rowsWritten: number, requests: number) => ({
   data: {
