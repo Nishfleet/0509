@@ -85,6 +85,10 @@ describe("readThisFirstLine", () => {
   it("keeps the plural noun when one of several was picked", () => {
     expect(readThisFirstLine(1, 3, "Acme")).toBe("1 of 3 changes worth reading this week, led by Acme.");
   });
+
+  it("keeps the singular noun when the one judged change was not picked", () => {
+    expect(readThisFirstLine(0, 1, "Acme")).toBe("0 of 1 change worth reading this week, led by Acme.");
+  });
 });
 
 describe("readThisFirstState", () => {
