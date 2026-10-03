@@ -15,12 +15,7 @@ import { CompetitorYoutube } from "../../app/components/competitor-youtube";
 // one-input.test.ts asserts them for the sibling input.
 const NEVER = () => new Promise(() => undefined);
 
-const HINTS = [
-  'autoCapitalize="none"',
-  'autoCorrect="off"',
-  'spellCheck="false"',
-  'enterKeyHint="go"',
-];
+const HINTS = ['autoCapitalize="none"', 'autoCorrect="off"', 'spellCheck="false"', 'enterKeyHint="go"'];
 
 function render(element: ReactElement): string {
   const router = createMemoryRouter(
