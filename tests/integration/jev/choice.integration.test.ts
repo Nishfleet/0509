@@ -46,7 +46,7 @@ describe("askChoice", () => {
     expect(verdict).toMatchObject({ questionId: "activity", choice: "dormant", cached: false });
     expect(verdict.inputHash).toMatch(/^[0-9a-f]{64}$/);
     expect(run).toHaveBeenCalledTimes(1);
-    expect(run.mock.calls[0]?.[0]).toBe("typesafe/jev");
+    expect(run.mock.calls[0]?.[0]).toBe("@cf/cloudflare/clef");
     const request = run.mock.calls[0]?.[1] as { questions: { activity: { type: string; criteria: unknown } } };
     expect(request.questions.activity.type).toBe("choice");
     expect(request.questions.activity.criteria).toEqual(question.options);
