@@ -4,7 +4,18 @@ import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { AlertChipEmpty } from "../app/components/alert-chip-empty";
+import type { AlertFeedItem } from "../app/components/alert-row";
 import { ALERT_CHIPS, type AlertChipKey } from "../app/lib/alert-chips";
+import { groupByDay } from "../app/lib/alert-day";
+
+const NOW = new Date("2026-10-02T08:00:00.000Z");
+
+const NOTE: AlertFeedItem = {
+  kind: "note",
+  id: "note-1",
+  at: "2026-10-02T07:00:00.000Z",
+  note: { id: "note-1", title: "A takedown request", created_at: "2026-10-02T07:00:00.000Z", when: "today" },
+};
 
 type Counts = Record<AlertChipKey, number>;
 
@@ -24,23 +35,25 @@ describe("AlertChipEmpty", () => {
   });
 
   it("renders nothing when the workspace holds rows of any kind", () => {
-    const groups = [{ group: "TODAY", items: [{ id: "sig-1" }] }];
-    expect(render("hiring", emptyCounts(), groups)).toBe("");
+    expect(render("hiring", emptyCounts(), groupByDay([NOTE], NOW, "UTC"))).toBe("");
   });
 
   it("renders nothing when the named chip has rows of its own", () => {
-    const counts = { ...emptyCounts(), hiring: 3 };
-    expect(render("hiring", counts)).toBe("");
+    expect(render("hiring", { ...emptyCounts(), hiring: 3 })).toBe("");
   });
 
-  it("names each empty chip, lower case, and links back to All", () => {
-    for (const { key, label } of ALERT_CHIPS) {
-      if (key === "all") continue;
+  it("still renders the empty state when a different chip has rows", () => {
+    expect(render("hiring", { ...emptyCounts(), ads: 4 })).toContain('data-testid="alert-chip-empty"');
+  });
+
+  it.each(ALERT_CHIPS.filter((chip) => chip.key !== "all"))(
+    "names $key, lower case, and links back to All",
+    ({ key, label }) => {
       const html = render(key);
       expect(html).toContain('data-testid="alert-chip-empty"');
       expect(html).toContain(`No ${label.toLowerCase()} alerts yet. Everything else is still under All.`);
       expect(html).toContain('href="/app/alerts"');
       expect(html).toContain("See everything");
-    }
-  });
+    },
+  );
 });
