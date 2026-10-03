@@ -138,10 +138,10 @@ describe("HowRankedTable", () => {
 });
 
 describe("HowRankedSheet", () => {
-  it("renders the trigger text and the title attribute", () => {
+  it("renders the trigger text without a title attribute", () => {
     const html = renderSheet();
     expect(html).toContain("How this is ranked");
-    expect(html).toContain('title="we rank each brand by what happened with it online this week"');
+    expect(html).not.toContain("title=");
   });
 
   it("keeps the trigger's touch target and underline affordances", () => {
