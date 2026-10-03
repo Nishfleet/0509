@@ -90,15 +90,25 @@ describe("generateShortlist", () => {
     await expect(run).rejects.toThrow(/hn: hn generator fetch failed with status 503; ai: gateway down/);
   });
 
-  it("marks the failure as a billing refusal when a generator was refused for payment", async () => {
+  it("marks the failure as a billing refusal when every generator was refused for payment", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    hn.run.mockRejectedValue(new Error("hn generator fetch failed with status 503"));
+    hn.run.mockRejectedValue(new Error("hn generator refused: 402 payment required"));
     ai.run.mockRejectedValue(new Error("AiError: 2021: account limited, payment required"));
 
     const failure: unknown = await generateShortlist(SELF, []).catch((error: unknown) => error);
 
     expect(failure).toBeInstanceOf(DiscoveryUnavailableError);
     expect(failure).toHaveProperty("billingRefused", true);
+  });
+
+  it("stays retryable when only one generator was refused and the other had a real outage", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    hn.run.mockRejectedValue(new Error("hn generator fetch failed with status 503"));
+    ai.run.mockRejectedValue(new Error("AiError: 2021: account limited, payment required"));
+
+    const failure: unknown = await generateShortlist(SELF, []).catch((error: unknown) => error);
+
+    expect(failure).toHaveProperty("billingRefused", false);
   });
 
   it("leaves billingRefused false for an ordinary outage", async () => {

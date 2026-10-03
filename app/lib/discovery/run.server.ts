@@ -93,7 +93,7 @@ async function settledCandidates(self: DiscoverySelf): Promise<Candidate[]> {
   if (failed.length === runs.length) {
     throw new DiscoveryUnavailableError(
       `every discovery generator failed: ${failed.map((item) => `${String(item.generator)}: ${failureMessage(item.reason)}`).join("; ")}`,
-      failed.some((item) => isBillingRefusal(item.reason)),
+      failed.every((item) => isBillingRefusal(item.reason)),
     );
   }
   for (const { generator, reason } of failed) captureException(reason, { tags: { discovery_generator: generator } });
