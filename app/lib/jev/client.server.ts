@@ -1,3 +1,4 @@
+import { captureException } from "@sentry/cloudflare";
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
@@ -54,6 +55,19 @@ export class JevUnavailableError extends Error {
     super(`jev unavailable: ${cause instanceof Error ? cause.message : String(cause)}`);
     this.name = "JevUnavailableError";
   }
+}
+
+const BILLING_REFUSED = /(^|\D)(2021|402)(\D|$)|payment|insufficient|credit/i;
+
+function unavailable(error: unknown): JevUnavailableError {
+  const failure = new JevUnavailableError(error);
+  if (BILLING_REFUSED.test(failure.message)) {
+    captureException(new Error("jev refused: AI Gateway credits or payment"), {
+      level: "error",
+      fingerprint: ["jev-billing-refused"],
+    });
+  }
+  return failure;
 }
 
 function jevBody(raw: unknown): unknown {
@@ -119,7 +133,7 @@ async function run(question: NoulQuestion, state: unknown): Promise<number> {
       { gateway: { id: GATEWAY_ID } },
     );
   } catch (error) {
-    throw new JevUnavailableError(error);
+    throw unavailable(error);
   }
   const parsed = answerSchema.safeParse(jevBody(raw));
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
@@ -163,7 +177,7 @@ export async function askNouls(
         { gateway: { id: GATEWAY_ID } },
       );
     } catch (error) {
-      throw new JevUnavailableError(error);
+      throw unavailable(error);
     }
     const parsed = answerSchema.safeParse(jevBody(raw));
     if (parsed.success) answers = parsed.data.answers;
@@ -197,7 +211,7 @@ async function runChoice(question: ChoiceQuestion, state: unknown): Promise<stri
       { gateway: { id: GATEWAY_ID } },
     );
   } catch (error) {
-    throw new JevUnavailableError(error);
+    throw unavailable(error);
   }
   const parsed = choiceAnswerSchema.safeParse(jevBody(raw));
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
