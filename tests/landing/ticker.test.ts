@@ -48,6 +48,14 @@ describe("agoLabel", () => {
   it("clamps a future observation to just now", () => {
     expect(agoLabel("2026-09-24T13:00:00.000Z", new Date("2026-09-24T12:00:00.000Z"))).toBe("just now");
   });
+
+  it("labels an unparseable observation as date unknown", () => {
+    expect(agoLabel("garbage", new Date("2026-09-24T12:00:00.000Z"))).toBe("date unknown");
+  });
+
+  it("labels an unparseable now as date unknown", () => {
+    expect(agoLabel("2026-09-24T11:00:00.000Z", new Date("nope"))).toBe("date unknown");
+  });
 });
 
 describe("tickerItems", () => {
@@ -60,6 +68,13 @@ describe("tickerItems", () => {
   it("falls back to the domain when the row has no name", () => {
     const items = tickerItems([siteChangeRow({ entity_name: null })], new Date());
     expect(items[0]?.text).toBe("acme.test changed its pricing page");
+  });
+
+  it("labels an unparseable observed_at as date unknown", () => {
+    const items = tickerItems([siteChangeRow({ observed_at: "garbage" })], new Date("2026-09-24T12:00:00.000Z"));
+    expect(items).toEqual([
+      { id: "sig-1", text: "Acme changed its pricing page", ago: "date unknown" } satisfies TickerItem,
+    ]);
   });
 
   it("drops a row whose payload is not readable", () => {
