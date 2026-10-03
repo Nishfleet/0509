@@ -34,6 +34,10 @@ export function CompetitorYoutube({ url, error }: CompetitorYoutubeProps): React
           type="text"
           inputMode="url"
           autoComplete="off"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          enterKeyHint="go"
           required
           maxLength={YOUTUBE_LINK_MAX}
           placeholder="youtube.com/@theirname"
