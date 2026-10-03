@@ -90,6 +90,20 @@ const EXTRA: DiscoveryCase[] = [
 
 const seen: string[] = [];
 
+const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function paced<T>(call: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt += 1) {
+    await pause(1_500);
+    try {
+      return await call();
+    } catch (error) {
+      if (!String(error).includes("2003") || attempt >= 4) throw error;
+      await pause(15_000);
+    }
+  }
+}
+
 function recordingAsk(): Ask<DiscoveryCase> {
   return async (row) => {
     const combine = (ps: number[]): number => {
@@ -97,7 +111,7 @@ function recordingAsk(): Ask<DiscoveryCase> {
       const [competitor = 0, category = 0] = ps;
       return category < 0.5 ? 0 : Math.min(competitor, category);
     };
-    return makeNoulsAsk([IS_COMPETITOR, SAME_CATEGORY], combine)(stateFor(row));
+    return paced(() => makeNoulsAsk([IS_COMPETITOR, SAME_CATEGORY], combine)(stateFor(row)));
   };
 }
 

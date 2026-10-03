@@ -16,7 +16,7 @@ import type { BreakageEvidence } from "../../app/lib/site/breakage-evidence";
 
 const REPEATS = 3;
 
-const CONCURRENCY = 2;
+const CONCURRENCY = 1;
 
 const MIN_PER_SPLIT = 20;
 
@@ -158,7 +158,7 @@ function selectedSplits(): Split[] {
 
 const JEV_TIMEOUT_MS = 60_000;
 
-const BUDGET_MARGIN = 1.2;
+const BUDGET_MARGIN = 1.5;
 
 let callBudget = 0;
 
