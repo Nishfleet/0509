@@ -62,7 +62,12 @@ function renderPending(state: Exclude<Navigation["state"], "idle">, posted = tru
 }
 
 function expectDisabledButton(html: string): void {
-  expect(/<button\b[^>]*\bdisabled\b[^>]*>/.exec(html)).not.toBeNull();
+  const disabledButton = /<button\b[^>]*\bdisabled\b[^>]*>/.exec(html);
+  expect(disabledButton).not.toBeNull();
+  // The disabled button is the one that reads Confirm, so an unrelated
+  // disabled button elsewhere in the page cannot pass this assertion.
+  const fromButton = disabledButton && html.slice(disabledButton.index);
+  expect(fromButton).toMatch(/Confirm/);
 }
 
 describe("/v/:token (0509#5811)", () => {
