@@ -207,9 +207,7 @@ async function postJev(body: unknown): Promise<JevResponse> {
   if (VIA_GATEWAY) {
     const raw = await (
       await aiBinding()
-    ).run(`@cf/cloudflare/${PROBE_MODEL}` as never, { ...(withoutModel(body) as object), model: PROBE_MODEL } as never, {
-      gateway: { id: GATEWAY_ID },
-    });
+    ).run(`@cf/cloudflare/${PROBE_MODEL}` as never, { ...(withoutModel(body) as object), model: PROBE_MODEL } as never);
     const unwrapped = unwrapJev(raw);
     return { ...unwrapped, model: typeof unwrapped.model === "string" ? unwrapped.model : GATEWAY_MODEL };
   }
