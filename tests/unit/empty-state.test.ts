@@ -136,9 +136,10 @@ describe("the component renders a sentence and at most one action, nothing else"
     const html = emptyState(sentence, action);
     expect(html).not.toMatch(/<a\b/);
     expect([...html.matchAll(/<input\b/g)]).toHaveLength(1);
-    // Mobile keyboard hints (0509#6701). React 19 emits these props camelCase
-    // in static markup; the HTML parser lowercases the attribute names on the
-    // wire, so spell-checking stays off and the Enter key reads "go" on a phone.
+    // Mobile keyboard hints (0509#6701). React 19 renders these props verbatim
+    // (camelCase) in static markup, so assert the exact string it writes; the HTML
+    // parser lowercases the attribute names when a phone loads the page, which is
+    // what turns spell-checking off and puts "go" on the Enter key.
     expect(html).toContain('autoComplete="off"');
     expect(html).toContain('autoCapitalize="none"');
     expect(html).toContain('autoCorrect="off"');
