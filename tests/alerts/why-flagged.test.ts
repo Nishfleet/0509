@@ -117,6 +117,14 @@ describe("WhyFlaggedSheet", () => {
     expect(body).toContain("Our read: A move.");
   });
 
+  it("shows the decision time in short UTC and keeps the ISO in dateTime", () => {
+    const body = contentBody();
+    // Serialised as `dateTime`, the prop name React hands to <time>; the
+    // browser's own DOM spelling is the lowercase `datetime`.
+    expect(body).toContain('dateTime="2026-09-25T04:00:00Z"');
+    expect(body).toContain(">2026-09-25 04:00 UTC</time>");
+  });
+
   it("drops the reason paragraph when Jev stored no reason", () => {
     const body = contentBody({ ...WHY, reason: null });
     expect(body).not.toContain("why-flagged-reason");

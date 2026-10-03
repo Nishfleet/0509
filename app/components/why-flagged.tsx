@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "./ui/dialog";
+import { shortUtc } from "../lib/short-utc";
 import type { WhyFlagged } from "../lib/why-flagged";
 
 const TRIGGER_CLASS = "text-ink-soft font-mono text-eyebrow uppercase underline underline-offset-4 min-h-11";
@@ -35,7 +36,7 @@ export function WhyFlaggedSheet({ why }: { why: WhyFlagged }): ReactElement {
           <div className={ROW_CLASS}>
             <dt className={LABEL_CLASS}>Decided</dt>
             <dd>
-              <time dateTime={why.decidedAt}>{why.decidedAt}</time>
+              <time dateTime={why.decidedAt}>{shortUtc(why.decidedAt)}</time>
             </dd>
           </div>
         </dl>
