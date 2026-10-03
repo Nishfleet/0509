@@ -27,6 +27,11 @@ export default function VerifyAddress({ actionData }: Route.ComponentProps) {
         <p className="mt-4 leading-[1.65] text-ink-soft">
           Your weekly brief and alerts will now go to this email address.
         </p>
+        <p className="mt-4 leading-[1.65]">
+          <a className="inline-flex min-h-11 items-center underline underline-offset-4" href="/app">
+            Open Five to Nine
+          </a>
+        </p>
         <Footer />
       </main>
     );
