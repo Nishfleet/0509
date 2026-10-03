@@ -10,17 +10,18 @@ function renderEmptyState(sentence: string, action?: EmptyStateAction): string {
 }
 
 describe("EmptyState", () => {
-  it.each(["No data.", " nothing here! ", '"No data"'])("throws renders no truth for %s", (sentence) => {
+  it.each(["No data.", " nothing here! ", '"No data"'])("rejects bare sentence %s", (sentence) => {
     expect(() => renderEmptyState(sentence)).toThrow("renders no truth");
   });
 
-  it.each(["//evil.example", "https://evil.example"])("throws same-site path for %s", (href) => {
+  it.each(["//evil.example", "https://evil.example"])("rejects off-site href %s", (href) => {
     expect(() => renderEmptyState("See the details.", { kind: "link", label: "Open", href })).toThrow("same-site path");
   });
 
-  it("renders a same-site link href", () => {
-    const html = renderEmptyState("See the details.", { kind: "link", label: "Open", href: "/app" });
-    expect(html).toContain('href="/app"');
+  it("accepts a same-site link href", () => {
+    const render = () => renderEmptyState("See the details.", { kind: "link", label: "Open", href: "/app" });
+    expect(render).not.toThrow();
+    expect(render()).toContain('href="/app"');
   });
 
   it("renders an input action with the given name and placeholder", () => {
