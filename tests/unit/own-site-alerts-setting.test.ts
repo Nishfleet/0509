@@ -18,6 +18,7 @@ vi.mock("react-router", async (importOriginal) => {
   return {
     ...actual,
     useFetcher: () => ({
+      state: harness.formData === undefined ? "idle" : "submitting",
       formData: harness.formData,
       submit: () => undefined,
     }),
@@ -36,7 +37,7 @@ function pendingValue(value: "on" | "off"): FormData {
 }
 
 function isChecked(tag: string): boolean {
-  return tag.includes('aria-checked="true"');
+  return /(?:^|\s)aria-checked="true"(?:\s|>|$)/.test(tag);
 }
 
 // The switch is a base-ui `role="switch"` span. The description must sit on that
