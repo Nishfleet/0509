@@ -10,7 +10,7 @@ function render(name: string, flags: { self?: boolean; off?: boolean } = {}): st
 }
 
 function classOf(html: string): string {
-  return /class="([^"]*)"/.exec(html)?.[1] ?? "";
+  return /<span\b[^>]*\bclass="([^"]*)"/.exec(html)?.[1] ?? "";
 }
 
 describe("the monogram", () => {
