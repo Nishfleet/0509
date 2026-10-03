@@ -56,6 +56,7 @@ export interface BiggestMoveView {
 
 export function biggestMoveView(move: BiggestMove, now: Date): BiggestMoveView {
   const { signal, weight, multiplier, points } = move;
+  const pointWord = points === 1 ? "point" : "points";
   return {
     id: signal.id,
     kind: signal.kind,
@@ -63,7 +64,7 @@ export function biggestMoveView(move: BiggestMove, now: Date): BiggestMoveView {
     title: signal.title ?? signal.summary ?? SOURCE_LABEL[signal.kind],
     url: signal.url,
     when: daysAgoLabel(signal.observedAt, now),
-    read: `${BUCKET_LABELS[signal.bucket]}: ${String(weight)} × ${String(multiplier)} = ${String(points)} points, the most of anything this brand did this week.`,
+    read: `${BUCKET_LABELS[signal.bucket]}: ${String(weight)} × ${String(multiplier)} = ${String(points)} ${pointWord}, the most of anything this brand did this week.`,
     weight,
     multiplier,
     points,
