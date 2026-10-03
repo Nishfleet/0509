@@ -81,6 +81,7 @@ describe("Discovery workflow judging", () => {
 
     await using instance = await introspectWorkflowInstance(env.DISCOVERY, "judge-batches");
     await instance.modify(async (modifier) => {
+      await modifier.mockStepResult({ name: "jev-ready" }, true);
       await modifier.mockStepResult({ name: "generate" }, generated());
     });
     await env.DISCOVERY.create({ id: "judge-batches", params: { workspaceId: WORKSPACE_ID, mode: "create" } });

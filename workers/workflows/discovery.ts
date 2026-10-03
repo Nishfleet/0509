@@ -13,11 +13,26 @@ import {
   stillCompetitorAction,
   writeStillCompetitorResults,
 } from "../../app/lib/discovery/refresh.server";
+import { stopRetryingWhenRefused } from "../../app/lib/discovery/refused.server";
 import type { DiscoveryParams } from "../../app/lib/discovery/start.server";
+import { JevUnavailableError, probeJev } from "../../app/lib/jev/client.server";
 
 const RETRY: WorkflowStepConfig = {
   retries: { limit: 3, delay: "10 seconds", backoff: "exponential" },
 };
+
+const PROBE_ONCE: WorkflowStepConfig = { retries: { limit: 0, delay: "1 second" } };
+
+async function jevIsReady(): Promise<boolean> {
+  try {
+    await probeJev();
+    return true;
+  } catch (error) {
+    if (!(error instanceof JevUnavailableError)) throw error;
+    console.error(JSON.stringify({ event: "discovery.jev_unavailable_skip", message: error.message }));
+    return false;
+  }
+}
 
 export interface DiscoveryOutcome {
   workspaceId: string;
@@ -65,8 +80,14 @@ export class Discovery extends WorkflowEntrypoint<Env, DiscoveryParams> {
       return { workspaceId, shortlisted: 0, queued: 0, promoted: 0, written: 0, judged };
     }
 
+    if (!(await step.do("jev-ready", PROBE_ONCE, jevIsReady))) {
+      return { workspaceId, shortlisted: 0, queued: 0, promoted: 0, written: 0, judged: 0 };
+    }
+
     const backlog = await step.do("backlog", RETRY, () => readBacklog(workspaceId));
-    const generated = await step.do("generate", RETRY, () => generateShortlist(context.self, backlog));
+    const generated = await step.do("generate", RETRY, () =>
+      stopRetryingWhenRefused(() => generateShortlist(context.self, backlog)),
+    );
     const shortlisted = generated.shortlisted;
     const resolved = await step.do("resolve", RETRY, () => resolveShortlist(context, shortlisted));
     const results = await judgeAndWriteBatches(step, context, resolved);

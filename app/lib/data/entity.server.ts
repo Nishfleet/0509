@@ -257,7 +257,8 @@ const SELECT_SELF =
 const SELECT_KNOWN =
   "SELECT domain, name, role, state FROM entity WHERE workspace_id = ?1 UNION ALL SELECT candidate_domain, candidate_name, 'suggestion', status FROM suggestion WHERE workspace_id = ?1 AND status <> 'pending'";
 
-const SELECT_SELF_WORKSPACES = "SELECT workspace_id FROM entity WHERE role = 'self' ORDER BY workspace_id";
+const SELECT_DISCOVERABLE_WORKSPACES =
+  "SELECT e.workspace_id AS workspace_id, w.created_at AS created_at, p.status AS status, p.current_period_end AS current_period_end FROM entity e JOIN workspace w ON w.id = e.workspace_id JOIN plan p ON p.workspace_id = w.id WHERE e.role = 'self' AND w.fixture = 0 ORDER BY e.workspace_id";
 
 interface SelfRow {
   workspace_id: string;
@@ -299,9 +300,26 @@ export async function readDiscoveryContext(workspaceId: string): Promise<Discove
   };
 }
 
-export async function readSelfWorkspaceIds(): Promise<string[]> {
-  const rows = await env.DB.prepare(SELECT_SELF_WORKSPACES).all<{ workspace_id: string }>();
-  return rows.results.map((row) => row.workspace_id);
+interface DiscoverableWorkspace {
+  workspaceId: string;
+  createdAt: string;
+  status: string;
+  currentPeriodEnd: string | null;
+}
+
+export async function readDiscoverableWorkspaces(): Promise<DiscoverableWorkspace[]> {
+  const rows = await env.DB.prepare(SELECT_DISCOVERABLE_WORKSPACES).all<{
+    workspace_id: string;
+    created_at: string;
+    status: string;
+    current_period_end: string | null;
+  }>();
+  return rows.results.map((row) => ({
+    workspaceId: row.workspace_id,
+    createdAt: row.created_at,
+    status: row.status,
+    currentPeriodEnd: row.current_period_end,
+  }));
 }
 
 const SELECT_REFRESH_TARGETS =

@@ -90,6 +90,27 @@ describe("generateShortlist", () => {
     await expect(run).rejects.toThrow(/hn: hn generator fetch failed with status 503; ai: gateway down/);
   });
 
+  it("marks the failure as a billing refusal when a generator was refused for payment", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    hn.run.mockRejectedValue(new Error("hn generator fetch failed with status 503"));
+    ai.run.mockRejectedValue(new Error("AiError: 2021: account limited, payment required"));
+
+    const failure: unknown = await generateShortlist(SELF, []).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(DiscoveryUnavailableError);
+    expect(failure).toHaveProperty("billingRefused", true);
+  });
+
+  it("leaves billingRefused false for an ordinary outage", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    hn.run.mockRejectedValue(new Error("hn generator fetch failed with status 503"));
+    ai.run.mockRejectedValue(new Error("gateway down"));
+
+    const failure: unknown = await generateShortlist(SELF, []).catch((error: unknown) => error);
+
+    expect(failure).toHaveProperty("billingRefused", false);
+  });
+
   it("returns an empty shortlist when the generators ran and found nothing", async () => {
     hn.run.mockResolvedValue([]);
 
