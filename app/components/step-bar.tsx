@@ -18,6 +18,7 @@ export function StepBar({ current }: { current: 1 | 2 | 3 }): ReactElement {
               className={cn(active ? "bg-green px-1.5 text-on-green" : step < current ? "text-ink" : "text-ink-soft")}
             >
               {step} {label}
+              {step < current ? <span className="sr-only"> (done)</span> : null}
             </li>
           );
         })}
