@@ -40,7 +40,17 @@ function brandsBlock(payload: BriefPayload): ReactElement {
     <section data-brief-block="brands" className={SECTION}>
       <h3 className={HEAD}>Your tracked brands</h3>
       {payload.brands.length === 0 ? (
-        <p className={BODY}>Add a competitor to see where you stand</p>
+        <Fragment>
+          <p className={BODY}>Add a competitor to see where you stand</p>
+          <p className={BODY}>
+            <a
+              className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4"
+              href="/app/competitors"
+            >
+              Add one on Competitors
+            </a>
+          </p>
+        </Fragment>
       ) : (
         payload.brands.map((brand) => (
           <p key={brand.entity_id} className={LINE}>

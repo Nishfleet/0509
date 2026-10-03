@@ -135,6 +135,8 @@ describe("the brief view", () => {
       "checked",
     ]);
     expect(render({ brands: [] })).toContain("Add a competitor to see where you stand");
+    expect(render({ brands: [] })).toContain('href="/app/competitors"');
+    expect(render()).not.toContain('href="/app/competitors"');
     expect(render({ own_site: { status: "ok", incidents: [] } })).toContain("Your site looks fine.");
   });
 
