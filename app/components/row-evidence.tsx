@@ -52,6 +52,8 @@ function EvidenceItem({ item }: { item: WeekEvidence }): ReactElement {
       {image === null ? null : (
         <img
           src={image}
+          width={104}
+          height={74}
           loading="lazy"
           alt=""
           className="h-[74px] w-[104px] object-cover object-top max-[859px]:h-14 max-[859px]:w-[76px]"
