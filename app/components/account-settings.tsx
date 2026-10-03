@@ -5,11 +5,13 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
 export function SignOut() {
+  const navigation = useNavigation();
+  const signingOut = navigation.state !== "idle" && navigation.formData?.get("intent") === "sign-out";
   return (
     <Form method="post" action="/app/settings">
       <input type="hidden" name="intent" value="sign-out" />
-      <Button type="submit" variant="tertiary">
-        Sign out
+      <Button type="submit" variant="tertiary" disabled={signingOut}>
+        {signingOut ? "Signing out…" : "Sign out"}
       </Button>
     </Form>
   );
