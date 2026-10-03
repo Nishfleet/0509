@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 import { Link } from "react-router";
 
-import { DAY_MONTH } from "./competitor-header";
+import { dayMonthLabel } from "./competitor-header";
 import { EmptyState } from "./empty-state";
 import { SourcePill } from "./source-pill";
 import type { SourceRow, SourceSnapshot } from "./source-pill";
@@ -156,10 +156,13 @@ function StillCompetitor({ verdict }: { verdict: RailVerdict | null }): ReactEle
   if (verdict === null || words === null) {
     return <EmptyState sentence="We check this every week. The first answer arrives after a week of watching." />;
   }
+  const checkedLabel = dayMonthLabel(verdict.decidedAt);
   return (
     <>
       <p className="font-display text-[1.02rem]">{words}</p>
-      <p className="text-meta text-ink-soft">Checked {DAY_MONTH.format(new Date(verdict.decidedAt))}</p>
+      <p className="text-meta text-ink-soft">
+        {checkedLabel === null ? "Checked recently" : `Checked ${checkedLabel}`}
+      </p>
     </>
   );
 }

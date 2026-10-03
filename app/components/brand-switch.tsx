@@ -8,6 +8,11 @@ export const DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
   timeZone: "UTC",
 });
 
+export function dayMonthLabel(value: string): string | null {
+  if (Number.isNaN(Date.parse(value))) return null;
+  return DAY_MONTH.format(new Date(value));
+}
+
 export type BrandSwitchState = "on" | "off" | "you";
 
 const STATE_TEXT: Record<BrandSwitchState, string> = {
