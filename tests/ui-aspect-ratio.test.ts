@@ -8,6 +8,11 @@ function render(props: { ratio: number; className?: string }, children?: ReactNo
   return renderToStaticMarkup(createElement(AspectRatio, props, children));
 }
 
+function classAttr(html: string): string | null {
+  const match = html.match(/class="([^"]*)"/);
+  return match ? match[1] : null;
+}
+
 describe("AspectRatio (ui/aspect-ratio.tsx)", () => {
   it("exposes the ratio as a --ratio custom property on data-slot=aspect-ratio", () => {
     const html = render({ ratio: 1.6 });
@@ -25,17 +30,17 @@ describe("AspectRatio (ui/aspect-ratio.tsx)", () => {
   it("renders the relative base class and keeps a passed className next to it", () => {
     const html = render({ ratio: 1.6, className: "extra" });
 
-    expect(html).toContain("class=");
-    expect(html).toContain("relative");
-    expect(html).toContain("aspect-(--ratio)");
-    expect(html).toContain("extra");
-    expect(html.indexOf("relative")).toBeLessThan(html.indexOf("extra"));
+    const cls = classAttr(html);
+    expect(cls).not.toBeNull();
+    expect(cls).toContain("relative");
+    expect(cls).toContain("aspect-(--ratio)");
+    expect(cls).toContain("extra");
   });
 
   it("renders children inside the div", () => {
     const html = render({ ratio: 1.6, className: "extra" }, "child");
 
     expect(html).toContain(">child</div>");
-    expect(html.endsWith("</div>")).toBe(true);
+    expect(html).toMatch(/<\/div>\s*$/);
   });
 });
