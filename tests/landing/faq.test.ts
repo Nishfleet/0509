@@ -20,7 +20,10 @@ describe("landing faq", () => {
     const html = markup();
     expect(html).toContain('<section id="faq"');
     expect(html).toContain('aria-labelledby="faq-title"');
-    expect(html).toMatch(/<h2 id="faq-title"[^>]*>Questions<\/h2>/);
+    const heading = html.match(/<h2\b[^>]*>[\s\S]*?<\/h2>/);
+    expect(heading).toBeDefined();
+    expect(heading?.[0]).toContain('id="faq-title"');
+    expect(heading?.[0]).toContain("Questions");
   });
 
   it("renders one h3 per FAQ entry, in order, each equal to the escaped question", () => {
@@ -35,13 +38,11 @@ describe("landing faq", () => {
 
   it("renders each answer in a paragraph right after its question", () => {
     const html = markup();
-    FAQ.forEach((entry) => {
-      const question = escaped(entry.question);
-      const questionIndex = html.indexOf(question);
-      expect(questionIndex).toBeGreaterThan(-1);
-      const afterQuestion = html.slice(questionIndex + question.length);
-      const paragraph = afterQuestion.match(/<p\b[^>]*>([\s\S]*?)<\/p>/);
-      expect(paragraph?.[1]).toBe(escaped(entry.answer));
+    const entries = [...html.matchAll(/<h3\b[^>]*>([\s\S]*?)<\/h3>\s*<p\b[^>]*>([\s\S]*?)<\/p>/g)];
+    expect(entries).toHaveLength(FAQ.length);
+    FAQ.forEach((entry, index) => {
+      expect(entries[index]?.[1]).toBe(escaped(entry.question));
+      expect(entries[index]?.[2]).toBe(escaped(entry.answer));
     });
   });
 });
