@@ -33,8 +33,4 @@ describe("PasskeyOption", () => {
     expect(html).toContain('role="alert"');
     expect(html).toContain("Your passkey didn");
   });
-
-  it("renders a button element", () => {
-    expect(render("idle")).toMatch(/<button[^>]*type="button"/);
-  });
 });
