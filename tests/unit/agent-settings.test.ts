@@ -265,6 +265,53 @@ describe("AgentKeys", () => {
     expect(makeKey).not.toContain('disabled=""');
     expect(html).not.toContain("Making…");
   });
+
+  // One row with a bad timestamp took down the whole page: day() formatted the
+  // value through Intl.DateTimeFormat, which throws RangeError on an Invalid
+  // Date. day() now says "date unknown" for a value Date.parse rejects, so the
+  // row still renders.
+  it("says date unknown instead of throwing when a key's createdAt is unparseable", () => {
+    const html = stubbed(
+      createElement(AgentKeys, {
+        keys: [{ ...makeKey("a", "Broken"), createdAt: "garbage" }],
+        newKey: null,
+        duplicate: false,
+        submission: SUBMISSION,
+      }),
+    );
+
+    expect(html).toContain("Created date unknown · never used");
+    expect(html).not.toContain("Invalid");
+  });
+
+  it("says date unknown for a key whose lastUsedAt is unparseable but still shows a valid createdAt", () => {
+    const html = stubbed(
+      createElement(AgentKeys, {
+        keys: [{ ...makeKey("a", "Broken"), createdAt: "2026-09-01T00:00:00.000Z", lastUsedAt: "garbage" }],
+        newKey: null,
+        duplicate: false,
+        submission: SUBMISSION,
+      }),
+    );
+
+    expect(html).toContain("Created 1 Sept 2026 · last used date unknown");
+    expect(html).not.toContain("Invalid");
+  });
+
+  // Inverse of the two cases above: a valid createdAt still formats a day, so
+  // the guard cannot be replaced by an unconditional "date unknown" and pass.
+  it("still formats the created day for a key with a valid timestamp", () => {
+    const html = stubbed(
+      createElement(AgentKeys, {
+        keys: [makeKey("a", "Good")],
+        newKey: null,
+        duplicate: false,
+        submission: SUBMISSION,
+      }),
+    );
+
+    expect(html).toContain("Created 1 Sept 2026 · never used");
+  });
 });
 
 describe("ConnectedApps", () => {
@@ -310,6 +357,30 @@ describe("ConnectedApps", () => {
     expect(disconnects.every((button) => button.includes(">Disconnect</button>"))).toBe(true);
     expect(disconnects.every((button) => !button.includes('disabled=""'))).toBe(true);
     expect(html).not.toContain("Disconnecting…");
+  });
+
+  // A connected-app row holds a timestamp the MCP client sent, so a bad one
+  // reaches the same day() a bad key timestamp does.
+  it("says date unknown instead of throwing when an app's connectedAt is unparseable", () => {
+    const html = stubbed(
+      createElement(ConnectedApps, { apps: [{ grantId: "g1", name: "Notion", connectedAt: "garbage" }] }),
+    );
+
+    expect(html).toContain("Connected date unknown");
+    expect(html).not.toContain("Invalid");
+  });
+
+  // Inverse of the case above: a good timestamp still formats a day, so a
+  // refactor that returned "date unknown" for every value cannot pass this
+  // suite silently.
+  it("still formats the connected day for an app with a valid timestamp", () => {
+    const html = stubbed(
+      createElement(ConnectedApps, {
+        apps: [{ grantId: "g1", name: "Notion", connectedAt: "2026-09-01T00:00:00.000Z" }],
+      }),
+    );
+
+    expect(html).toContain("Connected 1 Sept 2026");
   });
 });
 

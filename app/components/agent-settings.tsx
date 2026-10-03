@@ -13,7 +13,8 @@ const ROW = "flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-
 const CLIENTS = ["Claude", "ChatGPT", "Cursor"];
 
 function day(iso: string): string {
-  return DAY.format(new Date(iso));
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms) ? "date unknown" : DAY.format(new Date(ms));
 }
 
 export const COPY_DEADLINE_MS = 2_000;
