@@ -65,6 +65,7 @@ export function DeleteAccount({ email, error }: { email: string; error: string |
           id="confirm-email"
           name="confirm"
           type="email"
+          inputMode="email"
           autoComplete="off"
           autoCapitalize="none"
           autoCorrect="off"
