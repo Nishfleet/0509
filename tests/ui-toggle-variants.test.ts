@@ -2,11 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { toggleVariants } from "../app/components/ui/toggle";
 
-// The toggle is skin-only, so its whole contract is the class list. cva
-// concatenates the base classes with the variant classes, and every one of
-// those strings has to stay: a dropped `group/toggle` breaks the icon's own
-// hover group, and a dropped height class collapses the button.
-
 describe("toggleVariants", () => {
   it("gives the default variant a transparent background and the default size height", () => {
     const classes = toggleVariants();
