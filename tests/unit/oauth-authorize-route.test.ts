@@ -48,23 +48,25 @@ vi.mock("react-router", async (importOriginal) => {
   const actual = await importOriginal<ReactRouterModule>();
   return {
     ...actual,
-    // The stub's own navigation is idle, so only the pending states are
-    // replaced. Every other test in this file keeps the real hook.
-    useNavigation: (...args: Parameters<typeof actual.useNavigation>): Navigation =>
-      harness.state === "idle"
-        ? actual.useNavigation(...args)
-        : ({
-            state: harness.state,
-            location: { pathname: "/oauth/authorize", search: "", hash: "", state: null, key: "k" },
-            matches: [],
-            historyAction: "POP",
-            formMethod: "post",
-            formAction: "/oauth/authorize",
-            formEncType: "application/x-www-form-urlencoded",
-            formData: harness.formData(),
-            json: undefined,
-            text: undefined,
-          } as Navigation),
+    // The real hook is called on every render and its result is overridden, so
+    // the hook count never changes between an idle and a pending render.
+    useNavigation: (...args: Parameters<typeof actual.useNavigation>): Navigation => {
+      const real = actual.useNavigation(...args);
+      if (harness.state === "idle") return real;
+      return {
+        ...real,
+        state: harness.state,
+        location: { pathname: "/oauth/authorize", search: "", hash: "", state: null, key: "k" },
+        matches: [],
+        historyAction: "POP",
+        formMethod: "post",
+        formAction: "/oauth/authorize",
+        formEncType: "application/x-www-form-urlencoded",
+        formData: harness.formData(),
+        json: undefined,
+        text: undefined,
+      } as Navigation;
+    },
   };
 });
 
