@@ -59,12 +59,12 @@ export class JevUnavailableError extends Error {
   }
 }
 
-const BILLING_REFUSED = /(^|\D)(2021|402)(\D|$)|payment|insufficient|credit/i;
+const BILLING_REFUSED = /(^|\D)(2021|402|3036)(\D|$)|payment|insufficient|credit|free allocation/i;
 
 function unavailable(error: unknown): JevUnavailableError {
   const failure = new JevUnavailableError(error);
   if (BILLING_REFUSED.test(failure.message)) {
-    captureException(new Error("jev refused: AI Gateway credits or payment"), {
+    captureException(new Error("jev refused: Workers AI quota, AI Gateway credits or payment"), {
       level: "error",
       fingerprint: ["jev-billing-refused"],
     });
