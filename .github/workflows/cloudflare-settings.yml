@@ -1,0 +1,63 @@
+name: cloudflare-settings
+
+# Cloudflare settings that live outside wrangler.jsonc, applied with stock
+# wrangler commands on demand (Nish 2026-10-03). Never runs on push or schedule.
+# R2: the backup bucket carries the same per-prefix retention as 0509-snapshots
+# (0509#5950). Email Routing: support@ moves to the support-inbox Worker and
+# brief@ (the weekly brief's reply address) is added (0509#5699).
+on:
+  workflow_dispatch:
+    inputs:
+      support_rule_id:
+        description: Rule id of the existing support@0509.io rule (read it from the "List Email Routing rules" step of an earlier run); empty leaves support@ alone
+        type: string
+        default: ''
+      add_brief_rule:
+        description: Create the brief@0509.io rule (run once)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-settings
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Set the backup bucket lifecycle rules
+        run: npx wrangler r2 bucket lifecycle set 0509-snapshots-backup --file .github/cloudflare/r2-backup-lifecycle.json --force
+      - name: List the backup bucket lifecycle rules
+        run: npx wrangler r2 bucket lifecycle list 0509-snapshots-backup
+      - name: List Email Routing rules
+        run: npx wrangler email routing rules list 0509.io
+      - name: Point support@ at the support-inbox Worker
+        if: inputs.support_rule_id != ''
+        env:
+          RULE_ID: ${{ inputs.support_rule_id }}
+        run: >
+          npx wrangler email routing rules update 0509.io "$RULE_ID"
+          --name support --match-type literal --match-field to --match-value support@0509.io
+          --action-type worker --action-value 0509-support-inbox-v2
+      - name: Add the brief@ rule
+        if: inputs.add_brief_rule
+        run: >
+          npx wrangler email routing rules create 0509.io
+          --name brief --match-type literal --match-field to --match-value brief@0509.io
+          --action-type worker --action-value 0509-support-inbox-v2
