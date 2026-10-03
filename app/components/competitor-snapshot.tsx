@@ -31,7 +31,12 @@ export function CompetitorSnapshot({ cells }: { cells: readonly SnapshotCell[] }
                 {cell.key === "rank" ? "#" : null}
                 <span className="text-2xl font-semibold text-ink tabular-nums">{cell.value}</span>
                 {cell.key === "rank" && cell.movement !== null ? (
-                  <span className="font-mono text-eyebrow text-ink-soft">{movementLabel(cell.movement, false)}</span>
+                  <>
+                    {" "}
+                    <span className="ml-2 font-mono text-eyebrow text-ink-soft">
+                      {movementLabel(cell.movement, false)}
+                    </span>
+                  </>
                 ) : null}
               </dd>
             </div>
