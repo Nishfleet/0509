@@ -287,7 +287,7 @@ describe("AgentKeys", () => {
   it("says date unknown for a key whose lastUsedAt is unparseable but still shows a valid createdAt", () => {
     const html = stubbed(
       createElement(AgentKeys, {
-        keys: [{ ...makeKey("a", "Broken"), lastUsedAt: "garbage" }],
+        keys: [{ ...makeKey("a", "Broken"), createdAt: "2026-09-01T00:00:00.000Z", lastUsedAt: "garbage" }],
         newKey: null,
         duplicate: false,
         submission: SUBMISSION,
@@ -296,6 +296,21 @@ describe("AgentKeys", () => {
 
     expect(html).toContain("Created 1 Sept 2026 · last used date unknown");
     expect(html).not.toContain("Invalid");
+  });
+
+  // Inverse of the two cases above: a valid createdAt still formats a day, so
+  // the guard cannot be replaced by an unconditional "date unknown" and pass.
+  it("still formats the created day for a key with a valid timestamp", () => {
+    const html = stubbed(
+      createElement(AgentKeys, {
+        keys: [makeKey("a", "Good")],
+        newKey: null,
+        duplicate: false,
+        submission: SUBMISSION,
+      }),
+    );
+
+    expect(html).toContain("Created 1 Sept 2026 · never used");
   });
 });
 
@@ -353,6 +368,19 @@ describe("ConnectedApps", () => {
 
     expect(html).toContain("Connected date unknown");
     expect(html).not.toContain("Invalid");
+  });
+
+  // Inverse of the case above: a good timestamp still formats a day, so a
+  // refactor that returned "date unknown" for every value cannot pass this
+  // suite silently.
+  it("still formats the connected day for an app with a valid timestamp", () => {
+    const html = stubbed(
+      createElement(ConnectedApps, {
+        apps: [{ grantId: "g1", name: "Notion", connectedAt: "2026-09-01T00:00:00.000Z" }],
+      }),
+    );
+
+    expect(html).toContain("Connected 1 Sept 2026");
   });
 });
 
