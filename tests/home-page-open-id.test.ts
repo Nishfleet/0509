@@ -4,7 +4,31 @@ import type { BriefPayload } from "../app/lib/brief-payload";
 import { resolveOpenId } from "../app/lib/home-page.server";
 
 const ENTITIES = [{ id: "ent_self" }, { id: "ent_kindred" }];
-const PAYLOAD: BriefPayload = { period_start: "2026-09-14T07:00:00.000Z" } as unknown as BriefPayload;
+const PAYLOAD: BriefPayload = {
+  workspace_id: "ws_1",
+  timezone: "Europe/London",
+  period_start: "2026-09-14T07:00:00.000Z",
+  period_end: "2026-09-21T07:00:00.000Z",
+  headline_rank: 2,
+  headline_total: 3,
+  headline_movement: 1,
+  headline_is_new: false,
+  why_line: "Kindred launched 3 new ads",
+  is_quiet_week: false,
+  is_unjudged: false,
+  read_this_first: [],
+  brands: [],
+  own_site: { status: "ok", incidents: [] },
+  checked: {
+    mention_count: 0,
+    site_change_count: 0,
+    new_ad_count: 0,
+    source_keys: [],
+    degraded_source_keys: [],
+    degraded_sources: [],
+  },
+  next_brief_at: null,
+};
 
 describe("resolveOpenId", () => {
   it("returns null when open is null", () => {
