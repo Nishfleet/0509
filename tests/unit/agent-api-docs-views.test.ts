@@ -67,12 +67,12 @@ describe("endpointViews", () => {
   });
 
   it("throws when a parameter has no name or a response has no description", () => {
-    expect(() =>
-      endpointViews({ paths: { "/x": { get: { parameters: [{}] } } } }),
-    ).toThrow("OpenAPI parameter is missing a name");
-    expect(() =>
-      endpointViews({ paths: { "/x": { get: { responses: { "200": {} } } } } }),
-    ).toThrow("OpenAPI response 200 is missing a description");
+    expect(() => endpointViews({ paths: { "/x": { get: { parameters: [{}] } } } })).toThrow(
+      "OpenAPI parameter is missing a name",
+    );
+    expect(() => endpointViews({ paths: { "/x": { get: { responses: { "200": {} } } } } })).toThrow(
+      "OpenAPI response 200 is missing a description",
+    );
   });
 
   it("throws when a $ref has no name", () => {
@@ -139,9 +139,7 @@ describe("schemaViews", () => {
 describe("bearerCopy", () => {
   it("throws without a bearer scheme, and returns the description otherwise", () => {
     expect(() => bearerCopy({})).toThrow("OpenAPI document is missing the bearer security scheme");
-    expect(
-      bearerCopy({ components: { securitySchemes: { apiKey: { scheme: "bearer" } } } }),
-    ).toBe("");
+    expect(bearerCopy({ components: { securitySchemes: { apiKey: { scheme: "bearer" } } } })).toBe("");
     expect(
       bearerCopy({
         components: { securitySchemes: { apiKey: { scheme: "bearer", description: "Use a key" } } },
