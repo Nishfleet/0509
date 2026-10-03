@@ -13,7 +13,7 @@ export function discoveryNotice(state: DiscoveryState, competitorCount: number):
   }
   if (competitorCount > 0) return null;
   if (state === "done") {
-    return "We looked and found no obvious competitors yet. Add any you know below, or tap Start watching and we'll keep looking every night.";
+    return "We looked and found no obvious competitors yet. Add any you know below, or tap Start watching and we'll keep looking every week.";
   }
-  return "We couldn't look for competitors just now. Add any you know below, or tap Start watching and we'll try again tonight.";
+  return "We couldn't look for competitors just now. Add any you know below, or tap Start watching and we'll try again this week.";
 }

@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { readCachedChoice, readCachedNoul } from "../data/jev_verdict.server";
 import { sha256Hex } from "../sha256";
+import { isBillingRefusal } from "./refusal";
 import type { NoulQuestion } from "./thresholds";
 
 export type { NoulQuestion };
@@ -57,11 +58,9 @@ export class JevUnavailableError extends Error {
   }
 }
 
-const BILLING_REFUSED = /(^|\D)(2021|402)(\D|$)|payment|insufficient|credit/i;
-
 function unavailable(error: unknown): JevUnavailableError {
   const failure = new JevUnavailableError(error);
-  if (BILLING_REFUSED.test(failure.message)) {
+  if (isBillingRefusal(failure)) {
     captureException(new Error("jev refused: AI Gateway credits or payment"), {
       level: "error",
       fingerprint: ["jev-billing-refused"],
@@ -139,6 +138,17 @@ async function run(question: NoulQuestion, state: unknown): Promise<number> {
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
   if (answer === undefined) throw missing("noul", raw, parsed.error?.issues ?? []);
   return answer.noul;
+}
+
+const PROBE_QUESTION: NoulQuestion = {
+  id: "jev_probe",
+  instructions: "Is the item the number five?",
+  whenTrue: "The item is the number five.",
+  whenFalse: "The item is not the number five.",
+};
+
+export async function probeJev(): Promise<void> {
+  await run(PROBE_QUESTION, { item: 5 });
 }
 
 export async function askNoul(workspaceId: string, question: NoulQuestion, state: unknown): Promise<NoulVerdict> {

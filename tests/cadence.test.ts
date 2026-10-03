@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   FEED_SWEEP_CRON,
   HIRING_SWEEP_CRON,
+  isDiscoveryDay,
   MENTIONS_SWEEP_CRON,
   NIGHTLY_CRON,
   OWN_SITE_CHECK_CRON,
@@ -53,5 +54,15 @@ describe("cadence", () => {
   it("pins the site-sweep cron and label to the UTC hour the sweep runs at", () => {
     expect(SITE_SWEEP_CRON).toBe(`0 ${SITE_SWEEP_UTC_HOUR} * * *`);
     expect(SITE_SWEEP_UTC_LABEL).toBe(`${String(SITE_SWEEP_UTC_HOUR).padStart(2, "0")}:00 UTC`);
+  });
+});
+
+describe("isDiscoveryDay", () => {
+  it("is true on the weekday the workspace was created and false on the other six", () => {
+    const createdAt = "2026-09-14T22:30:00.000Z";
+    const week = Array.from({ length: 7 }, (_, offset) => new Date(Date.UTC(2026, 8, 21 + offset, 3)));
+    expect(week.filter((day) => isDiscoveryDay(createdAt, day)).map((day) => day.toISOString().slice(0, 10))).toEqual([
+      "2026-09-21",
+    ]);
   });
 });

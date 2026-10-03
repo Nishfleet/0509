@@ -9,3 +9,7 @@ export const WEEKLY_REFRESH_CRON = "0 4 * * 1";
 export const HIRING_SWEEP_CRON = "30 2 * * *";
 export const FEED_SWEEP_CRON = "45 2 * * *";
 export const SNAPSHOT_BACKUP_CRON = "0 5 * * *";
+
+export function isDiscoveryDay(createdAt: string, now: Date): boolean {
+  return new Date(createdAt).getUTCDay() === now.getUTCDay();
+}

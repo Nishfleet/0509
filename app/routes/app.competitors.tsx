@@ -91,7 +91,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       <UpgradeStatus tier={tier} wanted={wanted} />
       {competitors.length === 0 ? (
         <div className="mt-8">
-          <EmptyState sentence="Add a competitor to see where you stand. We also look for new ones every night." />
+          <EmptyState sentence="Add a competitor to see where you stand. We also look for new ones every week." />
         </div>
       ) : (
         <ul aria-label="Competitors" className="mt-6 border border-line bg-card px-4">
