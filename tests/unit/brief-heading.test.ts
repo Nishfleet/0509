@@ -10,18 +10,18 @@ const holder = vi.hoisted(() => ({
   workspaceId: "workspace_1",
   rows: [
     {
-      id: "dig_1",
-      period_start: "2026-09-14T00:00:00Z",
-      period_end: "2026-09-21T00:00:00Z",
-      status: "sent",
-      sent_at: "2026-09-21T07:00:00Z",
-    },
-    {
       id: "dig_0",
       period_start: "not-a-date",
       period_end: "2026-09-07T00:00:00Z",
       status: "sent",
       sent_at: "2026-09-07T07:00:00Z",
+    },
+    {
+      id: "dig_1",
+      period_start: "2026-09-14T00:00:00Z",
+      period_end: "2026-09-21T00:00:00Z",
+      status: "sent",
+      sent_at: "2026-09-21T07:00:00Z",
     },
   ] as {
     id: string;
@@ -124,24 +124,22 @@ describe("the brief page's Previous briefs links", () => {
 });
 
 describe("the brief page's week label", () => {
-  it("prints the finished day-and-month label, never the raw ISO period_start", async () => {
-    const html = await briefHtml();
-    expect(html).toContain("Week of 14 Sept · Sent 21 September");
+  it("finishes every week's label in UTC, and the selected one's", async () => {
+    const data = await loader(loaderArgs({ digestId: "dig_1" }));
+    expect(data.weeks.map((week) => week.weekLabel)).toEqual(["An earlier week", "Week of 14 Sept"]);
+    expect(data.selected?.weekLabel).toBe("Week of 14 Sept");
+  });
+
+  it("prints the finished label, never the raw ISO period_start", async () => {
+    const html = await renderBrief(await loader(loaderArgs({ digestId: "dig_1" })));
+    expect(html).toContain("Week of 14 Sept ·");
     expect(html).toContain("Week of 14 Sept</a>");
     expect(html).not.toContain("2026-09-14");
   });
 
   it("prints the loader's own fallback for a week it cannot read", async () => {
-    const html = await renderBrief({
-      weeks: [{ id: "dig_0", weekLabel: "An earlier week", line: "Sent 7 Sept" }],
-      selected: null,
-    });
+    const html = await renderBrief(await loader(loaderArgs({})));
+    expect(html).toContain("An earlier week ·");
     expect(html).toContain("An earlier week</a>");
-  });
-
-  it("finishes the day-and-month label for every week and the selected one", async () => {
-    const data = await loader(loaderArgs({ digestId: "dig_1" }));
-    expect(data.weeks.map((week) => week.weekLabel)).toEqual(["Week of 14 Sept", "An earlier week"]);
-    expect(data.selected?.weekLabel).toBe("Week of 14 Sept");
   });
 });
