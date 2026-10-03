@@ -18,13 +18,15 @@ interface AlertSwitchProps {
 function AlertSwitch({ on, intent, label, note, testId }: AlertSwitchProps): ReactElement {
   const fetcher = useFetcher();
   const noteId = useId();
+  const pending = fetcher.formData?.get("value");
+  const shown = pending === "on" ? true : pending === "off" ? false : on;
 
   return (
     <section className={ROW} data-testid={testId}>
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <span className="flex-1 leading-[1.55]">{label}</span>
         <BrandSwitch
-          state={on ? "on" : "off"}
+          state={shown ? "on" : "off"}
           brandName={label}
           label={label}
           describedBy={noteId}
