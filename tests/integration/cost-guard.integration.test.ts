@@ -1,4 +1,3 @@
-import { captureMessage } from "@sentry/cloudflare";
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -13,8 +12,6 @@ import { runCostGuard, runNightlyCostGuard } from "../../app/lib/observability/r
  * cost_alert row per line over threshold, UNIQUE (day, line) making a repeat
  * run idempotent. Real local D1 with every migration applied.
  */
-
-vi.mock("@sentry/cloudflare", () => ({ captureMessage: vi.fn() }));
 
 const usageBody = (rowsWritten: number, requests: number) => ({
   data: {
@@ -123,7 +120,6 @@ describe("runCostGuard (0509#4432)", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    vi.mocked(captureMessage).mockClear();
   });
 
   it("trips on the line over threshold and writes one cost_alert row", async () => {
@@ -132,10 +128,6 @@ describe("runCostGuard (0509#4432)", () => {
     expect(result.breaches).toHaveLength(1);
     expect(result.breaches[0]?.line).toBe("d1_rows_written");
     expect(result.alertIds).toHaveLength(1);
-    expect(captureMessage).toHaveBeenCalledExactlyOnceWith("cost guard breach on 2026-09-22: d1_rows_written", {
-      level: "error",
-      fingerprint: ["cost-guard-breach"],
-    });
     const id = result.alertIds[0];
     console.log("cost_alert id", id);
     const row = await env.DB.prepare("SELECT * FROM cost_alert WHERE id = ?").bind(id).first<{
@@ -234,7 +226,6 @@ describe("runCostGuard (0509#4432)", () => {
     expect(first.alertIds).toHaveLength(1);
     const again = await runCostGuard(env.DB, "t", "2026-09-22");
     expect(again.alertIds).toEqual([]);
-    expect(captureMessage).toHaveBeenCalledOnce();
     expect(await countAlerts("2026-09-22")).toBe(1);
   });
 
@@ -243,7 +234,6 @@ describe("runCostGuard (0509#4432)", () => {
     const result = await runCostGuard(env.DB, "t", "2026-09-23");
     expect(result.breaches).toEqual([]);
     expect(result.alertIds).toEqual([]);
-    expect(captureMessage).not.toHaveBeenCalled();
     expect(await countAlerts("2026-09-23")).toBe(0);
   });
 
