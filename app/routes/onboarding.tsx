@@ -67,7 +67,7 @@ async function screenAndStart({ timings, userId, workspaceId, subject, rawSubjec
     "screen",
     screenOnboardingSubject({ workspaceId, userId, subject, raw: rawSubject, answer, now }),
   );
-  if (result.kind === "refuse") return { message: result.message, confirm: null };
+  if (result.kind === "refuse" || result.kind === "unavailable") return { message: result.message, confirm: null };
   if (result.kind === "ask") return { message: null, confirm: { subject: result.subject, raw: rawSubject } };
   await timings.measure("run", startOnboardingRun({ workspaceId, userId, inputRaw: rawSubject, startedAt: now }));
   return null;

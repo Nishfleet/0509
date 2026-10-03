@@ -7,7 +7,13 @@ import { screenPublicSubject } from "./jev/public-subject.server";
 
 export const REFUSAL = "Five to Nine tracks brands and creators, not private individuals.";
 
-export type ScreenResult = { kind: "proceed" } | { kind: "refuse"; message: string } | { kind: "ask"; subject: string };
+export const UNAVAILABLE = "We couldn't check that just now. Please try again in a minute.";
+
+export type ScreenResult =
+  | { kind: "proceed" }
+  | { kind: "refuse"; message: string }
+  | { kind: "unavailable"; message: string }
+  | { kind: "ask"; subject: string };
 
 const runJevOutcome = (input: {
   workspaceId: string;
@@ -73,5 +79,6 @@ export async function screenOnboardingSubject(input: ScreenInput): Promise<Scree
   console.log(JSON.stringify({ event: "public_subject.screen", fetched: false, ground }));
   if (screening === null) return refuse(input);
   const screened = await screening;
+  if (screened === null && input.answer === null) return { kind: "unavailable", message: UNAVAILABLE };
   return settle(input, screened === null ? "ask" : screened.outcome);
 }
