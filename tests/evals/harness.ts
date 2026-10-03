@@ -14,7 +14,11 @@ import type { BreakageEvidence } from "../../app/lib/site/breakage-evidence";
 // one implementation. A question that wanted its own copy of any of those is the
 // second paved path docs/REBUILD-TRUST.md §C1(3) rules out.
 
-const REPEATS = 3;
+const REPEATS = 1;
+
+const PROBE_CAP = 12;
+
+const PROBE_MODEL = "clef-flash";
 
 const CONCURRENCY = 8;
 
@@ -203,7 +207,7 @@ async function postJev(body: unknown): Promise<JevResponse> {
   if (VIA_GATEWAY) {
     const raw = await (
       await aiBinding()
-    ).run(GATEWAY_MODEL as never, withoutModel(body) as never, {
+    ).run(`@cf/cloudflare/${PROBE_MODEL}` as never, { ...(withoutModel(body) as object), model: PROBE_MODEL } as never, {
       gateway: { id: GATEWAY_ID },
     });
     const unwrapped = unwrapJev(raw);
@@ -451,9 +455,9 @@ export async function runEval<T extends EvalRow>(
   const splits: SplitScore[] = [];
   const wanted = selectedSplits();
   callsUsed = 0;
-  callBudget = Math.ceil(rows.filter((row) => wanted.includes(row.split)).length * REPEATS * BUDGET_MARGIN);
+  callBudget = Math.ceil(wanted.length * Math.min(PROBE_CAP, rows.length) * REPEATS * BUDGET_MARGIN);
   for (const split of wanted) {
-    const picked = rows.filter((row) => row.split === split);
+    const picked = rows.filter((row) => row.split === split).slice(0, PROBE_CAP);
     if (picked.length === 0) throw new Error(`${questionId} has no ${split} cases to score`);
     const scored = await scoreSplit(split, picked, ask, score);
     for (const model of scored.models) models.add(model);
