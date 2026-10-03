@@ -76,6 +76,16 @@ describe("feedLinksFromHtml edge cases", () => {
     `;
     expect(feedLinksFromHtml(html, HOME)).toEqual([new URL("/withrel.xml", HOME).href]);
   });
+
+  it("keeps the https sibling when the same page declares a plain-http feed", () => {
+    // Only the http declaration is dropped, so this also proves a secure feed
+    // is not discarded along with it.
+    const html = `
+      <link rel="alternate" type="application/rss+xml" href="http://rival.com/insecure.xml">
+      <link rel="alternate" type="application/rss+xml" href="/secure.xml">
+    `;
+    expect(feedLinksFromHtml(html, HOME)).toEqual([new URL("/secure.xml", HOME).href]);
+  });
 });
 
 describe("feedCandidates", () => {
