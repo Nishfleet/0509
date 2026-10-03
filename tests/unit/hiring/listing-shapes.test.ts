@@ -29,10 +29,14 @@ describe("parseListing, unexpected shapes", () => {
     expect(bad).toThrow("ashby: body is not JSON");
   });
 
-  it("returns no roles for a well-shaped board with zero jobs", () => {
-    for (const platform of ["greenhouse", "ashby", "workable"] as const) {
+  it.each(["greenhouse", "ashby", "workable"] as const)(
+    "returns no roles for a well-shaped %s board with zero jobs",
+    (platform) => {
       expect(parseListing(platform, JSON.stringify({ jobs: [] }), BOARD)).toEqual([]);
-    }
+    },
+  );
+
+  it("returns no roles for a well-shaped Lever board with zero jobs", () => {
     expect(parseListing("lever", "[]", BOARD)).toEqual([]);
   });
 
