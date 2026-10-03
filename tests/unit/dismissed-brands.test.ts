@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
+import { dayMonthLabel } from "../../app/components/brand-switch";
 import type { DismissedSuggestion } from "../../app/components/dismissed-brands";
 import { DismissedBrands, restoreFetcherKey } from "../../app/components/dismissed-brands";
 
@@ -12,6 +13,11 @@ const kindred: DismissedSuggestion = {
   domain: "kindred.example",
   dismissedAt: "2026-09-20T09:14:00.000Z",
 };
+
+function dismissedLabel(at: string): string {
+  const label = dayMonthLabel(at);
+  return label === null ? "Dismissed" : `Dismissed ${label}`;
+}
 
 const casetta: DismissedSuggestion = {
   suggestionId: "sug-dismissed-casetta",
@@ -114,7 +120,7 @@ describe("the dismissed brands list", () => {
     expect(html).toContain("kindred.example");
     expect(html).toContain("Casetta");
     expect(html).toContain("casetta.example");
-    expect(html).toContain("Dismissed 2026-09-20");
+    expect(html).toContain(dismissedLabel(kindred.dismissedAt));
   });
 
   it("shows the count in the heading", () => {
@@ -141,7 +147,7 @@ describe("the dismissed brands list", () => {
     const html = render([casetta, kindred]);
     const row = rowHtml(html, "sug-dismissed-kindred");
 
-    const nodes = row.match(/>\s*Dismissed\s+2026-09-20\s*</g) ?? [];
+    const nodes = row.match(new RegExp(`>\\s*${dismissedLabel(kindred.dismissedAt)}\\s*<`, "g")) ?? [];
     expect(nodes).toHaveLength(1);
 
     expect(row).not.toMatch(/>\s*Dismissed\s*</);
@@ -179,5 +185,14 @@ describe("the dismissed brands list", () => {
     expect(buttonWith(row, "Casetta")).toContain(">Bring back</button>");
     expect(buttonWith(row, "Casetta")).not.toContain('disabled=""');
     expect(buttonWith(row, "Casetta")).not.toContain("Bringing back…");
+  });
+
+  it("renders the Dismissed text with no date and no NaN for an unparseable dismissedAt", () => {
+    const html = render([casetta, { ...kindred, dismissedAt: "not-a-date" }]);
+    const row = rowHtml(html, "sug-dismissed-kindred");
+
+    expect(row).toContain(">Dismissed<");
+    expect(row).not.toContain("NaN");
+    expect(row).not.toMatch(/>\s*Dismissed\s+\S+\s*</);
   });
 });

@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { useFetcher } from "react-router";
 
+import { dayMonthLabel } from "./brand-switch";
 import { BLOCK_HEADING } from "./page-heading";
 import { Monogram } from "./monogram";
 import { Button } from "./ui/button";
@@ -27,7 +28,7 @@ function DismissedRow({ suggestion }: { suggestion: DismissedSuggestion }): Reac
         <div className="min-w-0">
           <p className="truncate font-display text-row-name font-bold">{suggestion.name}</p>
           <p className="truncate text-body-sm text-ink-soft">{suggestion.domain}</p>
-          <p className="text-body-sm text-ink-soft">Dismissed {suggestion.dismissedAt.slice(0, 10)}</p>
+          <p className="text-body-sm text-ink-soft">{dismissedLabel(suggestion.dismissedAt)}</p>
         </div>
       </div>
       <fetcher.Form method="post" className="flex gap-2">
@@ -39,6 +40,11 @@ function DismissedRow({ suggestion }: { suggestion: DismissedSuggestion }): Reac
       </fetcher.Form>
     </li>
   );
+}
+
+function dismissedLabel(dismissedAt: string): string {
+  const label = dayMonthLabel(dismissedAt);
+  return label === null ? "Dismissed" : `Dismissed ${label}`;
 }
 
 export function DismissedBrands({ dismissed }: { dismissed: readonly DismissedSuggestion[] }): ReactElement | null {
