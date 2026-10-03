@@ -67,6 +67,12 @@ function text(html: string): string {
   return html.replace(/<[^>]*>/g, " ");
 }
 
+function peerRow(html: string, entityId: string): string {
+  const match = new RegExp(`<li data-entity-id="${entityId}"[\\s\\S]*?</li>`).exec(html);
+  expect(match).not.toBeNull();
+  return match?.[0] ?? "";
+}
+
 describe("the competitor rail", () => {
   it("draws peers, facts, sources and the still-a-competitor answer in order", () => {
     const html = render();
@@ -105,6 +111,19 @@ describe("the competitor rail", () => {
     expect(html).toContain('href="/app/competitors/comp-off"');
     expect(html).not.toContain('href="/app/competitors/comp-on"');
     expect(html.match(/aria-current="page"/g)).toHaveLength(1);
+  });
+
+  it("says in words that a switched-off competitor is paused", () => {
+    const html = render({
+      peers: [
+        { entityId: "comp-on", name: "Kindred", role: "competitor", state: "on", rank: 1 },
+        { entityId: "comp-off", name: "Casetta", role: "competitor", state: "off", rank: 2 },
+      ],
+    });
+    expect(html.match(/\(paused\)/g)).toHaveLength(1);
+    expect(peerRow(html, "comp-off")).toContain('<span class="sr-only"> (paused)</span>');
+    expect(peerRow(html, "comp-off")).toContain("opacity-60");
+    expect(peerRow(html, "comp-on")).not.toContain("(paused)");
   });
 
   it("shows recognized thirty-day facts and drops internal fact kinds", () => {

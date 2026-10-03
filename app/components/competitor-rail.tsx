@@ -98,6 +98,7 @@ function Peers({ entityId, peers }: { entityId: string; peers: readonly RailPeer
                 {peer.name}
               </Link>
             )}
+            {peer.state === "off" ? <span className="sr-only"> (paused)</span> : null}
           </li>
         );
       })}
