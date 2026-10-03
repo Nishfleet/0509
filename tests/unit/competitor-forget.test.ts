@@ -38,6 +38,13 @@ function isDisabled(button: string): boolean {
   return /<button\b[^>]*\sdisabled=""/.test(button);
 }
 
+function confirmInput(html: string): string {
+  const inputs = html.match(/<input\b[^>]*>/g) ?? [];
+  const found = inputs.find((tag) => tag.includes('id="confirm-name"'));
+  if (found === undefined) throw new Error("no confirm-name input in the rendered form");
+  return found;
+}
+
 describe("CompetitorForget", () => {
   beforeEach(() => {
     navigation.state = "idle";
@@ -69,5 +76,12 @@ describe("CompetitorForget", () => {
     const button = submitButton(render());
     expect(button).toContain("Remove and forget Northwind");
     expect(isDisabled(button)).toBe(false);
+  });
+
+  it("asks the keyboard not to autocorrect or spell-check the name you type", () => {
+    const input = confirmInput(render());
+    expect(input).toContain('autoCapitalize="none"');
+    expect(input).toContain('autoCorrect="off"');
+    expect(input).toContain('spellCheck="false"');
   });
 });

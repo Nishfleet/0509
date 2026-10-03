@@ -48,6 +48,13 @@ function isDisabled(button: string): boolean {
   return /<button\b[^>]*\sdisabled=""/.test(button);
 }
 
+function confirmInput(html: string): string {
+  const inputs = html.match(/<input\b[^>]*>/g) ?? [];
+  const found = inputs.find((tag) => tag.includes('id="confirm-email"'));
+  if (found === undefined) throw new Error("no confirm-email input in the rendered form");
+  return found;
+}
+
 describe("DeleteAccount", () => {
   beforeEach(() => {
     navigation.state = "idle";
@@ -104,6 +111,13 @@ describe("DeleteAccount", () => {
     const button = submitButton(renderDeleteAccount());
     expect(button).toContain("Delete my account");
     expect(isDisabled(button)).toBe(false);
+  });
+
+  it("asks the keyboard not to autocorrect or spell-check the email you type", () => {
+    const input = confirmInput(renderDeleteAccount());
+    expect(input).toContain('autoCapitalize="none"');
+    expect(input).toContain('autoCorrect="off"');
+    expect(input).toContain('spellCheck="false"');
   });
 });
 
