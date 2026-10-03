@@ -190,7 +190,7 @@ describe("judgeCandidates", () => {
     const second = await judgeCandidates(context, [candidate("Alphalete", "alphaleteathletics.com")]);
 
     expect(run).toHaveBeenCalledTimes(2);
-    expect(run.mock.calls[0]?.[0]).toBe("typesafe/jev");
+    expect(run.mock.calls[0]?.[0]).toBe("@cf/cloudflare/clef");
     expect(first[0]?.verdict).toMatchObject({ p: 0.92, cached: false });
     expect(second[0]?.verdict).toMatchObject({ p: 0.92, cached: true });
   });
