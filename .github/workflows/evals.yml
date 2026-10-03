@@ -1,11 +1,6 @@
 name: evals
 
 on:
-  pull_request:
-    paths:
-      - "app/lib/discovery/**"
-      - "app/lib/jev/**"
-      - "tests/evals/**"
   workflow_dispatch:
     inputs:
       split:
@@ -28,7 +23,6 @@ concurrency:
 jobs:
   evals:
     name: evals
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
