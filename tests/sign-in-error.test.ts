@@ -25,7 +25,7 @@ describe("SignInError renders the sign-in error region (0509#6809)", () => {
     expect(html.endsWith("</p>")).toBe(true);
   });
 
-  it("exports the id the input points at with aria-describedby", () => {
+  it("holds SIGN_IN_ERROR_ID as sign-in-error", () => {
     expect(SIGN_IN_ERROR_ID).toBe("sign-in-error");
   });
 
