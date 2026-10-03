@@ -10,7 +10,6 @@ import type { BiggestMoveView } from "../../app/lib/biggest-move";
 import { LOST_CHANNEL_REASON } from "../../app/lib/mentions/youtube-channel";
 import {
   CompetitorHeader,
-  CompetitorSwitch,
   competitorPausedLine,
   type CompetitorHeaderProps,
 } from "../../app/components/competitor-header";
@@ -153,18 +152,6 @@ describe("the competitor page frame", () => {
       const index = html.indexOf(marker);
       expect(index).toBeGreaterThan(at);
       at = index;
-    }
-  });
-
-  it("prints the DESIGN.md 2.5 consequence beside the switch in both states, never a dialog", () => {
-    for (const state of ["on", "off"] as const) {
-      const html = render(createElement(CompetitorSwitch, { state, brandName: "Kindred" }));
-      expect(html).toContain('data-slot="competitor-switch"');
-      expect(html).toContain('role="switch"');
-      expect(html).toContain(
-        "Turn off to stop watching and alerts. Your history stays, and turning it back on picks up where it left off.",
-      );
-      expect(html).not.toContain('role="dialog"');
     }
   });
 

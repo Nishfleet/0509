@@ -3,7 +3,7 @@ import { Link } from "react-router";
 
 import { adLibraryLinks } from "../lib/competitor/ad-library-links";
 import { pausedReasonLine } from "../lib/competitor/reason-customer";
-import { BrandSwitch, DAY_MONTH, dayMonthLabel } from "./brand-switch";
+import { DAY_MONTH, dayMonthLabel } from "./brand-switch";
 
 export { dayMonthLabel };
 
@@ -91,25 +91,5 @@ export function CompetitorHeader({
         {control}
       </div>
     </header>
-  );
-}
-
-const CONSEQUENCE =
-  "Turn off to stop watching and alerts. Your history stays, and turning it back on picks up where it left off.";
-
-export function CompetitorSwitch({
-  state,
-  brandName,
-  onCheckedChange,
-}: {
-  state: "on" | "off";
-  brandName: string;
-  onCheckedChange?: (checked: boolean) => void;
-}): ReactElement {
-  return (
-    <div data-slot="competitor-switch" className="flex max-w-[26rem] min-w-0 items-center gap-3">
-      <BrandSwitch state={state} brandName={brandName} onCheckedChange={onCheckedChange} />
-      <p className="min-w-0 text-body-sm text-ink-soft">{CONSEQUENCE}</p>
-    </div>
   );
 }
