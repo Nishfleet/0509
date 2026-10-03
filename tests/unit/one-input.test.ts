@@ -41,6 +41,8 @@ describe("OneInput", () => {
     const html = markup(PARENT_COPY);
     expect(html).toContain('role="status"');
     expect(html).toContain("find a website or username in that");
+    expect(html).toContain('aria-describedby="one-input-message"');
+    expect(html).toContain('id="one-input-message"');
   });
 
   it("carries a visible submit button, so the form is not Enter-only", () => {
@@ -50,6 +52,8 @@ describe("OneInput", () => {
   it("renders no status when message is absent", () => {
     const html = markup();
     expect(html).not.toContain('role="status"');
+    expect(html).not.toContain('aria-describedby="one-input-message"');
+    expect(html).not.toContain('id="one-input-message"');
   });
 
   it("can GET, require the field, and label the submit with a node", () => {
