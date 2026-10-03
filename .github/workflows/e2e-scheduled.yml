@@ -125,6 +125,53 @@ jobs:
       - name: Print what the page showed when it failed
         if: failure()
         run: tail -n +1 test-results/*/error-context.md
+  proof-clef:
+    name: proof-clef
+    if: inputs.journey == 'proof-clef' && inputs.spec == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Exchange the Access service token for its cookie
+        run: npm run e2e -- --project=setup --retries=0 --reporter=github,list
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      - name: One sign-up, one brand
+        run: |
+          set -euo pipefail
+          email="e2e+clef$(openssl rand -hex 5)@0509.io"
+          echo "PROOF_EMAIL=$email" >> "$GITHUB_ENV"
+          export PROOF_EMAIL="$email"
+          npm run e2e -- e2e/proof-clef.spec.ts --project=desktop-1440 --no-deps --retries=0 --workers=1 --reporter=list
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
+      - name: Read the verdict rows (SELECT only)
+        if: always()
+        run: |
+          set -euo pipefail
+          email="$PROOF_EMAIL"
+          [[ "$email" =~ ^e2e\+clef[0-9a-f]{10}@0509\.io$ ]]
+          npx wrangler d1 execute 0509 --remote --json --command "SELECT question_id, COUNT(*) AS n, MIN(decided_at) AS first_at, MAX(decided_at) AS last_at FROM jev_verdict WHERE workspace_id IN (SELECT id FROM workspace WHERE owner_user_id IN (SELECT id FROM user WHERE email = '$email')) GROUP BY question_id" | jq -c '.[0].results'
+          npx wrangler d1 execute 0509 --remote --json --command "SELECT o.started_at, o.card_ready_at, o.competitors_ready_at FROM onboarding_run o WHERE o.user_id IN (SELECT id FROM user WHERE email = '$email')" | jq -c '.[0].results'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Print what the page showed when it failed
+        if: failure()
+        run: tail -n +1 test-results/*/error-context.md
   j8:
     name: j8
     # One break of j8-hard.fixture.0509.in or j8-soft.fixture.0509.in per dispatch, journey j8-hard or j8-soft,
