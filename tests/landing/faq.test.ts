@@ -9,13 +9,10 @@ function markup(): string {
   return renderToStaticMarkup(createElement(Faq));
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#x27;");
+function escaped(text: string): string {
+  return renderToStaticMarkup(createElement("span", null, text))
+    .replace(/^<span>/, "")
+    .replace(/<\/span>$/, "");
 }
 
 describe("landing faq", () => {
@@ -32,19 +29,19 @@ describe("landing faq", () => {
     expect(FAQ.length).toBeGreaterThan(0);
     expect(headings).toHaveLength(FAQ.length);
     FAQ.forEach((entry, index) => {
-      expect(headings[index]).toBe(escapeHtml(entry.question));
+      expect(headings[index]).toBe(escaped(entry.question));
     });
   });
 
   it("renders each answer in a paragraph right after its question", () => {
     const html = markup();
     FAQ.forEach((entry) => {
-      const questionHtml = escapeHtml(entry.question);
-      const questionIndex = html.indexOf(questionHtml);
+      const question = escaped(entry.question);
+      const questionIndex = html.indexOf(question);
       expect(questionIndex).toBeGreaterThan(-1);
-      const afterQuestion = html.slice(questionIndex + questionHtml.length);
+      const afterQuestion = html.slice(questionIndex + question.length);
       const paragraph = afterQuestion.match(/<p\b[^>]*>([\s\S]*?)<\/p>/);
-      expect(paragraph?.[1]).toBe(escapeHtml(entry.answer));
+      expect(paragraph?.[1]).toBe(escaped(entry.answer));
     });
   });
 });
