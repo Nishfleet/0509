@@ -1,8 +1,18 @@
 import { attributes } from "./parse-feed";
 
-export const COMMON_FEED_PATHS: readonly string[] = ["/feed", "/rss.xml", "/atom.xml", "/blog/feed", "/changelog.xml"];
+export const COMMON_FEED_PATHS: readonly string[] = [
+  "/feed",
+  "/rss.xml",
+  "/atom.xml",
+  "/blog/feed",
+  "/changelog.xml",
+  "/changelog/rss.xml",
+  "/changelog/feed.xml",
+  "/blog/rss.xml",
+  "/feed.xml",
+];
 
-export const MAX_FEED_CANDIDATES = 8;
+export const MAX_FEED_CANDIDATES = 12;
 
 const FEED_TYPES: ReadonlySet<string> = new Set(["application/rss+xml", "application/atom+xml"]);
 

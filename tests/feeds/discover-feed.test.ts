@@ -70,6 +70,10 @@ describe("feedCandidates", () => {
       "https://rival.com/rss.xml",
       "https://rival.com/blog/feed",
       "https://rival.com/changelog.xml",
+      "https://rival.com/changelog/rss.xml",
+      "https://rival.com/changelog/feed.xml",
+      "https://rival.com/blog/rss.xml",
+      "https://rival.com/feed.xml",
     ]);
   });
 
