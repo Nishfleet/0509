@@ -26,6 +26,9 @@ export function CompetitorForget({ name, error }: { name: string; error: string 
           name="confirm"
           type="text"
           autoComplete="off"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           required
           aria-invalid={error === null ? undefined : true}
           aria-describedby={error === null ? undefined : "forget-competitor-error"}

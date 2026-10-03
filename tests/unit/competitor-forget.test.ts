@@ -38,6 +38,11 @@ function isDisabled(button: string): boolean {
   return /<button\b[^>]*\sdisabled=""/.test(button);
 }
 
+function confirmInput(html: string): string {
+  const start = html.lastIndexOf("<input", html.indexOf('id="confirm-name"'));
+  return html.slice(start, html.indexOf(">", start));
+}
+
 describe("CompetitorForget", () => {
   beforeEach(() => {
     navigation.state = "idle";
@@ -69,5 +74,15 @@ describe("CompetitorForget", () => {
     const button = submitButton(render());
     expect(button).toContain("Remove and forget Northwind");
     expect(isDisabled(button)).toBe(false);
+  });
+
+  it("asks the keyboard not to autocorrect or spell-check the name you type", () => {
+    // React 19 renders these props verbatim (camelCase) in static markup, so assert
+    // the exact string it writes; the HTML parser lowercases the attribute names
+    // when a phone loads the page, which is what turns autocorrect off.
+    const input = confirmInput(render());
+    expect(input).toContain('autoCapitalize="none"');
+    expect(input).toContain('autoCorrect="off"');
+    expect(input).toContain('spellCheck="false"');
   });
 });

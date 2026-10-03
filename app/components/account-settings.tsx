@@ -64,6 +64,9 @@ export function DeleteAccount({ email, error }: { email: string; error: string |
           name="confirm"
           type="email"
           autoComplete="off"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           required
           aria-invalid={error === null ? undefined : true}
           aria-describedby={error === null ? undefined : "delete-account-error"}
