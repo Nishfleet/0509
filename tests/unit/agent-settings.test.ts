@@ -194,6 +194,46 @@ describe("AgentKeys", () => {
     expect(openRow).not.toContain("requests");
   });
 
+  it("says 1 request left for a key on its last call, and 0 requests left once it is spent", () => {
+    const Stub = createRoutesStub([
+      {
+        path: "/",
+        Component: () =>
+          createElement(AgentKeys, {
+            keys: [
+              {
+                id: "a",
+                name: "Last call",
+                start: "0509_ab",
+                createdAt: "2026-09-01T00:00:00.000Z",
+                lastUsedAt: null,
+                rateLimitMax: 1,
+                remaining: 1,
+              },
+              {
+                id: "b",
+                name: "Used up",
+                start: "0509_ab",
+                createdAt: "2026-09-01T00:00:00.000Z",
+                lastUsedAt: null,
+                rateLimitMax: 120,
+                remaining: 0,
+              },
+            ],
+            newKey: null,
+            duplicate: false,
+            submission: SUBMISSION,
+          }),
+      },
+    ]);
+    const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
+
+    expect(html.match(/up to 1 request a minute/g)).toHaveLength(1);
+    expect(html.match(/1 request left/g)).toHaveLength(1);
+    expect(html).not.toContain("1 requests");
+    expect(html.match(/0 requests left/g)).toHaveLength(1);
+  });
+
   it("leaves the Make a key button enabled with its resting label", () => {
     const Stub = createRoutesStub([{ path: "/", Component: keysScreen }]);
     const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
