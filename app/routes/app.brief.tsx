@@ -5,6 +5,7 @@ import { Link, redirect } from "react-router";
 
 import { BriefUnavailable } from "../components/brief-unavailable";
 import { BriefView } from "../components/brief-view";
+import { dayMonthLabel } from "../components/brand-switch";
 import { FirstBriefNote } from "../components/first-brief-note";
 import { PAGE, PageHeading } from "../components/page-heading";
 import { formatBriefAt } from "../lib/brief-settings";
@@ -21,6 +22,11 @@ const PREVIOUS_LINK = "inline-flex min-h-11 items-center underline decoration-1 
 const BRIEF_LINE = "mt-2 font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft uppercase";
 export function meta() {
   return [{ title: "Your brief · Five to Nine" }];
+}
+
+function briefWeekLabel(periodStart: string): string {
+  const day = dayMonthLabel(periodStart);
+  return day === null ? "An earlier week" : `Week of ${day}`;
 }
 
 export async function loader({ params, context }: Route.LoaderArgs) {
@@ -40,7 +46,7 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     firstBriefAt: formatBriefAt(nextBriefAt(schedule, now), schedule.timezone),
     weeks: weeks.map((w) => ({
       id: w.id,
-      week: w.period_start.slice(0, 10),
+      weekLabel: briefWeekLabel(w.period_start),
       line: briefSendLine(w),
     })),
     selected:
@@ -48,7 +54,7 @@ export async function loader({ params, context }: Route.LoaderArgs) {
         ? null
         : {
             id: brief.id,
-            week: brief.period_start.slice(0, 10),
+            weekLabel: briefWeekLabel(brief.period_start),
             status: brief.status,
             line: briefSendLine(brief),
             payload: readBriefPayload(brief.payload_json),
@@ -68,7 +74,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       ) : (
         <>
           <p data-brief-state={selected.status} className={BRIEF_LINE}>
-            Week of {selected.week} · {selected.line}
+            {selected.weekLabel} · {selected.line}
           </p>
           <div className="mt-6">
             {selected.payload === null ? <BriefUnavailable /> : <BriefView payload={selected.payload} />}
@@ -86,7 +92,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                   to={`/app/brief/${w.id}`}
                   aria-current={w.id === loaderData.selected?.id ? "page" : undefined}
                 >
-                  Week of {w.week}
+                  {w.weekLabel}
                 </Link>
                 {": "}
                 {w.line}
