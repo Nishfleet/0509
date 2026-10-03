@@ -17,7 +17,7 @@ describe("normaliseSubject edges", () => {
     });
   });
 
-  it("refuses a bare social host with no handle", () => {
+  it("refuses a bare social host with no handle as an unsupported platform", () => {
     expect(normaliseSubject("https://x.com")).toEqual({ ok: false, reason: "unsupported-platform" });
     expect(normaliseSubject("https://instagram.com/")).toEqual({ ok: false, reason: "unsupported-platform" });
   });
