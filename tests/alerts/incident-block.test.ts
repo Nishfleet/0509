@@ -78,6 +78,12 @@ describe("the incident block", () => {
     expect(button).not.toContain("Saving…");
   });
 
+  it("tells a screen reader the site link leaves the page, in the same anchor", () => {
+    const anchor = render().match(/<a\b[^>]*href="https:\/\/example\.com\/"[^>]*>[\s\S]*?<\/a>/)?.[0] ?? "";
+    expect(anchor).toContain('target="_blank"');
+    expect(anchor).toContain('Open your site →<span class="sr-only"> (opens in a new tab)</span>');
+  });
+
   it("does not leak probability, a question id or Jev wording", () => {
     const html = render();
     expect(html).not.toContain("%");

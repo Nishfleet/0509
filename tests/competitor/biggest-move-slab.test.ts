@@ -94,6 +94,13 @@ describe("the biggest-move slab", () => {
     expect(html).toContain(READ);
   });
 
+  it("tells a screen reader the source link leaves the page, in the same anchor", () => {
+    const html = slab({ move: move(), change: null, quiet: QUIET });
+    const link = html.match(/<a\b[^>]*href="https:\/\/example\.com\/post\/1"[^>]*>[\s\S]*?<\/a>/)?.[0] ?? "";
+    expect(link).toContain('target="_blank"');
+    expect(link).toContain('Open the source<span class="sr-only"> (opens in a new tab)</span>');
+  });
+
   it("gives the source link the whole 44px tap target, not just the min-h-11 token", () => {
     const html = slab({ move: move(), change: null, quiet: QUIET });
     const link = html.match(/<a\b[^>]*href="https:\/\/example\.com\/post\/1"[^>]*>/)?.[0] ?? "";
