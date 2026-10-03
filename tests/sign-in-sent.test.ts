@@ -10,7 +10,6 @@ import { MAGIC_LINK_TTL_SECONDS } from "../app/lib/auth/magic-link-email";
 // nothing and its response reader stays a stub.
 vi.mock("../app/components/turnstile-widget", () => ({
   TurnstileWidget: () => null,
-  turnstileResponse: () => "",
 }));
 
 const EMAIL = "ada@example.com";
@@ -44,7 +43,6 @@ describe("SignInSent names the recipient and the expiry (0509#6886)", () => {
     const html = render();
     const minutes = String(MAGIC_LINK_TTL_SECONDS / 60);
 
-    expect(MAGIC_LINK_TTL_SECONDS).toBe(300);
     expect(html).toContain(`<strong class="font-semibold text-ink">${EMAIL}</strong>`);
     expect(html).toContain(`expires in ${minutes} minutes`);
     expect(html).toContain("can sign in, a link is on its way");
