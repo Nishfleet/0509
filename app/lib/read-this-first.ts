@@ -67,5 +67,6 @@ export function pickReadThisFirst(verdicts: readonly D4Verdict[]): string[] {
 }
 
 export function readThisFirstLine(picked: number, judged: number, leadName: string): string {
-  return `${String(picked)} of ${String(judged)} changes worth reading this week, led by ${leadName}.`;
+  const noun = judged === 1 ? "change" : "changes";
+  return `${String(picked)} of ${String(judged)} ${noun} worth reading this week, led by ${leadName}.`;
 }
