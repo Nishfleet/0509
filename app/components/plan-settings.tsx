@@ -23,7 +23,7 @@ export function PlanSection({ plan }: { plan: PlanSummary | null }) {
             {opening ? "Opening…" : "Manage or cancel plan"}
           </Button>
           {fetcher.data?.message ? (
-            <p role="status" className="mt-2 text-[0.95rem]">
+            <p role="alert" className="mt-2 text-[0.95rem]">
               {fetcher.data.message}
             </p>
           ) : null}
