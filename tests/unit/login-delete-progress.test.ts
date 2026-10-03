@@ -56,6 +56,11 @@ describe("Login account-delete progress", () => {
     expect(html).not.toContain("1 files");
   });
 
+  it("keeps files for zero removed files", () => {
+    const html = render({ id: "wf-7", progress: { rows: "removed", files: "removed", deleted: 0 } });
+    expect(html).toContain("Saved page copies and screenshots: removed (0 files)");
+  });
+
   it("says removed without a count when the Workflow reported none", () => {
     const html = render({ id: "wf-3", progress: { rows: "removed", files: "removed", deleted: null } });
     expect(html).toContain("Saved page copies and screenshots: removed");
