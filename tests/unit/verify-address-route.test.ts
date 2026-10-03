@@ -30,7 +30,7 @@ vi.mock("react-router", async (importOriginal) => {
     useNavigation: (...args: Parameters<typeof actual.useNavigation>): Navigation =>
       harness.state === "idle"
         ? actual.useNavigation(...args)
-        : ({
+        : {
             state: harness.state,
             location: { pathname: "/v/t", search: "", hash: "", state: null, key: "k" },
             matches: [],
@@ -41,7 +41,7 @@ vi.mock("react-router", async (importOriginal) => {
             formData: harness.posted ? new FormData() : undefined,
             json: undefined,
             text: undefined,
-          } as Navigation),
+          },
   };
 });
 
@@ -59,6 +59,10 @@ function renderPending(state: Exclude<Navigation["state"], "idle">, posted = tru
   harness.state = state;
   harness.posted = posted;
   return renderPage(false);
+}
+
+function expectDisabledButton(html: string): void {
+  expect(/<button\b[^>]*\bdisabled\b[^>]*>/.exec(html)).not.toBeNull();
 }
 
 describe("/v/:token (0509#5811)", () => {
@@ -97,7 +101,7 @@ describe("/v/:token (0509#5811)", () => {
     const html = renderPending("submitting");
     expect(html).toContain("Confirm this email address?");
     expect(html).toContain("Confirming…");
-    expect(/<button\b[^>]*\bdisabled\b[^>]*>/.exec(html)).not.toBeNull();
+    expectDisabledButton(html);
   });
 
   it("keeps the Confirm button disabled while the navigation settles after the post", () => {
@@ -105,7 +109,7 @@ describe("/v/:token (0509#5811)", () => {
     // disable: the state the router is in while the action completes.
     const html = renderPending("loading");
     expect(html).toContain("Confirming…");
-    expect(/<button\b[^>]*\bdisabled\b[^>]*>/.exec(html)).not.toBeNull();
+    expectDisabledButton(html);
   });
 
   it("keeps the Confirm button disabled while a revalidation runs with no form in flight", () => {
@@ -113,7 +117,7 @@ describe("/v/:token (0509#5811)", () => {
     // submission's own form metadata.
     const html = renderPending("loading", false);
     expect(html).toContain("Confirming…");
-    expect(/<button\b[^>]*\bdisabled\b[^>]*>/.exec(html)).not.toBeNull();
+    expectDisabledButton(html);
   });
 
   it("answers POST as confirmed for any token, including unknown", async () => {
