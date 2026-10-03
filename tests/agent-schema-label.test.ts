@@ -54,6 +54,22 @@ describe("the fields an OpenAPI schema lists", () => {
     ]);
   });
 
+  it("keeps every property in the order the schema lists them", () => {
+    expect(
+      schemaFields({
+        properties: {
+          alerts: { type: "array", items: { $ref: "#/components/schemas/Alert" } },
+          brief: { $ref: "#/components/schemas/Brief" },
+          name: { type: "string", description: "display name" },
+        },
+      }),
+    ).toEqual([
+      { name: "alerts", type: "Alert list", description: "" },
+      { name: "brief", type: "Brief", description: "" },
+      { name: "name", type: "string", description: "display name" },
+    ]);
+  });
+
   it("leaves the description blank when the property has none", () => {
     expect(schemaFields({ properties: { n: { type: "integer" } } })).toEqual([
       { name: "n", type: "integer", description: "" },
