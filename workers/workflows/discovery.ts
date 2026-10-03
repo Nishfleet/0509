@@ -1,5 +1,6 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
+import { NonRetryableError } from "cloudflare:workflows";
 
 import { readBacklog, writeBacklog } from "../../app/lib/data/discovery_backlog.server";
 import type { DiscoveryContext } from "../../app/lib/data/entity.server";
@@ -81,7 +82,7 @@ export class Discovery extends WorkflowEntrypoint<Env, DiscoveryParams> {
     }
 
     if (!(await step.do("jev-ready", PROBE_ONCE, jevIsReady))) {
-      return { workspaceId, shortlisted: 0, queued: 0, promoted: 0, written: 0, judged: 0 };
+      throw new NonRetryableError("jev unavailable: discovery stopped before any proposer call");
     }
 
     const backlog = await step.do("backlog", RETRY, () => readBacklog(workspaceId));

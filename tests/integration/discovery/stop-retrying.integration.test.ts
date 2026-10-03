@@ -51,7 +51,7 @@ describe("stopRetryingWhenRefused", () => {
 });
 
 describe("the Discovery workflow when Jev refuses", () => {
-  it("skips the run before any proposer call", async () => {
+  it("stops the run before any proposer call, so onboarding reads as unavailable", async () => {
     await seedWorkspace("ws-jev-down");
     const run = vi.fn(() => Promise.reject(new Error("2021: Payment error")));
     Reflect.set(env, "AI", { run });
@@ -63,9 +63,9 @@ describe("the Discovery workflow when Jev refuses", () => {
     await env.DISCOVERY.create({ id: "discovery-ws-jev-down", params: { workspaceId: "ws-jev-down", mode: "create" } });
     const [instance] = await introspector.get();
     if (instance === undefined) throw new Error("discovery instance was not started");
-    await instance.waitForStatus("complete");
+    await instance.waitForStatus("errored");
 
-    expect(await instance.getOutput()).toEqual({ workspaceId: "ws-jev-down", ...ZEROS });
+    expect((await instance.getError()).message).toContain("a step threw an NonRetryableError");
     expect(run).toHaveBeenCalledTimes(1);
   });
 
