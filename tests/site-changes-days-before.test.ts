@@ -15,6 +15,16 @@ describe("the instant a window opens", () => {
     expect(daysBefore(new Date("2026-03-02T12:00:00.000Z"), 2)).toBe("2026-02-28T12:00:00.000Z");
   });
 
+  it("lands on February 29 in a leap year", () => {
+    expect(daysBefore(new Date("2028-03-01T00:00:00.000Z"), 1)).toBe("2028-02-29T00:00:00.000Z");
+  });
+
+  it("leaves the instant it is given unchanged", () => {
+    const now = new Date("2026-10-03T12:00:00.000Z");
+    daysBefore(now, 7);
+    expect(now.toISOString()).toBe("2026-10-03T12:00:00.000Z");
+  });
+
   it("subtracts a fraction of a day", () => {
     expect(daysBefore(new Date("2026-10-03T18:30:00.000Z"), 0.5)).toBe("2026-10-03T06:30:00.000Z");
   });
