@@ -24,10 +24,10 @@ function submitButton(html: string): string {
   return html.match(/<button[^>]*type="submit"[^>]*>[\s\S]*?<\/button>/)?.[0] ?? "";
 }
 
-// The attribute list without the class list, whose utility names include the
-// word "disabled". A disabled control carries the bare attribute.
-function isDisabled(tag: string): boolean {
-  return /\sdisabled(?:=|\s|$)/.test(tag);
+// The disabled control renders the bare attribute, but the button class list
+// holds utility names that contain the same word, so match the attribute itself.
+function isDisabled(button: string): boolean {
+  return /\sdisabled(?:=|\s|$)/.test(button);
 }
 
 describe("SignInEmailForm (app/components/sign-in-email-form.tsx)", () => {
@@ -39,7 +39,7 @@ describe("SignInEmailForm (app/components/sign-in-email-form.tsx)", () => {
     expect(input).toContain('name="email"');
     expect(input).toContain('type="email"');
     expect(input).toContain("required");
-    // react-dom/server keeps the camelCase spelling it was given.
+    // The attributes reach the markup in the camelCase spelling they were given.
     expect(input).toMatch(/inputmode="email"/i);
     expect(input).toMatch(/autocomplete="email"/i);
     expect(input).not.toContain("aria-invalid");
@@ -53,6 +53,8 @@ describe("SignInEmailForm (app/components/sign-in-email-form.tsx)", () => {
 
     expect(input).toContain('aria-invalid="true"');
     expect(input).toContain(`aria-describedby="${SIGN_IN_ERROR_ID}"`);
+    // SignInEmailForm only names the target. The <p id=...> itself is the route's
+    // SignInError, which tests/unit/login-sign-in-error.test.ts covers.
   });
 
   it("offers the send button enabled while the link is not being sent", () => {
