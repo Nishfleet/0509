@@ -28,7 +28,7 @@ const PROBE_QUESTIONS = new Set([
 
 let probeQuestion = "";
 
-const PROBE_MODEL = "clef-flash";
+const PROBE_MODEL = "clef";
 
 const CONCURRENCY = 8;
 
