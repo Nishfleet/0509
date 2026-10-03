@@ -26,6 +26,10 @@ describe("an alert, put in its day group by the workspace clock", () => {
     expect(alertDayGroup("2026-09-23T12:00:00Z", NEW_YORK_NOW, "America/New_York")).toBe("Today");
     expect(alertDayGroup("2026-09-23T02:00:00Z", NEW_YORK_NOW, "America/New_York")).toBe("Yesterday");
   });
+
+  it("puts an unreadable time in Earlier instead of crashing", () => {
+    expect(alertDayGroup("garbage", UTC_NOW, "UTC")).toBe("Earlier");
+  });
 });
 
 describe("alerts, grouped by the day a customer reads them", () => {
@@ -46,5 +50,20 @@ describe("alerts, grouped by the day a customer reads them", () => {
   it("leaves the list it was given in the order it came in", () => {
     groupByDay(ITEMS, UTC_NOW, "UTC");
     expect(ITEMS.map((item) => item.id)).toEqual(["earliest", "middling", "second-newest", "newest"]);
+  });
+
+  it("keeps one unreadable time in Earlier and the readable ones in their group", () => {
+    const valid = { id: "valid", at: "2026-09-24T08:00:00Z" };
+    const bad = { id: "bad", at: "garbage" };
+    expect(groupByDay([bad, valid], UTC_NOW, "UTC")).toEqual([
+      { group: "Today", items: [valid] },
+      { group: "Earlier", items: [bad] },
+    ]);
+  });
+
+  it("keeps a stable order when several times cannot be read", () => {
+    const first = { id: "first", at: "garbage" };
+    const second = { id: "second", at: "nonsense" };
+    expect(groupByDay([first, second], UTC_NOW, "UTC")).toEqual([{ group: "Earlier", items: [first, second] }]);
   });
 });

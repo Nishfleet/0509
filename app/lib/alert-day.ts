@@ -6,7 +6,13 @@ function localDay(at: Date, timeZone: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
 }
 
+function time(at: string): number {
+  const parsed = Date.parse(at);
+  return Number.isNaN(parsed) ? Number.MIN_SAFE_INTEGER : parsed;
+}
+
 export function alertDayGroup(at: string, now: Date, timeZone: string): DayGroup {
+  if (Number.isNaN(Date.parse(at))) return "Earlier";
   const today = localDay(now, timeZone);
   const yesterday = new Date(Date.parse(`${today}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
   const atDay = localDay(new Date(at), timeZone);
@@ -20,7 +26,7 @@ export function groupByDay<T extends { at: string }>(
   now: Date,
   timeZone: string,
 ): { group: DayGroup; items: T[] }[] {
-  const sorted = [...items].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const sorted = [...items].sort((a, b) => time(b.at) - time(a.at) || 0);
   return DAY_GROUPS.map((group) => ({
     group,
     items: sorted.filter((item) => alertDayGroup(item.at, now, timeZone) === group),
