@@ -4,9 +4,6 @@ import { describe, expect, it } from "vitest";
 
 import { BrandChip, BrandChipRow, type BrandChipBrand } from "../app/components/brand-chip";
 
-// Every render here uses an `https://` href, so the chip anchors a plain `<a>`
-// and no router is needed. The null cases call the component directly: there is
-// nothing to render.
 function chip(props: BrandChipBrand): string {
   return renderToStaticMarkup(createElement(BrandChip, props));
 }
@@ -66,5 +63,10 @@ describe("BrandChipRow shows the add link only when it has somewhere to go", () 
     const html = renderToStaticMarkup(createElement(BrandChipRow, { brands: [], addHref: "https://a.example/add" }));
     expect(html).toContain("+ Add a competitor");
     expect(html).toContain('href="https://a.example/add"');
+  });
+
+  it("omits the add link for an addHref that is not a safe web address", () => {
+    const html = renderToStaticMarkup(createElement(BrandChipRow, { brands: [], addHref: "javascript:alert(1)" }));
+    expect(html).not.toContain("+ Add a competitor");
   });
 });
