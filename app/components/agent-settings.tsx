@@ -219,7 +219,14 @@ function CreateKeyForm({ submission }: { submission: string }) {
         Name
       </label>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-        <Input id="key-name" name="name" maxLength={60} placeholder="My agent" className="sm:flex-1" />
+        <Input
+          id="key-name"
+          name="name"
+          maxLength={60}
+          placeholder="My agent"
+          autoComplete="off"
+          className="sm:flex-1"
+        />
         <Button type="submit" variant="secondary" size="lg" disabled={making}>
           {making ? "Making…" : "Make a key"}
         </Button>
