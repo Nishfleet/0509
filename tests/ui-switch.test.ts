@@ -25,15 +25,21 @@ describe("ui/switch", () => {
     expect(html).toContain('data-slot="switch-thumb"');
   });
 
-  it("reflects disabled as disabled or data-disabled", () => {
+  it("reflects disabled as data-disabled and the native disabled attribute", () => {
     const html = render({ disabled: true });
-    expect(html).toContain("disabled");
-    expect(html).toContain("data-disabled");
+    expect(html).toContain('data-disabled=""');
+    expect(html).toContain('disabled=""');
   });
 
   it("keeps a custom className alongside rounded-full", () => {
     const html = render({ className: "my-switch" });
     expect(html).toContain("my-switch");
     expect(html).toContain("rounded-full");
+  });
+
+  it("reflects checked via defaultChecked", () => {
+    const html = render({ defaultChecked: true });
+    expect(html).toContain("data-checked");
+    expect(html).toContain('aria-checked="true"');
   });
 });
