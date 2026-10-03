@@ -118,7 +118,25 @@ describe("readFeed", () => {
     const feedRequests = server.requests.filter((request) => request.url === FEED_URL);
     expect(feedRequests[0]?.headers.get("if-none-match")).toBeNull();
     expect(feedRequests[1]?.headers.get("if-none-match")).toBe('"v1"');
-    expect(await snapshots()).toHaveLength(1);
+    const rows = await snapshots();
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toMatchObject({ id: `night-2-${WATCH_ID}`, item_count: 2 });
+    expect(rows[1]?.payload_r2_key).toBe(rows[0]?.payload_r2_key);
+  });
+
+  it("records a 304 night as a fresh snapshot, so the source never reads as stale", async () => {
+    const t = await target();
+    await readFeed(t, await nextTick("night-1"));
+    await env.DB.prepare(
+      "UPDATE source SET latest_fetched_at = '2000-01-01T00:00:00.000Z' WHERE key = 'feed.rss'",
+    ).run();
+
+    await readFeed(t, await nextTick("night-2"));
+
+    const row = await env.DB.prepare("SELECT latest_fetched_at AS at FROM source WHERE key = 'feed.rss'").first<{
+      at: string;
+    }>();
+    expect(row?.at.startsWith("2000-")).toBe(false);
   });
 
   it("keeps the validators next to what else the watch config holds", async () => {

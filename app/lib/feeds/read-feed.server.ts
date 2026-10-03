@@ -101,6 +101,23 @@ async function fileFreshPosts(input: {
   return fresh.length;
 }
 
+async function keepSnapshot(input: {
+  watchId: string;
+  id: string;
+  kept: BoardSnapshot;
+  fetchedAt: string;
+}): Promise<void> {
+  const { watchId, id, kept, fetchedAt } = input;
+  await insertBoardSnapshot({
+    id,
+    watchId,
+    fetchedAt,
+    r2Key: kept.r2Key,
+    hash: kept.hash,
+    itemCount: kept.itemCount,
+  });
+}
+
 export async function readFeed(target: FeedTarget, tick: SweepTick): Promise<FeedResult> {
   const config = parseConfig(await readWatchConfigJson(target.watchId));
   const fetched = await fetchFeed(target.feedUrl, validatorsOf(config));
@@ -111,6 +128,9 @@ export async function readFeed(target: FeedTarget, tick: SweepTick): Promise<Fee
     return { outcome: "gone", newPosts: 0 };
   }
   if (fetched.outcome === "not-modified") {
+    const kept = await latestBoardSnapshot(target.watchId, tick.plannedAt);
+    if (kept !== null)
+      await keepSnapshot({ watchId: target.watchId, id: `${tick.instanceId}-${target.watchId}`, kept, fetchedAt: now });
     await markWatchPolled(target.watchId, now);
     return { outcome: "unchanged", newPosts: 0 };
   }
@@ -123,14 +143,7 @@ export async function readFeed(target: FeedTarget, tick: SweepTick): Promise<Fee
   const previous = await latestBoardSnapshot(target.watchId, tick.plannedAt);
   const snapshotId = `${tick.instanceId}-${target.watchId}`;
   if (previous !== null && previous.hash === hash) {
-    await insertBoardSnapshot({
-      id: snapshotId,
-      watchId: target.watchId,
-      fetchedAt: now,
-      r2Key: previous.r2Key,
-      hash,
-      itemCount: items.length,
-    });
+    await keepSnapshot({ watchId: target.watchId, id: snapshotId, kept: previous, fetchedAt: now });
     await markWatchPolled(target.watchId, now);
     return { outcome: "unchanged", newPosts: 0 };
   }

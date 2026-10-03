@@ -373,7 +373,7 @@ jobs:
             npx wrangler workflows instances list "$1" --date-start "$since" --per-page 100 --json | jq -s -r --arg prefix "$1-" '(add // []) | map(select(.id | startswith($prefix))) | length'
           }
           crons=""
-          for name in mentions-sweep site-sweep hiring-sweep snapshot-backup; do
+          for name in mentions-sweep site-sweep hiring-sweep feed-sweep snapshot-backup; do
             n=$(cron_instances "$name") || n=unreadable
             crons="$crons$name $n, "
             [[ "$n" =~ ^[1-9][0-9]*$ ]] || { missed="$missed$name "; failed=1; }
@@ -395,6 +395,11 @@ jobs:
           pricing_bad=$(jq -r '[.[] | select(.judged == 1 and (.watches == 0 or .snapshots == 0))] | length' <<< "$pricing")
           pricing_any=$(jq -r '[.[] | select(.judged == 1)] | length' <<< "$pricing")
           [ "$pricing_bad" -eq 0 ] && [ "$pricing_any" -gt 0 ] || failed=1
+          feeds=$(d1 "SELECT e.domain AS brand, COUNT(DISTINCT w.id) AS watches, COUNT(sn.id) AS snapshots FROM entity e LEFT JOIN watch w ON w.entity_id = e.id AND w.is_active = 1 AND w.source_id = (SELECT id FROM source WHERE key = 'feed.rss') LEFT JOIN snapshot sn ON sn.watch_id = w.id AND sn.fetched_at >= '$since' WHERE e.role = 'competitor' AND e.state = 'on'$scope GROUP BY e.id ORDER BY e.domain")
+          feed_lines=$(jq -r 'map("\(.brand) " + (if .watches == 0 then "no feed found" elif .snapshots == 0 then "feed watched, NOT READ" else "feed read, \(.snapshots) snapshots" end)) | join("; ")' <<< "$feeds")
+          feed_bad=$(jq -r '[.[] | select(.watches > 0 and .snapshots == 0)] | length' <<< "$feeds")
+          feed_posts=$(d1 "SELECT COUNT(*) AS n FROM signal WHERE kind = 'content' AND observed_at >= '$since'$scope" | jq -r '.[0].n')
+          [ "$feed_bad" -eq 0 ] || failed=1
           {
             echo "Soak report for the 24 hours before $(date -u +%Y-%m-%dT%H:%MZ) (send counts: $label)."
             echo
@@ -409,6 +414,7 @@ jobs:
             echo "- #6110 news: $gdelt gdelt.doc snapshots with items, $mentions mention signals in the last 24 h$([ "$gdelt" -gt 0 ] && [ "$mentions" -gt 0 ] || echo " (FAIL)")"
             echo "- user table (0509#5731): $users"
             echo "- pricing-page watches, soak brands: $pricing_lines$([ "$pricing_bad" -eq 0 ] && [ "$pricing_any" -gt 0 ] || echo " (FAIL, $pricing_any brands have a judged pricing page and $pricing_bad of those lack a watch or a snapshot)")"
+            echo "- blog and changelog feeds, soak brands: $feed_lines; $feed_posts new posts filed in the last 24 h$([ "$feed_bad" -eq 0 ] || echo " (FAIL, $feed_bad watched feeds were not read)")"
             echo "- healthchecks.io dead-man and site-sweep pings: not read, no healthchecks.io read key is a repository secret"
             echo "- new Sentry issues: not read, no Sentry auth token is a repository secret"
           } > comment.md
