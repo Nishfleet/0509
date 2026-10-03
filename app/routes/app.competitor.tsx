@@ -5,7 +5,7 @@ import { redirect, useFetcher } from "react-router";
 import { BrandSwitchField } from "../components/brand-switch";
 import { CompetitorForget } from "../components/competitor-forget";
 import { CompetitorFrame } from "../components/competitor-frame";
-import { CompetitorHeader, DAY_MONTH } from "../components/competitor-header";
+import { CompetitorHeader, dayMonthLabel } from "../components/competitor-header";
 import { CompetitorSite } from "../components/competitor-site";
 import { CompetitorYoutube } from "../components/competitor-youtube";
 import { CompetitorSnapshot } from "../components/competitor-snapshot";
@@ -107,7 +107,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         quiet={loaderData.quiet}
         pages={loaderData.watch.pages}
         lastChecked={loaderData.lastChecked}
-        pausedOn={pausedAt === null ? null : DAY_MONTH.format(new Date(pausedAt))}
+        pausedOn={pausedAt === null ? null : dayMonthLabel(pausedAt)}
         unreadable={loaderData.watch.unreadable}
         rail={{ ...loaderData.rail, entityId: competitor.id, now: loaderData.now }}
       />

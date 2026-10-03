@@ -129,6 +129,13 @@ describe("the competitor rail", () => {
     const visible = text(render());
     expect(visible).toContain("Closed or stopped trading.");
     expect(visible).toContain("Checked 17 Sept");
+ });
+
+  it("renders without throwing when the verdict stamp is not a parseable time value", () => {
+    const visible = text(render({ verdict: { choice: "shut_down", decidedAt: "not a date" } }));
+    expect(visible).toContain("Closed or stopped trading.");
+    expect(visible).toContain("Checked recently");
+    expect(visible).not.toContain("Invalid");
   });
 
   it("never lets scoring or decision machinery reach the DOM", () => {

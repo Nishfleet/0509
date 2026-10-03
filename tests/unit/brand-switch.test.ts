@@ -8,6 +8,7 @@ import {
   brandRowClass,
   BrandSwitchField,
   brandSwitchNote,
+  dayMonthLabel,
 } from "../../app/components/brand-switch";
 
 function render(state: BrandSwitchState): string {
@@ -83,6 +84,13 @@ describe("the brand switch note", () => {
 
   it("marks you as always tracked", () => {
     expect(brandSwitchNote("you", null)).toBe("Your brand, always tracked");
+  });
+});
+
+describe("dayMonthLabel", () => {
+  it("formats a parseable stamp in en-GB short month and UTC, and drops invalid ones", () => {
+    expect(dayMonthLabel("2026-09-22T12:00:00.000Z")).toBe("22 Sept");
+    expect(dayMonthLabel("garbage")).toBeNull();
   });
 });
 

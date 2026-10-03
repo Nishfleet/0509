@@ -3,9 +3,9 @@ import { Link } from "react-router";
 
 import { adLibraryLinks } from "../lib/competitor/ad-library-links";
 import { pausedReasonLine } from "../lib/competitor/reason-customer";
-import { BrandSwitch, DAY_MONTH } from "./brand-switch";
+import { BrandSwitch, DAY_MONTH, dayMonthLabel } from "./brand-switch";
 
-export { DAY_MONTH };
+export { dayMonthLabel };
 
 export function competitorPausedLine(stateChangedAt: string | null, stateReason: string | null = null): string {
   const pausedDate = stateChangedAt === null ? null : new Date(stateChangedAt);
