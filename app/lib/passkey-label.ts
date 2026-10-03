@@ -1,4 +1,4 @@
-const ADDED = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", year: "numeric", month: "short", day: "numeric" });
+const ADDED = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", year: "numeric", month: "short", day: "numeric" });
 
 export function passkeyLabel(name: string | null | undefined, createdAt: Date | string): string {
   const title = (name?.trim() ?? "") || "Passkey";
