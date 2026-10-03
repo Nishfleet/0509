@@ -18,6 +18,16 @@ const REPEATS = 1;
 
 const PROBE_CAP = 12;
 
+const PROBE_QUESTIONS = new Set([
+  "is_competitor",
+  "is_creator_rival",
+  "own_site_breakage",
+  "noteworthy_change",
+  "still_competitor",
+]);
+
+let probeQuestion = "";
+
 const PROBE_MODEL = "clef-flash";
 
 const CONCURRENCY = 8;
@@ -404,6 +414,16 @@ async function scoreSplit<T extends EvalRow>(
     const calls: number[] = [];
     for (let repeat = 0; repeat < REPEATS; repeat += 1) {
       const call = await ask(row);
+      console.log(
+        "PROBE",
+        JSON.stringify({
+          q: probeQuestion,
+          id: row.id,
+          label: Reflect.get(row, "label"),
+          p: call.p,
+          choice: call.choice,
+        }),
+      );
       models.add(call.model);
       const outcome = score(row, call);
       outcomes.push(outcome);
@@ -452,6 +472,8 @@ export async function runEval<T extends EvalRow>(
   const models = new Set<string>();
   const splits: SplitScore[] = [];
   const wanted = selectedSplits();
+  if (!PROBE_QUESTIONS.has(questionId)) throw new Error(`probe skips ${questionId}`);
+  probeQuestion = questionId;
   callsUsed = 0;
   callBudget = Math.ceil(wanted.length * Math.min(PROBE_CAP, rows.length) * REPEATS * BUDGET_MARGIN);
   for (const split of wanted) {
