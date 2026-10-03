@@ -22,8 +22,9 @@ function row(overrides: Partial<MentionReadRow> & Pick<MentionReadRow, "id" | "p
     publishedAt: overrides.publishedAt === undefined ? "2026-09-24T08:00:00.000Z" : overrides.publishedAt,
     observedAt: overrides.observedAt ?? "2026-09-25T08:00:00.000Z",
     reason: overrides.reason === undefined ? "A London flagship is a move worth knowing." : overrides.reason,
-    verdictId: overrides.verdictId ?? `v-${overrides.id}`,
-    verdictDecidedAt: overrides.verdictDecidedAt ?? "2026-09-25T09:00:00.000Z",
+    verdictId: overrides.verdictId === undefined ? `v-${overrides.id}` : overrides.verdictId,
+    verdictDecidedAt:
+      overrides.verdictDecidedAt === undefined ? "2026-09-25T09:00:00.000Z" : overrides.verdictDecidedAt,
     id: overrides.id,
     p: overrides.p,
     state: overrides.state ?? null,
@@ -40,9 +41,10 @@ describe("alsoReportedLine", () => {
 
 describe("mentionWhen", () => {
   it("says found today when there is no published date and matches daysAgoLabel otherwise", () => {
+    const twoDaysAgo = "2026-09-23T12:00:00.000Z";
     expect(mentionWhen(null, NOW)).toBe("found today");
-    expect(mentionWhen("2026-09-23T00:00:00.000Z", NOW)).toBe(daysAgoLabel("2026-09-23T00:00:00.000Z", NOW));
-    expect(mentionWhen("2026-09-23T00:00:00.000Z", NOW)).toBe("2 days ago");
+    expect(mentionWhen(twoDaysAgo, NOW)).toBe(daysAgoLabel(twoDaysAgo, NOW));
+    expect(mentionWhen(twoDaysAgo, NOW)).toBe("2 days ago");
   });
 });
 
@@ -60,9 +62,18 @@ describe("mentionsFromRows", () => {
     expect(mentions[0]?.title).toBe("Zephyrwear");
   });
 
-  it("marks an unjudged row as pending even with a high score", () => {
-    const [mention] = mentionsFromRows([row({ id: "unjudged", p: 0.9, state: "unjudged" })], NOW);
-    expect(mention.treatment).toBe("pending");
+  it("marks an unjudged row as pending even with a high score, and leaves whyFlagged null without a verdict", () => {
+    const [withVerdict, withoutVerdict] = mentionsFromRows(
+      [
+        row({ id: "unjudged", p: 0.9, state: "unjudged" }),
+        row({ id: "unjudged-no-verdict", p: 0.9, state: "unjudged", verdictId: null, verdictDecidedAt: null }),
+      ],
+      NOW,
+    );
+    expect(withVerdict.treatment).toBe("pending");
+    expect(withVerdict.whyFlagged).not.toBeNull();
+    expect(withoutVerdict.treatment).toBe("pending");
+    expect(withoutVerdict.whyFlagged).toBeNull();
   });
 
   it("treats a null or non-finite p as unreviewed", () => {
@@ -77,17 +88,21 @@ describe("mentionsFromRows", () => {
   });
 
   it("reads the source name from kind and platform", () => {
-    const [hn, medium, unknown] = mentionsFromRows(
+    const [hn, medium, unknown, site] = mentionsFromRows(
       [
         row({ id: "hn", p: 0.95, kind: "mentions", platform: "hn" }),
         row({ id: "medium", p: 0.95, kind: "mentions", platform: "medium" }),
         row({ id: "unknown", p: 0.95, kind: "mentions", platform: "nowhere" }),
+        row({ id: "site", p: 0.95, kind: "site", platform: "gdelt" }),
       ],
       NOW,
     );
+    expect(hn.sourceName).toBe("Hacker News mentions");
+    expect(medium.sourceName).toBe("Medium mentions");
+    expect(unknown.sourceName).toBe("Your mentions source");
+    expect(site.sourceName).toBe("Website checks");
     expect(hn.sourceName).toBe(sourceName("mentions", "hn"));
-    expect(medium.sourceName).toBe(sourceName("mentions", "medium"));
-    expect(unknown.sourceName).toBe(sourceName("mentions", "nowhere"));
+    expect(site.sourceName).toBe(sourceName("site", "gdelt"));
   });
 });
 
@@ -121,5 +136,6 @@ describe("withoutMentionAlerts", () => {
     const result = withoutMentionAlerts(signals);
     expect(result.map((signal) => signal.id)).toEqual(["a1"]);
     expect(result).not.toBe(signals);
+    expect(signals.map((signal) => signal.id)).toEqual(["m1", "a1", "m2"]);
   });
 });
