@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { useId } from "react";
 import { useFetcher } from "react-router";
 
 import { BrandSwitch } from "./brand-switch";
@@ -16,6 +17,7 @@ interface AlertSwitchProps {
 
 function AlertSwitch({ on, intent, label, note, testId }: AlertSwitchProps): ReactElement {
   const fetcher = useFetcher();
+  const noteId = useId();
 
   return (
     <section className={ROW} data-testid={testId}>
@@ -25,12 +27,15 @@ function AlertSwitch({ on, intent, label, note, testId }: AlertSwitchProps): Rea
           state={on ? "on" : "off"}
           brandName={label}
           label={label}
+          describedBy={noteId}
           onCheckedChange={(checked) => {
             void fetcher.submit({ intent, value: checked ? "on" : "off" }, { method: "post" });
           }}
         />
       </div>
-      <p className={NOTE}>{note}</p>
+      <p id={noteId} className={NOTE}>
+        {note}
+      </p>
     </section>
   );
 }
