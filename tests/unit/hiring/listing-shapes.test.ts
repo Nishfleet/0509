@@ -5,36 +5,35 @@ import { ListingError, parseListing } from "../../../app/lib/hiring/listing";
 const BOARD = "https://boards.example.com/rival";
 
 describe("parseListing, unexpected shapes", () => {
-  it("throws ListingError when Ashby has no jobs", () => {
-    expect(() => parseListing("ashby", JSON.stringify({}), BOARD)).toThrow(
-      "ashby: unexpected listing shape",
-    );
+  it("throws ListingError when Ashby has no jobs key", () => {
+    const bad = () => parseListing("ashby", JSON.stringify({}), BOARD);
+    expect(bad).toThrow(ListingError);
+    expect(bad).toThrow("ashby: unexpected listing shape");
   });
 
   it("throws ListingError when Workable jobs is not an array", () => {
-    expect(() => parseListing("workable", JSON.stringify({ jobs: "nope" }), BOARD)).toThrow(
-      "workable: unexpected listing shape",
-    );
+    const bad = () => parseListing("workable", JSON.stringify({ jobs: "nope" }), BOARD);
+    expect(bad).toThrow(ListingError);
+    expect(bad).toThrow("workable: unexpected listing shape");
   });
 
   it("throws ListingError when Lever receives an object instead of an array", () => {
-    expect(() => parseListing("lever", JSON.stringify({ jobs: [] }), BOARD)).toThrow(
-      "lever: unexpected listing shape",
-    );
-  });
-
-  it("is a ListingError for a bad shape", () => {
-    let caught: unknown;
-    try {
-      parseListing("ashby", JSON.stringify({}), BOARD);
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).toBeInstanceOf(ListingError);
+    const bad = () => parseListing("lever", JSON.stringify({ jobs: [] }), BOARD);
+    expect(bad).toThrow(ListingError);
+    expect(bad).toThrow("lever: unexpected listing shape");
   });
 
   it("throws ListingError when the body is not JSON", () => {
-    expect(() => parseListing("ashby", "not json", BOARD)).toThrow("ashby: body is not JSON");
+    const bad = () => parseListing("ashby", "not json", BOARD);
+    expect(bad).toThrow(ListingError);
+    expect(bad).toThrow("ashby: body is not JSON");
+  });
+
+  it("returns no roles for a well-shaped board with zero jobs", () => {
+    for (const platform of ["greenhouse", "ashby", "workable"] as const) {
+      expect(parseListing(platform, JSON.stringify({ jobs: [] }), BOARD)).toEqual([]);
+    }
+    expect(parseListing("lever", "[]", BOARD)).toEqual([]);
   });
 
   it("drops a Greenhouse row that fails its schema and keeps the rest", () => {
