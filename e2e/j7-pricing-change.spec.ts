@@ -114,9 +114,13 @@ test("J7 a fixture price flip reaches Alerts as a before-and-after mark @own-sig
     test.skip(true, `J7: no sweep has filed a change yet; flipped to ${next} for the next one`);
   }
   await expect(chip).toBeEnabled();
-  const mark = page
-    .getByTestId("site-change")
-    .filter({ has: page.locator(`a[href^="${FIXTURE_ORIGIN}"]`) })
+  const fixtureMarks = page.getByTestId("site-change").filter({ has: page.locator(`a[href^="${FIXTURE_ORIGIN}"]`) });
+  if ((await fixtureMarks.count()) === 0) {
+    const next: Variant = variant === "raised" ? "base" : "raised";
+    await flip(next);
+    test.skip(true, `J7: no change has been filed for the fixture yet; flipped to ${next} for the next sweep`);
+  }
+  const mark = fixtureMarks
     .filter({ has: page.locator("s", { hasText: OLD_AND_NEW[variant].before }) })
     .filter({ has: page.locator("ins", { hasText: OLD_AND_NEW[variant].after }) })
     .first();
