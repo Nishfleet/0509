@@ -2,7 +2,8 @@ import { test } from "@playwright/test";
 
 import { requireInboxToken, signInWithMagicLink } from "./inbox";
 
-const BRAND = "allbirds.com";
+const BRAND = process.env.PROOF_BRAND ?? "allbirds.com";
+const READ_MS = Number(process.env.PROOF_READ_MS ?? "0");
 
 test("clef proof: one sign-up, one brand", async ({ page }) => {
   test.setTimeout(240_000);
@@ -26,6 +27,7 @@ test("clef proof: one sign-up, one brand", async ({ page }) => {
   console.log(`CLEF BRAND-STEP outcome=${outcome} ms=${cardAt - enterAt}`);
   if (outcome !== "card") throw new Error(`brand step ended in ${outcome}`);
   await page.getByText("looking on the site").waitFor({ state: "detached", timeout: 60_000 });
+  await page.waitForTimeout(READ_MS);
   const confirmAt = Date.now();
   await page.getByRole("button", { name: "That's me" }).click();
   await page.waitForURL(/\/onboarding\/competitors$/, { timeout: 20_000 });
@@ -35,8 +37,8 @@ test("clef proof: one sign-up, one brand", async ({ page }) => {
     .or(page.getByRole("list", { name: "Possible competitors" }).getByRole("listitem"));
   await listed.first().waitFor({ timeout: 120_000 });
   const listAt = Date.now();
-  console.log(`CLEF TIMING enter_to_card_ms=${cardAt - enterAt} confirm_to_list_ms=${listAt - confirmAt}`);
+  console.log(`CLEF TIMING brand=${BRAND} read_ms=${READ_MS} enter_to_card_ms=${cardAt - enterAt} card_to_list_ms=${listAt - cardAt} confirm_to_list_ms=${listAt - confirmAt}`);
   await page.waitForTimeout(2000);
   const names = await listed.allInnerTexts();
-  console.log(`CLEF RIVALS ${JSON.stringify(names.map((n) => n.replace(/\s+/g, " ").slice(0, 80)))}`);
+  console.log(`CLEF RIVALS brand=${BRAND} count=${names.length} ${JSON.stringify(names.map((n) => n.replace(/\s+/g, " ").slice(0, 80)))}`);
 });
