@@ -521,6 +521,8 @@ export function ownDocument404For(pathname: string): (entry: ConsoleEntry) => bo
 // in playwright.config.ts) against one inbox slot per recipient, so two tests
 // sharing one fixed address need serial mode or an address each.
 // Timestamps are logged for the packet's proof line (send and session).
+let signedInThisWorker: readonly string[] = [];
+
 const MAGIC_LINK_SEND_FAILED = "We couldn't send the link. Try again in a minute.";
 
 export async function signInWithMagicLink(
@@ -546,6 +548,7 @@ export async function signInWithMagicLink(
   const link = await waitForMagicLink(email, token, stale);
   const linkReadAt = new Date().toISOString();
   const response = await page.goto(link);
+  signedInThisWorker = [...signedInThisWorker, email];
   await expect(page).toHaveURL(landing);
   console.log(
     `magic-link sign-in email=${email} sentAt=${sentAt} linkReadAt=${linkReadAt} sessionAt=${new Date().toISOString()}`,
@@ -567,9 +570,15 @@ export async function signInWithMagicLink(
 // user row when the magic link is verified, inside signInWithMagicLink, so a
 // test that never got past that link has no session and no row; the skip
 // logs "deleteCreatedAccount: no session for <email>; nothing to delete"
-// before it returns. It is also the shape a J2 failure mid-ceremony leaves
-// behind — signed out, row still there — and this helper cannot tell the
-// two apart, so that leak is a named gap (#5733), not a solved case.
+// before it returns.
+//
+// A test that signed in and then lost the session (a sign-out mid-test, a J2
+// passkey ceremony that failed after signing out, magic-link-expiry before
+// 0509#6968) has a row and no session. signInWithMagicLink records every
+// address whose link it followed in this worker, so the helper tells the two
+// cases apart: a recorded address signs in once more and is deleted, an
+// unrecorded one is the no-row case. The extra sign-in sends one email, and
+// only on this path.
 
 // 0509#5688 (fleet-manager): the journey specs keep these six accounts on
 // purpose; the recurring teardown must never delete them. Match these exact
@@ -594,12 +603,18 @@ export async function deleteCreatedAccount(page: Page, email: string): Promise<v
   }
   await page.goto("/app/settings");
   if (page.url().includes("/login")) {
-    console.log(`deleteCreatedAccount: no session for ${email}; nothing to delete`);
-    return;
+    if (!signedInThisWorker.includes(email)) {
+      console.log(`deleteCreatedAccount: no session for ${email}; nothing to delete`);
+      return;
+    }
+    console.log(`deleteCreatedAccount: ${email} signed in earlier and lost its session; signing in again to delete it`);
+    await signInWithMagicLink(page, email, isLocalLane() ? null : requireInboxToken(), /\/(onboarding|app)/);
+    await page.goto("/app/settings");
   }
   await page.getByLabel("Type " + email + " to confirm").fill(email);
   await page.getByRole("button", { name: "Delete my account" }).click();
   await page.waitForURL(/\/login\?deleted=/);
+  signedInThisWorker = signedInThisWorker.filter((address) => address !== email);
 }
 
 function authSecret(): string {
