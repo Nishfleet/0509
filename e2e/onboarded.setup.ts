@@ -24,6 +24,9 @@ async function addCompetitor(page: Page, domain: string): Promise<void> {
     .getByRole("list", { name: "Competitors", exact: true })
     .getByRole("listitem")
     .filter({ hasText: domain });
+  await expect(
+    page.getByRole("list", { name: "Competitors", exact: true }).getByRole("listitem").first(),
+  ).toBeVisible();
   if ((await row.count()) === 0) {
     await page.locator("#add-competitor").fill(domain);
     await page.getByRole("button", { name: "Add" }).click();
