@@ -117,16 +117,18 @@ describe("e2e fixture teardown detector", () => {
   it("runs a matrix inside a job concurrency group one leg at a time", async () => {
     const dir = path.join(REPO_ROOT, ".github/workflows");
     const offenders: string[] = [];
-    let grouped = 0;
+    const grouped: string[] = [];
     for (const file of await readdir(dir)) {
+      if (!/\.ya?ml$/.test(file)) continue;
       const source = await readFile(path.join(dir, file), "utf8");
-      for (const job of source.split(/^ {2}(?=[a-z0-9-]+:$)/m).slice(1)) {
+      for (const job of source.split(/^ {2}(?=[A-Za-z0-9_-]+:$)/m).slice(1)) {
         if (!/^ {4}concurrency:/m.test(job) || !/^ {6}matrix:/m.test(job)) continue;
-        grouped += 1;
-        if (!/^ {6}max-parallel: 1$/m.test(job)) offenders.push(`${file}:${job.slice(0, job.indexOf(":"))}`);
+        const name = `${file}:${job.slice(0, job.indexOf(":"))}`;
+        grouped.push(name);
+        if (!/^ {6}max-parallel: 1$/m.test(job)) offenders.push(name);
       }
     }
-    expect(grouped).toBeGreaterThan(0);
+    expect(grouped).toContain("e2e-scheduled.yml:suite-shard");
     expect(offenders).toEqual([]);
   });
 });
