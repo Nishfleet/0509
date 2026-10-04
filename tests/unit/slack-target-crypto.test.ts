@@ -53,4 +53,10 @@ describe("Slack target AES-GCM", () => {
     const smashed = `${stored.slice(0, -2)}aa`;
     await expect(decryptSlackWebhook(smashed, SECRET)).rejects.toThrow("Slack target could not be decrypted");
   });
+
+  it("refuses a payload shorter than IV plus GCM tag", async () => {
+    await expect(decryptSlackWebhook("enc:v1:AAAAAAAAAAAA", SECRET)).rejects.toThrow(
+      "Slack target could not be decrypted",
+    );
+  });
 });

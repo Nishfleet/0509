@@ -109,10 +109,10 @@ WHERE workspace_id = ? AND channel_id = (SELECT id FROM channel WHERE key = 'sla
 const INSERT_SLACK_TARGET = `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at)
 SELECT ?, ?, id, ?, 1, ? FROM channel WHERE key = 'slack'`;
 
-const UPDATE_SLACK_TARGET_VALUE = `UPDATE send_target SET target_value = ? WHERE id = ?`;
-
 function slackTargetSecret(): string {
-  const secret = env.SLACK_TARGET_SECRET.trim();
+  const raw: unknown = Reflect.get(env, "SLACK_TARGET_SECRET");
+  if (typeof raw !== "string") throw new Error("SLACK_TARGET_SECRET is not configured");
+  const secret = raw.trim();
   if (secret.length === 0) throw new Error("SLACK_TARGET_SECRET is not configured");
   return secret;
 }
@@ -123,16 +123,11 @@ export async function readSlackTarget(
 ): Promise<{ id: string; target_value: string } | null> {
   const row = await db.prepare(SELECT_SLACK_TARGET).bind(workspaceId).first<{ id: string; target_value: string }>();
   if (row === null) return null;
-  const secret = slackTargetSecret();
   if (isEncryptedSlackTarget(row.target_value)) {
-    return { id: row.id, target_value: await decryptSlackWebhook(row.target_value, secret) };
+    return { id: row.id, target_value: await decryptSlackWebhook(row.target_value, slackTargetSecret()) };
   }
   const webhook = parseSlackWebhook(row.target_value);
   if (webhook === null) throw new Error("Slack target is not a webhook address");
-  await db
-    .prepare(UPDATE_SLACK_TARGET_VALUE)
-    .bind(await encryptSlackWebhook(webhook, secret), row.id)
-    .run();
   return { id: row.id, target_value: webhook };
 }
 

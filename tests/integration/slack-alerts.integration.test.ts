@@ -62,7 +62,7 @@ describe("Slack alerts setting (0509#6376)", () => {
     expect(stored?.target_value).not.toContain("hooks.slack.com");
   });
 
-  it("encrypts a plaintext row on read so D1 no longer holds the webhook (0509#6398)", async () => {
+  it("still reads a plaintext row left by the previous Worker, and does not rewrite it (0509#6398)", async () => {
     const channel = await env.DB.prepare(`SELECT id FROM channel WHERE key = 'slack'`).first<{ id: string }>();
     if (channel === null) throw new Error("slack channel missing");
     await env.DB.prepare(
@@ -76,9 +76,28 @@ describe("Slack alerts setting (0509#6376)", () => {
     const stored = await env.DB.prepare(`SELECT target_value FROM send_target WHERE id = 'st-slack-plain'`).first<{
       target_value: string;
     }>();
-    expect(stored?.target_value.startsWith("enc:v1:")).toBe(true);
-    expect(stored?.target_value).not.toContain("hooks.slack.com");
-    expect((await readSlackTarget(env.DB, WS))?.target_value).toBe(HOOK);
+    expect(stored?.target_value).toBe(HOOK);
+  });
+
+  it("refuses to save when SLACK_TARGET_SECRET is missing, and still reads plaintext without it", async () => {
+    const channel = await env.DB.prepare(`SELECT id FROM channel WHERE key = 'slack'`).first<{ id: string }>();
+    if (channel === null) throw new Error("slack channel missing");
+    await env.DB.prepare(
+      `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at)
+       VALUES ('st-slack-plain-nokey', ?, ?, ?, 1, '2026-10-01T00:00:00Z')`,
+    )
+      .bind(WS, channel.id, HOOK)
+      .run();
+    const held = env.SLACK_TARGET_SECRET;
+    env.SLACK_TARGET_SECRET = "";
+    try {
+      await expect(
+        saveSlackTarget(env.DB, { workspaceId: WS, webhookUrl: HOOK, now: "2026-10-01T01:00:00Z" }),
+      ).rejects.toThrow("SLACK_TARGET_SECRET is not configured");
+      expect((await readSlackTarget(env.DB, WS))?.target_value).toBe(HOOK);
+    } finally {
+      env.SLACK_TARGET_SECRET = held;
+    }
   });
 
   it("refuses an address that is not a Slack webhook without calling anything", async () => {

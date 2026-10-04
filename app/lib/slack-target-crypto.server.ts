@@ -51,7 +51,7 @@ export async function decryptSlackWebhook(stored: string, secret: string): Promi
   } catch (error) {
     throw new Error("Slack target could not be decrypted", { cause: error });
   }
-  if (packed.byteLength <= IV_LENGTH) throw new Error("Slack target could not be decrypted");
+  if (packed.byteLength < IV_LENGTH + 16) throw new Error("Slack target could not be decrypted");
   const iv = packed.subarray(0, IV_LENGTH);
   const sealed = packed.subarray(IV_LENGTH);
   let bytes: ArrayBuffer;
