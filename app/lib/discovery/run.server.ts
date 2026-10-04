@@ -6,7 +6,7 @@ import type { DiscoveryContext, DiscoverySelf } from "../data/entity.server";
 import type { DiscoveryResult } from "../data/suggestion.server";
 import { takenDownAmong } from "../data/takedown.server";
 import type { NoulQuestion, NoulVerdict } from "../jev/client.server";
-import { askNoul, askNouls, JevUnavailableError } from "../jev/client.server";
+import { askNoul, askNouls, JevRateLimitedError, JevUnavailableError } from "../jev/client.server";
 import { isBillingRefusal } from "../jev/refusal";
 import { evidenceLine } from "./evidence-line";
 import { aiGenerator } from "./generators/ai.server";
@@ -208,7 +208,7 @@ async function askCandidate(context: DiscoveryContext, candidate: ResolvedCandid
     if (context.self.kind === "creator") return await askNoul(context.self.workspaceId, IS_CREATOR_RIVAL, state);
     return await askCompetitorAndCategory(context, state);
   } catch (error) {
-    if (!(error instanceof JevUnavailableError)) throw error;
+    if (!(error instanceof JevUnavailableError) || error instanceof JevRateLimitedError) throw error;
     console.error(JSON.stringify({ event: "discovery.jev_unavailable", message: error.message }));
     return null;
   }

@@ -60,6 +60,15 @@ export class JevUnavailableError extends Error {
   }
 }
 
+export class JevRateLimitedError extends JevUnavailableError {
+  constructor(cause: unknown) {
+    super(cause);
+    this.name = "JevRateLimitedError";
+  }
+}
+
+const RATE_LIMITED = /(^|\D)2003(\D|$)/;
+
 function unavailable(error: unknown): JevUnavailableError {
   const failure = new JevUnavailableError(error);
   if (isBillingRefusal(failure)) {
@@ -67,8 +76,9 @@ function unavailable(error: unknown): JevUnavailableError {
       level: "error",
       fingerprint: ["jev-billing-refused"],
     });
+    return failure;
   }
-  return failure;
+  return RATE_LIMITED.test(failure.message) ? new JevRateLimitedError(error) : failure;
 }
 
 function jevBody(raw: unknown): unknown {

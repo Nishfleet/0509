@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readCompetitors, readDiscoveryContext, readOnboardingCompetitors } from "../../../app/lib/data/entity.server";
 import { writeDiscoveryResults } from "../../../app/lib/data/suggestion.server";
+import { JevRateLimitedError } from "../../../app/lib/jev/client.server";
 import { judgeCandidates, resolveShortlist } from "../../../app/lib/discovery/run.server";
 import type { ResolvedCandidate } from "../../../app/lib/discovery/run.server";
 
@@ -193,6 +194,28 @@ describe("judgeCandidates", () => {
     expect(run.mock.calls[0]?.[0]).toBe("@cf/cloudflare/clef");
     expect(first[0]?.verdict).toMatchObject({ p: 0.92, cached: false });
     expect(second[0]?.verdict).toMatchObject({ p: 0.92, cached: true });
+  });
+
+  it("raises a rate limit so the workflow step retries instead of leaving the candidate pending", async () => {
+    const workspaceId = await seedWorkspace();
+    const context = await readDiscoveryContext(workspaceId);
+    if (context === null) throw new Error("seed failed");
+    Reflect.set(env, "AI", { run: vi.fn(() => Promise.reject(new Error("2003: Rate limited"))) });
+
+    await expect(judgeCandidates(context, [candidate("Alphalete", "alphaleteathletics.com")])).rejects.toThrow(
+      JevRateLimitedError,
+    );
+  });
+
+  it("still leaves a candidate unjudged when the AI credits refuse, with no retry", async () => {
+    const workspaceId = await seedWorkspace();
+    const context = await readDiscoveryContext(workspaceId);
+    if (context === null) throw new Error("seed failed");
+    Reflect.set(env, "AI", { run: vi.fn(() => Promise.reject(new Error("2021: Payment error"))) });
+
+    const results = await judgeCandidates(context, [candidate("Alphalete", "alphaleteathletics.com")]);
+
+    expect(results[0]?.verdict).toBeNull();
   });
 
   it("drops a candidate Jev judges a different product category, whatever the competitor answer says", async () => {
