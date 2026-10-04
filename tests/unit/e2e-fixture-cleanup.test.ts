@@ -123,7 +123,7 @@ describe("e2e fixture teardown detector", () => {
   it("treats a second session teardown as a login redirect, not a missing deleted query", async () => {
     const source = await readFile(path.join(REPO_ROOT, "e2e/session.teardown.ts"), "utf8");
     expect(source).toContain("/login?deleted=");
-    expect(source).toContain('toMatch(/\\/login(?:\\?|$)/)');
+    expect(source).toContain("toMatch(/\\/login(?:\\?|$)/)");
   });
 
   it("runs a matrix inside a job concurrency group one leg at a time", async () => {
