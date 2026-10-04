@@ -193,6 +193,8 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
     .getByRole("switch");
   await offSwitch.click();
   await expect(offSwitch).not.toBeChecked();
+  await page.reload();
+  await expect(offSwitch).not.toBeChecked();
 
   const now = new Date();
   const opening = openingSlot(now);

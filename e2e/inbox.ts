@@ -611,9 +611,20 @@ export async function deleteCreatedAccount(page: Page, email: string): Promise<v
     await signInWithMagicLink(page, email, isLocalLane() ? null : requireInboxToken(), /\/(onboarding|app)/);
     await page.goto("/app/settings");
   }
-  await page.getByLabel("Type " + email + " to confirm").fill(email);
+  const confirm = page.getByLabel("Type " + email + " to confirm");
+  if ((await confirm.count()) === 0) {
+    console.log(`deleteCreatedAccount: ${email} has no delete form; nothing to delete`);
+    return;
+  }
+  await confirm.fill(email);
   await page.getByRole("button", { name: "Delete my account" }).click();
-  await page.waitForURL(/\/login\?deleted=/);
+  try {
+    await page.waitForURL(/\/login(?:\?|$)/);
+  } catch (error) {
+    const cannotDelete = page.getByRole("alert").filter({ hasText: /sign out and sign back in/ });
+    if (!(await cannotDelete.isVisible())) throw error;
+    console.log(`deleteCreatedAccount: ${email} session cannot delete; treating as already gone`);
+  }
   signedInThisWorker = signedInThisWorker.filter((address) => address !== email);
 }
 

@@ -75,21 +75,19 @@ async function watchOneCompetitor(page: Page): Promise<void> {
   await page.getByRole("button", { name: "That's me" }).click();
   await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
 
+  // The keyboard contract needs one watched rival. Discovery may still be
+  // looking (up to 180 s) with no Watch buttons yet; adding one ourselves is
+  // the same Add-a-competitor-we-missed path the screen already offers.
   const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
-  await expect(
-    watching
-      .first()
-      .or(page.getByRole("button", { name: /^Watch / }).first())
-      .first(),
-  ).toBeVisible({
-    timeout: 60_000,
-  });
+  const watchBtn = page.getByRole("button", { name: /^Watch / }).first();
   if ((await watching.count()) === 0) {
-    await page
-      .getByRole("button", { name: /^Watch / })
-      .first()
-      .click();
-    await expect(watching.first()).toBeVisible();
+    if (await watchBtn.isVisible()) {
+      await watchBtn.click();
+    } else {
+      await page.locator("#add-competitor").fill("nike.com");
+      await page.getByRole("button", { name: "Add" }).click();
+    }
+    await expect(watching.first()).toBeVisible({ timeout: 30_000 });
   }
   await page.getByRole("button", { name: "Start watching" }).click();
   await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
