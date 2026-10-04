@@ -51,12 +51,19 @@ describe("writeDiscoveryResults", () => {
     const workspaceId = await seedWorkspace();
     const sure = Array.from({ length: 9 }, (_, index) => ({
       ...candidate(`Brand ${String(index)}`, `brand${String(index)}.com`),
-      verdict: verdict(0.95),
+      verdict: verdict(0.9 + index / 100),
     }));
 
     await writeDiscoveryResults(workspaceId, sure, NOW);
 
     const { on, maybes } = await readOnboardingCompetitors(workspaceId);
+    expect(on.map((row) => row.domain).sort()).toEqual([
+      "brand4.com",
+      "brand5.com",
+      "brand6.com",
+      "brand7.com",
+      "brand8.com",
+    ]);
     expect(on).toHaveLength(5);
     expect(maybes).toHaveLength(4);
     const orphans = await env.DB.prepare(

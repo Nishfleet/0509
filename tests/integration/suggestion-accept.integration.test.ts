@@ -345,4 +345,42 @@ describe("acceptSuggestion against migrations/0001_rebuild.sql", () => {
     expect((await suggestionRow(secondSuggestionId))?.status).toBe("pending");
     expect((await suggestionRow(`sug-cross-a-${n}`))?.status).toBe("pending");
   });
+
+  it("refuses at the plan cap: no competitor is added and the suggestion stays pending", async () => {
+    seededRuns += 1;
+    const n = String(seededRuns);
+    const userId = `user-cap-${n}`;
+    const workspaceId = `ws-cap-${n}`;
+    await seedUser(userId, `cap-${n}@example.com`);
+    await seedWorkspace(workspaceId, userId, "Cap");
+    for (const index of [1, 2, 3, 4, 5]) {
+      await seedEntity({
+        id: `rival-cap-${n}-${String(index)}`,
+        workspaceId,
+        role: "competitor",
+        domain: `on-${String(index)}-${n}.example`,
+        state: "on",
+      });
+    }
+    await seedSuggestion({
+      id: `sug-cap-${n}`,
+      workspaceId,
+      entityId: null,
+      domain: `maybe-${n}.example`,
+      name: "Maybe",
+      reason: "Same buyers",
+      p: 0.7,
+      status: "pending",
+    });
+
+    const outcome = await acceptSuggestion({
+      workspaceId,
+      suggestionId: `sug-cap-${n}`,
+      now: "2026-09-24T09:00:00.000Z",
+    });
+
+    expect(outcome).toBe("at_cap");
+    expect(await entityRows(workspaceId, `maybe-${n}.example`)).toHaveLength(0);
+    expect((await suggestionRow(`sug-cap-${n}`))?.status).toBe("pending");
+  });
 });

@@ -1,6 +1,6 @@
 import { nameFromDomain } from "./competitor/domain-name";
 import { readCompetitorName } from "./competitor/site-name.server";
-import { addManualCompetitor, setCompetitorState } from "./data/entity.server";
+import { addManualCompetitor, readCompetitor, setCompetitorState } from "./data/entity.server";
 import { nextPlan, type PlanId } from "./billing/plans";
 import { readEntitlements, readPlanTier } from "./data/plan.server";
 import {
@@ -36,6 +36,13 @@ async function upgradePlanIdFor(workspaceId: string): Promise<PlanId | null> {
   return next === null ? null : next.id;
 }
 
+async function capRefusal(workspaceId: string, cap: number): Promise<CompetitorActionResult> {
+  return {
+    message: `Your plan watches up to ${String(cap)} competitors. Switch one off to add another.`,
+    upgradePlanId: await upgradePlanIdFor(workspaceId),
+  };
+}
+
 type Target = { domain: string; name: string | null } | CompetitorActionResult;
 
 async function targetOf(raw: string, normalised: ReturnType<typeof normaliseSubject>): Promise<Target> {
@@ -66,13 +73,7 @@ async function addCompetitor(workspaceId: string, raw: string, now: string): Pro
     now,
     cap,
   });
-  if (outcome === "at_cap") {
-    return {
-      message: `Your plan watches up to ${String(cap)} competitors. Switch one off to add another.`,
-      upgradePlanId: await upgradePlanIdFor(workspaceId),
-    };
-  }
-  return DONE;
+  return outcome === "at_cap" ? capRefusal(workspaceId, cap) : DONE;
 }
 
 const SUGGESTION_INTENTS = new Map([
@@ -82,6 +83,18 @@ const SUGGESTION_INTENTS = new Map([
   ["dismiss", dismissSuggestion],
 ]);
 
+async function refusedAtCap(workspaceId: string): Promise<CompetitorActionResult> {
+  return capRefusal(workspaceId, (await readEntitlements(workspaceId)).competitors);
+}
+
+async function switchRival(input: { workspaceId: string; entityId: string; state: "on" | "off"; now: string }) {
+  const { workspaceId, entityId, state } = input;
+  const changed = await setCompetitorState(input);
+  if (changed || state === "off") return DONE;
+  const rival = await readCompetitor(workspaceId, entityId);
+  return rival?.state === "off" ? refusedAtCap(workspaceId) : DONE;
+}
+
 export async function handleCompetitorIntent(workspaceId: string, form: FormData): Promise<CompetitorActionResult> {
   const now = new Date().toISOString();
   const intent = text(form, "intent");
@@ -89,13 +102,11 @@ export async function handleCompetitorIntent(workspaceId: string, form: FormData
   const entityId = text(form, "entityId");
   const suggestionAction = SUGGESTION_INTENTS.get(intent);
   if (suggestionAction !== undefined && suggestionId !== "") {
-    await suggestionAction({ workspaceId, suggestionId, now });
-    return DONE;
+    const outcome = await suggestionAction({ workspaceId, suggestionId, now });
+    return outcome === "at_cap" ? refusedAtCap(workspaceId) : DONE;
   }
-  if ((intent === "on" || intent === "off") && entityId !== "") {
-    await setCompetitorState({ workspaceId, entityId, state: intent, now });
-    return DONE;
-  }
+  if ((intent === "on" || intent === "off") && entityId !== "")
+    return switchRival({ workspaceId, entityId, state: intent, now });
   if (intent === "add") return addCompetitor(workspaceId, text(form, "competitor"), now);
   return DONE;
 }

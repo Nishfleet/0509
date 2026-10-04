@@ -9,7 +9,7 @@ import { insertVerdict } from "./jev_verdict.server";
 import { readEntitlements } from "./plan.server";
 
 const ACCEPT_SUGGESTION =
-  "UPDATE suggestion SET status = 'accepted', decided_by = 'user', decided_at = ?1, entity_id = (SELECT e.id FROM entity e WHERE e.workspace_id = suggestion.workspace_id AND e.domain = suggestion.candidate_domain) WHERE id = ?2 AND workspace_id = ?3 AND status = 'pending'";
+  "UPDATE suggestion SET status = 'accepted', decided_by = 'user', decided_at = ?1, entity_id = (SELECT e.id FROM entity e WHERE e.workspace_id = suggestion.workspace_id AND e.domain = suggestion.candidate_domain) WHERE id = ?2 AND workspace_id = ?3 AND status = 'pending' AND EXISTS (SELECT 1 FROM entity e WHERE e.workspace_id = suggestion.workspace_id AND e.domain = suggestion.candidate_domain AND e.state = 'on')";
 
 const DISMISS_SUGGESTION =
   "UPDATE suggestion SET status = 'dismissed', decided_by = 'user', decided_at = ?1 WHERE id = ?2 AND workspace_id = ?3 AND status = 'pending'";
@@ -111,7 +111,8 @@ export async function writeDiscoveryResults(
   now: string,
 ): Promise<void> {
   const scope = { workspaceId, now, cap: (await readEntitlements(workspaceId)).competitors };
-  const statements = results.flatMap((result) => statementsFor(scope, result));
+  const byScore = [...results].sort((a, b) => (b.verdict?.p ?? -1) - (a.verdict?.p ?? -1));
+  const statements = byScore.flatMap((result) => statementsFor(scope, result));
   if (statements.length === 0) return;
   await env.DB.batch(statements);
 }
@@ -120,16 +121,19 @@ export async function acceptSuggestion(input: {
   workspaceId: string;
   suggestionId: string;
   now: string;
-}): Promise<void> {
-  await env.DB.batch([
+}): Promise<"accepted" | "at_cap"> {
+  const cap = (await readEntitlements(input.workspaceId)).competitors;
+  const [, accepted] = await env.DB.batch([
     insertCompetitorFromSuggestion({
       entityId: crypto.randomUUID(),
       now: input.now,
       suggestionId: input.suggestionId,
       workspaceId: input.workspaceId,
+      cap,
     }),
     env.DB.prepare(ACCEPT_SUGGESTION).bind(input.now, input.suggestionId, input.workspaceId),
   ]);
+  return accepted?.meta.changes === 0 ? "at_cap" : "accepted";
 }
 
 const ACCEPT_RETIRE_SUGGESTION =
