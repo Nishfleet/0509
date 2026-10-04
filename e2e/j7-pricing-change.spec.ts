@@ -79,6 +79,14 @@ async function trackFixture(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
 }
 
+let rearm: Variant | null = null;
+
+test.afterEach(async () => {
+  const next = rearm;
+  rearm = null;
+  if (next) await flip(next);
+});
+
 test("J7 a fixture price flip reaches Alerts as a before-and-after mark @own-signin", async ({ page }, testInfo) => {
   test.skip(
     testInfo.project.name === "phone-390",
@@ -127,6 +135,7 @@ test("J7 a fixture price flip reaches Alerts as a before-and-after mark @own-sig
     await flip(next);
     test.skip(true, `J7: no change has been filed for the fixture yet; flipped to ${next} for the next sweep`);
   }
+  rearm = variant === "raised" ? "base" : "raised";
   const mark = fixtureMarks
     .filter({ has: page.locator("s", { hasText: OLD_AND_NEW[variant].before }) })
     .filter({ has: page.locator("ins", { hasText: OLD_AND_NEW[variant].after }) })
@@ -167,6 +176,4 @@ test("J7 a fixture price flip reaches Alerts as a before-and-after mark @own-sig
 
   console.log(`j7-mark source=${source ?? ""} capturedAt=${capturedAt ?? ""} flippedAt=${flippedAt}`);
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
-
-  await flip(variant === "raised" ? "base" : "raised");
 });
