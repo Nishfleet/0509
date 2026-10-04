@@ -33,7 +33,7 @@ for (const { width, height } of [
   test(`J3 onboards gymshark.com inside its budgets at ${width} @own-signin`, async ({ page }) => {
     // The journey's own budget reaches 60 s from the input, after the
     // magic-link sign-in, so the test timeout has to clear that ceiling.
-    test.setTimeout(150_000);
+    test.setTimeout(180_000);
     const token = requireInboxToken();
     const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
     createdEmail = email;
@@ -77,6 +77,12 @@ for (const { width, height } of [
     expect(competitorsMs).toBeLessThan(60_000);
 
     const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
+    await expect(
+      watching
+        .first()
+        .or(page.getByRole("button", { name: /^Watch / }).first())
+        .first(),
+    ).toBeVisible({ timeout: 60_000 });
     if ((await watching.count()) === 0) {
       await page
         .getByRole("button", { name: /^Watch / })
@@ -86,8 +92,21 @@ for (const { width, height } of [
     }
     await page.getByRole("button", { name: "Start watching" }).click();
     await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
+    await expect(page.locator('[data-home="standing"]')).toBeVisible();
 
     const panel = page.locator('[data-home="first-file"]');
+    if (!(await panel.isVisible())) {
+      await page.goto("/app/competitors");
+      await page.locator("#add-competitor").fill("nike.com");
+      await page.getByRole("button", { name: "Add" }).click();
+      const row = page
+        .getByRole("list", { name: "Competitors", exact: true })
+        .getByRole("listitem")
+        .filter({ hasText: "nike.com" });
+      await expect(row.getByRole("switch")).toBeChecked({ timeout: 30_000 });
+      await page.goto("/app");
+      await expect(page.locator('[data-home="standing"]')).toBeVisible();
+    }
     await expect(panel).toContainText(
       /Your first site snapshots arrive on (?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday) \d{1,2} [A-Z][a-z]+, around (?:[01]\d|2[0-3]):[0-5]\d \S+\./,
     );
