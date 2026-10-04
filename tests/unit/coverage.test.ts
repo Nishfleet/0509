@@ -1,6 +1,3 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -72,14 +69,22 @@ describe("coverage", () => {
     }
   });
 
-  it("claims no kind that has no live source, in the README or DESIGN.md", async () => {
-    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-    const copy = (await Promise.all(["README.md", "DESIGN.md"].map((file) => readFile(path.join(root, file), "utf8"))))
-      .join("\n")
-      .split("\n")
-      .filter((line) => line.startsWith("Five to Nine watches") || line.startsWith("| Read this first, quiet week"))
-      .join("\n");
-    expect(copy).not.toBe("");
+  it("names every live kind in the shipped public copy, and no kind that is not live", () => {
+    // docs/REBUILD-DONE.md D: a test never reads a .md file to check copy
+    // against code. This one used to read README.md and DESIGN.md for the same
+    // claim rows; that doc-vs-code check is review's now, and what the test
+    // owns is the surface a customer actually reads, which is built from the
+    // one list above.
+    const copy = [
+      ...FAQ.flatMap((entry) => [entry.question, entry.answer]),
+      llmsTxt("https://0509.io", []),
+      JSON.stringify(softwareApplicationJsonLd(FEATURES)),
+    ].join("\n");
+    for (const group of LIVE_COVERAGE) {
+      for (const phrase of [group.kind, group.noun ?? group.kind]) {
+        expect(claims(copy, phrase), `"${phrase}" is live but the shipped public copy never names it`).toBe(true);
+      }
+    }
     for (const group of notLive) {
       for (const phrase of [group.kind, group.noun ?? group.kind]) {
         expect(claims(copy, phrase), `"${phrase}" is claimed but ${group.kind} has no live source`).toBe(false);
