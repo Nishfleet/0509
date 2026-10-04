@@ -1470,5 +1470,557 @@
     },
     "label": false,
     "why": "meal kits, not restaurant meals"
+  },
+  {
+    "id": "oura-whoop",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Oura",
+      "domain": "oura.com",
+      "description": "Smart ring that tracks sleep, readiness and daily activity"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Whoop",
+      "domain": "whoop.com",
+      "evidence": [
+        {
+          "source": "oura.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a wrist-worn band that tracks sleep, strain and recovery to the same health-minded buyers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "a wearable that tracks sleep and recovery, in a different form factor"
+  },
+  {
+    "id": "oura-fitbit",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Oura",
+      "domain": "oura.com",
+      "description": "Smart ring that tracks sleep, readiness and daily activity"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Fitbit",
+      "domain": "fitbit.com",
+      "evidence": [
+        {
+          "source": "oura.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells wearables that track sleep, activity and heart rate."
+        }
+      ]
+    },
+    "label": true,
+    "why": "a wearable tracker a ring buyer could choose instead"
+  },
+  {
+    "id": "oura-garmin",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Oura",
+      "domain": "oura.com",
+      "description": "Smart ring that tracks sleep, readiness and daily activity"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Garmin",
+      "domain": "garmin.com",
+      "evidence": [
+        {
+          "source": "oura.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells fitness watches that track sleep, recovery and daily activity."
+        }
+      ]
+    },
+    "label": true,
+    "why": "a wearable tracker; the company also sells other products"
+  },
+  {
+    "id": "oura-calm",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Oura",
+      "domain": "oura.com",
+      "description": "Smart ring that tracks sleep, readiness and daily activity"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Calm",
+      "domain": "calm.com",
+      "evidence": [
+        {
+          "source": "oura.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a meditation and sleep-story app to people who want better sleep."
+        }
+      ]
+    },
+    "label": false,
+    "why": "an app, not a wearable; shares the sleep audience only"
+  },
+  {
+    "id": "oura-lululemon",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Oura",
+      "domain": "oura.com",
+      "description": "Smart ring that tracks sleep, readiness and daily activity"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Lululemon",
+      "domain": "lululemon.com",
+      "evidence": [
+        {
+          "source": "oura.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells athletic clothing to active, health-minded customers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "apparel, not a wearable tracker; shares the audience only"
+  },
+  {
+    "id": "vercel-netlify",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Vercel",
+      "domain": "vercel.com",
+      "description": "Cloud platform to build, deploy and host front-end web apps"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Netlify",
+      "domain": "netlify.com",
+      "evidence": [
+        {
+          "source": "vercel.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Hosts and deploys front-end web apps from a git repository."
+        }
+      ]
+    },
+    "label": true,
+    "why": "front-end hosting and deploy platform"
+  },
+  {
+    "id": "vercel-heroku",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Vercel",
+      "domain": "vercel.com",
+      "description": "Cloud platform to build, deploy and host front-end web apps"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Heroku",
+      "domain": "heroku.com",
+      "evidence": [
+        {
+          "source": "vercel.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Cloud platform to deploy and host web apps."
+        }
+      ]
+    },
+    "label": true,
+    "why": "cloud app hosting platform"
+  },
+  {
+    "id": "vercel-amazon-web-services",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Vercel",
+      "domain": "vercel.com",
+      "description": "Cloud platform to build, deploy and host front-end web apps"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Amazon Web Services",
+      "domain": "aws.amazon.com",
+      "evidence": [
+        {
+          "source": "vercel.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells cloud hosting, including Amplify, to deploy and host web apps."
+        }
+      ]
+    },
+    "label": true,
+    "why": "a large company; its hosting product is what a Vercel buyer would weigh"
+  },
+  {
+    "id": "vercel-datadog",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Vercel",
+      "domain": "vercel.com",
+      "description": "Cloud platform to build, deploy and host front-end web apps"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Datadog",
+      "domain": "datadoghq.com",
+      "evidence": [
+        {
+          "source": "vercel.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells monitoring and observability for web apps."
+        }
+      ]
+    },
+    "label": false,
+    "why": "monitoring, not hosting"
+  },
+  {
+    "id": "vercel-figma",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Vercel",
+      "domain": "vercel.com",
+      "description": "Cloud platform to build, deploy and host front-end web apps"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Figma",
+      "domain": "figma.com",
+      "evidence": [
+        {
+          "source": "vercel.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells design software used by the teams that build web apps."
+        }
+      ]
+    },
+    "label": false,
+    "why": "design software, not hosting"
+  },
+  {
+    "id": "gopro-dji",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "GoPro",
+      "domain": "gopro.com",
+      "description": "Rugged action cameras for filming sport and adventure"
+    },
+    "competitors": [],
+    "item": {
+      "name": "DJI",
+      "domain": "dji.com",
+      "evidence": [
+        {
+          "source": "gopro.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells Osmo Action cameras that compete directly with GoPro's."
+        }
+      ]
+    },
+    "label": true,
+    "why": "action cameras; the company also sells drones"
+  },
+  {
+    "id": "gopro-insta360",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "GoPro",
+      "domain": "gopro.com",
+      "description": "Rugged action cameras for filming sport and adventure"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Insta360",
+      "domain": "insta360.com",
+      "evidence": [
+        {
+          "source": "gopro.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells action and 360-degree cameras for sport and travel."
+        }
+      ]
+    },
+    "label": true,
+    "why": "action cameras"
+  },
+  {
+    "id": "gopro-sony",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "GoPro",
+      "domain": "gopro.com",
+      "description": "Rugged action cameras for filming sport and adventure"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Sony",
+      "domain": "sony.com",
+      "evidence": [
+        {
+          "source": "gopro.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells action cameras such as the RX0 and FDR-X series to adventure filmmakers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "a large company; its action cameras are what a GoPro buyer would weigh"
+  },
+  {
+    "id": "gopro-strava",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "GoPro",
+      "domain": "gopro.com",
+      "description": "Rugged action cameras for filming sport and adventure"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Strava",
+      "domain": "strava.com",
+      "evidence": [
+        {
+          "source": "gopro.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells an app where athletes record and share their activities."
+        }
+      ]
+    },
+    "label": false,
+    "why": "an app, not cameras; shares the athlete audience only"
+  },
+  {
+    "id": "gopro-red-bull",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "GoPro",
+      "domain": "gopro.com",
+      "description": "Rugged action cameras for filming sport and adventure"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Red Bull",
+      "domain": "redbull.com",
+      "evidence": [
+        {
+          "source": "gopro.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells energy drinks and produces extreme-sports content."
+        }
+      ]
+    },
+    "label": false,
+    "why": "drinks and media, not cameras"
+  },
+  {
+    "id": "sonos-bose",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Sonos",
+      "domain": "sonos.com",
+      "description": "Wireless multi-room speakers and soundbars for the home"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Bose",
+      "domain": "bose.com",
+      "evidence": [
+        {
+          "source": "sonos.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells wireless speakers and soundbars for the home."
+        }
+      ]
+    },
+    "label": true,
+    "why": "home speakers and soundbars"
+  },
+  {
+    "id": "sonos-sony",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Sonos",
+      "domain": "sonos.com",
+      "description": "Wireless multi-room speakers and soundbars for the home"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Sony",
+      "domain": "sony.com",
+      "evidence": [
+        {
+          "source": "sonos.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells wireless speakers and soundbars among its consumer electronics."
+        }
+      ]
+    },
+    "label": true,
+    "why": "a large company; its speakers are what a Sonos buyer would weigh"
+  },
+  {
+    "id": "sonos-apple",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Sonos",
+      "domain": "sonos.com",
+      "description": "Wireless multi-room speakers and soundbars for the home"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Apple",
+      "domain": "apple.com",
+      "evidence": [
+        {
+          "source": "sonos.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells the HomePod smart speaker for the home."
+        }
+      ]
+    },
+    "label": true,
+    "why": "a large company; the HomePod is a home speaker"
+  },
+  {
+    "id": "sonos-yamaha",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Sonos",
+      "domain": "sonos.com",
+      "description": "Wireless multi-room speakers and soundbars for the home"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Yamaha",
+      "domain": "yamaha.com",
+      "evidence": [
+        {
+          "source": "sonos.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells home audio equipment including soundbars and wireless speakers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "home audio and soundbars"
+  },
+  {
+    "id": "sonos-spotify",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Sonos",
+      "domain": "sonos.com",
+      "description": "Wireless multi-room speakers and soundbars for the home"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Spotify",
+      "domain": "spotify.com",
+      "evidence": [
+        {
+          "source": "sonos.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a music streaming subscription played on Sonos speakers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "music streaming, not speakers; a partner"
+  },
+  {
+    "id": "sonos-philips-hue",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Sonos",
+      "domain": "sonos.com",
+      "description": "Wireless multi-room speakers and soundbars for the home"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Philips Hue",
+      "domain": "philips-hue.com",
+      "evidence": [
+        {
+          "source": "sonos.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells smart lighting for the home."
+        }
+      ]
+    },
+    "label": false,
+    "why": "lighting, not speakers"
+  },
+  {
+    "id": "spotify-apple-music",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Spotify",
+      "domain": "spotify.com",
+      "description": "Music and podcast streaming service"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Apple Music",
+      "domain": "music.apple.com",
+      "evidence": [
+        {
+          "source": "spotify.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a music streaming subscription."
+        }
+      ]
+    },
+    "label": true,
+    "why": "music streaming; owned by a large company"
+  },
+  {
+    "id": "spotify-amazon-music",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Spotify",
+      "domain": "spotify.com",
+      "description": "Music and podcast streaming service"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Amazon Music",
+      "domain": "music.amazon.com",
+      "evidence": [
+        {
+          "source": "spotify.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a music streaming subscription to Prime and standalone customers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "music streaming; owned by a large company"
+  },
+  {
+    "id": "spotify-sonos",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Spotify",
+      "domain": "spotify.com",
+      "description": "Music and podcast streaming service"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Sonos",
+      "domain": "sonos.com",
+      "evidence": [
+        {
+          "source": "spotify.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells wireless speakers that play music from streaming services."
+        }
+      ]
+    },
+    "label": false,
+    "why": "speakers, not music streaming"
   }
 ]
