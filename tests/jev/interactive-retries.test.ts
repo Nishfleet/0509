@@ -10,8 +10,9 @@ vi.mock("../../app/lib/data/jev_verdict.server", () => ({
   insertVerdict: vi.fn(),
 }));
 
-import { askNoul, type NoulQuestion } from "../../app/lib/jev/client.server";
+import { askNoul, askNouls, type NoulQuestion } from "../../app/lib/jev/client.server";
 import { PUBLIC_SUBJECT } from "../../app/lib/jev/public-subject.server";
+import { IS_COMPETITOR, SAME_CATEGORY } from "../../app/lib/discovery/run.server";
 
 const PLAIN: NoulQuestion = { id: "q", instructions: "i", whenTrue: "t", whenFalse: "f" };
 
@@ -43,5 +44,17 @@ describe("the gateway retry policy of a Jev question", () => {
     expect(ai.run.mock.calls[0]?.[2]).toEqual({
       gateway: { id: "default", retries: { maxAttempts: 3, retryDelayMs: 500, backoff: "exponential" } },
     });
+  });
+
+  it("is never set on the two questions Discovery asks together, so a batch is never retried", async () => {
+    ai.run.mockResolvedValue({
+      answers: { is_competitor: { type: "noul", noul: 0.9 }, same_product_category: { type: "noul", noul: 0.9 } },
+    });
+
+    await askNouls("ws-1", [IS_COMPETITOR, SAME_CATEGORY], {});
+
+    expect(IS_COMPETITOR.retries).toBeUndefined();
+    expect(SAME_CATEGORY.retries).toBeUndefined();
+    expect(ai.run.mock.calls[0]?.[2]).toEqual({ gateway: { id: "default" } });
   });
 });
