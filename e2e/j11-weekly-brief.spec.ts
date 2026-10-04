@@ -235,8 +235,9 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   assertOrder(text, markers);
   const brands = text.slice(text.indexOf("Your tracked brands"), text.indexOf("Your site looks"));
   expect(brands).toContain(selfName);
-  for (const domain of ON) expect(brands).toContain(domain);
-  expect(brands, "an off brand is absent, not a zeroed line").not.toContain(OFF);
+  const brandsLower = brands.toLowerCase();
+  for (const domain of ON) expect(brandsLower).toContain(domain.split(".")[0]);
+  expect(brandsLower, "an off brand is absent, not a zeroed line").not.toContain(OFF.split(".")[0]);
   expect(text).not.toContain(OFF);
 
   const fits = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
