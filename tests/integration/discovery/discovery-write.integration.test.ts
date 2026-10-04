@@ -47,6 +47,33 @@ afterEach(() => {
 });
 
 describe("writeDiscoveryResults", () => {
+  it("switches on at most the plan's cap and holds the rest as maybes", async () => {
+    const workspaceId = await seedWorkspace();
+    const sure = Array.from({ length: 9 }, (_, index) => ({
+      ...candidate(`Brand ${String(index)}`, `brand${String(index)}.com`),
+      verdict: verdict(0.9 + index / 100),
+    }));
+
+    await writeDiscoveryResults(workspaceId, sure, NOW);
+
+    const { on, maybes } = await readOnboardingCompetitors(workspaceId);
+    expect(on.map((row) => row.domain).sort()).toEqual([
+      "brand4.com",
+      "brand5.com",
+      "brand6.com",
+      "brand7.com",
+      "brand8.com",
+    ]);
+    expect(on).toHaveLength(5);
+    expect(maybes).toHaveLength(4);
+    const orphans = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM suggestion WHERE workspace_id = ? AND status = 'auto_on' AND entity_id IS NULL",
+    )
+      .bind(workspaceId)
+      .first<{ n: number }>();
+    expect(orphans?.n).toBe(0);
+  });
+
   it("adds a p >= 0.9 brand ON, keeps the uncertain and unjudged as maybes, and drops p <= 0.1", async () => {
     const workspaceId = await seedWorkspace();
     await writeDiscoveryResults(
