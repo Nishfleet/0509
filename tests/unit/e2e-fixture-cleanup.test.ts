@@ -133,6 +133,14 @@ describe("e2e fixture teardown detector", () => {
     expect(source).not.toContain("treating as already gone");
   });
 
+  it("waits for the competitor-switch POST before the reload that checks slack.com stayed off", async () => {
+    const source = await readFile(path.join(REPO_ROOT, "e2e/j11-weekly-brief.spec.ts"), "utf8");
+    expect(source).toContain("waitForResponse");
+    expect(source).toContain('response.request().method() === "POST"');
+    expect(source).toContain("/app/competitors");
+    expect(source.indexOf("waitForResponse")).toBeLessThan(source.indexOf("await page.reload()"));
+  });
+
   it("runs a matrix inside a job concurrency group one leg at a time", async () => {
     const dir = path.join(REPO_ROOT, ".github/workflows");
     const offenders: string[] = [];

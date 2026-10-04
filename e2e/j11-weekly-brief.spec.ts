@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { previousBriefAt } from "../app/lib/brief-schedule";
 import {
@@ -94,11 +94,19 @@ async function saveSchedule(page: Page, schedule: { weekday: number; hour: numbe
   await expect(page.locator("label", { hasText: "Time" }).locator("select")).toHaveValue(String(schedule.hour));
 }
 
+async function saveCompetitorSwitch(page: Page, tracking: Locator): Promise<void> {
+  const saved = page.waitForResponse(
+    (response) => response.request().method() === "POST" && response.url().includes("/app/competitors"),
+  );
+  await tracking.click();
+  await saved;
+}
+
 async function switchOffEveryRival(page: Page): Promise<void> {
   const on = page.getByRole("switch", { name: / tracking/, checked: true });
   while ((await on.count()) > 0) {
     const before = await on.count();
-    await on.first().click();
+    await saveCompetitorSwitch(page, on.first());
     await expect(on).toHaveCount(before - 1);
   }
 }
@@ -191,7 +199,7 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
     .getByRole("listitem")
     .filter({ hasText: OFF })
     .getByRole("switch");
-  await offSwitch.click();
+  await saveCompetitorSwitch(page, offSwitch);
   await expect(offSwitch).not.toBeChecked();
   await page.reload();
   await expect(offSwitch).not.toBeChecked();
