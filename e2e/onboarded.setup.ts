@@ -20,12 +20,21 @@ const LANES = ["desktop", "phone"] as const;
 setup.setTimeout(480_000);
 
 async function addCompetitor(page: Page, domain: string): Promise<void> {
-  await page.locator("#add-competitor").fill(domain);
-  await page.getByRole("button", { name: "Add" }).click();
   const row = page
     .getByRole("list", { name: "Competitors", exact: true })
     .getByRole("listitem")
     .filter({ hasText: domain });
+  await expect(
+    page.getByRole("list", { name: "Competitors", exact: true }).getByRole("listitem").first(),
+  ).toBeVisible();
+  if ((await row.count()) === 0) {
+    const other = page.getByRole("switch", { name: /^(?!Nike|Adidas).* tracking/, checked: true });
+    const before = await other.count();
+    await other.first().click();
+    await expect(other).toHaveCount(before - 1);
+    await page.locator("#add-competitor").fill(domain);
+    await page.getByRole("button", { name: "Add" }).click();
+  }
   await expect(row.getByRole("switch")).toBeChecked({ timeout: 30_000 });
 }
 
