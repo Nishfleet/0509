@@ -281,13 +281,13 @@ interface HomeStandingInput {
   now: Date;
 }
 
-function gatheringStanding(input: HomeStandingInput, onBrands: number): HomeStanding {
-  const at = firstSiteSweepAt({ now: input.now, sources: input.sources });
+function gatheringStanding(input: HomeStandingInput, brandsOn: number): HomeStanding {
+  const at = firstSiteSweepAt({ now: input.now, sources: input.sources, brandsOn });
   return {
     kind: "gathering",
     briefAt: dayAndTime(input.schedule.timezone, nextBriefAt(input.schedule, input.now)),
     firstSweepAt: at === null ? null : arrivalAround(input.schedule.timezone, at),
-    brands: onBrands,
+    brands: brandsOn,
   };
 }
 

@@ -367,15 +367,11 @@ describe("Home standing", () => {
     expect(nextSiteSweepAt(new Date("2026-09-24T02:00:00Z"))).toEqual(new Date("2026-09-25T02:00:00Z"));
   });
 
-  it("has no first sweep when the sources carry no site kind", () => {
-    const noSiteInputs = [
-      { ...GATHERING_INPUT, sources: [] },
-      { ...GATHERING_INPUT, sources: MENTION_SOURCES },
-    ];
-    for (const input of noSiteInputs) {
-      const standing = homeStanding(input);
+  it("names the next sweep before the site source exists, because a brand is on", () => {
+    for (const sources of [[], MENTION_SOURCES]) {
+      const standing = homeStanding({ ...GATHERING_INPUT, sources });
       if (standing.kind !== "gathering") throw new Error("expected a gathering standing");
-      expect(standing.firstSweepAt).toBeNull();
+      expect(standing.firstSweepAt).toBe("Friday 25 September, around 07:00 BST");
     }
   });
 
