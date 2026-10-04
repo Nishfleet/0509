@@ -66,7 +66,8 @@ async function rotate(page: Page): Promise<string> {
   // (run 37237175774). Wait for the POST the same way J15 and J11's
   // saveCompetitorSwitch do.
   const saved = page.waitForResponse(
-    (response) => response.request().method() === "POST" && response.url().includes("/app/competitors"),
+    (response) =>
+      response.request().method() === "POST" && response.ok() && response.url().includes("/app/competitors"),
   );
   await toggle.click();
   await saved;

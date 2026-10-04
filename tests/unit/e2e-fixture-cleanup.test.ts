@@ -133,7 +133,7 @@ describe("e2e fixture teardown detector", () => {
     expect(source).not.toContain("treating as already gone");
   });
 
-  it("waits for the competitor-switch POST before the reload that checks slack.com kept the flip", async () => {
+  it("registers the competitor-switch POST wait before rotate() clicks and reloads", async () => {
     const source = await readFile(path.join(REPO_ROOT, "e2e/j12-rollovers.spec.ts"), "utf8");
     const rotate = source.slice(source.indexOf("async function rotate"), source.indexOf("async function briefLinks"));
     expect(rotate).toContain("waitForResponse");
