@@ -141,6 +141,8 @@ describe("e2e fixture teardown detector", () => {
     expect(rotate).toContain("/app/competitors");
     expect(rotate.indexOf("waitForResponse")).toBeLessThan(rotate.indexOf("await toggle.click()"));
     expect(rotate.indexOf("await toggle.click()")).toBeLessThan(rotate.indexOf("await page.reload()"));
+    expect(rotate.indexOf("await toggle.click()")).toBeLessThan(rotate.indexOf("await saved"));
+    expect(rotate.indexOf("await saved")).toBeLessThan(rotate.indexOf("await page.reload()"));
   });
 
   it("runs a matrix inside a job concurrency group one leg at a time", async () => {
