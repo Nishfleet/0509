@@ -149,7 +149,7 @@ describe("delivered once across weeks (0509#4063)", () => {
         ).bind(id, WS, RIVAL, SOURCE, title, `https://rival.example/${id}`, urlHash, id, OBSERVED),
         env.DB.prepare(
           `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at)
-           VALUES (?1, ?2, 'noteworthy_change', ?3, ?4, 0.95, ?5)`,
+           VALUES (?1, ?2, 'mention_matters', ?3, ?4, 0.95, ?5)`,
         ).bind(`jv-${id}`, WS, `ih-${id}`, id, "2026-09-18T11:00:00.000Z"),
       ]),
     ]);
