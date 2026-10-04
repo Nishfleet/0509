@@ -186,6 +186,27 @@ describe("judgeChange", () => {
     expect(await rowsFor("rival")).toHaveLength(2);
   });
 
+  it("case b2: a price change at 0.62 publishes, since Clef scores real price changes from 0.62", async () => {
+    jevAnswers.noul.set("noteworthy_change", 0.62);
+    jevAnswers.choice.set("change_kind", "pricing");
+
+    const judgment = await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
+
+    expect(judgment.noteworthy).toEqual({ p: 0.62, kind: "pricing", band: "publish" });
+  });
+
+  it("case b3: a price change just under 0.6 and a non-price change at 0.62 stay uncertain", async () => {
+    jevAnswers.noul.set("noteworthy_change", 0.59);
+    jevAnswers.choice.set("change_kind", "pricing");
+    const under = await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
+    expect(under.noteworthy).toEqual({ p: 0.59, kind: "pricing", band: "uncertain" });
+
+    jevAnswers.noul.set("noteworthy_change", 0.62);
+    jevAnswers.choice.set("change_kind", "launch");
+    const other = await judgeChange(judgeInput({ entity: "noisy", isSelf: false }));
+    expect(other.noteworthy).toEqual({ p: 0.62, kind: "launch", band: "uncertain" });
+  });
+
   it("case c: a competitor change at 0.05 discards but still logs both verdicts", async () => {
     jevAnswers.noul.set("noteworthy_change", 0.05);
     jevAnswers.choice.set("change_kind", "copy");

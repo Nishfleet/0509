@@ -1,8 +1,15 @@
+export interface AttemptPolicy {
+  maxAttempts: 1 | 2 | 3 | 4 | 5;
+  retryDelayMs: number;
+  backoff: "constant" | "linear" | "exponential";
+}
+
 export interface NoulQuestion {
   id: string;
   instructions: string;
   whenTrue: string;
   whenFalse: string;
+  retries?: AttemptPolicy;
 }
 
 export type NoulAction = "act" | "maybe" | "reject";

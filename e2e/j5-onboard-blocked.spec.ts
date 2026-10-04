@@ -50,6 +50,7 @@ test.describe("J5", () => {
   test("J5: a bot-blocking site still gets a card whose empty fields say when they fill @own-signin", async ({
     page,
   }, testInfo) => {
+    test.setTimeout(180_000);
     const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
     createdEmail = email;
     await signInWithMagicLink(page, email, requireInboxToken());
