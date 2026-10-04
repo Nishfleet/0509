@@ -146,15 +146,21 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
   await replayContext.close();
 
   // email is a known address now; stranger never signs in. The request path
-  // must answer both identically.
-  const known = await requestMagicLink(page, baseURL, email);
+  // must answer both identically. The requests go from their own signed-out
+  // jar: turnstileToken signs a signed-in page out to reach the /login
+  // widget, and a signed-out page left the afterEach no session to delete
+  // this account with (0509#6968).
+  const requesterContext = await freshContext(browser);
+  const requester = await requesterContext.newPage();
+  const known = await requestMagicLink(requester, baseURL, email);
   const secondLink = await waitForMagicLink(email, token, [first.link]);
-  await requestMagicLink(page, baseURL, email);
+  await requestMagicLink(requester, baseURL, email);
   const thirdLink = await waitForMagicLink(email, token, [first.link, secondLink]);
-  const expiring = await requestMagicLink(page, baseURL, email);
+  const expiring = await requestMagicLink(requester, baseURL, email);
   const expiresAfter = Date.parse(expiring.sentAt) + TOKEN_TTL_MS;
   const fourthLink = await waitForMagicLink(email, token, [first.link, secondLink, thirdLink]);
-  const unknown = await requestMagicLink(page, baseURL, stranger);
+  const unknown = await requestMagicLink(requester, baseURL, stranger);
+  await requesterContext.close();
   expect(unknown.body).toBe(known.body);
   console.log(
     `magic-link-expiry request-opacity known=${known.body} unknown=${unknown.body} at=${new Date().toISOString()}`,
