@@ -36,10 +36,9 @@ const GATEWAY_MODEL = "@cf/cloudflare/clef";
 
 const JEV_URL = VIA_GATEWAY ? "workers-ai binding" : (process.env.JEV_URL ?? "http://127.0.0.1:4000/jev");
 
-// Customers keep the gateway `default` to themselves: its rate limit (error 2003)
-// failed two sign-ups when an eval run shared it (docs/incidents/2026-10-04-signup-judge-failure.md).
-const GATEWAY_ID = "ci";
-
+// Eval calls skip AI Gateway on purpose: error 2003 is the gateway's own rate limit,
+// and sharing the gateway `default` with customers failed two sign-ups on 2026-10-04
+// (docs/incidents/2026-10-04-signup-judge-failure.md). callBudget caps the spend.
 const WRANGLER_CONFIG = path.join(HERE, "..", "..", "wrangler.jsonc");
 
 let platform: Promise<PlatformProxy<{ AI: Ai }>> | undefined;
@@ -196,7 +195,7 @@ export async function postWorkersAi(model: string, body: unknown): Promise<unkno
   return withOneRetry(async () => {
     spendCall();
     const ai = await aiBinding();
-    return ai.run(model as never, body as never, { gateway: { id: GATEWAY_ID } });
+    return ai.run(model as never, body as never);
   });
 }
 
@@ -205,9 +204,7 @@ async function postJev(body: unknown): Promise<JevResponse> {
   if (VIA_GATEWAY) {
     const raw = await (
       await aiBinding()
-    ).run(GATEWAY_MODEL as never, { ...(withoutModel(body) as object), model: "clef" } as never, {
-      gateway: { id: GATEWAY_ID },
-    });
+    ).run(GATEWAY_MODEL as never, { ...(withoutModel(body) as object), model: "clef" } as never);
     const unwrapped = unwrapJev(raw);
     return { ...unwrapped, model: typeof unwrapped.model === "string" ? unwrapped.model : GATEWAY_MODEL };
   }
