@@ -57,7 +57,7 @@ function deleteInstanceCookie() {
   return createCookie(DELETE_INSTANCE_COOKIE, {
     httpOnly: true,
     maxAge: 60 * 60,
-    path: "/login",
+    path: "/",
     sameSite: "lax",
     secrets: [secret],
     secure: new URL(env.BETTER_AUTH_URL).protocol === "https:",
