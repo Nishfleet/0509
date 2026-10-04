@@ -94,6 +94,15 @@ async function saveSchedule(page: Page, schedule: { weekday: number; hour: numbe
   await expect(page.locator("label", { hasText: "Time" }).locator("select")).toHaveValue(String(schedule.hour));
 }
 
+async function switchOffEveryRival(page: Page): Promise<void> {
+  const on = page.getByRole("switch", { name: / tracking$/, checked: true });
+  while ((await on.count()) > 0) {
+    const before = await on.count();
+    await on.first().click();
+    await expect(on).toHaveCount(before - 1);
+  }
+}
+
 async function addCompetitor(page: Page, domain: string): Promise<void> {
   await page.locator("#add-competitor").fill(domain);
   await page.getByRole("button", { name: "Add" }).click();
@@ -175,6 +184,7 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
 
   await page.goto("/app/competitors");
+  await switchOffEveryRival(page);
   for (const domain of [...ON, OFF]) await addCompetitor(page, domain);
   await page.getByRole("switch", { name: `${OFF} tracking` }).click();
   await expect(page.getByRole("switch", { name: `${OFF} tracking` })).not.toBeChecked();
