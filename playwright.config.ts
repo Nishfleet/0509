@@ -25,6 +25,15 @@ export const onboardedEmailPath = (lane: "desktop" | "phone"): string => `e2e/.a
 export const sessionStatePath = "e2e/.auth/session.json";
 const accessState = process.env.CF_ACCESS_CLIENT_ID ? { storageState: accessStatePath } : {};
 const productionLane = Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL && process.env.CF_ACCESS_CLIENT_ID);
+// Specs that never sign in. They run in the public-* projects, whose only
+// dependency is the Access cookie, so dispatching one against production never
+// mints a session or onboards an account (a live Jev call). The signed-in
+// projects ignore them, so each spec still runs once per viewport. A spec not
+// listed here stays in the signed-in projects. Source: 0509 spec dispatch that
+// ran onboarded-setup for an SEO spec, 2026-10-04.
+const publicSpecs =
+  /(?:^|\/)(?:a11y-legal|api-docs|footer|landing|not-found|pricing|privacy|security-headers|seo|share-image|smoke|terms|turnstile-blocked|unsubscribe|verify-address)\.spec\.ts$/;
+const accessDependency = process.env.CF_ACCESS_CLIENT_ID ? ["setup"] : [];
 
 export default defineConfig({
   testDir: "./e2e",
@@ -80,6 +89,18 @@ export default defineConfig({
         ]
       : []),
     {
+      name: "public-1440",
+      testMatch: publicSpecs,
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, ...accessState },
+      dependencies: accessDependency,
+    },
+    {
+      name: "public-390",
+      testMatch: publicSpecs,
+      use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 }, ...accessState },
+      dependencies: accessDependency,
+    },
+    {
       name: "desktop-1440",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, ...accessState },
       dependencies: productionLane
@@ -87,7 +108,7 @@ export default defineConfig({
         : process.env.CF_ACCESS_CLIENT_ID
           ? ["setup", "onboarded-setup"]
           : [],
-      testIgnore: /onboarded.*\.setup\.ts/,
+      testIgnore: [/onboarded.*\.setup\.ts/, publicSpecs],
     },
     {
       name: "phone-390",
@@ -97,7 +118,7 @@ export default defineConfig({
         : process.env.CF_ACCESS_CLIENT_ID
           ? ["setup", "onboarded-setup"]
           : [],
-      testIgnore: /onboarded.*\.setup\.ts/,
+      testIgnore: [/onboarded.*\.setup\.ts/, publicSpecs],
     },
   ],
   webServer: process.env.PLAYWRIGHT_TEST_BASE_URL
