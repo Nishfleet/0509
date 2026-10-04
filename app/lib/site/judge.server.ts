@@ -25,6 +25,8 @@ const BREAKAGE_CLEAR_P = 0.1;
 
 const PUBLISH_P = ACT_AT;
 
+const PRICING_PUBLISH_P = 0.6;
+
 const DISCARD_P = REJECT_AT;
 
 const D3S_BREAKAGE_QID = "own_site_breakage";
@@ -130,6 +132,7 @@ function breakageBandOf(p: number): BreakageBand["band"] {
 function noteworthyBandOf(p: number, kind: string): NoteworthyBand["band"] {
   if (kind === "noise") return "discard";
   if (p >= PUBLISH_P) return "publish";
+  if (kind === "pricing" && p >= PRICING_PUBLISH_P) return "publish";
   if (p <= DISCARD_P) return "discard";
   return "uncertain";
 }
