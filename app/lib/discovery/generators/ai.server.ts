@@ -215,7 +215,6 @@ function nameProposals(subject: Subject, proposals: readonly Proposal[]): NamedP
 }
 
 async function liveCandidates(
-  model: Model,
   subject: Subject,
   named: readonly NamedProposal[],
   checks: Map<string, Promise<boolean>>,
@@ -237,7 +236,6 @@ async function liveCandidates(
           sourceUrl: `https://${subject.domain}/`,
           excerpt: item.reason === "" ? EXCERPT : `${EXCERPT}. Its reason: ${item.reason}`,
           generator: "ai",
-          via: model,
         },
       ],
     }));
@@ -272,12 +270,15 @@ interface Source {
 }
 
 async function candidatesFrom(model: Model, { subject, readSite, checks }: Source): Promise<Candidate[]> {
-  return liveCandidates(
-    model,
+  const live = await liveCandidates(
     subject,
     nameProposals(subject, await cachedProposals(model, subject, readSite)),
     checks,
   );
+  return live.map((candidate) => ({
+    ...candidate,
+    evidence: candidate.evidence.map((item) => ({ ...item, via: model })),
+  }));
 }
 
 export async function warmProposals(subject: Subject): Promise<void> {
