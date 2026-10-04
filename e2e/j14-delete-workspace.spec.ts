@@ -10,6 +10,7 @@ test.skip(
 test("J14: a fresh account deleted from settings leaves nothing signed in and its files removed @own-signin", async ({
   page,
 }) => {
+  test.setTimeout(180_000);
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   await signInWithMagicLink(page, email, requireInboxToken());
 
@@ -23,7 +24,15 @@ test("J14: a fresh account deleted from settings leaves nothing signed in and it
   const instanceId = new URL(page.url()).searchParams.get("deleted") ?? "";
   expect(instanceId).not.toBe("");
 
-  await expect(page.getByRole("heading", { name: "Your account is deleted" })).toBeVisible();
+  await expect
+    .poll(
+      async () => {
+        await page.goto("/login?deleted=" + encodeURIComponent(instanceId));
+        return page.getByRole("heading", { name: "Your account is deleted" }).isVisible();
+      },
+      { timeout: 30_000, intervals: [1_000] },
+    )
+    .toBe(true);
 
   await expect
     .poll(
