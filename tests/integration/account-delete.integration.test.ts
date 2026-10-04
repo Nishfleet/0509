@@ -308,7 +308,7 @@ describe("delete my account", () => {
     expect(owned.body.progress).toEqual({ rows: "removed", files: "removed", deleted: 1 });
     expect(owned.setCookie).toContain("account-delete=");
     expect(owned.setCookie).toContain("Max-Age=0");
-    expect(owned.setCookie).toContain("Path=/login");
+    expect(owned.setCookie).toMatch(/Path=\/(;|$)/);
   });
 
   it("seals the Workflow instance id on the headers the deleting browser leaves with", async () => {
@@ -334,7 +334,10 @@ describe("delete my account", () => {
     if (baked === undefined) throw new Error("no account-delete cookie on the delete headers");
     expect(baked).toContain("HttpOnly");
     expect(baked).toContain("Max-Age=3600");
-    expect(baked).toContain("Path=/login");
+    expect(baked).toMatch(/Path=\/(;|$)/);
+    const path = /Path=([^;]+)/.exec(baked)?.[1] ?? "";
+    expect("/login".startsWith(path), "the page request carries the cookie").toBe(true);
+    expect("/login.data".startsWith(path), "the client-side navigation data request carries it too").toBe(true);
     expect(baked).toContain("SameSite=Lax");
 
     expect(baked).toContain("Secure");
