@@ -118,7 +118,7 @@ function recordingAsk(): Ask<DiscoveryCase> {
 describe.skipIf(!jevKeyPresent())("probe: Clef on the two rival questions", () => {
   it("scores the held-out cases and the Allbirds candidates, one call per row per repeat", async () => {
     const cases = await loadCases<DiscoveryCase>("same_category", ["kind", "self", "competitors", "item", "label"]);
-    const rows = [...cases.filter((row) => row.split === "test"), ...EXTRA];
+    const rows = [...cases, ...EXTRA];
     const report = await runEval("clef_rivals", rows, recordingAsk(), noulScore);
     console.log(`calls ${String(report.callsUsed)}/${String(report.callBudget)} model ${report.model}`);
     console.log(seen.join("\n"));
