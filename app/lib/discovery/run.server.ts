@@ -19,7 +19,7 @@ import type { Candidate, Evidence } from "./types";
 
 const EVIDENCE_KEPT = 5;
 const CATEGORY_FLOOR = 0.5;
-const CLEAR_YES_AT = 0.6;
+const CLEAR_YES_AT = CATEGORY_FLOOR;
 export const JUDGE_BATCH_SIZE = 2;
 
 export interface ShortlistedCandidate {

@@ -20,11 +20,13 @@ describe("keepOnlyIfBoth", () => {
     expect(noulAction(combined(0.8169, 0.7408))).toBe("act");
     expect(noulAction(combined(0.7819, 0.6543))).toBe("act");
     expect(noulAction(combined(0.9033, 0.9319))).toBe("act");
+    expect(noulAction(combined(0.7545, 0.5444))).toBe("act");
+    expect(noulAction(combined(0.7365, 0.593))).toBe("act");
   });
 
   it("keeps a score under the clear-yes mark as it was", () => {
-    expect(combined(0.8052, 0.55)).toBe(0.55);
-    expect(noulAction(combined(0.6735, 0.5))).toBe("maybe");
+    expect(combined(0.45, 0.9)).toBe(0.45);
+    expect(noulAction(combined(0.45, 0.9))).toBe("maybe");
   });
 
   it("scores a candidate off the category as zero however sure the competitor answer is", () => {
@@ -37,7 +39,7 @@ describe("keepOnlyIfBoth", () => {
   });
 
   it("never lowers a score and never passes one", () => {
-    const scores = [0.6, 0.65, 0.7, 0.8, 0.9, 0.95, 1];
+    const scores = [0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 1];
     const lifted = scores.map((p) => combined(p, p));
     lifted.forEach((value, index) => {
       expect(value).toBeGreaterThanOrEqual(scores[index] ?? 0);

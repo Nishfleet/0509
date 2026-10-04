@@ -156,7 +156,7 @@ describe("resolveShortlist", () => {
     expect(asked).toHaveLength(1);
     expect(asked[0]).toContain("kept.example");
     expect(asked[0]).not.toContain("taken-down.example");
-    expect(results[0]?.verdict).toMatchObject({ p: 0.98, cached: false });
+    expect(results[0]?.verdict).toMatchObject({ p: 0.984, cached: false });
     const verdicts = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE workspace_id = ?")
       .bind(workspaceId)
       .first<{ n: number }>();
@@ -192,8 +192,8 @@ describe("judgeCandidates", () => {
 
     expect(run).toHaveBeenCalledTimes(2);
     expect(run.mock.calls[0]?.[0]).toBe("@cf/cloudflare/clef");
-    expect(first[0]?.verdict).toMatchObject({ p: 0.98, cached: false });
-    expect(second[0]?.verdict).toMatchObject({ p: 0.9875, cached: true });
+    expect(first[0]?.verdict).toMatchObject({ p: 0.984, cached: false });
+    expect(second[0]?.verdict).toMatchObject({ p: 0.99, cached: true });
   });
 
   it("raises a rate limit so the workflow step retries instead of leaving the candidate pending", async () => {
