@@ -21,7 +21,7 @@ test.describe("J15 a signed-in customer changes settings and hits the plan limit
 
   test("J15 the brief day saves at once and is still there after a reload", async ({ page }) => {
     await openSettings(page);
-    const day = page.getByLabel("Day", { exact: true });
+    const day = page.getByRole("combobox", { name: "Day", exact: true });
     const before = await day.inputValue();
     const options = await day.locator("option").evaluateAll((all) => all.map((o) => (o as HTMLOptionElement).value));
     const next = options.find((value) => value !== before);
@@ -29,8 +29,8 @@ test.describe("J15 a signed-in customer changes settings and hits the plan limit
     await day.selectOption(next ?? before);
     await expect(page.getByText("Brief time saved")).toBeVisible();
     await page.reload();
-    await expect(page.getByLabel("Day", { exact: true })).toHaveValue(next ?? before);
-    await page.getByLabel("Day", { exact: true }).selectOption(before);
+    await expect(page.getByRole("combobox", { name: "Day", exact: true })).toHaveValue(next ?? before);
+    await page.getByRole("combobox", { name: "Day", exact: true }).selectOption(before);
     await expect(page.getByText("Brief time saved")).toBeVisible();
   });
 
