@@ -86,16 +86,23 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
     expect([...BLOCKING_STATUSES].sort((a, b) => a - b)).toEqual([202, 403, 429]);
   });
 
-  it("case A: HTTP 202 degrades the source, and the sweep step rejects without retrying", async () => {
+  it("case A: HTTP 202 degrades the source and the sweep returns a skipped outcome (0509#6592)", async () => {
     const { sourceId, brand } = await seedBlockedSource("a", { enabled: true });
     const fetchMock = vi.fn(async () => new Response("", { status: 202 }));
     vi.stubGlobal("fetch", fetchMock);
 
     try {
       const target = await gdeltTargetFor(sourceId, brand);
+      expect(target.watches.length).toBeGreaterThan(0);
 
-      await expect(sweepTarget(target, NOW, null)).rejects.toThrow(NonRetryableError);
+      const outcome = await sweepTarget(target, NOW, null);
 
+      expect(outcome).toEqual({
+        items: 0,
+        stored: 0,
+        unjudged: 0,
+        skipped: target.watches.length,
+      });
       expect(await readReason(sourceId)).toBe("blocked: HTTP 202");
       expect(fetchMock).toHaveBeenCalledTimes(1);
     } finally {
@@ -103,7 +110,33 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
     }
   });
 
-  it("case B: HTTP 429 degrades the source and the canary returns zero without overwriting the reason", async () => {
+  it("case F: HTTP 429 in a sweep skips the watches, logs once and leaves degraded_reason NULL (0509#6612)", async () => {
+    const { sourceId, brand } = await seedBlockedSource("f", { enabled: true });
+    const fetchMock = vi.fn(async () => new Response("", { status: 429 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    try {
+      const target = await gdeltTargetFor(sourceId, brand);
+
+      const outcome = await sweepTarget(target, NOW, null);
+
+      expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: target.watches.length });
+      expect(await readReason(sourceId)).toBeNull();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(String(warn.mock.calls[0]?.[0]))).toEqual({
+        event: "mentions.rate_limited",
+        source: "gdelt.doc",
+        status: 429,
+      });
+    } finally {
+      warn.mockRestore();
+      await env.DB.prepare("DELETE FROM source WHERE id = ?").bind(sourceId).run();
+    }
+  });
+
+  it("case B: HTTP 429 on the canary returns no count and leaves degraded_reason NULL (0509#6612)", async () => {
     const { sourceId } = await seedBlockedSource("b", { enabled: false });
     const source: CanarySource = { id: sourceId, pluginKey: "gdelt.doc", canaryQuery: "google" };
     const fetchMock = vi.fn(async () => new Response("", { status: 429 }));
@@ -112,8 +145,8 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
     try {
       const count = await runCanary(source, NOW);
 
-      expect(count).toBe(0);
-      expect(await readReason(sourceId)).toBe("blocked: HTTP 429");
+      expect(count).toBeNull();
+      expect(await readReason(sourceId)).toBeNull();
       expect(fetchMock).toHaveBeenCalledTimes(1);
     } finally {
       await env.DB.prepare("DELETE FROM source WHERE id = ?").bind(sourceId).run();

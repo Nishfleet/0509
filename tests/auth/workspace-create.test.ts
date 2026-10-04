@@ -24,6 +24,7 @@ function openDb(): DatabaseSync {
       brief_weekday INTEGER NOT NULL DEFAULT 1 CHECK (brief_weekday BETWEEN 0 AND 6),
       brief_hour INTEGER NOT NULL DEFAULT 8 CHECK (brief_hour BETWEEN 0 AND 23),
       created_at TEXT NOT NULL,
+      fixture INTEGER NOT NULL DEFAULT 0,
       FOREIGN KEY (owner_user_id) REFERENCES "user"(id)
     );
     CREATE INDEX idx_workspace_owner ON workspace(owner_user_id);

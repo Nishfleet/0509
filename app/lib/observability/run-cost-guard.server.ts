@@ -1,3 +1,5 @@
+import { captureMessage } from "@sentry/cloudflare";
+
 import { insertCostAlerts } from "../data/cost_alert.server";
 import { readBrowserMsForDay } from "../site/browser-budget.server";
 import { fetchDailyUsage } from "./cost-analytics.server";
@@ -25,6 +27,12 @@ export async function runCostGuard(
   const onBrands = row?.n ?? 0;
   const breaches = evaluateCost(usage, onBrands, apiToken === undefined ? BROWSER_ONLY_LINES : undefined);
   const alertIds = await insertCostAlerts(db, breaches);
+  if (alertIds.length > 0) {
+    captureMessage(`cost guard breach on ${day}: ${breaches.map((breach) => breach.line).join(", ")}`, {
+      level: "error",
+      fingerprint: ["cost-guard-breach"],
+    });
+  }
   return { usage, onBrands, breaches, alertIds };
 }
 

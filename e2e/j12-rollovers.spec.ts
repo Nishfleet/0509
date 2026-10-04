@@ -29,7 +29,7 @@ function switchFor(page: Page, domain: string): Locator {
 
 async function onboardSelf(page: Page): Promise<void> {
   await page.goto("/onboarding");
-  const input = page.getByRole("textbox", { name: "your website, or a handle" });
+  const input = page.getByRole("textbox", { name: /your website address or social username/i });
   await input.fill(SELF_DOMAIN);
   await input.press("Enter");
   await expect(page).toHaveURL(/\/onboarding\/identity\?subject=gymshark\.com$/);
@@ -171,7 +171,7 @@ test("two weekly rollovers: the stored standing matches Home and the brief, and 
   if (page.url().includes("/onboarding")) await onboardSelf(page);
 
   await page.goto("/app/competitors");
-  const items = page.getByRole("list", { name: "Competitors" }).getByRole("listitem");
+  const items = page.getByRole("list", { name: "Competitors", exact: true }).getByRole("listitem");
   expect(
     await items.count(),
     "the j12-rollovers account holds more competitors than its journey needs",

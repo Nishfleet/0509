@@ -1,3 +1,4 @@
+import { captureException } from "@sentry/cloudflare";
 import { getDomain } from "tldts";
 
 import type { BacklogRow } from "../data/discovery_backlog.server";
@@ -5,7 +6,9 @@ import type { DiscoveryContext, DiscoverySelf } from "../data/entity.server";
 import type { DiscoveryResult } from "../data/suggestion.server";
 import { takenDownAmong } from "../data/takedown.server";
 import type { NoulQuestion, NoulVerdict } from "../jev/client.server";
-import { askNoul, JevUnavailableError } from "../jev/client.server";
+import { askNoul, askNouls, JevRateLimitedError, JevUnavailableError } from "../jev/client.server";
+import { isBillingRefusal } from "../jev/refusal";
+import { ACT_AT } from "../jev/thresholds";
 import { evidenceLine } from "./evidence-line";
 import { aiGenerator } from "./generators/ai.server";
 import { hnGenerator } from "./generators/hn.server";
@@ -15,7 +18,9 @@ import type { ShortlistEntry } from "./shortlist";
 import type { Candidate, Evidence } from "./types";
 
 const EVIDENCE_KEPT = 5;
-export const JUDGE_BATCH_SIZE = 5;
+const CATEGORY_FLOOR = 0.5;
+const CLEAR_YES_AT = CATEGORY_FLOOR;
+export const JUDGE_BATCH_SIZE = 2;
 
 export interface ShortlistedCandidate {
   name: string;
@@ -41,6 +46,16 @@ export const IS_COMPETITOR: NoulQuestion = {
     "It is a publisher, retailer, marketplace, supplier, partner, investor, a product line of `self`, `self` itself, or an unrelated company that only shares a headline.",
 };
 
+export const SAME_CATEGORY: NoulQuestion = {
+  id: "same_product_category",
+  instructions:
+    "Does `item` mainly sell the same kind of product or service that `self` mainly sells? Judge the product category: what a customer actually buys from each. Do not count shared values, audience, price, style or business model. A shoe brand and a clothing brand are different categories even when both are sustainable and sold to the same people; a meal kit and a restaurant are different categories. `self.description` says what `self` sells and `item.evidence` says what `item` sells.",
+  whenTrue:
+    "What `item` mainly sells is the same kind of product or service as what `self` mainly sells, so a buyer shopping for one would consider the other.",
+  whenFalse:
+    "What `item` mainly sells is a different kind of product or service, even if it shares `self`'s values, audience, customers, style or business model.",
+};
+
 export const IS_CREATOR_RIVAL: NoulQuestion = {
   id: "is_creator_rival",
   instructions:
@@ -55,20 +70,36 @@ const GENERATORS = [
   { name: "ai", run: aiGenerator },
 ] as const;
 
+export class DiscoveryUnavailableError extends Error {
+  readonly billingRefused: boolean;
+
+  constructor(message: string, billingRefused: boolean) {
+    super(message);
+    this.billingRefused = billingRefused;
+  }
+}
+
+function failureMessage(reason: unknown): string {
+  return (reason instanceof Error ? reason.message : String(reason)).slice(0, 300);
+}
+
 async function settledCandidates(self: DiscoverySelf): Promise<Candidate[]> {
   const subject = { name: self.name, domain: self.domain, description: self.description };
   const runs = await Promise.allSettled(GENERATORS.map((generator) => generator.run(subject)));
-  return runs.flatMap((run, index) => {
-    if (run.status === "fulfilled") return run.value;
-    console.error(
-      JSON.stringify({
-        event: "discovery.generator_failed",
-        generator: GENERATORS[index]?.name,
-        message: (run.reason instanceof Error ? run.reason.message : String(run.reason)).slice(0, 300),
-      }),
+  const failed = runs.flatMap((run, index) =>
+    run.status === "rejected" ? [{ generator: GENERATORS[index]?.name, reason: run.reason as unknown }] : [],
+  );
+  for (const { generator, reason } of failed) {
+    console.error(JSON.stringify({ event: "discovery.generator_failed", generator, message: failureMessage(reason) }));
+  }
+  if (failed.length === runs.length) {
+    throw new DiscoveryUnavailableError(
+      `every discovery generator failed: ${failed.map((item) => `${String(item.generator)}: ${failureMessage(item.reason)}`).join("; ")}`,
+      failed.every((item) => isBillingRefusal(item.reason)),
     );
-    return [];
-  });
+  }
+  for (const { generator, reason } of failed) captureException(reason, { tags: { discovery_generator: generator } });
+  return runs.flatMap((run) => (run.status === "fulfilled" ? run.value : []));
 }
 
 export function withBacklog(
@@ -150,15 +181,41 @@ export function competitorState(context: DiscoveryContext, candidate: ResolvedCa
   };
 }
 
-async function askCandidate(context: DiscoveryContext, candidate: ResolvedCandidate): Promise<NoulVerdict | null> {
+async function askCompetitorAndCategory(context: DiscoveryContext, state: unknown): Promise<NoulVerdict> {
   try {
-    return await askNoul(
-      context.self.workspaceId,
-      context.self.kind === "creator" ? IS_CREATOR_RIVAL : IS_COMPETITOR,
-      competitorState(context, candidate),
-    );
+    return keepOnlyIfBoth(await askNouls(context.self.workspaceId, [IS_COMPETITOR, SAME_CATEGORY], state));
   } catch (error) {
-    if (!(error instanceof JevUnavailableError)) throw error;
+    if (error instanceof JevUnavailableError) throw error;
+    console.error(
+      JSON.stringify({
+        event: "discovery.category_check_failed",
+        error: error instanceof Error ? error.name : "unknown",
+      }),
+    );
+    return askNoul(context.self.workspaceId, IS_COMPETITOR, state);
+  }
+}
+
+export function keepOnlyIfBoth(verdicts: readonly NoulVerdict[]): NoulVerdict {
+  const [first, ...rest] = verdicts;
+  if (first === undefined) throw new Error("no verdicts to combine");
+  const lowest = Math.min(first.p, ...rest.map((verdict) => verdict.p));
+  const offCategory = rest.some((verdict) => verdict.p < CATEGORY_FLOOR);
+  return { ...first, p: offCategory ? 0 : liftClearYes(lowest) };
+}
+
+function liftClearYes(p: number): number {
+  if (p < CLEAR_YES_AT) return p;
+  return ACT_AT + ((p - CLEAR_YES_AT) * (1 - ACT_AT)) / (1 - CLEAR_YES_AT);
+}
+
+async function askCandidate(context: DiscoveryContext, candidate: ResolvedCandidate): Promise<NoulVerdict | null> {
+  const state = competitorState(context, candidate);
+  try {
+    if (context.self.kind === "creator") return await askNoul(context.self.workspaceId, IS_CREATOR_RIVAL, state);
+    return await askCompetitorAndCategory(context, state);
+  } catch (error) {
+    if (!(error instanceof JevUnavailableError) || error instanceof JevRateLimitedError) throw error;
     console.error(JSON.stringify({ event: "discovery.jev_unavailable", message: error.message }));
     return null;
   }

@@ -20,7 +20,7 @@ This replaces the earlier fleet-written cost doc wholesale. Nothing was carried 
 
 Sources: [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/), [KV pricing](https://developers.cloudflare.com/kv/platform/pricing/), [Browser Rendering pricing](https://developers.cloudflare.com/browser-rendering/pricing/), [Workers AI pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/), [usage-based products](https://developers.cloudflare.com/billing/).
 
-**Jev is not on this sheet.** It runs through TypeSafe via the LiteLLM router, not Workers AI, so its cost is a seat cost and is budgeted per engine packet. Workers AI appears here only for OCR and translation.
+**Jev is Cloudflare Clef on Workers AI** (`@cf/cloudflare/clef`, $0.24 per million input tokens, 21,818 neurons per million). An onboarding makes about 12 judgments of about 750 input tokens each, estimated from the TypeSafe usage page on 2026-10-03 (97.5M input tokens over about 130k calls), so about 9,000 tokens, 196 neurons or $0.0022 a sign-up. Re-measure from AI Gateway logs after the switch. Workers AI appears here for OCR and translation, and for the rival proposer in discovery (`@cf/openai/gpt-oss-120b` and `@cf/nvidia/nemotron-3-120b-a12b`, one call each per onboarding, run in parallel and merged): measured on 150 calls gpt-oss averages about 200 input and 760 output tokens, so about 58 neurons or $0.0006 a call; nemotron costs about twice the 71 neurons of the `llama-3.3-70b-instruct-fp8-fast` they replaced, so an onboarding is about 200 neurons or $0.002.
 
 ## What one brand costs per day
 
@@ -128,7 +128,7 @@ No design in this document approaches that: the largest here is 600,000 D1 rows 
 
 ## Guardrails, as numbers
 
-- Browser Rendering: **≤ 10 concurrent browsers**, a config value. Raising it costs $2 per extra concurrent browser per month and needs Nish's deliberate yes, recorded in the PR with the cost. No agent leaves it hanging while customers wait: if a sweep cannot finish in its window at the cap, escalate to Nish the same day with the measured number and a proposed cap, and meanwhile prioritise ON brands' home and pricing pages over long-tail pages. Never drop brands silently. Duration budget ≤ 20 browser-seconds per brand per day.
+- Browser Rendering: the app calls only Quick Actions (`env.BROWSER.quickAction`), which [bill browser hours only](https://developers.cloudflare.com/browser-run/pricing/); the concurrent-browser charge applies to Browser Sessions (Puppeteer, Playwright, CDP), which no live code uses. If a Browser Session is ever added, **≤ 10 concurrent browsers**, a config value. Raising it costs $2 per extra concurrent browser per month and needs Nish's deliberate yes, recorded in the PR with the cost. No agent leaves it hanging while customers wait: if a sweep cannot finish in its window at the cap, escalate to Nish the same day with the measured number and a proposed cap, and meanwhile prioritise ON brands' home and pricing pages over long-tail pages. Never drop brands silently. Duration budget ≤ 20 browser-seconds per brand per day.
 - D1: no write per observed element. Snapshots are one row per watch per tick, paired in the same `batch()` with the `source` row's latest-facts update; signals are one row per item that survived judgment.
 - Blobs — screenshots, raw payloads, HTML — in **R2**, never base64 into a D1 row.
 - Hot counters (poll cursors, budgets, tallies) in **KV or a Durable Object**, never a D1 write per increment.

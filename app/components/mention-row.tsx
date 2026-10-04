@@ -11,7 +11,7 @@ import { WhyFlaggedSheet } from "./why-flagged";
 
 const WHEN_CLASS = "mt-2 block font-mono text-meta text-ink-soft uppercase";
 const TITLE = "font-display text-row-name font-bold [overflow-wrap:anywhere]";
-const LINK = "underline decoration-1 underline-offset-4";
+const LINK = "inline-flex min-h-11 items-center underline decoration-1 underline-offset-4";
 const PILL =
   "inline-flex max-w-full border border-line px-2 py-1 font-mono text-pill [overflow-wrap:anywhere] text-ink-soft uppercase";
 
@@ -27,6 +27,7 @@ export function MentionRow({ mention }: { mention: MentionRowModel }): ReactElem
       <h3 className={TITLE}>
         <a href={mention.url} rel="noopener noreferrer nofollow" target="_blank" className={LINK}>
           {mention.title}
+          <span className="sr-only"> (opens in a new tab)</span>
         </a>
       </h3>
       {mention.treatment === "possibly" ? <p className="mt-2 leading-[1.65]">{POSSIBLY_LINE}</p> : null}

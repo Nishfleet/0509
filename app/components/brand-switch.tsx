@@ -8,6 +8,11 @@ export const DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
   timeZone: "UTC",
 });
 
+export function dayMonthLabel(value: string): string | null {
+  if (Number.isNaN(Date.parse(value))) return null;
+  return DAY_MONTH.format(new Date(value));
+}
+
 export type BrandSwitchState = "on" | "off" | "you";
 
 const STATE_TEXT: Record<BrandSwitchState, string> = {
@@ -18,11 +23,11 @@ const STATE_TEXT: Record<BrandSwitchState, string> = {
 
 export function brandSwitchNote(state: BrandSwitchState, pausedOn: Date | null): string {
   if (state === "on")
-    return "Off stops the watching and the alerts. The history stays, and turning it back on picks up where it left off.";
-  if (state === "you") return "Your brand · always tracked";
-  if (pausedOn === null) return "paused · history kept";
+    return "Turn off to stop watching and alerts. Your history stays, and turning it back on picks up where it left off.";
+  if (state === "you") return "Your brand, always tracked";
+  if (pausedOn === null || Number.isNaN(pausedOn.getTime())) return "Paused, history kept";
   const day = DAY_MONTH.format(pausedOn);
-  return `paused ${day} · history kept`;
+  return `Paused ${day}, history kept`;
 }
 
 export function brandRowClass(state: BrandSwitchState): string {
@@ -56,11 +61,13 @@ export function BrandSwitchField({
 export function BrandSwitch({
   state,
   brandName,
+  label,
   describedBy,
   onCheckedChange,
 }: {
   state: BrandSwitchState;
   brandName: string;
+  label?: string;
   describedBy?: string;
   onCheckedChange?: (checked: boolean) => void;
 }): ReactElement {
@@ -73,7 +80,7 @@ export function BrandSwitch({
       <Switch
         checked={state !== "off"}
         disabled={state === "you"}
-        aria-label={`${brandName} tracking`}
+        aria-label={label ?? `${brandName} tracking`}
         aria-describedby={describedBy}
         onCheckedChange={(checked) => onCheckedChange?.(checked)}
         className="h-[22px] w-[38px] shrink-0 rounded-none border-[1.5px] border-ink bg-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid data-checked:bg-green data-disabled:bg-green-wash data-disabled:opacity-100 [&_[data-slot=switch-thumb]]:size-4 [&_[data-slot=switch-thumb]]:translate-x-[1.5px] [&_[data-slot=switch-thumb]]:rounded-none [&_[data-slot=switch-thumb]]:bg-ink [&_[data-slot=switch-thumb]]:transition-transform [&_[data-slot=switch-thumb]]:duration-180 data-checked:[&_[data-slot=switch-thumb]]:translate-x-[17.5px]"

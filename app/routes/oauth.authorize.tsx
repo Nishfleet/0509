@@ -1,5 +1,7 @@
 import type { Route } from "./+types/oauth.authorize";
 
+import { useNavigation } from "react-router";
+
 import { Button } from "../components/ui/button";
 import { oauthHelpersContext } from "../lib/agent/context.server";
 import { decideConsent, readConsent } from "../lib/agent/consent.server";
@@ -36,6 +38,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
+  const navigation = useNavigation();
+  const deciding = navigation.state !== "idle";
+  const allowing = deciding && navigation.formData?.get("decision") === "allow";
   const view = actionData ?? loaderData;
 
   if (view.kind === "error") {
@@ -51,7 +56,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   return (
     <main className="mx-auto max-w-lg px-4 py-16">
       <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">
-        An app at <span className="font-mono text-[0.9em]">{view.host}</span> wants to read your workspace
+        An app at <span className="font-mono text-[0.9em]">{view.host}</span> wants to read your Five to Nine account
       </h1>
       {view.claimedName === null ? null : (
         <p className="mt-4 leading-[1.65] text-ink-soft">
@@ -65,17 +70,17 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         <li>your alerts</li>
       </ul>
       <p className="mt-4 leading-[1.65]">
-        It can't change anything, and it only sees your own workspace. You can disconnect it any time in Settings.
+        It can't change anything, and it only sees your own account. You can disconnect it any time in Settings.
       </p>
       <p className="mt-4 leading-[1.65] text-ink-soft">
         After you answer, you go back to <strong className="font-mono text-[0.9rem]">{view.host}</strong>. If you don't
         recognise that, cancel.
       </p>
       <form method="post" className="mt-8 flex gap-3">
-        <Button type="submit" name="decision" value="allow" size="lg">
-          Allow
+        <Button type="submit" name="decision" value="allow" size="lg" disabled={deciding}>
+          {allowing ? "Allowing…" : "Allow"}
         </Button>
-        <Button type="submit" name="decision" value="deny" size="lg" variant="secondary">
+        <Button type="submit" name="decision" value="deny" size="lg" variant="secondary" disabled={deciding}>
           Cancel
         </Button>
       </form>

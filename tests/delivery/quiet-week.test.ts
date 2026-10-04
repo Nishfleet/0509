@@ -27,7 +27,7 @@ function quiet(overrides: Partial<BriefPayload> = {}): BriefPayload {
     headline_total: 8,
     headline_movement: 2,
     headline_is_new: false,
-    why_line: "Quiet week: 61 mentions checked, 14 site changes, no new ads.",
+    why_line: "Quiet week: 61 mentions, 14 site changes, no new ads.",
     is_quiet_week: true,
     is_unjudged: false,
     read_this_first: [],
@@ -102,7 +102,7 @@ describe("paused competitor sentences", () => {
 describe("the quiet week brief", () => {
   it("still sends the headline and counts, and drops the empty read-this-first block", () => {
     const { html, text } = renderBrief(quiet(), CONTEXT);
-    expect(text).toContain("Quiet week: 61 mentions checked, 14 site changes, no new ads.");
+    expect(text).toContain("Quiet week: 61 mentions, 14 site changes, no new ads.");
     expect(text).toContain("You're #3 of 8 this week");
     expect(html).not.toContain("Read this first");
     expect(text).not.toContain("Read this first");
@@ -125,9 +125,9 @@ describe("the quiet week brief", () => {
       }),
       CONTEXT,
     );
-    expect(text).toContain("Reddit mentions has not answered since");
+    expect(text).toContain("We could not reach Reddit mentions since");
     expect(text).not.toContain("reddit.search");
-    expect(text).toContain("so this is not a quiet week we can vouch for.");
+    expect(text).toContain("so we cannot say this was a quiet week.");
     expect(text).not.toContain("Quiet week");
     expect(text).not.toContain("2026-09-19T08:00:00.000Z");
   });
@@ -142,7 +142,7 @@ describe("the quiet week brief", () => {
       }),
       CONTEXT,
     );
-    expect(text).toContain("One of your sources has not answered yet");
+    expect(text).toContain("We have not been able to reach One of your sources yet");
     expect(text).not.toContain("reddit.search");
   });
 

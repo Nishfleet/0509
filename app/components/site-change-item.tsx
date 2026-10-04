@@ -21,6 +21,10 @@ function OneSided({ added, removed }: { added: string | null; removed: string | 
   );
 }
 
+function ProvenanceNote({ text }: { text: string | null }): ReactElement | null {
+  return text === null ? null : <p className={WHEN_CLASS}>{text}</p>;
+}
+
 export function SiteChangeItem({
   change,
   size = "sm",
@@ -54,6 +58,7 @@ export function SiteChangeItem({
         )}
       </div>
       <p className="mt-2 leading-[1.65]">{change.sentence}</p>
+      <ProvenanceNote text={change.provenance} />
       <time dateTime={change.observedAt} className={WHEN_CLASS}>
         {change.when}
       </time>

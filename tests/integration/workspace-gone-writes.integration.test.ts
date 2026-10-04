@@ -107,7 +107,10 @@ describe("an account deleted mid-request", () => {
       now: NOW,
     });
 
-    expect(result).toEqual({ kind: "refuse", message: "we track brands and creators, not people" });
+    expect(result).toEqual({
+      kind: "refuse",
+      message: "Five to Nine tracks brands and creators, not private individuals.",
+    });
     expect(await countRows("user_decision", workspaceId)).toBe(before);
   });
 
@@ -224,7 +227,10 @@ describe("an account deleted mid-request", () => {
       now: NOW,
     });
 
-    expect(result).toEqual({ kind: "refuse", message: "we track brands and creators, not people" });
+    expect(result).toEqual({
+      kind: "refuse",
+      message: "Five to Nine tracks brands and creators, not private individuals.",
+    });
     // The refusal was recorded, so the same subject is not asked again.
     expect(await countRows("jev_verdict", workspaceId)).toBe(verdicts + 1);
     expect(await countRows("user_decision", workspaceId)).toBe(decisions + 1);

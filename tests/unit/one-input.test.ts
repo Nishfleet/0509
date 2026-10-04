@@ -4,17 +4,17 @@ import { describe, expect, it } from "vitest";
 
 import { OneInput } from "../../app/components/one-input";
 
-const PARENT_COPY = "we couldn't find anything for that, try the main website";
+const PARENT_COPY = "we couldn't find a website or username in that";
 
 function markup(message?: string): string {
   return renderToStaticMarkup(
     createElement(OneInput, {
-      label: "your website, or a handle",
-      placeholder: "your website, or a handle",
+      label: "your website address or social username (like @yourbrand)",
+      placeholder: "your website address or social username (like @yourbrand)",
       name: "subject",
       action: "/onboarding",
       message,
-      submitLabel: "Draw my card",
+      submitLabel: "Continue",
     }),
   );
 }
@@ -25,8 +25,8 @@ describe("OneInput", () => {
     expect(html).toContain('method="post"');
     expect(html).toContain('action="/onboarding"');
     expect(html).toContain('name="subject"');
-    expect(html).toContain('placeholder="your website, or a handle"');
-    expect(html).toContain('aria-label="your website, or a handle"');
+    expect(html).toContain('placeholder="your website address or social username (like @yourbrand)"');
+    expect(html).toContain('aria-label="your website address or social username (like @yourbrand)"');
     expect(html).not.toContain("required");
   });
 
@@ -40,23 +40,27 @@ describe("OneInput", () => {
   it("shows the parent copy line as a status when message is set", () => {
     const html = markup(PARENT_COPY);
     expect(html).toContain('role="status"');
-    expect(html).toContain("find anything for that, try the main website");
+    expect(html).toContain("find a website or username in that");
+    expect(html).toContain('aria-describedby="one-input-message"');
+    expect(html).toContain('id="one-input-message"');
   });
 
   it("carries a visible submit button, so the form is not Enter-only", () => {
-    expect(markup()).toMatch(/<button[^>]*type="submit"[^>]*>Draw my card<\/button>/);
+    expect(markup()).toMatch(/<button[^>]*type="submit"[^>]*>Continue<\/button>/);
   });
 
   it("renders no status when message is absent", () => {
     const html = markup();
     expect(html).not.toContain('role="status"');
+    expect(html).not.toContain('aria-describedby="one-input-message"');
+    expect(html).not.toContain('id="one-input-message"');
   });
 
   it("can GET, require the field, and label the submit with a node", () => {
     const html = renderToStaticMarkup(
       createElement(OneInput, {
-        label: "your website, or a handle",
-        placeholder: "your website, or a handle",
+        label: "your website address or social username (like @yourbrand)",
+        placeholder: "your website address or social username (like @yourbrand)",
         name: "subject",
         action: "/login",
         method: "get",

@@ -23,6 +23,8 @@ const KEPT_JOURNEY_ACCOUNTS = [
   "e2e+j7@0509.io",
   "e2e+j8-hard@0509.io",
   "e2e+j8-soft@0509.io",
+  "e2e+j8-hard-v2@0509.io",
+  "e2e+j8-soft-v2@0509.io",
   "e2e+j9-mentions@0509.io",
   "e2e+j12-rollovers@0509.io",
   "e2e+soak@0509.io",

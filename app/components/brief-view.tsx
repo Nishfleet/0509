@@ -30,7 +30,7 @@ function headlineBlock(payload: BriefPayload): ReactElement {
             ? `You're #${String(payload.headline_rank)} of ${String(payload.headline_total)} this week`
             : "Add a competitor to see where you stand"}
       </h2>
-      <p className={BODY}>{payload.why_line}</p>
+      {payload.is_unjudged ? null : <p className={BODY}>{payload.why_line}</p>}
     </section>
   );
 }
@@ -40,11 +40,21 @@ function brandsBlock(payload: BriefPayload): ReactElement {
     <section data-brief-block="brands" className={SECTION}>
       <h3 className={HEAD}>Your tracked brands</h3>
       {payload.brands.length === 0 ? (
-        <p className={BODY}>Add a competitor to see where you stand</p>
+        <Fragment>
+          <p className={BODY}>Add a competitor to see where you stand</p>
+          <p className={BODY}>
+            <a
+              className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4"
+              href="/app/competitors"
+            >
+              Add one on Competitors
+            </a>
+          </p>
+        </Fragment>
       ) : (
         payload.brands.map((brand) => (
           <p key={brand.entity_id} className={LINE}>
-            {brand.name} — {rankText(brand.rank)}
+            {brand.name}: {rankText(brand.rank)}
             {brand.biggest_move === null ? null : ` ${brand.biggest_move}`}
           </p>
         ))
@@ -57,16 +67,17 @@ function ownSiteBlock(payload: BriefPayload): ReactElement {
   const fine = payload.own_site.status === "ok";
   return (
     <section data-brief-block="own-site" className={SECTION}>
+      <h3 className={HEAD}>Your site</h3>
       {fine ? (
         <p className={BODY}>Your site looks fine.</p>
       ) : (
         <Fragment>
-          <p className={BODY}>Your site looks broken</p>
+          <p className={BODY}>Your site looks broken.</p>
           {payload.own_site.incidents.map((incident) => (
             <p key={`${incident.page_url} ${incident.observed_at} ${String(incident.is_open)}`} className={LINE}>
               {incident.kind === ""
                 ? incident.page_url
-                : `${incident.kind} on ${incident.page_url} — ${incident.is_open ? "still broken" : "fixed"}`}
+                : `${incident.kind} on ${incident.page_url}, ${incident.is_open ? "still broken" : "fixed"}`}
             </p>
           ))}
         </Fragment>
@@ -80,11 +91,16 @@ function checkedBlock(payload: BriefPayload): ReactElement {
     <section data-brief-block="checked" className={SECTION}>
       <h3 className={HEAD}>What was checked</h3>
       <p className="mt-2 font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft">
-        {payload.checked.mention_count} mentions · {payload.checked.site_change_count} site changes ·{" "}
-        {payload.checked.new_ad_count} new ads
+        {countLabel(payload.checked.mention_count, "mention", "mentions")} ·{" "}
+        {countLabel(payload.checked.site_change_count, "site change", "site changes")}
       </p>
     </section>
   );
+}
+
+function countLabel(count: number, one: string, many: string): string {
+  if (count === 0) return `no ${many}`;
+  return `${String(count)} ${count === 1 ? one : many}`;
 }
 
 function rankText(rank: number | null): string {

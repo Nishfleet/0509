@@ -229,9 +229,27 @@ test("a workspace shows the three mention treatments", async ({ page }, testInfo
     contentType: "image/png",
   });
 
-  await page.getByTestId("mentions-show-all").click();
+  await page.getByTestId("mentions-show-all").focus();
+  await page.keyboard.press("Enter");
   await expect(held).toHaveCount(1);
   await expect(held).toContainText("Zephyrwear ticker line");
+
+  // The reveal button stays mounted and keeps focus, so a keyboard user is not dropped to <body>.
+  const reveal = page.getByTestId("mentions-show-all");
+  await expect(reveal).toBeVisible();
+  await expect(reveal).toBeFocused();
+  await expect(reveal).toHaveAttribute("aria-expanded", "true");
+  await expect(reveal).toHaveText(/Hide the \d+ we think (?:do|does) not matter/);
+
+  // A second keyboard activation hides the held rows again.
+  await page.keyboard.press("Enter");
+  await expect(held).toHaveCount(0);
+  await expect(reveal).toHaveAttribute("aria-expanded", "false");
+  await expect(reveal).toHaveText(/Show all, including \d+ we think (?:do|does) not matter/);
+
+  // Re-open so the rest of this test inspects the held rows.
+  await page.keyboard.press("Enter");
+  await expect(held).toHaveCount(1);
   const trigger = held.getByRole("button", { name: "Why we flagged this" });
   await trigger.click();
   await expect(page.getByTestId("why-flagged-reason")).toHaveText("Our read: A ticker line, not a move.");

@@ -1,9 +1,10 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { readSelfWorkspaceIds } from "../../../app/lib/data/entity.server";
+import { readDiscoverableWorkspaces } from "../../../app/lib/data/entity.server";
 import type { DiscoveryParams } from "../../../app/lib/discovery/start.server";
-import { startDiscovery, startWeeklyRefresh, WEEKLY_REFRESH_CRON } from "../../../app/lib/discovery/start.server";
+import { WEEKLY_REFRESH_CRON } from "../../../app/lib/cadence";
+import { startDiscovery, startWeeklyRefresh } from "../../../app/lib/discovery/start.server";
 
 const NOW = "2026-09-28T04:00:00.000Z";
 const DATE = "2026-09-28";
@@ -29,6 +30,9 @@ async function seedSelfWorkspace(domain: string): Promise<string> {
     env.DB.prepare(
       "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, created_at) VALUES (?1, ?2, 'self', ?3, 'Self', '{\"description\":\"Gym clothing\"}', ?4)",
     ).bind(`${workspaceId}-self`, workspaceId, domain, NOW),
+    env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?1, ?2, 'scout', 'trialing', ?3)",
+    ).bind(`${workspaceId}-plan`, workspaceId, NOW),
   ]);
   return workspaceId;
 }
@@ -41,7 +45,7 @@ describe("startWeeklyRefresh", () => {
   it("starts one refresh instance per self workspace with the refresh id and mode", async () => {
     await seedSelfWorkspace("gymshark.com");
     await seedSelfWorkspace("nike.com");
-    const workspaceIds = await readSelfWorkspaceIds();
+    const workspaceIds = (await readDiscoverableWorkspaces()).map((workspace) => workspace.workspaceId);
     const createBatch = vi.fn((_batch: BatchItem[]) => Promise.resolve([]));
     Reflect.set(env, "DISCOVERY", { createBatch });
 

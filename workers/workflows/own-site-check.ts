@@ -12,6 +12,7 @@ import {
   planOwnSiteCheck,
   probeOwnSite,
 } from "../../app/lib/site/own-site.server";
+import { isNativeSchedule, startOwnSiteCheckHour } from "../workflow-crons";
 
 const RETRY: WorkflowStepConfig = {
   retries: { limit: 3, delay: "30 seconds", backoff: "exponential" },
@@ -107,7 +108,11 @@ function openConfirmed(step: WorkflowStep, suspects: readonly Probed[]): Promise
 }
 
 export class OwnSiteCheck extends WorkflowEntrypoint<Env> {
-  async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<OwnSiteCheckOutcome> {
+  async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<OwnSiteCheckOutcome | null> {
+    if (isNativeSchedule(event)) {
+      await startOwnSiteCheckHour(this.env, event.timestamp.getTime());
+      return null;
+    }
     return withMonitor("own-site-check", () => this.runCheck(event, step), MONITOR);
   }
 

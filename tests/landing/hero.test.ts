@@ -6,8 +6,8 @@ import { Hero } from "../../app/components/landing/hero";
 import { WATCHED_NOUNS } from "../../app/lib/coverage";
 
 const HEADLINE = "Know where you stand. And who’s gaining on you.";
-const SENTENCE = `We watch ${WATCHED_NOUNS} across your market, and we name the rivals for you, so you do not have to know them.`;
-const MICROCOPY = "One input. Sixty seconds to who’s gaining on you.";
+const SENTENCE = `We watch ${WATCHED_NOUNS} across your market. We find your competitors for you, so you do not need to know who they are.`;
+const MICROCOPY = "One box to fill in. About a minute to see who’s gaining on you.";
 
 function markup(): string {
   return renderToStaticMarkup(createElement(Hero, { nouns: WATCHED_NOUNS }));
@@ -29,8 +29,8 @@ describe("landing hero", () => {
     expect(html).toContain('method="get"');
     expect(html).toContain('action="/login"');
     expect(html).toContain('name="subject"');
-    expect(html).toContain('placeholder="your website, or a handle"');
-    expect(html).toContain('aria-label="your website, or a handle"');
+    expect(html).toContain('placeholder="your website address or social username (like @yourbrand)"');
+    expect(html).toContain('aria-label="your website address or social username (like @yourbrand)"');
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*>/);
     expect(html.match(/<button/g)).toHaveLength(1);
     expect(html).toContain("€10/mo");

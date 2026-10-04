@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { WEEKLY_REFRESH_CRON } from "../../app/lib/discovery/start.server";
+import { NIGHTLY_CRON, SNAPSHOT_BACKUP_CRON, WEEKLY_REFRESH_CRON } from "../../app/lib/cadence";
 import { cronMonitor } from "../../workers/cron-monitors";
-import { NIGHTLY_CRON } from "../../workers/delivery/sweeper";
 
 /**
  * Every scheduled cron's Sentry Cron Monitor (0509#5750, parent 0509#5736).
@@ -41,13 +40,24 @@ describe("cronMonitor", () => {
     });
   });
 
+  it("maps the snapshot-backup cron to a 60-minute check-in margin and a 5-minute run budget", () => {
+    expect(cronMonitor(SNAPSHOT_BACKUP_CRON)).toEqual({
+      slug: "snapshot-backup-start",
+      schedule: "0 5 * * *",
+      checkinMargin: 60,
+      maxRuntime: 5,
+    });
+  });
+
   it("returns undefined for a cron with no monitor", () => {
     expect(cronMonitor("0 0 * * *")).toBeUndefined();
   });
 
-  it("gives the three monitors distinct slugs", () => {
-    const slugs = [NIGHTLY_CRON, WEEKLY_REFRESH_CRON, "*/5 * * * *"].map((cron) => cronMonitor(cron)?.slug);
-    expect(slugs).toEqual(["nightly", "weekly-refresh", "liveness-ping"]);
-    expect(new Set(slugs).size).toBe(3);
+  it("gives the four monitors distinct slugs", () => {
+    const slugs = [NIGHTLY_CRON, WEEKLY_REFRESH_CRON, "*/5 * * * *", SNAPSHOT_BACKUP_CRON].map(
+      (cron) => cronMonitor(cron)?.slug,
+    );
+    expect(slugs).toEqual(["nightly", "weekly-refresh", "liveness-ping", "snapshot-backup-start"]);
+    expect(new Set(slugs).size).toBe(4);
   });
 });

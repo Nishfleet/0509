@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { configDefaults, defineConfig } from "vitest/config";
 
@@ -35,7 +37,12 @@ export default defineConfig({
     },
     projects: [
       {
-        // Pure logic: no bindings, no workerd.
+        // Pure logic: no bindings, no workerd. fetchOutbound reads the signing
+        // key from `env`, so every module that reaches it needs the same empty
+        // `env` the evals use; a test that needs values still vi.mocks it.
+        resolve: {
+          alias: { "cloudflare:workers": fileURLToPath(new URL("./tests/workers-env-empty-stub.ts", import.meta.url)) },
+        },
         test: {
           name: "node",
           environment: "node",

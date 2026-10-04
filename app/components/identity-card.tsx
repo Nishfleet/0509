@@ -1,5 +1,5 @@
 import { Suspense, useId, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Await, Form, useFetcher } from "react-router";
+import { Await, Form, useFetcher, useNavigation } from "react-router";
 
 import type { CardDraft, CreatorRows, DraftField, SiteFields } from "../lib/identity/card-fields";
 import { cn } from "../lib/utils";
@@ -25,7 +25,7 @@ function Row({
   return (
     <div
       className={cn(
-        "flex items-baseline gap-4 border-b border-line py-3",
+        "flex items-center gap-4 border-b border-line py-3",
         wrap === true && "max-sm:flex-wrap",
         check === true && "bg-green-wash px-2 text-green-ink",
       )}
@@ -33,8 +33,11 @@ function Row({
       <span className="w-20 shrink-0 font-mono text-[0.75rem] text-ink-soft uppercase">{label}</span>
       {children}
       {check === true ? (
-        <span id={checkId} className="font-mono text-[0.7rem] text-green-ink uppercase">
-          check this
+        <span
+          id={checkId}
+          className="shrink-0 rounded-sm bg-green px-1.5 py-0.5 text-[0.75rem] font-medium text-on-green"
+        >
+          please check
         </span>
       ) : null}
     </div>
@@ -106,7 +109,11 @@ function EditStatus({ edited, reverted, onRevert }: Pick<EditRowProps, "edited" 
     return (
       <>
         <span className="font-mono text-[0.7rem] text-ink-soft uppercase">edited by you</span>
-        <button type="button" className="text-[0.88rem] text-ink-soft underline" onClick={onRevert}>
+        <button
+          type="button"
+          className="inline-flex min-h-11 items-center text-[0.88rem] text-ink-soft underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid"
+          onClick={onRevert}
+        >
           use what we found
         </button>
       </>
@@ -115,7 +122,7 @@ function EditStatus({ edited, reverted, onRevert }: Pick<EditRowProps, "edited" 
   if (reverted) {
     return (
       <span role="status" className="text-[0.88rem] text-ink-soft">
-        back to what we found, we will check it again
+        back to what we found, we'll check it again
       </span>
     );
   }
@@ -185,8 +192,8 @@ function Logo({ logo }: { logo: Promise<string | null> }) {
   );
 }
 
-const EMPTY_LINE = "we'll fill this after the first crawl";
-const UNREAD_LINE = "we'll fill this on the first crawl, within the hour";
+const EMPTY_LINE = "we'll fill this in after our first look at your site";
+const UNREAD_LINE = "we'll fill this in within the hour";
 
 const DRAFT_META = {
   name: { label: "name", placeholder: "your brand's name", multiline: false },
@@ -231,8 +238,8 @@ function DraftRow({ field, site, draft, emptyLine, actions }: DraftRowProps) {
       key={draft[field] === undefined ? `${field}:found` : `${field}:edited`}
       label={meta.label}
       name={field}
-      initial={draft[field] ?? (check ? "" : (site[field] ?? ""))}
-      placeholder={check ? (site[field] ?? "") : meta.placeholder}
+      initial={draft[field] ?? site[field] ?? ""}
+      placeholder={meta.placeholder}
       check={check}
       empty={site.review[field] === "empty"}
       emptyLine={emptyLine}
@@ -261,7 +268,8 @@ function SocialsBody({ site, emptyLine }: { site: SiteFields; emptyLine: string 
             <label className="flex min-h-11 min-w-0 items-center gap-3">
               <input
                 type="checkbox"
-                className="size-5 shrink-0"
+                defaultChecked
+                className="size-5 shrink-0 accent-green"
                 name={`social.${social.platform}`}
                 value={social.url}
               />
@@ -311,7 +319,7 @@ export function Fields({
         <Logo logo={logo} />
       )}
       <DraftRow field="description" site={site} draft={draft} emptyLine={emptyLine} actions={actions} />
-      <Row label="socials" check={site.review.socials === "check"}>
+      <Row label="social links" check={site.review.socials === "check"}>
         <SocialsBody site={site} emptyLine={emptyLine} />
       </Row>
     </>
@@ -325,13 +333,39 @@ export function ArrivalLine({ fields }: { fields: SiteFields }) {
   const checks = [
     fields.review.name === "check" ? "name" : null,
     fields.review.description === "check" ? "about" : null,
-    fields.review.socials === "check" ? "socials" : null,
+    fields.review.socials === "check" ? "social links" : null,
   ].filter((label): label is string => label !== null);
   const list = checks.join(", ");
   return (
     <span className="sr-only">
-      {checks.length === 0 ? "Your card is drawn." : `Your card is drawn. Check this: ${list}.`}
+      {checks.length === 0 ? "Your details are ready." : `Your details are ready. Please check: ${list}.`}
     </span>
+  );
+}
+
+export function CheckHint({ fields }: { fields: SiteFields }) {
+  const review = fields.review;
+  if (fields.unfound || ![review.name, review.description, review.socials].includes("check")) return null;
+  const socials = review.socials === "check" ? " Untick any social link that isn't yours." : "";
+  return (
+    <span className="block pb-3">{`Rows marked "please check" may not be right. Tap a row to fix it.${socials}`}</span>
+  );
+}
+
+function ArrivalNotes({ site }: { site: Promise<SiteFields> }) {
+  return (
+    <p role="status" className="text-[0.88rem] text-ink-soft">
+      <Suspense fallback={null}>
+        <Await resolve={site}>
+          {(fields) => (
+            <>
+              <ArrivalLine fields={fields} />
+              <CheckHint fields={fields} />
+            </>
+          )}
+        </Await>
+      </Suspense>
+    </p>
   );
 }
 
@@ -344,7 +378,7 @@ function CreatorLines({ creator }: { creator: CreatorRows | null }) {
           <span className="truncate text-[0.95rem]">{creator.channel}</span>
         </Row>
       )}
-      <Row label="handle">
+      <Row label="username">
         <span className="truncate text-[0.95rem]">{creator.handle}</span>
       </Row>
     </>
@@ -357,7 +391,7 @@ function PendingRows() {
       <Pending label="name" fill="looking on the site" />
       <Pending label="logo" fill="looking on the site" />
       <Pending label="about" fill="looking on the site" />
-      <Pending label="socials" fill="looking on the site" />
+      <Pending label="social links" fill="looking on the site" />
     </>
   );
 }
@@ -379,17 +413,15 @@ export function IdentityCard({
   draft: CardDraft;
   message: string | undefined;
 }) {
+  const confirming = useNavigation().state !== "idle";
   return (
     <Form method="post" className="mt-8 max-w-xl border-[1.5px] border-ink bg-card px-4">
       <input type="hidden" name="subject" value={subject} />
       <Row label="site">
         <span className="truncate text-[0.95rem]">{domain}</span>
       </Row>
-      <p role="status" className="text-[0.88rem] text-ink-soft">
-        <Suspense fallback={null}>
-          <Await resolve={site}>{(fields) => <ArrivalLine fields={fields} />}</Await>
-        </Suspense>
-      </p>
+      <ArrivalNotes site={site} />
+
       <CreatorLines creator={creator} />
       <Suspense fallback={<PendingRows />}>
         <Await resolve={site}>
@@ -401,13 +433,19 @@ export function IdentityCard({
                   {message}
                 </p>
               ) : null}
-              <Button type="submit" size="lg" className="my-5">
-                That&apos;s me
-              </Button>
+              <ConfirmButton confirming={confirming} />
             </>
           )}
         </Await>
       </Suspense>
     </Form>
+  );
+}
+
+function ConfirmButton({ confirming }: { confirming: boolean }) {
+  return (
+    <Button type="submit" size="lg" className="my-5" disabled={confirming}>
+      {confirming ? "Saving…" : "That's me"}
+    </Button>
   );
 }

@@ -65,7 +65,7 @@ test("the Alerts page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440
       await expect(page.getByRole("heading", { level: 1, name: "Alerts" })).toBeVisible();
       await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
       await expect(page.getByRole("main")).toHaveCount(1);
-      await expect(page.getByRole("navigation", { name: "Places" })).toBeVisible();
+      await expect(page.getByRole("navigation", { name: "Primary" })).toBeVisible();
 
       // Heading order: the first heading is the h1 and no level is skipped, so
       // the page reads as an outline rather than a flat list of styled text.
@@ -76,17 +76,17 @@ test("the Alerts page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440
       for (let i = 1; i < levels.length; i += 1) expect(levels[i] - levels[i - 1]).toBeLessThanOrEqual(1);
 
       // Focus order from a fresh load: a reload pins the count from the top of
-      // the document, so the four Places follow each other before any content
-      // on the page is reachable. The focused Settings link carries a visible
-      // outline.
+      // the document, so Skip to content is first, then the four Places,
+      // before any other content on the page is reachable. The focused
+      // Settings link carries a visible outline.
       await page.reload();
       const order: string[] = [];
-      for (let i = 0; i < 4; i += 1) {
+      for (let i = 0; i < 5; i += 1) {
         await page.keyboard.press("Tab");
         order.push(await page.evaluate(() => document.activeElement?.textContent?.trim() ?? ""));
       }
-      expect(order).toEqual(["Home", "Competitors", "Alerts", "Settings"]);
-      await expect(page.getByRole("navigation", { name: "Places" }).getByRole("link", { name: "Settings" })).toHaveCSS(
+      expect(order).toEqual(["Skip to content", "Home", "Competitors", "Alerts", "Settings"]);
+      await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Settings" })).toHaveCSS(
         "outline-style",
         "solid",
       );

@@ -1,13 +1,14 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { checkoutProof } from "../../app/lib/billing/checkout-proof.server";
 import checkoutSession from "../fixtures/dodo/checkout-session-created.json";
 
 vi.mock("../../app/lib/require-session.server", () => ({
   requireFreshSession: async () => ({ user: { id: "user-upgrade", email: "upgrade@example.com" } }),
 }));
 
-import { action } from "../../app/routes/app.upgrade";
+import { action, loader } from "../../app/routes/app.upgrade";
 
 async function seedOwner(): Promise<void> {
   await env.DB.prepare(
@@ -31,6 +32,13 @@ afterEach(() => {
 });
 
 describe("upgrade checkout (J13)", () => {
+  it("sends a plain visit to the upgrade link back to Settings", () => {
+    const result = loader();
+
+    expect(result.status).toBe(302);
+    expect(result.headers.get("Location")).toBe("/app/settings");
+  });
+
   it("creates a Dodo test-mode checkout session for the plan and redirects to its url", async () => {
     await seedOwner();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json(checkoutSession, { status: 200 }));
@@ -49,7 +57,11 @@ describe("upgrade checkout (J13)", () => {
       product_cart: [{ product_id: "pdt_test_starter", quantity: 1 }],
       customer: { email: "upgrade@example.com" },
       subscription_data: { trial_period_days: 7 },
-      metadata: { workspace_id: "ws-upgrade", plan: "starter" },
+      metadata: {
+        workspace_id: "ws-upgrade",
+        plan: "starter",
+        proof: await checkoutProof("ws-upgrade", "pdt_test_starter"),
+      },
       return_url: "https://0509.io/app/competitors?upgraded=starter",
     });
   });

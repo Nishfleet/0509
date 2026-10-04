@@ -1,3 +1,5 @@
+import { sha256Hex } from "../sha256";
+
 const WRITE_UNSUBSCRIBE_TOKEN = `UPDATE send_target SET unsubscribe_token = ? WHERE id = ? AND unsubscribe_token IS NULL`;
 
 const SELECT_EMAIL_TARGET = `SELECT st.target_value, st.is_verified FROM send_target st
@@ -42,11 +44,6 @@ SELECT 'st-email-' || w.id, w.id, c.id, u.email, u.emailVerified, ?
    AND NOT EXISTS (
      SELECT 1 FROM send_target st WHERE st.workspace_id = w.id AND st.channel_id = c.id
    )`;
-
-async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
 
 interface TargetDb {
   prepare(query: string): {
@@ -95,4 +92,36 @@ export async function changeEmailTarget(db: TargetDb, input: { workspaceId: stri
 export async function confirmEmailTargetByToken(db: TargetDb, input: { token: string; now: string }): Promise<void> {
   const tokenHash = await sha256Hex(input.token);
   await db.prepare(CONFIRM_EMAIL_TARGET_BY_TOKEN).bind(tokenHash, input.now).run();
+}
+
+const SELECT_SLACK_TARGET = `SELECT st.id, st.target_value FROM send_target st
+JOIN channel c ON c.id = st.channel_id
+WHERE st.workspace_id = ? AND c.key = 'slack' AND c.is_enabled = 1 AND st.is_verified = 1
+LIMIT 1`;
+
+const DELETE_SLACK_TARGET = `DELETE FROM send_target
+WHERE workspace_id = ? AND channel_id = (SELECT id FROM channel WHERE key = 'slack')`;
+
+const INSERT_SLACK_TARGET = `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at)
+SELECT ?, ?, id, ?, 1, ? FROM channel WHERE key = 'slack'`;
+
+export async function readSlackTarget(
+  db: TargetDb,
+  workspaceId: string,
+): Promise<{ id: string; target_value: string } | null> {
+  return db.prepare(SELECT_SLACK_TARGET).bind(workspaceId).first<{ id: string; target_value: string }>();
+}
+
+export async function removeSlackTarget(db: D1Database, workspaceId: string): Promise<void> {
+  await db.prepare(DELETE_SLACK_TARGET).bind(workspaceId).run();
+}
+
+export async function saveSlackTarget(
+  db: D1Database,
+  input: { workspaceId: string; webhookUrl: string; now: string },
+): Promise<void> {
+  await db.batch([
+    db.prepare(DELETE_SLACK_TARGET).bind(input.workspaceId),
+    db.prepare(INSERT_SLACK_TARGET).bind(crypto.randomUUID(), input.workspaceId, input.webhookUrl, input.now),
+  ]);
 }

@@ -24,6 +24,7 @@ interface ReadUrlSuccess {
   browserMsUsed?: number;
   escalated: boolean;
   escalationReason?: EscalationReason;
+  fromArchive?: true;
 }
 
 type ReadUrlFailure =
@@ -102,7 +103,7 @@ export async function countExtractedChars(html: string): Promise<number> {
   return chars;
 }
 
-async function refusalReason(
+export async function refusalReason(
   status: number,
   html: string,
 ): Promise<Exclude<EscalationReason, "timeout" | "learned"> | null> {

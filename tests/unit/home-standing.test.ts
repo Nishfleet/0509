@@ -15,10 +15,10 @@ import {
   homeView,
   movementLabel,
   nextHour,
-  nextSiteSweepAt,
   type HomeEntity,
   type HomeHistoryRow,
 } from "../../app/lib/home-standing";
+import { nextSiteSweepAt } from "../../app/lib/onboarding/arrival-estimate";
 
 const SCHEDULE: BriefSchedule = { timezone: "Europe/London", weekday: 1, hour: 8 };
 const THURSDAY_MORNING = new Date("2026-09-24T06:30:00.000Z");
@@ -122,15 +122,15 @@ const HOW_RANKED: HowRanked = {
     { key: "mention_matters", label: "Mentions that matter", weight: 3 },
     { key: "mention_normal", label: "Mentions", weight: 1 },
     { key: "site_change_noteworthy", label: "Noteworthy site changes", weight: 4 },
-    { key: "ad_new_creative", label: "New ad creatives", weight: 2 },
-    { key: "ad_copy_change", label: "Ad copy or offer changes", weight: 3 },
-    { key: "hiring_new_role", label: "New roles", weight: 1 },
+    { key: "ad_new_creative", label: "New ads", weight: 2 },
+    { key: "ad_copy_change", label: "Ad wording or offer changes", weight: 3 },
+    { key: "hiring_new_role", label: "New job openings", weight: 1 },
   ],
   multipliers: [
-    { reliability: "official_api", label: "Official API", value: 1 },
-    { reliability: "rss", label: "RSS feed", value: 0.9 },
-    { reliability: "scraped_page", label: "Scraped page", value: 0.6 },
-    { reliability: "best_effort", label: "Best effort", value: 0.5 },
+    { reliability: "official_api", label: "Official data", value: 1 },
+    { reliability: "rss", label: "Public feed", value: 0.9 },
+    { reliability: "scraped_page", label: "Page we read", value: 0.6 },
+    { reliability: "best_effort", label: "Best guess", value: 0.5 },
   ],
   brands: [{ entityId: "ent_self", name: "Own Brand", lines: [], total: 0 }],
 };
@@ -305,11 +305,11 @@ describe("Home standing", () => {
   it("says when the first standing comes while the first week is still open", () => {
     const html = render({ payload: null });
     expect(html).toContain(
-      `We&#x27;re gathering the first week: ${WATCHED_NOUNS} for 3 brands. The first site snapshots land by Friday 03:00; your first read-this-first comes with the brief on Monday 08:00.`,
+      `We&#x27;re collecting your first week of data: ${WATCHED_NOUNS} for 3 brands. Your first site snapshots arrive on Friday 25 September, around 07:00 BST. Your first ranking arrives with your brief on Monday 08:00.`,
     );
     expect(html).toContain('data-home="first-file"');
     expect(html).toContain("Good morning.</h1>");
-    expect(render({ payload: payload({ headline_rank: null }) })).toContain("gathering the first week");
+    expect(render({ payload: payload({ headline_rank: null }) })).toContain("collecting your first week of data");
   });
 
   it("shows a chip per on and off brand in the gathering state and no chip row once ranked", () => {
@@ -336,7 +336,7 @@ describe("Home standing", () => {
 
     const gathering = render({ payload: null, entities });
     expect(gathering).toContain('role="group"');
-    expect(gathering).toContain('aria-label="Your set"');
+    expect(gathering).toContain('aria-label="Brands you watch"');
     expect(gathering).toContain('class="mt-4"');
     expect(gathering).toContain('href="/app/settings"');
     expect(gathering).toContain('href="/app/competitors/ent_kindred"');
@@ -347,18 +347,18 @@ describe("Home standing", () => {
     expect(gathering).toContain('data-off=""');
 
     const ranked = render({ payload: payload(), entities });
-    expect(ranked).not.toContain('aria-label="Your set"');
+    expect(ranked).not.toContain('aria-label="Brands you watch"');
     expect(ranked).not.toContain('class="mt-4"');
 
     const quiet = render({ payload: payload({ is_unjudged: true, headline_rank: null }), entities });
-    expect(quiet).not.toContain('aria-label="Your set"');
+    expect(quiet).not.toContain('aria-label="Brands you watch"');
     expect(quiet).not.toContain('class="mt-4"');
 
     const addCompetitor = render({
       payload: payload(),
       entities: [SELF, { id: "ent_off", role: "competitor", domain: "off.example", name: "Off Brand", state: "off" }],
     });
-    expect(addCompetitor).not.toContain('aria-label="Your set"');
+    expect(addCompetitor).not.toContain('aria-label="Brands you watch"');
     expect(addCompetitor).not.toContain('class="mt-4"');
   });
 
@@ -385,7 +385,7 @@ describe("Home standing", () => {
     );
     const standing = homeStanding(GATHERING_INPUT);
     if (standing.kind !== "gathering") throw new Error("expected a gathering standing");
-    expect(standing.firstSweepAt).toBe("Friday 03:00");
+    expect(standing.firstSweepAt).toBe("Friday 25 September, around 07:00 BST");
     expect(homeView(GATHERING_INPUT).standing).toEqual(standing);
   });
 
@@ -406,6 +406,13 @@ describe("Home standing", () => {
   it("rounds nextHour up to the next hour boundary", () => {
     expect(nextHour(new Date("2026-09-24T10:17:00Z"))).toEqual(new Date("2026-09-24T11:00:00.000Z"));
     expect(nextHour(new Date("2026-09-24T10:00:00Z"))).toEqual(new Date("2026-09-24T11:00:00.000Z"));
+    expect(nextHour(new Date("2026-09-25T23:59:00Z"))).toEqual(new Date("2026-09-26T00:00:00.000Z"));
+  });
+
+  it("does not mutate the Date nextHour is given", () => {
+    const now = new Date("2026-09-25T10:15:00.000Z");
+    nextHour(now);
+    expect(now.toISOString()).toBe("2026-09-25T10:15:00.000Z");
   });
 
   it("builds the footer with the brand count, brief time and own-site re-check, singular for one brand", () => {
@@ -427,7 +434,9 @@ describe("Home standing", () => {
       moves: [],
       now,
     });
-    expect(four.footer).toBe("Checked 4 brands this week · brief Monday 08:00 · your site re-checked at 13:00");
+    expect(four.footer).toBe(
+      "Checked 4 brands this week · next brief Monday 08:00 · your site is checked again at 13:00",
+    );
 
     const one = homeView({
       payload: payload(),
@@ -439,7 +448,9 @@ describe("Home standing", () => {
       moves: [],
       now,
     });
-    expect(one.footer).toBe("Checked 1 brand this week · brief Monday 08:00 · your site re-checked at 13:00");
+    expect(one.footer).toBe(
+      "Checked 1 brand this week · next brief Monday 08:00 · your site is checked again at 13:00",
+    );
   });
 });
 

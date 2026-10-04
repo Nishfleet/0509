@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Form } from "react-router";
+import type { ReactElement } from "react";
+import { Form, useNavigation } from "react-router";
 
 import type { AgentKey, ConnectedApp } from "../lib/agent/access";
 import { BLOCK_HEADING } from "./page-heading";
@@ -12,11 +13,43 @@ const ROW = "flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-
 const CLIENTS = ["Claude", "ChatGPT", "Cursor"];
 
 function day(iso: string): string {
-  return DAY.format(new Date(iso));
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms) ? "date unknown" : DAY.format(new Date(ms));
+}
+
+export const COPY_DEADLINE_MS = 2_000;
+
+export function copyToClipboard(value: string, deadlineMs = COPY_DEADLINE_MS): Promise<"copied" | "failed"> {
+  const write = Promise.resolve()
+    .then(() => navigator.clipboard.writeText(value))
+    .then(
+      () => "copied" as const,
+      () => "failed" as const,
+    );
+  return Promise.race([
+    write,
+    new Promise<"copied" | "failed">((settle) => {
+      setTimeout(() => {
+        settle("failed");
+      }, deadlineMs);
+    }),
+  ]);
+}
+
+export function copyKeyLabel(state: "idle" | "copied" | "failed"): string {
+  return state === "copied" ? "Copied" : "Copy key";
+}
+
+export function CopyFailureNote({ subject }: { subject: string }): ReactElement {
+  return (
+    <p role="status" className="mt-2 text-body-sm text-ink-soft">
+      Copy failed. Select the {subject} and copy it by hand.
+    </p>
+  );
 }
 
 function CopyField({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false);
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   return (
     <div className="mt-3 flex flex-col gap-2 sm:flex-row">
       <Input
@@ -33,13 +66,12 @@ function CopyField({ label, value }: { label: string; value: string }) {
         variant="secondary"
         size="lg"
         onClick={() => {
-          void navigator.clipboard.writeText(value).then(() => {
-            setCopied(true);
-          });
+          void copyToClipboard(value).then(setState);
         }}
       >
-        {copied ? "Copied" : "Copy"}
+        {state === "copied" ? "Copied" : "Copy"}
       </Button>
+      {state === "failed" ? <CopyFailureNote subject={label.toLowerCase()} /> : null}
     </div>
   );
 }
@@ -62,15 +94,28 @@ export function ConnectDetails({ mcpUrl, origin }: { mcpUrl: string; origin: str
       </ul>
       <CopyField label="Connector address" value={mcpUrl} />
       <p className="mt-3 text-body-sm text-ink-soft">Connecting with a key instead? Send it in this header.</p>
-      <CopyField label="Header" value="Authorization: Bearer <your key>" />
+      <CopyField label="Authorization header" value="Authorization: Bearer <your key>" />
       <p className="mt-3 text-body-sm text-ink-soft">
         Writing your own code? Make a key below and read the{" "}
-        <a className="text-ink underline decoration-1 underline-offset-4" href={`${origin}/api/v1/openapi.json`}>
+        <a className="text-ink underline decoration-1 underline-offset-4" href={`${origin}/api/docs`}>
           API reference
         </a>
         .
       </p>
     </section>
+  );
+}
+
+function DisconnectButton({ app }: { app: ConnectedApp }) {
+  const navigation = useNavigation();
+  const leaving =
+    navigation.state !== "idle" &&
+    navigation.formData?.get("intent") === "disconnect-app" &&
+    navigation.formData?.get("id") === app.grantId;
+  return (
+    <Button type="submit" variant="tertiary" aria-label={`Disconnect ${app.name}`} disabled={leaving}>
+      {leaving ? "Disconnecting…" : "Disconnect"}
+    </Button>
   );
 }
 
@@ -95,9 +140,7 @@ export function ConnectedApps({ apps }: { apps: ConnectedApp[] }) {
               <Form method="post">
                 <input type="hidden" name="intent" value="disconnect-app" />
                 <input type="hidden" name="id" value={app.grantId} />
-                <Button type="submit" variant="tertiary" aria-label={`Disconnect ${app.name}`}>
-                  Disconnect
-                </Button>
+                <DisconnectButton app={app} />
               </Form>
             </li>
           ))}
@@ -109,10 +152,14 @@ export function ConnectedApps({ apps }: { apps: ConnectedApp[] }) {
 
 function keyDetail(key: AgentKey): string {
   return [
-    `Made ${day(key.createdAt)}`,
+    `Created ${day(key.createdAt)}`,
     key.lastUsedAt === null ? "never used" : `last used ${day(key.lastUsedAt)}`,
-    ...(key.rateLimitMax === null ? [] : [`up to ${String(key.rateLimitMax)} requests a minute`]),
-    ...(key.remaining === null ? [] : [`${String(key.remaining)} requests left`]),
+    ...(key.rateLimitMax === null
+      ? []
+      : [`up to ${String(key.rateLimitMax)} ${key.rateLimitMax === 1 ? "request" : "requests"} a minute`]),
+    ...(key.remaining === null
+      ? []
+      : [`${String(key.remaining)} ${key.remaining === 1 ? "request" : "requests"} left`]),
   ].join(" · ");
 }
 
@@ -128,7 +175,20 @@ function NewKeyNotice({ newKey }: { newKey: string }) {
   );
 }
 
+function DuplicateKeyNotice() {
+  return (
+    <p role="status" className="mt-3 border-[1.5px] border-ink p-4 leading-[1.55]">
+      That key was already created. Its secret is only shown once; delete it and make a new one if you didn't copy it.
+    </p>
+  );
+}
+
 function KeyRow({ apiKey }: { apiKey: AgentKey }) {
+  const navigation = useNavigation();
+  const deleting =
+    navigation.state !== "idle" &&
+    navigation.formData?.get("intent") === "revoke-key" &&
+    navigation.formData.get("id") === apiKey.id;
   return (
     <li data-testid="api-key" className={ROW}>
       <p className="min-w-0">
@@ -139,38 +199,64 @@ function KeyRow({ apiKey }: { apiKey: AgentKey }) {
       <Form method="post">
         <input type="hidden" name="intent" value="revoke-key" />
         <input type="hidden" name="id" value={apiKey.id} />
-        <Button type="submit" variant="tertiary">
-          Delete
+        <Button
+          type="submit"
+          variant="tertiary"
+          aria-label={deleting ? `Deleting ${apiKey.name}` : `Delete ${apiKey.name}`}
+          disabled={deleting}
+        >
+          {deleting ? "Deleting…" : "Delete"}
         </Button>
       </Form>
     </li>
   );
 }
 
-function CreateKeyForm() {
+function CreateKeyForm({ submission }: { submission: string }) {
+  const navigation = useNavigation();
+  const making = navigation.state !== "idle" && navigation.formData?.get("intent") === "create-key";
   return (
     <Form method="post" className="mt-6">
       <input type="hidden" name="intent" value="create-key" />
+      <input type="hidden" name="submission" value={submission} />
       <label htmlFor="key-name" className={BLOCK_HEADING}>
         Name
       </label>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-        <Input id="key-name" name="name" maxLength={60} placeholder="My agent" className="sm:flex-1" />
-        <Button type="submit" variant="secondary" size="lg">
-          Make a key
+        <Input
+          id="key-name"
+          name="name"
+          maxLength={60}
+          placeholder="My agent"
+          autoComplete="off"
+          className="sm:flex-1"
+        />
+        <Button type="submit" variant="secondary" size="lg" disabled={making}>
+          {making ? "Making…" : "Make a key"}
         </Button>
       </div>
     </Form>
   );
 }
 
-export function AgentKeys({ keys, newKey }: { keys: AgentKey[]; newKey: string | null }) {
+export function AgentKeys({
+  keys,
+  newKey,
+  duplicate,
+  submission,
+}: {
+  keys: AgentKey[];
+  newKey: string | null;
+  duplicate: boolean;
+  submission: string;
+}) {
   return (
     <section aria-labelledby="agents-keys" className={BLOCK}>
       <h2 id="agents-keys" className={BLOCK_HEADING}>
         API keys
       </h2>
       {newKey === null ? null : <NewKeyNotice newKey={newKey} />}
+      {duplicate ? <DuplicateKeyNotice /> : null}
       {keys.length === 0 ? (
         <p className="mt-2 leading-[1.55] text-ink-soft">
           No keys yet. A key lets your own code read the same things an app can.
@@ -182,25 +268,25 @@ export function AgentKeys({ keys, newKey }: { keys: AgentKey[]; newKey: string |
           ))}
         </ul>
       )}
-      <CreateKeyForm />
+      <CreateKeyForm submission={submission} />
     </section>
   );
 }
 
-function CopyKey({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
+export function CopyKey({ value }: { value: string }) {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   return (
-    <Button
-      type="button"
-      variant="secondary"
-      className="mt-3"
-      onClick={() => {
-        void navigator.clipboard.writeText(value).then(() => {
-          setCopied(true);
-        });
-      }}
-    >
-      {copied ? "Copied" : "Copy key"}
-    </Button>
+    <div className="mt-3">
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={() => {
+          void copyToClipboard(value).then(setState);
+        }}
+      >
+        {copyKeyLabel(state)}
+      </Button>
+      {state === "failed" ? <CopyFailureNote subject="key above" /> : null}
+    </div>
   );
 }

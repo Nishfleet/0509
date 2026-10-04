@@ -1,5 +1,4 @@
 import { env } from "cloudflare:workers";
-import { NonRetryableError } from "cloudflare:workflows";
 
 import { insertSignalAlert } from "../../app/lib/data/alert.server";
 import type { DiscoveryContext } from "../../app/lib/data/entity.server";
@@ -16,7 +15,7 @@ import {
   resolveUnjudgedMention,
 } from "../../app/lib/data/signal.server";
 import { insertWatchSnapshot } from "../../app/lib/data/snapshot.server";
-import { markSourceBlocked, markSourceTimedOut } from "../../app/lib/data/source.server";
+import { markSourceTimedOut } from "../../app/lib/data/source.server";
 import type { WatchRow } from "../../app/lib/data/watch.server";
 import {
   markWatchPolled,
@@ -49,7 +48,7 @@ import {
 } from "../../app/lib/mentions/youtube-channel";
 import { sha256Hex } from "../../app/lib/sha256";
 import { storedDedupKey, toSignalRow, type MentionItem, type SignalRow } from "./map";
-import { writeSourcePoint } from "./canary";
+import { recordUpstreamBlock, writeSourcePoint } from "./canary";
 import { adapterFor } from "../sources/registry";
 import { youtubeAdapter } from "../sources/mentions/youtube";
 import { isUpstreamTimeout, UpstreamBlockedError } from "../sources/mentions/types";
@@ -651,6 +650,11 @@ async function sweepYoutubeTarget(
   return { items, stored, unjudged, skipped };
 }
 
+async function skipBlockedTarget(target: MentionTarget, status: number): Promise<TargetOutcome> {
+  await recordUpstreamBlock(target.sourceId, target.pluginKey, status);
+  return { items: 0, stored: 0, unjudged: 0, skipped: target.watches.length };
+}
+
 export async function sweepTarget(
   target: MentionTarget,
   now: string,
@@ -685,10 +689,7 @@ export async function sweepTarget(
     }
     return { items: result.items.length, stored, unjudged, skipped: 0 };
   } catch (error) {
-    if (error instanceof UpstreamBlockedError) {
-      await markSourceBlocked(target.sourceId, error.status);
-      throw new NonRetryableError(error.message, "UpstreamBlockedError");
-    }
+    if (error instanceof UpstreamBlockedError) return await skipBlockedTarget(target, error.status);
     if (isUpstreamTimeout(error)) {
       await markSourceTimedOut(target.sourceId);
       return { items: 0, stored: 0, unjudged: 0, skipped: target.watches.length };

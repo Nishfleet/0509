@@ -1,5 +1,3 @@
-export { NIGHTLY_CRON } from "../../app/lib/cadence";
-
 export const SELECT_STALE_PENDING_DIGESTS = `SELECT id FROM digest WHERE status = 'pending' AND period_end < ? AND period_end >= ?`;
 
 export const SELECT_STALE_PENDING_ATTEMPTS = `SELECT DISTINCT a.digest_id FROM send_attempt a

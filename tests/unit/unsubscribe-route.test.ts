@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createRoutesStub } from "react-router";
+import { createRoutesStub, UNSAFE_DataRouterNavigationContext, type Navigation } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
 const holder = vi.hoisted(() => ({ known: false, outcome: "invalid_token" as string }));
@@ -45,6 +45,57 @@ function renderConfirm(unsubscribed: boolean): string {
   );
 }
 
+function navigationAt(state: Navigation["state"]): Navigation {
+  if (state === "idle") {
+    return {
+      state,
+      location: undefined,
+      matches: undefined,
+      historyAction: undefined,
+      formMethod: undefined,
+      formAction: undefined,
+      formEncType: undefined,
+      formData: undefined,
+      json: undefined,
+      text: undefined,
+    };
+  }
+  return {
+    state,
+    location: { pathname: "/u/t", search: "", hash: "", state: null, key: "k" },
+    matches: [],
+    historyAction: "POP",
+    formMethod: state === "submitting" ? "post" : undefined,
+    formAction: state === "submitting" ? "/u/t" : undefined,
+    formEncType: state === "submitting" ? "application/x-www-form-urlencoded" : undefined,
+    formData: state === "submitting" ? new FormData() : undefined,
+    json: undefined,
+    text: undefined,
+  };
+}
+
+function renderFormAt(state: Navigation["state"]): string {
+  const Stub = createRoutesStub([
+    {
+      id: "routes/u.$token",
+      path: "/u/:token",
+      Component: () =>
+        createElement(
+          UNSAFE_DataRouterNavigationContext.Provider,
+          { value: { navigation: navigationAt(state), revalidation: "idle" } },
+          createElement(Unsubscribe, { actionData: undefined } as never),
+        ),
+    },
+  ]);
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/u/t"] }));
+}
+
+function submitButton(html: string): string {
+  const match = html.match(/<button[^>]*type="submit"[\s\S]*?<\/button>/);
+  if (match === null) throw new Error(`no submit button in ${html}`);
+  return match[0];
+}
+
 describe("/u/:token (0509#5761)", () => {
   it("serves a 404 for a token no target holds", async () => {
     holder.known = false;
@@ -79,7 +130,7 @@ describe("/u/:token (0509#5761)", () => {
 
     expect(html).toContain("This link is not valid");
     expect(html).not.toContain("You&#x27;re unsubscribed");
-    expect(html).not.toContain("Stop the weekly brief?");
+    expect(html).not.toContain("Unsubscribe from Five to Nine emails?");
   });
 
   it("renders the generic problem page for a failure that is not a 404", () => {
@@ -89,7 +140,7 @@ describe("/u/:token (0509#5761)", () => {
     ]) {
       const html = renderBoundary(error);
 
-      expect(html).toContain("The product hit a problem");
+      expect(html).toContain("Something went wrong");
       expect(html).not.toContain("This link is not valid");
     }
   });
@@ -97,7 +148,7 @@ describe("/u/:token (0509#5761)", () => {
   it("renders the confirm form for a live token", () => {
     const html = renderConfirm(false);
 
-    expect(html).toContain("Stop the weekly brief?");
+    expect(html).toContain("Unsubscribe from Five to Nine emails?");
     expect(html).not.toContain("This link is not valid");
   });
 
@@ -105,6 +156,44 @@ describe("/u/:token (0509#5761)", () => {
     const html = renderConfirm(true);
 
     expect(html).toContain("You&#x27;re unsubscribed");
+    expect(html).toContain("Changed your mind?");
+    expect(html).toContain('href="/app/settings"');
+    expect(html).not.toContain("No more email");
     expect(html).not.toContain("This link is not valid");
+  });
+
+  // DESIGN.md: tap targets are 44px minimum. min-h-11 is 44px in this repo
+  // (tests/unit/onboarding-competitors.test.ts); inline-flex and items-center
+  // are what make the line box reach that height.
+  it("gives the Settings link a 44px-tall tap target", () => {
+    const html = renderConfirm(true);
+
+    const link = html.match(/<a\b[^>]*href="\/app\/settings"[^>]*>/)?.[0] ?? "";
+
+    expect(link).toContain("min-h-11");
+    expect(link).toContain("inline-flex");
+    expect(link).toContain("items-center");
+  });
+
+  describe("the Unsubscribe button reports its pending state (0509#6641)", () => {
+    it("is enabled and reads Unsubscribe while nothing is in flight", () => {
+      const html = submitButton(renderFormAt("idle"));
+      expect(html).toContain(">Unsubscribe<");
+      expect(html).not.toContain('disabled=""');
+      expect(html).not.toContain("Unsubscribing…");
+    });
+
+    it("is disabled and reads Unsubscribing… while the POST is submitting", () => {
+      const html = submitButton(renderFormAt("submitting"));
+      expect(html).toContain('disabled=""');
+      expect(html).toContain("Unsubscribing…");
+      expect(html).not.toContain(">Unsubscribe<");
+    });
+
+    it("stays disabled while the action and loader settle after submitting", () => {
+      const html = submitButton(renderFormAt("loading"));
+      expect(html).toContain('disabled=""');
+      expect(html).toContain("Unsubscribing…");
+    });
   });
 });

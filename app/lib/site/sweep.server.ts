@@ -1,9 +1,15 @@
+import { captureException } from "@sentry/cloudflare";
 import { env } from "cloudflare:workers";
 import { getDomain } from "tldts";
 
 import { insertIncidentAlertStatement } from "../data/alert.server";
 import { openIncidentStatement } from "../data/incident.server";
-import { insertPages, readEntitiesWithoutHomePage } from "../data/page.server";
+import {
+  insertPages,
+  readEntitiesWithoutHomePage,
+  readUnwatchedPricingPages,
+  syncPricingWatches,
+} from "../data/page.server";
 import { linkVerdictsStatement } from "../data/jev_verdict.server";
 import { insertChangeSignalStatement } from "../data/signal.server";
 import { readCoveredPagePairs } from "../data/snapshot.server";
@@ -52,7 +58,10 @@ function enteredHomeUrl(entity: { domain: string; url: string | null }): string 
   return entered.subject.url;
 }
 
-function homeUrl(entity: { domain: string; url: string | null }): string | null {
+function homeUrl(entity: { id: string; domain: string; url: string | null; identity_valid: boolean }): string | null {
+  if (!entity.identity_valid) {
+    console.warn(JSON.stringify({ event: "site-sweep.identity-json-invalid", entityId: entity.id }));
+  }
   const entered = enteredHomeUrl(entity);
   if (entered !== null) return entered;
   return getDomain(entity.domain) === entity.domain ? `https://${entity.domain}/` : null;
@@ -81,6 +90,11 @@ export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
       const url = homeUrl(entity);
       return url === null ? [] : [{ id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: url }];
     }),
+  );
+  await syncPricingWatches(sourceId);
+  const pricing = await readUnwatchedPricingPages(sourceId);
+  await insertWatches(
+    pricing.map((page) => ({ id: crypto.randomUUID(), entityId: page.entityId, sourceId, targetKey: page.url })),
   );
   return [...(await readSiteSweepTargets(SITE_SOURCE_KEY))];
 }
@@ -132,7 +146,7 @@ export async function checkSitePage(
     before: tick.plannedAt,
     read,
     mayScreenshot:
-      options.browser === false
+      options.browser === false || (read.ok && read.fromArchive === true)
         ? undefined
         : () => takeBrowserScreenshot(target.workspaceId, target.entityId, tick.plannedAt.slice(0, 10)),
   });
@@ -197,6 +211,7 @@ function changeSignalPayload(
     wordsRemoved: words.filter((c) => c.removed).reduce((n, c) => n + wordCount(c.value), 0),
     status: changed.status,
     transport: changed.transport,
+    ...(changed.viaArchive ? { viaArchive: true } : {}),
   });
 }
 
@@ -351,6 +366,16 @@ async function storeDiff(diffKey: string, diff: ReturnType<typeof diffPageText> 
   });
 }
 
+async function emailPricingChange(signalId: string, judgment: JudgedChange | null): Promise<void> {
+  if (judgment?.noteworthy?.band !== "publish" || judgment.noteworthy.kind !== "pricing") return;
+  try {
+    await env.SEND_EMAIL.send({ signal_id: signalId });
+  } catch (error) {
+    console.log(JSON.stringify({ event: "site.change_email_enqueue_failed", signalId }));
+    captureException(error, { tags: { queue: "send-email", lane: "change" } });
+  }
+}
+
 async function fileUnlessDiscarded(change: SiteChangeInput, payloadJson: string, selfJudgment: JudgedChange | null) {
   const { target } = change;
   const competitorJudgment = await judgeCompetitorChange(change);
@@ -365,6 +390,7 @@ async function fileUnlessDiscarded(change: SiteChangeInput, payloadJson: string,
     return;
   }
   const signalId = await fileChangeSignal(change, payloadJson, selfJudgment ?? competitorJudgment);
+  await emailPricingChange(signalId, competitorJudgment);
   if (target.entityRole === "self" && change.diff === null) {
     await judgeUnlessFailed(change, signalId);
   }

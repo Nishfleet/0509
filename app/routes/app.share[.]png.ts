@@ -18,7 +18,7 @@ function plain(status: number, message: string, headers: Record<string, string> 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
-  const inputs = await readHomeStandingInputs(env.DB, session.user.id);
+  const inputs = await readHomeStandingInputs(env.DB, session.user.id, workspaceId ?? undefined);
   const card = inputs === null ? null : shareCard({ ...inputs, now: new Date() });
   if (card === null) return plain(404, "There is no ranking to share yet.");
 
@@ -31,7 +31,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     headers: {
       "content-type": "image/png",
       "cache-control": "private, max-age=3600",
-      "content-disposition": 'inline; filename="0509-standing.png"',
+      "content-disposition": 'inline; filename="five-to-nine-ranking.png"',
     },
   });
 }

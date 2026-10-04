@@ -42,5 +42,6 @@ export function formatBriefAt(instant: Date, timezone: string): string {
 }
 
 export function formatPausedSince(pausedAt: string, timezone: string): string {
+  if (Number.isNaN(Date.parse(pausedAt))) return "an unknown date";
   return format(new TZDate(new Date(pausedAt).getTime(), timezone), "EEEE d MMMM");
 }

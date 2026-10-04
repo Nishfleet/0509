@@ -154,11 +154,12 @@ map from the two sources and opens a PR when it has drifted.
 > performance" — 12:33
 
 **Chosen: `treosh/lighthouse-ci-action@v12`** on the same `deployment_status`
-event, with `lighthouse-budget.json`. Already probed in
+event, called through the fleet-ops reusable `lighthouse.yml`, whose
+`config/lighthouserc.json` holds the budgets. Already probed in
 `docs/REBUILD-STACK.md` §6.3: tag `v12` → `3e7e23fb74242897f95c0ba9cabad3d0227b9b18`,
 last push 2026-03-12; `GoogleChrome/lighthouse-ci` ships no action of its own.
 The budgets are `docs/REBUILD-DONE.md` §B translated into the vendor's format —
-LCP 1500 ms, TTI 3000 ms, CLS 0.1, script 150 KB, total 500 KB.
+LCP 1500 ms, TTI 3000 ms, CLS 0.05, script 150 KB, total 500 KB.
 
 The load-bearing detail, from §6.3: **the action has no `fail:` input.** It runs
 `lhci assert`, reads `assertion-results.json`, and calls `core.setFailed()` only

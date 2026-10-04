@@ -1,13 +1,12 @@
 import type { Route } from "./+types/onboarding";
 
-import { Form, redirect } from "react-router";
+import { redirect } from "react-router";
 
 import { requireFreshSession, requireSession } from "../lib/require-session.server";
 import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 import { OneInput } from "../components/one-input";
-import { AddPasskey } from "../components/passkey-button";
 import { OnboardingFrame } from "../components/onboarding-frame";
-import { Button } from "../components/ui/button";
+import { SubjectConfirm } from "../components/onboarding-subject-confirm";
 import { subjectRedirect } from "../lib/onboarding-subject";
 import { isTakenDown } from "../lib/data/takedown.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
@@ -15,9 +14,10 @@ import { normaliseSubject } from "../lib/identity/normalise";
 import { screenOnboardingSubject } from "../lib/onboarding-screen.server";
 import { startOnboardingRun } from "../lib/data/onboarding_run.server";
 import { createTimings } from "../lib/server-timing.server";
+import { useTimezoneCookie } from "../lib/use-timezone-cookie";
 
 export function meta() {
-  return [{ title: "Start with your website or a handle · Five to Nine" }];
+  return [{ title: "Your website or social username · Five to Nine" }];
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -67,7 +67,7 @@ async function screenAndStart({ timings, userId, workspaceId, subject, rawSubjec
     "screen",
     screenOnboardingSubject({ workspaceId, userId, subject, raw: rawSubject, answer, now }),
   );
-  if (result.kind === "refuse") return { message: result.message, confirm: null };
+  if (result.kind === "refuse" || result.kind === "unavailable") return { message: result.message, confirm: null };
   if (result.kind === "ask") return { message: null, confirm: { subject: result.subject, raw: rawSubject } };
   await timings.measure("run", startOnboardingRun({ workspaceId, userId, inputRaw: rawSubject, startedAt: now }));
   return null;
@@ -80,7 +80,7 @@ export async function action({ request }: Route.ActionArgs) {
   const { taken, workspaceId } = await readTakenAndWorkspace(timings, session.user.id, normalised);
   if (taken) {
     return {
-      message: "This brand asked not to be tracked, so we can't set it up. Try your own website.",
+      message: "This brand asked us not to track it, so we can't set it up. Try your own website address.",
       confirm: null,
     };
   }
@@ -98,40 +98,34 @@ export async function action({ request }: Route.ActionArgs) {
   }
   const target = subjectRedirect(raw);
   if (target) throw redirect(target, { headers: timings.header() });
-  return { message: "We couldn't find anything for that, try the main website.", confirm: null };
+  return {
+    message:
+      "We couldn't find a website or username in that. Try an address like yourbrand.com or a username like @yourbrand.",
+    confirm: null,
+  };
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
+  useTimezoneCookie();
   return (
-    <OnboardingFrame step={1} heading="Start with your website or a handle" hideHeading>
+    <OnboardingFrame step={1} heading="Your website or social username" hideHeading>
       <p className="mt-3 max-w-prose leading-[1.55] text-ink-soft">
-        We read it and draw your card, then find who you're up against. A handle like @yourbrand works too.
+        Enter your website address or your social username, like @yourbrand. We'll read it, fill in your details, then
+        find your competitors.
       </p>
       <OneInput
-        label="your website, or a handle"
-        placeholder="your website, or a handle"
+        label="Your website address or social username"
+        placeholder="yourbrand.com or @yourbrand"
         name="subject"
         action="/onboarding"
         message={actionData?.message ?? undefined}
-        submitLabel="Draw my card"
+        submitLabel="Continue"
       />
       {actionData?.confirm ? (
-        <Form method="post" action="/onboarding" className="mt-6 flex flex-col gap-3">
-          <p>Is {actionData.confirm.subject} a business or a public creator?</p>
-          <input type="hidden" name="subject" value={actionData.confirm.raw} />
-          <div className="flex flex-wrap gap-3">
-            <Button type="submit" name="answer" value="business" size="lg">
-              Yes, a business or creator
-            </Button>
-            <Button type="submit" name="answer" value="person" variant="secondary" size="lg">
-              No, it's a person
-            </Button>
-          </div>
-        </Form>
+        <SubjectConfirm subject={actionData.confirm.subject} raw={actionData.confirm.raw} />
       ) : null}
       <footer className="mt-16 flex flex-wrap items-center gap-x-4 border-t border-line pt-4 font-mono text-meta text-ink-soft">
         <p className="[overflow-wrap:anywhere]">Signed in as {loaderData.email}</p>
-        <AddPasskey />
       </footer>
     </OnboardingFrame>
   );

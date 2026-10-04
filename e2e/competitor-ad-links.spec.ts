@@ -51,7 +51,11 @@ async function openCompetitor(page: Page, width: number): Promise<void> {
   // The chip is the row's only pointer path to the competitor page. #5845
   // reached it by Tab+Enter because the switch's hit area covered the chip;
   // #5923 un-squeezed the chip out from under the switch, so the spec clicks.
-  await page.getByRole("list", { name: "Competitors" }).getByRole("link", { name: /Boots/ }).first().click();
+  await page
+    .getByRole("list", { name: "Competitors", exact: true })
+    .getByRole("link", { name: /Boots/ })
+    .first()
+    .click();
   await expect(page).toHaveURL(/\/app\/competitors\/ent-/);
 }
 

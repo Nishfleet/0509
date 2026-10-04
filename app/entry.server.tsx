@@ -72,7 +72,10 @@ export default async function handleRequest(
     signal: AbortSignal.timeout(streamTimeout + 1000),
     onError(error: unknown) {
       status = 500;
-      if (shellRendered) console.error(error);
+      if (shellRendered) {
+        console.error(error);
+        captureException(error, { tags: { route: "stream" } });
+      }
     },
   });
   shellRendered = true;

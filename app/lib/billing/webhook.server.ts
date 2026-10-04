@@ -3,8 +3,11 @@ import { Webhook } from "standardwebhooks";
 import { z } from "zod";
 
 import { markWebhookEventProcessed, recordWebhookEvent } from "../data/dodo_webhook_event.server";
-import { readWorkspaceIdBySubscription, upsertSubscriptionPlan } from "../data/plan.server";
-import { planIdForProduct } from "./products.server";
+import { readPlanSubscription, readWorkspaceIdBySubscription, upsertSubscriptionPlan } from "../data/plan.server";
+import { isCheckoutProof } from "./checkout-proof.server";
+import { isSubscriptionLive } from "./entitlements";
+import { planIdForProduct, testerProductId } from "./products.server";
+import { isTrialing } from "./trial";
 
 const envelope = z.object({
   type: z.string(),
@@ -17,6 +20,8 @@ const subscriptionData = z.object({
   product_id: z.string(),
   status: z.string(),
   next_billing_date: z.string().nullish(),
+  created_at: z.string().nullish(),
+  trial_period_days: z.number().nullish(),
   cancel_at_next_billing_date: z.boolean().nullish(),
   customer: z.object({ customer_id: z.string() }),
   metadata: z.record(z.string(), z.string()).nullish(),
@@ -28,6 +33,41 @@ const OK = { status: 200 };
 
 function log(event: string, fields: Record<string, string>): void {
   console.log(JSON.stringify({ event, ...fields }));
+}
+
+type Workspace = { kind: "found"; id: string } | { kind: "retry" } | { kind: "ignore" };
+
+async function resolveWorkspace(data: z.infer<typeof subscriptionData>): Promise<Workspace> {
+  const known = await readWorkspaceIdBySubscription(data.subscription_id);
+  if (known !== null) return { kind: "found", id: known };
+  const claimed = data.metadata?.workspace_id;
+  if (claimed === undefined) {
+    log("billing.webhook_no_workspace", { subscription: data.subscription_id });
+    return { kind: "retry" };
+  }
+  if (!(await isCheckoutProof(claimed, data.product_id, data.metadata?.proof))) {
+    log("billing.webhook_unproven", { subscription: data.subscription_id });
+    return { kind: "ignore" };
+  }
+  return { kind: "found", id: claimed };
+}
+
+type Displacement = "same" | "stale" | "takeover";
+
+async function displacement(input: {
+  workspaceId: string;
+  subscriptionId: string;
+  productId: string;
+  type: string;
+  timestamp: string;
+}): Promise<Displacement> {
+  const current = await readPlanSubscription(input.workspaceId);
+  if (current === null || current.subscriptionId === input.subscriptionId) return "same";
+  if (input.productId === testerProductId() && isSubscriptionLive(current, new Date())) return "stale";
+  if (input.type !== "subscription.active") return "stale";
+  const since = Date.parse(current.updatedAt);
+  if (!Number.isFinite(since) || since > Date.now()) return "takeover";
+  return Date.parse(input.timestamp) > since ? "same" : "stale";
 }
 
 async function applySubscription(body: unknown, type: string, timestamp: string): Promise<"done" | "retry"> {
@@ -42,10 +82,20 @@ async function applySubscription(body: unknown, type: string, timestamp: string)
     log("billing.webhook_unknown_product", { type, product: data.product_id });
     return "done";
   }
-  const workspaceId = data.metadata?.workspace_id ?? (await readWorkspaceIdBySubscription(data.subscription_id));
-  if (workspaceId === null || workspaceId === undefined) {
-    log("billing.webhook_no_workspace", { type, subscription: data.subscription_id });
-    return "retry";
+  const workspace = await resolveWorkspace(data);
+  if (workspace.kind === "retry") return "retry";
+  if (workspace.kind === "ignore") return "done";
+  const workspaceId = workspace.id;
+  const change = await displacement({
+    workspaceId,
+    subscriptionId: data.subscription_id,
+    productId: data.product_id,
+    type,
+    timestamp,
+  });
+  if (change === "stale") {
+    log("billing.webhook_other_subscription_ignored", { type, subscription: data.subscription_id });
+    return "done";
   }
   const cancelledNow = data.status === "cancelled" && data.cancel_at_next_billing_date !== true;
   await upsertSubscriptionPlan({
@@ -55,7 +105,15 @@ async function applySubscription(body: unknown, type: string, timestamp: string)
     customerId: data.customer.customer_id,
     subscriptionId: data.subscription_id,
     currentPeriodEnd: cancelledNow ? null : (data.next_billing_date ?? null),
+    trialing:
+      data.status === "active" &&
+      isTrialing({
+        createdAt: data.created_at,
+        nextBillingDate: data.next_billing_date,
+        trialDays: data.trial_period_days,
+      }),
     updatedAt: timestamp,
+    replace: change === "takeover",
   });
   return "done";
 }

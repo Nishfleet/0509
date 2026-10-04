@@ -5,6 +5,7 @@ import { withMonitor } from "@sentry/cloudflare";
 
 import { recordSweepRun } from "../../app/lib/data/sweep_run.server";
 import { pingLiveness } from "../../app/lib/liveness-ping.server";
+import { classifyCompetitorSites } from "../../app/lib/site/classify-competitors.server";
 import {
   CHUNK_SIZE,
   checkSitePage,
@@ -13,6 +14,7 @@ import {
   uncoveredItems,
 } from "../../app/lib/site/sweep.server";
 import { plannedAt } from "../../app/lib/workflow-time";
+import { isNativeSchedule } from "../workflow-crons";
 
 const RETRY: WorkflowStepConfig = {
   retries: { limit: 3, delay: "30 seconds", backoff: "exponential" },
@@ -115,7 +117,8 @@ async function recordRun(
 }
 
 export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: string }> {
-  async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<SiteSweepOutcome> {
+  async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<SiteSweepOutcome | null> {
+    if (isNativeSchedule(event)) return null;
     return withMonitor("site-sweep", () => this.runSweep(event, step), MONITOR);
   }
 
@@ -124,6 +127,7 @@ export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: 
       instanceId: event.instanceId,
       plannedAt: plannedAt(event.timestamp, event.schedule?.scheduledTime),
     };
+    await settle("classify", () => step.do("classify", RETRY, () => classifyCompetitorSites(tick.plannedAt)));
     const targets = await step.do("plan", RETRY, () => planSiteSweep(tick.plannedAt));
 
     const outcomes = await checkTargets(step, targets, tick);

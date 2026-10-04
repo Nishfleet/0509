@@ -9,11 +9,11 @@ test.skip(
 );
 
 const SELF_DOMAIN = "gymshark.com";
-const COMPETITORS = ["nike.com", "adidas.com", "underarmour.com", "lululemon.com"] as const;
+const COMPETITORS = ["nike.com", "adidas.com", "underarmour.com", "lululemon.com", "linear.app"] as const;
 
 async function onboardSelf(page: Page): Promise<void> {
   await page.goto("/onboarding");
-  const input = page.getByRole("textbox", { name: "your website, or a handle" });
+  const input = page.getByRole("textbox", { name: /your website address or social username/i });
   await input.fill(SELF_DOMAIN);
   await input.press("Enter");
   await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 45_000 });
@@ -37,7 +37,7 @@ async function addCompetitors(page: Page): Promise<void> {
 
 async function trackedBrands(page: Page): Promise<number> {
   await page.goto("/app/competitors");
-  const switches = page.getByRole("list", { name: "Competitors" }).getByRole("switch");
+  const switches = page.getByRole("list", { name: "Competitors", exact: true }).getByRole("switch");
   await expect(switches.first()).toBeVisible();
   let on = 0;
   for (const tracking of await switches.all()) {
@@ -54,10 +54,8 @@ test("soak workspace: one persistent production workspace tracks at least four b
 
   await signInWithMagicLink(page, FIXTURE_ACCOUNTS.soak.email, requireInboxToken(), /\/(app|onboarding)/);
   const alreadyOnboarded = /\/app$/.test(new URL(page.url()).pathname);
-  if (!alreadyOnboarded) {
-    await onboardSelf(page);
-    await addCompetitors(page);
-  }
+  if (!alreadyOnboarded) await onboardSelf(page);
+  await addCompetitors(page);
 
   const brands = await trackedBrands(page);
   console.log(

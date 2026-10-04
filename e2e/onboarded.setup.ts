@@ -22,7 +22,10 @@ setup.setTimeout(480_000);
 async function addCompetitor(page: Page, domain: string): Promise<void> {
   await page.locator("#add-competitor").fill(domain);
   await page.getByRole("button", { name: "Add" }).click();
-  const row = page.getByRole("list", { name: "Competitors" }).getByRole("listitem").filter({ hasText: domain });
+  const row = page
+    .getByRole("list", { name: "Competitors", exact: true })
+    .getByRole("listitem")
+    .filter({ hasText: domain });
   await expect(row.getByRole("switch")).toBeChecked({ timeout: 30_000 });
 }
 
@@ -54,7 +57,7 @@ setup("mint one onboarded session per viewport lane", async ({ browser }) => {
       writeFileSync(onboardedEmailPath(lane), email);
 
       await page.goto("/onboarding");
-      const input = page.getByRole("textbox", { name: "your website, or a handle" });
+      const input = page.getByRole("textbox", { name: /your website address or social username/i });
       await input.fill("gymshark.com");
       await input.press("Enter");
 
@@ -64,7 +67,12 @@ setup("mint one onboarded session per viewport lane", async ({ browser }) => {
       await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
 
       const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
-      await expect(watching.first().or(page.getByRole("button", { name: /^Watch / }).first())).toBeVisible({
+      await expect(
+        watching
+          .first()
+          .or(page.getByRole("button", { name: /^Watch / }).first())
+          .first(),
+      ).toBeVisible({
         timeout: 60_000,
       });
       if ((await watching.count()) === 0) {

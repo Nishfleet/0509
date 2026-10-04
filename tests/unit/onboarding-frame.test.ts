@@ -24,7 +24,7 @@ describe("OnboardingFrame", () => {
     expect(html).toContain("<main>");
     expect(html).toContain("<footer");
     expect(html.match(/<h1\b/g) ?? []).toHaveLength(1);
-    expect(html).toContain('<h1 class="mt-10 font-display text-display-2 font-extrabold uppercase">H</h1>');
+    expect(html).toContain('<h1 class="mt-10 max-w-[18ch] font-display text-display-3 font-bold text-balance">H</h1>');
     expect(html.startsWith(`<div class="${ONBOARDING_PAGE}"><header>`)).toBe(true);
     expect(html).toContain('aria-current="step"');
   });
@@ -37,7 +37,7 @@ describe("OnboardingFrame", () => {
 
   it("keeps screen 3's watching list a polite additions-only live region inside the frame", () => {
     const html = renderToStaticMarkup(
-      createElement(OnboardingFrame, { step: 3, heading: "Who you're up against" }, WATCHING_LIST),
+      createElement(OnboardingFrame, { step: 3, heading: "Your competitors" }, WATCHING_LIST),
     );
 
     expect(html).toContain("<main>");

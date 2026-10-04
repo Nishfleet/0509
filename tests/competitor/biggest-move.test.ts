@@ -94,6 +94,59 @@ describe("pickBiggestMove", () => {
     expect(move?.points).toBe(3);
   });
 
+  it("keeps the higher-points signal when a lower-points signal arrives after it", () => {
+    // Same reliability on both, so the bucket weight alone decides the points:
+    // mention_matters is 3 and mention_normal is 1 in V1_ROWS.
+    const high = signal({ id: "sig-high", bucket: "mention_matters" });
+    const low = signal({ id: "sig-low", bucket: "mention_normal" });
+
+    expect(high.bucket).not.toBe(low.bucket);
+    expect(pickBiggestMove([high, low], WEIGHTS)?.signal.id).toBe("sig-high");
+    expect(pickBiggestMove([low, high], WEIGHTS)?.signal.id).toBe("sig-high");
+  });
+
+  it("breaks an equal-points tie on the later observedAt in either order", () => {
+    // Same bucket and reliability on both, so the points are equal by
+    // construction and only observedAt can separate them.
+    const earlier = signal({
+      id: "sig-earlier",
+      bucket: "mention_matters",
+      reliability: "official_api",
+      observedAt: "2026-09-18T10:00:00.000Z",
+    });
+    const later = signal({
+      id: "sig-later",
+      bucket: "mention_matters",
+      reliability: "official_api",
+      observedAt: "2026-09-21T10:00:00.000Z",
+    });
+
+    expect(pickBiggestMove([later, earlier], WEIGHTS)?.signal.id).toBe("sig-later");
+    expect(pickBiggestMove([earlier, later], WEIGHTS)?.signal.id).toBe("sig-later");
+  });
+
+  it("breaks an equal-points, equal-observedAt tie on the greater id in either order", () => {
+    // Same bucket, reliability and observedAt on both, so points and time are
+    // equal by construction and only the id can separate them.
+    const alpha = signal({
+      id: "sig-alpha",
+      bucket: "mention_matters",
+      reliability: "official_api",
+      observedAt: "2026-09-20T10:00:00.000Z",
+    });
+    const beta = signal({
+      id: "sig-beta",
+      bucket: "mention_matters",
+      reliability: "official_api",
+      observedAt: "2026-09-20T10:00:00.000Z",
+    });
+
+    // "sig-beta" sorts above "sig-alpha", so the test cannot hide a win by
+    // the smaller id behind JS string order.
+    expect(pickBiggestMove([beta, alpha], WEIGHTS)?.signal.id).toBe("sig-beta");
+    expect(pickBiggestMove([alpha, beta], WEIGHTS)?.signal.id).toBe("sig-beta");
+  });
+
   it("throws when the bucket has no weight row", () => {
     const rows = V1_ROWS.filter((row) => row.key !== "hiring_new_role");
     const weights = weightsAsOf(rows, WEEK);
@@ -126,13 +179,29 @@ describe("biggestMoveView", () => {
     const view = biggestMoveView(move, now);
 
     expect(view.read).toBe(
-      "Ad copy or offer changes: 3 × 1 = 3 points, the most of anything this brand did this week.",
+      "Ad wording or offer changes: 3 × 1 = 3 points, the most of anything this brand did this week.",
     );
     expect(view.source).toBe("Ad library · meta");
     expect(view.id).toBe("sig-ad");
     expect(view.kind).toBe("ad");
     expect(view.url).toBe("https://example.com/ad/1");
     expect(view.when).toBe("2 days ago");
+  });
+
+  it("says point, not points, for a one-point move", () => {
+    const onePoint = biggestMoveView(
+      {
+        ...move,
+        signal: signal({ id: "sig-mention", bucket: "mention_normal", reliability: "official_api" }),
+        weight: 1,
+        multiplier: 1,
+        points: 1,
+      },
+      now,
+    );
+
+    expect(onePoint.read).toBe("Mentions: 1 × 1 = 1 point, the most of anything this brand did this week.");
+    expect(onePoint.read).not.toContain("1 points");
   });
 
   it("falls back to the summary, then to the source label, for the title", () => {
@@ -144,13 +213,13 @@ describe("biggestMoveView", () => {
 describe("quietWeekSentence", () => {
   it("names the checked sources and the last check time", () => {
     expect(quietWeekSentence(["Website", "Ad library"], "2026-09-24 02:10 UTC")).toBe(
-      "Nothing scored for this brand in the last 7 days. We checked Website and Ad library, last at 2026-09-24 02:10 UTC.",
+      "Nothing worth scoring for this competitor in the last 7 days. We checked Website and Ad library, last at 2026-09-24 02:10 UTC.",
     );
   });
 
   it("says the first read lands tonight when the brand was never checked", () => {
     expect(quietWeekSentence([], null)).toBe(
-      "Nothing scored for this brand in the last 7 days. We watch its website; the first read lands tonight at 02:00 UTC.",
+      "Nothing worth scoring for this competitor in the last 7 days. We watch its website; our first read is tonight at 02:00 UTC.",
     );
   });
 });

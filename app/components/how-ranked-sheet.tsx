@@ -15,7 +15,6 @@ export function HowRankedSheet({ howRanked }: { howRanked: HowRanked }): ReactEl
         type="button"
         aria-haspopup="dialog"
         className="min-h-11 font-mono text-eyebrow text-ink-soft uppercase underline underline-offset-4"
-        title="ranked by what the internet did about each brand this week"
         onClick={() => {
           setOpened(true);
         }}

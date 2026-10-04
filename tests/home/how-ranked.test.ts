@@ -47,17 +47,17 @@ describe("howRanked", () => {
       ["mention_matters", "Mentions that matter", 3],
       ["mention_normal", "Mentions", 1],
       ["site_change_noteworthy", "Noteworthy site changes", 4],
-      ["ad_new_creative", "New ad creatives", 2],
-      ["ad_copy_change", "Ad copy or offer changes", 3],
-      ["hiring_new_role", "New roles", 1],
+      ["ad_new_creative", "New ads", 2],
+      ["ad_copy_change", "Ad wording or offer changes", 3],
+      ["hiring_new_role", "New job openings", 1],
     ]);
 
     const multipliers: readonly HowRankedMultiplier[] = result.multipliers;
     expect(multipliers.map((entry) => [entry.reliability, entry.label, entry.value])).toEqual([
-      ["official_api", "Official API", 1],
-      ["rss", "RSS feed", 0.9],
-      ["scraped_page", "Scraped page", 0.6],
-      ["best_effort", "Best effort", 0.5],
+      ["official_api", "Official data", 1],
+      ["rss", "Public feed", 0.9],
+      ["scraped_page", "Page we read", 0.6],
+      ["best_effort", "Best guess", 0.5],
     ]);
   });
 

@@ -17,6 +17,7 @@ const change: SiteChangeItemData = {
   observedAt: "2026-09-24T02:10:00.000Z",
   capturedAt: "2026-09-24 02:09 UTC",
   wordsChanged: 5,
+  provenance: null,
   sentence: "3 words added, 2 removed.",
   mark: { removed: "Plans from $10.", added: "Plans from $12." },
   before: { src: "/app/changes/sig-1/before", capturedAt: "2026-09-23 02:09 UTC" },
@@ -26,7 +27,7 @@ const change: SiteChangeItemData = {
 };
 
 const QUIET =
-  "Nothing scored for this brand in the last 7 days. We checked Website and Ad library, last at 2026-09-24 02:10 UTC.";
+  "Nothing worth scoring for this competitor in the last 7 days. We checked Website and Ad library, last at 2026-09-24 02:10 UTC.";
 
 const READ = "Mentions that matter: 3 × 0.9 = 2.7 points, the most of anything this brand did this week.";
 
@@ -91,5 +92,22 @@ describe("the biggest-move slab", () => {
     const html = slab({ move: move({ url: null }), change: null, quiet: QUIET });
     expect(html).not.toContain("Open the source");
     expect(html).toContain(READ);
+  });
+
+  it("tells a screen reader the source link leaves the page, in the same anchor", () => {
+    const html = slab({ move: move(), change: null, quiet: QUIET });
+    const link = html.match(/<a\b[^>]*href="https:\/\/example\.com\/post\/1"[^>]*>[\s\S]*?<\/a>/)?.[0] ?? "";
+    expect(link).toContain('target="_blank"');
+    expect(link).toContain('Open the source<span class="sr-only"> (opens in a new tab)</span>');
+  });
+
+  it("gives the source link the whole 44px tap target, not just the min-h-11 token", () => {
+    const html = slab({ move: move(), change: null, quiet: QUIET });
+    const link = html.match(/<a\b[^>]*href="https:\/\/example\.com\/post\/1"[^>]*>/)?.[0] ?? "";
+    expect(link).toContain("min-h-11");
+    expect(link).toContain("inline-flex");
+    expect(link).toContain("items-center");
+    expect(link).toContain("focus-visible:outline-2");
+    expect(link).toContain("focus-visible:outline-offset-2");
   });
 });

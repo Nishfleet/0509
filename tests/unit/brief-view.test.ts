@@ -103,15 +103,21 @@ function blocks(html: string): string[] {
   return [...html.matchAll(/data-brief-block="([^"]+)"/g)].map((match) => match[1] ?? "");
 }
 
+function ownSiteSection(html: string): string {
+  const start = html.indexOf('data-brief-block="own-site"');
+  const end = html.indexOf('data-brief-block="checked"', start);
+  return html.slice(start, end);
+}
+
 describe("the brief view", () => {
   it("renders the email's five blocks in order", () => {
     expect(blocks(render())).toEqual(["headline", "read-this-first", "brands", "own-site", "checked"]);
     const html = render();
     expect(html).toContain("You&#x27;re #2 of 6 this week");
-    expect(html).toContain("12 mentions · 3 site changes · 4 new ads");
-    expect(html).toContain("cart 500s on https://drylight.example/ — still broken");
-    expect(html).toContain("Oaks — #1 Oaks shipped a 2026 pricing page");
-    expect(html).toContain("Drylight — unranked");
+    expect(html).toContain("12 mentions · 3 site changes<");
+    expect(html).toContain("cart 500s on https://drylight.example/, still broken");
+    expect(html).toContain("Oaks: #1 Oaks shipped a 2026 pricing page");
+    expect(html).toContain("Drylight: unranked");
   });
 
   it("shows the struck before and the no-mark row as a link", () => {
@@ -129,7 +135,16 @@ describe("the brief view", () => {
       "checked",
     ]);
     expect(render({ brands: [] })).toContain("Add a competitor to see where you stand");
+    expect(render({ brands: [] })).toContain('href="/app/competitors"');
+    expect(render()).not.toContain('href="/app/competitors"');
     expect(render({ own_site: { status: "ok", incidents: [] } })).toContain("Your site looks fine.");
+  });
+
+  it("heads the own-site block so heading navigation reaches it (0509#6744)", () => {
+    const broken = ownSiteSection(render());
+    expect(broken).toMatch(/<h3[^>]*>Your site<\/h3>/);
+    const ok = ownSiteSection(render({ own_site: { status: "ok", incidents: [] } }));
+    expect(ok).toMatch(/<h3[^>]*>Your site<\/h3>/);
   });
 
   it("keeps an unsafe read-this-first URL out of the markup", () => {

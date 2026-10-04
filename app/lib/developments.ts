@@ -1,4 +1,4 @@
-export const FEED_KINDS = ["ad", "change", "mention", "hiring"] as const;
+export const FEED_KINDS = ["ad", "change", "mention", "hiring", "content"] as const;
 
 export type FeedKind = (typeof FEED_KINDS)[number];
 
@@ -12,6 +12,7 @@ export const FEED_FILTERS: readonly { value: FeedFilter; label: string }[] = [
   { value: "change", label: "Site changes" },
   { value: "mention", label: "Mentions" },
   { value: "hiring", label: "Hiring" },
+  { value: "content", label: "Blog posts" },
 ];
 
 export const SOURCE_LABEL: Readonly<Record<FeedKind, string>> = {
@@ -19,6 +20,7 @@ export const SOURCE_LABEL: Readonly<Record<FeedKind, string>> = {
   change: "Website",
   mention: "Mention",
   hiring: "Careers page",
+  content: "Blog or changelog",
 };
 
 export interface DevelopmentItem {
@@ -28,6 +30,11 @@ export interface DevelopmentItem {
   summary: string | null;
   url: string | null;
   observedAt: string;
+}
+
+export function emptyFeedSentence(filter: FeedFilter): string {
+  if (filter === "all") return "Nothing yet. Site changes, mentions, ads and jobs show up here as we find them.";
+  return "Nothing of this kind in the last 90 days.";
 }
 
 export function isFeedKind(value: string): value is FeedKind {
@@ -45,7 +52,7 @@ export function filterFeed<T extends { kind: FeedKind }>(items: readonly T[], fi
 }
 
 export function countByKind(items: readonly { kind: FeedKind }[]): Record<FeedFilter, number> {
-  const totals: Record<FeedFilter, number> = { all: items.length, ad: 0, change: 0, mention: 0, hiring: 0 };
+  const totals: Record<FeedFilter, number> = { all: items.length, ad: 0, change: 0, mention: 0, hiring: 0, content: 0 };
   return items.reduce((counts, item) => {
     const next: Record<FeedFilter, number> = { ...counts, [item.kind]: counts[item.kind] + 1 };
     return next;

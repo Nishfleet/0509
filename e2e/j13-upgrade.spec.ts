@@ -1,8 +1,10 @@
+import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 import { expect, test, type Page } from "@playwright/test";
 import { Webhook } from "standardwebhooks";
 
+import { checkoutProofMessage } from "../app/lib/billing/checkout-proof";
 import {
   consoleFailures,
   deleteCreatedAccount,
@@ -73,11 +75,11 @@ const PREVIEW_STARTER_PRODUCT = "pdt_preview_starter";
 
 async function addUntilCap(page: Page): Promise<void> {
   const cap = page.getByText(/Your plan watches up to 5 competitors/);
-  const list = page.getByRole("list", { name: "Competitors" });
+  const list = page.getByRole("list", { name: "Competitors", exact: true });
   for (let attempt = 0; attempt < 6; attempt += 1) {
     if (await cap.isVisible()) return;
     const domain = `j13${crypto.randomUUID().replaceAll("-", "").slice(0, 10)}.com`;
-    await page.getByLabel("Add one we missed").fill(domain);
+    await page.getByLabel("Add a competitor we missed").fill(domain);
     await page.getByRole("button", { name: "Add", exact: true }).click();
     await expect(list.getByRole("link", { name: domain }).or(cap)).toBeVisible();
   }
@@ -89,7 +91,7 @@ async function watchOneCompetitor(page: Page): Promise<void> {
   createdEmail = email;
   await signInWithMagicLink(page, email, requireInboxToken());
   await page.goto("/onboarding");
-  const input = page.getByRole("textbox", { name: "your website, or a handle" });
+  const input = page.getByRole("textbox", { name: /your website address or social username/i });
   await input.fill("gymshark.com");
   await input.press("Enter");
   await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
@@ -97,7 +99,12 @@ async function watchOneCompetitor(page: Page): Promise<void> {
   await page.getByRole("button", { name: "That's me" }).click();
   await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
   const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
-  await expect(watching.first().or(page.getByRole("button", { name: /^Watch / }).first())).toBeVisible({
+  await expect(
+    watching
+      .first()
+      .or(page.getByRole("button", { name: /^Watch / }).first())
+      .first(),
+  ).toBeVisible({
     timeout: 60_000,
   });
   if ((await watching.count()) === 0) {
@@ -122,7 +129,13 @@ async function deliverPreviewWebhook(page: Page, workspaceId: string): Promise<v
       status: "active",
       next_billing_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       customer: { customer_id: `cus_${workspaceId}` },
-      metadata: { workspace_id: workspaceId, plan: "starter" },
+      metadata: {
+        workspace_id: workspaceId,
+        plan: "starter",
+        proof: createHmac("sha256", devVar("BETTER_AUTH_SECRET"))
+          .update(checkoutProofMessage(workspaceId, PREVIEW_STARTER_PRODUCT))
+          .digest("hex"),
+      },
     },
   });
   const signedAt = new Date();

@@ -32,7 +32,7 @@ function toggleOpen(entityId: string, isOpen: boolean): (prev: URLSearchParams) 
 function RowToggle({ row, isOpen }: { row: HomeRow; isOpen: boolean }): ReactElement {
   const [, setSearchParams] = useSearchParams();
   return (
-    <span className="min-w-0">
+    <span className="min-w-0 max-sm:col-span-2">
       <button
         type="button"
         data-slot="row-toggle"
@@ -102,7 +102,9 @@ export function RankedRow({ row, onSwitch, openId, evidence }: RankedRowProps): 
       <span className="font-mono text-[0.88rem]">{positionLabel(row)}</span>
       <RowMonogram row={row} />
       <RowToggle row={row} isOpen={isOpen} />
-      <span className="text-right font-mono text-eyebrow text-ink-soft uppercase">{row.movement}</span>
+      <span className="text-right font-mono text-eyebrow text-ink-soft uppercase max-sm:col-span-3 max-sm:col-start-3 max-sm:row-start-2 max-sm:text-left">
+        {row.movement}
+      </span>
       <BrandSwitch
         state={row.self ? "you" : "on"}
         brandName={row.name}
@@ -142,13 +144,20 @@ function RowMove({ move }: { move: SiteChangeView }): ReactElement | null {
   );
 }
 
-function positionLabel(row: HomeRow): string {
-  if (row.signals === 0 || row.position === null) return "—";
+function positionLabel(row: HomeRow): React.ReactNode {
+  if (row.signals === 0 || row.position === null) {
+    return (
+      <>
+        <span aria-hidden="true">—</span>
+        <span className="sr-only">No rank yet</span>
+      </>
+    );
+  }
   return `#${String(row.position)}`;
 }
 
 function pillText(pill: HomePill): string {
   if (pill.state === "live") return `${pill.label} · ${String(pill.count)}`;
-  if (pill.state === "degraded") return `${pill.label} — degraded`;
-  return `${pill.label} — none`;
+  if (pill.state === "degraded") return `${pill.label} · not answering`;
+  return `${pill.label} · nothing new`;
 }

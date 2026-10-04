@@ -41,7 +41,7 @@ const SCREEN_FONT = {
 const EMAIL_FONT = "22px";
 const DISPLAY_FONT = 'var(--display, var(--font-display, "Bricolage Grotesque", ui-sans-serif, sans-serif))';
 const EMAIL_FONT_FAMILY = '"Bricolage Grotesque", ui-sans-serif, sans-serif';
-const screenshotUnavailable = "screenshot unavailable";
+const screenshotUnavailable = "Screenshot not available";
 
 interface Resolved {
   source: string;
@@ -99,7 +99,7 @@ function CaptureSlot({
 }): ReactNode {
   if (capture !== undefined && capture !== null) return capture;
   if (shot === null) return <p style={{ margin: 0 }}>{screenshotUnavailable}</p>;
-  return <img src={shot} alt={`Capture, ${capturedAt.trim()}`} width={104} height={74} />;
+  return <img src={shot} alt={`Screenshot, ${capturedAt.trim()}`} width={104} height={74} />;
 }
 
 function MarkLine({

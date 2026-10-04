@@ -58,6 +58,18 @@ describe("DESIGN.md 7 empty states", () => {
     expect(links(html)[0]).toContain('href="/app"');
   });
 
+  it("a quiet week of exactly one names the singular nouns (#6666)", () => {
+    const { sentence } = quietWeek(1, 1);
+    expect(sentence).toContain("1 mention and 1 site change");
+    expect(sentence).not.toContain("1 mentions");
+    expect(sentence).not.toContain("1 site changes");
+  });
+
+  it("a quiet week of zero keeps the plural nouns (#6666)", () => {
+    const { sentence } = quietWeek(0, 0);
+    expect(sentence).toContain("0 mentions and 0 site changes");
+  });
+
   it("fewer than two ON brands carries the one inline input", () => {
     const { sentence, action } = fewerThanTwoOnBrands();
     expect(action.kind).toBe("input");
@@ -73,14 +85,14 @@ describe("DESIGN.md 7 empty states", () => {
     const { sentence } = evidenceEmpty(["/pricing", "/home"], lastChecked);
     const html = emptyState(sentence);
     expect(html).toContain("/pricing and /home");
-    expect(html).toContain(`last at ${clock(lastChecked)}`);
+    expect(html).toContain(`most recently at ${clock(lastChecked)}`);
   });
 
   it("a degraded source names itself and declines to round a gap into a count", () => {
     const { sentence } = degradedSource("X", "rate-limiting us since Friday");
     const html = emptyState(sentence);
     expect(html).toContain("X has been rate-limiting us since Friday");
-    expect(html).toContain("rather than pretend the count is complete");
+    expect(html).toContain("The count may be incomplete");
   });
 
   it("a surface with some truth shows that truth at whatever size it is", () => {
@@ -108,7 +120,15 @@ describe("the component renders a sentence and at most one action, nothing else"
     const { sentence, action } = quietWeek(61, 2);
     const html = emptyState(sentence, action);
     expect(links(html)).toHaveLength(1);
-    expect(html).toContain(">Open the counts</a>");
+    expect(html).toContain(">See the details</a>");
+  });
+
+  it("gives the action link a 44px-tall tap target", () => {
+    const { sentence, action } = quietWeek(61, 2);
+    const link = links(emptyState(sentence, action))[0];
+    expect(link).toContain("min-h-11");
+    expect(link).toContain("inline-flex");
+    expect(link).toContain("items-center");
   });
 
   it("renders exactly one input when given an input action", () => {
@@ -116,6 +136,15 @@ describe("the component renders a sentence and at most one action, nothing else"
     const html = emptyState(sentence, action);
     expect(html).not.toMatch(/<a\b/);
     expect([...html.matchAll(/<input\b/g)]).toHaveLength(1);
+    // Mobile keyboard hints (0509#6701). React 19 renders these props verbatim
+    // (camelCase) in static markup, so assert the exact string it writes; the HTML
+    // parser lowercases the attribute names when a phone loads the page, which is
+    // what turns spell-checking off and puts "go" on the Enter key.
+    expect(html).toContain('autoComplete="off"');
+    expect(html).toContain('autoCapitalize="none"');
+    expect(html).toContain('autoCorrect="off"');
+    expect(html).toContain('spellCheck="false"');
+    expect(html).toContain('enterKeyHint="go"');
   });
 
   it("an action href must be a same-site path", () => {
@@ -226,7 +255,7 @@ describe("DESIGN.md 7 rows are tied to the factories that ship them (#5862)", ()
     const docTime = row?.match(/brief on ([A-Z][a-z]+ \d{2}:\d{2})/)?.[1];
     expect(docTime).toBeDefined();
     expect(docTime).toBe(view.standing.briefAt);
-    expect(html).toContain(`comes with the brief on ${String(docTime)}`);
+    expect(html).toContain(`arrives with your brief on ${String(docTime)}`);
   });
 });
 

@@ -1,13 +1,14 @@
 import { env } from "cloudflare:workers";
 import { NonRetryableError } from "cloudflare:workflows";
 
-import { readSelfEntityId } from "../data/entity.server";
+import { fillCompetitorSocials, readSelfEntityId } from "../data/entity.server";
 import { insertPages, readJudgedPricingUrl } from "../data/page.server";
 import type { NewPage } from "../data/page.server";
 import { readEnabledSourceId, readEnabledSources } from "../data/source.server";
 import { insertWatches, readEntityWatches } from "../data/watch.server";
 import type { EntityWatch, NewWatch } from "../data/watch.server";
-import { readUrl, probeFailureReason } from "../fetch/transport.server";
+import { readOrArchive } from "../fetch/archive.server";
+import { readUrl, probeFailureReason, type ReadUrlResult } from "../fetch/transport.server";
 import { discoverBoard } from "../hiring/discover-board.server";
 import { sha256Hex } from "../sha256";
 import { brandBudget, readCachedSiteProof, readSiteCard } from "./card.server";
@@ -56,10 +57,26 @@ export async function persistTail(params: IdentityTailParams): Promise<{ entityI
   return { entityId };
 }
 
-export async function classifyTailPages(params: IdentityTailParams, now: string): Promise<void> {
-  if (params.handle !== undefined || params.homepageUrl === null) return;
+async function readHome(
+  params: IdentityTailParams,
+  homepageUrl: string,
+  archive: { now: Date; allowed: boolean },
+): Promise<ReadUrlResult> {
+  const live = await readUrl(homepageUrl, { mayEscalate: brandBudget(params.workspaceId, params.domain) });
+  return readOrArchive(live, { url: homepageUrl, ...archive });
+}
+
+export async function classifyTailPages(
+  params: IdentityTailParams,
+  now: string,
+  options: { archive?: boolean } = {},
+): Promise<boolean> {
+  if (params.handle !== undefined || params.homepageUrl === null) return false;
   try {
-    const page = await readUrl(params.homepageUrl, { mayEscalate: brandBudget(params.workspaceId, params.domain) });
+    const page = await readHome(params, params.homepageUrl, {
+      now: new Date(now),
+      allowed: options.archive === true,
+    });
     if (!page.ok) {
       const subjectSha256 = await sha256Hex(params.domain);
       console.log(
@@ -70,15 +87,22 @@ export async function classifyTailPages(params: IdentityTailParams, now: string)
           subjectSha256,
         }),
       );
-      return;
+      return false;
     }
     const extract = await extractIdentity(page.html, params.homepageUrl);
+    await fillCompetitorSocials({
+      workspaceId: params.workspaceId,
+      entityId: params.entityId,
+      socialsJson: JSON.stringify(extract.socials),
+      readAt: now,
+    });
     await classifyNavPages({
       workspaceId: params.workspaceId,
       entity: { id: params.entityId, domain: params.domain },
       pages: extract.navPages,
       now,
     });
+    return true;
   } catch (error) {
     const subjectSha256 = await sha256Hex(params.domain);
     console.log(
@@ -89,6 +113,7 @@ export async function classifyTailPages(params: IdentityTailParams, now: string)
         subjectSha256,
       }),
     );
+    return false;
   }
 }
 

@@ -4,7 +4,7 @@ import { nextBriefAt } from "./brief-schedule";
 import { firstSiteSweepAt } from "./onboarding/arrival-estimate";
 import type { SiteChangeView } from "./site-change";
 import { sourceName } from "./source-name";
-export { nextSiteSweepAt } from "./onboarding/arrival-estimate";
+import type { SourceKind } from "./source-kind";
 
 export interface HomeEntity {
   id: string;
@@ -22,7 +22,7 @@ export interface HomeHistoryRow {
 
 export interface HomeSource {
   key: string;
-  kind: "site" | "ads" | "mentions" | "hiring";
+  kind: SourceKind;
   platform: string;
 }
 
@@ -151,6 +151,20 @@ function dayAndTime(timezone: string, at: Date): string {
   return `${day} ${hourAndMinute(timezone, at)}`;
 }
 
+export function arrivalAround(timezone: string, at: Date): string {
+  const date = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(at);
+  const zone =
+    new Intl.DateTimeFormat("en-GB", { timeZone: timezone, timeZoneName: "short" })
+      .formatToParts(at)
+      .find((part) => part.type === "timeZoneName")?.value ?? timezone;
+  return `${date.replace(",", "")}, around ${hourAndMinute(timezone, at)} ${zone}`;
+}
+
 function todayEyebrow(timezone: string, now: Date): string {
   return new Intl.DateTimeFormat("en-GB", {
     timeZone: timezone,
@@ -272,7 +286,7 @@ function gatheringStanding(input: HomeStandingInput, onBrands: number): HomeStan
   return {
     kind: "gathering",
     briefAt: dayAndTime(input.schedule.timezone, nextBriefAt(input.schedule, input.now)),
-    firstSweepAt: at === null ? null : dayAndTime(input.schedule.timezone, at),
+    firstSweepAt: at === null ? null : arrivalAround(input.schedule.timezone, at),
     brands: onBrands,
   };
 }
@@ -332,7 +346,7 @@ export function homeView(input: HomeStandingInput): HomeView {
   const brandWord = onCount === 1 ? "brand" : "brands";
   const recheckTime = hourAndMinute(input.schedule.timezone, nextHour(input.now));
   const briefTime = dayAndTime(input.schedule.timezone, nextBriefAt(input.schedule, input.now));
-  const footer = `Checked ${String(onCount)} ${brandWord} this week · brief ${briefTime} · your site re-checked at ${recheckTime}`;
+  const footer = `Checked ${String(onCount)} ${brandWord} this week · next brief ${briefTime} · your site is checked again at ${recheckTime}`;
   const standing = homeStanding(input);
   return {
     eyebrow: todayEyebrow(input.schedule.timezone, input.now),

@@ -26,7 +26,8 @@ const INSERT_WATCH = `INSERT INTO watch (id, entity_id, source_id, target_key)
 VALUES (?1, ?2, ?3, ?4)
 ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
 
-const UNWATCHED_ENTITIES = `SELECT e.id AS id, e.domain AS domain, json_extract(e.identity_json, '$.url') AS url
+const UNWATCHED_ENTITIES = `SELECT e.id AS id, e.domain AS domain, CASE WHEN json_valid(e.identity_json) THEN json_extract(e.identity_json, '$.url') END AS url,
+       json_valid(e.identity_json) AS identity_valid
 FROM entity e
 WHERE e.state = 'on'
   AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = e.id AND w.source_id = ?1)
@@ -45,7 +46,7 @@ const SITE_SWEEP_TARGET_JOIN = `SELECT e.workspace_id AS workspace_id,
        p.transport AS transport,
        p.transport_tested_at AS transport_tested_at
 FROM watch w
-JOIN source src ON src.id = w.source_id AND src.is_enabled = 1
+JOIN source src ON src.id = w.source_id AND src.is_enabled = 1 AND src.platform <> 'feed'
 JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
 JOIN page p ON p.entity_id = e.id AND p.url = w.target_key
 WHERE w.is_active = 1`;
@@ -55,7 +56,14 @@ ORDER BY e.workspace_id, e.id, p.url`;
 
 const entityRows = z.array(z.object({ id: z.string(), domain: z.string() }));
 
-const unwatchedEntityRows = z.array(z.object({ id: z.string(), domain: z.string(), url: z.string().nullable() }));
+const unwatchedEntityRows = z.array(
+  z.object({
+    id: z.string(),
+    domain: z.string(),
+    url: z.string().nullable(),
+    identity_valid: z.number().transform((flag) => flag === 1),
+  }),
+);
 
 type UnwatchedEntity = z.infer<typeof unwatchedEntityRows>[number];
 
@@ -171,7 +179,7 @@ ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
 const SELECT_WATCHES = `SELECT w.id AS watch_id, w.target_key, e.id AS entity_id, e.workspace_id, e.role,
   COALESCE(NULLIF(e.name, ''), e.domain) AS name, e.domain,
   s.id AS source_id, s.plugin_key, s.reliability,
-  COALESCE(json_extract(s.config_json, '$.min_interval_seconds'), 0) AS min_interval_seconds
+  COALESCE(json_extract(CASE WHEN json_valid(s.config_json) THEN s.config_json ELSE '{}' END, '$.min_interval_seconds'), 0) AS min_interval_seconds
 FROM watch w
 JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
 JOIN source s ON s.id = w.source_id AND s.kind = ?1 AND s.is_enabled = 1
@@ -255,26 +263,185 @@ export async function readHiringTargets(): Promise<readonly HiringTarget[]> {
   }));
 }
 
+const IN_PILOT = `(json_extract(CASE WHEN json_valid(src.config_json) THEN src.config_json ELSE '{}' END, '$.pilot') IS NULL
+  OR e.workspace_id IN (SELECT ws.id FROM workspace ws JOIN user u ON u.id = ws.owner_user_id
+    WHERE u.email = json_extract(CASE WHEN json_valid(src.config_json) THEN src.config_json ELSE '{}' END, '$.pilot')))`;
+
+const ENTITIES_WITHOUT_FEED_WATCH = `SELECT e.id AS id, e.domain AS domain
+FROM entity e
+JOIN source src ON src.key = 'feed.rss' AND src.is_enabled = 1
+WHERE e.state = 'on' AND ${IN_PILOT}
+  AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = e.id AND w.source_id = src.id AND w.is_active = 1)
+ORDER BY e.id`;
+
+const FEED_TARGETS = `SELECT e.workspace_id AS workspace_id, e.id AS entity_id, w.source_id AS source_id,
+       w.id AS watch_id, w.target_key AS feed_url
+FROM watch w
+JOIN source src ON src.id = w.source_id AND src.key = 'feed.rss' AND src.is_enabled = 1
+JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
+WHERE w.is_active = 1 AND ${IN_PILOT}
+ORDER BY e.workspace_id, e.id, w.id`;
+
+const feedTargetRows = z.array(
+  z.object({
+    workspace_id: z.string(),
+    entity_id: z.string(),
+    source_id: z.string(),
+    watch_id: z.string(),
+    feed_url: z.string(),
+  }),
+);
+
+export interface FeedTarget {
+  workspaceId: string;
+  entityId: string;
+  sourceId: string;
+  watchId: string;
+  feedUrl: string;
+}
+
+export async function readEntitiesWithoutFeedWatch(): Promise<readonly { id: string; domain: string }[]> {
+  const rows = await env.DB.prepare(ENTITIES_WITHOUT_FEED_WATCH).all();
+  return entityRows.parse(rows.results);
+}
+
+export async function readFeedTargets(): Promise<readonly FeedTarget[]> {
+  const rows = await env.DB.prepare(FEED_TARGETS).all();
+  return feedTargetRows.parse(rows.results).map((row) => ({
+    workspaceId: row.workspace_id,
+    entityId: row.entity_id,
+    sourceId: row.source_id,
+    watchId: row.watch_id,
+    feedUrl: row.feed_url,
+  }));
+}
+
 export async function deactivateWatch(watchId: string): Promise<void> {
   await env.DB.prepare(DEACTIVATE_WATCH).bind(watchId).run();
 }
 
-const SITE_WATCH_SUMMARY = `SELECT COUNT(*) AS pages, MAX(w.last_polled_at) AS last_polled_at
+const ALTERNATE_MARKER = (alias: string): string =>
+  `coalesce(CASE WHEN json_valid(${alias}.config_json) THEN json_extract(${alias}.config_json, '$.alternateHome') END, 0) = 1`;
+
+const BLOCKED_RIVALS = `SELECT e.id AS entity_id, e.workspace_id AS workspace_id, e.domain AS domain
+FROM entity e
+WHERE e.role = 'competitor' AND e.state = 'on'
+  AND EXISTS (SELECT 1 FROM page h WHERE h.entity_id = e.id AND h.role = 'home' AND h.deferred_at IS NOT NULL)
+  AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = e.id AND w.is_active = 1 AND ${ALTERNATE_MARKER("w")})
+ORDER BY random()
+LIMIT ?1`;
+
+const blockedRivalRows = z.array(z.object({ entity_id: z.string(), workspace_id: z.string(), domain: z.string() }));
+
+export interface BlockedRival {
+  entityId: string;
+  workspaceId: string;
+  domain: string;
+}
+
+export async function readBlockedRivals(limit: number): Promise<readonly BlockedRival[]> {
+  const rows = await env.DB.prepare(BLOCKED_RIVALS).bind(limit).all();
+  return blockedRivalRows
+    .parse(rows.results)
+    .map((row) => ({ entityId: row.entity_id, workspaceId: row.workspace_id, domain: row.domain }));
+}
+
+const ALTERNATE_ATTEMPTS = `SELECT w.target_key AS url FROM watch w
+WHERE w.entity_id = ?1 AND w.source_id = ?2
+  AND (NOT (${ALTERNATE_MARKER("w")}) OR CASE WHEN json_valid(w.config_json) THEN json_extract(w.config_json, '$.at') END >= ?3)`;
+
+export async function readAlternateAttempts(
+  entityId: string,
+  sourceId: string,
+  since: string,
+): Promise<ReadonlySet<string>> {
+  const rows = await env.DB.prepare(ALTERNATE_ATTEMPTS).bind(entityId, sourceId, since).all();
+  return new Set(
+    z
+      .array(z.object({ url: z.string() }))
+      .parse(rows.results)
+      .map((row) => row.url),
+  );
+}
+
+const RECORD_ALTERNATE_ATTEMPT = `INSERT INTO watch (id, entity_id, source_id, target_key, is_active, config_json)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+ON CONFLICT (entity_id, source_id, target_key) DO UPDATE SET is_active = excluded.is_active, config_json = excluded.config_json
+WHERE ${ALTERNATE_MARKER("watch")}`;
+
+export async function recordAlternateAttempt(input: {
+  entityId: string;
+  sourceId: string;
+  url: string;
+  at: string;
+  outcome: { adopted: true } | { adopted: false; reason: string };
+  origin?: "customer";
+}): Promise<void> {
+  const { entityId, sourceId, url, at, outcome, origin } = input;
+  const config = JSON.stringify({
+    alternateHome: 1,
+    at,
+    ...(origin === "customer" ? { customer: 1 } : {}),
+    ...(outcome.adopted ? {} : { reason: outcome.reason }),
+  });
+  await env.DB.prepare(RECORD_ALTERNATE_ATTEMPT)
+    .bind(crypto.randomUUID(), entityId, sourceId, url, outcome.adopted ? 1 : 0, config)
+    .run();
+}
+
+const CUSTOMER_MARKER = (alias: string): string =>
+  `${ALTERNATE_MARKER(alias)} AND coalesce(CASE WHEN json_valid(${alias}.config_json) THEN json_extract(${alias}.config_json, '$.customer') END, 0) = 1`;
+
+const RETIRE_CUSTOMER_SITES = `UPDATE watch SET is_active = 0
+WHERE entity_id = ?2 AND target_key <> ?3 AND is_active = 1 AND ${CUSTOMER_MARKER("watch")}
+  AND entity_id IN (SELECT id FROM entity WHERE id = ?2 AND workspace_id = ?1)`;
+
+export async function retireCustomerSites(workspaceId: string, entityId: string, keepUrl: string): Promise<void> {
+  await env.DB.prepare(RETIRE_CUSTOMER_SITES).bind(workspaceId, entityId, keepUrl).run();
+}
+
+const CUSTOMER_SITE_USAGE = `SELECT COUNT(*) AS rows_used,
+       MAX(CASE WHEN json_valid(w.config_json) THEN json_extract(w.config_json, '$.at') END) AS last_at
+FROM watch w JOIN entity e ON e.id = w.entity_id AND e.workspace_id = ?1
+WHERE w.entity_id = ?2 AND ${CUSTOMER_MARKER("w")}`;
+
+export async function readCustomerSiteUsage(
+  workspaceId: string,
+  entityId: string,
+): Promise<{ rows: number; lastAt: string | null }> {
+  const row = await env.DB.prepare(CUSTOMER_SITE_USAGE)
+    .bind(workspaceId, entityId)
+    .first<{ rows_used: number; last_at: string | null }>();
+  return { rows: row?.rows_used ?? 0, lastAt: row?.last_at ?? null };
+}
+
+const SITE_WATCH_SUMMARY = `SELECT COUNT(*) AS pages, MAX(w.last_polled_at) AS last_polled_at,
+       (EXISTS (SELECT 1 FROM entity ue WHERE ue.id = ?2 AND ue.workspace_id = ?1)
+        AND EXISTS (SELECT 1 FROM page hp WHERE hp.entity_id = ?2 AND hp.role = 'home' AND hp.deferred_at IS NOT NULL)
+        AND NOT EXISTS (SELECT 1 FROM watch aw WHERE aw.entity_id = ?2 AND aw.is_active = 1 AND ${ALTERNATE_MARKER("aw")})) AS unreadable,
+       (SELECT cw.target_key FROM watch cw JOIN entity ce ON ce.id = cw.entity_id AND ce.workspace_id = ?1 WHERE cw.entity_id = ?2 AND cw.is_active = 1 AND ${CUSTOMER_MARKER("cw")} LIMIT 1) AS customer_site
 FROM watch w
-JOIN source src ON src.id = w.source_id AND src.kind = 'site'
+JOIN source src ON src.id = w.source_id AND src.kind = 'site' AND src.platform <> 'feed'
 JOIN entity e ON e.id = w.entity_id AND e.workspace_id = ?1
 WHERE w.entity_id = ?2 AND w.is_active = 1`;
 
 export interface SiteWatchSummary {
   pages: number;
   lastPolledAt: string | null;
+  unreadable: boolean;
+  customerSite: string | null;
 }
 
 export async function readSiteWatchSummary(workspaceId: string, entityId: string): Promise<SiteWatchSummary> {
   const row = await env.DB.prepare(SITE_WATCH_SUMMARY)
     .bind(workspaceId, entityId)
-    .first<{ pages: number; last_polled_at: string | null }>();
-  return { pages: row?.pages ?? 0, lastPolledAt: row?.last_polled_at ?? null };
+    .first<{ pages: number; last_polled_at: string | null; unreadable: number; customer_site: string | null }>();
+  return {
+    pages: row?.pages ?? 0,
+    lastPolledAt: row?.last_polled_at ?? null,
+    unreadable: row?.unreadable === 1,
+    customerSite: row?.customer_site ?? null,
+  };
 }
 
 const ENTITY_R2_PREFIXES = `SELECT w.id AS id
@@ -285,5 +452,9 @@ ORDER BY w.id`;
 
 export async function readEntityR2Prefixes(workspaceId: string, entityId: string): Promise<string[]> {
   const { results } = await env.DB.prepare(ENTITY_R2_PREFIXES).bind(workspaceId, entityId).all<{ id: string }>();
-  return results.flatMap((row) => [`snapshot/site/${row.id}/`, `snapshot/hiring/${row.id}/`]);
+  return results.flatMap((row) => [
+    `snapshot/site/${row.id}/`,
+    `snapshot/hiring/${row.id}/`,
+    `snapshot/feed/${row.id}/`,
+  ]);
 }

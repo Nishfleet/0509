@@ -407,16 +407,27 @@ export interface ConsoleEntry {
 export function watchConsole(page: Page): {
   consoleErrors: ConsoleEntry[];
   pageErrors: string[];
+  prefetchRefused: string[];
 } {
   const consoleErrors: ConsoleEntry[] = [];
   const pageErrors: string[] = [];
+  const prefetchRefused: string[] = [];
   page.on("console", (message) => {
     if (message.type() === "error") {
       consoleErrors.push({ text: message.text(), url: message.location().url });
     }
   });
   page.on("pageerror", (error) => pageErrors.push(error.message));
-  return { consoleErrors, pageErrors };
+  // Chrome Speculation Rules prefetch Worker URLs with Sec-Purpose: prefetch.
+  // Cloudflare then refuses them (503 + cf-speculation-refused) because
+  // Workers cannot serve prefetch. Chromium still logs that 503 as a console
+  // error, which is not an app failure (0509#6912).
+  page.on("response", (response) => {
+    if (response.status() !== 503) return;
+    if (!response.headers()["cf-speculation-refused"]) return;
+    prefetchRefused.push(response.url());
+  });
+  return { consoleErrors, pageErrors, prefetchRefused };
 }
 
 // Same-origin entries fail the test as "text @ url"; the excluded cross-origin
@@ -424,6 +435,18 @@ export function watchConsole(page: Page): {
 // dropped. `exclude` drops a same-origin console entry a spec expects — the
 // 404-page specs' own-document line — at entry level, before the line is
 // composed. Pageerrors have no location to scope by and are never excludable.
+export function prefetchRefused503(refusedUrls: readonly string[]): (entry: ConsoleEntry) => boolean {
+  const refused = new Set(refusedUrls);
+  return (entry) => {
+    if (!/status of 503\b/.test(entry.text) || refused.size === 0) return false;
+    if (entry.url.length > 0 && refused.has(entry.url)) return true;
+    for (const url of refusedUrls) {
+      if (entry.text.includes(url)) return true;
+    }
+    return false;
+  };
+}
+
 export async function consoleFailures(
   page: Page,
   watched: ReturnType<typeof watchConsole>,
@@ -434,6 +457,7 @@ export async function consoleFailures(
   // `!entry.url` is load-bearing: a console error with no location would make
   // `new URL("")` throw inside the predicate.
   const sameOrigin = (entry: ConsoleEntry) => !entry.url || new URL(entry.url).origin === pageOrigin;
+  const prefetchRefused = prefetchRefused503(watched.prefetchRefused);
   const dropped = watched.consoleErrors.filter((entry) => !sameOrigin(entry));
   if (dropped.length > 0) {
     await testInfo.attach("cross-origin console errors (excluded from the gate)", {
@@ -441,9 +465,16 @@ export async function consoleFailures(
       contentType: "text/plain",
     });
   }
+  const prefetchDropped = watched.consoleErrors.filter((entry) => sameOrigin(entry) && prefetchRefused(entry));
+  if (prefetchDropped.length > 0) {
+    await testInfo.attach("Cloudflare prefetch-refused 503s (excluded from the gate)", {
+      body: prefetchDropped.map((entry) => `${entry.text} @ ${entry.url}`).join("\n"),
+      contentType: "text/plain",
+    });
+  }
   return [
     ...watched.consoleErrors
-      .filter((entry) => sameOrigin(entry) && !exclude(entry))
+      .filter((entry) => sameOrigin(entry) && !exclude(entry) && !prefetchRefused(entry))
       .map((entry) => `${entry.text} @ ${entry.url}`),
     ...watched.pageErrors,
   ];
@@ -542,6 +573,8 @@ const KEPT_JOURNEY_ACCOUNTS: readonly string[] = [
   "e2e+j7@0509.io",
   "e2e+j8-hard@0509.io",
   "e2e+j8-soft@0509.io",
+  "e2e+j8-hard-v2@0509.io",
+  "e2e+j8-soft-v2@0509.io",
   "e2e+j9-mentions@0509.io",
   "e2e+j12-rollovers@0509.io",
   "e2e+soak@0509.io",

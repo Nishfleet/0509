@@ -59,13 +59,47 @@ function Section({ section }: { section: LegalSection }) {
   );
 }
 
+function LegalLogo() {
+  return (
+    <a
+      className="inline-flex min-h-11 items-center font-display text-base font-bold tracking-[-0.03em] text-ink"
+      href="/"
+    >
+      <span className="sr-only">Five to Nine</span>
+      <span aria-hidden="true">
+        05<span className="bg-green px-[5px] text-on-green">09</span>
+      </span>
+    </a>
+  );
+}
+
+function OnThisPage({ sections }: { sections: readonly LegalSection[] }) {
+  const linkClass = "inline-flex min-h-11 items-center text-ink-soft underline-offset-4 hover:text-ink hover:underline";
+  return (
+    <nav aria-label="On this page" className="mt-10 border-y border-line py-5">
+      <ol className="grid gap-x-6 gap-y-0 text-[0.92rem] sm:grid-cols-2">
+        {sections.map((section) => (
+          <li key={section.id}>
+            <a className={linkClass} href={`#${section.id}`}>
+              {section.heading}
+            </a>
+          </li>
+        ))}
+        <li>
+          <a className={linkClass} href="#contact">
+            Contact
+          </a>
+        </li>
+      </ol>
+    </nav>
+  );
+}
+
 export function LegalPage({ doc }: { doc: LegalDocument }) {
   return (
     <div className="mx-auto w-full max-w-[46rem] bg-bone px-6 py-16 text-ink sm:py-24">
       <header>
-        <a className="font-display text-base font-bold tracking-[-0.03em] text-ink" href="/">
-          05<span className="bg-green px-[5px] text-on-green">09</span>
-        </a>
+        <LegalLogo />
       </header>
       <main className="mt-8">
         <h1 className="font-display text-[clamp(1.75rem,3.6vw,2.9rem)] leading-[1.15] font-semibold tracking-[-0.02em]">
@@ -75,22 +109,7 @@ export function LegalPage({ doc }: { doc: LegalDocument }) {
           Last updated <time dateTime={LEGAL_UPDATED}>{updatedLabel}</time>
         </p>
         <p className="mt-6 leading-[1.65] text-ink-soft">{doc.intro}</p>
-        <nav aria-label="On this page" className="mt-10 border-y border-line py-5">
-          <ol className="grid gap-x-6 gap-y-2 text-[0.92rem] sm:grid-cols-2">
-            {doc.sections.map((section) => (
-              <li key={section.id}>
-                <a className="text-ink-soft underline-offset-4 hover:text-ink hover:underline" href={`#${section.id}`}>
-                  {section.heading}
-                </a>
-              </li>
-            ))}
-            <li>
-              <a className="text-ink-soft underline-offset-4 hover:text-ink hover:underline" href="#contact">
-                Contact
-              </a>
-            </li>
-          </ol>
-        </nav>
+        <OnThisPage sections={doc.sections} />
         {doc.sections.map((section) => (
           <Section key={section.id} section={section} />
         ))}

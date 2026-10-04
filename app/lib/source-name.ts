@@ -2,6 +2,7 @@ const PLATFORM_NAMES: Readonly<Record<string, string>> = {
   amazon: "Amazon",
   apple: "Apple",
   ashby: "Ashby",
+  feed: "Blog and changelog",
   gdelt: "News",
   google: "Google",
   greenhouse: "Greenhouse",
@@ -25,9 +26,11 @@ const KIND_NOUNS: Readonly<Record<string, string>> = {
   mentions: "mentions",
   site: "site checks",
   hiring: "job posts",
+  content: "posts",
 };
 
 export function sourceName(kind: string, platform: string): string {
+  if (kind === "site") return "Website checks";
   const noun = KIND_NOUNS[kind] ?? "updates";
   const brand = PLATFORM_NAMES[platform];
   return brand === undefined ? `Your ${noun} source` : `${brand} ${noun}`;

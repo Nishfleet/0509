@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import HN_FIXTURE from "../../../fixtures/hn-gymshark.json?raw";
 import { hnGenerator } from "../../../../app/lib/discovery/generators/hn.server";
-import { evidenceLine, shortlist } from "../../../../app/lib/discovery/shortlist";
+import { shortlist } from "../../../../app/lib/discovery/shortlist";
 import type { Candidate, FetchedText, Subject } from "../../../../app/lib/discovery/types";
 
 const SUBJECT: Subject = { name: "Gymshark", domain: "gymshark.com" };
@@ -24,11 +24,10 @@ interface Row {
   publishers: number;
   shortlisted: string;
   why: string;
-  line: string;
 }
 
 describe("shortlist fixtures", () => {
-  it("builds a shortlist from real generator output and every entry has an evidence line", async () => {
+  it("builds a shortlist from real generator output with only unique names", async () => {
     const hnCandidates = await hnGenerator(SUBJECT, fetchTextWith(HN_FIXTURE));
     const combined: Candidate[] = hnCandidates;
     const entries = shortlist(combined);
@@ -38,10 +37,6 @@ describe("shortlist fixtures", () => {
 
     const lowercaseNames = entries.map((entry) => entry.name.toLowerCase());
     expect(new Set(lowercaseNames).size).toBe(lowercaseNames.length);
-
-    for (const entry of entries) {
-      expect(evidenceLine(entry).length).toBeGreaterThan(0);
-    }
 
     const grouped = new Map(
       [...new Set(combined.map((candidate) => candidate.name.toLowerCase()))].map((key): [string, Grouped] => {
@@ -73,10 +68,9 @@ describe("shortlist fixtures", () => {
         publishers: record.publishers.size,
         shortlisted: shortlistedNames.has(key) ? "yes" : "no",
         why: entry === undefined ? "outside top 20" : entry.slot,
-        line: entry === undefined ? "" : evidenceLine(entry),
       };
     });
 
-    console.table(rows, ["candidate", "generators", "publishers", "shortlisted", "why", "line"]);
+    console.table(rows, ["candidate", "generators", "publishers", "shortlisted", "why"]);
   });
 });

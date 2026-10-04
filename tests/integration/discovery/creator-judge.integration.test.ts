@@ -38,10 +38,10 @@ function candidate(name: string, domain: string): ResolvedCandidate {
   };
 }
 
-function jevStub(questionId: string) {
+function jevStub() {
   return vi.fn(async (_model: string, request: { questions: Record<string, { type: string }> }) => {
     const answer = { type: "noul", noul: 0.9 };
-    return { answers: questionId in request.questions ? { [questionId]: answer } : {} };
+    return { answers: Object.fromEntries(Object.keys(request.questions).map((id) => [id, answer])) };
   });
 }
 
@@ -55,7 +55,7 @@ describe("judgeCandidates question choice", () => {
     const context = await readDiscoveryContext(workspaceId);
     if (context === null) throw new Error("seed failed");
     expect(context.self.kind).toBe("creator");
-    const run = jevStub("is_creator_rival");
+    const run = jevStub();
     Reflect.set(env, "AI", { run });
 
     const results = await judgeCandidates(context, [candidate("With Riley", "withriley.example")]);
@@ -64,6 +64,7 @@ describe("judgeCandidates question choice", () => {
     const questions = run.mock.calls[0]?.[1].questions;
     expect(questions?.["is_creator_rival"]).toBeDefined();
     expect(questions?.["is_competitor"]).toBeUndefined();
+    expect(questions?.["same_product_category"]).toBeUndefined();
     expect(results[0]?.verdict).toMatchObject({ questionId: "is_creator_rival", p: 0.9, cached: false });
   });
 
@@ -72,7 +73,7 @@ describe("judgeCandidates question choice", () => {
     const context = await readDiscoveryContext(workspaceId);
     if (context === null) throw new Error("seed failed");
     expect(context.self.kind).toBe("domain");
-    const run = jevStub("is_competitor");
+    const run = jevStub();
     Reflect.set(env, "AI", { run });
 
     const results = await judgeCandidates(context, [candidate("Alphalete", "alphaleteathletics.com")]);
@@ -80,7 +81,8 @@ describe("judgeCandidates question choice", () => {
     expect(run).toHaveBeenCalledTimes(1);
     const questions = run.mock.calls[0]?.[1].questions;
     expect(questions?.["is_competitor"]).toBeDefined();
+    expect(questions?.["same_product_category"]).toBeDefined();
     expect(questions?.["is_creator_rival"]).toBeUndefined();
-    expect(results[0]?.verdict).toMatchObject({ questionId: "is_competitor", p: 0.9, cached: false });
+    expect(results[0]?.verdict).toMatchObject({ questionId: "is_competitor", p: 0.98, cached: false });
   });
 });

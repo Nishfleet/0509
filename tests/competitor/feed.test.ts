@@ -6,6 +6,7 @@ import {
   FEED_PARAM,
   SOURCE_LABEL,
   countByKind,
+  emptyFeedSentence,
   filterFeed,
   isFeedKind,
   parseFeedFilter,
@@ -30,13 +31,13 @@ const ITEMS: readonly DevelopmentItem[] = [
 ];
 
 describe("FEED_KINDS", () => {
-  it("names the four kinds in filter order", () => {
-    expect([...FEED_KINDS]).toEqual(["ad", "change", "mention", "hiring"]);
+  it("names the five kinds in filter order", () => {
+    expect([...FEED_KINDS]).toEqual(["ad", "change", "mention", "hiring", "content"]);
   });
 });
 
 describe("isFeedKind", () => {
-  it("accepts only the four kinds", () => {
+  it("accepts only the five kinds", () => {
     expect(FEED_KINDS.every((kind) => isFeedKind(kind))).toBe(true);
     expect(isFeedKind("all")).toBe(false);
     expect(isFeedKind("")).toBe(false);
@@ -82,18 +83,25 @@ describe("filterFeed", () => {
 
 describe("countByKind", () => {
   it("counts every kind plus all", () => {
-    expect(countByKind(ITEMS)).toEqual({ all: 6, ad: 1, change: 2, mention: 1, hiring: 2 });
+    expect(countByKind(ITEMS)).toEqual({ all: 6, ad: 1, change: 2, mention: 1, hiring: 2, content: 0 });
   });
 
   it("returns all-zero counts for an empty list", () => {
     const empty: readonly { kind: FeedKind }[] = [];
-    expect(countByKind(empty)).toEqual({ all: 0, ad: 0, change: 0, mention: 0, hiring: 0 });
+    expect(countByKind(empty)).toEqual({ all: 0, ad: 0, change: 0, mention: 0, hiring: 0, content: 0 });
   });
 });
 
 describe("FEED_FILTERS", () => {
   it("lists the labels in order", () => {
-    expect(FEED_FILTERS.map((filter) => filter.label)).toEqual(["All", "Ads", "Site changes", "Mentions", "Hiring"]);
+    expect(FEED_FILTERS.map((filter) => filter.label)).toEqual([
+      "All",
+      "Ads",
+      "Site changes",
+      "Mentions",
+      "Hiring",
+      "Blog posts",
+    ]);
   });
 });
 
@@ -121,10 +129,23 @@ describe("SOURCE_LABEL", () => {
       change: "Website",
       mention: "Mention",
       hiring: "Careers page",
+      content: "Blog or changelog",
     });
   });
 
   it("covers all and only the feed kinds", () => {
     expect(Object.keys(SOURCE_LABEL).sort()).toEqual([...FEED_KINDS].sort());
+  });
+});
+
+describe("emptyFeedSentence", () => {
+  it("promises updates will arrive on the All filter", () => {
+    expect(emptyFeedSentence("all")).toBe(
+      "Nothing yet. Site changes, mentions, ads and jobs show up here as we find them.",
+    );
+  });
+
+  it("keeps the filtered-out kind wording for a kind", () => {
+    expect(emptyFeedSentence("mention")).toBe("Nothing of this kind in the last 90 days.");
   });
 });

@@ -13,3 +13,8 @@ export interface ConnectedApp {
   name: string;
   connectedAt: string;
 }
+
+export interface CreateKeyResult {
+  newKey: string | null;
+  duplicate: boolean;
+}

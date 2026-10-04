@@ -18,7 +18,10 @@ export function Header() {
           <ul className={`${eyebrow} flex gap-7 text-ink-soft`}>
             {LINKS.map((link) => (
               <li key={link.href}>
-                <a className="transition-colors duration-140 hover:text-ink" href={link.href}>
+                <a
+                  className="flex min-h-11 items-center transition-colors duration-140 hover:text-ink"
+                  href={link.href}
+                >
                   {link.label}
                 </a>
               </li>

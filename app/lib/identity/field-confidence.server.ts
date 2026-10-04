@@ -1,3 +1,5 @@
+import { captureException } from "@sentry/cloudflare";
+
 import { insertVerdicts, type VerdictRow } from "../data/jev_verdict.server";
 import { JevUnavailableError, askNouls, type NoulQuestion, type NoulVerdict } from "../jev/client.server";
 import { noulAction } from "../jev/thresholds";
@@ -84,13 +86,7 @@ export interface ReviewFieldsInput {
   now: string;
 }
 
-export async function reviewFields({
-  workspaceId,
-  subject,
-  fields,
-  edited,
-  now,
-}: ReviewFieldsInput): Promise<CardReview> {
+async function judgeFields({ workspaceId, subject, fields, edited, now }: ReviewFieldsInput): Promise<CardReview> {
   const questions = buildQuestions(fields, edited);
   if (questions.length === 0) return withEdited(reviewValued(fields, "empty"), edited);
   let verdicts: NoulVerdict[];
@@ -132,4 +128,13 @@ export async function reviewFields({
     if (field !== undefined) review = { ...review, [field]: reviewFor(verdict.p) };
   }
   return withEdited(review, edited);
+}
+
+export async function reviewFields(input: ReviewFieldsInput): Promise<CardReview> {
+  try {
+    return await judgeFields(input);
+  } catch (error) {
+    captureException(error, { tags: { step: "identity-review" } });
+    return withEdited(reviewValued(input.fields, "check"), input.edited);
+  }
 }

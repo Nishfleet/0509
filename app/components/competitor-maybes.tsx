@@ -20,43 +20,58 @@ export function CompetitorMaybes({ maybes }: { maybes: readonly Maybe[] }): Reac
   return (
     <section aria-labelledby="maybes-heading" className="mt-12">
       <h2 id="maybes-heading" className={BLOCK_HEADING}>
-        Maybe
+        Possible competitors
       </h2>
-      <p className="mt-1 text-body-sm text-ink-soft">We weren't sure about these. Watch the ones that matter.</p>
-      <ul aria-label="Maybe" className="mt-3 border-b border-line">
+      <p className="mt-1 text-body-sm text-ink-soft">We weren't sure these compete with you. Watch the ones that do.</p>
+      <ul aria-label="Possible competitors" className="mt-3 border-b border-line">
         {maybes.map((maybe) => (
-          <li
-            key={maybe.suggestionId}
-            className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line py-4"
-          >
-            <div className="flex min-w-0 flex-1 items-start gap-3">
-              <Monogram name={maybe.name} off />
-              <div className="min-w-0">
-                <p className="truncate font-display text-row-name font-bold">{maybe.name}</p>
-                <p className="truncate text-body-sm text-ink-soft">{maybe.domain}</p>
-                {maybe.reason === null ? null : <p className="mt-1 text-body-sm text-ink-soft">{maybe.reason}</p>}
-              </div>
-            </div>
-            <Form method="post" className="flex gap-2">
-              <input type="hidden" name="suggestionId" value={maybe.suggestionId} />
-              <Button type="submit" variant="secondary" name="intent" value="accept" aria-label={`Watch ${maybe.name}`}>
-                Watch
-              </Button>
-              <Button
-                type="submit"
-                variant="tertiary"
-                name="intent"
-                value="dismiss"
-                aria-label={`Dismiss ${maybe.name}`}
-                className="px-2"
-              >
-                Dismiss
-              </Button>
-            </Form>
-          </li>
+          <MaybeRow key={maybe.suggestionId} maybe={maybe} />
         ))}
       </ul>
     </section>
+  );
+}
+
+function MaybeRow({ maybe }: { maybe: Maybe }): ReactElement {
+  const navigation = useNavigation();
+  const busy = navigation.state !== "idle" && navigation.formData?.get("suggestionId") === maybe.suggestionId;
+  const watching = busy && navigation.formData?.get("intent") === "accept";
+  const dismissing = busy && navigation.formData?.get("intent") === "dismiss";
+  return (
+    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line py-4">
+      <div className="flex min-w-0 flex-1 items-start gap-3">
+        <Monogram name={maybe.name} off />
+        <div className="min-w-0">
+          <p className="truncate font-display text-row-name font-bold">{maybe.name}</p>
+          <p className="truncate text-body-sm text-ink-soft">{maybe.domain}</p>
+          {maybe.reason === null ? null : <p className="mt-1 text-body-sm text-ink-soft">{maybe.reason}</p>}
+        </div>
+      </div>
+      <Form method="post" className="flex gap-2">
+        <input type="hidden" name="suggestionId" value={maybe.suggestionId} />
+        <Button
+          type="submit"
+          variant="secondary"
+          name="intent"
+          value="accept"
+          aria-label={`Watch ${maybe.name}`}
+          disabled={busy}
+        >
+          {watching ? "Watching…" : "Watch"}
+        </Button>
+        <Button
+          type="submit"
+          variant="tertiary"
+          name="intent"
+          value="dismiss"
+          aria-label={`Dismiss ${maybe.name}`}
+          className="px-2"
+          disabled={busy}
+        >
+          {dismissing ? "Dismissing…" : "Dismiss"}
+        </Button>
+      </Form>
+    </li>
   );
 }
 
@@ -74,26 +89,28 @@ export function AddCompetitor({
       <Form method="post">
         <input type="hidden" name="intent" value="add" />
         <label htmlFor="add-competitor" className={BLOCK_HEADING}>
-          Add one we missed
+          Add a competitor we missed
         </label>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row">
           <Input
             id="add-competitor"
             name="competitor"
-            placeholder="their website"
+            placeholder="their website address"
             autoComplete="off"
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
             enterKeyHint="go"
             className="sm:flex-1"
+            aria-invalid={message ? true : undefined}
+            aria-describedby={message ? "add-competitor-error" : undefined}
           />
           <Button type="submit" variant="secondary" size="lg" disabled={adding}>
             {adding ? "Adding…" : "Add"}
           </Button>
         </div>
         {message ? (
-          <p role="status" className="mt-3 text-[0.95rem]">
+          <p id="add-competitor-error" role="alert" className="mt-3 text-[0.95rem]">
             {message}
           </p>
         ) : null}

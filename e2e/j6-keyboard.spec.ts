@@ -67,7 +67,7 @@ async function watchOneCompetitor(page: Page): Promise<void> {
   await signInWithMagicLink(page, email, requireInboxToken());
 
   await page.goto("/onboarding");
-  const input = page.getByRole("textbox", { name: "your website, or a handle" });
+  const input = page.getByRole("textbox", { name: /your website address or social username/i });
   await input.fill("gymshark.com");
   await input.press("Enter");
   await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
@@ -76,7 +76,12 @@ async function watchOneCompetitor(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
 
   const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
-  await expect(watching.first().or(page.getByRole("button", { name: /^Watch / }).first())).toBeVisible({
+  await expect(
+    watching
+      .first()
+      .or(page.getByRole("button", { name: /^Watch / }).first())
+      .first(),
+  ).toBeVisible({
     timeout: 60_000,
   });
   if ((await watching.count()) === 0) {
@@ -104,10 +109,12 @@ test("the per-brand switch is operable with a keyboard alone @own-signin", async
   }
 
   // J6 starts here; the pointer is done for the rest of the test. A reload
-  // pins the tab count to the top of the document, then the nav's
-  // "Competitors" link is two Tabs and an Enter away.
+  // pins the tab count to the top of the document. The skip link is first,
+  // then the nav's "Competitors" link is two more Tabs and an Enter away.
   await page.reload();
-  const nav = page.getByRole("navigation", { name: "Places" });
+  const nav = page.getByRole("navigation", { name: "Primary" });
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(nav.getByRole("link", { name: "Home" })).toBeFocused();
   await page.keyboard.press("Tab");
@@ -116,16 +123,16 @@ test("the per-brand switch is operable with a keyboard alone @own-signin", async
   await expect(page).toHaveURL(/\/app\/competitors$/);
   await expect(page.getByRole("heading", { level: 1, name: "Competitors" })).toBeVisible();
 
-  // The focus-order contract: from the top of a freshly loaded page the four
-  // Places come first and in this order. At 390 they are the fixed bottom tab
+  // The focus-order contract: from the top of a freshly loaded page the skip
+  // link is first, then the four Places. At 390 they are the fixed bottom tab
   // bar — same order, different chrome.
   await page.reload();
   const order: string[] = [];
-  for (let i = 0; i < 4; i += 1) {
+  for (let i = 0; i < 5; i += 1) {
     await page.keyboard.press("Tab");
     order.push(await page.evaluate(() => document.activeElement?.textContent?.trim() ?? ""));
   }
-  expect(order).toEqual(["Home", "Competitors", "Alerts", "Settings"]);
+  expect(order).toEqual(["Skip to content", "Home", "Competitors", "Alerts", "Settings"]);
   const viewport = page.viewportSize();
   if (viewport === null) throw new Error("page.viewportSize() returned null");
   const width = viewport.width;
@@ -158,7 +165,7 @@ test("the per-brand switch is operable with a keyboard alone @own-signin", async
   const noteId = await toggle.getAttribute("aria-describedby");
   expect(noteId).toBeTruthy();
   const note = page.locator(`[id="${noteId ?? ""}"]`);
-  await expect(note).toContainText("Off stops the watching and the alerts");
+  await expect(note).toContainText("Turn off to stop watching and alerts");
 
   // Space turns the brand off. The change is announced because focus stays on
   // the switch and its aria-checked flips; the line it describes now reads
@@ -167,7 +174,7 @@ test("the per-brand switch is operable with a keyboard alone @own-signin", async
   await expect(toggle).toBeFocused();
   await expect(toggle).toHaveAttribute("aria-checked", "false");
   await expect(page.locator("[data-slot='brand-switch-field']").first()).toHaveAttribute("data-state", "off");
-  await expect(note).toContainText(/paused .*history kept/);
+  await expect(note).toContainText(/Paused .*history kept/);
   console.log(
     `switch[width=${String(width)}] aria-checked=true->false, note="${(await note.textContent())?.trim() ?? ""}"`,
   );
@@ -176,7 +183,7 @@ test("the per-brand switch is operable with a keyboard alone @own-signin", async
   await page.keyboard.press("Space");
   await expect(toggle).toBeFocused();
   await expect(toggle).toHaveAttribute("aria-checked", "true");
-  await expect(note).toContainText("Off stops the watching and the alerts");
+  await expect(note).toContainText("Turn off to stop watching and alerts");
   console.log(
     `switch[width=${String(width)}] aria-checked=false->true, note="${(await note.textContent())?.trim() ?? ""}"`,
   );

@@ -67,6 +67,12 @@ function text(html: string): string {
   return html.replace(/<[^>]*>/g, " ");
 }
 
+function peerRow(html: string, entityId: string): string {
+  const match = new RegExp(`<li data-entity-id="${entityId}"[\\s\\S]*?</li>`).exec(html);
+  expect(match).not.toBeNull();
+  return match?.[0] ?? "";
+}
+
 describe("the competitor rail", () => {
   it("draws peers, facts, sources and the still-a-competitor answer in order", () => {
     const html = render();
@@ -107,10 +113,23 @@ describe("the competitor rail", () => {
     expect(html.match(/aria-current="page"/g)).toHaveLength(1);
   });
 
+  it("says in words that a switched-off competitor is paused", () => {
+    const html = render({
+      peers: [
+        { entityId: "comp-on", name: "Kindred", role: "competitor", state: "on", rank: 1 },
+        { entityId: "comp-off", name: "Casetta", role: "competitor", state: "off", rank: 2 },
+      ],
+    });
+    expect(html.match(/\(paused\)/g)).toHaveLength(1);
+    expect(peerRow(html, "comp-off")).toContain('<span class="sr-only"> (paused)</span>');
+    expect(peerRow(html, "comp-off")).toContain("opacity-60");
+    expect(peerRow(html, "comp-on")).not.toContain("(paused)");
+  });
+
   it("shows recognized thirty-day facts and drops internal fact kinds", () => {
     const visible = text(render());
     expect(visible).toContain("2 site changes");
-    expect(visible).toContain("1 new role");
+    expect(visible).toContain("1 new job opening");
     expect(visible).not.toContain("still_competitor");
     expect(factLabel("change", 1)).toBe("1 site change");
     expect(factLabel("ad", 2)).toBe("2 ads");
@@ -121,7 +140,7 @@ describe("the competitor rail", () => {
   it("shows each source's live or degraded state and recorded reason", () => {
     const html = render();
     expect(html).toContain('data-state="degraded"');
-    expect(text(html)).toContain("rate-limited");
+    expect(text(html)).toContain("not updating right now");
     expect(html).toContain('data-state="live"');
   });
 
@@ -129,6 +148,13 @@ describe("the competitor rail", () => {
     const visible = text(render());
     expect(visible).toContain("Closed or stopped trading.");
     expect(visible).toContain("Checked 17 Sept");
+  });
+
+  it("renders without throwing when the verdict stamp is not a parseable time value", () => {
+    const visible = text(render({ verdict: { choice: "shut_down", decidedAt: "not a date" } }));
+    expect(visible).toContain("Closed or stopped trading.");
+    expect(visible).toContain("Checked recently");
+    expect(visible).not.toContain("Invalid");
   });
 
   it("never lets scoring or decision machinery reach the DOM", () => {
@@ -140,11 +166,11 @@ describe("the competitor rail", () => {
   it("uses explicit empty states and the first-read source fallback", () => {
     expect(verdictWords("maybe")).toBeNull();
     const unknown = text(render({ verdict: { choice: "maybe", decidedAt: "2026-09-17T00:00:00.000Z" } }));
-    expect(unknown).toContain("We ask this every week. The first answer lands after a week of watching.");
+    expect(unknown).toContain("We check this every week. The first answer arrives after a week of watching.");
     const empty = text(render({ peers: [], facts: [], sources: [], verdict: null, lastChecked: null }));
-    expect(empty).toContain("No standing yet. It comes with your first weekly brief.");
+    expect(empty).toContain("No ranking yet. It arrives with your first weekly brief.");
     expect(empty).toContain("Nothing new from them in the last 30 days.");
-    expect(empty).toContain("We ask this every week. The first answer lands after a week of watching.");
+    expect(empty).toContain("We check this every week. The first answer arrives after a week of watching.");
     expect(empty).toContain("First read tonight at 02:00 UTC.");
   });
 });

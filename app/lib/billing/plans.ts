@@ -50,10 +50,17 @@ export const PLANS = [
 
 export type PlanId = (typeof PLANS)[number]["id"];
 
+export type BillingInterval = "monthly" | "yearly";
+
+export function isBillingInterval(value: unknown): value is BillingInterval {
+  return value === "monthly" || value === "yearly";
+}
+
 export interface PlanSummary {
   tier: PlanId;
   status: string;
   currentPeriodEnd: string | null;
+  trialing: boolean;
   billed: boolean;
 }
 

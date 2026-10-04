@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readCompetitors, readDiscoveryContext, readOnboardingCompetitors } from "../../../app/lib/data/entity.server";
 import { writeDiscoveryResults } from "../../../app/lib/data/suggestion.server";
+import { JevRateLimitedError } from "../../../app/lib/jev/client.server";
 import { judgeCandidates, resolveShortlist } from "../../../app/lib/discovery/run.server";
 import type { ResolvedCandidate } from "../../../app/lib/discovery/run.server";
 
@@ -128,7 +129,11 @@ describe("resolveShortlist", () => {
     )
       .bind("taken-down.example", NOW, NOW)
       .run();
-    const run = vi.fn(() => Promise.resolve({ answers: { is_competitor: { type: "noul", noul: 0.92 } } }));
+    const run = vi.fn(() =>
+      Promise.resolve({
+        answers: { is_competitor: { type: "noul", noul: 0.92 }, same_product_category: { type: "noul", noul: 0.95 } },
+      }),
+    );
     Reflect.set(env, "AI", { run });
     const prepare = vi.spyOn(env.DB, "prepare");
 
@@ -151,7 +156,7 @@ describe("resolveShortlist", () => {
     expect(asked).toHaveLength(1);
     expect(asked[0]).toContain("kept.example");
     expect(asked[0]).not.toContain("taken-down.example");
-    expect(results[0]?.verdict).toMatchObject({ p: 0.92, cached: false });
+    expect(results[0]?.verdict).toMatchObject({ p: 0.984, cached: false });
     const verdicts = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE workspace_id = ?")
       .bind(workspaceId)
       .first<{ n: number }>();
@@ -174,17 +179,91 @@ describe("judgeCandidates", () => {
     const workspaceId = await seedWorkspace();
     const context = await readDiscoveryContext(workspaceId);
     if (context === null) throw new Error("seed failed");
-    const run = vi.fn(() => Promise.resolve({ answers: { is_competitor: { type: "noul", noul: 0.92 } } }));
+    const run = vi.fn(() =>
+      Promise.resolve({
+        answers: { is_competitor: { type: "noul", noul: 0.92 }, same_product_category: { type: "noul", noul: 0.95 } },
+      }),
+    );
     Reflect.set(env, "AI", { run });
 
     const first = await judgeCandidates(context, [candidate("Alphalete", "alphaleteathletics.com")]);
     await writeDiscoveryResults(workspaceId, first, NOW);
     const second = await judgeCandidates(context, [candidate("Alphalete", "alphaleteathletics.com")]);
 
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(run.mock.calls[0]?.[0]).toBe("@cf/cloudflare/clef");
+    expect(first[0]?.verdict).toMatchObject({ p: 0.984, cached: false });
+    expect(second[0]?.verdict).toMatchObject({ p: 0.99, cached: true });
+  });
+
+  it("raises a rate limit so the workflow step retries instead of leaving the candidate pending", async () => {
+    const workspaceId = await seedWorkspace();
+    const context = await readDiscoveryContext(workspaceId);
+    if (context === null) throw new Error("seed failed");
+    Reflect.set(env, "AI", { run: vi.fn(() => Promise.reject(new Error("2003: Rate limited"))) });
+
+    await expect(judgeCandidates(context, [candidate("Alphalete", "alphaleteathletics.com")])).rejects.toThrow(
+      JevRateLimitedError,
+    );
+  });
+
+  it("still leaves a candidate unjudged when the AI credits refuse, with no retry", async () => {
+    const workspaceId = await seedWorkspace();
+    const context = await readDiscoveryContext(workspaceId);
+    if (context === null) throw new Error("seed failed");
+    Reflect.set(env, "AI", { run: vi.fn(() => Promise.reject(new Error("2021: Payment error"))) });
+
+    const results = await judgeCandidates(context, [candidate("Alphalete", "alphaleteathletics.com")]);
+
+    expect(results[0]?.verdict).toBeNull();
+  });
+
+  it("drops a candidate Jev judges a different product category, whatever the competitor answer says", async () => {
+    const workspaceId = await seedWorkspace();
+    const context = await readDiscoveryContext(workspaceId);
+    if (context === null) throw new Error("seed failed");
+    const run = vi.fn(() =>
+      Promise.resolve({
+        answers: { is_competitor: { type: "noul", noul: 0.95 }, same_product_category: { type: "noul", noul: 0.04 } },
+      }),
+    );
+    Reflect.set(env, "AI", { run });
+
+    const results = await judgeCandidates(context, [candidate("Patagonia", "patagonia.com")]);
+
     expect(run).toHaveBeenCalledTimes(1);
-    expect(run.mock.calls[0]?.[0]).toBe("typesafe/jev");
-    expect(first[0]?.verdict).toMatchObject({ p: 0.92, cached: false });
-    expect(second[0]?.verdict).toMatchObject({ p: 0.92, cached: true });
+    expect(results[0]?.verdict).toMatchObject({ questionId: "is_competitor", p: 0 });
+  });
+
+  it("drops a candidate whose category answer is below the floor even when it is above the reject line", async () => {
+    const workspaceId = await seedWorkspace();
+    const context = await readDiscoveryContext(workspaceId);
+    if (context === null) throw new Error("seed failed");
+    const run = vi.fn(() =>
+      Promise.resolve({
+        answers: { is_competitor: { type: "noul", noul: 0.62 }, same_product_category: { type: "noul", noul: 0.15 } },
+      }),
+    );
+    Reflect.set(env, "AI", { run });
+
+    const results = await judgeCandidates(context, [candidate("Patagonia", "patagonia.com")]);
+
+    expect(results[0]?.verdict).toMatchObject({ questionId: "is_competitor", p: 0 });
+  });
+
+  it("keeps the candidate unjudged for the user to confirm when the category answer is missing", async () => {
+    const workspaceId = await seedWorkspace();
+    const context = await readDiscoveryContext(workspaceId);
+    if (context === null) throw new Error("seed failed");
+    const run = vi.fn(() => Promise.resolve({ answers: { is_competitor: { type: "noul", noul: 0.92 } } }));
+    Reflect.set(env, "AI", { run });
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const results = await judgeCandidates(context, [candidate("Alphalete", "alphaleteathletics.com")]);
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.verdict).toBeNull();
+    errors.mockRestore();
   });
 
   it("stores every candidate unjudged when Jev refuses, and stops asking after the first refusal", async () => {

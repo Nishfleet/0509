@@ -10,6 +10,7 @@ import { LIVE_COVERAGE, PLAN_NOTE } from "./coverage";
 import { FAQ } from "./faq";
 import { LEGAL_UPDATED } from "./legal/document";
 import { planNames, planPriceList } from "./pricing-page";
+import { plainSourceReason } from "./source-status-words";
 import { SITE_URL } from "./structured-data";
 import { watchedClaims } from "./watched-claims";
 
@@ -25,7 +26,7 @@ export const SITEMAP_LASTMOD: Readonly<Record<string, string>> = {
   "/terms": LEGAL_UPDATED,
 };
 export const DISALLOWED_PREFIXES = ["/app", "/api", "/u", "/v", "/login", "/onboarding", "/oauth", "/design"] as const;
-export const AGENT_PATHS = ["/mcp", "/api/v1/openapi.json"] as const;
+export const AGENT_PATHS = ["/mcp", "/api/v1/openapi.json", "/.well-known/http-message-signatures-directory"] as const;
 export const MCP_URL = `${SITE_URL}/mcp`;
 
 const PAGE_SUMMARIES: Record<(typeof PUBLIC_PATHS)[number], { title: string; summary: string }> = {
@@ -91,7 +92,7 @@ export function llmsTxt(origin: string, sources: readonly LlmsTxtSource[], now: 
       ...FAQ.flatMap((entry) => [`**${entry.question}** ${entry.answer}`, ""]),
       "## Agents",
       "",
-      `- [MCP server](${MCP_URL}): add it as a connector in Claude, ChatGPT or Cursor and sign in; read-only, limited to your own workspace`,
+      `- [MCP server](${MCP_URL}): add it as a connector in Claude, ChatGPT or Cursor and sign in; read-only, limited to your own account`,
       ...Object.entries(registeredToolDescriptors).map(([name, tool]) => `- ${name}: ${tool.title}`),
       `- [API reference](${origin}/api/v1/openapi.json): OpenAPI 3.1 for the read-only REST API; send an API key from Settings as a Bearer token`,
       "",
@@ -125,9 +126,9 @@ function llmsWatchQualifier(status: SourcePillStatus): string {
     return " (no data yet)";
   }
   if (status.reason === null) {
-    return " (degraded — not answering today)";
+    return " (not answering today)";
   }
-  return ` (degraded: ${status.reason} — not answering today)`;
+  return ` (not answering today: ${plainSourceReason(status.reason)})`;
 }
 
 function llmsWatchLine(

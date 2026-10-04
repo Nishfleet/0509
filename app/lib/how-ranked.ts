@@ -13,16 +13,16 @@ export const BUCKET_LABELS = {
   mention_matters: "Mentions that matter",
   mention_normal: "Mentions",
   site_change_noteworthy: "Noteworthy site changes",
-  ad_new_creative: "New ad creatives",
-  ad_copy_change: "Ad copy or offer changes",
-  hiring_new_role: "New roles",
+  ad_new_creative: "New ads",
+  ad_copy_change: "Ad wording or offer changes",
+  hiring_new_role: "New job openings",
 } satisfies Record<ScoreBucket, string>;
 
 const RELIABILITY_LABELS = {
-  official_api: "Official API",
-  rss: "RSS feed",
-  scraped_page: "Scraped page",
-  best_effort: "Best effort",
+  official_api: "Official data",
+  rss: "Public feed",
+  scraped_page: "Page we read",
+  best_effort: "Best guess",
 } satisfies Record<Reliability, string>;
 
 export interface HowRankedWeight {

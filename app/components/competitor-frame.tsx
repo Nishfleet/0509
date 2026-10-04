@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import type { CSSProperties, ReactElement } from "react";
 
 import { BiggestMove } from "./biggest-move";
 import { DevelopmentsFeed } from "./developments-feed";
@@ -20,6 +20,7 @@ export interface CompetitorFrameProps {
   pages: number;
   lastChecked: string | null;
   pausedOn: string | null;
+  unreadable: boolean;
   rail: Omit<CompetitorRailProps, "lastChecked">;
 }
 
@@ -47,10 +48,13 @@ function SnapshotSection({ weekCount, pages, lastChecked }: SnapshotProps): Reac
       <h2 id="competitor-snapshot" className={HEADING}>
         This week
       </h2>
-      <dl className="grid grid-cols-1 border border-line min-[480px]:grid-cols-3">
-        <Cell label="Site changes" value={String(weekCount)} />
+      <dl
+        className="grid grid-cols-1 border border-line min-[480px]:[grid-template-columns:repeat(var(--cols),minmax(0,1fr))]"
+        style={{ "--cols": (weekCount > 0 ? 1 : 0) + 1 + (lastChecked === null ? 0 : 1) } as CSSProperties}
+      >
+        {weekCount > 0 ? <Cell label="Site changes" value={String(weekCount)} /> : null}
         <Cell label="Pages watched" value={String(pages)} />
-        <Cell label="Last checked" value={lastChecked ?? "Tonight"} />
+        {lastChecked === null ? null : <Cell label="Last checked" value={lastChecked} />}
       </dl>
     </section>
   );
@@ -73,19 +77,34 @@ function BiggestMoveSection({ biggestMove, quiet, changes }: BiggestMoveSectionP
   );
 }
 
-type DevelopmentsSectionProps = Pick<CompetitorFrameProps, "changes" | "developments" | "lastChecked" | "pausedOn">;
+type DevelopmentsSectionProps = Pick<
+  CompetitorFrameProps,
+  "changes" | "developments" | "lastChecked" | "pausedOn" | "unreadable"
+>;
 
-function DevelopmentsSection({ changes, developments, lastChecked, pausedOn }: DevelopmentsSectionProps): ReactElement {
+function DevelopmentsSection({
+  changes,
+  developments,
+  lastChecked,
+  pausedOn,
+  unreadable,
+}: DevelopmentsSectionProps): ReactElement {
   return (
     <section data-section="developments" aria-labelledby="competitor-developments" className="min-w-0">
       <h2 id="competitor-developments" className={HEADING}>
-        Developments
+        What's new
       </h2>
       {pausedOn === null ? null : (
         <p data-slot="feed-paused" className="border-t border-ink pt-3 text-meta text-ink-soft">
-          Paused {pausedOn}. We stopped checking here; turn it back on to pick up where it left off.
+          Paused {pausedOn}. We've stopped checking. Turn it back on to pick up where it left off.
         </p>
       )}
+      {unreadable ? (
+        <p data-slot="site-unreadable" className="border-t border-ink pt-3 text-meta text-ink-soft">
+          We couldn't read their website. It may block automated visits. We'll keep trying, and we're still watching
+          everything else about them.
+        </p>
+      ) : null}
       {developments.length === 0 ? (
         <EmptyState sentence={developmentsEmpty(lastChecked)} />
       ) : (
@@ -104,6 +123,7 @@ export function CompetitorFrame({
   pages,
   lastChecked,
   pausedOn,
+  unreadable,
   rail,
 }: CompetitorFrameProps): ReactElement {
   return (
@@ -116,6 +136,7 @@ export function CompetitorFrame({
           developments={developments}
           lastChecked={lastChecked}
           pausedOn={pausedOn}
+          unreadable={unreadable}
         />
       </div>
       <CompetitorRail {...rail} lastChecked={lastChecked} />

@@ -42,14 +42,14 @@ test.describe("a watched competitor page leads with the switch and its consequen
 
     await page.goto("/app/competitors");
     await page
-      .getByRole("list", { name: "Competitors" })
+      .getByRole("list", { name: "Competitors", exact: true })
       .getByRole("listitem")
       .filter({ hasText: "nike.com" })
       .getByRole("link")
       .click();
     await expect(page).toHaveURL(/\/app\/competitors\/[^/]+$/);
 
-    const sentence = page.getByText("Off stops the watching and the alerts.", { exact: false });
+    const sentence = page.getByText("Turn off to stop watching and alerts.", { exact: false });
     await expect(sentence).toBeVisible();
 
     // Exactly one switch on the detail page — the watched competitor's own, whose

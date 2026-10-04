@@ -64,11 +64,11 @@ describe("snapshotCells", () => {
   it("labels the six cells", () => {
     expect(snapshotCells(input()).map((cell) => cell.label)).toEqual([
       "Rank",
-      "New ad creatives",
-      "Ad copy changes",
+      "New ads",
+      "Ad wording changes",
       "Noteworthy site changes",
       "Mentions that matter",
-      "New roles",
+      "New job openings",
     ]);
   });
 
@@ -97,7 +97,7 @@ describe("snapshotCells", () => {
       label: "Rank",
       value: null,
       movement: null,
-      reason: "Ranked when your week closes.",
+      reason: "Your rank appears when the week ends.",
     });
   });
 
@@ -105,7 +105,7 @@ describe("snapshotCells", () => {
     const cells = snapshotCells(input({ counts: { ...COUNTS, newCreatives: 0 } }));
     expect(cellOf(cells, "new_creatives")).toEqual({
       key: "new_creatives",
-      label: "New ad creatives",
+      label: "New ads",
       value: 0,
       movement: null,
       reason: null,
@@ -119,10 +119,10 @@ describe("snapshotCells", () => {
       label: "Noteworthy site changes",
       value: null,
       movement: null,
-      reason: "Not watched for this brand yet.",
+      reason: "We're not watching this for this competitor yet.",
     });
-    expect(cellOf(cells, "mentions")?.reason).toBe("Not watched for this brand yet.");
-    expect(cellOf(cells, "new_roles")?.reason).toBe("Not watched for this brand yet.");
+    expect(cellOf(cells, "mentions")?.reason).toBe("We're not watching this for this competitor yet.");
+    expect(cellOf(cells, "new_roles")?.reason).toBe("We're not watching this for this competitor yet.");
   });
 
   it("dashes both ads cells when one ads source did not answer, naming only that source", () => {
@@ -139,17 +139,17 @@ describe("snapshotCells", () => {
     );
     expect(cellOf(cells, "new_creatives")).toEqual({
       key: "new_creatives",
-      label: "New ad creatives",
+      label: "New ads",
       value: null,
       movement: null,
-      reason: "TikTok creative center did not answer this week.",
+      reason: "TikTok creative center did not respond this week.",
     });
     expect(cellOf(cells, "copy_changes")).toEqual({
       key: "copy_changes",
-      label: "Ad copy changes",
+      label: "Ad wording changes",
       value: null,
       movement: null,
-      reason: "TikTok creative center did not answer this week.",
+      reason: "TikTok creative center did not respond this week.",
     });
   });
 
@@ -166,7 +166,7 @@ describe("snapshotCells", () => {
       }),
     );
     expect(cellOf(cells, "new_creatives")?.reason).toBe(
-      "Meta ads library, TikTok creative center did not answer this week.",
+      "Meta ads library, TikTok creative center did not respond this week.",
     );
   });
 
@@ -183,7 +183,7 @@ describe("snapshotCells", () => {
       }),
     );
     expect(cellOf(cells, "copy_changes")?.reason).toBe(
-      "Zillow later source, Alpha first source did not answer this week.",
+      "Zillow later source, Alpha first source did not respond this week.",
     );
   });
 

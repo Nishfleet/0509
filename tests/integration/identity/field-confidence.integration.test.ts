@@ -201,4 +201,19 @@ describe("reviewFields", () => {
     expect(review).toEqual({ name: "check", description: "empty", socials: "empty" });
     expect(run).toHaveBeenCalledTimes(1);
   });
+
+  it("falls back to check this on every valued field when the verdicts cannot be saved, never throws", async () => {
+    stubAi(runAnswer({ [NAME_ID]: 0.95, [DESCRIPTION_ID]: 0.95, [SOCIALS_ID]: 0.95 }));
+    vi.spyOn(env.DB, "batch").mockRejectedValueOnce(new Error("D1 network connection lost"));
+
+    const review = await reviewFields({
+      workspaceId: WS_ID,
+      subject: SUBJECT,
+      fields: ALL_FIELDS,
+      edited: [],
+      now: NOW,
+    });
+
+    expect(review).toEqual({ name: "check", description: "check", socials: "check" });
+  });
 });

@@ -5,6 +5,9 @@ import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
 
 import { API_KEY_PREFIX } from "./agent/paths";
+import { cancelPendingDigests } from "./data/digest.server";
+import { suppressWorkspaceTargets } from "./data/email_suppression.server";
+import { readWorkspaceIdForOwner } from "./data/workspace.server";
 import { ensureWorkspaceForSignIn } from "./workspace.server";
 import { accessPrecleared } from "./auth/access-preclearance.server";
 import { changeEmailEmail } from "./auth/change-email-email";
@@ -118,6 +121,7 @@ function authPlugins(env: AuthEnv, options?: { captcha?: boolean }) {
     apiKey({
       defaultPrefix: API_KEY_PREFIX,
       maximumNameLength: 60,
+      enableMetadata: true,
       rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 120 },
     }),
   ];
@@ -138,7 +142,10 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
       cookieCache: { enabled: true, maxAge: SESSION_COOKIE_CACHE_SECONDS },
     },
     user: {
-      deleteUser: { enabled: true },
+      deleteUser: {
+        enabled: true,
+        beforeDelete: ({ id }) => silenceWorkspace(env.DB, id),
+      },
       changeEmail: {
         enabled: true,
         updateEmailWithoutVerification: false,
@@ -180,6 +187,13 @@ export async function signOut(env: AuthEnv, request: Request): Promise<Headers> 
   return headers;
 }
 
+async function silenceWorkspace(db: D1Database, userId: string): Promise<void> {
+  const workspaceId = await readWorkspaceIdForOwner(userId);
+  if (workspaceId === null) return;
+  await suppressWorkspaceTargets(workspaceId);
+  await cancelPendingDigests(db, workspaceId);
+}
+
 export async function deleteSignedInUser(env: AuthEnv, request: Request, now: Date): Promise<Headers | null> {
   const auth = createAuth(env);
   const session = await auth.api.getSession({ headers: request.headers, query: FRESH });
@@ -197,6 +211,15 @@ export async function deleteSignedInUser(env: AuthEnv, request: Request, now: Da
     returnHeaders: true,
   });
   return headers;
+}
+
+export async function removeSignedInPasskey(env: AuthEnv, request: Request, id: string): Promise<"removed" | "stale"> {
+  const auth = createAuth(env);
+  const session = await auth.api.getSession({ headers: request.headers, query: FRESH });
+  if (!session) return "stale";
+  if (Date.now() - new Date(session.session.createdAt).getTime() >= FRESH_SESSION_SECONDS * 1000) return "stale";
+  await auth.api.deletePasskey({ body: { id }, headers: request.headers, query: FRESH });
+  return "removed";
 }
 
 export async function requestEmailChange(

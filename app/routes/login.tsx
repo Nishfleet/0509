@@ -1,24 +1,26 @@
 import type { Route } from "./+types/login";
 import { env } from "cloudflare:workers";
-import { data, Form, useActionData, useLoaderData, useNavigation, useSearchParams } from "react-router";
+import { useState } from "react";
+import { data, redirect, useActionData, useLoaderData, useNavigation, useSearchParams } from "react-router";
 
 import { AccountDeleteNotice } from "../components/account-delete-notice";
+import { SignInEmailForm, SignInError } from "../components/sign-in-email-form";
 import { SIGN_IN_LEDE, SIGN_IN_SHELL, SIGN_IN_TITLE, SignInSent } from "../components/sign-in-sent";
-import { TurnstileWidget } from "../components/turnstile-widget";
+import { PasskeyOption } from "../components/passkey-option";
 import { Wordmark } from "../components/wordmark";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
 import { Footer } from "../components/footer";
 import { safeReturnTo } from "../lib/agent/paths";
 import { subjectRedirect } from "../lib/onboarding-subject";
+import { deadLinkMessage } from "../lib/login-link-error";
 import { formMagicLinkRequest } from "../lib/auth/login-magic-link.server";
 import { createAuthForRequest } from "../lib/auth.server";
+import { hasSession } from "../lib/require-session.server";
 import {
   clearAccountDeleteInstanceId,
   readAccountDeleteInstanceId,
   readAccountDeleteProgress,
 } from "../lib/account-delete.server";
-import { usePasskeySignIn, type PasskeyState } from "../lib/use-passkey-sign-in";
+import { usePasskeySignIn } from "../lib/use-passkey-sign-in";
 import { useTimezoneCookie } from "../lib/use-timezone-cookie";
 
 type LoginActionData = { error: string; sent?: never } | { sent: { email: string; at: number }; error?: never };
@@ -33,14 +35,17 @@ export function meta() {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const turnstileSiteKey = env.TURNSTILE_SITE_KEY;
-  const id = new URL(request.url).searchParams.get("deleted");
+  const search = new URL(request.url).searchParams;
+  const linkError = deadLinkMessage(search);
+  const id = search.get("deleted");
+  if (id === null && linkError === null && (await hasSession(request))) throw redirect(signInTarget(search));
   if (id === null || id === "" || (await readAccountDeleteInstanceId(request)) !== id) {
-    return data({ turnstileSiteKey, id: null, progress: null });
+    return data({ turnstileSiteKey, linkError, id: null, progress: null });
   }
   const progress = await readAccountDeleteProgress(id);
   const finished = progress?.files === "removed";
   const headers = finished ? { "set-cookie": await clearAccountDeleteInstanceId() } : undefined;
-  return data({ turnstileSiteKey, id, progress }, { headers });
+  return data({ turnstileSiteKey, linkError, id, progress }, { headers });
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -66,53 +71,28 @@ export async function action({ request }: Route.ActionArgs) {
   return data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 });
 }
 
-function EmailForm({ busy, turnstileSiteKey }: { busy: boolean; turnstileSiteKey: string }) {
-  return (
-    <Form method="post" className="mt-8 flex flex-col gap-3">
-      <label htmlFor="email" className="font-mono text-eyebrow text-ink-soft uppercase">
-        Email
-      </label>
-      <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" required />
-      <TurnstileWidget siteKey={turnstileSiteKey} startOn="email-focus" />
-      <Button type="submit" size="lg" disabled={busy} className="mt-2">
-        {busy ? "Sending…" : "Email me a link"}
-      </Button>
-    </Form>
-  );
-}
-
-function PasskeyOption({ state, onSignIn }: { state: PasskeyState; onSignIn: () => Promise<void> }) {
-  return (
-    <>
-      <Button
-        type="button"
-        variant="tertiary"
-        className="mt-4 self-start"
-        onClick={() => void onSignIn()}
-        disabled={state === "working"}
-      >
-        {state === "working" ? "Follow the prompt…" : "Use a passkey instead"}
-      </Button>
-      {state === "failed" ? (
-        <p role="alert" className="text-[0.95rem]">
-          Your passkey didn't sign you in. Try it again, or use the email link.
-        </p>
-      ) : null}
-    </>
-  );
-}
-
 export default function Login() {
   const actionData = useActionData<LoginActionData>();
   const deleted = useLoaderData<typeof loader>();
   const busy = useNavigation().state !== "idle";
   const [searchParams] = useSearchParams();
   const passkey = usePasskeySignIn(signInTarget(searchParams));
+  const [dismissedAt, setDismissedAt] = useState<number | null>(null);
   useTimezoneCookie();
 
-  if (actionData?.sent) {
+  const error = actionData?.error ?? deleted.linkError ?? "";
+
+  const sent = actionData?.sent;
+  if (sent && sent.at !== dismissedAt) {
     return (
-      <SignInSent key={actionData.sent.at} email={actionData.sent.email} turnstileSiteKey={deleted.turnstileSiteKey} />
+      <SignInSent
+        key={sent.at}
+        email={sent.email}
+        turnstileSiteKey={deleted.turnstileSiteKey}
+        onChangeEmail={() => {
+          setDismissedAt(sent.at);
+        }}
+      />
     );
   }
 
@@ -127,12 +107,8 @@ export default function Login() {
         {deleted.progress === null || deleted.id === null ? null : (
           <AccountDeleteNotice id={deleted.id} progress={deleted.progress} />
         )}
-        {actionData?.error ? (
-          <p role="alert" className="mt-8 text-[0.95rem]">
-            {actionData.error}
-          </p>
-        ) : null}
-        <EmailForm busy={busy} turnstileSiteKey={deleted.turnstileSiteKey} />
+        <SignInError message={error} />
+        <SignInEmailForm busy={busy} turnstileSiteKey={deleted.turnstileSiteKey} error={error} />
         <PasskeyOption state={passkey.state} onSignIn={passkey.signIn} />
       </main>
       <Footer />

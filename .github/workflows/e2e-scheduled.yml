@@ -20,7 +20,7 @@ on:
       journey:
         description: Journey to run now
         type: choice
-        options: [none, j12, suite, signin, j8-hard, j8-soft, soak-report]
+        options: [none, j12, suite, signin, j8-hard, j8-soft, soak-report, backup-proof]
         default: none
       spec:
         description: 'One spec or a filter to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts (0509 sign-up verdict, 2026-09-28)'
@@ -31,7 +31,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: e2e-scheduled-${{ inputs.spec && 'spec' || github.event.schedule == '30 6 * * *' && 'soak' || inputs.journey == 'soak-report' && 'soak' || inputs.journey == 'suite' && 'suite' || github.event.schedule == '17 4 * * *' && 'signin' || inputs.journey == 'signin' && 'signin' || startsWith(inputs.journey, 'j8-') && 'j8' || 'j12' }}
+  group: e2e-scheduled-${{ inputs.spec && 'spec' || github.event.schedule == '30 6 * * *' && 'soak' || inputs.journey == 'soak-report' && 'soak' || inputs.journey == 'suite' && 'suite' || github.event.schedule == '17 4 * * *' && 'signin' || inputs.journey == 'signin' && 'signin' || startsWith(inputs.journey, 'j8-') && 'j8' || inputs.journey == 'backup-proof' && 'backup' || 'j12' }}
   cancel-in-progress: false
 
 jobs:
@@ -289,6 +289,34 @@ jobs:
           [ -z "$N" ] || gh issue close "$N" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Green again on $RUN_URL."
       - name: Red unless every shard passed
         run: test "$SHARDS" = success
+  backup-proof:
+    name: backup-proof
+    # Reads the snapshot-backup instances of the last 48 h and describes each
+    # cron-started one (0509#5982, 0509#6289). Counts and R2 cursors only, no rows.
+    if: inputs.journey == 'backup-proof' && inputs.spec == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Describe the cron-started snapshot-backup instances
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          since=$(date -u -d '48 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          npx wrangler workflows instances list snapshot-backup --date-start "$since" --per-page 100 --json | jq -s -r 'add // [] | .[] | [.id, .status, .created_on, .trigger_source] | @tsv' | tee instances.tsv
+          cut -f1 instances.tsv | grep '^snapshot-backup-' | while read -r id; do
+            echo "== $id"
+            npx wrangler workflows instances describe snapshot-backup "$id" < /dev/null
+          done
   soak-report:
     name: soak-report
     # Reads counts only, never rows: no email, report text or other customer
@@ -340,26 +368,53 @@ jobs:
             npx wrangler d1 execute 0509 --remote --json --command "$1" | jq -c '.[0].results'
           }
           failed=0
+          missed=""
+          cron_instances() {
+            npx wrangler workflows instances list "$1" --date-start "$since" --per-page 100 --json | jq -s -r --arg prefix "$1-" '(add // []) | map(select(.id | startswith($prefix))) | length'
+          }
+          crons=""
+          for name in mentions-sweep site-sweep hiring-sweep feed-sweep snapshot-backup; do
+            n=$(cron_instances "$name") || n=unreadable
+            crons="$crons$name $n, "
+            [[ "$n" =~ ^[1-9][0-9]*$ ]] || { missed="$missed$name "; failed=1; }
+          done
+          blocked=$(d1 "SELECT key, degraded_reason AS reason FROM source WHERE degraded_reason LIKE 'blocked:%' ORDER BY key" | jq -r 'if length == 0 then "none" else map("\(.key) (\(.reason))") | join(", ") end')
           required='["is_competitor","still_competitor","noteworthy_change","own_site_breakage","read_this_first","mention_is_about_brand","mention_matters","page_role","identity_field_confidence.name","identity_field_confidence.description","identity_field_confidence.socials"]'
           verdicts=$(d1 "SELECT question_id, COUNT(*) AS n, MAX(decided_at) AS last FROM jev_verdict GROUP BY question_id")
           missing=$(jq -r --argjson req "$required" '[.[].question_id] as $have | $req - $have | join(", ")' <<< "$verdicts")
           dup=$(jq -r '[.[] | select(.question_id == "duplicate_signal")] | if length == 0 then "no rows yet" else "\(.[0].n) rows, last \(.[0].last)" end' <<< "$verdicts")
           [ -z "$missing" ] || failed=1
-          stale=$(d1 "SELECT s.key AS key FROM source s WHERE s.is_enabled = 1 AND s.degraded_reason IS NULL AND (s.latest_fetched_at IS NULL OR s.latest_fetched_at < '$since') AND EXISTS (SELECT 1 FROM watch w WHERE w.source_id = s.id AND w.is_active = 1) ORDER BY s.key" | jq -r 'map(.key) | join(", ")')
+          stale=$(d1 "SELECT s.key AS key FROM source s WHERE s.is_enabled = 1 AND s.degraded_reason IS NULL AND (s.latest_fetched_at IS NULL OR s.latest_fetched_at < '$since') AND EXISTS (SELECT 1 FROM watch w WHERE w.source_id = s.id AND w.is_active = 1 AND COALESCE(CASE WHEN json_valid(w.config_json) THEN json_extract(w.config_json, '$.noChannel.state') END, '') <> 'degraded') ORDER BY s.key" | jq -r 'map(.key) | join(", ")')
           [ -z "$stale" ] || failed=1
           gdelt=$(d1 "SELECT COUNT(*) AS n FROM snapshot sn JOIN watch w ON w.id = sn.watch_id JOIN source s ON s.id = w.source_id WHERE s.key = 'gdelt.doc' AND sn.item_count > 0 AND sn.fetched_at >= '$since'" | jq -r '.[0].n')
           mentions=$(d1 "SELECT COUNT(*) AS n FROM signal WHERE kind = 'mention' AND observed_at >= '$since'" | jq -r '.[0].n')
           [ "$gdelt" -gt 0 ] && [ "$mentions" -gt 0 ] || failed=1
+          users=$(d1 "SELECT COUNT(*) AS total, SUM((email LIKE 'e2e+%@0509.io' OR email LIKE 'canary%' OR email LIKE '%@fixture.0509.in') AND email NOT IN ('e2e+j7@0509.io', 'e2e+j8-hard@0509.io', 'e2e+j8-soft@0509.io', 'e2e+j8-hard-v2@0509.io', 'e2e+j8-soft-v2@0509.io', 'e2e+j9-mentions@0509.io', 'e2e+j12-rollovers@0509.io', 'e2e+soak@0509.io')) AS leftover FROM \"user\"" | jq -r '.[0] | "\(.total) users, \(.leftover) leftover test accounts (the eight kept journey accounts are not counted)"')
+          pricing=$(d1 "SELECT e.domain AS brand, p.url IS NOT NULL AS judged, COUNT(DISTINCT w.id) AS watches, COUNT(sn.id) AS snapshots FROM entity e LEFT JOIN page p ON p.entity_id = e.id AND p.role = 'pricing' AND p.role_decided_for_hash IS NOT NULL LEFT JOIN watch w ON w.entity_id = e.id AND w.target_key = p.url AND w.is_active = 1 AND w.source_id = (SELECT id FROM source WHERE key = 'site.web') LEFT JOIN snapshot sn ON sn.watch_id = w.id AND sn.fetched_at >= '$since' WHERE e.role = 'competitor' AND e.state = 'on'$scope GROUP BY e.id ORDER BY e.domain")
+          pricing_lines=$(jq -r 'map("\(.brand) " + (if .judged == 0 then "no pricing page judged" elif .watches == 0 then "pricing page judged, NO WATCH" elif .snapshots == 0 then "watched, no snapshot" else "watched, \(.snapshots) snapshots" end)) | join("; ")' <<< "$pricing")
+          pricing_bad=$(jq -r '[.[] | select(.judged == 1 and (.watches == 0 or .snapshots == 0))] | length' <<< "$pricing")
+          pricing_any=$(jq -r '[.[] | select(.judged == 1)] | length' <<< "$pricing")
+          [ "$pricing_bad" -eq 0 ] && [ "$pricing_any" -gt 0 ] || failed=1
+          feeds=$(d1 "SELECT e.domain AS brand, COUNT(DISTINCT w.id) AS watches, COUNT(sn.id) AS snapshots FROM entity e LEFT JOIN watch w ON w.entity_id = e.id AND w.is_active = 1 AND w.source_id = (SELECT id FROM source WHERE key = 'feed.rss') LEFT JOIN snapshot sn ON sn.watch_id = w.id AND sn.fetched_at >= '$since' WHERE e.role = 'competitor' AND e.state = 'on'$scope GROUP BY e.id ORDER BY e.domain")
+          feed_lines=$(jq -r 'map("\(.brand) " + (if .watches == 0 then "no feed found" elif .snapshots == 0 then "feed watched, NOT READ" else "feed read, \(.snapshots) snapshots" end)) | join("; ")' <<< "$feeds")
+          feed_bad=$(jq -r '[.[] | select(.watches > 0 and .snapshots == 0)] | length' <<< "$feeds")
+          feed_posts=$(d1 "SELECT COUNT(*) AS n FROM signal WHERE kind = 'content' AND observed_at >= '$since'$scope" | jq -r '.[0].n')
+          [ "$feed_bad" -eq 0 ] || failed=1
           {
             echo "Soak report for the 24 hours before $(date -u +%Y-%m-%dT%H:%MZ) (send counts: $label)."
             echo
+            echo "- cron-started Workflow instances in the last 24 h (newest 100 each): ${crons%, }$([ -z "$missed" ] || echo " (FAIL, none or unreadable for: ${missed% })")"
             echo "- site-sweep Workflow instances: $(instances site-sweep)"
             echo "- site sweeps recorded in sweep_run: $sweeps"
             echo "- standing-rollover Workflow instances: $(instances standing-rollover)"
             echo "- send_attempt rows by status: $sends"
             echo "- Jev verdicts: $([ -z "$missing" ] && echo "every required question has a row" || echo "FAIL, no rows for: $missing"); duplicate_signal (informational): $dup"
             echo "- enabled sources with an active watch: $([ -z "$stale" ] && echo "all fetched in the last 24 h or marked degraded" || echo "FAIL, stale and not degraded: $stale")"
+            echo "- sources marked blocked: $blocked"
             echo "- #6110 news: $gdelt gdelt.doc snapshots with items, $mentions mention signals in the last 24 h$([ "$gdelt" -gt 0 ] && [ "$mentions" -gt 0 ] || echo " (FAIL)")"
+            echo "- user table (0509#5731): $users"
+            echo "- pricing-page watches, soak brands: $pricing_lines$([ "$pricing_bad" -eq 0 ] && [ "$pricing_any" -gt 0 ] || echo " (FAIL, $pricing_any brands have a judged pricing page and $pricing_bad of those lack a watch or a snapshot)")"
+            echo "- blog and changelog feeds, soak brands: $feed_lines; $feed_posts new posts filed in the last 24 h$([ "$feed_bad" -eq 0 ] || echo " (FAIL, $feed_bad watched feeds were not read)")"
             echo "- healthchecks.io dead-man and site-sweep pings: not read, no healthchecks.io read key is a repository secret"
             echo "- new Sentry issues: not read, no Sentry auth token is a repository secret"
           } > comment.md

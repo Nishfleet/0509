@@ -21,7 +21,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const session = await requireFreshSession(request);
   const access = await readAgentAccess(context.get(oauthHelpersContext), request, session.user.id);
   const origin = new URL(request.url).origin;
-  return { ...access, mcpUrl: `${origin}${MCP_PATH}`, origin };
+  return { ...access, mcpUrl: `${origin}${MCP_PATH}`, origin, submission: crypto.randomUUID() };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -30,25 +30,25 @@ export async function action({ request, context }: Route.ActionArgs) {
   const intent = form.get("intent");
   const target = form.get("id");
 
-  if (intent === "create-key") {
-    const submitted = form.get("name");
-    const name = typeof submitted === "string" && submitted.trim() !== "" ? submitted.trim().slice(0, 60) : "My agent";
-    return { newKey: await createAgentKey(request, name) };
-  }
+  if (intent === "create-key") return await createAgentKey(request, form);
   if (intent === "revoke-key" && typeof target === "string") {
     await revokeAgentKey(request, target);
   }
   if (intent === "disconnect-app" && typeof target === "string") {
     await disconnectApp(context.get(oauthHelpersContext), session.user.id, target);
   }
-  return { newKey: null };
+  return { newKey: null, duplicate: false };
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   return (
     <main className={PAGE}>
-      <nav aria-label="Breadcrumb" className="mb-4 font-mono text-meta text-ink-soft uppercase">
-        <Link to="/app/settings" prefetch="intent" className="underline decoration-1 underline-offset-4">
+      <nav aria-label="Breadcrumb" className="mb-4 flex items-center font-mono text-meta text-ink-soft uppercase">
+        <Link
+          to="/app/settings"
+          prefetch="intent"
+          className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4"
+        >
           Settings
         </Link>
         <span aria-hidden="true"> / </span>
@@ -56,11 +56,16 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       </nav>
       <PageHeading
         title="Agents and API"
-        lede="Let Claude, ChatGPT, Cursor or your own code read your brief, competitors and alerts. Agents can only read, and only your workspace."
+        lede="Let Claude, ChatGPT, Cursor or your own code read your brief, competitors and alerts. Agents can only read, and only your own account."
       />
       <ConnectDetails mcpUrl={loaderData.mcpUrl} origin={loaderData.origin} />
       <ConnectedApps apps={loaderData.apps} />
-      <AgentKeys keys={loaderData.keys} newKey={actionData?.newKey ?? null} />
+      <AgentKeys
+        keys={loaderData.keys}
+        newKey={actionData?.newKey ?? null}
+        duplicate={actionData?.duplicate ?? false}
+        submission={loaderData.submission}
+      />
     </main>
   );
 }

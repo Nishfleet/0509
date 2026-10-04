@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  evidenceLine,
+  AI_GUARANTEED,
   GENERATOR_ORDER,
   SHORTLIST_TOP,
   nameKey,
@@ -158,35 +158,6 @@ describe("shortlist", () => {
     expect(input).toEqual(before);
   });
 
-  it("builds an evidence line from news publishers and hn threads", () => {
-    const entry: ShortlistEntry = {
-      name: "Alpha",
-      evidence: [
-        ev("https://www.glamourmagazine.co.uk/a", "news"),
-        ev("https://glamourmagazine.co.uk/b", "news"),
-        ev("https://www.vogue.co.uk/c", "news"),
-        ev("https://news.ycombinator.com/item?id=1", "hn"),
-      ],
-      generators: ["news", "hn"],
-      publishers: ["glamourmagazine.co.uk", "vogue.co.uk"],
-      slot: "top",
-      nameKeys: [nameKey("Alpha")],
-    };
-    expect(evidenceLine(entry)).toBe("named by 2 news publishers, mentioned in 1 Hacker News thread");
-  });
-
-  it("builds an evidence line for ads-only entries", () => {
-    const entry: ShortlistEntry = {
-      name: "Beta",
-      evidence: [{ sourceUrl: "https://ads.example.com", excerpt: "", generator: "ads" }],
-      generators: ["ads"],
-      publishers: [],
-      slot: "top",
-      nameKeys: [nameKey("Beta")],
-    };
-    expect(evidenceLine(entry)).toBe("advertises in the same category");
-  });
-
   it("ranks corroborated candidates above ai-only suggestions and keeps the ai-only one via its guaranteed slot", () => {
     const corroborated = Array.from({ length: SHORTLIST_TOP }, (_, index) =>
       dual(`Corroborated ${String(index)}`, index),
@@ -200,6 +171,18 @@ describe("shortlist", () => {
       generators: ["ai"],
     });
     expect(result.entries.slice(0, SHORTLIST_TOP).every((entry) => entry.generators.length === 2)).toBe(true);
+  });
+
+  it("keeps several ai-only suggestions when corroborated candidates fill the top twenty", () => {
+    const corroborated = Array.from({ length: SHORTLIST_TOP }, (_, index) => dual(`Full ${String(index)}`, index));
+    const suggested = Array.from({ length: AI_GUARANTEED + 3 }, (_, index) =>
+      candidate(`Suggested ${String(index)}`, "ai", "https://allbirds.com/", `suggested${String(index)}.com`),
+    );
+    const result = partitionShortlist([...suggested, ...corroborated]);
+    const kept = result.entries.filter((entry) => entry.slot === "guaranteed");
+    expect(kept).toHaveLength(AI_GUARANTEED);
+    expect(kept.every((entry) => entry.generators.length === 1 && entry.generators[0] === "ai")).toBe(true);
+    expect(result.rest).toHaveLength(3);
   });
 
   it("ranks an ai-only suggestion below a single-source candidate and an ai-agreed one above it", () => {

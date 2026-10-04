@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { aiGenerator } from "../../../app/lib/discovery/generators/ai.server";
+import { aiGenerator, warmProposals } from "../../../app/lib/discovery/generators/ai.server";
 import type { FetchedText, Subject } from "../../../app/lib/discovery/types";
 
 const SUBJECT: Subject = { name: "Gymshark", domain: "gymshark.com", description: "Fitness apparel" };
@@ -31,6 +31,11 @@ function liveHosts(...hosts: string[]): void {
   answering(Object.fromEntries(hosts.map((host) => [host, new Response(null, { status: 200 })])));
 }
 
+beforeEach(async () => {
+  const stored = await env.IDENTITY_CACHE.list();
+  for (const key of stored.keys) await env.IDENTITY_CACHE.delete(key.name);
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
   Reflect.deleteProperty(env, "AI");
@@ -55,14 +60,23 @@ describe("aiGenerator", () => {
     ]);
     const [model, input, options] = run.mock.calls[0] as [
       string,
-      { messages: { content: string }[]; response_format: { type: string } },
+      { messages: { content: string }[]; response_format: { type: string }; max_tokens: number },
       unknown,
     ];
-    expect(model).toBe("@cf/meta/llama-3.3-70b-instruct-fp8-fast");
+    expect(model).toBe("@cf/openai/gpt-oss-120b");
     expect(input.response_format.type).toBe("json_schema");
+    expect(input.max_tokens).toBeGreaterThanOrEqual(1_000);
     expect(input.messages[1]?.content).toContain("Gymshark | Gymwear");
     expect(input.messages[1]?.content).toContain("Fitness apparel and accessories");
     expect(options).toMatchObject({ gateway: { id: "default" } });
+  });
+
+  it("reads the list from a chat-completion answer, the shape the larger models return", async () => {
+    const content = JSON.stringify({ competitors: [{ name: "Alphalete", domain: "alphaleteathletics.com" }] });
+    Reflect.set(env, "AI", { run: vi.fn().mockResolvedValue({ choices: [{ message: { content } }] }) });
+    liveHosts("alphaleteathletics.com");
+    const candidates = await aiGenerator(SUBJECT, home());
+    expect(candidates.map((candidate) => candidate.domain)).toEqual(["alphaleteathletics.com"]);
   });
 
   it("drops a hallucinated domain that does not resolve", async () => {
@@ -75,6 +89,13 @@ describe("aiGenerator", () => {
     liveHosts("realco.com");
     const candidates = await aiGenerator(SUBJECT, home());
     expect(candidates.map((candidate) => candidate.name)).toEqual(["Real Co"]);
+  });
+
+  it("keeps a real brand whose site is slow to answer", async () => {
+    proposes({ competitors: [{ name: "Slow Co", domain: "slowco.com" }] });
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new DOMException("timed out", "TimeoutError"));
+    const candidates = await aiGenerator(SUBJECT, home());
+    expect(candidates.map((candidate) => candidate.name)).toEqual(["Slow Co"]);
   });
 
   it("drops the subject's own domain and duplicate proposals", async () => {
@@ -90,18 +111,85 @@ describe("aiGenerator", () => {
     expect(candidates.map((candidate) => candidate.domain)).toEqual(["a.com"]);
   });
 
-  it("degrades to zero candidates when the AI binding throws", async () => {
+  it("fails, rather than returning zero candidates, when the AI binding throws", async () => {
     Reflect.set(env, "AI", { run: vi.fn().mockRejectedValue(new Error("gateway down")) });
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
-    await expect(aiGenerator(SUBJECT, home())).resolves.toEqual([]);
+    await expect(aiGenerator(SUBJECT, home())).rejects.toThrow("gateway down");
   });
 
-  it("degrades to zero candidates on malformed JSON", async () => {
+  it("asks both models and keeps the brands from both answers", async () => {
+    const run = vi
+      .fn()
+      .mockResolvedValueOnce({ response: { competitors: [{ name: "Alpha", domain: "a.com" }] } })
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                competitors: [
+                  { name: "Alpha", domain: "a.com" },
+                  { name: "Beta", domain: "b.com" },
+                ],
+              }),
+            },
+          },
+        ],
+      });
+    Reflect.set(env, "AI", { run });
+    liveHosts("a.com", "b.com");
+    const candidates = await aiGenerator(SUBJECT, home());
+    expect(run.mock.calls.map((call) => call[0])).toEqual([
+      "@cf/openai/gpt-oss-120b",
+      "@cf/nvidia/nemotron-3-120b-a12b",
+    ]);
+    expect(candidates.map((candidate) => candidate.domain)).toEqual(["a.com", "b.com"]);
+  });
+
+  it("reuses the answers a warm-up stored instead of asking the models again", async () => {
+    const run = proposes({ competitors: [{ name: "Alpha", domain: "a.com" }] });
+    liveHosts("gymshark.com", "a.com");
+    await warmProposals(SUBJECT);
+    expect(run).toHaveBeenCalledTimes(2);
+    const asked = vi.spyOn(globalThis, "fetch").mockClear();
+    const candidates = await aiGenerator(SUBJECT, home());
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(asked).not.toHaveBeenCalled();
+    expect(candidates.map((candidate) => candidate.domain)).toEqual(["a.com"]);
+  });
+
+  it("still finds rivals when the cache cannot be read or written", async () => {
+    proposes({ competitors: [{ name: "Alpha", domain: "a.com" }] });
+    liveHosts("gymshark.com", "a.com");
+    vi.spyOn(env.IDENTITY_CACHE, "get").mockRejectedValue(new Error("kv down"));
+    vi.spyOn(env.IDENTITY_CACHE, "put").mockRejectedValue(new Error("kv down"));
+    const candidates = await aiGenerator(SUBJECT, home());
+    expect(candidates.map((candidate) => candidate.domain)).toEqual(["a.com"]);
+  });
+
+  it("asks the models again when the brand's name or description changed", async () => {
+    const run = proposes({ competitors: [{ name: "Alpha", domain: "a.com" }] });
+    liveHosts("gymshark.com", "a.com");
+    await warmProposals(SUBJECT);
+    await aiGenerator({ ...SUBJECT, description: "Gym clothes" }, home());
+    expect(run).toHaveBeenCalledTimes(4);
+  });
+
+  it("keeps the answer that came back when the other model fails", async () => {
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("gateway down"))
+      .mockResolvedValueOnce({ response: { competitors: [{ name: "Alpha", domain: "a.com" }] } });
+    Reflect.set(env, "AI", { run });
+    liveHosts("a.com");
+    const candidates = await aiGenerator(SUBJECT, home());
+    expect(candidates.map((candidate) => candidate.domain)).toEqual(["a.com"]);
+  });
+
+  it("fails on malformed JSON", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     proposes("{not json");
-    await expect(aiGenerator(SUBJECT, home())).resolves.toEqual([]);
+    await expect(aiGenerator(SUBJECT, home())).rejects.toThrow("ai proposer returned malformed JSON");
     proposes({ competitors: "nope" });
-    await expect(aiGenerator(SUBJECT, home())).resolves.toEqual([]);
+    await expect(aiGenerator(SUBJECT, home())).rejects.toThrow("ai proposer returned malformed JSON");
   });
 
   it("still proposes from the card when the homepage cannot be fetched", async () => {
@@ -155,6 +243,36 @@ describe("aiGenerator", () => {
     expect(candidates.map((candidate) => candidate.name)).toEqual(["Ok"]);
   });
 
+  it("keeps a domain that blocks crawlers with 403 or 429, since the brand exists", async () => {
+    proposes({
+      competitors: [
+        { name: "Guarded", domain: "guarded.com" },
+        { name: "Busy", domain: "busy.com" },
+      ],
+    });
+    answering({
+      "guarded.com": new Response(null, { status: 403 }),
+      "busy.com": new Response(null, { status: 429 }),
+    });
+    const candidates = await aiGenerator(SUBJECT, home());
+    expect(candidates.map((candidate) => candidate.name)).toEqual(["Guarded", "Busy"]);
+  });
+
+  it("gives the judge the model's own reason as evidence, and the plain note when it gave none", async () => {
+    proposes({
+      competitors: [
+        { name: "Alphalete", domain: "alphaleteathletics.com", reason: "Sells gym wear to the same lifters." },
+        { name: "Ryderwear", domain: "ryderwear.com" },
+      ],
+    });
+    liveHosts("alphaleteathletics.com", "ryderwear.com");
+    const candidates = await aiGenerator(SUBJECT, home());
+    expect(candidates[0]?.evidence[0]?.excerpt).toContain("Sells gym wear to the same lifters.");
+    expect(candidates[1]?.evidence[0]?.excerpt).toBe(
+      "Proposed by a language model reading the brand's own site; not corroborated by any other source",
+    );
+  });
+
   it("rejects IP literals, localhost and internal or local hosts without fetching them", async () => {
     proposes({
       competitors: ["10.0.0.1", "localhost", "db.internal", "printer.local", "http://169.254.169.254/"].map(
@@ -189,7 +307,7 @@ describe("aiGenerator", () => {
   it("rejects an overlong name and strips control characters from a kept one", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     proposes({ competitors: [{ name: "x".repeat(81), domain: "a.com" }] });
-    await expect(aiGenerator(SUBJECT, home())).resolves.toEqual([]);
+    await expect(aiGenerator(SUBJECT, home())).rejects.toThrow("ai proposer returned malformed JSON");
     proposes({ competitors: [{ name: "Al\u0000pha\nlete", domain: "a.com" }] });
     liveHosts("a.com");
     const candidates = await aiGenerator(SUBJECT, home());

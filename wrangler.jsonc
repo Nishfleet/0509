@@ -133,6 +133,11 @@
     "DODO_PRODUCT_SCOUT": "pdt_0NoeiCehl28XydokfKsmk",
     "DODO_PRODUCT_STARTER": "pdt_0NoeiCjBmCJTfOHquf26O",
     "DODO_PRODUCT_AGENCY": "pdt_0NoeiCmf66xTM4sWXDrAj",
+    "DODO_PRODUCT_SCOUT_YEARLY": "",
+    "DODO_PRODUCT_STARTER_YEARLY": "",
+    "DODO_PRODUCT_AGENCY_YEARLY": "",
+    "DODO_PRODUCT_TESTER": "",
+    "TESTER_EMAIL_HASHES": "",
     "ACCESS_TEAM_DOMAIN": "https://nish345.cloudflareaccess.com",
     "ACCESS_AUD": "b4fa400a1848c913b92c3212dc0714fcdbd1b1b66eb24659e4a7cc01c790575d",
   },
@@ -222,8 +227,8 @@
   "browser": { "binding": "BROWSER" },
 
   // Jev, the typed-decision model (docs/REBUILD-JEV.md), runs as the Workers AI
-  // model typesafe/jev through AI Gateway, paid from the account's AI Gateway
-  // credits (unified billing). No provider key lives in this Worker.
+  // model @cf/cloudflare/clef through AI Gateway, billed with the rest of
+  // Workers AI. No provider key lives in this Worker.
   "ai": { "binding": "AI" },
 
   // Transactional send only. The weekly brief's standing on this lane is an
@@ -327,6 +332,17 @@
       "binding": "HIRING_SWEEP",
       "class_name": "HiringSweepWorkflow",
     },
+    // The nightly blog and changelog feed sweep (docs/engines/content.md):
+    // finds each tracked brand's RSS or Atom feed, then reads every watched
+    // feed with a conditional GET. 02:45 UTC, after the 02:30 hiring sweep and
+    // before the 03:00 standing refresh. One retried step per entity and per
+    // feed; a step that cannot be read fails alone. Inert until the
+    // `feed.rss` source row is enabled.
+    {
+      "name": "feed-sweep",
+      "binding": "FEED_SWEEP",
+      "class_name": "FeedSweepWorkflow",
+    },
     // The nightly snapshot backup (0509#5802): copies every object in
     // 0509-snapshots that 0509-snapshots-backup does not yet hold, one
     // retried step per page of up to 200 objects, preserving httpMetadata.
@@ -358,7 +374,6 @@
       "name": "own-site-check",
       "binding": "OWN_SITE_CHECK",
       "class_name": "OwnSiteCheckWorkflow",
-      "schedules": ["0 * * * *"],
     },
     // The nightly news sweep (docs/engines/mentions.md): GDELT and Hacker
     // News, one step per brand per source, paced for GDELT's one request per
@@ -386,14 +401,29 @@
     // pending digests and claims, and the Monday 04:00 UTC D2 competitor
     // refresh.
     //
-    // Also the four daily Workflow starts: 01:00 mentions-sweep, 02:00
-    // site-sweep, 02:30 hiring-sweep, 05:00 snapshot-backup (0509#6289). The
+    // Also the Workflow starts: 01:00 mentions-sweep, 02:00 site-sweep, 02:30
+    // hiring-sweep, 02:45 feed-sweep, 05:00 snapshot-backup (0509#6289) and the hourly
+    // own-site-check (0509#4124). The
     // Workflow-level `schedules` bind was skipped around redeploys (this Worker
     // deploys 20-90 times a day; snapshot-backup's never fired), so the
     // `scheduled` handler creates each instance with createBatch under the id
     // `<name>-<scheduled instant>`, which skips an id that already exists.
-    // own-site-check stays on `schedules`: hourly, it loses one hour at most.
-    "crons": ["*/5 * * * *", "0 1 * * *", "0 2 * * *", "30 2 * * *", "0 3 * * *", "0 4 * * 1", "0 5 * * *"],
+    // own-site-check starts from the cron like the rest, under one id per
+    // hour (`own-site-check-<date>T<hour>`). Its Workflow-level schedule
+    // still fires and starts that same id, and every tick starts the hour
+    // before it if missing, so one skipped cron tick cannot skip an hour
+    // (J8 run 36964422899 lost the 06:00 check and its "looks fixed" email).
+    "crons": [
+      "*/5 * * * *",
+      "0 * * * *",
+      "0 1 * * *",
+      "0 2 * * *",
+      "30 2 * * *",
+      "45 2 * * *",
+      "0 3 * * *",
+      "0 4 * * 1",
+      "0 5 * * *",
+    ],
   },
 
   "routes": [

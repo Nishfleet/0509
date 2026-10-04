@@ -17,8 +17,8 @@ test("the landing document paints without a module graph @smoke", async ({ page 
   const head = html.slice(html.indexOf("<head"), html.indexOf("</head>"));
   expect(head).toContain('rel="stylesheet"');
   expect(head).not.toContain('rel="modulepreload"');
-  expect(head).toContain("/fonts/bricolage-hero.woff2");
-  expect(head).not.toContain("bricolage-grotesque-latin");
+  expect(head).not.toContain("/fonts/");
+  expect(head).not.toContain('rel="preload"');
   expect(head).not.toContain('type="module"');
 });
 
@@ -83,7 +83,7 @@ test("the landing never leads with a full row of dimmed sources @smoke", async (
   // The all-degraded gate counts mentions sources only (#6064): when the site
   // source (site.page) is itself degraded the normal dimmed rows render, so a
   // fully dimmed row is allowed only then and never otherwise.
-  const siteDegraded = await watch.locator('[data-state="degraded"]', { hasText: "site.page" }).count();
+  const siteDegraded = await watch.locator('[data-state="degraded"]', { hasText: "Website checks" }).count();
   expect(degraded === pills && pills > 0 && siteDegraded === 0).toBe(false);
   if (row === 0) {
     // The gate leaves the one rebuilding line where the row was; a bare section
@@ -100,7 +100,7 @@ test("how it works reads as three ruled steps in order, wide and narrow @smoke",
   const section = page.locator("#how-it-works");
   const steps = section.locator("ol > li");
   await expect(steps).toHaveCount(3);
-  const titles = ["Paste your site or handle", "Meet who you’re up against", "Read one email on Monday"];
+  const titles = ["Enter your website or social username", "Meet who you’re up against", "Read one email on Monday"];
   for (const [index, title] of titles.entries()) {
     await expect(steps.nth(index).getByRole("heading", { level: 3, name: title })).toBeVisible();
   }
@@ -145,7 +145,7 @@ test("the agents section hands a visitor's agent the MCP address and the API doc
   for (const name of ["Claude", "Cursor", "ChatGPT"]) {
     await expect(agents.getByText(name, { exact: true })).toBeVisible();
   }
-  await expect(agents.getByRole("link", { name: "Read the API docs" })).toHaveAttribute("href", "/api/v1/openapi.json");
+  await expect(agents.getByRole("link", { name: "Read the API docs" })).toHaveAttribute("href", "/api/docs");
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 
   await testInfo.attach(`agents-${testInfo.project.name}`, {
@@ -179,10 +179,10 @@ test("the hero's first viewport holds the outcome and the one priced input @smok
   const pieces = [
     hero.getByText("For founders, brands and creators"),
     hero.getByRole("heading", { level: 1, name: "Know where you stand. And who’s gaining on you." }),
-    hero.getByText(/we name the rivals for you, so you do not have to know them/i),
-    hero.getByRole("textbox", { name: "your website, or a handle" }),
+    hero.getByText(/we find your competitors for you, so you do not need to know who they are/i),
+    hero.getByRole("textbox", { name: /your website address or social username/i }),
     hero.getByRole("button", { name: /€\d+\/mo/ }),
-    hero.getByText("One input. Sixty seconds to who’s gaining on you."),
+    hero.getByText("One box to fill in. About a minute to see who’s gaining on you."),
   ];
   for (const piece of pieces) {
     await expect(piece).toBeVisible();
@@ -238,7 +238,7 @@ test("the hero's first viewport holds the outcome and the one priced input @smok
   await expectFaceLoaded(page, "Bricolage Grotesque", 800);
   await expectFaceLoaded(page, "Instrument Sans", 400);
   await expectFaceLoaded(page, "IBM Plex Mono", 400);
-  await expect(page.locator('link[rel="preload"][href="/fonts/bricolage-hero.woff2"]')).toHaveCount(1);
+  await expect(page.locator('link[rel="preload"]')).toHaveCount(0);
   await expect(page.locator('link[rel="modulepreload"]')).toHaveCount(0);
 
   if (testInfo.project.name === "phone-390") {
@@ -251,7 +251,10 @@ test("the hero's first viewport holds the outcome and the one priced input @smok
 
 test("the hero input carries what you typed to sign-in @smoke", async ({ page }) => {
   await page.goto(PATH);
-  await page.locator("#hero").getByRole("textbox", { name: "your website, or a handle" }).fill("example.com");
+  await page
+    .locator("#hero")
+    .getByRole("textbox", { name: /your website address or social username/i })
+    .fill("example.com");
   await page
     .locator("#hero")
     .getByRole("button", { name: /€\d+\/mo/ })

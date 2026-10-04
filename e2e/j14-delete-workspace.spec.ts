@@ -33,7 +33,7 @@ test("J14: a fresh account deleted from settings leaves nothing signed in and it
       },
       { timeout: 120_000, intervals: [5_000] },
     )
-    .toMatch(/Snapshots and screenshots: removed/);
+    .toMatch(/Saved page copies and screenshots: removed/);
 
   await page.screenshot({ path: test.info().outputPath("deleted.png") });
 
