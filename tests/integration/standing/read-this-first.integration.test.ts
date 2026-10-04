@@ -96,13 +96,13 @@ async function seed(): Promise<Seeded> {
       "2026-09-18T10:00:00.000Z",
     ),
     env.DB.prepare(
-      "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at) VALUES (?1, ?2, 'noteworthy_change', ?3, ?4, 0.95, ?5)",
+      "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at) VALUES (?1, ?2, 'mention_matters', ?3, ?4, 0.95, ?5)",
     ).bind(`d4-t-verdict-a-${run}`, workspaceId, `d4-t-ih-a-${run}`, signalA, DECIDED_AT),
     env.DB.prepare(
-      "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at) VALUES (?1, ?2, 'noteworthy_change', ?3, ?4, 0.95, ?5)",
+      "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at) VALUES (?1, ?2, 'mention_matters', ?3, ?4, 0.95, ?5)",
     ).bind(`d4-t-verdict-b-${run}`, workspaceId, `d4-t-ih-b-${run}`, signalB, DECIDED_AT),
     env.DB.prepare(
-      "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at) VALUES (?1, ?2, 'noteworthy_change', ?3, ?4, 0.95, ?5)",
+      "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at) VALUES (?1, ?2, 'mention_matters', ?3, ?4, 0.95, ?5)",
     ).bind(`d4-t-verdict-tomb-${run}`, workspaceId, `d4-t-ih-tomb-${run}`, signalTomb, DECIDED_AT),
   ]);
 
@@ -183,5 +183,26 @@ describe("judgeWeek", () => {
 
     expect(run).toHaveBeenCalledTimes(2);
     expect(askedTitles(run)).not.toContain(seeded.titleTomb);
+  });
+  it("pairs each question with its signal kind, so a mention with a noteworthy_change verdict is not sent", async () => {
+    const seeded = await seed();
+    await env.DB.prepare(
+      "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at) VALUES (?1, ?2, 'noteworthy_change', ?3, ?4, 0.95, ?5)",
+    )
+      .bind(
+        `d4-t-verdict-c-${seeded.signalC}`,
+        seeded.workspaceId,
+        `d4-t-ih-c-${seeded.signalC}`,
+        seeded.signalC,
+        DECIDED_AT,
+      )
+      .run();
+    const run = vi.fn(async () => ({ answers: { [READ_THIS_FIRST.id]: { type: "noul", noul: 0.9 } } }));
+    Reflect.set(env, "AI", { run });
+
+    await judgeWeek(env.DB, inputFor(seeded.workspaceId));
+
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(askedTitles(run)).not.toContain(seeded.titleC);
   });
 });
