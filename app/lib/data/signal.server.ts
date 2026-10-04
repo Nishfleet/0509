@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { ScoredSignal } from "../biggest-move";
 import { isFeedKind, type DevelopmentItem } from "../developments";
 import type { WeekEvidence } from "../home-standing";
-import { ACT_AT, REJECT_AT } from "../jev/thresholds";
+import { ACT_AT, REJECT_AT, changeActsSql } from "../jev/thresholds";
 import { D3_QUESTION_ID, D6_QUESTION_ID, reliabilitySchema, scoreBucketSchema } from "../standing-score";
 import { effectiveKindSql } from "../source-kind";
 import type { HiringSignalState, HiringSignalUpdate } from "../hiring/role-lifecycle";
@@ -538,7 +538,7 @@ const SELECT_SCORED_SIGNALS = `SELECT * FROM (SELECT s.id, s.kind, s.title, s.su
   CASE
     WHEN s.kind = 'mention' AND v.p >= ${String(ACT_AT)} THEN 'mention_matters'
     WHEN s.kind = 'mention' AND v.p > ${String(REJECT_AT)} THEN 'mention_normal'
-    WHEN s.kind = 'change' AND v.p >= ${String(ACT_AT)} THEN 'site_change_noteworthy'
+    WHEN s.kind = 'change' AND ${changeActsSql("s", "v")} THEN 'site_change_noteworthy'
     WHEN s.kind = 'ad' AND s.aspect IS NOT NULL THEN 'ad_copy_change'
     WHEN s.kind = 'ad' AND s.published_at >= ?3 AND s.published_at < ?4 THEN 'ad_new_creative'
     WHEN s.kind = 'hiring' THEN 'hiring_new_role'
