@@ -106,7 +106,7 @@ test("how it works reads as three ruled steps in order, wide and narrow @smoke",
   }
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 
-  if (testInfo.project.name === "desktop-1440") {
+  if (testInfo.project.name.endsWith("-1440")) {
     const rows = await steps.evaluateAll((items) =>
       items.map((item) => {
         const rect = item.getBoundingClientRect();
@@ -120,7 +120,7 @@ test("how it works reads as three ruled steps in order, wide and narrow @smoke",
       expect(row.top).toBeGreaterThanOrEqual(previous.bottom - 1);
     }
   }
-  if (testInfo.project.name === "phone-390") {
+  if (testInfo.project.name.endsWith("-390")) {
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
     );
@@ -209,10 +209,10 @@ test("the hero's first viewport holds the outcome and the one priced input @smok
   if (headlineBox === null || proofBox === null) {
     throw new Error(headlineBox === null ? "headline has no box" : "proof has no box");
   }
-  if (testInfo.project.name === "desktop-1440") {
+  if (testInfo.project.name.endsWith("-1440")) {
     expect(proofBox.x).toBeGreaterThan(headlineBox.x + headlineBox.width - 1);
   }
-  if (testInfo.project.name === "phone-390") {
+  if (testInfo.project.name.endsWith("-390")) {
     expect(proofBox.y).toBeGreaterThanOrEqual(headlineBox.y + headlineBox.height - 1);
   }
 
@@ -241,7 +241,7 @@ test("the hero's first viewport holds the outcome and the one priced input @smok
   await expect(page.locator('link[rel="preload"]')).toHaveCount(0);
   await expect(page.locator('link[rel="modulepreload"]')).toHaveCount(0);
 
-  if (testInfo.project.name === "phone-390") {
+  if (testInfo.project.name.endsWith("-390")) {
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
     );

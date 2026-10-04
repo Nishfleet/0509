@@ -33,7 +33,7 @@ test("the API reference is generated from the OpenAPI document @smoke", async ({
 });
 
 test("the API reference does not scroll sideways at 390 @smoke", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== "phone-390", "measured at 390 only");
+  test.skip(!testInfo.project.name.endsWith("-390"), "measured at 390 only");
   await page.goto("/api/docs");
   await expect(page.locator("main")).toBeVisible();
   const width = await page.evaluate(() => ({
