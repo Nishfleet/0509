@@ -1,9 +1,9 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 
 import { test as teardown } from "@playwright/test";
 
 import { onboardedEmailPath, onboardedStatePath } from "../playwright.config";
-import { deleteCreatedAccount } from "./inbox";
+import { deleteAccountViaRequest } from "./inbox";
 
 // The teardown half of e2e/onboarded.setup.ts: the setup mints one onboarded
 // session per lane, this deletes both accounts through the product's own
@@ -13,19 +13,18 @@ import { deleteCreatedAccount } from "./inbox";
 
 const LANES = ["desktop", "phone"] as const;
 
-teardown("delete each onboarded account the setup minted", async ({ browser }) => {
-  teardown.setTimeout(120_000);
+teardown("delete each onboarded account the setup minted", async ({ playwright, baseURL }) => {
+  if (!baseURL) throw new Error("PLAYWRIGHT_TEST_BASE_URL resolved to no baseURL");
+  const origin = new URL(baseURL).origin;
   for (const lane of LANES) {
     const statePath = onboardedStatePath(lane);
     const emailPath = onboardedEmailPath(lane);
     if (!existsSync(statePath) || !existsSync(emailPath)) continue;
-    const email = readFileSync(emailPath, "utf8").trim();
-    const context = await browser.newContext({ storageState: statePath });
-    const page = await context.newPage();
+    const api = await playwright.request.newContext({ storageState: statePath, baseURL });
     try {
-      await deleteCreatedAccount(page, email);
+      await deleteAccountViaRequest(api, origin);
     } finally {
-      await context.close();
+      await api.dispose();
     }
   }
 });

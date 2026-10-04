@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it, vi } from "vitest";
 
+import { classifySettingsDeleteRedirect } from "../../e2e/inbox";
+
 // #5985: an e2e spec that mints an `e2e+` address creates a real user row in
 // production, and deleteCreatedAccount in e2e/inbox.ts is the only path that
 // removes it. A spec that mints and never calls the helper leaks a row per
@@ -120,10 +122,30 @@ describe("e2e fixture teardown detector", () => {
     expect(source).not.toContain("/__wall?state=off");
   });
 
+  it("classifies a settings delete redirect as deleted, already gone, or unexpected", () => {
+    expect(classifySettingsDeleteRedirect(302, "/login?deleted=abc")).toBe("deleted");
+    expect(classifySettingsDeleteRedirect(302, "/login")).toBe("already-gone");
+    expect(classifySettingsDeleteRedirect(302, "/login?next=%2Fapp%2Fsettings")).toBe("already-gone");
+    expect(classifySettingsDeleteRedirect(200, "/login")).toBe("unexpected");
+    expect(classifySettingsDeleteRedirect(302, "/app")).toBe("unexpected");
+  });
+
   it("treats a second session teardown as a login redirect, not a missing deleted query", async () => {
-    const source = await readFile(path.join(REPO_ROOT, "e2e/session.teardown.ts"), "utf8");
+    const source = await readFile(path.join(REPO_ROOT, "e2e/inbox.ts"), "utf8");
     expect(source).toContain("/login?deleted=");
     expect(source).toContain("toMatch(/\\/login(?:\\?|$)/)");
+  });
+
+  it("the cut-short onboarded teardown deletes through the request helper, not a browser wait", async () => {
+    const source = await readFile(path.join(REPO_ROOT, "e2e/onboarded-teardown.setup.ts"), "utf8");
+    expect(source).toContain("deleteAccountViaRequest");
+    expect(source).not.toContain("deleteCreatedAccount");
+    expect(source).not.toContain("setTimeout(120_000)");
+  });
+
+  it("the session teardown deletes through the same request helper", async () => {
+    const source = await readFile(path.join(REPO_ROOT, "e2e/session.teardown.ts"), "utf8");
+    expect(source).toContain("deleteAccountViaRequest");
   });
 
   it("signs in again when settings refuses a stale delete, instead of treating the row as gone", async () => {

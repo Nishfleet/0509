@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
-import { expect, type Page, type TestInfo } from "@playwright/test";
+import { expect, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
 
 // The J1 mail path, per the amended decision on 0509#3927: Email Routing's
 // e2e@0509.io rule delivers e2e+<run-id>@0509.io (zone subaddressing on, RFC
@@ -595,6 +595,47 @@ const KEPT_JOURNEY_ACCOUNTS: readonly string[] = [
   "e2e+j12-rollovers@0509.io",
   "e2e+soak@0509.io",
 ];
+
+export function classifySettingsDeleteRedirect(
+  status: number,
+  location: string,
+): "deleted" | "already-gone" | "unexpected" {
+  if (status !== 302) return "unexpected";
+  if (location.includes("/login?deleted=")) return "deleted";
+  if (/\/login(?:\?|$)/.test(location)) return "already-gone";
+  return "unexpected";
+}
+
+// Setup teardowns delete through this request path, not the browser helper
+// below. The always() rerun in e2e-scheduled.yml posts with leftover cookies
+// after the suite already deleted the row; settings then sends the visitor to
+// /login with no deleted query. A browser page.goto("/app/settings") on that
+// leftover cookie hung for the test timeout (0509#6989).
+export async function deleteAccountViaRequest(request: APIRequestContext, origin: string): Promise<void> {
+  const response = await request.get("/api/auth/get-session");
+  if (response.status() !== 200) {
+    throw new Error(`GET /api/auth/get-session answered HTTP ${response.status()} (expected 200)`);
+  }
+  const body: unknown = await response.json();
+  let email: string | null = null;
+  if (body && typeof body === "object" && "user" in body) {
+    const user = (body as { user?: { email?: string } }).user;
+    if (user && typeof user.email === "string" && user.email.length > 0) {
+      email = user.email;
+    }
+  }
+  if (!email) return;
+
+  const deleted = await request.post("/app/settings", {
+    headers: { origin },
+    form: { intent: "delete-account", confirm: email },
+    maxRedirects: 0,
+  });
+  const location = deleted.headers().location ?? "";
+  if (classifySettingsDeleteRedirect(deleted.status(), location) !== "unexpected") return;
+  expect(deleted.status()).toBe(302);
+  expect(location, "already-deleted session tears down as a login redirect").toMatch(/\/login(?:\?|$)/);
+}
 
 export async function deleteCreatedAccount(page: Page, email: string): Promise<void> {
   if (KEPT_JOURNEY_ACCOUNTS.includes(email)) {
