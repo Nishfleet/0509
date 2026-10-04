@@ -11,6 +11,14 @@ describe("briefSendLine", () => {
     expect(briefSendLine({ status: "sent", sent_at: null })).toBe("Sent");
   });
 
+  it("words a sent brief without a date when sent_at is unreadable", () => {
+    expect(briefSendLine({ status: "sent", sent_at: "not a date" })).toBe("Sent");
+  });
+
+  it("words a sent brief with its UTC day, not the host timezone's", () => {
+    expect(briefSendLine({ status: "sent", sent_at: "2026-09-30T23:30:00.000Z" })).toBe("Sent 30 Sept");
+  });
+
   it("words a failed brief as one the mail service kept refusing", () => {
     expect(briefSendLine({ status: "failed", sent_at: null })).toBe(
       "Could not be sent: the mail service kept refusing it, so we stopped trying.",
