@@ -186,8 +186,13 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   await page.goto("/app/competitors");
   await switchOffEveryRival(page);
   for (const domain of [...ON, OFF]) await addCompetitor(page, domain);
-  await page.getByRole("switch", { name: `${OFF} tracking` }).click();
-  await expect(page.getByRole("switch", { name: `${OFF} tracking` })).not.toBeChecked();
+  const offSwitch = page
+    .getByRole("list", { name: "Competitors", exact: true })
+    .getByRole("listitem")
+    .filter({ hasText: OFF })
+    .getByRole("switch");
+  await offSwitch.click();
+  await expect(offSwitch).not.toBeChecked();
 
   const now = new Date();
   const opening = openingSlot(now);
