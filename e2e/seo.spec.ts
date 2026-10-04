@@ -14,6 +14,8 @@ test("GET /robots.txt serves the manifest-generated file @smoke", async ({ reque
 
   const body = await response.text();
   expect(body).toContain("Disallow: /app");
+  expect(body).toContain("Allow: /mcp");
+  expect(body).toContain("Allow: /api/v1/openapi.json");
   expect(body).toMatch(/^Sitemap: https?:\/\/\S+\/sitemap\.xml$/m);
 });
 
@@ -104,4 +106,13 @@ test("GET /.well-known/security.txt names a contact, an expiry and its canonical
   expect(body).toMatch(/^Canonical: https:\/\/0509\.io\/\.well-known\/security\.txt$/m);
   const expires = /^Expires: (\S+)$/m.exec(body)?.[1] ?? "";
   expect(new Date(expires).getTime(), "security.txt has expired").toBeGreaterThan(Date.now());
+});
+
+test("www.0509.io redirects to the apex with the path and query kept (0509#4498)", async ({ playwright }) => {
+  test.skip(!process.env.PLAYWRIGHT_TEST_BASE_URL, "the www host only exists in production");
+  const request = await playwright.request.newContext({ maxRedirects: 0 });
+  const response = await request.get("https://www.0509.io/privacy?utm_source=check");
+  expect(response.status()).toBe(308);
+  expect(response.headers()["location"]).toBe("https://0509.io/privacy?utm_source=check");
+  await request.dispose();
 });
