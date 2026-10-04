@@ -5,7 +5,7 @@ import { z } from "zod";
 import { readCachedChoice, readCachedNoul } from "../data/jev_verdict.server";
 import { sha256Hex } from "../sha256";
 import { isBillingRefusal } from "./refusal";
-import type { NoulQuestion } from "./thresholds";
+import type { AttemptPolicy, NoulQuestion } from "./thresholds";
 
 export type { NoulQuestion };
 
@@ -129,15 +129,16 @@ function noulAsk(question: NoulQuestion): NoulAsk {
   };
 }
 
-function decide(state: unknown, questions: Record<string, unknown>): Promise<unknown> {
-  return env.AI.run(MODEL, { model: MODEL_SELECTOR, state, questions }, { gateway: { id: GATEWAY_ID } });
+function decide(state: unknown, questions: Record<string, unknown>, retries?: AttemptPolicy): Promise<unknown> {
+  const gateway = retries === undefined ? { id: GATEWAY_ID } : { id: GATEWAY_ID, retries };
+  return env.AI.run(MODEL, { model: MODEL_SELECTOR, state, questions }, { gateway });
 }
 
 async function run(question: NoulQuestion, state: unknown): Promise<number> {
   const asked = noulAsk(question);
   let raw: unknown;
   try {
-    raw = await decide(state, { [question.id]: asked });
+    raw = await decide(state, { [question.id]: asked }, question.retries);
   } catch (error) {
     throw unavailable(error);
   }
