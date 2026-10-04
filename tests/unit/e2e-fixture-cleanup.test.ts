@@ -113,4 +113,20 @@ describe("e2e fixture teardown detector", () => {
     expect(jobs.length).toBeGreaterThan(5);
     expect(offenders).toEqual([]);
   });
+
+  it("runs a matrix inside a job concurrency group one leg at a time", async () => {
+    const dir = path.join(REPO_ROOT, ".github/workflows");
+    const offenders: string[] = [];
+    let grouped = 0;
+    for (const file of await readdir(dir)) {
+      const source = await readFile(path.join(dir, file), "utf8");
+      for (const job of source.split(/^ {2}(?=[a-z0-9-]+:$)/m).slice(1)) {
+        if (!/^ {4}concurrency:/m.test(job) || !/^ {6}matrix:/m.test(job)) continue;
+        grouped += 1;
+        if (!/^ {6}max-parallel: 1$/m.test(job)) offenders.push(`${file}:${job.slice(0, job.indexOf(":"))}`);
+      }
+    }
+    expect(grouped).toBeGreaterThan(0);
+    expect(offenders).toEqual([]);
+  });
 });
