@@ -6,7 +6,9 @@ import type { DiscoveryContext, DiscoverySelf } from "../data/entity.server";
 import type { DiscoveryResult } from "../data/suggestion.server";
 import { takenDownAmong } from "../data/takedown.server";
 import type { NoulQuestion, NoulVerdict } from "../jev/client.server";
-import { askNoul, askNouls, JevUnavailableError } from "../jev/client.server";
+import { askNoul, askNouls, JevRateLimitedError, JevUnavailableError } from "../jev/client.server";
+import { isBillingRefusal } from "../jev/refusal";
+import { ACT_AT } from "../jev/thresholds";
 import { evidenceLine } from "./evidence-line";
 import { aiGenerator } from "./generators/ai.server";
 import { hnGenerator } from "./generators/hn.server";
@@ -17,6 +19,7 @@ import type { Candidate, Evidence } from "./types";
 
 const EVIDENCE_KEPT = 5;
 const CATEGORY_FLOOR = 0.5;
+const CLEAR_YES_AT = CATEGORY_FLOOR;
 export const JUDGE_BATCH_SIZE = 2;
 
 export interface ShortlistedCandidate {
@@ -67,7 +70,14 @@ const GENERATORS = [
   { name: "ai", run: aiGenerator },
 ] as const;
 
-export class DiscoveryUnavailableError extends Error {}
+export class DiscoveryUnavailableError extends Error {
+  readonly billingRefused: boolean;
+
+  constructor(message: string, billingRefused: boolean) {
+    super(message);
+    this.billingRefused = billingRefused;
+  }
+}
 
 function failureMessage(reason: unknown): string {
   return (reason instanceof Error ? reason.message : String(reason)).slice(0, 300);
@@ -85,6 +95,7 @@ async function settledCandidates(self: DiscoverySelf): Promise<Candidate[]> {
   if (failed.length === runs.length) {
     throw new DiscoveryUnavailableError(
       `every discovery generator failed: ${failed.map((item) => `${String(item.generator)}: ${failureMessage(item.reason)}`).join("; ")}`,
+      failed.every((item) => isBillingRefusal(item.reason)),
     );
   }
   for (const { generator, reason } of failed) captureException(reason, { tags: { discovery_generator: generator } });
@@ -190,7 +201,12 @@ export function keepOnlyIfBoth(verdicts: readonly NoulVerdict[]): NoulVerdict {
   if (first === undefined) throw new Error("no verdicts to combine");
   const lowest = Math.min(first.p, ...rest.map((verdict) => verdict.p));
   const offCategory = rest.some((verdict) => verdict.p < CATEGORY_FLOOR);
-  return { ...first, p: offCategory ? 0 : lowest };
+  return { ...first, p: offCategory ? 0 : liftClearYes(lowest) };
+}
+
+function liftClearYes(p: number): number {
+  if (p < CLEAR_YES_AT) return p;
+  return ACT_AT + ((p - CLEAR_YES_AT) * (1 - ACT_AT)) / (1 - CLEAR_YES_AT);
 }
 
 async function askCandidate(context: DiscoveryContext, candidate: ResolvedCandidate): Promise<NoulVerdict | null> {
@@ -199,7 +215,7 @@ async function askCandidate(context: DiscoveryContext, candidate: ResolvedCandid
     if (context.self.kind === "creator") return await askNoul(context.self.workspaceId, IS_CREATOR_RIVAL, state);
     return await askCompetitorAndCategory(context, state);
   } catch (error) {
-    if (!(error instanceof JevUnavailableError)) throw error;
+    if (!(error instanceof JevUnavailableError) || error instanceof JevRateLimitedError) throw error;
     console.error(JSON.stringify({ event: "discovery.jev_unavailable", message: error.message }));
     return null;
   }

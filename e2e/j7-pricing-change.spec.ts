@@ -15,6 +15,8 @@ import { consoleFailures, requireInboxToken, signInWithMagicLink, watchConsole }
 test.skip(!process.env.PLAYWRIGHT_TEST_BASE_URL, "J7 needs the production sweep, the fixture Worker and the mail path");
 
 const FIXTURE_ORIGIN = "https://fixture.0509.in";
+// The Competitors list shows the registrable domain, so the fixture row reads 0509.in.
+const FIXTURE_ROW = "0509.in";
 const SWEEP_UTC_HOUR = 2;
 const SETTLE_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -91,10 +93,10 @@ test("J7 a fixture price flip reaches Alerts as a before-and-after mark @own-sig
     FIXTURE_ACCOUNTS.j7.maxCompetitors,
   );
 
-  if ((await listed.filter({ hasText: "fixture.0509.in" }).count()) === 0) {
+  if ((await listed.filter({ hasText: FIXTURE_ROW }).count()) === 0) {
     await page.getByLabel("Add a competitor we missed").fill("fixture.0509.in");
     await page.getByRole("button", { name: "Add", exact: true }).click();
-    await expect(listed.filter({ hasText: "fixture.0509.in" })).toHaveCount(1, { timeout: 60_000 });
+    await expect(listed.filter({ hasText: FIXTURE_ROW })).toHaveCount(1, { timeout: 60_000 });
     await flip(variant === "raised" ? "base" : "raised");
     test.skip(true, "J7: the account was not watching the fixture; added it and flipped the price for the next sweeps");
   }
@@ -112,9 +114,13 @@ test("J7 a fixture price flip reaches Alerts as a before-and-after mark @own-sig
     test.skip(true, `J7: no sweep has filed a change yet; flipped to ${next} for the next one`);
   }
   await expect(chip).toBeEnabled();
-  const mark = page
-    .getByTestId("site-change")
-    .filter({ has: page.locator(`a[href^="${FIXTURE_ORIGIN}"]`) })
+  const fixtureMarks = page.getByTestId("site-change").filter({ has: page.locator(`a[href^="${FIXTURE_ORIGIN}"]`) });
+  if ((await fixtureMarks.count()) === 0) {
+    const next: Variant = variant === "raised" ? "base" : "raised";
+    await flip(next);
+    test.skip(true, `J7: no change has been filed for the fixture yet; flipped to ${next} for the next sweep`);
+  }
+  const mark = fixtureMarks
     .filter({ has: page.locator("s", { hasText: OLD_AND_NEW[variant].before }) })
     .filter({ has: page.locator("ins", { hasText: OLD_AND_NEW[variant].after }) })
     .first();

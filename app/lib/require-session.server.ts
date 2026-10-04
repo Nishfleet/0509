@@ -17,3 +17,8 @@ export function requireSession(request: Request, returnTo?: string) {
 export function requireFreshSession(request: Request, returnTo?: string) {
   return readSession(request, returnTo, true);
 }
+
+export async function hasSession(request: Request): Promise<boolean> {
+  const auth = createAuth(env);
+  return (await auth.api.getSession({ headers: request.headers })) !== null;
+}

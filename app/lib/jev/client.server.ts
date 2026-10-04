@@ -4,11 +4,14 @@ import { z } from "zod";
 
 import { readCachedChoice, readCachedNoul } from "../data/jev_verdict.server";
 import { sha256Hex } from "../sha256";
+import { isBillingRefusal } from "./refusal";
 import type { NoulQuestion } from "./thresholds";
 
 export type { NoulQuestion };
 
-const MODEL = "typesafe/jev";
+const MODEL = "@cf/cloudflare/clef";
+
+const MODEL_SELECTOR = "clef";
 
 export const GATEWAY_ID = "default";
 
@@ -57,17 +60,25 @@ export class JevUnavailableError extends Error {
   }
 }
 
-const BILLING_REFUSED = /(^|\D)(2021|402)(\D|$)|payment|insufficient|credit/i;
+export class JevRateLimitedError extends JevUnavailableError {
+  constructor(cause: unknown) {
+    super(cause);
+    this.name = "JevRateLimitedError";
+  }
+}
+
+const RATE_LIMITED = /(^|\D)2003(\D|$)/;
 
 function unavailable(error: unknown): JevUnavailableError {
   const failure = new JevUnavailableError(error);
-  if (BILLING_REFUSED.test(failure.message)) {
-    captureException(new Error("jev refused: AI Gateway credits or payment"), {
+  if (isBillingRefusal(failure)) {
+    captureException(new Error("jev refused: Workers AI quota, AI Gateway credits or payment"), {
       level: "error",
       fingerprint: ["jev-billing-refused"],
     });
+    return failure;
   }
-  return failure;
+  return RATE_LIMITED.test(failure.message) ? new JevRateLimitedError(error) : failure;
 }
 
 function jevBody(raw: unknown): unknown {
@@ -118,20 +129,15 @@ function noulAsk(question: NoulQuestion): NoulAsk {
   };
 }
 
+function decide(state: unknown, questions: Record<string, unknown>): Promise<unknown> {
+  return env.AI.run(MODEL, { model: MODEL_SELECTOR, state, questions }, { gateway: { id: GATEWAY_ID } });
+}
+
 async function run(question: NoulQuestion, state: unknown): Promise<number> {
   const asked = noulAsk(question);
   let raw: unknown;
   try {
-    raw = await env.AI.run(
-      MODEL,
-      {
-        state,
-        questions: {
-          [question.id]: asked,
-        },
-      },
-      { gateway: { id: GATEWAY_ID } },
-    );
+    raw = await decide(state, { [question.id]: asked });
   } catch (error) {
     throw unavailable(error);
   }
@@ -139,6 +145,17 @@ async function run(question: NoulQuestion, state: unknown): Promise<number> {
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
   if (answer === undefined) throw missing("noul", raw, parsed.error?.issues ?? []);
   return answer.noul;
+}
+
+const PROBE_QUESTION: NoulQuestion = {
+  id: "jev_probe",
+  instructions: "Is the item the number five?",
+  whenTrue: "The item is the number five.",
+  whenFalse: "The item is not the number five.",
+};
+
+export async function probeJev(): Promise<void> {
+  await run(PROBE_QUESTION, { item: 5 });
 }
 
 export async function askNoul(workspaceId: string, question: NoulQuestion, state: unknown): Promise<NoulVerdict> {
@@ -168,14 +185,7 @@ export async function askNouls(
     const asked = Object.fromEntries(pending.map((entry) => [entry.question.id, noulAsk(entry.question)]));
     let raw: unknown;
     try {
-      raw = await env.AI.run(
-        MODEL,
-        {
-          state,
-          questions: asked,
-        },
-        { gateway: { id: GATEWAY_ID } },
-      );
+      raw = await decide(state, asked);
     } catch (error) {
       throw unavailable(error);
     }
@@ -196,20 +206,9 @@ export async function askNouls(
 async function runChoice(question: ChoiceQuestion, state: unknown): Promise<string> {
   let raw: unknown;
   try {
-    raw = await env.AI.run(
-      MODEL,
-      {
-        state,
-        questions: {
-          [question.id]: {
-            type: "choice",
-            instructions: question.instructions,
-            criteria: question.options,
-          },
-        },
-      },
-      { gateway: { id: GATEWAY_ID } },
-    );
+    raw = await decide(state, {
+      [question.id]: { type: "choice", instructions: question.instructions, criteria: question.options },
+    });
   } catch (error) {
     throw unavailable(error);
   }

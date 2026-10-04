@@ -227,8 +227,8 @@
   "browser": { "binding": "BROWSER" },
 
   // Jev, the typed-decision model (docs/REBUILD-JEV.md), runs as the Workers AI
-  // model typesafe/jev through AI Gateway, paid from the account's AI Gateway
-  // credits (unified billing). No provider key lives in this Worker.
+  // model @cf/cloudflare/clef through AI Gateway, billed with the rest of
+  // Workers AI. No provider key lives in this Worker.
   "ai": { "binding": "AI" },
 
   // Transactional send only. The weekly brief's standing on this lane is an

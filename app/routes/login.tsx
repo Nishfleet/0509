@@ -1,7 +1,7 @@
 import type { Route } from "./+types/login";
 import { env } from "cloudflare:workers";
 import { useState } from "react";
-import { data, useActionData, useLoaderData, useNavigation, useSearchParams } from "react-router";
+import { data, redirect, useActionData, useLoaderData, useNavigation, useSearchParams } from "react-router";
 
 import { AccountDeleteNotice } from "../components/account-delete-notice";
 import { SignInEmailForm, SignInError } from "../components/sign-in-email-form";
@@ -14,6 +14,7 @@ import { subjectRedirect } from "../lib/onboarding-subject";
 import { deadLinkMessage } from "../lib/login-link-error";
 import { formMagicLinkRequest } from "../lib/auth/login-magic-link.server";
 import { createAuthForRequest } from "../lib/auth.server";
+import { hasSession } from "../lib/require-session.server";
 import {
   clearAccountDeleteInstanceId,
   readAccountDeleteInstanceId,
@@ -37,6 +38,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const search = new URL(request.url).searchParams;
   const linkError = deadLinkMessage(search);
   const id = search.get("deleted");
+  if (id === null && linkError === null && (await hasSession(request))) throw redirect(signInTarget(search));
   if (id === null || id === "" || (await readAccountDeleteInstanceId(request)) !== id) {
     return data({ turnstileSiteKey, linkError, id: null, progress: null });
   }

@@ -80,7 +80,7 @@ describe("askNouls", () => {
     expect(verdicts.map((verdict) => verdict.cached)).toEqual([false, false, false]);
     expect(verdicts[0]?.inputHash).toMatch(/^[0-9a-f]{64}$/);
     expect(run).toHaveBeenCalledTimes(1);
-    expect(run.mock.calls[0]?.[0]).toBe("typesafe/jev");
+    expect(run.mock.calls[0]?.[0]).toBe("@cf/cloudflare/clef");
     expect(run.mock.calls[0]?.[2]).toEqual({ gateway: { id: "default" } });
     const request = run.mock.calls[0]?.[1] as {
       questions: Record<string, { type: string; instructions: string; criteria: unknown }>;
@@ -187,7 +187,7 @@ describe("askNouls", () => {
 
 describe("the answer body the AI binding returns", () => {
   const documented = {
-    model: "typesafe/jev",
+    model: "@cf/cloudflare/clef",
     answers: { identity_name: { type: "noul", noul: 0.71 } },
     usage: { prompt_tokens: 1, completion_tokens: 1 },
   };

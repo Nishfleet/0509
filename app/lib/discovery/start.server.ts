@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 
-import { readSelfWorkspaceIds } from "../data/entity.server";
+import { isSubscriptionLive } from "../billing/entitlements";
+import { isDiscoveryDay } from "../cadence";
+import { readDiscoverableWorkspaces } from "../data/entity.server";
 import { discoveryStateFor, type DiscoveryState } from "./state";
 
 export interface DiscoveryParams {
@@ -22,8 +24,16 @@ function instances(workspaceIds: readonly string[], now: Date, mode: "create" | 
   }));
 }
 
+async function eligibleWorkspaceIds(now: Date, mode: "create" | "refresh"): Promise<string[]> {
+  const workspaces = await readDiscoverableWorkspaces();
+  return workspaces
+    .filter((workspace) => isSubscriptionLive(workspace, now))
+    .filter((workspace) => mode === "refresh" || isDiscoveryDay(workspace.createdAt, now))
+    .map((workspace) => workspace.workspaceId);
+}
+
 async function startAll(now: Date, mode: "create" | "refresh"): Promise<number> {
-  const all = instances(await readSelfWorkspaceIds(), now, mode);
+  const all = instances(await eligibleWorkspaceIds(now, mode), now, mode);
   const chunks = Array.from({ length: Math.ceil(all.length / BATCH_LIMIT) }, (_, index) =>
     all.slice(index * BATCH_LIMIT, (index + 1) * BATCH_LIMIT),
   );

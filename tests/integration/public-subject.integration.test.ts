@@ -54,7 +54,7 @@ describe("screenPublicSubject", () => {
     expect(outcome).toBe<PublicSubjectOutcome>("proceed");
     expect(verdict).toMatchObject({ questionId: "public_subject", p: 0.95, cached: false });
     expect(run).toHaveBeenCalledTimes(1);
-    expect(run.mock.calls[0]?.[0]).toBe("typesafe/jev");
+    expect(run.mock.calls[0]?.[0]).toBe("@cf/cloudflare/clef");
     const request = run.mock.calls[0]?.[1] as {
       questions: { public_subject: { type: string; instructions: string; criteria: { true: string; false: string } } };
     };

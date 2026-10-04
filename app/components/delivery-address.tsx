@@ -11,6 +11,14 @@ function describedByIds(hasError: boolean, showUnconfirmed: boolean): string | u
   return ids.length === 0 ? undefined : ids.join(" ");
 }
 
+function UnconfirmedNote() {
+  return (
+    <p id="delivery-address-unconfirmed" className="mt-2 max-w-prose leading-[1.55]">
+      This address isn't confirmed yet. We emailed you a confirmation link. The brief won't be sent until you confirm.
+    </p>
+  );
+}
+
 function AddressFields({
   delivery,
   error,
@@ -33,18 +41,17 @@ function AddressFields({
         name="address"
         type="email"
         autoComplete="email"
+        inputMode="email"
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
         required
         defaultValue={delivery.address}
         className="h-11 border border-line px-3"
         aria-invalid={hasError ? true : undefined}
         aria-describedby={describedByIds(hasError, showUnconfirmed)}
       />
-      {showUnconfirmed ? (
-        <p id="delivery-address-unconfirmed" className="mt-2 max-w-prose leading-[1.55]">
-          This address isn't confirmed yet. We emailed you a confirmation link. The brief won't be sent until you
-          confirm.
-        </p>
-      ) : null}
+      {showUnconfirmed ? <UnconfirmedNote /> : null}
       {suppressed ? (
         <label className="flex min-h-11 items-center gap-3 leading-[1.55]">
           <input type="checkbox" name="resume" value="yes" className="size-5 shrink-0 accent-green" />

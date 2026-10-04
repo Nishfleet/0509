@@ -150,7 +150,8 @@ describe("RankedRow", () => {
     expect(row.signals).toBe(0);
     expect(row.position).toBeNull();
     const html = render(row);
-    expect(html).toContain(">—</span>");
+    expect(html).toContain('aria-hidden="true">—</span>');
+    expect(html).toContain("No rank yet");
     expect(html).not.toContain(">#");
   });
 

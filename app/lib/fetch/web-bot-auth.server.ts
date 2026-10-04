@@ -65,10 +65,16 @@ export function directoryBody(): string | null {
   return key === null ? null : JSON.stringify(publicDirectory(key));
 }
 
-function memoSigner(key: SigningKey): Promise<WebBotSigner> {
+async function memoSigner(key: SigningKey): Promise<WebBotSigner> {
   if (memo === null) throw new Error("signing key not read");
-  memo.signer ??= signerFromJWK(key);
-  return memo.signer;
+  const current = memo;
+  current.signer ??= signerFromJWK(key);
+  try {
+    return await current.signer;
+  } catch (error) {
+    current.signer = null;
+    throw error;
+  }
 }
 
 async function signed(request: SignRequest, key: SigningKey): Promise<HeadersInit> {

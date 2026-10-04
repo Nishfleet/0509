@@ -83,6 +83,6 @@ describe("judgeCandidates question choice", () => {
     expect(questions?.["is_competitor"]).toBeDefined();
     expect(questions?.["same_product_category"]).toBeDefined();
     expect(questions?.["is_creator_rival"]).toBeUndefined();
-    expect(results[0]?.verdict).toMatchObject({ questionId: "is_competitor", p: 0.9, cached: false });
+    expect(results[0]?.verdict).toMatchObject({ questionId: "is_competitor", p: 0.98, cached: false });
   });
 });

@@ -121,14 +121,18 @@ test("a registered passkey is listed in Settings and can be removed @own-signin"
       response.url().includes("/api/auth/passkey/verify-registration"),
     );
     // The new passkey must appear in the list without a full-page reload, and
-    // the in-place revalidation must re-run the Settings loader (a ?_data= fetch).
-    // A reload would miss the heading and then pass; a client-side navigate()
-    // would also pass, so require the data fetch react-router issues for it.
+    // the in-place revalidation must re-run the Settings loader (GET
+    // /app/settings.data). A reload would miss the heading and then pass; a
+    // client-side navigate() would also pass, so require the single-fetch
+    // request react-router issues for it.
     const fullReloads: string[] = [];
     const loaderRevalidations: string[] = [];
     page.on("request", (request) => {
+      const url = new URL(request.url());
       if (request.isNavigationRequest()) fullReloads.push(request.url());
-      if (new URL(request.url()).searchParams.has("_data")) loaderRevalidations.push(request.url());
+      if (!request.isNavigationRequest() && url.pathname === "/app/settings.data") {
+        loaderRevalidations.push(request.url());
+      }
     });
     await page.getByRole("button", { name: /add a passkey/i }).click();
     expect((await registered).status()).toBe(200);

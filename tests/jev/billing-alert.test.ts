@@ -27,7 +27,7 @@ describe("a Jev call the AI credits refuse", () => {
 
     expect(captureException).toHaveBeenCalledTimes(1);
     const [captured, hint] = vi.mocked(captureException).mock.calls[0] ?? [];
-    expect(String(captured)).toBe("Error: jev refused: AI Gateway credits or payment");
+    expect(String(captured)).toBe("Error: jev refused: Workers AI quota, AI Gateway credits or payment");
     expect(JSON.stringify(hint)).not.toContain("brand");
     expect(hint).toMatchObject({ level: "error", fingerprint: ["jev-billing-refused"] });
   });
@@ -38,6 +38,24 @@ describe("a Jev call the AI credits refuse", () => {
     await expect(askNouls("ws-1", [QUESTION], {})).rejects.toThrow(JevUnavailableError);
 
     expect(captureException).toHaveBeenCalledTimes(1);
+  });
+
+  it("does the same when Workers AI says the daily free allocation is used up", async () => {
+    ai.run.mockRejectedValue(new Error("3036: You have used up your daily free allocation of 10,000 neurons."));
+
+    await expect(askNoul("ws-1", QUESTION, {})).rejects.toThrow(JevUnavailableError);
+
+    expect(captureException).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends the Clef model selector in the request body", async () => {
+    ai.run.mockResolvedValue({ model: "clef", answers: { q: { type: "noul", noul: 0.7 } } });
+
+    await askNoul("ws-1", QUESTION, {});
+
+    expect(ai.run).toHaveBeenCalledWith("@cf/cloudflare/clef", expect.objectContaining({ model: "clef" }), {
+      gateway: { id: "default" },
+    });
   });
 
   it("stays quiet for an ordinary outage such as a timeout", async () => {

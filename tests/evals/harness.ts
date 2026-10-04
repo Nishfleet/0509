@@ -32,7 +32,7 @@ const CF_TOKEN = process.env.CLOUDFLARE_API_TOKEN ?? "";
 
 const VIA_GATEWAY = JEV_KEY === "" && CF_ACCOUNT !== "" && CF_TOKEN !== "";
 
-const GATEWAY_MODEL = "typesafe/jev";
+const GATEWAY_MODEL = "@cf/cloudflare/clef";
 
 const JEV_URL = VIA_GATEWAY ? "workers-ai binding" : (process.env.JEV_URL ?? "http://127.0.0.1:4000/jev");
 
@@ -203,7 +203,7 @@ async function postJev(body: unknown): Promise<JevResponse> {
   if (VIA_GATEWAY) {
     const raw = await (
       await aiBinding()
-    ).run(GATEWAY_MODEL as never, withoutModel(body) as never, {
+    ).run(GATEWAY_MODEL as never, { ...(withoutModel(body) as object), model: "clef" } as never, {
       gateway: { id: GATEWAY_ID },
     });
     const unwrapped = unwrapJev(raw);
