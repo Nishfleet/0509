@@ -197,6 +197,14 @@ describe("readCompetitorSnapshot against real D1", () => {
     });
     await seedVerdict("snap-jev-pricepage", ws, "noteworthy_change", "snap-sig-pricepage", 0.62);
 
+    await seedSignal("snap-sig-pricelaunch", ws, entity, sourceSite, {
+      kind: "change",
+      aspect: "pricing",
+      observedAt: "2026-09-21T11:45:00.000Z",
+    });
+    await seedVerdict("snap-jev-pricelaunch", ws, "noteworthy_change", "snap-sig-pricelaunch", 0.62);
+    await seedKind("snap-kind-pricelaunch", ws, "snap-sig-pricelaunch", "launch");
+
     await seedSignal("snap-sig-launch", ws, entity, sourceSite, {
       kind: "change",
       aspect: "launch",

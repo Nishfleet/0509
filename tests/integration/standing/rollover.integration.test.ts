@@ -103,7 +103,7 @@ async function seedTitledNotable(slug: string, entity: string, title: string, ob
       observedAt.toISOString(),
     ),
     env.DB.prepare(
-      "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, reason, decided_at) VALUES (?1, ?2, 'noteworthy_change', ?3, ?4, 0.95, NULL, ?5)",
+      "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, reason, decided_at) VALUES (?1, ?2, 'mention_matters', ?3, ?4, 0.95, NULL, ?5)",
     ).bind(`verdict-${id}`, WS, `input-${id}`, id, observedAt.toISOString()),
   ]);
   return id;
