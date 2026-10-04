@@ -109,9 +109,10 @@
   // forwarded header: auth origin trust and the magic-link URL both come from
   // it, and a client-supplied value would let a link point anywhere.
   // BETTER_AUTH_SECRET stays a Worker secret.
-  // TURNSTILE_SECRET_KEY and TURNSTILE_SITE_KEY are Worker secrets too. Listing
-  // them under secrets.required makes deploy inherit the values already on the
-  // Worker instead of replacing them with a plaintext var.
+  // TURNSTILE_SECRET_KEY and TURNSTILE_SITE_KEY are Worker secrets too.
+  // SLACK_TARGET_SECRET is the AES-GCM key for send_target Slack webhook rows.
+  // Listing them under secrets.required makes deploy inherit the values already
+  // on the Worker instead of replacing them with a plaintext var.
   // LANDING_WORKSPACE_ID: the public workspace we run ourselves whose changes the landing ticker and mark section show (#4083, #4084). Empty draws no strip and no marks, never filler.
   // ACCESS_TEAM_DOMAIN / ACCESS_AUD pin the Access application that fronts
   // 0509.io. They are public identifiers — the AUD appears in Access's own
@@ -148,6 +149,7 @@
       "TURNSTILE_SITE_KEY",
       "DODO_PAYMENTS_API_KEY",
       "DODO_WEBHOOK_SECRET",
+      "SLACK_TARGET_SECRET",
     ],
   },
 
