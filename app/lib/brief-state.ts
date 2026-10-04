@@ -1,7 +1,12 @@
+import { dayMonthLabel } from "../components/brand-switch";
+
 export function briefSendLine(row: { status: string; sent_at: string | null }): string {
   switch (row.status) {
-    case "sent":
-      return row.sent_at === null ? "Sent" : `Sent ${row.sent_at.slice(0, 10)}`;
+    case "sent": {
+      if (row.sent_at === null) return "Sent";
+      const sentOn = dayMonthLabel(row.sent_at);
+      return sentOn === null ? "Sent" : `Sent ${sentOn}`;
+    }
     case "failed":
       return "Could not be sent: the mail service kept refusing it, so we stopped trying.";
     case "paused":

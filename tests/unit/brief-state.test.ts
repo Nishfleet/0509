@@ -4,7 +4,7 @@ import { briefSendLine } from "../../app/lib/brief-state";
 
 describe("briefSendLine", () => {
   it("words a sent brief with its date when sent_at is present", () => {
-    expect(briefSendLine({ status: "sent", sent_at: "2026-09-21T08:00:03.000Z" })).toBe("Sent 2026-09-21");
+    expect(briefSendLine({ status: "sent", sent_at: "2026-09-21T08:00:03.000Z" })).toBe("Sent 21 Sept");
   });
 
   it("words a sent brief without a date when sent_at is null", () => {
