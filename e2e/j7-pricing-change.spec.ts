@@ -30,6 +30,13 @@ const OLD_AND_NEW: Record<Variant, { before: RegExp; after: RegExp }> = {
 
 async function readFixture(): Promise<{ variant: Variant; flippedAt: string }> {
   const response = await fetch(`${FIXTURE_ORIGIN}/`);
+  if (response.status === 403) {
+    const html = await response.text();
+    test.skip(
+      html.includes("Just a moment") || html.includes("Checking if the site connection is secure"),
+      "J7: the fixture bot wall is up (J5 shares this Worker); GET / answers 403 until J5 turns it off",
+    );
+  }
   expect(response.status).toBe(200);
   const html = await response.text();
   const match = /<p id="price" data-variant="(base|raised)" data-flipped-at="([^"]*)"/.exec(html);

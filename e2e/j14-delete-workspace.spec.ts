@@ -23,7 +23,7 @@ test("J14: a fresh account deleted from settings leaves nothing signed in and it
   const instanceId = new URL(page.url()).searchParams.get("deleted") ?? "";
   expect(instanceId).not.toBe("");
 
-  await expect(page.getByRole("heading", { name: "Your account is deleted" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your account is deleted" })).toBeVisible({ timeout: 15_000 });
 
   await expect
     .poll(

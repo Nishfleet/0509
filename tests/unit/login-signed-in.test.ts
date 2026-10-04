@@ -1,10 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const hasSession = vi.hoisted(() => vi.fn());
+const readAccountDeleteInstanceId = vi.hoisted(() => vi.fn());
+const readAccountDeleteProgress = vi.hoisted(() => vi.fn());
+const clearAccountDeleteInstanceId = vi.hoisted(() => vi.fn());
 
 vi.mock("cloudflare:workers", () => ({ env: { TURNSTILE_SITE_KEY: "1x00000000000000000000BB" } }));
 vi.mock("../../app/lib/auth.server", () => ({ createAuth: () => ({}), createAuthForRequest: () => ({}) }));
 vi.mock("../../app/lib/require-session.server", () => ({ hasSession }));
+vi.mock("../../app/lib/account-delete.server", () => ({
+  readAccountDeleteInstanceId,
+  readAccountDeleteProgress,
+  clearAccountDeleteInstanceId,
+}));
 
 import { loader } from "../../app/routes/login";
 
@@ -22,7 +30,15 @@ async function redirectedTo(path: string): Promise<string | null> {
 }
 
 describe("Login for a signed-in customer", () => {
-  beforeEach(() => hasSession.mockReset());
+  beforeEach(() => {
+    hasSession.mockReset();
+    readAccountDeleteInstanceId.mockReset();
+    readAccountDeleteProgress.mockReset();
+    clearAccountDeleteInstanceId.mockReset();
+    readAccountDeleteInstanceId.mockResolvedValue(null);
+    readAccountDeleteProgress.mockResolvedValue(null);
+    clearAccountDeleteInstanceId.mockResolvedValue("account-delete=; Max-Age=0");
+  });
 
   it("sends them to the app", async () => {
     hasSession.mockResolvedValue(true);
@@ -47,5 +63,15 @@ describe("Login for a signed-in customer", () => {
   it("keeps the delete progress page", async () => {
     hasSession.mockResolvedValue(true);
     expect(await redirectedTo("/login?deleted=wf-1")).toBeNull();
+  });
+
+  it("shows still-removing when the Workflow is not readable yet", async () => {
+    hasSession.mockResolvedValue(true);
+    readAccountDeleteInstanceId.mockResolvedValue("wf-new");
+    readAccountDeleteProgress.mockResolvedValue(null);
+    const result = await run("/login?deleted=wf-new");
+    expect(result).toMatchObject({
+      data: { id: "wf-new", progress: { rows: "removed", files: "removing", deleted: null } },
+    });
   });
 });

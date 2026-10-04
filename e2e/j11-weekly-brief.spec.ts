@@ -97,7 +97,11 @@ async function saveSchedule(page: Page, schedule: { weekday: number; hour: numbe
 async function addCompetitor(page: Page, domain: string): Promise<void> {
   await page.locator("#add-competitor").fill(domain);
   await page.getByRole("button", { name: "Add" }).click();
-  await expect(page.getByRole("switch", { name: `${domain} tracking` })).toBeChecked();
+  const row = page
+    .getByRole("list", { name: "Competitors", exact: true })
+    .getByRole("listitem")
+    .filter({ hasText: domain });
+  await expect(row.getByRole("switch")).toBeChecked();
 }
 
 async function waitForBrief(to: string, token: string): Promise<string> {

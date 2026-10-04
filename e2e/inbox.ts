@@ -380,6 +380,10 @@ export async function settleSignInWidget(page: Page): Promise<void> {
 
 export async function turnstileToken(page: Page): Promise<string> {
   await page.goto("/login");
+  if (!new URL(page.url()).pathname.startsWith("/login")) {
+    await page.request.post("/app/settings", { form: { intent: "sign-out" } });
+    await page.goto("/login");
+  }
   await settleSignInWidget(page);
   const token = (await page.locator('input[name="cf-turnstile-response"]').inputValue()).trim();
   // Pre-cleared callers send the request without a token; an empty return is
