@@ -2,13 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { RouteConfigEntry } from "@react-router/dev/routes";
 import routes from "../app/routes";
 
-import {
-  consoleFailures,
-  ownDocument404For,
-  prefetchRefused503,
-  watchConsole,
-  type ConsoleEntry,
-} from "./inbox";
+import { consoleFailures, ownDocument404For, prefetchRefused503, watchConsole, type ConsoleEntry } from "./inbox";
 
 function screenPaths(entries: RouteConfigEntry[], parent: string): string[] {
   const paths: string[] = [];
@@ -120,9 +114,7 @@ test("the collector drops a Cloudflare prefetch-refused 503 @smoke", async ({ pa
   expect(await consoleFailures(page, watched, testInfo)).toEqual([]);
 });
 
-test("the collector still fails a same-origin 503 that is not prefetch-refused @smoke", async ({
-  page,
-}, testInfo) => {
+test("the collector still fails a same-origin 503 that is not prefetch-refused @smoke", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
   await page.route("**/plain-503.data", (route) =>
     route.fulfill({
