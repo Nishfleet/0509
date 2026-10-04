@@ -141,9 +141,8 @@ function messagesWithContext(row: Row): ReturnType<typeof messagesFor> {
 }
 
 describe.skipIf(!workersAiPresent())("leaders: category-leaders proposer arms", () => {
-  it.each(ARMS)(
-    "arm $id",
-    async (arm) => {
+  it("arms run one after another", async () => {
+    for (const arm of ARMS) {
       const rows = await loadCases<Row>("proposer_recall", ["self", "site", "expected"]);
       const shown = new Map<string, Set<string>[]>();
       let ms = 0;
@@ -183,35 +182,6 @@ describe.skipIf(!workersAiPresent())("leaders: category-leaders proposer arms", 
         const parsed = categoriesSchema.safeParse(proposalBody(result));
         return parsed.success ? parsed.data.categories.slice(0, MAX_CATEGORIES) : [];
       };
-      const keeps = async (row: Row, item: { name: string; domain: string }): Promise<boolean> => {
-        const state = {
-          self: { name: row.self.name, domain: row.self.domain, description: row.self.description },
-          competitor_set: [],
-          item: {
-            name: item.name,
-            domain: item.domain,
-            evidence: [
-              {
-                source: row.self.domain,
-                excerpt:
-                  "Proposed by a language model reading the brand's own site; not corroborated by any other source",
-              },
-            ],
-          },
-          user_memory: { dismissed_domains: [] },
-          reliability: { hn: "best_effort" },
-        };
-        const combine = (ps: number[]): number =>
-          keepOnlyIfBoth(ps.map((p) => ({ questionId: "", inputHash: "", p, cached: false }))).p;
-        for (let attempt = 0; ; attempt++) {
-          try {
-            const call = await makeNoulsAsk([IS_COMPETITOR, SAME_CATEGORY], combine)(state);
-            return (call.p ?? 0) > REJECT_AT;
-          } catch (error) {
-            if (attempt >= 3) throw error;
-          }
-        }
-      };
       const ask: Ask<Row> = async (row) => {
         const batches: { name: string; domain: string }[][] = [];
         if (arm.base)
@@ -233,9 +203,8 @@ describe.skipIf(!workersAiPresent())("leaders: category-leaders proposer arms", 
         for (const item of batches.flat())
           if (registrable(item.domain) !== own && !unique.has(registrable(item.domain)))
             unique.set(registrable(item.domain), item);
-        const kept: string[] = [];
-        for (const item of [...unique.values()].slice(0, MAX_JUDGED))
-          if (await keeps(row, item)) kept.push(registrable(item.domain));
+        const kept = [...unique.keys()];
+        console.log(`POOL ${arm.id} ${row.self.domain}: ${kept.join(",")}`);
         shown.set(row.self.domain, [...(shown.get(row.self.domain) ?? []), new Set(kept)]);
         return { model: MODEL, p: null, choice: kept.join(",") };
       };
@@ -270,7 +239,6 @@ describe.skipIf(!workersAiPresent())("leaders: category-leaders proposer arms", 
           );
       }
       expect(report.splits.length).toBeGreaterThan(0);
-    },
-    1_200_000,
-  );
+    }
+  }, 1_200_000);
 });
