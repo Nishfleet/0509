@@ -618,13 +618,23 @@ export async function deleteCreatedAccount(page: Page, email: string): Promise<v
   }
   await confirm.fill(email);
   await page.getByRole("button", { name: "Delete my account" }).click();
-  try {
-    await page.waitForURL(/\/login(?:\?|$)/);
-  } catch (error) {
-    const cannotDelete = page.getByRole("alert").filter({ hasText: /sign out and sign back in/ });
-    if (!(await cannotDelete.isVisible())) throw error;
-    console.log(`deleteCreatedAccount: ${email} session cannot delete; treating as already gone`);
+  const cannotDelete = page.getByRole("alert").filter({ hasText: /sign out and sign back in/ });
+  if (await cannotDelete.isVisible()) {
+    if (!signedInThisWorker.includes(email)) {
+      throw new Error(`deleteCreatedAccount: ${email} session cannot delete and was never signed in this worker`);
+    }
+    await signInWithMagicLink(page, email, isLocalLane() ? null : requireInboxToken(), /\/(onboarding|app)/);
+    await page.goto("/app/settings");
+    const again = page.getByLabel("Type " + email + " to confirm");
+    if ((await again.count()) === 0) {
+      console.log(`deleteCreatedAccount: ${email} has no delete form after sign-in; nothing to delete`);
+      signedInThisWorker = signedInThisWorker.filter((address) => address !== email);
+      return;
+    }
+    await again.fill(email);
+    await page.getByRole("button", { name: "Delete my account" }).click();
   }
+  await page.waitForURL(/\/login(?:\?|$)/);
   signedInThisWorker = signedInThisWorker.filter((address) => address !== email);
 }
 

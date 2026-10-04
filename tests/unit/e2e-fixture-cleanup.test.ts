@@ -126,6 +126,13 @@ describe("e2e fixture teardown detector", () => {
     expect(source).toContain("toMatch(/\\/login(?:\\?|$)/)");
   });
 
+  it("signs in again when settings refuses a stale delete, instead of treating the row as gone", async () => {
+    const source = await readFile(path.join(REPO_ROOT, "e2e/inbox.ts"), "utf8");
+    expect(source).toContain("sign out and sign back in");
+    expect(source).toContain("signInWithMagicLink");
+    expect(source).not.toContain("treating as already gone");
+  });
+
   it("runs a matrix inside a job concurrency group one leg at a time", async () => {
     const dir = path.join(REPO_ROOT, ".github/workflows");
     const offenders: string[] = [];
