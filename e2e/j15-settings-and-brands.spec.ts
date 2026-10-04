@@ -56,13 +56,19 @@ test.describe("J15 a signed-in customer changes settings and hits the plan limit
     await expect(control()).toBeChecked({ checked: !was });
     await control().click();
     await expect(control()).toBeChecked({ checked: was });
+    await page.reload();
+    await expect(control()).toBeChecked({ checked: was });
   });
 
-  test("J15 a delivery address that is not an email is refused with a reason", async ({ page }) => {
+  test("J15 a delivery address that is not an email is stopped and not saved", async ({ page }) => {
     await openSettings(page);
-    await page.locator("#delivery-address-input").fill("not-an-email");
-    await page.getByRole("button", { name: "Save", exact: true }).last().click();
-    await expect(page.locator("#delivery-address-error")).toBeVisible();
+    const field = page.locator("#delivery-address-input");
+    const original = await field.inputValue();
+    await field.fill("not-an-email");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    expect(await field.evaluate((input: HTMLInputElement) => input.validity.typeMismatch)).toBe(true);
+    await page.reload();
+    await expect(page.locator("#delivery-address-input")).toHaveValue(original);
   });
 
   test("J15 adding a brand at the plan limit says so and offers the upgrade", async ({ page }) => {
