@@ -3733,5 +3733,637 @@
       "noteworthy_change": "a review counter moved by six",
       "change_kind": "a counter ticked"
     }
+  },
+  {
+    "id": "offer2-bombas-bogo",
+    "split": "train",
+    "subject": {
+      "name": "Bombas",
+      "domain": "bombas.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://bombas.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,3 @@", "+Buy 2 pairs, get the third free", " Shop socks", " Shop tees"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18100,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "a buy-two-get-one deal is a new promotion",
+      "change_kind": "a new promotion or offer term"
+    }
+  },
+  {
+    "id": "offer2-peloton-trial",
+    "split": "test",
+    "subject": {
+      "name": "Peloton",
+      "domain": "onepeloton.com"
+    },
+    "isSelf": true,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.onepeloton.com/membership",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-Try free for 30 days", "+Try free for 90 days", " All-Access $44 / month"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18100,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "the free trial tripled, a stronger offer",
+      "change_kind": "a new promotion or offer term"
+    }
+  },
+  {
+    "id": "offer2-chewy-autoship",
+    "split": "train",
+    "subject": {
+      "name": "Chewy",
+      "domain": "chewy.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.chewy.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,3 @@", "+Save 35% on your first Autoship order", " Shop dogs", " Shop cats"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18100,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "a bigger first-order discount is a new promotion",
+      "change_kind": "a new promotion or offer term"
+    }
+  },
+  {
+    "id": "offer2-ikea-family",
+    "split": "test",
+    "subject": {
+      "name": "IKEA",
+      "domain": "ikea.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.ikea.com/us/en/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,3 @@",
+          "+IKEA Family members get 15% off bedroom storage this month",
+          " Shop rooms",
+          " Shop products"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18100,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "a member-only discount is a new offer",
+      "change_kind": "a new promotion or offer term"
+    }
+  },
+  {
+    "id": "offer2-zoom-annual",
+    "split": "test",
+    "subject": {
+      "name": "Zoom",
+      "domain": "zoom.us"
+    },
+    "isSelf": true,
+    "pageRole": "pricing",
+    "pageUrl": "https://zoom.us/pricing",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,3 @@",
+          " Pro $159.90 / year / license",
+          "+Get 2 months free when you switch to annual",
+          " Business $219.90 / year / license"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18100,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "two free months for annual billing is a new offer",
+      "change_kind": "a new promotion or offer term"
+    }
+  },
+  {
+    "id": "offer2-slack-nonprofit",
+    "split": "train",
+    "subject": {
+      "name": "Slack",
+      "domain": "slack.com"
+    },
+    "isSelf": true,
+    "pageRole": "pricing",
+    "pageUrl": "https://slack.com/pricing",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,3 @@",
+          " Pro $8.75 per user / month",
+          "+Nonprofits save 85% on paid plans",
+          " Business+ $15 per user / month"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18100,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "a nonprofit discount is a new offer",
+      "change_kind": "a new promotion or offer term"
+    }
+  },
+  {
+    "id": "offer2-no-emailcapture",
+    "split": "train",
+    "subject": {
+      "name": "Everlane",
+      "domain": "everlane.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.everlane.com/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,2 @@",
+          "-Sign up for emails and get 10% off",
+          "+Join our email list and get 10% off",
+          " Shop women"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18100,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "the same email-signup 10% offer in different words",
+      "change_kind": "a standing promotion was reworded"
+    }
+  },
+  {
+    "id": "offer2-no-promoswap",
+    "split": "train",
+    "subject": {
+      "name": "Gymshark",
+      "domain": "gymshark.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.gymshark.com/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,2 @@",
+          "-Free shipping over $75 | Free returns",
+          "+Free returns | Free shipping over $75",
+          " Shop men"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18100,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "the same two standing benefits in the other order",
+      "change_kind": "a standing promotion was reworded"
+    }
+  },
+  {
+    "id": "offer2-no-limitedtime",
+    "split": "test",
+    "subject": {
+      "name": "Allbirds",
+      "domain": "allbirds.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.allbirds.com/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,2 @@",
+          "-Limited time: free shipping over $75",
+          "+For a limited time: free shipping over $75",
+          " Shop men"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18100,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "the same standing shipping offer with different wording",
+      "change_kind": "a standing promotion was reworded"
+    }
+  },
+  {
+    "id": "offer2-no-codecase",
+    "split": "test",
+    "subject": {
+      "name": "Casper",
+      "domain": "casper.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://casper.com/mattresses/casper-original/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-Use code SAVE50 at checkout", "+Use code save50 at checkout", " Queen $1,195"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18100,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "the same code, only its capitalisation changed",
+      "change_kind": "a standing promotion was reworded"
+    }
+  },
+  {
+    "id": "offer2-no-navlabel",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-Shop the sale", "+Shop sale", " Shop new arrivals"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18100,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "a navigation label shortened, same sale link",
+      "change_kind": "a standing promotion was reworded"
+    }
+  },
+  {
+    "id": "offer2-no-loyalty",
+    "split": "test",
+    "subject": {
+      "name": "Lush",
+      "domain": "lush.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.lush.com/us/en",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-Earn points on every order", "+Earn loyalty points on every order", " Shop soap"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18100,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "the same loyalty program, one word added",
+      "change_kind": "a standing promotion was reworded"
+    }
+  },
+  {
+    "id": "offer2-no-stock",
+    "split": "train",
+    "subject": {
+      "name": "Chewy",
+      "domain": "chewy.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://www.chewy.com/blue-buffalo-life-protection/dp/12345",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-Only 14 left in stock", "+Only 13 left in stock", " $54.98 Autoship price"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18100,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "a stock counter moved by one",
+      "change_kind": "a standing promotion was reworded"
+    }
+  },
+  {
+    "id": "offer2-no-giftcard",
+    "split": "test",
+    "subject": {
+      "name": "Spotify",
+      "domain": "spotify.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://www.spotify.com/us/premium/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-Buy a gift card", "+Give a gift card", " Individual $11.99 / month"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18100,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "a gift-card link was relabelled, nothing about the offer changed",
+      "change_kind": "a standing promotion was reworded"
+    }
+  },
+  {
+    "id": "offer2-no-trialfine",
+    "split": "train",
+    "subject": {
+      "name": "Notion",
+      "domain": "notion.so"
+    },
+    "isSelf": true,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.notion.so/pricing",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,2 @@",
+          "-Free 14-day trial of Plus",
+          "+Try Plus free for 14 days",
+          " Plus $10 per seat / month billed annually"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18100,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "the same 14-day trial in different words",
+      "change_kind": "a standing promotion was reworded"
+    }
+  },
+  {
+    "id": "offer2-no-reftext",
+    "split": "test",
+    "subject": {
+      "name": "Dropbox",
+      "domain": "dropbox.com"
+    },
+    "isSelf": true,
+    "pageRole": "plans",
+    "pageUrl": "https://www.dropbox.com/plans",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,2 @@",
+          "-Refer a friend and get 500 MB",
+          "+Refer a friend, get 500 MB",
+          " Plus 2 TB $9.99 / month"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18100,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "the same referral bonus with punctuation changed",
+      "change_kind": "a standing promotion was reworded"
+    }
   }
 ]
