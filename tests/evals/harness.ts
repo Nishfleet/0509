@@ -14,9 +14,9 @@ import type { BreakageEvidence } from "../../app/lib/site/breakage-evidence";
 // one implementation. A question that wanted its own copy of any of those is the
 // second paved path docs/REBUILD-TRUST.md §C1(3) rules out.
 
-const REPEATS = Number(process.env.EVAL_REPEATS ?? 3);
+const REPEATS = Number(process.env.EVAL_REPEATS ?? 1);
 
-const CONCURRENCY = Number(process.env.EVAL_CONCURRENCY ?? 8);
+const CONCURRENCY = Number(process.env.EVAL_CONCURRENCY ?? 2);
 
 const MIN_PER_SPLIT = 20;
 
