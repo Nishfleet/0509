@@ -95,7 +95,7 @@ async function saveSchedule(page: Page, schedule: { weekday: number; hour: numbe
 }
 
 async function switchOffEveryRival(page: Page): Promise<void> {
-  const on = page.getByRole("switch", { name: / tracking$/, checked: true });
+  const on = page.getByRole("switch", { name: / tracking/, checked: true });
   while ((await on.count()) > 0) {
     const before = await on.count();
     await on.first().click();
