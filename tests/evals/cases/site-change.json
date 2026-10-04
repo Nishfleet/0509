@@ -3194,5 +3194,544 @@
       "noteworthy_change": "two columns swapped places and every price is unchanged",
       "change_kind": "the columns were reordered with the same prices"
     }
+  },
+  {
+    "id": "offer-allbirds-bogo",
+    "split": "train",
+    "subject": {
+      "name": "Allbirds",
+      "domain": "allbirds.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.allbirds.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,3 @@", "+Buy one pair, get one 50% off through Sunday", " Shop men", " Shop women"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "a buy-one-get-one deal is a new promotion a customer tracking the brand wants to see",
+      "change_kind": "a new promotion was added"
+    }
+  },
+  {
+    "id": "offer-gymshark-blackfriday",
+    "split": "train",
+    "subject": {
+      "name": "Gymshark",
+      "domain": "gymshark.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.gymshark.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-New arrivals", "+Black Friday: 50% off everything", " Shop men"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "a sitewide 50% off sale replaced the normal banner",
+      "change_kind": "a sitewide sale banner replaced the usual one"
+    }
+  },
+  {
+    "id": "offer-casper-bundle",
+    "split": "train",
+    "subject": {
+      "name": "Casper",
+      "domain": "casper.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://casper.com/mattresses/casper-original/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,3 @@", " Queen $1,095", "+Free pillow set with any mattress this month", " King $1,295"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "a free bundled gift is a new offer on the product page",
+      "change_kind": "a free gift offer was added"
+    }
+  },
+  {
+    "id": "offer-notion-startups",
+    "split": "train",
+    "subject": {
+      "name": "Notion",
+      "domain": "notion.so"
+    },
+    "isSelf": true,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.notion.so/pricing",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,3 @@",
+          " Plus $8 per seat / month billed annually",
+          "+Startups get 6 months free",
+          " Business $15 per seat / month billed annually"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "six free months for startups is a new promotion",
+      "change_kind": "a new startup discount was added"
+    }
+  },
+  {
+    "id": "offer-spotify-trial",
+    "split": "test",
+    "subject": {
+      "name": "Spotify",
+      "domain": "spotify.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://www.spotify.com/us/premium/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-Try 1 month free", "+Try 3 months free", " Individual $11.99 / month"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "the free trial tripled, a stronger offer to new subscribers",
+      "change_kind": "a free trial offer was extended"
+    }
+  },
+  {
+    "id": "offer-dropbox-annual",
+    "split": "test",
+    "subject": {
+      "name": "Dropbox",
+      "domain": "dropbox.com"
+    },
+    "isSelf": true,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.dropbox.com/plans",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,3 @@",
+          " Plus 2 TB $9.99 / month",
+          "+Save 20% when you pay yearly",
+          " Essentials 3 TB $19.99 / month"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "a 20% yearly discount is a new offer",
+      "change_kind": "an annual-billing discount was added"
+    }
+  },
+  {
+    "id": "offer-everlane-freeship",
+    "split": "test",
+    "subject": {
+      "name": "Everlane",
+      "domain": "everlane.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.everlane.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-Free shipping over $100", "+Free shipping on all orders", " Shop women"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "shipping became free for every order, a clear customer-facing change",
+      "change_kind": "a shipping promotion was widened"
+    }
+  },
+  {
+    "id": "offer-lush-student",
+    "split": "test",
+    "subject": {
+      "name": "Lush",
+      "domain": "lush.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.lush.com/us/en",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,3 @@", " Shop bath bombs", "+Students save 15% with verification", " Shop soap"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "a new student discount",
+      "change_kind": "a new discount program was added"
+    }
+  },
+  {
+    "id": "offer-no-timer",
+    "split": "train",
+    "subject": {
+      "name": "Everlane",
+      "domain": "everlane.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.everlane.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-Flash sale ends in 4h 12m", "+Flash sale ends in 4h 11m", " Shop women"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "only the countdown clock ticked, the offer itself is unchanged",
+      "change_kind": "a countdown timer ticked"
+    }
+  },
+  {
+    "id": "offer-no-bannerorder",
+    "split": "train",
+    "subject": {
+      "name": "Gymshark",
+      "domain": "gymshark.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.gymshark.com/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,2 @@",
+          "-Free shipping over $75",
+          "-Free returns within 30 days",
+          "+Free returns within 30 days",
+          "+Free shipping over $75"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "the same two offers swapped places",
+      "change_kind": "two offer lines were reordered"
+    }
+  },
+  {
+    "id": "offer-no-cookie",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,2 @@",
+          "-Accept cookies to see offers",
+          "+Accept cookies to view offers",
+          " Shop new arrivals"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "one word swapped in a cookie prompt, no offer changed",
+      "change_kind": "a cookie prompt was reworded"
+    }
+  },
+  {
+    "id": "offer-no-couponformat",
+    "split": "test",
+    "subject": {
+      "name": "Casper",
+      "domain": "casper.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://casper.com/mattresses/casper-original/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-Use code SAVE50", "+Use code SAVE50 at checkout", " Queen $1,095"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "copy"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "same coupon, same code, a few words added",
+      "change_kind": "coupon text was reworded"
+    }
+  },
+  {
+    "id": "offer-no-shipwording",
+    "split": "test",
+    "subject": {
+      "name": "Dropbox",
+      "domain": "dropbox.com"
+    },
+    "isSelf": true,
+    "pageRole": "plans",
+    "pageUrl": "https://www.dropbox.com/plans",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-Cancel anytime", "+You can cancel at any time", " Plus 2 TB $9.99 / month"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "copy"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "the same promise in different words",
+      "change_kind": "a reassurance line was reworded"
+    }
+  },
+  {
+    "id": "offer-no-reviewcount",
+    "split": "test",
+    "subject": {
+      "name": "Allbirds",
+      "domain": "allbirds.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://www.allbirds.com/products/mens-wool-runners",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-4,210 reviews", "+4,216 reviews", " Free shipping over $75"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18000,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
+      "noteworthy_change": "a review counter moved by six",
+      "change_kind": "a counter ticked"
+    }
   }
 ]
