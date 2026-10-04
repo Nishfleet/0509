@@ -100,6 +100,18 @@ describe("Slack alerts setting (0509#6376)", () => {
     }
   });
 
+  it("refuses to read an encrypted row when SLACK_TARGET_SECRET is missing", async () => {
+    stubSlack(200);
+    await call({ intent: "slack-save", webhook: HOOK });
+    const held = env.SLACK_TARGET_SECRET;
+    env.SLACK_TARGET_SECRET = "";
+    try {
+      await expect(readSlackTarget(env.DB, WS)).rejects.toThrow("SLACK_TARGET_SECRET is not configured");
+    } finally {
+      env.SLACK_TARGET_SECRET = held;
+    }
+  });
+
   it("refuses an address that is not a Slack webhook without calling anything", async () => {
     const posts = stubSlack(200);
 

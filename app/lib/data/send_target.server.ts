@@ -101,6 +101,7 @@ export async function confirmEmailTargetByToken(db: TargetDb, input: { token: st
 const SELECT_SLACK_TARGET = `SELECT st.id, st.target_value FROM send_target st
 JOIN channel c ON c.id = st.channel_id
 WHERE st.workspace_id = ? AND c.key = 'slack' AND c.is_enabled = 1 AND st.is_verified = 1
+ORDER BY st.created_at ASC
 LIMIT 1`;
 
 const DELETE_SLACK_TARGET = `DELETE FROM send_target
@@ -110,7 +111,7 @@ const INSERT_SLACK_TARGET = `INSERT INTO send_target (id, workspace_id, channel_
 SELECT ?, ?, id, ?, 1, ? FROM channel WHERE key = 'slack'`;
 
 function slackTargetSecret(): string {
-  const raw: unknown = Reflect.get(env, "SLACK_TARGET_SECRET");
+  const raw: unknown = env.SLACK_TARGET_SECRET;
   if (typeof raw !== "string") throw new Error("SLACK_TARGET_SECRET is not configured");
   const secret = raw.trim();
   if (secret.length === 0) throw new Error("SLACK_TARGET_SECRET is not configured");
@@ -124,7 +125,7 @@ export async function readSlackTarget(
   const row = await db.prepare(SELECT_SLACK_TARGET).bind(workspaceId).first<{ id: string; target_value: string }>();
   if (row === null) return null;
   if (isEncryptedSlackTarget(row.target_value)) {
-    return { id: row.id, target_value: await decryptSlackWebhook(row.target_value, slackTargetSecret()) };
+    return { id: row.id, target_value: await decryptSlackWebhook(row.target_value, slackTargetSecret(), workspaceId) };
   }
   const webhook = parseSlackWebhook(row.target_value);
   if (webhook === null) throw new Error("Slack target is not a webhook address");
@@ -139,7 +140,7 @@ export async function saveSlackTarget(
   db: D1Database,
   input: { workspaceId: string; webhookUrl: string; now: string },
 ): Promise<void> {
-  const sealed = await encryptSlackWebhook(input.webhookUrl, slackTargetSecret());
+  const sealed = await encryptSlackWebhook(input.webhookUrl, slackTargetSecret(), input.workspaceId);
   await db.batch([
     db.prepare(DELETE_SLACK_TARGET).bind(input.workspaceId),
     db.prepare(INSERT_SLACK_TARGET).bind(crypto.randomUUID(), input.workspaceId, sealed, input.now),

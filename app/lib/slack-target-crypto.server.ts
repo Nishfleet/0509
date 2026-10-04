@@ -34,12 +34,17 @@ async function importSecret(secret: string): Promise<CryptoKey> {
   return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
 }
 
-export async function encryptSlackWebhook(url: string, secret: string): Promise<string> {
+export async function encryptSlackWebhook(url: string, secret: string, workspaceId: string): Promise<string> {
   const webhook = parseSlackWebhook(url);
   if (webhook === null) throw new Error("Slack webhook address is not valid");
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+  const bound = new TextEncoder().encode(workspaceId);
   const sealed = new Uint8Array(
-    await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await importSecret(secret), new TextEncoder().encode(webhook)),
+    await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv, additionalData: bound },
+      await importSecret(secret),
+      new TextEncoder().encode(webhook),
+    ),
   );
   const packed = new Uint8Array(iv.byteLength + sealed.byteLength);
   packed.set(iv);
@@ -47,7 +52,7 @@ export async function encryptSlackWebhook(url: string, secret: string): Promise<
   return PREFIX + bytesToBase64(packed);
 }
 
-export async function decryptSlackWebhook(stored: string, secret: string): Promise<string> {
+export async function decryptSlackWebhook(stored: string, secret: string, workspaceId: string): Promise<string> {
   if (!isEncryptedSlackTarget(stored)) throw new Error("Slack target is not encrypted");
   let packed: Uint8Array<ArrayBuffer>;
   try {
@@ -58,9 +63,14 @@ export async function decryptSlackWebhook(stored: string, secret: string): Promi
   if (packed.byteLength < IV_LENGTH + 16) throw new Error("Slack target could not be decrypted");
   const iv = packed.subarray(0, IV_LENGTH);
   const sealed = packed.subarray(IV_LENGTH);
+  const bound = new TextEncoder().encode(workspaceId);
   let bytes: ArrayBuffer;
   try {
-    bytes = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, await importSecret(secret), sealed);
+    bytes = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv, additionalData: bound },
+      await importSecret(secret),
+      sealed,
+    );
   } catch (error) {
     throw new Error("Slack target could not be decrypted", { cause: error });
   }
