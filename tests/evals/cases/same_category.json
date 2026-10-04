@@ -2022,5 +2022,511 @@
     },
     "label": false,
     "why": "speakers, not music streaming"
+  },
+  {
+    "id": "dyson-shark",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Dyson",
+      "domain": "dyson.com",
+      "description": "Premium vacuum cleaners, air purifiers and hair care tools"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Shark",
+      "domain": "sharkclean.com",
+      "evidence": [
+        {
+          "source": "dyson.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells upright and cordless vacuum cleaners."
+        }
+      ]
+    },
+    "label": true,
+    "why": "vacuum cleaners"
+  },
+  {
+    "id": "dyson-bissell",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Dyson",
+      "domain": "dyson.com",
+      "description": "Premium vacuum cleaners, air purifiers and hair care tools"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Bissell",
+      "domain": "bissell.com",
+      "evidence": [
+        {
+          "source": "dyson.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells vacuum and carpet-cleaning machines for the home."
+        }
+      ]
+    },
+    "label": true,
+    "why": "vacuum cleaners"
+  },
+  {
+    "id": "dyson-irobot",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Dyson",
+      "domain": "dyson.com",
+      "description": "Premium vacuum cleaners, air purifiers and hair care tools"
+    },
+    "competitors": [],
+    "item": {
+      "name": "iRobot",
+      "domain": "irobot.com",
+      "evidence": [
+        {
+          "source": "dyson.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells robot vacuum cleaners."
+        }
+      ]
+    },
+    "label": true,
+    "why": "vacuum cleaners in a different form"
+  },
+  {
+    "id": "dyson-instant-pot",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Dyson",
+      "domain": "dyson.com",
+      "description": "Premium vacuum cleaners, air purifiers and hair care tools"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Instant Pot",
+      "domain": "instantpot.com",
+      "evidence": [
+        {
+          "source": "dyson.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells multi-cooker kitchen appliances to home cooks."
+        }
+      ]
+    },
+    "label": false,
+    "why": "kitchen appliances, not cleaning or air care"
+  },
+  {
+    "id": "notion-coda",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "Workspace for notes, documents and wikis"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Coda",
+      "domain": "coda.io",
+      "evidence": [
+        {
+          "source": "notion.so",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a document and wiki workspace for teams."
+        }
+      ]
+    },
+    "label": true,
+    "why": "docs and wiki workspace"
+  },
+  {
+    "id": "notion-evernote",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "Workspace for notes, documents and wikis"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Evernote",
+      "domain": "evernote.com",
+      "evidence": [
+        {
+          "source": "notion.so",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a note-taking app."
+        }
+      ]
+    },
+    "label": true,
+    "why": "notes app"
+  },
+  {
+    "id": "notion-zoom",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "Workspace for notes, documents and wikis"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Zoom",
+      "domain": "zoom.us",
+      "evidence": [
+        {
+          "source": "notion.so",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells video meeting software."
+        }
+      ]
+    },
+    "label": false,
+    "why": "video meetings, not docs"
+  },
+  {
+    "id": "sleep-number-tempur-pedic",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Sleep Number",
+      "domain": "sleepnumber.com",
+      "description": "Adjustable-firmness beds and mattresses with sleep tracking"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Tempur-Pedic",
+      "domain": "tempurpedic.com",
+      "evidence": [
+        {
+          "source": "sleepnumber.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells mattresses and adjustable bases."
+        }
+      ]
+    },
+    "label": true,
+    "why": "mattresses and bases"
+  },
+  {
+    "id": "sleep-number-eight-sleep",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Sleep Number",
+      "domain": "sleepnumber.com",
+      "description": "Adjustable-firmness beds and mattresses with sleep tracking"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Eight Sleep",
+      "domain": "eightsleep.com",
+      "evidence": [
+        {
+          "source": "sleepnumber.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a temperature-controlled, sleep-tracking mattress cover."
+        }
+      ]
+    },
+    "label": true,
+    "why": "sleep-tracking mattress product"
+  },
+  {
+    "id": "sleep-number-brooklinen",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Sleep Number",
+      "domain": "sleepnumber.com",
+      "description": "Adjustable-firmness beds and mattresses with sleep tracking"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Brooklinen",
+      "domain": "brooklinen.com",
+      "evidence": [
+        {
+          "source": "sleepnumber.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells sheets, duvets and other bedding."
+        }
+      ]
+    },
+    "label": false,
+    "why": "bedding, not mattresses or beds"
+  },
+  {
+    "id": "mailchimp-klaviyo",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Mailchimp",
+      "domain": "mailchimp.com",
+      "description": "Email marketing and newsletter platform for small businesses"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Klaviyo",
+      "domain": "klaviyo.com",
+      "evidence": [
+        {
+          "source": "mailchimp.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells email and SMS marketing automation."
+        }
+      ]
+    },
+    "label": true,
+    "why": "email marketing platform"
+  },
+  {
+    "id": "mailchimp-constant-contact",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Mailchimp",
+      "domain": "mailchimp.com",
+      "description": "Email marketing and newsletter platform for small businesses"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Constant Contact",
+      "domain": "constantcontact.com",
+      "evidence": [
+        {
+          "source": "mailchimp.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells email marketing for small businesses."
+        }
+      ]
+    },
+    "label": true,
+    "why": "email marketing platform"
+  },
+  {
+    "id": "mailchimp-hubspot",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Mailchimp",
+      "domain": "mailchimp.com",
+      "description": "Email marketing and newsletter platform for small businesses"
+    },
+    "competitors": [],
+    "item": {
+      "name": "HubSpot",
+      "domain": "hubspot.com",
+      "evidence": [
+        {
+          "source": "mailchimp.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells marketing automation, including email campaigns, among its CRM tools."
+        }
+      ]
+    },
+    "label": true,
+    "why": "a large company; its email marketing is what a Mailchimp buyer would weigh"
+  },
+  {
+    "id": "mailchimp-canva",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Mailchimp",
+      "domain": "mailchimp.com",
+      "description": "Email marketing and newsletter platform for small businesses"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Canva",
+      "domain": "canva.com",
+      "evidence": [
+        {
+          "source": "mailchimp.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells design software for making graphics and social posts."
+        }
+      ]
+    },
+    "label": false,
+    "why": "design software, not email marketing"
+  },
+  {
+    "id": "mailchimp-shopify",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Mailchimp",
+      "domain": "mailchimp.com",
+      "description": "Email marketing and newsletter platform for small businesses"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Shopify",
+      "domain": "shopify.com",
+      "evidence": [
+        {
+          "source": "mailchimp.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells an online store platform to small businesses."
+        }
+      ]
+    },
+    "label": false,
+    "why": "online store platform, not email marketing"
+  },
+  {
+    "id": "duolingo-babbel",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Duolingo",
+      "domain": "duolingo.com",
+      "description": "Language-learning app with short daily lessons"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Babbel",
+      "domain": "babbel.com",
+      "evidence": [
+        {
+          "source": "duolingo.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a language-learning app."
+        }
+      ]
+    },
+    "label": true,
+    "why": "language-learning app"
+  },
+  {
+    "id": "duolingo-rosetta-stone",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Duolingo",
+      "domain": "duolingo.com",
+      "description": "Language-learning app with short daily lessons"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Rosetta Stone",
+      "domain": "rosettastone.com",
+      "evidence": [
+        {
+          "source": "duolingo.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells language-learning software."
+        }
+      ]
+    },
+    "label": true,
+    "why": "language-learning software"
+  },
+  {
+    "id": "duolingo-grammarly",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Duolingo",
+      "domain": "duolingo.com",
+      "description": "Language-learning app with short daily lessons"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Grammarly",
+      "domain": "grammarly.com",
+      "evidence": [
+        {
+          "source": "duolingo.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells a writing assistant that corrects grammar and style."
+        }
+      ]
+    },
+    "label": false,
+    "why": "writing assistant, not language learning"
+  },
+  {
+    "id": "dropbox-google-drive",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Dropbox",
+      "domain": "dropbox.com",
+      "description": "Cloud file storage and sharing for individuals and teams"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Google Drive",
+      "domain": "drive.google.com",
+      "evidence": [
+        {
+          "source": "dropbox.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells cloud file storage and sharing as part of Google's suite."
+        }
+      ]
+    },
+    "label": true,
+    "why": "a large company; its file storage is what a Dropbox buyer would weigh"
+  },
+  {
+    "id": "dropbox-onedrive",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Dropbox",
+      "domain": "dropbox.com",
+      "description": "Cloud file storage and sharing for individuals and teams"
+    },
+    "competitors": [],
+    "item": {
+      "name": "OneDrive",
+      "domain": "onedrive.live.com",
+      "evidence": [
+        {
+          "source": "dropbox.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells cloud file storage bundled with Microsoft 365."
+        }
+      ]
+    },
+    "label": true,
+    "why": "a large company; its file storage is what a Dropbox buyer would weigh"
+  },
+  {
+    "id": "dropbox-zoom",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Dropbox",
+      "domain": "dropbox.com",
+      "description": "Cloud file storage and sharing for individuals and teams"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Zoom",
+      "domain": "zoom.us",
+      "evidence": [
+        {
+          "source": "dropbox.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells video meeting software."
+        }
+      ]
+    },
+    "label": false,
+    "why": "video meetings, not file storage"
+  },
+  {
+    "id": "dropbox-slack",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Dropbox",
+      "domain": "dropbox.com",
+      "description": "Cloud file storage and sharing for individuals and teams"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Slack",
+      "domain": "slack.com",
+      "evidence": [
+        {
+          "source": "dropbox.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells team chat software."
+        }
+      ]
+    },
+    "label": false,
+    "why": "team chat, not file storage"
   }
 ]
