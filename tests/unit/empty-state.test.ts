@@ -1,7 +1,4 @@
 import { createElement } from "react";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -26,8 +23,6 @@ import {
 
 const NOW = new Date(2026, 8, 24, 10, 0, 0, 0);
 const DAY_MS = 86_400_000;
-
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function shift(days: number): Date {
   return new Date(NOW.getTime() + days * DAY_MS);
@@ -208,23 +203,20 @@ describe("a bare empty sentence is impossible", () => {
  * Nishfleet/0509#5862. DESIGN.md 7's "Home, second zero" row used to be
  * served by a dead `homeSecondZero()` factory in empty-state.tsx that guessed
  * the brief time as `shift(now, 6)` with no timeZone. Nothing rendered it —
- * the shipped second zero is first-file-panel.tsx, which takes the brief time
- * from the real schedule. This gate is the anti-drift: the DESIGN.md row must
- * name a copy the SHIPPED factory can actually produce, and no copy factory in
- * empty-state.tsx may be exported without a caller.
+ * the shipped second zero is FirstFilePanel, which takes the brief time from
+ * the real schedule.
+ *
+ * The row-vs-copy half of this gate read DESIGN.md to compare the doc row
+ * against the shipped copy. docs/REBUILD-DONE.md D moves that doc-vs-code
+ * check to review, so what remains here is the shipped path end to end:
+ * homeView turns a schedule into one exact day and time, and FirstFilePanel
+ * renders that string into the sentence a customer reads. A guessed date
+ * cannot reach the copy without failing one of those two assertions.
  */
-describe("DESIGN.md 7 rows are tied to the factories that ship them (#5862)", () => {
-  it("the Home second-zero copy is produced by the shipped FirstFilePanel from a real brief time", async () => {
+describe("the Home second-zero copy comes from the real schedule (#5862)", () => {
+  it("homeView emits one brief time and FirstFilePanel renders it", async () => {
     const { FirstFilePanel } = await import("../../app/components/first-file-panel");
     const { homeView } = await import("../../app/lib/home-standing");
-    const doc = await readFile(path.join(REPO_ROOT, "DESIGN.md"), "utf8");
-    const row = doc
-      .split("\n")
-      .find((line) => line.startsWith("| Home, second zero"))
-      ?.split("|")[2]
-      ?.trim();
-    expect(row).toBeDefined();
-
     const view = homeView({
       payload: null,
       entities: [
@@ -248,41 +240,39 @@ describe("DESIGN.md 7 rows are tied to the factories that ship them (#5862)", ()
         briefAt: view.standing.briefAt,
       }),
     );
-    // The row's copy names a day/time; the real schedule must produce exactly
-    // that one, and the shipped factory must render it. A row that names a day
-    // the schedule cannot emit (the shift(now, 6) lie) fails here instead of
-    // drifting back in.
-    const docTime = row?.match(/brief on ([A-Z][a-z]+ \d{2}:\d{2})/)?.[1];
-    expect(docTime).toBeDefined();
-    expect(docTime).toBe(view.standing.briefAt);
-    expect(html).toContain(`arrives with your brief on ${String(docTime)}`);
+    // weekday 1, hour 8 in Europe/London is Monday 08:00 — one real Workflow
+    // time, never "soon", and the panel writes it into the sentence verbatim.
+    expect(view.standing.briefAt).toBe("Monday 08:00");
+    expect(html).toContain(`arrives with your brief on ${view.standing.briefAt}`);
+    expect(html).not.toContain("soon");
   });
 });
 
-describe("DESIGN.md 7 rows quote the strings customers can reach (#5963)", () => {
-  async function designRow(label: string): Promise<string> {
-    const doc = await readFile(path.join(REPO_ROOT, "DESIGN.md"), "utf8");
-    const row = doc
-      .split("\n")
-      .find((line) => line.startsWith(`| ${label}`))
-      ?.split("|")[2]
-      ?.trim();
-    expect(row).toBeDefined();
-    return String(row).replace(/^"|"$/g, "");
-  }
-
-  it("the just-added competitor row is the sentence the competitor page renders", async () => {
+/**
+ * Nishfleet/0509#5963. DESIGN.md 7's rows quoted the strings customers can
+ * reach, so a row that drifted from the shipped copy was a doc bug. Reading the
+ * table to compare the two is the doc-vs-code check docs/REBUILD-DONE.md D
+ * moves to review (the alerts and competitor-page sentences are pinned by
+ * tests/alerts/alert-chip-empty.test.ts and tests/competitor/*). What this
+ * gate keeps is the shipped side: every sentence the copy factories emit is a
+ * full sentence, not a bare "No data", so the row review compares the doc
+ * against is one the component actually renders.
+ */
+describe("the strings customers can reach are full sentences (#5963)", () => {
+  it("both competitor-page sentences render through the component", async () => {
     const { developmentsEmpty } = await import("../../app/components/competitor-frame");
-    expect(await designRow("Competitor page, just added")).toBe(developmentsEmpty(null));
-  });
-
-  it("the alerts row is the paragraph the alerts route renders", async () => {
-    const route = await readFile(path.join(REPO_ROOT, "app/routes/app.alerts.tsx"), "utf8");
-    expect(route).toContain(await designRow("Alerts, nothing yet"));
+    const sentences = [developmentsEmpty(null), developmentsEmpty("Monday 08:00")];
+    expect(sentences).toHaveLength(2);
+    for (const sentence of sentences) {
+      expect(sentence.length).toBeGreaterThan("Nothing here".length);
+      expect(() => emptyState(sentence)).not.toThrow();
+    }
   });
 
   it("empty-state.tsx exports no copy factory the app does not import", async () => {
-    const source = await readFile(path.join(REPO_ROOT, "app/components/empty-state.tsx"), "utf8");
-    expect(source).not.toMatch(/export function (competitorJustAdded|alertsEmpty|homeSecondZero)\b/);
+    const exported = Object.keys(await import("../../app/components/empty-state"));
+    for (const dead of ["competitorJustAdded", "alertsEmpty", "homeSecondZero"]) {
+      expect(exported).not.toContain(dead);
+    }
   });
 });

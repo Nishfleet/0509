@@ -248,6 +248,22 @@ const NO_USER_DATA_IN_LOGS = [
   },
 ];
 
+// docs/REBUILD-DONE.md D: "no test about the fleet, CI, migration numbering or
+// docs — the feature-map proof test is the named exception". A unit test that
+// opens a .md file checks copy against code, which is what review is for; a doc
+// edit then fails the suite instead of the review, and the next writer learns
+// to edit the test. 0509#6953 removed the three readers D named
+// (tests/unit/coverage.test.ts and the two DESIGN.md gates in
+// tests/unit/empty-state.test.ts) and lands this rule so the next one is a diff
+// the lint rejects. The selector is the literal's value, so a path built from
+// parts, a `new URL()` template or a name read from a config still slips
+// through — this gate catches the shape that recurred, not every possible one.
+const DOC_READING_TEST_BAN = {
+  selector: "Literal[value=/\\.md$/]",
+  message:
+    "A test never reads a .md file. A doc-vs-code check is review's: a doc edit that fails the suite teaches the next writer to change the test instead of the doc. Put the copy in the product's public surface and assert that. docs/REBUILD-DONE.md D. Source: 0509#6953.",
+};
+
 const BANNED_SYNTAX = [
   SUPPORT_ADDRESS_BAN,
   GOOGLE_FONTS_BAN,
@@ -978,6 +994,30 @@ export default tseslint.config(
       "vitest/no-identical-title": "error",
       "vitest/expect-expect": "error",
       "vitest/valid-expect": ["error", { maxArgs: 2 }],
+    },
+  },
+
+  {
+    // docs/REBUILD-DONE.md D, 0509#6953. Scope is tests/unit/** — the three
+    // readers D named were all unit tests, and it is what keeps the exception
+    // list to exactly two. tests/stack-dependencies.test.ts and
+    // tests/docs-paths.test.ts also read .md files, but they are repo-hygiene
+    // gates on the agent's own entry docs rather than copy-versus-code checks
+    // about the product, and CLAUDE.md makes the first a rejection rule ("a
+    // dependency with no row in docs/REBUILD-STACK.md is a rejection"). Both
+    // are follow-up work to migrate, not exemptions to add here.
+    //
+    // Two files hold a named exception and only these two, because Nish has not
+    // ruled on either: feature-map-proof.test.ts reads
+    // .agents/skills/verify/feature-map.md to prove every mapped screen was
+    // actually visited, and theme.test.ts reads DESIGN.md §3 and §4 to keep the
+    // tokens in step with the doc. A third is a new rule here, in review, not
+    // an `ignores` entry. The block is the only matching one that sets
+    // no-restricted-syntax for tests/unit/.
+    files: ["tests/unit/**/*.ts"],
+    ignores: ["tests/unit/feature-map-proof.test.ts", "tests/unit/theme.test.ts"],
+    rules: {
+      "no-restricted-syntax": ["error", DOC_READING_TEST_BAN],
     },
   },
 
