@@ -11,10 +11,11 @@ export function nextSiteSweepAt(now: Date): Date {
 export interface FirstSweepInput {
   now: Date;
   sources: readonly HomeSource[];
+  brandsOn: number;
 }
 
 export function firstSiteSweepAt(input: FirstSweepInput): Date | null {
-  const sweepScheduled = input.sources.some((source) => source.kind === "site");
+  const sweepScheduled = input.brandsOn > 0 || input.sources.some((source) => source.kind === "site");
   if (!sweepScheduled) return null;
   const start = nextSiteSweepAt(input.now);
   return new Date(start.getTime() + SITE_SWEEP_ALLOWANCE_HOURS * 3_600_000);
