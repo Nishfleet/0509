@@ -28,6 +28,10 @@ async function addCompetitor(page: Page, domain: string): Promise<void> {
     page.getByRole("list", { name: "Competitors", exact: true }).getByRole("listitem").first(),
   ).toBeVisible();
   if ((await row.count()) === 0) {
+    const other = page.getByRole("switch", { name: /^(?!Nike|Adidas).* tracking/, checked: true });
+    const before = await other.count();
+    await other.first().click();
+    await expect(other).toHaveCount(before - 1);
     await page.locator("#add-competitor").fill(domain);
     await page.getByRole("button", { name: "Add" }).click();
   }
