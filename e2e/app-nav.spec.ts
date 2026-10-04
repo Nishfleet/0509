@@ -16,12 +16,12 @@ test.use({
   },
 });
 
-// The signed-in nav walk, production only: the preview Worker has no inbox, so
-// the setup that mints this spec's session cannot sign in there, and the spec
-// skips rather than fake the journey. It runs in the `e2e-production` job after
-// deploy. Its storageState is the already-onboarded session that
-// `e2e/onboarded.setup.ts` mints per lane, so Home (`/app`) is a real page:
-// each walk below ends on Home, which waits for `/app$`.
+// The signed-in nav walk, production only: the preview Worker can neither send
+// nor receive email, so the setup that mints this spec's session cannot sign in
+// there, and the spec skips rather than fake the journey. It runs in the
+// `e2e-production` job after deploy. Its storageState is the already-onboarded
+// session that `e2e/onboarded.setup.ts` mints per lane, so Home (`/app`) is a
+// real page: each walk below ends on Home, which waits for `/app$`.
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "the nav walk needs a real session; the local preview Worker can neither send nor receive email",
