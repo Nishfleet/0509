@@ -43,8 +43,9 @@ function freshAddress(tag: string): string {
 // An isolated cookie jar per follow attempt: replay and expiry must prove the
 // link itself is dead, which a context already holding a session cannot show.
 // The Access cookie comes back in from the setup project's storageState.
-function freshContext(browser: Browser): Promise<BrowserContext> {
+function freshContext(browser: Browser, baseURL?: string): Promise<BrowserContext> {
   return browser.newContext({
+    baseURL,
     storageState: process.env.CF_ACCESS_CLIENT_ID ? accessStatePath : undefined,
   });
 }
@@ -74,8 +75,17 @@ async function followOnce(context: BrowserContext, link: string) {
 // a requester sees can be compared byte for byte between a known and an
 // unknown address. Origin is sent because the Access cookie rides along and
 // better-auth's CSRF check validates Origin whenever a cookie is present.
-async function requestMagicLink(page: Page, baseURL: string, email: string) {
-  const captcha = await turnstileToken(page);
+async function signedOutCaptcha(browser: Browser, baseURL: string): Promise<string> {
+  const context = await freshContext(browser, baseURL);
+  try {
+    return await turnstileToken(await context.newPage());
+  } finally {
+    await context.close();
+  }
+}
+
+async function requestMagicLink(browser: Browser, page: Page, baseURL: string, email: string) {
+  const captcha = await signedOutCaptcha(browser, baseURL);
   const sentAt = new Date().toISOString();
   // The pre-cleared lane sends no token: its captcha field is empty by design.
   const headers: Record<string, string> = { origin: baseURL };
@@ -147,14 +157,14 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
 
   // email is a known address now; stranger never signs in. The request path
   // must answer both identically.
-  const known = await requestMagicLink(page, baseURL, email);
+  const known = await requestMagicLink(browser, page, baseURL, email);
   const secondLink = await waitForMagicLink(email, token, [first.link]);
-  await requestMagicLink(page, baseURL, email);
+  await requestMagicLink(browser, page, baseURL, email);
   const thirdLink = await waitForMagicLink(email, token, [first.link, secondLink]);
-  const expiring = await requestMagicLink(page, baseURL, email);
+  const expiring = await requestMagicLink(browser, page, baseURL, email);
   const expiresAfter = Date.parse(expiring.sentAt) + TOKEN_TTL_MS;
   const fourthLink = await waitForMagicLink(email, token, [first.link, secondLink, thirdLink]);
-  const unknown = await requestMagicLink(page, baseURL, stranger);
+  const unknown = await requestMagicLink(browser, page, baseURL, stranger);
   expect(unknown.body).toBe(known.body);
   console.log(
     `magic-link-expiry request-opacity known=${known.body} unknown=${unknown.body} at=${new Date().toISOString()}`,
