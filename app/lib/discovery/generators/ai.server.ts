@@ -270,7 +270,15 @@ interface Source {
 }
 
 async function candidatesFrom(model: Model, { subject, readSite, checks }: Source): Promise<Candidate[]> {
-  return liveCandidates(subject, nameProposals(subject, await cachedProposals(model, subject, readSite)), checks);
+  const live = await liveCandidates(
+    subject,
+    nameProposals(subject, await cachedProposals(model, subject, readSite)),
+    checks,
+  );
+  return live.map((candidate) => ({
+    ...candidate,
+    evidence: candidate.evidence.map((item) => ({ ...item, via: model })),
+  }));
 }
 
 export async function warmProposals(subject: Subject): Promise<void> {
@@ -279,13 +287,16 @@ export async function warmProposals(subject: Subject): Promise<void> {
 }
 
 function mergedByDomain(lists: readonly (readonly Candidate[])[]): Candidate[] {
-  const seen = new Set<string>();
-  return lists.flat().filter((candidate) => {
+  const merged = new Map<string, Candidate>();
+  for (const candidate of lists.flat()) {
     const domain = candidate.domain ?? candidate.name;
-    if (seen.has(domain)) return false;
-    seen.add(domain);
-    return true;
-  });
+    const kept = merged.get(domain);
+    merged.set(
+      domain,
+      kept === undefined ? candidate : { ...kept, evidence: [...kept.evidence, ...candidate.evidence] },
+    );
+  }
+  return [...merged.values()];
 }
 
 async function candidatesFromAll(subject: Subject, readSite: SiteReader): Promise<Candidate[]> {

@@ -36,7 +36,7 @@ export function nameKey(name: string): string {
 }
 
 function isSameEvidence(a: Evidence, b: Evidence): boolean {
-  return a.generator === b.generator && a.sourceUrl === b.sourceUrl;
+  return a.generator === b.generator && a.sourceUrl === b.sourceUrl && a.via === b.via;
 }
 
 function hostKey(value: string): string {

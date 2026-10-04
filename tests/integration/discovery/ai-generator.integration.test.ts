@@ -56,7 +56,12 @@ describe("aiGenerator", () => {
       ["Ryderwear", "ryderwear.com"],
     ]);
     expect(candidates[0]?.evidence).toEqual([
-      expect.objectContaining({ generator: "ai", sourceUrl: "https://gymshark.com/" }),
+      expect.objectContaining({ generator: "ai", sourceUrl: "https://gymshark.com/", via: "@cf/openai/gpt-oss-120b" }),
+      expect.objectContaining({
+        generator: "ai",
+        sourceUrl: "https://gymshark.com/",
+        via: "@cf/nvidia/nemotron-3-120b-a12b",
+      }),
     ]);
     const [model, input, options] = run.mock.calls[0] as [
       string,
