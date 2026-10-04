@@ -12,6 +12,7 @@ export const PUBLIC_SUBJECT: NoulQuestion = {
   whenTrue: "It is a business, brand, product or public creator that presents itself to the public.",
   whenFalse:
     "It is a private individual: a personal name or personal handle with no sign of a company, brand, product, or creator publishing to an audience.",
+  retries: { maxAttempts: 3, retryDelayMs: 500, backoff: "exponential" },
 };
 
 export type PublicSubjectOutcome = "proceed" | "ask" | "refuse";
