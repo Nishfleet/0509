@@ -9,7 +9,7 @@ import {
   type NoulQuestion,
   type NoulVerdict,
 } from "../jev/client.server";
-import { ACT_AT, PRICING_ACT_AT, REJECT_AT } from "../jev/thresholds";
+import { ACT_AT, CHANGE_KIND_QUESTION_ID, PRICING_ACT_AT, REJECT_AT } from "../jev/thresholds";
 import { daysBefore } from "../site-changes.server";
 import type { BreakageEvidence } from "./breakage-evidence";
 
@@ -31,7 +31,7 @@ const D3S_BREAKAGE_QID = "own_site_breakage";
 
 const D3_NOTEWORTHY_QID = "noteworthy_change";
 
-const D3_KIND_QID = "change_kind";
+const D3_KIND_QID = CHANGE_KIND_QUESTION_ID;
 
 export const D3S_BREAKAGE: NoulQuestion = {
   id: D3S_BREAKAGE_QID,

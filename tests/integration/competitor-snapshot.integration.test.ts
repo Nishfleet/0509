@@ -124,6 +124,15 @@ async function seedVerdict(id: string, ws: string, questionId: string, signalId:
     .run();
 }
 
+async function seedKind(id: string, ws: string, signalId: string, choice: string): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, choice, decided_at)
+     VALUES (?1, ?2, 'change_kind', ?3, ?4, NULL, ?5, ?6)`,
+  )
+    .bind(id, ws, `hash-${id}`, signalId, choice, NOW.toISOString())
+    .run();
+}
+
 beforeEach(async () => {
   for (const table of [
     "signal",
@@ -179,6 +188,14 @@ describe("readCompetitorSnapshot against real D1", () => {
       observedAt: "2026-09-21T11:00:00.000Z",
     });
     await seedVerdict("snap-jev-price", ws, "noteworthy_change", "snap-sig-price", 0.62);
+    await seedKind("snap-kind-price", ws, "snap-sig-price", "pricing");
+
+    await seedSignal("snap-sig-pricepage", ws, entity, sourceSite, {
+      kind: "change",
+      aspect: "pricing",
+      observedAt: "2026-09-21T11:30:00.000Z",
+    });
+    await seedVerdict("snap-jev-pricepage", ws, "noteworthy_change", "snap-sig-pricepage", 0.62);
 
     await seedSignal("snap-sig-launch", ws, entity, sourceSite, {
       kind: "change",
@@ -186,6 +203,7 @@ describe("readCompetitorSnapshot against real D1", () => {
       observedAt: "2026-09-21T12:00:00.000Z",
     });
     await seedVerdict("snap-jev-launch", ws, "noteworthy_change", "snap-sig-launch", 0.62);
+    await seedKind("snap-kind-launch", ws, "snap-sig-launch", "launch");
 
     await seedSignal("snap-sig-copy", ws, entity, sourceAds, {
       kind: "ad",
