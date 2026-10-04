@@ -50,3 +50,13 @@ Subject: "<site> looks broken: <one-line kind>". Body: the before-and-after mark
 ## Proof required in every delivery packet
 
 One real weekly brief sent to a real inbox from a real workspace, with the message id and timestamp, and one real own-site incident email with its "fixed" follow-up. Rendered HTML checked at 600 px and in a dark-mode mail client. No invented samples.
+
+## Email sending capacity at launch (checked 2026-10-04, #6094)
+
+Every email (magic links, the weekly brief, immediate alerts) goes through one Cloudflare Email Service account, so one daily cap covers all of them.
+
+- **Daily cap.** Cloudflare publishes no number and no API returns it. The account's own send log (GraphQL `emailSendingAdaptiveGroups`, account `f670a698…`) shows the cap in practice: on 2026-09-28 sends stopped at 20:00 UTC after 5,978 delivered that UTC day, and nothing more went out until 2026-09-29. So the cap was about 6,000 sends per UTC day then. It rises with reputation. Normal use since the e2e fix: 51 to 186 sends a day (2026-09-29 to 2026-10-04).
+- **Plan.** Workers Paid. `wrangler.jsonc` sets `limits.cpu_ms: 5000`, which only Workers Paid accepts, and `deploy-production.yml` deploys it green. Workers Paid includes 3,000 sends a month, then $0.35 per 1,000. September used 16,729.
+- **Sessions.** Magic link: 5 minutes, single use. Session: Better Auth default, 7 days, refreshed once a day when used (`app/lib/auth.server.ts` sets only `freshAge`).
+- **Launch estimate.** Per customer, about one sign-in email and one brief a week. 1,000 customers is about 150 sends on a normal day and about 1,150 on Monday (briefs), well under 6,000. A month is about 8,700 sends, about $2 over the included 3,000.
+- **Verdict.** The cap is enough for launch volume. No Limit Increase Request is needed. Production e2e is the only thing that has ever spent the cap (#6092, #6093). Request a raise from the form on https://developers.cloudflare.com/email-service/platform/limits/ when a normal day passes 3,000 sends.
