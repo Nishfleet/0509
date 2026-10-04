@@ -92,9 +92,10 @@ for (const { width, height } of [
     }
     await page.getByRole("button", { name: "Start watching" }).click();
     await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
+    await expect(page.locator('[data-home="standing"]')).toBeVisible();
 
     const panel = page.locator('[data-home="first-file"]');
-    if ((await panel.count()) === 0) {
+    if (!(await panel.isVisible())) {
       await page.goto("/app/competitors");
       await page.locator("#add-competitor").fill("nike.com");
       await page.getByRole("button", { name: "Add" }).click();
@@ -104,6 +105,7 @@ for (const { width, height } of [
         .filter({ hasText: "nike.com" });
       await expect(row.getByRole("switch")).toBeChecked({ timeout: 30_000 });
       await page.goto("/app");
+      await expect(page.locator('[data-home="standing"]')).toBeVisible();
     }
     await expect(panel).toContainText(
       /Your first site snapshots arrive on (?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday) \d{1,2} [A-Z][a-z]+, around (?:[01]\d|2[0-3]):[0-5]\d \S+\./,

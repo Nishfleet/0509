@@ -381,7 +381,10 @@ export async function settleSignInWidget(page: Page): Promise<void> {
 export async function turnstileToken(page: Page): Promise<string> {
   await page.goto("/login");
   if (!new URL(page.url()).pathname.startsWith("/login")) {
-    await page.request.post("/app/settings", { form: { intent: "sign-out" } });
+    const signedOut = await page.request.post("/app/settings", { form: { intent: "sign-out" } });
+    if (!signedOut.ok()) {
+      throw new Error(`sign-out answered HTTP ${String(signedOut.status())}`);
+    }
     await page.goto("/login");
   }
   await settleSignInWidget(page);

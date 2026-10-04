@@ -34,7 +34,7 @@ async function readFixture(): Promise<{ variant: Variant; flippedAt: string }> {
     const html = await response.text();
     test.skip(
       html.includes("Just a moment") || html.includes("Checking if the site connection is secure"),
-      "J7: the fixture bot wall is up (J5 shares this Worker); GET / answers 403 until J5 turns it off",
+      "J7: J5's fixture bot wall is up (same Worker, 0509#6924); GET / answers 403 until J5 turns it off",
     );
   }
   expect(response.status).toBe(200);

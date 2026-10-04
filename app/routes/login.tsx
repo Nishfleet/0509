@@ -42,12 +42,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (id === null || id === "" || (await readAccountDeleteInstanceId(request)) !== id) {
     return data({ turnstileSiteKey, linkError, id: null, progress: null });
   }
-  const progress = (await readAccountDeleteProgress(id)) ?? {
-    rows: "removed" as const,
-    files: "removing" as const,
-    deleted: null,
-  };
-  const finished = progress.files === "removed";
+  const progress = await readAccountDeleteProgress(id);
+  const finished = progress?.files === "removed";
   const headers = finished ? { "set-cookie": await clearAccountDeleteInstanceId() } : undefined;
   return data({ turnstileSiteKey, linkError, id, progress }, { headers });
 }
