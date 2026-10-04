@@ -112,9 +112,7 @@ SELECT ?, ?, id, ?, 1, ? FROM channel WHERE key = 'slack'`;
 const UPDATE_SLACK_TARGET_VALUE = `UPDATE send_target SET target_value = ? WHERE id = ?`;
 
 function slackTargetSecret(): string {
-  const raw = Reflect.get(env, "SLACK_TARGET_SECRET");
-  if (typeof raw !== "string") throw new Error("SLACK_TARGET_SECRET is not configured");
-  const secret = raw.trim();
+  const secret = env.SLACK_TARGET_SECRET.trim();
   if (secret.length === 0) throw new Error("SLACK_TARGET_SECRET is not configured");
   return secret;
 }
