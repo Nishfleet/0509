@@ -60,9 +60,6 @@ async function rotate(page: Page): Promise<string> {
   await page.goto("/app/competitors");
   const toggle = switchFor(page, ROTATING);
   const wasOn = await toggle.isChecked();
-  // The switch paints fetcher.formData intent as its own state, so it reads as
-  // settled before the POST lands. The reload waits for that POST the way J15's
-  // own-site alerts switch and J11's saveCompetitorSwitch do.
   const saved = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" && response.ok() && response.url().includes("/app/competitors"),
