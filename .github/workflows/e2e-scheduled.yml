@@ -96,7 +96,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Run the spec against production
-        run: npm run e2e -- "$SPEC" --project=desktop-1440 --retries=0 --reporter=github,list
+        run: npm run e2e -- "$SPEC" --project=public-1440 --project=desktop-1440 --retries=0 --reporter=github,list
         env:
           SPEC: ${{ inputs.spec }}
           PLAYWRIGHT_TEST_BASE_URL: https://0509.io
