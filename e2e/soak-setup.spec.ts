@@ -9,7 +9,8 @@ test.skip(
 );
 
 const SELF_DOMAIN = "gymshark.com";
-const COMPETITORS = ["nike.com", "adidas.com", "underarmour.com", "lululemon.com", "linear.app", "vercel.com"] as const;
+const COMPETITORS = ["nike.com", "adidas.com", "lululemon.com", "linear.app", "vercel.com"] as const;
+const SWAPPED_OUT = "underarmour.com";
 
 async function onboardSelf(page: Page): Promise<void> {
   await page.goto("/onboarding");
@@ -24,8 +25,16 @@ async function onboardSelf(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
 }
 
+async function switchOffSwappedOut(page: Page): Promise<void> {
+  const tracking = page.getByRole("switch", { name: `${SWAPPED_OUT} tracking` });
+  if ((await tracking.count()) === 0 || !(await tracking.isChecked())) return;
+  await tracking.click();
+  await expect(tracking).not.toBeChecked({ timeout: 30_000 });
+}
+
 async function addCompetitors(page: Page): Promise<void> {
   await page.goto("/app/competitors");
+  await switchOffSwappedOut(page);
   for (const domain of COMPETITORS) {
     const tracking = page.getByRole("switch", { name: `${domain} tracking` });
     if ((await tracking.count()) > 0) continue;
