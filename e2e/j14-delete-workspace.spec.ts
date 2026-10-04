@@ -30,6 +30,16 @@ test("J14: a fresh account deleted from settings leaves nothing signed in and it
     `J14 diag url=${page.url().replace(instanceId, "<id>")} sections=${String(await page.locator("section[data-delete]").count())}`,
   );
 
+  const asked = await page.request.get(`/login?deleted=${encodeURIComponent(instanceId)}`);
+  const askedHtml = await asked.text();
+  console.log(
+    `J14 diag page.request html status=${String(asked.status())} hasNotice=${String(askedHtml.includes("Your account is deleted"))} len=${String(askedHtml.length)}`,
+  );
+  const asData = await page.request.get(`/login.data?deleted=${encodeURIComponent(instanceId)}`);
+  const dataText = (await asData.text()).replaceAll(instanceId, "<id>");
+  console.log(`J14 diag login.data status=${String(asData.status())} body=${dataText.slice(0, 600)}`);
+  const after = (await page.context().cookies()).map((c) => c.name);
+  console.log(`J14 diag cookies after requests: ${JSON.stringify(after)}`);
   await expect(page.getByRole("heading", { name: "Your account is deleted" })).toBeVisible();
 
   await expect
