@@ -33,6 +33,10 @@ describe("keepOnlyIfBoth", () => {
     expect(combined(0.8052, 0.4036)).toBe(0);
   });
 
+  it("zeroes a category score just under the floor", () => {
+    expect(combined(0.9, 0.49)).toBe(0);
+  });
+
   it("keeps an unlikely candidate rejected", () => {
     expect(noulAction(combined(0.084, 0.0469))).toBe("reject");
     expect(combined(0.084, 0.0469)).toBeLessThanOrEqual(REJECT_AT);

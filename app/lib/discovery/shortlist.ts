@@ -4,7 +4,7 @@ import type { Candidate, Evidence, GeneratorKey } from "./types";
 
 export const SHORTLIST_TOP = 20;
 
-export const AI_GUARANTEED = 5;
+export const AI_GUARANTEED = 10;
 
 export const GENERATOR_ORDER: readonly GeneratorKey[] = ["news", "hn", "ads", "ai"];
 
