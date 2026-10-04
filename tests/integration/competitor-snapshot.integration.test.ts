@@ -173,6 +173,20 @@ describe("readCompetitorSnapshot against real D1", () => {
     });
     await seedVerdict("snap-jev-low", ws, "noteworthy_change", "snap-sig-low", 0.5);
 
+    await seedSignal("snap-sig-price", ws, entity, sourceSite, {
+      kind: "change",
+      aspect: "pricing",
+      observedAt: "2026-09-21T11:00:00.000Z",
+    });
+    await seedVerdict("snap-jev-price", ws, "noteworthy_change", "snap-sig-price", 0.62);
+
+    await seedSignal("snap-sig-launch", ws, entity, sourceSite, {
+      kind: "change",
+      aspect: "launch",
+      observedAt: "2026-09-21T12:00:00.000Z",
+    });
+    await seedVerdict("snap-jev-launch", ws, "noteworthy_change", "snap-sig-launch", 0.62);
+
     await seedSignal("snap-sig-copy", ws, entity, sourceAds, {
       kind: "ad",
       aspect: "headline",
@@ -205,7 +219,7 @@ describe("readCompetitorSnapshot against real D1", () => {
     expect(snapshot.counts).toEqual({
       newCreatives: 1,
       copyChanges: 1,
-      noteworthyChanges: 1,
+      noteworthyChanges: 2,
       mentionsThatMatter: 1,
       newRoles: 0,
     });

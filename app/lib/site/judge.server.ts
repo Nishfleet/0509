@@ -9,7 +9,7 @@ import {
   type NoulQuestion,
   type NoulVerdict,
 } from "../jev/client.server";
-import { ACT_AT, REJECT_AT } from "../jev/thresholds";
+import { ACT_AT, PRICING_ACT_AT, REJECT_AT } from "../jev/thresholds";
 import { daysBefore } from "../site-changes.server";
 import type { BreakageEvidence } from "./breakage-evidence";
 
@@ -24,8 +24,6 @@ const BREAKAGE_ALERT_P = 0.5;
 const BREAKAGE_CLEAR_P = 0.1;
 
 const PUBLISH_P = ACT_AT;
-
-const PRICING_PUBLISH_P = 0.6;
 
 const DISCARD_P = REJECT_AT;
 
@@ -132,7 +130,7 @@ function breakageBandOf(p: number): BreakageBand["band"] {
 function noteworthyBandOf(p: number, kind: string): NoteworthyBand["band"] {
   if (kind === "noise") return "discard";
   if (p >= PUBLISH_P) return "publish";
-  if (kind === "pricing" && p >= PRICING_PUBLISH_P) return "publish";
+  if (kind === "pricing" && p >= PRICING_ACT_AT) return "publish";
   if (p <= DISCARD_P) return "discard";
   return "uncertain";
 }
