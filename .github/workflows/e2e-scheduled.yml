@@ -345,7 +345,7 @@ jobs:
           echo "== last 24 h by kind and code"
           npx wrangler d1 execute 0509 --remote --json --command "SELECT kind, code, COUNT(*) AS n, MIN(occurred_at) AS first, MAX(occurred_at) AS last FROM jev_failure WHERE occurred_at >= '$since' GROUP BY kind, code ORDER BY n DESC" | jq -c '.[0].results[]'
           echo "== latest 20"
-          npx wrangler d1 execute 0509 --remote --json --command "SELECT occurred_at, kind, code, question_id, message FROM jev_failure ORDER BY occurred_at DESC LIMIT 20" | jq -c '.[0].results[]'
+          npx wrangler d1 execute 0509 --remote --json --command "SELECT occurred_at, kind, code, question, message FROM jev_failure ORDER BY occurred_at DESC LIMIT 20" | jq -c '.[0].results[]'
   soak-report:
     name: soak-report
     # Reads counts only, never rows: no email, report text or other customer

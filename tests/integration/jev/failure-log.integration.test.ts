@@ -21,7 +21,7 @@ async function failuresFor(questionId: string): Promise<unknown[]> {
   let rows: unknown[] = [];
   await vi.waitFor(async () => {
     const { results } = await env.DB.prepare(
-      "SELECT question_id, kind, code, message FROM jev_failure WHERE question_id = ?1",
+      "SELECT question, kind, code, message FROM jev_failure WHERE question = ?1",
     )
       .bind(questionId)
       .all();
@@ -52,7 +52,7 @@ describe("a failed Jev call", () => {
     await expect(askNoul("ws-failure-log", asking, {})).rejects.toThrow(JevUnavailableError);
 
     expect(await failuresFor(asking.id)).toEqual([
-      { question_id: asking.id, kind: "rate_limited", code: "2003", message: "2003: Rate limited" },
+      { question: asking.id, kind: "rate_limited", code: "2003", message: "2003: Rate limited" },
     ]);
   });
 
@@ -116,10 +116,10 @@ describe("a failed Jev call", () => {
     const fresh = new Date(now.getTime() - RETENTION_MS + 60_000).toISOString();
     await env.DB.batch([
       env.DB.prepare(
-        "INSERT INTO jev_failure (id, question_id, kind, code, message, occurred_at) VALUES ('old-row', 'q', 'other', NULL, 'm', ?1)",
+        "INSERT INTO jev_failure (id, question, kind, code, message, occurred_at) VALUES ('old-row', 'q', 'other', NULL, 'm', ?1)",
       ).bind(old),
       env.DB.prepare(
-        "INSERT INTO jev_failure (id, question_id, kind, code, message, occurred_at) VALUES ('fresh-row', 'q', 'other', NULL, 'm', ?1)",
+        "INSERT INTO jev_failure (id, question, kind, code, message, occurred_at) VALUES ('fresh-row', 'q', 'other', NULL, 'm', ?1)",
       ).bind(fresh),
     ]);
 
