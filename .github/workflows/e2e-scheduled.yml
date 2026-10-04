@@ -39,6 +39,18 @@ jobs:
     name: j12
     if: github.event.schedule == '5 10 * * 3' || inputs.journey == 'j12'
     runs-on: ubuntu-latest
+    # One live-AI job at a time: they share the account's Clef call rate (about 60
+    # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
+    # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
+    # every workflow in the repo. One run waits per group; a newer waiting run
+    # replaces an older one (actionlint 1.7.12 rejects `queue: max`).
+    # Left out, with reasons: j8 (hours long, would block every other live-AI job),
+    # backup-proof, soak-report and jev-failures (read only, no AI), production-sha and
+    # suite (no AI). Not in this file: preview-assert and lighthouse in ci.yml run on
+    # every PR and deploy, so grouping them would serialize all PRs.
+    concurrency:
+      group: live-ai
+      cancel-in-progress: false
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -63,6 +75,15 @@ jobs:
     # cookie (0509#5999); a failure is read from the job log.
     if: inputs.spec != ''
     runs-on: ubuntu-latest
+    # One live-AI job at a time: they share the account's Clef call rate (about 60
+    # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
+    # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
+    # every workflow in the repo. One run waits per group; a newer waiting run
+    # replaces an older one (actionlint 1.7.12 rejects `queue: max`).
+    # See the live-ai note on the j12 job.
+    concurrency:
+      group: live-ai
+      cancel-in-progress: false
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -96,6 +117,15 @@ jobs:
     # (0509#5999); a failure is read from the job log.
     if: github.event.schedule == '17 4 * * *' || (inputs.journey == 'signin' && inputs.spec == '')
     runs-on: ubuntu-latest
+    # One live-AI job at a time: they share the account's Clef call rate (about 60
+    # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
+    # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
+    # every workflow in the repo. One run waits per group; a newer waiting run
+    # replaces an older one (actionlint 1.7.12 rejects `queue: max`).
+    # See the live-ai note on the j12 job.
+    concurrency:
+      group: live-ai
+      cancel-in-progress: false
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -216,6 +246,15 @@ jobs:
     needs: production-sha
     if: inputs.journey == 'suite'
     runs-on: ubuntu-latest
+    # One live-AI job at a time: they share the account's Clef call rate (about 60
+    # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
+    # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
+    # every workflow in the repo. One run waits per group; a newer waiting run
+    # replaces an older one (actionlint 1.7.12 rejects `queue: max`).
+    # See the live-ai note on the j12 job.
+    concurrency:
+      group: live-ai
+      cancel-in-progress: false
     timeout-minutes: 35
     strategy:
       fail-fast: false
