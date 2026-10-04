@@ -63,12 +63,28 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Run J12 against production
+        id: e2e
+        timeout-minutes: 65
         run: npm run e2e -- e2e/j12-rollovers.spec.ts --project=desktop-1440 --retries=0 --reporter=github,list
         env:
           PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
+      - name: Delete the setup accounts if the run was cut short
+        # The session and onboarded setups mint real accounts and their teardown
+        # projects delete them, but a cancel, a timeout or a killed runner ends
+        # the Playwright process first and the rows stay in production
+        # (0509#6968). The teardowns read the state files the setups wrote, so
+        # running them again here deletes what is left; an account already
+        # deleted is skipped.
+        if: always() && steps.e2e.outcome != 'skipped'
+        timeout-minutes: 5
+        run: npm run e2e -- --project=session-teardown --project=onboarded-teardown --retries=0 --reporter=github,list
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
   spec:
     name: spec
     # No trace is uploaded: the repo is public and a trace can hold the Access
@@ -96,6 +112,8 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Run the spec against production
+        id: e2e
+        timeout-minutes: 22
         run: npm run e2e -- "$SPEC" --project=public-1440 --project=desktop-1440 --retries=0 --reporter=github,list
         env:
           SPEC: ${{ inputs.spec }}
@@ -104,6 +122,20 @@ jobs:
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
           FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
+      - name: Delete the setup accounts if the run was cut short
+        # The session and onboarded setups mint real accounts and their teardown
+        # projects delete them, but a cancel, a timeout or a killed runner ends
+        # the Playwright process first and the rows stay in production
+        # (0509#6968). The teardowns read the state files the setups wrote, so
+        # running them again here deletes what is left; an account already
+        # deleted is skipped.
+        if: always() && steps.e2e.outcome != 'skipped'
+        timeout-minutes: 5
+        run: npm run e2e -- --project=session-teardown --project=onboarded-teardown --retries=0 --reporter=github,list
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
       - name: Print what the page showed when it failed
         # Playwright writes the page snapshot next to each failure; printing it
         # is how a failure is read, since nothing is uploaded.
@@ -274,6 +306,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Run this shard of the suite against production
+        id: e2e
         # @scheduled journeys run on their own clock above: J12 now, J8 with its spec (0509#4124, 0509#4128).
         # https://playwright.dev/docs/test-sharding
         timeout-minutes: 25
@@ -284,6 +317,20 @@ jobs:
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
           FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
+      - name: Delete the setup accounts if the run was cut short
+        # The session and onboarded setups mint real accounts and their teardown
+        # projects delete them, but a cancel, a timeout or a killed runner ends
+        # the Playwright process first and the rows stay in production
+        # (0509#6968). The teardowns read the state files the setups wrote, so
+        # running them again here deletes what is left; an account already
+        # deleted is skipped.
+        if: always() && steps.e2e.outcome != 'skipped'
+        timeout-minutes: 5
+        run: npm run e2e -- --project=session-teardown --project=onboarded-teardown --retries=0 --reporter=github,list
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
   suite:
     name: e2e-production
     needs: [production-sha, suite-shard]
