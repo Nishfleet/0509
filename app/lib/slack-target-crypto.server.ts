@@ -14,13 +14,17 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function base64ToBytes(value: string): Uint8Array {
+function base64ToBytes(value: string): Uint8Array<ArrayBuffer> {
   const binary = atob(value);
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  const bytes = new Uint8Array(new ArrayBuffer(binary.length));
+  bytes.forEach((_, index) => {
+    bytes[index] = binary.charCodeAt(index);
+  });
+  return bytes;
 }
 
 async function importSecret(secret: string): Promise<CryptoKey> {
-  let raw: Uint8Array;
+  let raw: Uint8Array<ArrayBuffer>;
   try {
     raw = base64ToBytes(secret);
   } catch (error) {
@@ -45,7 +49,7 @@ export async function encryptSlackWebhook(url: string, secret: string): Promise<
 
 export async function decryptSlackWebhook(stored: string, secret: string): Promise<string> {
   if (!isEncryptedSlackTarget(stored)) throw new Error("Slack target is not encrypted");
-  let packed: Uint8Array;
+  let packed: Uint8Array<ArrayBuffer>;
   try {
     packed = base64ToBytes(stored.slice(PREFIX.length));
   } catch (error) {
