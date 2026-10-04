@@ -14,6 +14,12 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+function copyBytes(source: Uint8Array, start = 0, end = source.byteLength): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(new ArrayBuffer(end - start));
+  bytes.set(source.subarray(start, end));
+  return bytes;
+}
+
 function base64ToBytes(value: string): Uint8Array<ArrayBuffer> {
   const binary = atob(value);
   const bytes = new Uint8Array(new ArrayBuffer(binary.length));
@@ -37,16 +43,17 @@ async function importSecret(secret: string): Promise<CryptoKey> {
 export async function encryptSlackWebhook(url: string, secret: string, workspaceId: string): Promise<string> {
   const webhook = parseSlackWebhook(url);
   if (webhook === null) throw new Error("Slack webhook address is not valid");
-  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
-  const bound = new TextEncoder().encode(workspaceId);
+  const iv = new Uint8Array(new ArrayBuffer(IV_LENGTH));
+  crypto.getRandomValues(iv);
+  const bound = copyBytes(new TextEncoder().encode(workspaceId));
   const sealed = new Uint8Array(
     await crypto.subtle.encrypt(
       { name: "AES-GCM", iv, additionalData: bound },
       await importSecret(secret),
-      new TextEncoder().encode(webhook),
+      copyBytes(new TextEncoder().encode(webhook)),
     ),
   );
-  const packed = new Uint8Array(iv.byteLength + sealed.byteLength);
+  const packed = new Uint8Array(new ArrayBuffer(iv.byteLength + sealed.byteLength));
   packed.set(iv);
   packed.set(sealed, iv.byteLength);
   return PREFIX + bytesToBase64(packed);
@@ -61,9 +68,9 @@ export async function decryptSlackWebhook(stored: string, secret: string, worksp
     throw new Error("Slack target could not be decrypted", { cause: error });
   }
   if (packed.byteLength < IV_LENGTH + 16) throw new Error("Slack target could not be decrypted");
-  const iv = packed.subarray(0, IV_LENGTH);
-  const sealed = packed.subarray(IV_LENGTH);
-  const bound = new TextEncoder().encode(workspaceId);
+  const iv = copyBytes(packed, 0, IV_LENGTH);
+  const sealed = copyBytes(packed, IV_LENGTH);
+  const bound = copyBytes(new TextEncoder().encode(workspaceId));
   let bytes: ArrayBuffer;
   try {
     bytes = await crypto.subtle.decrypt(
