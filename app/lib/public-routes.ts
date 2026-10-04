@@ -5,10 +5,11 @@ import {
   type SourceSnapshot,
 } from "../components/source-pill";
 import { registeredToolDescriptors } from "./agent/mcp-tools";
-import { PLANS, TRIAL_TERMS } from "./billing/plans";
+import { TRIAL_DAYS, TRIAL_TERMS } from "./billing/plans";
 import { LIVE_COVERAGE, PLAN_NOTE } from "./coverage";
 import { FAQ } from "./faq";
 import { LEGAL_UPDATED } from "./legal/document";
+import { planNames, planPriceList } from "./pricing-page";
 import { plainSourceReason } from "./source-status-words";
 import { SITE_URL } from "./structured-data";
 import { watchedClaims } from "./watched-claims";
@@ -18,8 +19,8 @@ export interface LlmsTxtSource {
   snapshot: SourceSnapshot | null;
 }
 
-export const PUBLIC_PATHS = ["/privacy", "/terms"] as const;
-export const SITEMAP_PATHS = ["/privacy", "/terms", "/llms.txt"] as const;
+export const PUBLIC_PATHS = ["/pricing", "/privacy", "/terms"] as const;
+export const SITEMAP_PATHS = ["/pricing", "/privacy", "/terms", "/llms.txt"] as const;
 export const SITEMAP_LASTMOD: Readonly<Record<string, string>> = {
   "/privacy": LEGAL_UPDATED,
   "/terms": LEGAL_UPDATED,
@@ -29,6 +30,10 @@ export const AGENT_PATHS = ["/mcp", "/api/v1/openapi.json", "/.well-known/http-m
 export const MCP_URL = `${SITE_URL}/mcp`;
 
 const PAGE_SUMMARIES: Record<(typeof PUBLIC_PATHS)[number], { title: string; summary: string }> = {
+  "/pricing": {
+    title: "Pricing",
+    summary: `the ${planNames()} plans with monthly prices in euros, and the ${String(TRIAL_DAYS)}-day trial terms`,
+  },
   "/privacy": {
     title: "Privacy",
     summary: "what we collect, who helps run 0509, how long we keep it, and how any brand or creator can be removed",
@@ -72,7 +77,7 @@ export function robotsTxt(origin: string): string {
 }
 
 export function llmsTxt(origin: string, sources: readonly LlmsTxtSource[], now: number = Date.now()): string {
-  const prices = PLANS.map((plan) => `${plan.name} €${String(plan.monthlyPriceEur)}/month`).join(", ");
+  const prices = planPriceList();
   return (
     [
       "# Five to Nine",
