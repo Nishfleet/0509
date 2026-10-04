@@ -18,9 +18,11 @@
 // `POST /__break?mode=off`.
 //
 // State is per hostname (0509#4124), so J8 hard on j8-hard.fixture.0509.in and
-// J8 soft on j8-soft.fixture.0509.in never disturb each other or J5/J7 on
+// J8 soft on j8-soft.fixture.0509.in never disturb each other or J7 on
 // fixture.0509.in. Each has its own host because an own-site incident email is
 // once per site per day: one shared host let one mode spend the other's email.
+// J5 has j5.fixture.0509.in because the identity probe cache is per hostname for
+// 24 h, so a host another journey read successfully would hide J5's bot wall.
 //
 // The Worker also needs the `FIXTURE_SITE_TOKEN` Worker secret. Without it every
 // flip answers 503 and the fixture stays healthy forever, which is why the
@@ -39,6 +41,7 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["FixtureState"] }],
   "routes": [
     { "pattern": "fixture.0509.in", "custom_domain": true },
+    { "pattern": "j5.fixture.0509.in", "custom_domain": true },
     { "pattern": "j8-hard.fixture.0509.in", "custom_domain": true },
     { "pattern": "j8-soft.fixture.0509.in", "custom_domain": true },
   ],
