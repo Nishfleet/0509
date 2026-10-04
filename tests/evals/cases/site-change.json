@@ -4005,12 +4005,12 @@
     "labels": {
       "own_site_breakage": false,
       "noteworthy_change": false,
-      "change_kind": "offer"
+      "change_kind": "copy"
     },
     "why": {
       "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
       "noteworthy_change": "the same email-signup 10% offer in different words",
-      "change_kind": "a standing promotion was reworded"
+      "change_kind": "messaging reworded, no term changed"
     }
   },
   {
@@ -4047,12 +4047,12 @@
     "labels": {
       "own_site_breakage": false,
       "noteworthy_change": false,
-      "change_kind": "offer"
+      "change_kind": "noise"
     },
     "why": {
       "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
       "noteworthy_change": "the same two standing benefits in the other order",
-      "change_kind": "a standing promotion was reworded"
+      "change_kind": "nothing meaningful changed"
     }
   },
   {
@@ -4089,12 +4089,12 @@
     "labels": {
       "own_site_breakage": false,
       "noteworthy_change": false,
-      "change_kind": "offer"
+      "change_kind": "copy"
     },
     "why": {
       "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
       "noteworthy_change": "the same standing shipping offer with different wording",
-      "change_kind": "a standing promotion was reworded"
+      "change_kind": "messaging reworded, no term changed"
     }
   },
   {
@@ -4126,12 +4126,12 @@
     "labels": {
       "own_site_breakage": false,
       "noteworthy_change": false,
-      "change_kind": "offer"
+      "change_kind": "copy"
     },
     "why": {
       "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
       "noteworthy_change": "the same code, only its capitalisation changed",
-      "change_kind": "a standing promotion was reworded"
+      "change_kind": "messaging reworded, no term changed"
     }
   },
   {
@@ -4163,12 +4163,12 @@
     "labels": {
       "own_site_breakage": false,
       "noteworthy_change": false,
-      "change_kind": "offer"
+      "change_kind": "copy"
     },
     "why": {
       "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
       "noteworthy_change": "a navigation label shortened, same sale link",
-      "change_kind": "a standing promotion was reworded"
+      "change_kind": "messaging reworded, no term changed"
     }
   },
   {
@@ -4200,12 +4200,12 @@
     "labels": {
       "own_site_breakage": false,
       "noteworthy_change": false,
-      "change_kind": "offer"
+      "change_kind": "copy"
     },
     "why": {
       "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
       "noteworthy_change": "the same loyalty program, one word added",
-      "change_kind": "a standing promotion was reworded"
+      "change_kind": "messaging reworded, no term changed"
     }
   },
   {
@@ -4237,12 +4237,12 @@
     "labels": {
       "own_site_breakage": false,
       "noteworthy_change": false,
-      "change_kind": "offer"
+      "change_kind": "noise"
     },
     "why": {
       "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
       "noteworthy_change": "a stock counter moved by one",
-      "change_kind": "a standing promotion was reworded"
+      "change_kind": "nothing meaningful changed"
     }
   },
   {
@@ -4274,12 +4274,12 @@
     "labels": {
       "own_site_breakage": false,
       "noteworthy_change": false,
-      "change_kind": "offer"
+      "change_kind": "copy"
     },
     "why": {
       "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
       "noteworthy_change": "a gift-card link was relabelled, nothing about the offer changed",
-      "change_kind": "a standing promotion was reworded"
+      "change_kind": "messaging reworded, no term changed"
     }
   },
   {
@@ -4316,12 +4316,12 @@
     "labels": {
       "own_site_breakage": false,
       "noteworthy_change": false,
-      "change_kind": "offer"
+      "change_kind": "copy"
     },
     "why": {
       "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
       "noteworthy_change": "the same 14-day trial in different words",
-      "change_kind": "a standing promotion was reworded"
+      "change_kind": "messaging reworded, no term changed"
     }
   },
   {
@@ -4358,12 +4358,12 @@
     "labels": {
       "own_site_breakage": false,
       "noteworthy_change": false,
-      "change_kind": "offer"
+      "change_kind": "copy"
     },
     "why": {
       "own_site_breakage": "the page is complete and renders for a visitor: deliberate",
       "noteworthy_change": "the same referral bonus with punctuation changed",
-      "change_kind": "a standing promotion was reworded"
+      "change_kind": "messaging reworded, no term changed"
     }
   }
 ]
