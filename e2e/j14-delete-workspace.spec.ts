@@ -22,6 +22,13 @@ test("J14: a fresh account deleted from settings leaves nothing signed in and it
   await page.waitForURL(/\/login\?deleted=/);
   const instanceId = new URL(page.url()).searchParams.get("deleted") ?? "";
   expect(instanceId).not.toBe("");
+  const jar = (await page.context().cookies()).map(
+    (c) => `${c.name} path=${c.path} secure=${String(c.secure)} sameSite=${c.sameSite} domain=${c.domain}`,
+  );
+  console.log(`J14 diag cookies: ${JSON.stringify(jar)}`);
+  console.log(
+    `J14 diag url=${page.url().replace(instanceId, "<id>")} sections=${String(await page.locator("section[data-delete]").count())}`,
+  );
 
   await expect(page.getByRole("heading", { name: "Your account is deleted" })).toBeVisible();
 
