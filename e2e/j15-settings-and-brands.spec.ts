@@ -47,15 +47,20 @@ test.describe("J15 a signed-in customer changes settings and hits the plan limit
 
   test("J15 the own-site alerts switch keeps its state across a reload", async ({ page }) => {
     await openSettings(page);
-    const name = "Immediate alerts for your own site";
-    const control = (): ReturnType<Page["getByRole"]> => page.getByRole("switch", { name: new RegExp(name) });
+    const control = (): ReturnType<Page["getByRole"]> =>
+      page.getByRole("switch", { name: /Immediate alerts for your own site/ });
+    const flip = async (): Promise<void> => {
+      const saved = page.waitForResponse(
+        (response) => response.request().method() === "POST" && response.url().includes("/app/settings"),
+      );
+      await control().click();
+      await saved;
+    };
     const was = await control().isChecked();
-    await control().click();
-    await expect(control()).toBeChecked({ checked: !was });
+    await flip();
     await page.reload();
     await expect(control()).toBeChecked({ checked: !was });
-    await control().click();
-    await expect(control()).toBeChecked({ checked: was });
+    await flip();
     await page.reload();
     await expect(control()).toBeChecked({ checked: was });
   });
