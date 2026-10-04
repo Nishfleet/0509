@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
 import { requireInboxToken, signInWithMagicLink } from "./inbox";
@@ -25,8 +25,16 @@ async function onboardSelf(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
 }
 
+function trackingSwitch(page: Page, domain: string): Locator {
+  return page
+    .getByRole("list", { name: "Competitors", exact: true })
+    .getByRole("listitem")
+    .filter({ hasText: domain })
+    .getByRole("switch");
+}
+
 async function switchOffSwappedOut(page: Page): Promise<void> {
-  const tracking = page.getByRole("switch", { name: `${SWAPPED_OUT} tracking` });
+  const tracking = trackingSwitch(page, SWAPPED_OUT);
   if ((await tracking.count()) === 0 || !(await tracking.isChecked())) return;
   await tracking.click();
   await expect(tracking).not.toBeChecked({ timeout: 30_000 });
@@ -36,7 +44,7 @@ async function addCompetitors(page: Page): Promise<void> {
   await page.goto("/app/competitors");
   await switchOffSwappedOut(page);
   for (const domain of COMPETITORS) {
-    const tracking = page.getByRole("switch", { name: `${domain} tracking` });
+    const tracking = trackingSwitch(page, domain);
     if ((await tracking.count()) > 0) continue;
     await page.locator("#add-competitor").fill(domain);
     await page.getByRole("button", { name: "Add" }).click();
