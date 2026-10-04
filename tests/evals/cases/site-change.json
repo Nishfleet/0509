@@ -2555,5 +2555,644 @@
       "noteworthy_change": "the same plans in a new order, no plan, price or serving count moved",
       "change_kind": "nothing meaningful changed, only the display order"
     }
+  },
+  {
+    "id": "notion-plus-seat-price",
+    "split": "train",
+    "subject": {
+      "name": "Notion",
+      "domain": "notion.so"
+    },
+    "isSelf": false,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.notion.so/pricing",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,2 @@",
+          "-Plus $8 per seat / month billed annually",
+          "+Plus $10 per seat / month billed annually",
+          " Business $15 per seat / month billed annually"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18200,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 12,
+      "pricesAfter": 12,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "pricing"
+    },
+    "why": {
+      "own_site_breakage": "the page renders normally and the edit is deliberate, not a breakage",
+      "noteworthy_change": "the paid tier a tracking customer compares against rose 25 percent",
+      "change_kind": "a plan price rose"
+    }
+  },
+  {
+    "id": "linear-standard-seat-price",
+    "split": "train",
+    "subject": {
+      "name": "Linear",
+      "domain": "linear.app"
+    },
+    "isSelf": false,
+    "pageRole": "pricing",
+    "pageUrl": "https://linear.app/pricing",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,2 @@",
+          "-Standard $8 per user / month",
+          "+Standard $10 per user / month",
+          " Plus $14 per user / month"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18200,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 12,
+      "pricesAfter": 12,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "pricing"
+    },
+    "why": {
+      "own_site_breakage": "the page renders normally and the edit is deliberate, not a breakage",
+      "noteworthy_change": "a rival's main paid plan went up $2 per user",
+      "change_kind": "a plan price rose"
+    }
+  },
+  {
+    "id": "spotify-premium-individual-price",
+    "split": "train",
+    "subject": {
+      "name": "Spotify",
+      "domain": "spotify.com"
+    },
+    "isSelf": false,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.spotify.com/us/premium/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-Individual $10.99 / month", "+Individual $11.99 / month", " Duo $14.99 / month"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18200,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 12,
+      "pricesAfter": 12,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "pricing"
+    },
+    "why": {
+      "own_site_breakage": "the page renders normally and the edit is deliberate, not a breakage",
+      "noteworthy_change": "the entry paid plan rose by a dollar, a price move customers follow",
+      "change_kind": "a plan price rose"
+    }
+  },
+  {
+    "id": "grammarly-premium-annual-price",
+    "split": "train",
+    "subject": {
+      "name": "Grammarly",
+      "domain": "grammarly.com"
+    },
+    "isSelf": false,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.grammarly.com/plans",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,2 @@",
+          "-Premium $144 billed annually",
+          "+Premium $150 billed annually",
+          " Business $15 per member / month"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18200,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 12,
+      "pricesAfter": 12,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "pricing"
+    },
+    "why": {
+      "own_site_breakage": "the page renders normally and the edit is deliberate, not a breakage",
+      "noteworthy_change": "the annual premium price rose by $6",
+      "change_kind": "a plan price rose"
+    }
+  },
+  {
+    "id": "slack-plan-cards-reordered",
+    "split": "train",
+    "subject": {
+      "name": "Slack",
+      "domain": "slack.com"
+    },
+    "isSelf": false,
+    "pageRole": "pricing",
+    "pageUrl": "https://slack.com/pricing",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,3 +1,3 @@",
+          "-Pro $8.75 per user / month",
+          "-Business+ $15 per user / month",
+          "+Business+ $15 per user / month",
+          "+Pro $8.75 per user / month"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18200,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 12,
+      "pricesAfter": 12,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "own_site_breakage": "the page renders normally and the edit is deliberate, not a breakage",
+      "noteworthy_change": "two plan cards swapped places and no price changed",
+      "change_kind": "the cards were reordered with the same prices"
+    }
+  },
+  {
+    "id": "webflow-tax-wording",
+    "split": "train",
+    "subject": {
+      "name": "Webflow",
+      "domain": "webflow.com"
+    },
+    "isSelf": false,
+    "pageRole": "pricing",
+    "pageUrl": "https://webflow.com/pricing",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,2 @@",
+          "-Prices shown exclude tax",
+          "+Prices exclude applicable taxes",
+          " CMS $29 per month billed annually"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18200,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 12,
+      "pricesAfter": 12,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "copy"
+    },
+    "why": {
+      "own_site_breakage": "the page renders normally and the edit is deliberate, not a breakage",
+      "noteworthy_change": "a footnote was reworded and no price moved",
+      "change_kind": "wording of a tax footnote"
+    }
+  },
+  {
+    "id": "everlane-sale-timer",
+    "split": "train",
+    "subject": {
+      "name": "Everlane",
+      "domain": "everlane.com"
+    },
+    "isSelf": false,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.everlane.com/collections/womens-sale",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-Sale ends in 3 hours", "+Sale ends in 2 hours", " Italian leather tote $98"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18200,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 12,
+      "pricesAfter": 12,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "own_site_breakage": "the page renders normally and the edit is deliberate, not a breakage",
+      "noteworthy_change": "a countdown ticked and the prices are the same",
+      "change_kind": "a ticking countdown"
+    }
+  },
+  {
+    "id": "squarespace-price-format",
+    "split": "train",
+    "subject": {
+      "name": "Squarespace",
+      "domain": "squarespace.com"
+    },
+    "isSelf": false,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.squarespace.com/pricing",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-Business $23 per month", "+Business $23.00 per month", " Commerce $28 per month"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18200,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 12,
+      "pricesAfter": 12,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "own_site_breakage": "the page renders normally and the edit is deliberate, not a breakage",
+      "noteworthy_change": "the same price now prints with two decimals",
+      "change_kind": "a formatting-only change"
+    }
+  },
+  {
+    "id": "dropbox-plus-price-drop",
+    "split": "test",
+    "subject": {
+      "name": "Dropbox",
+      "domain": "dropbox.com"
+    },
+    "isSelf": false,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.dropbox.com/plans",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,2 @@",
+          "-Plus 2 TB $11.99 / month",
+          "+Plus 2 TB $9.99 / month",
+          " Essentials 3 TB $19.99 / month"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18200,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 12,
+      "pricesAfter": 12,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "pricing"
+    },
+    "why": {
+      "own_site_breakage": "the page renders normally and the edit is deliberate, not a breakage",
+      "noteworthy_change": "a rival cut its main storage plan by about 17 percent",
+      "change_kind": "a plan price fell"
+    }
+  },
+  {
+    "id": "zoom-pro-license-price",
+    "split": "test",
+    "subject": {
+      "name": "Zoom",
+      "domain": "zoom.us"
+    },
+    "isSelf": false,
+    "pageRole": "pricing",
+    "pageUrl": "https://zoom.us/pricing",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,2 @@",
+          "-Pro $149.90 / year / license",
+          "+Pro $159.90 / year / license",
+          " Business $219.90 / year / license"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18200,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 12,
+      "pricesAfter": 12,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "pricing"
+    },
+    "why": {
+      "own_site_breakage": "the page renders normally and the edit is deliberate, not a breakage",
+      "noteworthy_change": "the yearly per-license price rose by $10",
+      "change_kind": "a plan price rose"
+    }
+  },
+  {
+    "id": "casper-original-queen-price",
+    "split": "test",
+    "subject": {
+      "name": "Casper",
+      "domain": "casper.com"
+    },
+    "isSelf": false,
+    "pageRole": "pricing",
+    "pageUrl": "https://casper.com/mattresses/casper-original/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-Queen $1,095", "+Queen $1,195", " King $1,295"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18200,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 12,
+      "pricesAfter": 12,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "pricing"
+    },
+    "why": {
+      "own_site_breakage": "the page renders normally and the edit is deliberate, not a breakage",
+      "noteworthy_change": "the queen mattress a shopper compares rose $100",
+      "change_kind": "a product price rose"
+    }
+  },
+  {
+    "id": "allbirds-wool-runner-price",
+    "split": "test",
+    "subject": {
+      "name": "Allbirds",
+      "domain": "allbirds.com"
+    },
+    "isSelf": false,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.allbirds.com/products/mens-wool-runners",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-Wool Runner $98", "+Wool Runner $105", " Free shipping on orders over $75"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18200,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 12,
+      "pricesAfter": 12,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "pricing"
+    },
+    "why": {
+      "own_site_breakage": "the page renders normally and the edit is deliberate, not a breakage",
+      "noteworthy_change": "the hero shoe rose $7",
+      "change_kind": "a product price rose"
+    }
+  },
+  {
+    "id": "figma-pricing-footnote",
+    "split": "test",
+    "subject": {
+      "name": "Figma",
+      "domain": "figma.com"
+    },
+    "isSelf": false,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.figma.com/pricing/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,2 @@",
+          "-Professional $15 per editor / month, billed annually",
+          "+Professional $15 per editor / month when billed annually",
+          " Organization $45 per editor / month"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18200,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 12,
+      "pricesAfter": 12,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "copy"
+    },
+    "why": {
+      "own_site_breakage": "the page renders normally and the edit is deliberate, not a breakage",
+      "noteworthy_change": "a billing sentence was reworded and the price stayed $15",
+      "change_kind": "wording around an unchanged price"
+    }
+  },
+  {
+    "id": "chewy-review-count",
+    "split": "test",
+    "subject": {
+      "name": "Chewy",
+      "domain": "chewy.com"
+    },
+    "isSelf": false,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.chewy.com/blue-buffalo-life-protection/dp/12345",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-12,431 reviews", "+12,455 reviews", " $54.98 Autoship price"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18200,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 12,
+      "pricesAfter": 12,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "own_site_breakage": "the page renders normally and the edit is deliberate, not a breakage",
+      "noteworthy_change": "a review counter grew and the price is the same",
+      "change_kind": "a counter near a price"
+    }
+  },
+  {
+    "id": "shopify-currency-format",
+    "split": "test",
+    "subject": {
+      "name": "Shopify",
+      "domain": "shopify.com"
+    },
+    "isSelf": false,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.shopify.com/pricing",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-Basic US$29 per month", "+Basic $29 USD per month", " Shopify US$79 per month"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18200,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 12,
+      "pricesAfter": 12,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "own_site_breakage": "the page renders normally and the edit is deliberate, not a breakage",
+      "noteworthy_change": "the same $29 is written with the currency in a different place",
+      "change_kind": "a currency formatting change"
+    }
+  },
+  {
+    "id": "mailchimp-plan-columns-reordered",
+    "split": "test",
+    "subject": {
+      "name": "Mailchimp",
+      "domain": "mailchimp.com"
+    },
+    "isSelf": false,
+    "pageRole": "pricing",
+    "pageUrl": "https://mailchimp.com/pricing/marketing/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,3 +1,3 @@",
+          "-Essentials $13 per month",
+          "-Standard $20 per month",
+          "+Standard $20 per month",
+          "+Essentials $13 per month"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18200,
+      "afterChars": 18200,
+      "textHalved": false,
+      "pricesBefore": 12,
+      "pricesAfter": 12,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "own_site_breakage": "the page renders normally and the edit is deliberate, not a breakage",
+      "noteworthy_change": "two columns swapped places and every price is unchanged",
+      "change_kind": "the columns were reordered with the same prices"
+    }
   }
 ]
