@@ -60,11 +60,9 @@ async function rotate(page: Page): Promise<string> {
   await page.goto("/app/competitors");
   const toggle = switchFor(page, ROTATING);
   const wasOn = await toggle.isChecked();
-  // The switch paints fetcher.formData intent as its own state, so it looks
-  // settled before the POST lands. A reload that early aborts the POST and
-  // leaves the server ON, which is what failed J11 in production
-  // (run 37237175774). Wait for the POST the same way J15 and J11's
-  // saveCompetitorSwitch do.
+  // The switch paints fetcher.formData intent as its own state, so it reads as
+  // settled before the POST lands. The reload waits for that POST the way J15's
+  // own-site alerts switch and J11's saveCompetitorSwitch do.
   const saved = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" && response.ok() && response.url().includes("/app/competitors"),
