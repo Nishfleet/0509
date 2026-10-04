@@ -19,7 +19,7 @@ Evidence: the run history of the eval and nightly jobs, and the billing refusals
 
 ## How it was detected
 
-The spend overrun and the failing onboarding were noticed by the team on 10-03.
+The failing onboarding was found by CX and journey runs, and the spend overrun was noticed by Nish. No alert fired for either: there was no budget alert on AI spend. Cloudflare budget alerts (Nish's list, item 4) and #6908 cover this gap.
 
 ## The fix
 

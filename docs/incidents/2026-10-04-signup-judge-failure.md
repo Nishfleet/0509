@@ -23,14 +23,14 @@ Gap: the error text of the two failed sign-ups was not read, because no credenti
 
 ## How it was detected
 
-Live customer-flow checks on production (CX and PAY GAPS runs).
+Live customer-flow checks on production (CX and PAY GAPS runs). No alert fired: nothing watches sign-up failures, so the first sign was a test run failing.
 
 ## The fix
 
-#6923 retries the brand check up to 3 times with backoff, and never on billing errors. #6927 records the exact reason of every judge failure.
+#6923 asks the AI Gateway to retry the brand check up to 3 times with backoff. The gateway cannot tell a billing refusal from another failure, so a billing refusal is retried too, but a refused call costs $0 and the tries are capped at 3. Whether the gateway retries a 2003 is not proven; the failure table will show it on the next one. #6927 records the exact reason of every judge failure.
 
 ## What stops a repeat
 
 - The reason is recorded in a table CI can read, so the next failure explains itself (#6927).
-- Live test jobs stop competing with customers for the shared call rate: one live-AI job at a time (proposal sent to the coordinator).
+- Live test jobs stop competing with customers for the shared call rate: one live-AI job at a time (#6930). A third queued run replaces the second.
 - Raise the AI Gateway rate limit and run eval probes through the separate "evals" gateway.
