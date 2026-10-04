@@ -49,9 +49,9 @@ export const IS_COMPETITOR: NoulQuestion = {
 export const SAME_CATEGORY: NoulQuestion = {
   id: "same_product_category",
   instructions:
-    "Does `item` mainly sell the same kind of product or service that `self` mainly sells? Judge the product category: what a customer actually buys from each. Do not count shared values, audience, price, style or business model. A shoe brand and a clothing brand are different categories even when both are sustainable and sold to the same people; a meal kit and a restaurant are different categories. `self.description` says what `self` sells and `item.evidence` says what `item` sells.",
+    "Would a buyer shopping for what `self` mainly sells consider buying one of `item`'s products instead? Judge what customers actually buy, not shared values, audience, price, style or business model. The shape of the product does not matter: a ring, a band and a watch that all track sleep are the same category. Nor does the size of `item`: if it is a large company that sells many things, judge the product of `item` closest to what `self` sells. A shoe brand and a clothing brand are different categories even when both are sustainable and sold to the same people; a meal kit and a restaurant are different categories. `self.description` says what `self` sells and `item.evidence` says what `item` sells.",
   whenTrue:
-    "What `item` mainly sells is the same kind of product or service as what `self` mainly sells, so a buyer shopping for one would consider the other.",
+    "A product that `item` sells serves the same need as what `self` mainly sells, so a buyer shopping for one would consider the other, even in a different form or from a company with many other products.",
   whenFalse:
     "What `item` mainly sells is a different kind of product or service, even if it shares `self`'s values, audience, customers, style or business model.",
 };
