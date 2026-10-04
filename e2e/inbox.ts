@@ -614,6 +614,7 @@ export async function deleteCreatedAccount(page: Page, email: string): Promise<v
   await page.getByLabel("Type " + email + " to confirm").fill(email);
   await page.getByRole("button", { name: "Delete my account" }).click();
   await page.waitForURL(/\/login\?deleted=/);
+  signedInThisWorker = signedInThisWorker.filter((address) => address !== email);
 }
 
 function authSecret(): string {
