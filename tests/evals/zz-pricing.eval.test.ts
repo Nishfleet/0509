@@ -36,7 +36,7 @@ function stateFor(row: SiteRow<boolean | string>): unknown {
   return changeState(input, row.history_30d);
 }
 
-const KINDS = new Set(["offer"]);
+const KINDS = new Set(["noise", "copy", "offer"]);
 
 async function rowsOf() {
   const nw = await loadSiteRows<boolean>("site-change", "noteworthy_change");
