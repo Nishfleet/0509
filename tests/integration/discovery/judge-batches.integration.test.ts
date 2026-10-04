@@ -64,7 +64,7 @@ describe("judgeBatches", () => {
 });
 
 describe("Discovery workflow judging", () => {
-  it("judges every batch at once so the first rivals show within one Jev round trip", async () => {
+  it("judges one batch at a time so Clef never sees concurrent calls", async () => {
     await seedWorkspace();
     let inFlight = 0;
     let peak = 0;
@@ -88,7 +88,7 @@ describe("Discovery workflow judging", () => {
     await instance.waitForStatus("complete");
 
     expect(run).toHaveBeenCalledTimes(CANDIDATES);
-    expect(peak).toBe(CANDIDATES / JUDGE_BATCH_SIZE);
+    expect(peak).toBe(1);
     expect(await suggestionRows()).toBe(CANDIDATES);
   });
 });

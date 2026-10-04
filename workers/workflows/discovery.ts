@@ -49,15 +49,14 @@ async function judgeAndWriteBatches(
   context: DiscoveryContext,
   resolved: readonly ResolvedCandidate[],
 ): Promise<DiscoveryResult[]> {
-  const batches = await Promise.all(
-    judgeBatches(resolved).map(async (batch, index) => {
-      const judgedBatch = await step.do(`judge-${String(index)}`, RETRY, () => judgeCandidates(context, batch));
-      await step.do(`write-${String(index)}`, RETRY, () =>
-        writeDiscoveryResults(context.self.workspaceId, judgedBatch, new Date().toISOString()),
-      );
-      return judgedBatch;
-    }),
-  );
+  const batches: DiscoveryResult[][] = [];
+  for (const [index, batch] of judgeBatches(resolved).entries()) {
+    const judgedBatch = await step.do(`judge-${String(index)}`, RETRY, () => judgeCandidates(context, batch));
+    await step.do(`write-${String(index)}`, RETRY, () =>
+      writeDiscoveryResults(context.self.workspaceId, judgedBatch, new Date().toISOString()),
+    );
+    batches.push(judgedBatch);
+  }
   return batches.flat();
 }
 
