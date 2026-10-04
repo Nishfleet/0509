@@ -139,19 +139,19 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Read verdicts and suggestions (SELECT only)
+      - name: Read backlog, identity and judged rows (SELECT only)
         run: |
           set -euo pipefail
-          for email in e2e+clef85745faa70@0509.io e2e+clef91122bcf1b@0509.io e2e+clefa7945f6844@0509.io e2e+clef6b83baee3d@0509.io; do
+          for email in e2e+clef85745faa70@0509.io e2e+clef91122bcf1b@0509.io; do
             [[ "$email" =~ ^e2e\+clef[0-9a-f]{10}@0509\.io$ ]]
             echo "=== $email"
             ws="(SELECT id FROM workspace WHERE owner_user_id IN (SELECT id FROM user WHERE email = '$email'))"
-            echo "--- verdicts"
-            npx wrangler d1 execute 0509 --remote --json --command "SELECT question_id, ROUND(p,3) AS p, choice, ROUND(score,3) AS score, substr(reason,1,200) AS reason, decided_at FROM jev_verdict WHERE workspace_id IN $ws AND question_id IN ('is_competitor','same_product_category') ORDER BY decided_at" | jq -c '.[0].results[]'
-            echo "--- suggestions"
-            npx wrangler d1 execute 0509 --remote --json --command "SELECT candidate_name, candidate_domain, kind, ROUND(verdict_p,3) AS verdict_p, status, substr(verdict_reason,1,200) AS reason FROM suggestion WHERE workspace_id IN $ws ORDER BY created_at" | jq -c '.[0].results[]'
-            echo "--- tracked rivals"
-            npx wrangler d1 execute 0509 --remote --json --command "SELECT name, domain FROM entity WHERE workspace_id IN $ws" | jq -c '.[0].results[]'
+            echo "--- backlog"
+            npx wrangler d1 execute 0509 --remote --json --command "SELECT name, domain, evidence_count, first_seen_at, promoted_at, substr(evidence_json,1,160) AS evidence FROM discovery_backlog WHERE workspace_id IN $ws ORDER BY first_seen_at" | jq -c '.[0].results[]'
+            echo "--- self identity"
+            npx wrangler d1 execute 0509 --remote --json --command "SELECT name, domain, substr(identity_json,1,700) AS identity FROM entity WHERE workspace_id IN $ws AND role = 'self'" | jq -c '.[0].results[]'
+            echo "--- all suggestions incl evidence"
+            npx wrangler d1 execute 0509 --remote --json --command "SELECT candidate_name, candidate_domain, status, ROUND(verdict_p,3) AS p, substr(evidence_json,1,200) AS evidence FROM suggestion WHERE workspace_id IN $ws ORDER BY created_at" | jq -c '.[0].results[]'
           done
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
