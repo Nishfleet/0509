@@ -25,7 +25,7 @@ function fixtureToken(): string {
 }
 
 async function setWall(state: "on" | "off"): Promise<void> {
-  const res = await fetch(`https://fixture.0509.in/__wall?state=${state}`, {
+  const res = await fetch(`https://j5.fixture.0509.in/__wall?state=${state}`, {
     method: "POST",
     headers: { authorization: `Bearer ${fixtureToken()}` },
   });
@@ -59,13 +59,13 @@ test.describe("J5", () => {
 
     await page.goto("/onboarding");
     const input = page.getByRole("textbox", { name: /your website address or social username/i });
-    await input.fill("fixture.0509.in");
+    await input.fill("j5.fixture.0509.in");
     await input.press("Enter");
 
     const business = page.getByRole("button", { name: "Yes, a business or creator" });
     await expect(async () => {
       if (await business.isVisible()) await business.click();
-      await expect(page).toHaveURL(/\/onboarding\/identity\?subject=fixture\.0509\.in$/, { timeout: 3_000 });
+      await expect(page).toHaveURL(/\/onboarding\/identity\?subject=j5\.fixture\.0509\.in$/, { timeout: 3_000 });
     }).toPass({ timeout: 30_000 });
     await expect(page.getByRole("status")).toHaveText("We couldn't read that site, so fill in what you can.", {
       timeout: 45_000,
