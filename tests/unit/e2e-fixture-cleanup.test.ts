@@ -132,8 +132,9 @@ describe("e2e fixture teardown detector", () => {
 
   it("treats a second session teardown as a login redirect, not a missing deleted query", async () => {
     const source = await readFile(path.join(REPO_ROOT, "e2e/inbox.ts"), "utf8");
+    expect(source).toContain("classifySettingsDeleteRedirect");
     expect(source).toContain("/login?deleted=");
-    expect(source).toContain("toMatch(/\\/login(?:\\?|$)/)");
+    expect(source).toContain("/login(?:\\?|$)");
   });
 
   it("the cut-short onboarded teardown deletes through the request helper, not a browser wait", async () => {

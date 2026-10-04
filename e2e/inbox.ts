@@ -632,9 +632,10 @@ export async function deleteAccountViaRequest(request: APIRequestContext, origin
     maxRedirects: 0,
   });
   const location = deleted.headers().location ?? "";
-  if (classifySettingsDeleteRedirect(deleted.status(), location) !== "unexpected") return;
-  expect(deleted.status()).toBe(302);
-  expect(location, "already-deleted session tears down as a login redirect").toMatch(/\/login(?:\?|$)/);
+  const outcome = classifySettingsDeleteRedirect(deleted.status(), location);
+  if (outcome === "unexpected") {
+    throw new Error(`settings delete answered HTTP ${String(deleted.status())} location=${location}`);
+  }
 }
 
 export async function deleteCreatedAccount(page: Page, email: string): Promise<void> {
