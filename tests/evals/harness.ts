@@ -14,9 +14,9 @@ import type { BreakageEvidence } from "../../app/lib/site/breakage-evidence";
 // one implementation. A question that wanted its own copy of any of those is the
 // second paved path docs/REBUILD-TRUST.md §C1(3) rules out.
 
-const REPEATS = 3;
+const REPEATS = Number(process.env.EVAL_REPEATS ?? 3);
 
-const CONCURRENCY = 8;
+const CONCURRENCY = Number(process.env.EVAL_CONCURRENCY ?? 8);
 
 const MIN_PER_SPLIT = 20;
 
@@ -446,12 +446,13 @@ export async function runEval<T extends EvalRow>(
   rows: readonly T[],
   ask: Ask<T>,
   score: Score<T>,
+  perRow?: number,
 ): Promise<EvalReport> {
   const models = new Set<string>();
   const splits: SplitScore[] = [];
   const wanted = selectedSplits();
   callsUsed = 0;
-  callBudget = Math.ceil(rows.filter((row) => wanted.includes(row.split)).length * REPEATS * BUDGET_MARGIN);
+  callBudget = Math.ceil(rows.filter((row) => wanted.includes(row.split)).length * REPEATS * (perRow ?? BUDGET_MARGIN));
   for (const split of wanted) {
     const picked = rows.filter((row) => row.split === split);
     if (picked.length === 0) throw new Error(`${questionId} has no ${split} cases to score`);

@@ -96,6 +96,17 @@ function leaderMessages(category: string): ReturnType<typeof messagesFor> {
 const registrable = (value: string): string => parse(value).domain ?? value.toLowerCase();
 const proposals = z.object({ competitors: z.array(z.object({ name: z.string(), domain: z.string() })) });
 
+async function post(body: unknown): Promise<unknown> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await postWorkersAi(MODEL, body);
+    } catch (error) {
+      if (attempt >= 4 || !String(error).includes("2003")) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 20_000));
+    }
+  }
+}
+
 async function withTimeout(call: Promise<unknown>): Promise<unknown> {
   return Promise.race([call, new Promise<null>((resolve) => setTimeout(() => resolve(null), 90_000))]);
 }
@@ -140,9 +151,7 @@ describe.skipIf(!workersAiPresent())("leaders: category-leaders proposer arms", 
       let timeouts = 0;
       const propose = async (messages: ReturnType<typeof messagesFor>): Promise<{ name: string; domain: string }[]> => {
         const started = Date.now();
-        const result = await withTimeout(
-          postWorkersAi(MODEL, { messages, response_format: RESPONSE_FORMAT, max_tokens: MAX_TOKENS }),
-        );
+        const result = await withTimeout(post({ messages, response_format: RESPONSE_FORMAT, max_tokens: MAX_TOKENS }));
         ms += Date.now() - started;
         calls += 1;
         if (result === null) {
@@ -154,7 +163,7 @@ describe.skipIf(!workersAiPresent())("leaders: category-leaders proposer arms", 
       };
       const categoriesOf = async (row: Row): Promise<string[]> => {
         const result = await withTimeout(
-          postWorkersAi(MODEL, {
+          post({
             messages: categoryMessages(row),
             response_format: {
               type: "json_schema",
@@ -242,7 +251,7 @@ describe.skipIf(!workersAiPresent())("leaders: category-leaders proposer arms", 
         return union === 0 ? 1 : [...a].filter((x) => b.has(x)).length / union;
       };
       const overlaps: number[] = [];
-      const per = 1 + MAX_CATEGORIES + 1 + MAX_JUDGED * 2;
+      const per = 3 * (1 + MAX_CATEGORIES + 1);
       const report = await runEval(`hillclimb_${arm.id}`, rows, ask, score, per);
       console.log(formatReport(report));
       for (const runs of shown.values())
