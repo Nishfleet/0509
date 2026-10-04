@@ -20,7 +20,7 @@ on:
       journey:
         description: Journey to run now
         type: choice
-        options: [none, j12, suite, signin, j8-hard, j8-soft, soak-report, backup-proof]
+        options: [none, j12, suite, signin, j8-hard, j8-soft, soak-report, backup-proof, jev-failures]
         default: none
       spec:
         description: 'One spec or a filter to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts (0509 sign-up verdict, 2026-09-28)'
@@ -31,7 +31,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: e2e-scheduled-${{ inputs.spec && 'spec' || github.event.schedule == '30 6 * * *' && 'soak' || inputs.journey == 'soak-report' && 'soak' || inputs.journey == 'suite' && 'suite' || github.event.schedule == '17 4 * * *' && 'signin' || inputs.journey == 'signin' && 'signin' || startsWith(inputs.journey, 'j8-') && 'j8' || inputs.journey == 'backup-proof' && 'backup' || 'j12' }}
+  group: e2e-scheduled-${{ inputs.spec && 'spec' || github.event.schedule == '30 6 * * *' && 'soak' || inputs.journey == 'soak-report' && 'soak' || inputs.journey == 'suite' && 'suite' || github.event.schedule == '17 4 * * *' && 'signin' || inputs.journey == 'signin' && 'signin' || startsWith(inputs.journey, 'j8-') && 'j8' || inputs.journey == 'backup-proof' && 'backup' || inputs.journey == 'jev-failures' && 'jev-failures' || 'j12' }}
   cancel-in-progress: false
 
 jobs:
@@ -356,6 +356,35 @@ jobs:
             echo "== $id"
             npx wrangler workflows instances describe snapshot-backup "$id" < /dev/null
           done
+  jev-failures:
+    name: jev-failures
+    # Reads why the judge failed. One SELECT each:
+    # counts by kind and code over 24 h, then the latest 20 rows. Rows hold a
+    # kind, a 4-digit code, a 160-char redacted message and the question ids.
+    # Dispatch: `journey=jev-failures`, then read the job log.
+    if: inputs.journey == 'jev-failures' && inputs.spec == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Read the judge failures
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          echo "== last 24 h by kind and code"
+          npx wrangler d1 execute 0509 --remote --json --command "SELECT kind, code, COUNT(*) AS n, MIN(occurred_at) AS first, MAX(occurred_at) AS last FROM jev_failure WHERE occurred_at >= '$since' GROUP BY kind, code ORDER BY n DESC" | jq -c '.[0].results[]'
+          echo "== latest 20"
+          npx wrangler d1 execute 0509 --remote --json --command "SELECT occurred_at, kind, code, question, message FROM jev_failure ORDER BY occurred_at DESC LIMIT 20" | jq -c '.[0].results[]'
   soak-report:
     name: soak-report
     # Reads counts only, never rows: no email, report text or other customer

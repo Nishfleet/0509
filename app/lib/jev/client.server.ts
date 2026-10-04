@@ -1,9 +1,11 @@
 import { captureException } from "@sentry/cloudflare";
-import { env } from "cloudflare:workers";
+import { env, waitUntil } from "cloudflare:workers";
 import { z } from "zod";
 
+import { insertJevFailure } from "../data/jev_failure.server";
 import { readCachedChoice, readCachedNoul } from "../data/jev_verdict.server";
 import { sha256Hex } from "../sha256";
+import { classifyJevFailure, RATE_LIMITED } from "./failure";
 import { isBillingRefusal } from "./refusal";
 import type { AttemptPolicy, NoulQuestion } from "./thresholds";
 
@@ -67,8 +69,6 @@ export class JevRateLimitedError extends JevUnavailableError {
   }
 }
 
-const RATE_LIMITED = /(^|\D)2003(\D|$)/;
-
 function unavailable(error: unknown): JevUnavailableError {
   const failure = new JevUnavailableError(error);
   if (isBillingRefusal(failure)) {
@@ -79,6 +79,22 @@ function unavailable(error: unknown): JevUnavailableError {
     return failure;
   }
   return RATE_LIMITED.test(failure.message) ? new JevRateLimitedError(error) : failure;
+}
+
+function recorded(questionIds: string, failure: JevUnavailableError): JevUnavailableError {
+  const write = insertJevFailure(questionIds, classifyJevFailure(failure), new Date().toISOString()).catch(
+    (error: unknown) => {
+      console.error(
+        JSON.stringify({ event: "jev.failure_not_recorded", error: error instanceof Error ? error.name : "unknown" }),
+      );
+    },
+  );
+  try {
+    waitUntil(write);
+  } catch {
+    return failure;
+  }
+  return failure;
 }
 
 function jevBody(raw: unknown): unknown {
@@ -140,11 +156,11 @@ async function run(question: NoulQuestion, state: unknown): Promise<number> {
   try {
     raw = await decide(state, { [question.id]: asked }, question.retries);
   } catch (error) {
-    throw unavailable(error);
+    throw recorded(question.id, unavailable(error));
   }
   const parsed = answerSchema.safeParse(jevBody(raw));
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
-  if (answer === undefined) throw missing("noul", raw, parsed.error?.issues ?? []);
+  if (answer === undefined) throw recorded(question.id, missing("noul", raw, parsed.error?.issues ?? []));
   return answer.noul;
 }
 
@@ -180,6 +196,7 @@ export async function askNouls(
     }),
   );
   const pending = entries.filter((entry) => entry.cached === null);
+  const questionIds = pending.map((entry) => entry.question.id).join(",");
   let answers: NoulAnswers = {};
   let unparsed: { raw: unknown; issues: readonly ParseIssue[] } = { raw: undefined, issues: [] };
   if (pending.length > 0) {
@@ -188,7 +205,7 @@ export async function askNouls(
     try {
       raw = await decide(state, asked);
     } catch (error) {
-      throw unavailable(error);
+      throw recorded(questionIds, unavailable(error));
     }
     const parsed = answerSchema.safeParse(jevBody(raw));
     if (parsed.success) answers = parsed.data.answers;
@@ -199,7 +216,7 @@ export async function askNouls(
       return { questionId: entry.question.id, inputHash: entry.hash, p: entry.cached, cached: true };
     }
     const fresh = answers[entry.question.id]?.noul;
-    if (fresh === undefined) throw missing("noul", unparsed.raw, unparsed.issues);
+    if (fresh === undefined) throw recorded(questionIds, missing("noul", unparsed.raw, unparsed.issues));
     return { questionId: entry.question.id, inputHash: entry.hash, p: fresh, cached: false };
   });
 }
@@ -211,12 +228,12 @@ async function runChoice(question: ChoiceQuestion, state: unknown): Promise<stri
       [question.id]: { type: "choice", instructions: question.instructions, criteria: question.options },
     });
   } catch (error) {
-    throw unavailable(error);
+    throw recorded(question.id, unavailable(error));
   }
   const parsed = choiceAnswerSchema.safeParse(jevBody(raw));
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
   if (answer === undefined || !Object.keys(question.options).includes(answer.choice)) {
-    throw missing("choice", raw, parsed.error?.issues ?? []);
+    throw recorded(question.id, missing("choice", raw, parsed.error?.issues ?? []));
   }
   return answer.choice;
 }
