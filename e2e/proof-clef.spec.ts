@@ -38,7 +38,15 @@ test("clef proof: one sign-up, one brand", async ({ page }) => {
   await listed.first().waitFor({ timeout: 120_000 });
   const listAt = Date.now();
   console.log(`CLEF TIMING brand=${BRAND} read_ms=${READ_MS} enter_to_card_ms=${cardAt - enterAt} card_to_list_ms=${listAt - cardAt} confirm_to_list_ms=${listAt - confirmAt}`);
-  await page.waitForTimeout(2000);
-  const names = await listed.allInnerTexts();
+  let names = await listed.allInnerTexts();
+  const settleDeadline = Date.now() + 60_000;
+  let stableSince = Date.now();
+  while (Date.now() < settleDeadline && Date.now() - stableSince < 10_000) {
+    await page.waitForTimeout(1000);
+    const next = await listed.allInnerTexts();
+    if (next.length !== names.length) stableSince = Date.now();
+    names = next;
+  }
+  console.log(`CLEF SETTLED brand=${BRAND} settle_ms=${Date.now() - listAt}`);
   console.log(`CLEF RIVALS brand=${BRAND} count=${names.length} ${JSON.stringify(names.map((n) => n.replace(/\s+/g, " ").slice(0, 80)))}`);
 });
