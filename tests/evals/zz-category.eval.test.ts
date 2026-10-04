@@ -1,12 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { DiscoveryContext } from "../../app/lib/data/entity.server";
-import {
-  IS_COMPETITOR,
-  SAME_CATEGORY,
-  competitorState,
-  type ResolvedCandidate,
-} from "../../app/lib/discovery/run.server";
+import { SAME_CATEGORY, competitorState, type ResolvedCandidate } from "../../app/lib/discovery/run.server";
 import { formatReport, jevKeyPresent, loadCases, makeNoulAsk, runEval, type Ask, type DiscoveryCase } from "./harness";
 
 vi.mock("../../app/lib/data/takedown.server", () => ({ takenDownAmong: () => Promise.resolve(new Set()) }));
@@ -38,13 +33,22 @@ function paced<T>(call: () => Promise<T>): Promise<T> {
 const SHARED_TAIL =
   " A shoe brand and a clothing brand are different categories even when both are sustainable and sold to the same people; a meal kit and a restaurant are different categories. `self.description` says what `self` sells and `item.evidence` says what `item` sells.";
 
-const V1 = {
+const OLD = {
   ...SAME_CATEGORY,
   instructions:
-    "Would a buyer shopping for what `self` mainly sells consider buying one of `item`'s products instead? Judge what customers actually buy, not shared values, audience, price, style or business model. The shape of the product does not matter: a ring, a band and a watch that all track sleep are the same category. Nor does the size of `item`: if it is a large company that sells many things, judge the product of `item` closest to what `self` sells." +
+    "Does `item` mainly sell the same kind of product or service that `self` mainly sells? Judge the product category: what a customer actually buys from each. Do not count shared values, audience, price, style or business model." +
     SHARED_TAIL,
   whenTrue:
-    "A product that `item` sells serves the same need as what `self` mainly sells, so a buyer shopping for one would consider the other, even in a different form or from a company with many other products.",
+    "What `item` mainly sells is the same kind of product or service as what `self` mainly sells, so a buyer shopping for one would consider the other.",
+};
+
+const V3 = {
+  ...SAME_CATEGORY,
+  instructions: SAME_CATEGORY.instructions.replace(
+    " A shoe brand",
+    " Selling something that goes with the product, such as bedding for a mattress, is not selling the product itself. A shoe brand",
+  ),
+  whenFalse: `${SAME_CATEGORY.whenFalse} Something that goes with the product, rather than the product itself, also counts as different.`,
 };
 
 function stateFor(row: DiscoveryCase): unknown {
@@ -69,13 +73,6 @@ function stateFor(row: DiscoveryCase): unknown {
   return competitorState(context, candidate);
 }
 
-const NEW_BRANDS = new Set(["Oura", "Vercel", "GoPro", "Sonos"]);
-const NEW_SPOTIFY = new Set(["Apple Music", "Amazon Music", "Sonos"]);
-
-function isNew(row: DiscoveryCase): boolean {
-  return NEW_BRANDS.has(row.self.name) || (row.self.name === "Spotify" && NEW_SPOTIFY.has(row.item.name));
-}
-
 async function probe(name: string, question: typeof SAME_CATEGORY, only: (row: DiscoveryCase) => boolean) {
   const all = await loadCases<DiscoveryCase>("same_category", ["kind", "self", "competitors", "item", "label"]);
   const rows = all.filter(only);
@@ -96,14 +93,16 @@ async function probe(name: string, question: typeof SAME_CATEGORY, only: (row: D
   return report;
 }
 
+const NEWEST = new Set(["Dyson", "Notion", "Sleep Number", "Mailchimp", "Duolingo", "Dropbox"]);
+
 describe.skipIf(!jevKeyPresent())("probe: category wording per case", () => {
-  it("category_base", async () => {
-    expect((await probe("category_base", SAME_CATEGORY, () => true)).splits.length).toBeGreaterThan(0);
+  it("category_shipped_branch", async () => {
+    expect((await probe("category_new", SAME_CATEGORY, () => true)).splits.length).toBeGreaterThan(0);
   });
-  it("category_v1", async () => {
-    expect((await probe("category_v1", V1, () => true)).splits.length).toBeGreaterThan(0);
+  it("category_v3", async () => {
+    expect((await probe("category_v3", V3, () => true)).splits.length).toBeGreaterThan(0);
   });
-  it("is_competitor_new_cases", async () => {
-    expect((await probe("is_competitor_new", IS_COMPETITOR, isNew)).splits.length).toBeGreaterThan(0);
+  it("category_old_on_newest", async () => {
+    expect((await probe("category_old", OLD, (row) => NEWEST.has(row.self.name))).splits.length).toBeGreaterThan(0);
   });
 });
