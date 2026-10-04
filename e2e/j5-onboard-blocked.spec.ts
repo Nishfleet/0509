@@ -37,6 +37,10 @@ test.describe("J5", () => {
     !process.env.PLAYWRIGHT_TEST_BASE_URL,
     "J5 needs a signed-in session and the production fixture wall; the preview lane has neither",
   );
+  test.skip(
+    ({ viewport }) => viewport?.width !== 1440,
+    "the bot wall is one switch on fixture.0509.in: two viewports in parallel turn it off under each other, so J5 runs on one lane",
+  );
   test.describe.configure({ mode: "serial" });
 
   test.beforeAll(async () => {
