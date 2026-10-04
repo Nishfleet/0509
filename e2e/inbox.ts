@@ -685,3 +685,12 @@ export function readPreview<T>(read: (db: DatabaseSync) => T): T {
     db.close();
   }
 }
+
+export async function switchOffEveryRival(page: Page): Promise<void> {
+  const on = page.getByRole("switch", { name: / tracking$/, checked: true });
+  while ((await on.count()) > 0) {
+    const before = await on.count();
+    await on.first().click();
+    await expect(on).toHaveCount(before - 1);
+  }
+}

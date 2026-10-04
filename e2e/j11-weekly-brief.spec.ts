@@ -8,6 +8,7 @@ import {
   readRawMessage,
   requireInboxToken,
   signInWithMagicLink,
+  switchOffEveryRival,
 } from "./inbox";
 
 let createdEmail = "";
@@ -92,15 +93,6 @@ async function saveSchedule(page: Page, schedule: { weekday: number; hour: numbe
   await page.goto("/app/settings");
   await expect(page.locator("label", { hasText: "Day" }).locator("select")).toHaveValue(String(schedule.weekday));
   await expect(page.locator("label", { hasText: "Time" }).locator("select")).toHaveValue(String(schedule.hour));
-}
-
-async function switchOffEveryRival(page: Page): Promise<void> {
-  const on = page.getByRole("switch", { name: / tracking$/, checked: true });
-  while ((await on.count()) > 0) {
-    const before = await on.count();
-    await on.first().click();
-    await expect(on).toHaveCount(before - 1);
-  }
 }
 
 async function addCompetitor(page: Page, domain: string): Promise<void> {
