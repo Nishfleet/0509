@@ -4,6 +4,7 @@ interface Evidence {
   sourceUrl: string;
   excerpt: string;
   generator: GeneratorKey;
+  via?: string;
 }
 
 interface Candidate {

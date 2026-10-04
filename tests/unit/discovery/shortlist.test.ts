@@ -196,4 +196,13 @@ describe("shortlist", () => {
     ]).map((entry) => entry.name);
     expect(order).toEqual(["Both", "Hn Only", "Ai Only"]);
   });
+
+  it("ranks an AI-only name that two models agree on above one only a single model named", () => {
+    const viaModel = (name: string, models: string[]): Candidate => ({
+      name,
+      evidence: models.map((via) => ({ sourceUrl: "https://self.example.com/", excerpt: "", generator: "ai", via })),
+    });
+    const input = [viaModel("Single", ["a"]), viaModel("Agreed", ["a", "b"])];
+    expect(shortlist(input).map((entry) => entry.name)).toEqual(["Agreed", "Single"]);
+  });
 });

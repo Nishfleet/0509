@@ -215,6 +215,7 @@ function nameProposals(subject: Subject, proposals: readonly Proposal[]): NamedP
 }
 
 async function liveCandidates(
+  model: Model,
   subject: Subject,
   named: readonly NamedProposal[],
   checks: Map<string, Promise<boolean>>,
@@ -236,6 +237,7 @@ async function liveCandidates(
           sourceUrl: `https://${subject.domain}/`,
           excerpt: item.reason === "" ? EXCERPT : `${EXCERPT}. Its reason: ${item.reason}`,
           generator: "ai",
+          via: model,
         },
       ],
     }));
@@ -270,7 +272,12 @@ interface Source {
 }
 
 async function candidatesFrom(model: Model, { subject, readSite, checks }: Source): Promise<Candidate[]> {
-  return liveCandidates(subject, nameProposals(subject, await cachedProposals(model, subject, readSite)), checks);
+  return liveCandidates(
+    model,
+    subject,
+    nameProposals(subject, await cachedProposals(model, subject, readSite)),
+    checks,
+  );
 }
 
 export async function warmProposals(subject: Subject): Promise<void> {
@@ -279,13 +286,16 @@ export async function warmProposals(subject: Subject): Promise<void> {
 }
 
 function mergedByDomain(lists: readonly (readonly Candidate[])[]): Candidate[] {
-  const seen = new Set<string>();
-  return lists.flat().filter((candidate) => {
+  const merged = new Map<string, Candidate>();
+  for (const candidate of lists.flat()) {
     const domain = candidate.domain ?? candidate.name;
-    if (seen.has(domain)) return false;
-    seen.add(domain);
-    return true;
-  });
+    const kept = merged.get(domain);
+    merged.set(
+      domain,
+      kept === undefined ? candidate : { ...kept, evidence: [...kept.evidence, ...candidate.evidence] },
+    );
+  }
+  return [...merged.values()];
 }
 
 async function candidatesFromAll(subject: Subject, readSite: SiteReader): Promise<Candidate[]> {
