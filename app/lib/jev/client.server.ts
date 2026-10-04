@@ -1,5 +1,5 @@
 import { captureException } from "@sentry/cloudflare";
-import { env } from "cloudflare:workers";
+import { env, waitUntil } from "cloudflare:workers";
 import { z } from "zod";
 
 import { insertJevFailure } from "../data/jev_failure.server";
@@ -81,13 +81,18 @@ function unavailable(error: unknown): JevUnavailableError {
   return RATE_LIMITED.test(failure.message) ? new JevRateLimitedError(error) : failure;
 }
 
-async function recorded(questionIds: string, failure: JevUnavailableError): Promise<JevUnavailableError> {
+function recorded(questionIds: string, failure: JevUnavailableError): JevUnavailableError {
+  const write = insertJevFailure(questionIds, classifyJevFailure(failure), new Date().toISOString()).catch(
+    (error: unknown) => {
+      console.error(
+        JSON.stringify({ event: "jev.failure_not_recorded", error: error instanceof Error ? error.name : "unknown" }),
+      );
+    },
+  );
   try {
-    await insertJevFailure(questionIds, classifyJevFailure(failure), new Date().toISOString());
-  } catch (error) {
-    console.error(
-      JSON.stringify({ event: "jev.failure_not_recorded", error: error instanceof Error ? error.name : "unknown" }),
-    );
+    waitUntil(write);
+  } catch {
+    return failure;
   }
   return failure;
 }
@@ -150,11 +155,11 @@ async function run(question: NoulQuestion, state: unknown): Promise<number> {
   try {
     raw = await decide(state, { [question.id]: asked });
   } catch (error) {
-    throw await recorded(question.id, unavailable(error));
+    throw recorded(question.id, unavailable(error));
   }
   const parsed = answerSchema.safeParse(jevBody(raw));
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
-  if (answer === undefined) throw await recorded(question.id, missing("noul", raw, parsed.error?.issues ?? []));
+  if (answer === undefined) throw recorded(question.id, missing("noul", raw, parsed.error?.issues ?? []));
   return answer.noul;
 }
 
@@ -199,22 +204,20 @@ export async function askNouls(
     try {
       raw = await decide(state, asked);
     } catch (error) {
-      throw await recorded(questionIds, unavailable(error));
+      throw recorded(questionIds, unavailable(error));
     }
     const parsed = answerSchema.safeParse(jevBody(raw));
     if (parsed.success) answers = parsed.data.answers;
     unparsed = { raw, issues: parsed.error?.issues ?? [] };
   }
-  const verdicts = entries.flatMap((entry) => {
-    const p = entry.cached ?? answers[entry.question.id]?.noul;
-    return p === undefined
-      ? []
-      : [{ questionId: entry.question.id, inputHash: entry.hash, p, cached: entry.cached !== null }];
+  return entries.map((entry) => {
+    if (entry.cached !== null) {
+      return { questionId: entry.question.id, inputHash: entry.hash, p: entry.cached, cached: true };
+    }
+    const fresh = answers[entry.question.id]?.noul;
+    if (fresh === undefined) throw recorded(questionIds, missing("noul", unparsed.raw, unparsed.issues));
+    return { questionId: entry.question.id, inputHash: entry.hash, p: fresh, cached: false };
   });
-  if (verdicts.length < entries.length) {
-    throw await recorded(questionIds, missing("noul", unparsed.raw, unparsed.issues));
-  }
-  return verdicts;
 }
 
 async function runChoice(question: ChoiceQuestion, state: unknown): Promise<string> {
@@ -224,12 +227,12 @@ async function runChoice(question: ChoiceQuestion, state: unknown): Promise<stri
       [question.id]: { type: "choice", instructions: question.instructions, criteria: question.options },
     });
   } catch (error) {
-    throw await recorded(question.id, unavailable(error));
+    throw recorded(question.id, unavailable(error));
   }
   const parsed = choiceAnswerSchema.safeParse(jevBody(raw));
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
   if (answer === undefined || !Object.keys(question.options).includes(answer.choice)) {
-    throw await recorded(question.id, missing("choice", raw, parsed.error?.issues ?? []));
+    throw recorded(question.id, missing("choice", raw, parsed.error?.issues ?? []));
   }
   return answer.choice;
 }

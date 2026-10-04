@@ -1,6 +1,6 @@
 import { isBillingRefusal } from "./refusal";
 
-export type JevFailureKind = "rate_limited" | "billing" | "timeout" | "bad_shape" | "other";
+type JevFailureKind = "rate_limited" | "billing" | "timeout" | "bad_shape" | "other";
 
 export interface JevFailure {
   kind: JevFailureKind;
@@ -20,6 +20,8 @@ const PREFIX = /^jev unavailable: /;
 
 export const MESSAGE_MAX = 160;
 
+const ECHOED_INPUT = /"[^"]*"|'[^']*'|\S*@\S*|\S*:\/\/\S*|\b[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}\b/gi;
+
 function kindOf(raw: string): JevFailureKind {
   if (isBillingRefusal(raw)) return "billing";
   if (RATE_LIMITED.test(raw)) return "rate_limited";
@@ -29,9 +31,11 @@ function kindOf(raw: string): JevFailureKind {
 
 export function classifyJevFailure(error: unknown): JevFailure {
   const raw = error instanceof Error ? error.message : String(error);
+  const kind = kindOf(raw);
+  const text = kind === "bad_shape" ? raw : raw.replace(ECHOED_INPUT, "…");
   return {
-    kind: kindOf(raw),
+    kind,
     code: PROVIDER_CODE.exec(raw)?.[1] ?? null,
-    message: raw.replace(PREFIX, "").replace(/\s+/g, " ").slice(0, MESSAGE_MAX),
+    message: text.replace(PREFIX, "").replace(/\s+/g, " ").slice(0, MESSAGE_MAX),
   };
 }

@@ -13,6 +13,7 @@ import { NIGHTLY_CRON, OWN_SITE_CHECK_CRON, WEEKLY_REFRESH_CRON } from "../app/l
 import { requestContext } from "../app/lib/agent/context.server";
 import { createOAuthProvider } from "../app/lib/agent/oauth.server";
 import { deleteExpiredAuthRows } from "../app/lib/data/auth_expiry.server";
+import { deleteExpiredJevFailures } from "../app/lib/data/jev_failure.server";
 import { stampFirstSignals } from "../app/lib/data/onboarding_run.server";
 import { startNightlyDiscovery, startWeeklyRefresh } from "../app/lib/discovery/start.server";
 import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
@@ -78,6 +79,7 @@ const handler = {
           sweepPending(env, now),
           startNightlyDiscovery(now),
           deleteExpiredAuthRows(env.DB, now),
+          deleteExpiredJevFailures(env.DB, now),
           stampFirstSignals(),
           runNightlyCostGuard(env.DB, env.CLOUDFLARE_API_TOKEN, controller.scheduledTime),
         ]);
