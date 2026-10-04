@@ -114,6 +114,25 @@ describe("e2e fixture teardown detector", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("never turns the J5 bot wall off, so a healthy homepage cannot land in the 24 h identity cache", async () => {
+    const source = await readFile(path.join(REPO_ROOT, "e2e/j5-onboard-blocked.spec.ts"), "utf8");
+    expect(source).toContain("/__wall?state=on");
+    expect(source).not.toContain("/__wall?state=off");
+  });
+
+  it("treats a second session teardown as a login redirect, not a missing deleted query", async () => {
+    const source = await readFile(path.join(REPO_ROOT, "e2e/session.teardown.ts"), "utf8");
+    expect(source).toContain("/login?deleted=");
+    expect(source).toContain("toMatch(/\\/login(?:\\?|$)/)");
+  });
+
+  it("signs in again when settings refuses a stale delete, instead of treating the row as gone", async () => {
+    const source = await readFile(path.join(REPO_ROOT, "e2e/inbox.ts"), "utf8");
+    expect(source).toContain("sign out and sign back in");
+    expect(source).toContain("signInWithMagicLink");
+    expect(source).not.toContain("treating as already gone");
+  });
+
   it("runs a matrix inside a job concurrency group one leg at a time", async () => {
     const dir = path.join(REPO_ROOT, ".github/workflows");
     const offenders: string[] = [];

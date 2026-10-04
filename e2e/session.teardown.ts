@@ -30,5 +30,10 @@ teardown("delete the shared session account", async ({ request, baseURL }) => {
     maxRedirects: 0,
   });
   expect(deleted.status()).toBe(302);
-  expect(deleted.headers().location ?? "").toContain("/login?deleted=");
+  const location = deleted.headers().location ?? "";
+  if (location.includes("/login?deleted=")) return;
+  // The suite's own teardown already deleted this row; the always() rerun
+  // (e2e-scheduled.yml) then posts with a leftover cookie and settings sends
+  // the visitor to /login with no deleted query.
+  expect(location, "already-deleted session tears down as a login redirect").toMatch(/\/login(?:\?|$)/);
 });

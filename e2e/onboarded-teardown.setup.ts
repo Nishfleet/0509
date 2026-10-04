@@ -14,6 +14,7 @@ import { deleteCreatedAccount } from "./inbox";
 const LANES = ["desktop", "phone"] as const;
 
 teardown("delete each onboarded account the setup minted", async ({ browser }) => {
+  teardown.setTimeout(120_000);
   for (const lane of LANES) {
     const statePath = onboardedStatePath(lane);
     const emailPath = onboardedEmailPath(lane);
