@@ -206,3 +206,97 @@ describe("addManualCompetitor cap (0509#4891)", () => {
     expect(await domainCount(workspaceId, "nike.com")).toBe(1);
   });
 });
+
+async function seedAtCap(label: string, tier?: { tier: "starter"; status: "active" }): Promise<string> {
+  seededRuns += 1;
+  const n = String(seededRuns);
+  const userId = `user-${label}-${n}`;
+  const workspaceId = `ws-${label}-${n}`;
+  await seedUser(userId, `${label}-${n}@example.com`);
+  await seedWorkspace(workspaceId, userId, label);
+  if (tier !== undefined) {
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, ?, ?, '2026-09-23T12:00:00.000Z')",
+    )
+      .bind(`plan-${label}-${n}`, workspaceId, tier.tier, tier.status)
+      .run();
+  }
+  return workspaceId;
+}
+
+async function seedOffRival(workspaceId: string, domain: string): Promise<string> {
+  const entityId = `off-${domain}-${workspaceId}`;
+  await env.DB.prepare(
+    `INSERT INTO entity (id, workspace_id, role, domain, name, origin, state, state_changed_at, state_changed_by, created_at)
+     VALUES (?, ?, 'competitor', ?, ?, 'manual', 'off', ?, 'user', ?)`,
+  )
+    .bind(entityId, workspaceId, domain, domain, "2026-09-23T12:00:00.000Z", "2026-09-23T12:00:00.000Z")
+    .run();
+  return entityId;
+}
+
+describe("the cap on every path that turns a rival on", () => {
+  it("refuses to switch a rival back on at the cap, with the cap message", async () => {
+    const workspaceId = await seedAtCap("switch-on");
+    for (let i = 1; i <= 5; i += 1) {
+      await handleCompetitorIntent(workspaceId, intentForm({ intent: "add", competitor: `s${String(i)}.com` }));
+    }
+    const entityId = await seedOffRival(workspaceId, "waiting.com");
+
+    const result = await handleCompetitorIntent(workspaceId, intentForm({ intent: "on", entityId }));
+
+    expect(result.message).toContain("5 competitors");
+    expect(result.upgradePlanId).toBe("starter");
+    expect((await entityRow(workspaceId, "waiting.com"))?.state).toBe("off");
+  });
+
+  it("switches a rival on when there is room, and switching off always works", async () => {
+    const workspaceId = await seedAtCap("switch-room");
+    const entityId = await seedOffRival(workspaceId, "roomy.com");
+
+    const on = await handleCompetitorIntent(workspaceId, intentForm({ intent: "on", entityId }));
+    expect(on.message).toBeNull();
+    expect((await entityRow(workspaceId, "roomy.com"))?.state).toBe("on");
+
+    const off = await handleCompetitorIntent(workspaceId, intentForm({ intent: "off", entityId }));
+    expect(off.message).toBeNull();
+    expect((await entityRow(workspaceId, "roomy.com"))?.state).toBe("off");
+  });
+
+  it("gives a paid plan its higher cap: a sixth rival is added on starter", async () => {
+    const workspaceId = await seedAtCap("paid-cap", { tier: "starter", status: "active" });
+    for (let i = 1; i <= 6; i += 1) {
+      const result = await handleCompetitorIntent(
+        workspaceId,
+        intentForm({ intent: "add", competitor: `p${String(i)}.com` }),
+      );
+      expect(result.message).toBeNull();
+    }
+    expect(await domainCount(workspaceId, "p6.com")).toBe(1);
+    const off = await seedOffRival(workspaceId, "paid-off.com");
+    const result = await handleCompetitorIntent(workspaceId, intentForm({ intent: "on", entityId: off }));
+    expect(result.message).toBeNull();
+  });
+
+  it("returns the cap message when accepting a suggestion at the cap", async () => {
+    const workspaceId = await seedAtCap("accept-cap");
+    for (let i = 1; i <= 5; i += 1) {
+      await handleCompetitorIntent(workspaceId, intentForm({ intent: "add", competitor: `c${String(i)}.com` }));
+    }
+    await env.DB.prepare(
+      `INSERT INTO suggestion (id, workspace_id, kind, candidate_domain, candidate_name, verdict_p, status, created_at)
+       VALUES (?, ?, 'add', 'maybe.com', 'Maybe', 0.7, 'pending', '2026-09-23T12:00:00.000Z')`,
+    )
+      .bind(`sugg-${workspaceId}`, workspaceId)
+      .run();
+
+    const result = await handleCompetitorIntent(
+      workspaceId,
+      intentForm({ intent: "accept", suggestionId: `sugg-${workspaceId}` }),
+    );
+
+    expect(result.message).toContain("5 competitors");
+    expect(result.upgradePlanId).toBe("starter");
+    expect(await domainCount(workspaceId, "maybe.com")).toBe(0);
+  });
+});
