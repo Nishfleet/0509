@@ -36,4 +36,6 @@ Live customer-flow checks on production (CX and PAY GAPS runs). No alert fired: 
 
 - The reason is recorded in a table CI can read, so the next failure explains itself (#6927).
 - Live test jobs stop competing with customers for the shared call rate: one live-AI job at a time (#6930). A third queued run replaces the second.
-- Raise the AI Gateway rate limit and run eval probes through the separate "evals" gateway.
+- Eval AI calls skip AI Gateway, so they cannot use up the `default` gateway's rate limit. Error 2003 is AI Gateway's own limit and it is counted per gateway (Cloudflare AI Gateway rate-limiting docs). The eval harness keeps its own call budget for spend.
+- Not isolated: Workers AI's own per-account model limits (error 3036 or 3040) are shared with customers. If a model hits them, the next lever is a separate Cloudflare account for CI and evals.
+- Raise the `default` gateway's rate limit so customers have headroom of their own.
