@@ -160,7 +160,7 @@ const JEV_TIMEOUT_MS = 60_000;
 
 const BUDGET_MARGIN = 1.2;
 
-let callBudget = 0;
+let callBudget = 70;
 
 let callsUsed = 0;
 
