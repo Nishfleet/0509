@@ -36,7 +36,9 @@ const GATEWAY_MODEL = "@cf/cloudflare/clef";
 
 const JEV_URL = VIA_GATEWAY ? "workers-ai binding" : (process.env.JEV_URL ?? "http://127.0.0.1:4000/jev");
 
-const GATEWAY_ID = "default";
+// Customers keep the gateway `default` to themselves: its rate limit (error 2003)
+// failed two sign-ups when an eval run shared it (docs/incidents/2026-10-04-signup-judge-failure.md).
+const GATEWAY_ID = "ci";
 
 const WRANGLER_CONFIG = path.join(HERE, "..", "..", "wrangler.jsonc");
 
