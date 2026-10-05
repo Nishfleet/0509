@@ -6,5 +6,5 @@ SET "permissions" = '{"read":["*"]}'
 WHERE "permissions" IS NULL;
 
 UPDATE "apikey"
-SET "expiresAt" = datetime('now', '+90 days')
+SET "expiresAt" = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+90 days')
 WHERE "expiresAt" IS NULL;

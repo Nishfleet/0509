@@ -1,4 +1,4 @@
-import { env } from "cloudflare:test";
+import { env, type D1Migration } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 import { createAuth } from "../../app/lib/auth.server";
@@ -142,4 +142,43 @@ describe("apikey plugin against the shipped schema", () => {
     await env.DB.prepare("UPDATE apikey SET permissions = NULL WHERE id = ?").bind(created.id).run();
     expect(await propsForApiKey(created.key)).toBeNull();
   });
+
+  it("honours ISO expiry stamped by the apikey backfill", async () => {
+    await seedUser("u_apikey_backfill");
+    const minted = await auth.api.createApiKey({
+      body: { userId: "u_apikey_backfill", name: "format-control" },
+    });
+    const created = await auth.api.createApiKey({
+      body: { userId: "u_apikey_backfill", name: "backfill" },
+    });
+    await env.DB.prepare('UPDATE apikey SET "expiresAt" = NULL WHERE id = ?').bind(created.id).run();
+    await env.DB.prepare(expiresAtBackfill()).run();
+
+    const iso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+    const rows = await env.DB.prepare('SELECT id, "expiresAt" FROM apikey WHERE id IN (?, ?)')
+      .bind(minted.id, created.id)
+      .all<{ id: string; expiresAt: string | null }>();
+    const byId = new Map((rows.results ?? []).map((row) => [row.id, row.expiresAt]));
+    expect(byId.get(minted.id)).toMatch(iso);
+    expect(byId.get(created.id)).toMatch(iso);
+
+    expect((await auth.api.verifyApiKey({ body: { key: created.key } })).valid).toBe(true);
+
+    await env.DB.prepare('UPDATE apikey SET "expiresAt" = ? WHERE id = ?')
+      .bind("2000-01-01T00:00:00.000Z", created.id)
+      .run();
+    expect((await auth.api.verifyApiKey({ body: { key: created.key } })).valid).toBe(false);
+  });
 });
+
+function expiresAtBackfill(): string {
+  const found: D1Migration | undefined = env.TEST_MIGRATIONS.find((migration) =>
+    migration.name.endsWith("_apikey_read_expiry.sql"),
+  );
+  if (found === undefined) throw new Error("0049_apikey_read_expiry.sql is missing from TEST_MIGRATIONS");
+  const updates = found.queries.filter((query) => /update\s+"apikey"\s+set\s+"expiresAt"/i.test(query));
+  if (updates.length !== 1) {
+    throw new Error(`0049_apikey_read_expiry.sql holds ${updates.length} UPDATEs over apikey.expiresAt`);
+  }
+  return updates[0] as string;
+}
