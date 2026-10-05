@@ -58,7 +58,7 @@ describe("Slack alerts setting (0509#6376)", () => {
     const stored = await env.DB.prepare(`SELECT target_value FROM send_target WHERE workspace_id = ?`)
       .bind(WS)
       .first<{ target_value: string }>();
-    expect(stored?.target_value.startsWith("enc:v1:")).toBe(true);
+    expect(stored?.target_value.startsWith("enc:v2:")).toBe(true);
     expect(stored?.target_value).not.toContain("hooks.slack.com");
   });
 
@@ -76,7 +76,7 @@ describe("Slack alerts setting (0509#6376)", () => {
     const stored = await env.DB.prepare(`SELECT target_value FROM send_target WHERE id = 'st-slack-plain'`).first<{
       target_value: string;
     }>();
-    expect(stored?.target_value.startsWith("enc:v1:")).toBe(true);
+    expect(stored?.target_value.startsWith("enc:v2:")).toBe(true);
     expect(stored?.target_value).not.toContain("hooks.slack.com");
     expect((await readSlackTarget(env.DB, WS))?.target_value).toBe(HOOK);
   });
@@ -117,6 +117,21 @@ describe("Slack alerts setting (0509#6376)", () => {
       await expect(readSlackTarget(env.DB, WS)).rejects.toThrow("SLACK_TARGET_SECRET is not configured");
     } finally {
       env.SLACK_TARGET_SECRET = held;
+    }
+  });
+
+  it("reads an encrypted row with the previous secret during rotation (dual-read)", async () => {
+    stubSlack(200);
+    await call({ intent: "slack-save", webhook: HOOK });
+    const held = env.SLACK_TARGET_SECRET;
+    const heldPrev = env.SLACK_TARGET_SECRET_PREVIOUS;
+    env.SLACK_TARGET_SECRET_PREVIOUS = held;
+    env.SLACK_TARGET_SECRET = heldPrev || "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=";
+    try {
+      expect((await readSlackTarget(env.DB, WS))?.target_value).toBe(HOOK);
+    } finally {
+      env.SLACK_TARGET_SECRET = held;
+      env.SLACK_TARGET_SECRET_PREVIOUS = heldPrev;
     }
   });
 
