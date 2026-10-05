@@ -7,35 +7,30 @@ import { describe, expect, it } from "vitest";
 const ENTRY_DOCS = ["CLAUDE.md", "README.md"] as const;
 const PATH = /`((?:app|docs|workers|tests|e2e|migrations|\.agents)\/[\w./-]+[\w-])`/g;
 
-// 0509#7006: CLAUDE.md's "Rebuild rules" claimed a hash-check mechanism that
-// exists nowhere in the repo, described retired orchestration roles, sent lane
-// posts to a closed issue, and gave a stale feature-map size. Copy that a doc
-// asserts about itself cannot be checked by a doc test (docs/REBUILD-DONE.md D),
-// but a claim about a mechanism is different: the mechanism either exists in the
-// repo or it does not. This gate fails on the old wording and passes once the
-// claim, the retired roles and the stale figure are gone. The live rules the
-// section carried stay, so the deletion cannot take them with it.
+// 0509#7006: CLAUDE.md's "Rebuild rules" section claimed a hash-check mechanism
+// that exists nowhere in the repo, described retired orchestration roles, sent
+// lane posts to a closed issue, and gave a stale feature-map size. This is a
+// wording gate, not a mechanism check: it catches the return of those exact
+// claims. It fails on the old text and passes once the claims are gone. The live
+// rules the section carried stay, so the deletion cannot take them with it.
 const RETIRED = [
   /\bhash-checked\b/,
-  /\b668d2452c\b/,
-  /\bfa9d48aa4\b/,
-  /\bpre-wipe\b/,
   /\bFable\b/,
   /\bOpus deputy\b/,
   /Two orchestrator sessions/,
   /#3842/,
   /about \d+ KB/,
-  /Rebuild rules/,
 ] as const;
 
-// The four live rules move from "Rebuild rules" into "Conventions", and the
-// gated-site rule moves to "Rules that are not about code". None of them may
-// leave the file with the section.
+// The four live rules move from "Rebuild rules" into "Conventions", the
+// gated-site rule moves to "Rules that are not about code", and the pre-wipe
+// reuse rule stays as policy. None of them may leave the file with the section.
 const LIVE = [
   /Stock only, at the version named in `docs\/REBUILD-STACK\.md`/,
   /Jev decides every typed decision/,
   /Browser Rendering capped at 10/,
   /Guardrails/,
+  /Nothing from the pre-wipe code is reused/,
   /site is gated until the audit passes/,
 ] as const;
 

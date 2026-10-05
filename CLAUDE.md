@@ -217,6 +217,8 @@ Service daily quota (Nish 2026-09-28).
   break-glass only.
 - Prod schema changes go through one door: a numbered file in `migrations/`.
   Never DDL via `wrangler d1 execute --remote`.
+- Nothing from the pre-wipe code is reused: old files are read only for facts
+  about an outside API, never copied and never checked out beside a build.
 - No `scripts/`, `ops/`, `.github/scripts`, hooks, wrappers or helper files.
   Workflow steps call vendor commands directly. `docs/REBUILD-DONE.md` §D is
   the bar.
