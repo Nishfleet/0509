@@ -9,6 +9,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 
 const TAG_SCAN_MESSAGE = "Looking a feed tag up by name is a hand-rolled parser";
 const TAG_READER_MESSAGE = "A tag-reading helper is a hand-rolled parser";
+const TAG_STRIP_MESSAGE = "Stripping tags with /<[^>]*>/ is the incomplete sanitizer";
 
 const TAG_LOOKUP = `export function readItems(xml: string): number {
   return xml.indexOf("item");
@@ -16,13 +17,21 @@ const TAG_LOOKUP = `export function readItems(xml: string): number {
 `;
 
 const TAG_READER = `export function readBlock(xml: string): string {
-  return unwrapCdata(stripTags(xml));
+  return unwrapCdata(unmarkup(stripTags(xml)));
 }
 function unwrapCdata(text: string): string {
   return text;
 }
+function unmarkup(text: string): string {
+  return text;
+}
 function stripTags(text: string): string {
   return text;
+}
+`;
+
+const TAG_STRIP = `export function readTitle(value: string): string {
+  return value.replace(/<[^>]*>/g, "");
 }
 `;
 
@@ -64,10 +73,16 @@ describe("eslint hand-rolled feed parser rule (#7000)", () => {
     expect(result.messages.some((m) => m.includes(TAG_SCAN_MESSAGE))).toBe(true);
   });
 
-  it("rejects unwrapCdata and stripTags in the feed module", { timeout: 60_000 }, async () => {
+  it("rejects unwrapCdata, unmarkup and stripTags in the feed module", { timeout: 60_000 }, async () => {
     const result = await lintProbe("app/lib/feeds/probe-hand-rolled-tmp.ts", TAG_READER);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(TAG_READER_MESSAGE))).toBe(true);
+  });
+
+  it("rejects a tag-strip regex in the feed module", { timeout: 60_000 }, async () => {
+    const result = await lintProbe("app/lib/feeds/probe-hand-rolled-tmp.ts", TAG_STRIP);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((m) => m.includes(TAG_STRIP_MESSAGE))).toBe(true);
   });
 
   it("allows a mapper over extractFromXml", { timeout: 60_000 }, async () => {

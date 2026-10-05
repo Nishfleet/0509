@@ -48,7 +48,7 @@ describe("parseFeed", () => {
     expect(items).toEqual([
       {
         id: "tag:rival.com,2026:42",
-        title: "Fixed billing export",
+        title: "Fixed <em>billing</em> export",
         url: "https://rival.com/changelog/42",
         excerpt: "Exports no longer time out.",
         publishedAt: "2026-10-01T08:30:00.000Z",

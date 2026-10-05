@@ -75,63 +75,57 @@ function isNode(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object";
 }
 
-function firstText(nodes: readonly unknown[], key: string): string {
+function firstText(nodes: readonly unknown[]): string {
   for (const node of nodes) {
-    if (node === undefined) continue;
-    const value = typeof node === "object" ? text((node as Record<string, unknown>)[key]) : text(node);
+    const value = text(node);
     if (value !== "") return value;
   }
   return "";
 }
 
-function entryLink(raw: Record<string, unknown>, fallback: string, base: string): string | null {
+function hrefOf(link: unknown): string {
+  if (!isNode(link)) return text(link);
+  const href = text(link["@_href"]);
+  return href !== "" ? href : text(link);
+}
+
+function relOf(link: unknown): string {
+  if (!isNode(link)) return "";
+  const rel = link["@_rel"];
+  return typeof rel === "string" ? rel.toLowerCase() : "";
+}
+
+function pickHref(raw: Record<string, unknown>): string {
   const links = asList(raw.link);
-  const hrefOf = (link: unknown): string => {
-    if (!isNode(link)) return text(link);
-    const href = text(link["@_href"]);
-    return href !== "" ? href : text(link);
-  };
-  const relOf = (link: unknown): string => {
-    if (!isNode(link)) return "";
-    const rel = link["@_rel"];
-    return typeof rel === "string" ? rel.toLowerCase() : "";
-  };
   const alternate = links.find((link) => {
     const rel = relOf(link);
     return rel === "" || rel.split(/\s+/).includes("alternate");
   });
-  const href = [hrefOf(alternate), ...links.map(hrefOf), fallback].find((value) => value !== "") ?? "";
-  return resolveHttp(href, base);
+  return [hrefOf(alternate), ...links.map(hrefOf)].find((value) => value !== "") ?? "";
 }
 
-function entryDate(raw: Record<string, unknown>, published: string): string | null {
-  if (published !== "") return published;
-  const parsed = Date.parse(firstText(asList(raw["dc:date"]), "#text"));
-  return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
+function publishedAt(value: string | undefined): string | null {
+  return value === undefined || value === "" ? null : value;
 }
 
-function unmarkup(value: string): string {
-  return value.replace(/<[^>]*>/g, "");
-}
-
-function entryId(raw: Record<string, unknown>, url: string, parsedId: string): string {
-  const declared = firstText([raw.guid, raw.id], "#text");
-  return declared === "" ? url : parsedId;
+function excerptOf(value: string | undefined): string | null {
+  return value === undefined || value === "" ? null : cut(value, MAX_EXCERPT_CHARS);
 }
 
 function toItem(entry: FeedEntry & { raw: Record<string, unknown> }, base: string): FeedItem | null {
-  const url = entryLink(entry.raw, entry.link ?? "", base);
+  const picked = pickHref(entry.raw);
+  const href = picked === "" ? (entry.link ?? "") : picked;
+  const url = resolveHttp(href, base);
   if (url === null) return null;
-  const title = cut(unmarkup(entry.title ?? ""), MAX_TITLE_CHARS);
+  const title = cut(entry.title ?? "", MAX_TITLE_CHARS);
   if (title === "") return null;
-  const rawExcerpt = text(entry.raw.summary) !== "" ? text(entry.raw.summary) : text(entry.raw.description);
-  const excerpt = entry.description ?? rawExcerpt;
+  const declared = firstText([entry.raw.guid, entry.raw.id]);
   return {
-    id: entryId(entry.raw, url, entry.id),
+    id: declared === "" ? url : declared,
     title,
     url,
-    excerpt: excerpt === "" ? null : cut(excerpt, MAX_EXCERPT_CHARS),
-    publishedAt: entryDate(entry.raw, entry.published ?? ""),
+    excerpt: excerptOf(entry.description),
+    publishedAt: publishedAt(entry.published),
   };
 }
 

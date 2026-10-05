@@ -177,18 +177,20 @@ const HAND_ROLLED_FEED_TAG_SCAN = {
   selector:
     "Literal[value=/^(item|entry|items|channel|rss|feed|guid|pubdate)$/i], TemplateLiteral[quasis.0.value.raw=/^<\\//]",
   message:
-    "Feed XML is read by @extractus/feed-extractor (app/lib/feeds/parse-feed.ts maps extractFromXml onto FeedItem) and a homepage <link> by one HTMLRewriter selector (app/lib/feeds/discover-feed.ts). Looking a feed tag up by name is a hand-rolled parser: one that imports nothing, so the fast-xml-parser import and XMLParser bans cannot see it, and one that must be re-audited against CDATA, entities, namespaces, case and hostile input forever. That is the parser #7000 deleted. The one tag name allowed here is dc:date, which the extractor does not surface; reach it through getExtraEntryFields as this file does, and add any other to the extractor instead. Source: 0509#7000.",
+    "Feed XML is read by @extractus/feed-extractor (app/lib/feeds/parse-feed.ts maps extractFromXml onto FeedItem) and a homepage <link> by one HTMLRewriter selector (app/lib/feeds/discover-feed.ts). Looking a feed tag up by name is a hand-rolled parser: one that imports nothing, so the fast-xml-parser import and XMLParser bans cannot see it, and one that must be re-audited against CDATA, entities, namespaces, case and hostile input forever. That is the parser #7000 deleted. getExtraEntryFields may read a parsed node's guid, id or link to pick a stable id and a human URL; it must not walk the XML string. Source: 0509#7000.",
 };
 
-// The tag-reader helpers themselves. A function whose body slices a string at a
-// tag offset is the scanner; banning the two shapes it was built from (a
-// close-tag template, a lower-cased copy of a document) catches the same code
-// before it is finished.
 const HAND_ROLLED_TAG_READER = {
   selector:
-    "CallExpression[callee.name=/^(openTagAt|elementAt|firstTag|findTag|parseTag|readTag|matchTag|unwrapCdata|stripTags|attributes)$/]",
+    "CallExpression[callee.name=/^(openTagAt|elementAt|firstTag|findTag|parseTag|readTag|matchTag|unwrapCdata|unmarkup|stripTags|attributes)$/]",
   message:
-    "A tag-reading helper is a hand-rolled parser. Feed XML is read by @extractus/feed-extractor and a homepage <link> by one HTMLRewriter selector (app/lib/feeds/discover-feed.ts). A local openTagAt/elementAt/stripTags/attributes has to re-derive CDATA, entities, namespaces and case, and the copy that sat beside the extractor for a year could not read RDF or dc:date. Source: 0509#7000.",
+    "A tag-reading helper is a hand-rolled parser. Feed XML is read by @extractus/feed-extractor and a homepage <link> by one HTMLRewriter selector (app/lib/feeds/discover-feed.ts). A local openTagAt/elementAt/stripTags/unmarkup/attributes has to re-derive CDATA, entities, namespaces and case, and the copy that sat beside the extractor could not read RDF or dc:date. Source: 0509#7000.",
+};
+
+const HAND_ROLLED_TAG_STRIP = {
+  selector: "Literal[regex.pattern=/<\\[\\^>\\]\\*>/]",
+  message:
+    "Stripping tags with /<[^>]*>/ is the incomplete sanitizer CodeQL flags and the stripTags helper #7000 deleted. Feed titles come from extractFromXml; HTML on a homepage is HTMLRewriter. Source: 0509#7000.",
 };
 
 // The one domain normaliser. The identity engine — app/lib/identity/normalise.ts
@@ -776,9 +778,8 @@ export default tseslint.config(
     // The feed read itself. A second parser in here cannot be reached by the
     // import ban (it needs no import) or the whole-repo tag ban (a "title"
     // elsewhere is a DOM property), so the tag ban is scoped to the module a
-    // feed parser can only live in. dc:date is the one name parse-feed.ts
-    // reaches for through getExtraEntryFields, and it is excluded above; the
-    // extractor does not surface it.
+    // feed parser can only live in. Extra fields may read a parsed guid, id or
+    // link node; they must not scan the XML string or strip tags.
     files: ["app/lib/feeds/**"],
     rules: {
       "no-restricted-syntax": [
@@ -789,6 +790,7 @@ export default tseslint.config(
         FEED_STATE_LITERAL,
         HAND_ROLLED_FEED_TAG_SCAN,
         HAND_ROLLED_TAG_READER,
+        HAND_ROLLED_TAG_STRIP,
       ],
     },
   },
