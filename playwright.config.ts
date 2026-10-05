@@ -40,6 +40,16 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
+  // #7012: two retries made a spec that failed once and passed on the second try
+  // count as green in the required preview-assert job, so the flake stayed hidden
+  // until it failed three times in a row in the queue. failOnFlakyTests keeps the
+  // retries -- the trace and the artifacts still land, which is why they are set
+  // at all -- and fails the run on a pass that needed one. Playwright's own doc
+  // form, and the stock option: CLI --fail-on-flaky-tests since 1.45,
+  // TestConfig.failOnFlakyTests since 1.52, and this repo pins @playwright/test
+  // ^1.63.0. The e2e lanes in e2e-scheduled.yml already pass --retries=0, so
+  // this is the only lane that could hide a flake.
+  failOnFlakyTests: !!process.env.CI,
   // https://playwright.dev/docs/ci#workers
   workers: process.env.PLAYWRIGHT_TEST_BASE_URL ? (process.env.CI ? 4 : undefined) : 1,
   reporter: process.env.CI ? "github" : "list",
