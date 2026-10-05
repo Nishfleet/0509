@@ -194,7 +194,7 @@ test.
 
 **This is designed here and built by a worker (#issue in §E), not by me**,
 because it needs a Sentry organisation created and a `SENTRY_DSN` Worker secret,
-and it adds a dependency row to `docs/REBUILD-STACK.md`. Two hard lines go in
+and it adds a dependency row to `docs/dependencies.md`. Two hard lines go in
 that packet: **Developer plan only, never a paid tier or a trial**, and the DSN
 is a Worker secret, never a repo file.
 
@@ -471,7 +471,7 @@ a required check that builds the Worker and runs the e2e suite at the PR head.
 
 Reviewers also check the two things no test checks: that
 `.agents/skills/verify/feature-map.md` matches `app/routes.ts` after a route change, and that
-every new dependency has a row in `docs/REBUILD-STACK.md`.
+every new dependency has a row in `docs/dependencies.md`.
 
 ### C2. The scout packet's gardener section
 

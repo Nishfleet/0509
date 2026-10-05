@@ -20,15 +20,10 @@ const confirmSchema = z.object({
   socials: socialsSchema,
 });
 
-function socials(form: FormData): { platform: string; url: unknown }[] {
-  return [...form.entries()]
+function socialsFrom(entries: Record<string, FormDataEntryValue>): { platform: string; url: unknown }[] {
+  return Object.entries(entries)
     .filter(([key]) => key.startsWith(SOCIAL_PREFIX))
     .map(([key, url]) => ({ platform: key.slice(SOCIAL_PREFIX.length), url }));
-}
-
-function field(form: FormData, name: string): string {
-  const value = form.get(name);
-  return typeof value === "string" ? value : "";
 }
 
 function creatorSite(socials: { platform: string; url: string }[]): Subject | null {
@@ -50,11 +45,12 @@ type ConfirmedCard = z.infer<typeof confirmSchema>;
 type CachedValues = Awaited<ReturnType<typeof readCachedSiteValues>>;
 
 function parseConfirm(form: FormData): { card: ConfirmedCard; subject: Subject } | null {
+  const entries = Object.fromEntries(form);
   const parsed = confirmSchema.safeParse({
-    subject: field(form, "subject"),
-    name: field(form, "name"),
-    description: field(form, "description"),
-    socials: socials(form),
+    subject: entries.subject,
+    name: entries.name,
+    description: entries.description,
+    socials: socialsFrom(entries),
   });
   if (!parsed.success) return null;
   const normalised = normaliseSubject(parsed.data.subject);
