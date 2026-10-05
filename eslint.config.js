@@ -497,9 +497,6 @@ const TAILWIND_DEFAULT_PALETTE = {
     "The Tailwind default palette is banned: every colour is a @theme token in app/app.css (bg-green is the one accent, DESIGN.md rule 8). Source: 0509#5871.",
 };
 
-const SHADCN_STOCK_TOKEN_CLASSES =
-  "(?:^|:)(?:bg|text|border|ring|fill|stroke)-(?:background|foreground|muted|muted-foreground|primary|primary-foreground|secondary|secondary-foreground|destructive|border|input|ring|popover|popover-foreground)(?:/[0-9]+)?$";
-
 const TW_ANIMATE_STOCK_CLASSES =
   "(?:^|:)(?:animate-in|animate-out|fade-in-0|fade-out-0|zoom-in-95|zoom-out-95|slide-in-from-(?:top|bottom|left|right)-2)$";
 
@@ -1226,16 +1223,16 @@ export default tseslint.config(
   // `(?:[^\s]*:)*` because a variant prefix is not always one word: this repo
   // writes `max-[859px]:`, `aria-[current=page]:` and `[&:hover]:`, and a
   // prefix pattern of `[a-z0-9-]+` let a banned colour hide behind all three.
-  // The `ui/` ignore list covers stock shadcn semantic tokens and
-  // tw-animate-css classes that are dead on main: the tokens are not in
-  // `@theme`, and registering them would start painting, a design change out
-  // of scope for this slice. 81 hits were probed on a74ad41 — 80 in
-  // app/components/ui/, one `cf-turnstile` in
-  // app/components/turnstile-widget.tsx, which is Cloudflare's widget class,
-  // never a Tailwind class. The `ui/` override is a later matching block
-  // because flat config replaces a rule's options per matching block: it
-  // widens `no-unknown-classes` only, and the strict block's
-  // restricted-classes and class-order settings stay in force there.
+  // The `ui/` ignore list keeps only the tw-animate-css classes (0509#7071):
+  // the stock shadcn semantic tokens used to be ignored here too, on the false
+  // premise that they were dead on main. They are not — DialogContent carries
+  // `bg-popover` — so those tokens are now aliased onto the house palette in
+  // app/app.css and this rule fails on any token without a mapping. tw-animate
+  // is a separate package the app never imports, so its classes stay ignored.
+  // The `ui/` override is a later matching block because flat config replaces a
+  // rule's options per matching block: it widens `no-unknown-classes` only, and
+  // the strict block's restricted-classes and class-order settings stay in force
+  // there.
   {
     files: ["app/**/*.{ts,tsx}"],
     plugins: { "better-tailwindcss": betterTailwindcss },
@@ -1254,10 +1251,7 @@ export default tseslint.config(
   {
     files: ["app/components/ui/**/*.tsx"],
     rules: {
-      "better-tailwindcss/no-unknown-classes": [
-        "error",
-        { ignore: [SHADCN_STOCK_TOKEN_CLASSES, TW_ANIMATE_STOCK_CLASSES] },
-      ],
+      "better-tailwindcss/no-unknown-classes": ["error", { ignore: [TW_ANIMATE_STOCK_CLASSES] }],
     },
   },
 );

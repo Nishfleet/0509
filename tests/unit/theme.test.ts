@@ -525,6 +525,49 @@ describe("the one stylesheet stays the one stylesheet (#3984)", () => {
     expect(css).not.toMatch(/border-radius:\s*(?:0\.[0-9]|[1-9])/);
   });
 
+  it("zeroes every step of the radius scale, not just --radius-none", async () => {
+    // #7071: `--radius-none: 0` alone left `rounded-sm/lg/xl` compiling to the
+    // Tailwind defaults (0.25rem / 0.5rem / 0.75rem), so any class carrying one
+    // quietly painted a round corner. DESIGN.md §3 says radius is 0 everywhere,
+    // so the scale is zeroed rather than one step of it.
+    const css = await readFile(path.join(REPO_ROOT, "app/app.css"), "utf8");
+    for (const step of ["none", "xs", "sm", "md", "lg", "xl", "2xl", "3xl", "4xl"]) {
+      expect(css, `--radius-${step} is not 0`).toContain(`--radius-${step}: 0px`);
+    }
+  });
+
+  it("maps every shadcn stock colour token onto a documented one", async () => {
+    // #7071: app/components/ui/ ships shadcn stock classes whose tokens had no
+    // declaration, so `bg-primary` compiled to nothing and the dialog, badge,
+    // toggle, textarea and select backgrounds all rendered transparent/black.
+    // The eslint no-unknown-classes guard (eslint.config.js) keeps this set
+    // complete, but it cannot say WHICH token each maps to, so the aliases are
+    // pinned here: a rename of --bone, or a re-aim of --color-primary at some
+    // other colour, fails here rather than repainting the product.
+    const css = await readFile(path.join(REPO_ROOT, "app/app.css"), "utf8");
+    const aliases: Record<string, string> = {
+      "--color-background": "--bone",
+      "--color-foreground": "--ink",
+      "--color-card": "--card",
+      "--color-card-foreground": "--ink",
+      "--color-popover": "--card",
+      "--color-popover-foreground": "--ink",
+      "--color-primary": "--green",
+      "--color-primary-foreground": "--on-green",
+      "--color-secondary": "--bone",
+      "--color-secondary-foreground": "--ink",
+      "--color-muted": "--bone",
+      "--color-muted-foreground": "--ink-soft",
+      "--color-destructive": "--red",
+      "--color-border": "--line",
+      "--color-input": "--line",
+      "--color-ring": "--ink",
+    };
+    for (const [stock, house] of Object.entries(aliases)) {
+      expect(css, `${stock} does not alias ${house}`).toContain(`${stock}: var(${house})`);
+    }
+  });
+
   it("wires the token names into root.tsx's font preload links", async () => {
     const root = await readFile(path.join(REPO_ROOT, "app/root.tsx"), "utf8");
     expect(root).toContain("bricolage-hero.woff2");
