@@ -74,11 +74,16 @@ describe("0051_drop_rate_limit_events.sql", () => {
   });
 
   it("closes the read and the write path, not only the table listing", async () => {
-    await expect(env.DB.prepare(`SELECT * FROM ${TABLE}`).all()).rejects.toThrow(/no such table/i);
-    await expect(
-      env.DB.prepare(`INSERT INTO ${TABLE} (id, bucket, subject, occurred_at) VALUES (?1, ?2, ?3, ?4)`)
+    // Each call sits in its own async function so a synchronous throw from
+    // prepare is a rejected promise to the matcher, never a raw throw that
+    // skips the assertion.
+    await expect(async () => {
+      await env.DB.prepare(`SELECT * FROM ${TABLE}`).all();
+    }).rejects.toThrow(/no such table/i);
+    await expect(async () => {
+      await env.DB.prepare(`INSERT INTO ${TABLE} (id, bucket, subject, occurred_at) VALUES (?1, ?2, ?3, ?4)`)
         .bind("rl-1", "bucket", "subject", "2026-10-06T00:00:00.000Z")
-        .run(),
-    ).rejects.toThrow(/no such table/i);
+        .run();
+    }).rejects.toThrow(/no such table/i);
   });
 });
