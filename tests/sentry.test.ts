@@ -21,6 +21,22 @@ describe("Sentry release and environment", () => {
     expect(deployed.release).toBe("version-abc");
     expect(deployed.environment).toBe("production");
   });
+
+  it("uses production when the version tag is empty", () => {
+    const deployed = sentryOptions({
+      CF_VERSION_METADATA: { id: "version-abc", tag: "", timestamp: "2026-10-05T00:00:00.000Z" },
+    });
+    expect(deployed.release).toBe("version-abc");
+    expect(deployed.environment).toBe("production");
+  });
+
+  it("uses the version tag as the environment when it is not empty", () => {
+    const preview = sentryOptions({
+      CF_VERSION_METADATA: { id: "version-abc", tag: "preview", timestamp: "2026-10-05T00:00:00.000Z" },
+    });
+    expect(preview.release).toBe("version-abc");
+    expect(preview.environment).toBe("preview");
+  });
 });
 
 afterEach(() => {

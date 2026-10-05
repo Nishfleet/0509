@@ -12,7 +12,7 @@ const SEEN_CAP = 2000;
 function releaseFrom(env: SentryEnv): Pick<CloudflareOptions, "release" | "environment"> {
   const version = env.CF_VERSION_METADATA;
   if (version === undefined) return {};
-  return { release: version.id, environment: "production" };
+  return { release: version.id, environment: version.tag === "" ? "production" : version.tag };
 }
 
 export const sentryOptions = (env: SentryEnv): CloudflareOptions => ({

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { healthResponse } from "../app/lib/observability/health.server";
 
@@ -13,6 +13,16 @@ function dbRejecting(error: Error): D1Database {
     prepare: () => ({ first: () => Promise.reject(error) }),
   } as unknown as D1Database;
 }
+
+function dbHanging(): D1Database {
+  return {
+    prepare: () => ({ first: () => new Promise(() => undefined) }),
+  } as unknown as D1Database;
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("/api/health", () => {
   it("answers ok after D1 returns 1", async () => {
@@ -37,6 +47,15 @@ describe("/api/health", () => {
 
   it("answers 503 when D1 rejects", async () => {
     const response = await healthResponse(dbRejecting(new Error("D1_ERROR")));
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ status: "error", app: "0509", d1: "error" });
+  });
+
+  it("answers 503 when D1 does not return in time", async () => {
+    vi.useFakeTimers();
+    const pending = healthResponse(dbHanging());
+    await vi.advanceTimersByTimeAsync(2_000);
+    const response = await pending;
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({ status: "error", app: "0509", d1: "error" });
   });

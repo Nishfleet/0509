@@ -60,7 +60,9 @@ export async function countVerdictsSince(
 
 export async function countVerdictsOnDay(db: D1Database, day: string): Promise<number> {
   const start = `${day}T00:00:00.000Z`;
-  const end = new Date(Date.parse(start) + 86_400_000).toISOString();
+  const startMs = Date.parse(start);
+  if (!Number.isFinite(startMs)) throw new Error("countVerdictsOnDay: day is not YYYY-MM-DD");
+  const end = new Date(startMs + 86_400_000).toISOString();
   const row = await db.prepare(COUNT_VERDICTS_ON_DAY).bind(start, end).first<{ n: number }>();
   return row?.n ?? 0;
 }
