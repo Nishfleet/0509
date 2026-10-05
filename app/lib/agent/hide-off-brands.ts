@@ -24,7 +24,7 @@ function lineNamesBrand(why: string, name: string): boolean {
   while (from <= why.length - name.length) {
     const at = why.indexOf(name, from);
     if (at === -1) return false;
-    const left = at === 0 ? "" : why[at - 1];
+    const left = why[at - 1] ?? "";
     const right = why[at + name.length] ?? "";
     if (!wordChar(left) && !wordChar(right)) return true;
     from = at + 1;
