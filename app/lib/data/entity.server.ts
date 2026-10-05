@@ -365,6 +365,11 @@ const INSERT_MANUAL_COMPETITOR =
 const COUNT_OTHER_ON =
   "SELECT count(*) AS n FROM entity WHERE workspace_id = ? AND role = 'competitor' AND state = 'on' AND domain <> ?";
 
+export async function countOtherOnCompetitors(workspaceId: string, domain: string): Promise<number | null> {
+  const row = await env.DB.prepare(COUNT_OTHER_ON).bind(workspaceId, domain).first<{ n: number }>();
+  return row === null ? null : row.n;
+}
+
 export async function addManualCompetitor(input: {
   workspaceId: string;
   domain: string;
