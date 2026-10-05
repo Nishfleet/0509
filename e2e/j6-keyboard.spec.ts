@@ -27,7 +27,7 @@ test.afterEach(async ({ page }, testInfo) => {
 // aria-describedby.
 //
 // Two lanes, one contract:
-// - production (PLAYWRIGHT_TEST_BASE_URL set, the deployment_status run): a
+// - production (PLAYWRIGHT_TEST_BASE_URL set, the e2e-scheduled.yml run): a
 //   real magic-link sign-in and the J3 onboarding, gymshark.com watched, the
 //   same journey competitor-page.spec.ts drives.
 // - preview (unset, the PR's own e2e run): the local Worker cannot mint a
