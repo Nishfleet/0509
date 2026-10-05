@@ -145,7 +145,6 @@ they name were plans and many never existed. The real layout is below.
   `competitor/`, `feeds/`, `hiring/`, `mentions/`, `standing/`, `agent/` for the
   API and MCP, `data/` for the table writers).
 - `app/lib/*.ts` — shared pure logic.
-- `app/lib/ads/` is retained code for a dropped feature (J10, #3974); do not extend it.
 - `app/lib/public-routes.ts` — the sitemap paths, robots.txt and llms.txt.
 - `workers/app.ts` — the Worker entry and the `scheduled` handler.
 - `workers/workflows/` — the Workflows (site, feed, hiring and mentions sweeps,
