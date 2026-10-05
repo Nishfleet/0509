@@ -3,7 +3,7 @@ import type { Route } from "./+types/onboarding";
 import { redirect } from "react-router";
 import { z } from "zod";
 
-import { requireFreshSession, requireSession } from "../lib/require-session.server";
+import { requireFreshSession, requireSession, signOutToLogin } from "../lib/require-session.server";
 import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 import { OneInput } from "../components/one-input";
 import { OnboardingFrame } from "../components/onboarding-frame";
@@ -28,7 +28,8 @@ export function headers() {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
-  const landing = await workspaceLandingForRequest(request, session.user);
+  const { landing, workspaceId } = await workspaceLandingForRequest(request, session.user);
+  if (workspaceId === null) return await signOutToLogin(request);
   if (landing === null || landing === ONBOARDING_COMPETITORS) throw redirect(landing ?? "/app");
   return { email: session.user.email };
 }

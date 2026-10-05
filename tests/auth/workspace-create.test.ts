@@ -11,6 +11,7 @@ import {
   ensureWorkspace,
   ensureWorkspaceForSignIn,
   firstWorkspaceId,
+  workspaceLanding,
   workspaceNameFromEmail,
   type WorkspaceDb,
 } from "../../app/lib/workspace.server";
@@ -41,6 +42,26 @@ function openDb(): DatabaseSync {
       is_verified INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       UNIQUE (workspace_id, channel_id, target_value)
+    );
+    CREATE TABLE entity (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      domain TEXT,
+      name TEXT,
+      identity_json TEXT,
+      origin TEXT,
+      confirmed_at TEXT,
+      state TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE onboarding_run (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      input_raw TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      watching_started_at TEXT
     );
   `);
   return database;
@@ -421,5 +442,55 @@ describe("ensureWorkspace", () => {
         now: "2026-09-22T12:00:00.000Z",
       }),
     ).resolves.toEqual(row);
+  });
+});
+
+describe("workspaceLanding", () => {
+  it("does not insert when the owner has no workspace", async () => {
+    const queries: string[] = [];
+    const db: WorkspaceDb = {
+      prepare(query: string) {
+        queries.push(query);
+        return {
+          bind() {
+            return {
+              async first<T>() {
+                return null as T | null;
+              },
+              async run() {
+                throw new Error("workspaceLanding must not write");
+              },
+            };
+          },
+        };
+      },
+    };
+
+    await expect(
+      workspaceLanding(db, {
+        userId: "user-gone",
+        timezone: "Asia/Kolkata",
+      }),
+    ).resolves.toEqual({ workspaceId: null, landing: null });
+    expect(queries.some((query) => query.includes("INSERT"))).toBe(false);
+  });
+
+  it("fills UTC from the landing read when a real zone arrives", async () => {
+    const database = openDb();
+    seedUser(database, "user-1", "ada@example.com");
+    const db = asWorkspaceDb(database);
+    await ensureWorkspace(db, {
+      userId: "user-1",
+      email: "ada@example.com",
+      timezone: null,
+      now: "2026-09-22T12:00:00.000Z",
+    });
+    await expect(workspaceLanding(db, { userId: "user-1", timezone: "Asia/Kolkata" })).resolves.toEqual({
+      workspaceId: firstWorkspaceId("user-1"),
+      landing: "/onboarding",
+    });
+    expect(database.prepare("SELECT timezone FROM workspace WHERE owner_user_id = 'user-1'").get()).toEqual({
+      timezone: "Asia/Kolkata",
+    });
   });
 });
