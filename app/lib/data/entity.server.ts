@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { readEntitlements } from "./plan.server";
+import { shouldRetryD1, tryWhile } from "./retries.server";
 
 const identitySocials = z.object({
   socials: z.array(z.object({ platform: z.string(), url: z.string() })).optional(),
@@ -141,10 +142,14 @@ export async function replaceCompetitorYoutube(input: {
 }): Promise<boolean> {
   const { workspaceId, entityId, url } = input;
   const social = JSON.stringify({ platform: "youtube", url });
-  const [updated] = await env.DB.batch([
-    env.DB.prepare(REPLACE_COMPETITOR_YOUTUBE).bind(entityId, workspaceId, social),
-    env.DB.prepare(RESET_YOUTUBE_WATCH).bind(entityId, workspaceId),
-  ]);
+  const [updated] = await tryWhile(
+    () =>
+      env.DB.batch([
+        env.DB.prepare(REPLACE_COMPETITOR_YOUTUBE).bind(entityId, workspaceId, social),
+        env.DB.prepare(RESET_YOUTUBE_WATCH).bind(entityId, workspaceId),
+      ]),
+    shouldRetryD1,
+  );
   return (updated?.meta.changes ?? 0) > 0;
 }
 
@@ -161,7 +166,10 @@ export async function setCompetitorState(input: {
 }): Promise<boolean> {
   const { workspaceId, entityId, state, now } = input;
   const cap = (await readEntitlements(workspaceId)).competitors;
-  const result = await env.DB.prepare(SET_COMPETITOR_STATE).bind(state, now, entityId, workspaceId, cap).run();
+  const result = await tryWhile(
+    () => env.DB.prepare(SET_COMPETITOR_STATE).bind(state, now, entityId, workspaceId, cap).run(),
+    shouldRetryD1,
+  );
   return result.meta.changes === 1;
 }
 
@@ -221,9 +229,13 @@ export async function insertSelfEntity(input: {
   identityJson: string;
   now: string;
 }): Promise<boolean> {
-  const result = await env.DB.prepare(INSERT_SELF)
-    .bind(input.id, input.workspaceId, input.domain, input.name, input.identityJson, input.now)
-    .run();
+  const result = await tryWhile(
+    () =>
+      env.DB.prepare(INSERT_SELF)
+        .bind(input.id, input.workspaceId, input.domain, input.name, input.identityJson, input.now)
+        .run(),
+    shouldRetryD1,
+  );
   return result.meta.changes > 0;
 }
 
@@ -361,9 +373,14 @@ export async function addManualCompetitor(input: {
   now: string;
   cap: number;
 }): Promise<"added" | "at_cap"> {
-  const result = await env.DB.prepare(INSERT_MANUAL_COMPETITOR)
-    .bind(crypto.randomUUID(), input.workspaceId, input.domain, input.name, input.now, input.cap, input.url)
-    .run();
+  const entityId = crypto.randomUUID();
+  const result = await tryWhile(
+    () =>
+      env.DB.prepare(INSERT_MANUAL_COMPETITOR)
+        .bind(entityId, input.workspaceId, input.domain, input.name, input.now, input.cap, input.url)
+        .run(),
+    shouldRetryD1,
+  );
   if (result.meta.changes === 1) return "added";
   const count = await env.DB.prepare(COUNT_OTHER_ON).bind(input.workspaceId, input.domain).first<{ n: number }>();
   if (count !== null && count.n >= input.cap) return "at_cap";

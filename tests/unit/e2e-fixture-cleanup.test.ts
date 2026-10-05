@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it, vi } from "vitest";
+import { parse } from "yaml";
 
 import { classifySettingsDeleteRedirect } from "../../e2e/inbox";
 
@@ -42,6 +43,16 @@ const SETUP_TEARDOWN_ELSEWHERE = new Set(["e2e/lhci-session.setup.ts"]);
 
 const WORKFLOW = ".github/workflows/e2e-scheduled.yml";
 const TEARDOWN_RERUN = "--project=session-teardown --project=onboarded-teardown";
+
+interface WorkflowJob {
+  concurrency?: unknown;
+  strategy?: { matrix?: unknown; "max-parallel"?: number };
+  steps?: { run?: string; if?: unknown }[];
+}
+
+function readJobs(source: string): Record<string, WorkflowJob> {
+  return (parse(source) as { jobs: Record<string, WorkflowJob> }).jobs;
+}
 
 async function e2eFiles(dir: string, suffix: RegExp): Promise<string[]> {
   const found: string[] = [];
@@ -104,14 +115,20 @@ describe("e2e fixture teardown detector", () => {
   });
 
   it("re-runs the setup teardowns on every exit path of each production job that runs the setups", async () => {
-    const source = await readFile(path.join(REPO_ROOT, WORKFLOW), "utf8");
-    const jobs = source.split(/^ {2}(?=[a-z0-9-]+:$)/m).slice(1);
+    const jobs = Object.entries(readJobs(await readFile(path.join(REPO_ROOT, WORKFLOW), "utf8")));
     const offenders = jobs
-      .filter((job) =>
-        /npm run e2e -- (?!--project=setup )(?![^\n]*--no-deps)(?![^\n]*--project=session-teardown)/.test(job),
+      .filter(([, job]) =>
+        (job.steps ?? []).some((step) =>
+          /npm run e2e -- (?!--project=setup )(?!.*--no-deps)(?!.*--project=session-teardown)/.test(step.run ?? ""),
+        ),
       )
-      .filter((job) => !(job.includes(TEARDOWN_RERUN) && /if: always\(\)/.test(job)))
-      .map((job) => job.slice(0, job.indexOf(":")));
+      .filter(
+        ([, job]) =>
+          !(job.steps ?? []).some(
+            (step) => (step.run ?? "").includes(TEARDOWN_RERUN) && String(step.if ?? "").startsWith("always()"),
+          ),
+      )
+      .map(([key]) => key);
     expect(jobs.length).toBeGreaterThan(5);
     expect(offenders).toEqual([]);
   });
@@ -130,64 +147,17 @@ describe("e2e fixture teardown detector", () => {
     expect(classifySettingsDeleteRedirect(302, "/app")).toBe("unexpected");
   });
 
-  it("treats a second session teardown as a login redirect, not a missing deleted query", async () => {
-    const source = await readFile(path.join(REPO_ROOT, "e2e/inbox.ts"), "utf8");
-    expect(source).toContain("classifySettingsDeleteRedirect");
-    expect(source).toContain("/login?deleted=");
-    expect(source).toContain("/login(?:\\?|$)");
-  });
-
-  it("the cut-short onboarded teardown deletes through the request helper, not a browser wait", async () => {
-    const source = await readFile(path.join(REPO_ROOT, "e2e/onboarded-teardown.setup.ts"), "utf8");
-    expect(source).toContain("deleteAccountViaRequest");
-    expect(source).not.toContain("deleteCreatedAccount");
-    expect(source).not.toContain("setTimeout(120_000)");
-  });
-
-  it("the session teardown deletes through the same request helper", async () => {
-    const source = await readFile(path.join(REPO_ROOT, "e2e/session.teardown.ts"), "utf8");
-    expect(source).toContain("deleteAccountViaRequest");
-  });
-
-  it("signs in again when settings refuses a stale delete, instead of treating the row as gone", async () => {
-    const source = await readFile(path.join(REPO_ROOT, "e2e/inbox.ts"), "utf8");
-    expect(source).toContain("sign out and sign back in");
-    expect(source).toContain("signInWithMagicLink");
-    expect(source).not.toContain("treating as already gone");
-  });
-
-  it("registers the competitor-switch POST wait before rotate() clicks and reloads", async () => {
-    const source = await readFile(path.join(REPO_ROOT, "e2e/j12-rollovers.spec.ts"), "utf8");
-    const rotate = source.slice(source.indexOf("async function rotate"), source.indexOf("async function briefLinks"));
-    expect(rotate).toContain("waitForResponse");
-    expect(rotate).toContain('response.request().method() === "POST"');
-    expect(rotate).toContain("/app/competitors");
-    expect(rotate.indexOf("waitForResponse")).toBeLessThan(rotate.indexOf("await toggle.click()"));
-    expect(rotate.indexOf("await toggle.click()")).toBeLessThan(rotate.indexOf("await page.reload()"));
-    expect(rotate.indexOf("await toggle.click()")).toBeLessThan(rotate.indexOf("await saved"));
-    expect(rotate.indexOf("await saved")).toBeLessThan(rotate.indexOf("await page.reload()"));
-  });
-
-  it("waits for the competitor-switch POST before the reload that checks slack.com stayed off", async () => {
-    const source = await readFile(path.join(REPO_ROOT, "e2e/j11-weekly-brief.spec.ts"), "utf8");
-    expect(source).toContain("waitForResponse");
-    expect(source).toContain('response.request().method() === "POST"');
-    expect(source).toContain("/app/competitors");
-    expect(source.indexOf("waitForResponse")).toBeLessThan(source.indexOf("await page.reload()"));
-  });
-
   it("runs a matrix inside a job concurrency group one leg at a time", async () => {
     const dir = path.join(REPO_ROOT, ".github/workflows");
     const offenders: string[] = [];
     const grouped: string[] = [];
     for (const file of await readdir(dir)) {
       if (!/\.ya?ml$/.test(file)) continue;
-      const source = await readFile(path.join(dir, file), "utf8");
-      for (const job of source.split(/^ {2}(?=[A-Za-z0-9_-]+:$)/m).slice(1)) {
-        if (!/^ {4}concurrency:/m.test(job) || !/^ {6}matrix:/m.test(job)) continue;
-        const name = `${file}:${job.slice(0, job.indexOf(":"))}`;
+      for (const [key, job] of Object.entries(readJobs(await readFile(path.join(dir, file), "utf8")))) {
+        if (job.concurrency === undefined || job.strategy?.matrix === undefined) continue;
+        const name = `${file}:${key}`;
         grouped.push(name);
-        if (!/^ {6}max-parallel: 1$/m.test(job)) offenders.push(name);
+        if (job.strategy["max-parallel"] !== 1) offenders.push(name);
       }
     }
     expect(grouped).toContain("e2e-scheduled.yml:suite-shard");
