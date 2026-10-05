@@ -101,7 +101,7 @@ Signing in locally needs the `--var` overrides in `.agents/skills/verify/SKILL.m
 `PLAYWRIGHT_TEST_BASE_URL` unset, `playwright.config.ts` starts `wrangler dev`
 itself and tests the built Worker — that is what `preview-assert` runs on every
 PR. With it set, there is no local server and the suite runs against that URL —
-that is what the `deployment_status` job runs against production. Same
+that is what the `e2e-scheduled.yml` jobs run against production. Same
 assertions both times.
 
 **Run it before the PR opens.** A diff that touches only `docs/` or `.agents/` runs `npx prettier --check` on the changed files and nothing else. A change under `app/`, `workers/` or `e2e/`
@@ -174,6 +174,10 @@ bypass list**:
 Gitleaks   codex-node-checks   semgrep   preview-assert
 ```
 
+`ci-ok` in `ci.yml` needs all four and fails if any failed or was cancelled,
+so the ruleset can require it alone (0509#7013). Until the ruleset swaps the
+four for `ci-ok`, the rule below still holds.
+
 Renaming one of these is not cosmetic. A required check that never reports fails
 closed and nothing can merge again, including the PR that renamed it. A
 _skipped_ required check counts as passing, so none of these four carries a
@@ -184,7 +188,7 @@ AI grader: CI is the gate, and a PR that touches `.github/`, `migrations/`,
 `app/lib/auth*` or `app/lib/data/` is labelled `needs-coordinator` and the
 coordinator reviews it before it merges.
 
-`lighthouse` runs on `deployment_status` and `e2e-production` (the sharded full
+`lighthouse` runs in `deploy-production.yml` after the deploy job, and `e2e-production` (the sharded full
 suite in `e2e-scheduled.yml`, dispatched with `journey=suite`) runs on demand. To run one spec against production from any branch, dispatch
 `e2e-scheduled.yml` on that ref with the `spec` input (`e2e/<name>.spec.ts`).
 Neither is **required**, deliberately: they cannot run on a pull request, and a

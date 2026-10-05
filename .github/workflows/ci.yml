@@ -5,34 +5,24 @@
 # fails closed and nothing can merge, including the PR that renamed it.
 # Verified against the live ruleset (id 21391031) before this file was written.
 #
-# Every required job runs on pull_request, merge_group and deployment_status:
-# the queue evaluates checks on the merge ref, so a job that skips there gives
-# the queue no verdict, and on GitHub a skipped required check counts as
-# passing (#4664): no required job may carry a job-level `if:` that can skip
-# it; tests/required-checks-never-skip.test.ts pins it. On an event where a job has
-# nothing to do it runs one explicit pass step.
+# Every required job runs on pull_request and merge_group: the queue evaluates
+# checks on the merge ref, so a job that skips there gives the queue no verdict,
+# and on GitHub a skipped required check counts as passing (#4664): no required
+# job may carry a job-level `if:` that can skip it;
+# tests/required-checks-never-skip.test.ts pins it. `ci-ok` aggregates the four
+# so the ruleset can require it alone (0509#7013).
+#
+# Lighthouse against production runs in deploy-production.yml after the deploy
+# job, so this workflow has no deployment_status trigger (0509#7013).
 name: CI
 
-# `deployment_status` is the third trigger and it is the stock one: Cloudflare
-# Workers Builds emit GitHub deployments, so lighthouse fires on the real deploy
-# with no polling; the full production e2e no longer does (its sign-ins send
-# real emails against a spent daily quota) and runs from e2e-scheduled.yml. https://playwright.dev/docs/ci#on-deployment
-# The required jobs report on every event and pass explicitly on a deployment
-# they have nothing to say about (#4664).
 on:
   pull_request:
   merge_group:
-  deployment_status:
 
 concurrency:
-  # A deployment_status run verifies one deploy and must finish. Sharing the
-  # branch group with cancel-in-progress cancelled every production run that day:
-  # each deploy emits pending, in_progress and success events, each a run, and
-  # merges 90 s apart cancelled the previous deploy's run (35754511999, 35754574851
-  # and four more, all "cancelled", 16:29-16:31Z), which is why lighthouse keeps it. PR and queue runs keep the
-  # branch group so a superseded head is still cancelled.
-  group: ci-${{ github.event_name == 'deployment_status' && github.run_id || github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'deployment_status' }}
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -46,23 +36,19 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: github.event_name != 'deployment_status'
         with:
           persist-credentials: false
           # Two commits so HEAD^1 (the base side of the PR merge ref) exists
           # for `vitest --changed` below.
           fetch-depth: 2
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: github.event_name != 'deployment_status'
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-        if: github.event_name != 'deployment_status'
       - name: Typecheck
         # cf-typegen and react-router typegen generate worker-configuration.d.ts
         # and the route types, so `tsc -b` cannot run before them.
-        if: github.event_name != 'deployment_status'
         run: npm run typecheck
       - name: Lint
         # Rung 2 of the correction ladder (docs/REBUILD-TRUST.md B): every
@@ -70,12 +56,10 @@ jobs:
         # sentence in a doc. `npm run lint` is `eslint . && knip` — the rules
         # and the dead-code finder in one gate. It runs after typecheck because
         # typed lint rules need the generated route types that typecheck emits.
-        if: github.event_name != 'deployment_status'
         run: npm run lint
       - name: Lint the workflows (actionlint)
         # Stock linter for workflow syntax, expressions and the shell inside
         # run: blocks (shellcheck ships in the image). Pinned like gitleaks.
-        if: github.event_name != 'deployment_status'
         uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
         with:
           args: -color
@@ -84,7 +68,6 @@ jobs:
         # injection, persisted credentials, unpinned actions, over-broad app
         # tokens. Offline: a required gate must not hang on API rate limits, and
         # the step needs no token. Policy and its exceptions: .github/zizmor.yml.
-        if: github.event_name != 'deployment_status'
         uses: docker://ghcr.io/zizmorcore/zizmor:1.30.1@sha256:a2eb396d886c053073405c7a980f2139ba2248ec172243cfa3841e57196e8101
         with:
           args: --offline --format plain .github/workflows
@@ -113,11 +96,7 @@ jobs:
         if: github.event_name == 'merge_group'
         run: npx vitest run --project node --coverage
       - name: Build
-        if: github.event_name != 'deployment_status'
         run: npm run build
-      - name: Nothing to check on a deployment event
-        if: github.event_name == 'deployment_status'
-        run: "true"
 
   Gitleaks:
     name: Gitleaks
@@ -130,7 +109,6 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: github.event_name != 'deployment_status'
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -138,12 +116,8 @@ jobs:
       # that demands an organisation licence and aborts without one. Run the
       # official image directly — no wrapper action, no script.
       - uses: docker://ghcr.io/gitleaks/gitleaks:v8.29.0@sha256:71d3ee5990f2176f763b438298453fc37e87b119122045e176ca9d44ff00b08b
-        if: github.event_name != 'deployment_status'
         with:
           args: detect --source . --redact --exit-code 1
-      - name: Nothing to scan on a deployment event
-        if: github.event_name == 'deployment_status'
-        run: "true"
 
   semgrep:
     name: semgrep
@@ -156,20 +130,14 @@ jobs:
       image: semgrep/semgrep:1.170.0@sha256:c98f8829eea377274ee4b10656458b078b88232469b2ff913f091c2317347c9d
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: github.event_name != 'deployment_status'
         with:
           persist-credentials: false
       # `semgrep ci` is the hosted mode and needs SEMGREP_APP_TOKEN, exiting 2
       # without one. `semgrep scan` is the local mode and needs nothing.
       - run: semgrep scan --config p/typescript --config p/security-audit --config .semgrep/rollover-catch-up.yml --config https://raw.githubusercontent.com/Nishfleet/fleet-ops/main/.semgrep/no-glue.yml --error
-        if: github.event_name != 'deployment_status'
       # Keep the local rule's fixture honest: --test fails if ruleid:/ok:
       # annotations in .semgrep/<rule>.ts stop matching what the rule fires on.
       - run: semgrep scan --test --config .semgrep/rollover-catch-up.yml .semgrep/rollover-catch-up.ts
-        if: github.event_name != 'deployment_status'
-      - name: Nothing to scan on a deployment event
-        if: github.event_name == 'deployment_status'
-        run: "true"
 
   preview-assert:
     name: preview-assert
@@ -182,15 +150,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: github.event_name != 'deployment_status'
         with:
           persist-credentials: false
           fetch-depth: 2
-      - name: Nothing to assert on a deployment event
-        # A deployment_status run has nothing to assert against a preview, but
-        # the check is required, so it passes here as one explicit step (#4664).
-        if: github.event_name == 'deployment_status'
-        run: "true"
       - name: Skip the browser suites when the pull request touches only docs and unit tests
         # A required check from a path-filtered workflow stays Pending and blocks the PR,
         # so the filter lives here and the job still reports (#5381). merge_group always runs.
@@ -198,27 +160,27 @@ jobs:
         if: github.event_name == 'pull_request'
         run: if git diff --quiet HEAD^1 HEAD -- . ':(exclude)docs' ':(exclude)tests' ':(exclude).agents' ':(exclude)*.md'; then echo skip=true >> "$GITHUB_OUTPUT"; fi
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: github.event_name != 'deployment_status' && steps.scope.outputs.skip != 'true'
+        if: steps.scope.outputs.skip != 'true'
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-        if: github.event_name != 'deployment_status' && steps.scope.outputs.skip != 'true'
+        if: steps.scope.outputs.skip != 'true'
       - name: Build the Worker as the deploy would
-        if: github.event_name != 'deployment_status' && steps.scope.outputs.skip != 'true'
+        if: steps.scope.outputs.skip != 'true'
         run: npm run build
 
       - name: Assert Home's JavaScript budget from the build manifest
-        if: github.event_name != 'deployment_status' && steps.scope.outputs.skip != 'true'
+        if: steps.scope.outputs.skip != 'true'
         # 0509#4134, docs/REBUILD-DONE.md §B and DESIGN.md §10: /app ratchets toward 150 KB gzipped (#5216), the chart stays under 30 KB.
         run: npx vitest run --config vitest.bundle.config.ts
 
       - name: Install the browser Playwright will drive
-        if: github.event_name != 'deployment_status' && steps.scope.outputs.skip != 'true'
+        if: steps.scope.outputs.skip != 'true'
         run: npx playwright install --with-deps chromium
 
       - name: Run the e2e suite against the built Worker
-        if: github.event_name != 'deployment_status' && steps.scope.outputs.skip != 'true'
+        if: steps.scope.outputs.skip != 'true'
         # This replaced a curl-and-grep loop against /api/health. The proof is
         # the same shape — build it, run it, ask it — but now the agent that
         # wrote the change runs the same suite a user's browser would, and a
@@ -229,8 +191,8 @@ jobs:
         run: npm run e2e
 
       - name: Collect Lighthouse against the built Worker
-        if: github.event_name != 'deployment_status' && steps.scope.outputs.skip != 'true'
-        # Same budgets as the deployment_status lighthouse audit, on the PR, so a
+        if: steps.scope.outputs.skip != 'true'
+        # Same budgets as the production lighthouse audit, on the PR, so a
         # regression is red before merge (poteto 03:24: a trace per change, not
         # per deploy; #4224). lhci starts wrangler dev itself: start-server-command
         # and the ready pattern are stock lhci flags. No loop, no script.
@@ -243,9 +205,9 @@ jobs:
         run: P=$((18000 + $$ % 1000)); npx --yes @lhci/cli@0.15.1 collect --url=http://127.0.0.1:$P/ --url=http://127.0.0.1:$P/design/landing --start-server-command="npx wrangler dev --env-file .dev.vars.example --port $P --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
 
       - name: Assert the Lighthouse budgets
-        if: github.event_name != 'deployment_status' && steps.scope.outputs.skip != 'true'
+        if: steps.scope.outputs.skip != 'true'
         # lighthouse-budget.pr.json is the deterministic subset of the fleet budget (fleet-ops config/lighthouserc.json):
-        # resource sizes and CLS. The timing rows (LCP, TTI) stay on the deployment_status
+        # resource sizes and CLS. The timing rows (LCP, TTI) stay on the production
         # job: on a shared runner the unchanged page measured LCP 1657 one run and under
         # 1500 the run before (35748475565 vs 35746328688), and a required check that
         # flips on runner load is not a gate. Production still enforces every row.
@@ -261,73 +223,18 @@ jobs:
             test-results/
           retention-days: 7
 
-  lighthouse:
-    name: lighthouse
-    # The performance half of verification (talk 14:30): correctness says the
-    # feature works, this says it is still fast. The audit and its budgets are
-    # the fleet's, defined once in fleet-ops (lighthouse.yml and
-    # config/lighthouserc.json); this repo passes only the URLs, so no change
-    # here can loosen them. Called at @main on purpose, like the agent-dispatch
-    # stub: .github/zizmor.yml. Not required: it cannot run on a pull request.
-    if: github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success'
-    permissions:
-      contents: read
-    uses: Nishfleet/fleet-ops/.github/workflows/lighthouse.yml@main
-    with:
-      # The public pages: no Access, no session, so a deploy sends no
-      # email and needs no secret. /design/landing is the staged homepage
-      # (the landing LCP bar in docs/REBUILD-DONE.md B) and is public until
-      # 0509#4834 moves it to /. The signed-in pages are measured by the
-      # scheduled suite once 0509#6034 lands.
-      urls: |
-        ${{ github.event.deployment_status.environment_url }}/
-        ${{ github.event.deployment_status.environment_url }}/privacy
-        ${{ github.event.deployment_status.environment_url }}/terms
-        ${{ github.event.deployment_status.environment_url }}/design/landing
-
-  lighthouse-report:
-    name: lighthouse-report
-    # What this repo does with the called audit's verdict: open the issue that
-    # dispatches the fix when it is red, close it when it is green. Its own job
-    # because a job that calls a reusable workflow has no steps, and so that
-    # issues: write and actions: write are held by this job and not the audit.
-    needs: [lighthouse]
-    if: always() && github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success'
+  ci-ok:
+    name: ci-ok
+    # One verdict over every gate job, so the ruleset can require this check
+    # alone and a gate job may skip or shard without passing by skipping
+    # (0509#7013). always() makes it report even when a needed job fails.
+    needs: [codex-node-checks, Gitleaks, semgrep, preview-assert]
+    if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      issues: write
-      actions: write
+    timeout-minutes: 2
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Open or update the issue that dispatches the fix
-        if: needs.lighthouse.result == 'failure' || needs.lighthouse.result == 'cancelled'
-        id: red
-        uses: JasonEtco/create-an-issue@1b14a70e4d8dc185e5cc76d3bec9eab20257b2c5 # v2.9.2
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          SHA: ${{ github.event.deployment.sha }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        with:
-          filename: .github/red-main/lighthouse.md
-          update_existing: true
-          search_existing: open
-      - name: Hand the issue to a worker
-        # A GITHUB_TOKEN label fires no workflow, so dispatch by number;
-        # agent.yml's Gate sizes it. needs-split alone left #4620 unworked.
-        if: (needs.lighthouse.result == 'failure' || needs.lighthouse.result == 'cancelled') && steps.red.outputs.number
-        env:
-          GH_TOKEN: ${{ github.token }}
-          N: ${{ steps.red.outputs.number }}
-        run: gh workflow run agent-dispatch.yml --repo "$GITHUB_REPOSITORY" -f issue="$N"
-      - name: Close the issue once this check is green again
-        if: needs.lighthouse.result == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search '"lighthouse red on main" in:title' --json number --jq '.[0].number // empty')
-          [ -z "$N" ] || gh issue close "$N" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Green again on $RUN_URL."
+      - name: Fail when a gate job failed or was cancelled
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - name: Every gate job passed or skipped
+        run: "true"

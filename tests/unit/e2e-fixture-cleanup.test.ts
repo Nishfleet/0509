@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it, vi } from "vitest";
+import { parse } from "yaml";
 
 import { classifySettingsDeleteRedirect } from "../../e2e/inbox";
 
@@ -42,6 +43,16 @@ const SETUP_TEARDOWN_ELSEWHERE = new Set(["e2e/lhci-session.setup.ts"]);
 
 const WORKFLOW = ".github/workflows/e2e-scheduled.yml";
 const TEARDOWN_RERUN = "--project=session-teardown --project=onboarded-teardown";
+
+interface WorkflowJob {
+  concurrency?: unknown;
+  strategy?: { matrix?: unknown; "max-parallel"?: number };
+  steps?: { run?: string; if?: unknown }[];
+}
+
+function readJobs(source: string): Record<string, WorkflowJob> {
+  return (parse(source) as { jobs: Record<string, WorkflowJob> }).jobs;
+}
 
 async function e2eFiles(dir: string, suffix: RegExp): Promise<string[]> {
   const found: string[] = [];
@@ -104,14 +115,20 @@ describe("e2e fixture teardown detector", () => {
   });
 
   it("re-runs the setup teardowns on every exit path of each production job that runs the setups", async () => {
-    const source = await readFile(path.join(REPO_ROOT, WORKFLOW), "utf8");
-    const jobs = source.split(/^ {2}(?=[a-z0-9-]+:$)/m).slice(1);
+    const jobs = Object.entries(readJobs(await readFile(path.join(REPO_ROOT, WORKFLOW), "utf8")));
     const offenders = jobs
-      .filter((job) =>
-        /npm run e2e -- (?!--project=setup )(?![^\n]*--no-deps)(?![^\n]*--project=session-teardown)/.test(job),
+      .filter(([, job]) =>
+        (job.steps ?? []).some((step) =>
+          /npm run e2e -- (?!--project=setup )(?!.*--no-deps)(?!.*--project=session-teardown)/.test(step.run ?? ""),
+        ),
       )
-      .filter((job) => !(job.includes(TEARDOWN_RERUN) && /if: always\(\)/.test(job)))
-      .map((job) => job.slice(0, job.indexOf(":")));
+      .filter(
+        ([, job]) =>
+          !(job.steps ?? []).some(
+            (step) => (step.run ?? "").includes(TEARDOWN_RERUN) && String(step.if ?? "").startsWith("always()"),
+          ),
+      )
+      .map(([key]) => key);
     expect(jobs.length).toBeGreaterThan(5);
     expect(offenders).toEqual([]);
   });
@@ -182,12 +199,11 @@ describe("e2e fixture teardown detector", () => {
     const grouped: string[] = [];
     for (const file of await readdir(dir)) {
       if (!/\.ya?ml$/.test(file)) continue;
-      const source = await readFile(path.join(dir, file), "utf8");
-      for (const job of source.split(/^ {2}(?=[A-Za-z0-9_-]+:$)/m).slice(1)) {
-        if (!/^ {4}concurrency:/m.test(job) || !/^ {6}matrix:/m.test(job)) continue;
-        const name = `${file}:${job.slice(0, job.indexOf(":"))}`;
+      for (const [key, job] of Object.entries(readJobs(await readFile(path.join(dir, file), "utf8")))) {
+        if (job.concurrency === undefined || job.strategy?.matrix === undefined) continue;
+        const name = `${file}:${key}`;
         grouped.push(name);
-        if (!/^ {6}max-parallel: 1$/m.test(job)) offenders.push(name);
+        if (job.strategy["max-parallel"] !== 1) offenders.push(name);
       }
     }
     expect(grouped).toContain("e2e-scheduled.yml:suite-shard");
