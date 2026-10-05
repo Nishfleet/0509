@@ -1,6 +1,7 @@
 import type { Route } from "./+types/oauth.authorize";
 
 import { useNavigation } from "react-router";
+import { z } from "zod";
 
 import { Button } from "../components/ui/button";
 import { oauthHelpersContext } from "../lib/agent/context.server";
@@ -23,6 +24,8 @@ function returnTo(request: Request): string {
   return `${url.pathname}${url.search}`;
 }
 
+const consentForm = z.object({ decision: z.string().optional() });
+
 export async function loader({ request, context }: Route.LoaderArgs) {
   await requireFreshSession(request, returnTo(request));
   return readConsent(context.get(oauthHelpersContext), request);
@@ -30,10 +33,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 export async function action({ request, context }: Route.ActionArgs) {
   const session = await requireFreshSession(request, returnTo(request));
-  const form = await request.formData();
+  const parsed = consentForm.safeParse(Object.fromEntries(await request.formData()));
   return decideConsent(context.get(oauthHelpersContext), request, {
     userId: session.user.id,
-    allow: form.get("decision") === "allow",
+    allow: parsed.success && parsed.data.decision === "allow",
   });
 }
 

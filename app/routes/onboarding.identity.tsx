@@ -3,6 +3,7 @@ import type { Route } from "./+types/onboarding.identity";
 
 import { captureException } from "@sentry/cloudflare";
 import { data, redirect } from "react-router";
+import { z } from "zod";
 
 import { IdentityCard } from "../components/identity-card";
 import { OnboardingFrame } from "../components/onboarding-frame";
@@ -28,6 +29,8 @@ export function headers({ loaderHeaders }: Route.HeadersArgs) {
 export function meta() {
   return [{ title: "Check your details · Five to Nine" }];
 }
+
+const identityActionForm = z.object({ subject: z.string().optional() });
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const timings = createTimings();
@@ -66,8 +69,9 @@ export async function action({ request, context }: Route.ActionArgs) {
   if (workspaceId === null) throw redirect("/onboarding");
   const form = await request.formData();
   if (await applyDraftIntent(workspaceId, form)) return null;
-  const rawSubject = form.get("subject");
-  if (typeof rawSubject === "string") {
+  const parsedSubject = identityActionForm.safeParse(Object.fromEntries(form));
+  const rawSubject = parsedSubject.success ? parsedSubject.data.subject : undefined;
+  if (rawSubject !== undefined) {
     const normalised = normaliseSubject(rawSubject);
     if (normalised.ok) {
       if (!(await timings.measure("limit", withinProbeLimit(session.user.id)))) {

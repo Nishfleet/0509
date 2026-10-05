@@ -342,6 +342,12 @@ const ENV_DB_IN_ROUTES = {
   message: "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
 };
 
+const FORM_GET_BAN = {
+  selector: "CallExpression[callee.property.name='get'][callee.object.name=/^(form|formData)$/]",
+  message:
+    "Parse form input with a zod schema next to the action; do not read formData.get by hand. Source: 0509#7027.",
+};
+
 const STATIC_HOME_HTML_PARSER = {
   meta: { name: "static-home-html" },
   parse(text) {
@@ -578,7 +584,14 @@ export default tseslint.config(
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
     ignores: ["app/lib/data/**", "workers/e2e-inbox.ts", "workers/fixture-site.ts"],
     rules: {
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, RAW_DML_WRITER, FEED_STATE_LITERAL],
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX,
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+        FORM_GET_BAN,
+      ],
     },
   },
 
@@ -623,6 +636,24 @@ export default tseslint.config(
         ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  {
+    // Identity *.server.ts still exempts DOMAIN_HOSTNAME_BAN (the engine lives
+    // here) and adds FORM_GET_BAN so confirm/card-draft cannot read form.get by
+    // hand. card-fields.ts stays on the block above: isDraftSave reads pending
+    // formData for shouldRevalidate, not action input. 0509#7027, 0509#7033.
+    files: ["app/lib/identity/**/*.server.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== DOMAIN_HOSTNAME_BAN),
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+        FORM_GET_BAN,
       ],
     },
   },
@@ -1013,6 +1044,7 @@ export default tseslint.config(
         RAW_DML_WRITER,
         ENV_DB_IN_ROUTES,
         FEED_STATE_LITERAL,
+        FORM_GET_BAN,
       ],
     },
   },

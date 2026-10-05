@@ -424,7 +424,7 @@ async function statementsForWatch(input: {
   watch: WatchRow;
   context: DiscoveryContext;
   items: readonly MentionItem[];
-  snapshot: { r2Key: string; hash: string };
+  snapshot: { r2Key: null; hash: string };
   canaryCount: number | null;
   now: string;
 }): Promise<{ statements: D1PreparedStatement[]; stored: number; unjudged: number }> {
@@ -476,18 +476,15 @@ async function advanceCursor(pluginKey: string, watchId: string, items: readonly
   if (isHnPlugin(pluginKey) && cursor !== null) await advanceHnCursor(watchId, cursor);
 }
 
-async function putMentionBody(pluginKey: string, rawBody: string): Promise<{ r2Key: string; hash: string }> {
-  const hash = await sha256Hex(rawBody);
-  const r2Key = `snapshot/mentions/${pluginKey}/${hash}`;
-  await env.SNAPSHOTS.put(r2Key, rawBody, { httpMetadata: { contentType: "application/octet-stream" } });
-  return { r2Key, hash };
+async function hashMentionBody(rawBody: string): Promise<{ r2Key: null; hash: string }> {
+  return { r2Key: null, hash: await sha256Hex(rawBody) };
 }
 
 async function commitMentionWatch(input: {
   watch: WatchRow;
   context: DiscoveryContext;
   items: readonly MentionItem[];
-  snapshot: { r2Key: string; hash: string };
+  snapshot: { r2Key: null; hash: string };
   canaryCount: number | null;
   now: string;
 }): Promise<{ stored: number; unjudged: number }> {
@@ -533,7 +530,6 @@ async function flagNoChannel(watchId: string, now: string): Promise<void> {
 }
 
 interface YoutubeRun {
-  pluginKey: string;
   now: string;
   canaryCount: number | null;
 }
@@ -545,7 +541,7 @@ async function commitYoutubeFeed(input: {
   channelId: string;
 }): Promise<TargetOutcome> {
   const { watch, feed, run, channelId } = input;
-  const { pluginKey, now, canaryCount } = run;
+  const { now, canaryCount } = run;
   const current = await requireWatchConfigJson(watch.watch_id);
   const currentConfig = readWatchConfig(current);
   if (
@@ -557,7 +553,7 @@ async function commitYoutubeFeed(input: {
   ) {
     await writeWatchConfigJson(watch.watch_id, withResolvedChannel(current, channelId));
   }
-  const snapshot = await putMentionBody(pluginKey, feed.rawBody);
+  const snapshot = await hashMentionBody(feed.rawBody);
   const context = await readDiscoveryContext(watch.workspace_id);
   if (context === null) return { items: feed.items.length, stored: 0, unjudged: 0, skipped: 0 };
   const committed = await commitMentionWatch({
@@ -644,7 +640,7 @@ async function sweepYoutubeTarget(
   let skipped = 0;
   for (const [index, watch] of target.watches.entries()) {
     try {
-      const outcome = await sweepOneYoutube(watch, { pluginKey: target.pluginKey, now, canaryCount });
+      const outcome = await sweepOneYoutube(watch, { now, canaryCount });
       items += outcome.items;
       stored += outcome.stored;
       unjudged += outcome.unjudged;
@@ -675,7 +671,7 @@ export async function sweepTarget(
     if (adapter === undefined) throw new Error(`no mentions adapter for ${target.pluginKey}`);
     const result = await adapter({ query: target.query }, startCursor(target.pluginKey, target.watches));
     writeSourcePoint(target.pluginKey, result.items.length, canaryCount);
-    const snapshot = await putMentionBody(target.pluginKey, result.rawBody);
+    const snapshot = await hashMentionBody(result.rawBody);
     const contexts = new Map<string, DiscoveryContext | null>();
     let stored = 0;
     let unjudged = 0;

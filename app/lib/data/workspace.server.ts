@@ -26,7 +26,7 @@ export async function readWorkspaceIdForOwner(userId: string): Promise<string | 
 
 interface BoundStatement {
   first<T>(): Promise<T | null>;
-  run(): Promise<unknown>;
+  run(): Promise<{ meta: { changes: number } }>;
 }
 
 export interface WorkspaceDb {
@@ -51,8 +51,15 @@ export async function insertWorkspace(
     .run();
 }
 
-export async function fillWorkspaceTimezone(db: WorkspaceDb, id: string, timezone: string): Promise<void> {
-  await db.prepare(FILL_TIMEZONE).bind(timezone, id).run();
+export async function fillWorkspaceTimezone(db: WorkspaceDb, id: string, timezone: string): Promise<boolean> {
+  const result = await db.prepare(FILL_TIMEZONE).bind(timezone, id).run();
+  return result.meta.changes > 0;
+}
+
+const REVERT_TIMEZONE = `UPDATE workspace SET timezone = 'UTC' WHERE id = ? AND timezone = ?`;
+
+export async function revertWorkspaceTimezone(db: WorkspaceDb, id: string, timezone: string): Promise<void> {
+  await db.prepare(REVERT_TIMEZONE).bind(id, timezone).run();
 }
 
 export async function readWorkspaceR2Prefixes(workspaceId: string): Promise<string[]> {
