@@ -4,6 +4,8 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 import { instantStamp, nextBriefAt, rolloverInstance, weekClosingAt } from "../../app/lib/brief-schedule";
 import type { RolloverParams } from "../../app/lib/brief-schedule";
 import { insertWeeklyDigest } from "../../app/lib/data/digest.server";
+import { JevRateLimitedError } from "../../app/lib/jev/client.server";
+import { rejudgeUnjudgedChanges } from "../../app/lib/site/judge.server";
 import { composeBrief } from "../standing/compose-brief";
 import { freezeWeek } from "../standing/freeze";
 import { judgeWeek, type JudgedWeek } from "../standing/read-this-first";
@@ -75,6 +77,45 @@ async function writeDigest(
   return id;
 }
 
+async function rejudgeClosingWeek(
+  step: WorkflowStep,
+  input: { db: D1Database; workspaceId: string; startsAt: string; closesAt: string },
+): Promise<void> {
+  try {
+    await step.do("rejudge-changes", RETRY, async () => {
+      await rejudgeUnjudgedChanges({
+        workspaceId: input.workspaceId,
+        windowStartAt: input.startsAt,
+        windowEndAt: input.closesAt,
+      });
+      await refreshWorkspaceScores(input.db, {
+        workspaceId: input.workspaceId,
+        weekStartAt: input.startsAt,
+        windowStartAt: input.startsAt,
+        windowEndAt: input.closesAt,
+        computedAt: new Date().toISOString(),
+      });
+    });
+  } catch (error) {
+    if (!(error instanceof JevRateLimitedError)) throw error;
+    console.error(JSON.stringify({ event: "standing.rejudge_rate_limited" }));
+  }
+}
+
+function freezeClosingWeek(
+  step: WorkflowStep,
+  input: { db: D1Database; workspaceId: string; startsAt: string; closesAt: string },
+): Promise<number> {
+  return step.do("freeze-rank", RETRY, async () => {
+    const ranked = await freezeWeek(input.db, {
+      workspaceId: input.workspaceId,
+      weekStartAt: input.startsAt,
+      weekEndAt: input.closesAt,
+    });
+    return ranked.length;
+  });
+}
+
 export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
   async run(event: WorkflowEvent<RolloverParams>, step: WorkflowStep): Promise<RolloverOutcome> {
     const { workspaceId } = event.payload;
@@ -94,15 +135,14 @@ export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
     if (closing === "workspace_gone" || closing === "schedule_moved") return outcome(null, closing);
 
     const schedule = { timezone: closing.timezone, weekday: closing.weekday, hour: closing.hour };
-
-    const rankedCount = await step.do("freeze-rank", RETRY, async () => {
-      const ranked = await freezeWeek(this.env.DB, {
-        workspaceId,
-        weekStartAt: closing.startsAt,
-        weekEndAt: closesAt.toISOString(),
-      });
-      return ranked.length;
-    });
+    const week = {
+      db: this.env.DB,
+      workspaceId,
+      startsAt: closing.startsAt,
+      closesAt: closesAt.toISOString(),
+    };
+    await rejudgeClosingWeek(step, week);
+    const rankedCount = await freezeClosingWeek(step, week);
 
     const readThisFirst = await step.do("read-this-first", RETRY, async () =>
       judgeWeek(this.env.DB, {

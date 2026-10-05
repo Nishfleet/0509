@@ -5,7 +5,13 @@ import type { ScoredSignal } from "../biggest-move";
 import { isFeedKind, type DevelopmentItem } from "../developments";
 import type { WeekEvidence } from "../home-standing";
 import { ACT_AT, REJECT_AT, changeActsSql } from "../jev/thresholds";
-import { D3_QUESTION_ID, D6_QUESTION_ID, reliabilitySchema, scoreBucketSchema } from "../standing-score";
+import {
+  D3_QUESTION_ID,
+  D3S_QUESTION_ID,
+  D6_QUESTION_ID,
+  reliabilitySchema,
+  scoreBucketSchema,
+} from "../standing-score";
 import { effectiveKindSql } from "../source-kind";
 import type { HiringSignalState, HiringSignalUpdate } from "../hiring/role-lifecycle";
 
@@ -346,6 +352,69 @@ export async function readUnjudgedMentions(watchId: string, limit: number): Prom
 
 export function resolveUnjudgedMention(id: string, tombstoned: boolean): D1PreparedStatement {
   return env.DB.prepare(RESOLVE_UNJUDGED_MENTION).bind(id, tombstoned ? 1 : 0);
+}
+
+const SELECT_UNJUDGED_CHANGES = `SELECT s.id AS id, s.workspace_id AS workspace_id, s.entity_id AS entity_id,
+  s.url AS url, s.aspect AS aspect, s.payload_json AS payload_json,
+  e.role AS entity_role, e.name AS entity_name, e.domain AS entity_domain
+FROM signal s
+JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.state = 'on'
+WHERE s.kind = 'change' AND s.is_tombstoned = 0
+  AND (?1 IS NULL OR s.workspace_id = ?1)
+  AND s.observed_at >= ?2 AND s.observed_at < ?3
+  AND NOT EXISTS (
+    SELECT 1 FROM jev_verdict v
+    WHERE v.signal_id = s.id AND v.question_id IN (?5, ?6)
+  )
+ORDER BY s.observed_at, s.id
+LIMIT ?4`;
+
+const unjudgedChangeRows = z.array(
+  z.object({
+    id: z.string(),
+    workspace_id: z.string(),
+    entity_id: z.string(),
+    url: z.string().nullable(),
+    aspect: z.string().nullable(),
+    payload_json: z.string(),
+    entity_role: z.enum(["self", "competitor"]),
+    entity_name: z.string().nullable(),
+    entity_domain: z.string(),
+  }),
+);
+
+export interface UnjudgedChange {
+  id: string;
+  workspaceId: string;
+  entityId: string;
+  url: string | null;
+  aspect: string | null;
+  payloadJson: string;
+  entityRole: "self" | "competitor";
+  entityName: string | null;
+  entityDomain: string;
+}
+
+export async function readUnjudgedChanges(input: {
+  workspaceId: string | null;
+  windowStartAt: string;
+  windowEndAt: string;
+  limit: number;
+}): Promise<UnjudgedChange[]> {
+  const rows = await env.DB.prepare(SELECT_UNJUDGED_CHANGES)
+    .bind(input.workspaceId, input.windowStartAt, input.windowEndAt, input.limit, D3_QUESTION_ID, D3S_QUESTION_ID)
+    .all();
+  return unjudgedChangeRows.parse(rows.results).map((row) => ({
+    id: row.id,
+    workspaceId: row.workspace_id,
+    entityId: row.entity_id,
+    url: row.url,
+    aspect: row.aspect,
+    payloadJson: row.payload_json,
+    entityRole: row.entity_role,
+    entityName: row.entity_name,
+    entityDomain: row.entity_domain,
+  }));
 }
 
 export interface RecentSignal {

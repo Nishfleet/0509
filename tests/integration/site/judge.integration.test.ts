@@ -2,8 +2,9 @@ import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { insertVerdict } from "../../../app/lib/data/jev_verdict.server";
+import { JevRateLimitedError } from "../../../app/lib/jev/client.server";
 import { computeBreakageEvidence } from "../../../app/lib/site/breakage-evidence";
-import { judgeChange } from "../../../app/lib/site/judge.server";
+import { judgeChange, rejudgeUnjudgedChanges } from "../../../app/lib/site/judge.server";
 
 const jevAnswers = {
   noul: new Map<string, number>(),
@@ -12,7 +13,7 @@ const jevAnswers = {
   states: [] as unknown[],
 };
 
-const jevFailures = { next: 0 };
+const jevFailures = { next: 0, message: "gateway down" };
 
 function installJev(): void {
   Reflect.set(env, "AI", {
@@ -21,7 +22,7 @@ function installJev(): void {
       jevAnswers.calls += 1;
       if (jevFailures.next > 0) {
         jevFailures.next -= 1;
-        throw new Error("gateway down");
+        throw new Error(jevFailures.message);
       }
       const answers: Record<string, { type: "noul"; noul: number } | { type: "choice"; choice: string }> = {};
       for (const [id, question] of Object.entries(request.questions)) {
@@ -124,6 +125,7 @@ describe("judgeChange", () => {
     jevAnswers.calls = 0;
     jevAnswers.states.length = 0;
     jevFailures.next = 0;
+    jevFailures.message = "gateway down";
     installJev();
     await seedWorkspace("ws-mine");
     await seedWorkspace("ws-history");
@@ -387,6 +389,16 @@ describe("judgeChange", () => {
     expect(events).toContain("site.jev_unavailable");
   });
 
+  it("case h3: a rate-limited Jev call throws so the workflow step can retry", async () => {
+    jevAnswers.noul.set("noteworthy_change", 0.95);
+    jevAnswers.choice.set("change_kind", "pricing");
+    jevFailures.next = 1;
+    jevFailures.message = "2003: Rate limited";
+
+    await expect(judgeChange(judgeInput({ entity: "rival", isSelf: false }))).rejects.toThrow(JevRateLimitedError);
+    expect(await rowsFor("rival")).toEqual([]);
+  });
+
   it("case i: Jev unavailable for the self breakage question defers too", async () => {
     jevAnswers.noul.set("own_site_breakage", 0.7);
     jevFailures.next = 1;
@@ -413,6 +425,39 @@ describe("judgeChange", () => {
       { question_id: "change_kind", input_hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
       { question_id: "noteworthy_change", input_hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
     ]);
+  });
+
+  it("rejudges a filed change even when the brand already used today's judgment budget", async () => {
+    for (let index = 0; index < 6; index += 1) {
+      await insertVerdict({
+        workspaceId: "ws-mine",
+        questionId: `seeded-${index}`,
+        inputHash: `seeded-cap-${index}`,
+        signalId: null,
+        entityId: "rival",
+        p: 0.9,
+        choice: null,
+        reason: null,
+        decidedAt: NOW,
+      }).run();
+    }
+    await env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, url, payload_json, dedup_key, observed_at)
+       VALUES ('sig-deferred', 'ws-mine', 'rival', 'src_site_web', 'change', 'home', 'https://rival.example/', '{}', 'dedup-deferred', ?)`,
+    )
+      .bind(NOW)
+      .run();
+    jevAnswers.noul.set("noteworthy_change", 0.95);
+    jevAnswers.choice.set("change_kind", "copy");
+
+    const judged = await rejudgeUnjudgedChanges({
+      workspaceId: "ws-mine",
+      windowStartAt: new Date(Date.parse(NOW) - 86_400_000).toISOString(),
+      windowEndAt: new Date(Date.parse(NOW) + 86_400_000).toISOString(),
+    });
+
+    expect(judged).toBe(1);
+    expect((await rowsFor("rival")).map((row) => row.question_id)).toContain("noteworthy_change");
   });
 });
 

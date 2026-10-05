@@ -1,8 +1,17 @@
-import { countVerdictsSince, insertVerdicts, readVerdictIds, type VerdictRow } from "../data/jev_verdict.server";
-import { readRecentSignals } from "../data/signal.server";
+import { env } from "cloudflare:workers";
+
+import {
+  countVerdictsSince,
+  insertVerdicts,
+  linkVerdictsStatement,
+  readVerdictIds,
+  type VerdictRow,
+} from "../data/jev_verdict.server";
+import { readRecentSignals, readUnjudgedChanges, type UnjudgedChange } from "../data/signal.server";
 import {
   askChoice,
   askNoul,
+  JevRateLimitedError,
   JevUnavailableError,
   type ChoiceQuestion,
   type ChoiceVerdict,
@@ -10,8 +19,9 @@ import {
   type NoulVerdict,
 } from "../jev/client.server";
 import { ACT_AT, CHANGE_KIND_QUESTION_ID, PRICING_ACT_AT, REJECT_AT } from "../jev/thresholds";
+import { parseDiffHunks, parseSiteChangePayload } from "../site-change";
 import { daysBefore } from "../site-changes.server";
-import type { BreakageEvidence } from "./breakage-evidence";
+import { computeBreakageEvidence, type BreakageEvidence } from "./breakage-evidence";
 
 const JEV_JUDGMENTS_PER_BRAND_PER_DAY = 6;
 
@@ -175,6 +185,12 @@ function logJevUnavailable(error: JevUnavailableError): null {
   return null;
 }
 
+function degradeUnlessRateLimited(error: unknown): null {
+  if (error instanceof JevRateLimitedError) throw error;
+  if (error instanceof JevUnavailableError) return logJevUnavailable(error);
+  throw error;
+}
+
 async function storeVerdicts(rows: readonly VerdictRow[]): Promise<readonly string[]> {
   await insertVerdicts(rows);
   return readVerdictIds(rows);
@@ -195,8 +211,7 @@ async function judgeSelfBreakage(
   try {
     breakage = await askNoul(input.workspaceId, D3S_BREAKAGE, state);
   } catch (error) {
-    if (error instanceof JevUnavailableError) return logJevUnavailable(error);
-    throw error;
+    return degradeUnlessRateLimited(error);
   }
   const p = breakage.p;
   const row = verdictRow({
@@ -225,8 +240,7 @@ async function judgeNoteworthy(
       askChoice(input.workspaceId, D3_KIND, state),
     ]);
   } catch (error) {
-    if (error instanceof JevUnavailableError) return logJevUnavailable(error);
-    throw error;
+    return degradeUnlessRateLimited(error);
   }
   const p = noul.p;
   const kind = choice.choice;
@@ -240,16 +254,10 @@ async function judgeNoteworthy(
   };
 }
 
-export async function judgeChange(input: JudgeInput): Promise<JudgedChange> {
-  const now = new Date();
+async function judgeChangeBody(input: JudgeInput, now: Date): Promise<JudgedChange> {
   const decidedAt = now.toISOString();
-
-  const usedToday = await countVerdictsSince(input.entityId, todayStartIso(now));
-  if (usedToday >= JEV_JUDGMENTS_PER_BRAND_PER_DAY) return deferredResult(null);
-
   const history30d = await readHistory30d(input.entityId, daysBefore(now, HISTORY_DAYS));
   const state = changeState(input, history30d);
-
   const self = input.isSelf ? await judgeSelfBreakage(input, state, decidedAt) : undefined;
   if (self === null) return deferredResult(null);
   if (self !== undefined && self.selfBreakage.band !== "clear") {
@@ -260,11 +268,73 @@ export async function judgeChange(input: JudgeInput): Promise<JudgedChange> {
       verdictIds: await storeVerdicts([self.row]),
     };
   }
-  const selfBreakage = self?.selfBreakage ?? null;
-
+  const selfBreakage = self === undefined ? null : self.selfBreakage;
   const judged = await judgeNoteworthy(input, state, decidedAt);
   if (judged === null) return deferredResult(selfBreakage);
-
   const rows = self === undefined ? judged.rows : [self.row, ...judged.rows];
   return { deferred: false, selfBreakage, noteworthy: judged.noteworthy, verdictIds: await storeVerdicts(rows) };
+}
+
+export async function judgeChange(input: JudgeInput): Promise<JudgedChange> {
+  const now = new Date();
+  const usedToday = await countVerdictsSince(input.entityId, todayStartIso(now));
+  if (usedToday >= JEV_JUDGMENTS_PER_BRAND_PER_DAY) return deferredResult(null);
+  return judgeChangeBody(input, now);
+}
+
+const REJUDGE_LIMIT = 50;
+
+const EMPTY_EVIDENCE = computeBreakageEvidence({ status: 200, beforeText: "", afterText: "" });
+
+function pageUrlOf(row: UnjudgedChange, pageUrl: string | undefined): string {
+  if (pageUrl !== undefined && pageUrl.length > 0) return pageUrl;
+  if (row.url !== null && row.url.length > 0) return row.url;
+  return `https://${row.entityDomain}/`;
+}
+
+async function readStoredHunks(diffKey: string | null): Promise<readonly { lines: readonly string[] }[]> {
+  if (diffKey === null || diffKey.length === 0) return [];
+  const object = await env.SNAPSHOTS.get(diffKey);
+  if (object === null) return [];
+  const hunks = parseDiffHunks(await object.text());
+  return hunks === null ? [] : hunks.map((lines) => ({ lines }));
+}
+
+async function judgeInputFromStored(row: UnjudgedChange): Promise<JudgeInput> {
+  const payload = parseSiteChangePayload(row.payloadJson);
+  return {
+    workspaceId: row.workspaceId,
+    entityId: row.entityId,
+    signalId: row.id,
+    isSelf: row.entityRole === "self",
+    subject: { name: row.entityName, domain: row.entityDomain },
+    pageUrl: pageUrlOf(row, payload === null ? undefined : payload.page.url),
+    pageRole: payload === null ? row.aspect : payload.page.role,
+    hunks: await readStoredHunks(payload === null ? null : payload.diffKey),
+    evidence: EMPTY_EVIDENCE,
+  };
+}
+
+async function rejudgeStoredChange(row: UnjudgedChange): Promise<boolean> {
+  const judged = await judgeChangeBody(await judgeInputFromStored(row), new Date());
+  if (judged.verdictIds.length === 0) return false;
+  await linkVerdictsStatement({
+    signalId: row.id,
+    workspaceId: row.workspaceId,
+    verdictIds: judged.verdictIds,
+  }).run();
+  return true;
+}
+
+export async function rejudgeUnjudgedChanges(input: {
+  workspaceId: string | null;
+  windowStartAt: string;
+  windowEndAt: string;
+}): Promise<number> {
+  const pending = await readUnjudgedChanges({ ...input, limit: REJUDGE_LIMIT });
+  let judged = 0;
+  for (const row of pending) {
+    if (await rejudgeStoredChange(row)) judged += 1;
+  }
+  return judged;
 }

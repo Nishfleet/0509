@@ -4,6 +4,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 import { recordSweepRun } from "../../app/lib/data/sweep_run.server";
 import { pingLiveness } from "../../app/lib/liveness-ping.server";
 import { classifyCompetitorSites } from "../../app/lib/site/classify-competitors.server";
+import { rejudgeUnjudgedChanges } from "../../app/lib/site/judge.server";
 import {
   CHUNK_SIZE,
   checkSitePage,
@@ -93,6 +94,21 @@ function recheckMissing(step: WorkflowStep, missing: SweepTargets, tick: SweepTi
   }, Promise.resolve([]));
 }
 
+async function rejudgeChanges(step: WorkflowStep): Promise<number> {
+  const windowEndAt = new Date();
+  const windowStartAt = new Date(windowEndAt.getTime() - 8 * 24 * 60 * 60 * 1000);
+  const judged = await settle("rejudge-changes", () =>
+    step.do("rejudge-changes", RETRY, () =>
+      rejudgeUnjudgedChanges({
+        workspaceId: null,
+        windowStartAt: windowStartAt.toISOString(),
+        windowEndAt: windowEndAt.toISOString(),
+      }),
+    ),
+  );
+  return judged === null ? 0 : judged;
+}
+
 async function recordRun(
   step: WorkflowStep,
   tick: SweepTick,
@@ -136,6 +152,7 @@ export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: 
     const recheckOutcomes = await recheckMissing(step, missing, tick);
     const recheckByPage = new Map(missing.map((target, index) => [target.pageId, recheckOutcomes[index]] as const));
     const finalOutcomes = targets.map((target, index) => recheckByPage.get(target.pageId) ?? outcomes[index]);
+    await rejudgeChanges(step);
 
     const count = (outcome: PageOutcome) => finalOutcomes.filter((o) => o === outcome).length;
     const pages = finalOutcomes.length;
