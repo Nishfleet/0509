@@ -80,10 +80,21 @@ test("/api/health answers ok @smoke", async ({ request }) => {
   const response = await request.get("/api/health");
   expect(response.status()).toBe(200);
 
-  const body = (await response.json()) as { status: string; app: string; timestamp: string };
+  const body = (await response.json()) as {
+    status: string;
+    app: string;
+    timestamp: string;
+    commit: string;
+  };
   expect(body.status).toBe("ok");
   expect(body.app).toBe("0509");
   expect(Number.isNaN(Date.parse(body.timestamp))).toBe(false);
+  // #7187: the health body names the deployed version's tag through the stock
+  // version_metadata binding, so production exposes what is live. The built
+  // worker answers in the preview lane with an empty tag (miniflare injects the
+  // binding, a real deploy fills it), so the shape is asserted everywhere and
+  // the value comes from the deploy workflow's own commit grep.
+  expect(typeof body.commit).toBe("string");
 });
 
 test("the login page renders the one input that signs you in @smoke", async ({ page }) => {
