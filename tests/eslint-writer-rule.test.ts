@@ -1,9 +1,6 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
+
+import { lintTextAt } from "./eslint-lint-text";
 
 // #4313: the one-writer-per-table lint rule used to match kysely call shapes
 // (insertInto/updateTable/deleteFrom) that no longer exist after the raw-D1
@@ -13,8 +10,6 @@ import { describe, expect, it } from "vitest";
 // under app/** and workers/** except the paved path app/lib/data/**. These
 // probes boot the real eslint.config.js (same rig as eslint-ignores.test.ts)
 // so a restated copy cannot drift from the gate.
-
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const WRITER_MESSAGE = "One writer per table";
 
@@ -94,60 +89,41 @@ const PROSE_UPDATE = `export function savedCopy(): string {
 }
 `;
 
-async function lintProbe(rel: string, code: string): Promise<{ ignored: boolean; messages: string[] }> {
-  const file = path.join(REPO_ROOT, rel);
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, code);
-  try {
-    const eslint = new ESLint({ cwd: REPO_ROOT });
-    if (await eslint.isPathIgnored(file)) {
-      return { ignored: true, messages: [] };
-    }
-    const results = await eslint.lintFiles([file]);
-    return {
-      ignored: false,
-      messages: results.flatMap((result) => result.messages.map((m) => m.message)),
-    };
-  } finally {
-    await rm(file, { force: true });
-  }
-}
-
 describe("eslint one-writer-per-table rule (#4313)", () => {
   it("rejects a DML module constant in app/lib outside app/lib/data", { timeout: 60_000 }, async () => {
-    const result = await lintProbe("app/lib/probe-writer-tmp.server.ts", CONST_DML);
+    const result = await lintTextAt("app/lib/cadence.ts", CONST_DML);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(WRITER_MESSAGE))).toBe(true);
   });
 
   it("rejects an inline prepare() DML argument in workers/", { timeout: 60_000 }, async () => {
-    const result = await lintProbe("workers/probe-writer-tmp.ts", INLINE_DML);
+    const result = await lintTextAt("workers/workflow-monitor.ts", INLINE_DML);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(WRITER_MESSAGE))).toBe(true);
   });
 
   it("leaves the paved path in app/lib/data/ unblocked", { timeout: 60_000 }, async () => {
-    const result = await lintProbe("app/lib/data/probe-writer-tmp.server.ts", CONST_DML);
+    const result = await lintTextAt("app/lib/data/workspace.server.ts", CONST_DML);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(WRITER_MESSAGE))).toBe(false);
   });
 
   for (const variant of WRITE_VARIANTS) {
     it(`rejects ${variant.name}`, { timeout: 60_000 }, async () => {
-      const result = await lintProbe("app/lib/probe-writer-tmp.server.ts", variant.code);
+      const result = await lintTextAt("app/lib/cadence.ts", variant.code);
       expect(result.ignored).toBe(false);
       expect(result.messages.some((m) => m.includes(WRITER_MESSAGE))).toBe(true);
     });
   }
 
   it("leaves a WITH-led SELECT unblocked", { timeout: 60_000 }, async () => {
-    const result = await lintProbe("app/lib/probe-writer-tmp.server.ts", READ_CTE);
+    const result = await lintTextAt("app/lib/cadence.ts", READ_CTE);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(WRITER_MESSAGE))).toBe(false);
   });
 
   it("leaves prose starting with Update unblocked", { timeout: 60_000 }, async () => {
-    const result = await lintProbe("app/lib/probe-writer-tmp.server.ts", PROSE_UPDATE);
+    const result = await lintTextAt("app/lib/cadence.ts", PROSE_UPDATE);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(WRITER_MESSAGE))).toBe(false);
   });

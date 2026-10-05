@@ -1,6 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
-vi.mock("cloudflare:workers", () => ({ env: {} }));
 vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn() }));
 
 const slots = vi.hoisted(() => ({
