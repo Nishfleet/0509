@@ -6,10 +6,22 @@ updates:
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Kolkata
     open-pull-requests-limit: 5
     cooldown:
       default-days: 7
     groups:
+      # Majors need their own group (0509#7074). While a group's pull
+      # request is open Dependabot defers that group and marks the
+      # group's dependencies handled for the whole run, so a single
+      # minor/patch group swallowed the majors: runs 36721784366 and
+      # 36727409669 log oauth-provider and @sentry/cloudflare in
+      # "Adding dependencies as handled" and then "Found no
+      # dependencies to update after filtering allowed updates".
+      npm-major:
+        update-types: [major]
       npm-minor-patch:
         update-types: [minor, patch]
     # Majors flow through Dependabot behind the merge-queue live e2e
@@ -26,6 +38,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Kolkata
     cooldown:
       default-days: 7
     groups:
