@@ -32,21 +32,23 @@ const names = manifests.flatMap((file) => {
   return KINDS.flatMap((kind) => Object.keys(pkg[kind] ?? {}));
 });
 
-// One approving row, whatever the name: | `name` | <specifier that starts with
-// a digit, after an optional ^ or ~>. The same shape `approvedRow` looks for,
-// without the name, so a doc that grows the table again is caught. The
-// specifier cell must be one token: that is what tells an approving row from
-// the probe-result tables elsewhere (| `https://...` | 200, `image/x-icon` |),
-// whose second cell starts with a digit too.
-const approvingRow = /^\| `[^`]+` +\| +[\^~]?\d[^\s|]* *\|/m;
+// One approving row, whichever way it is asked for: | `name` | <specifier> |.
+// Given a name it matches that package's row; given none it matches any
+// approving row in the file, which is what stops the table growing a second
+// home (0509#7017). The specifier cell is one token, because a cell that starts
+// with a digit is not only a version: docs/REBUILD-STACK.md §4 has probe-result
+// rows whose second cell is `200, `image/x-icon``, and the looser shape matched
+// all three of them.
+const approvingRow = (name?: string): RegExp => {
+  const cell = name === undefined ? "[^`]+" : name.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+  return new RegExp(`^\\| \`${cell}\` +\\| +[\\^~]?\\d[^\\s|]* *\\|`, "m");
+};
 
 const allowlist = readFileSync(path.join(ROOT, ALLOWLIST), "utf8");
-const approvedRow = (name: string): RegExp =>
-  new RegExp(`^\\| \`${name.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}\` +\\| +[\\^~]?\\d`, "m");
 
 describe(ALLOWLIST, () => {
   it.each([...new Set(names)])("approves %s in its own row", (name) => {
-    expect(approvedRow(name).test(allowlist), `${name} has no approving row in ${ALLOWLIST}`).toBe(true);
+    expect(approvingRow(name).test(allowlist), `${name} has no approving row in ${ALLOWLIST}`).toBe(true);
   });
 });
 
@@ -57,7 +59,7 @@ describe("the allowlist lives in one file", () => {
   }).filter((file) => file !== ALLOWLIST);
 
   it.each(otherDocs)("%s holds no approving row", (file) => {
-    expect(approvingRow.test(readFileSync(path.join(ROOT, file), "utf8"))).toBe(false);
+    expect(approvingRow().test(readFileSync(path.join(ROOT, file), "utf8"))).toBe(false);
   });
 
   it.each(["CLAUDE.md", "README.md", "docs/REBUILD-STACK.md"])("%s points at the allowlist", (doc) => {
