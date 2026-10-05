@@ -27,8 +27,12 @@ The J7 live journey failed on its first attempt; no customer alert exists for an
 
 ## The fix
 
-The loader reads the status first and the lists second (`readOnboardingScreen`). If the status says complete, every write already committed, so the lists that follow are complete.
+The loader reads the status first and the lists second (`readOnboardingScreen`). The workflow only reports "complete" after its last write step has committed, so a reader that sees "complete" and then reads the lists can never see partial results, whatever the timing.
+
+Why not one read: the status lives in Cloudflare Workflows and the lists live in D1, so no single query or batch can cover both. A "finished" marker saved in D1 would be a second source of truth for the same fact and needs a migration; the happens-before order gives the same guarantee without one.
 
 ## What stops a repeat
+
+- When the screen reads "complete" with an empty list, the loader logs `discovery.done_with_empty_list` with the time the status was read and the time the lists were read. Compared with the instance's write-step times (`wrangler workflows instances describe competitor-discovery <id> --json`, which CI can already read), the next occurrence, if any, proves itself.
 
 An integration test (`onboarding-screen.integration.test.ts`) simulates the last writes landing between the reads. It fails with the old parallel order and passes with the new one.

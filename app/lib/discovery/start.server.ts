@@ -69,6 +69,17 @@ export async function readDiscoveryState(workspaceId: string, now: Date): Promis
 
 export async function readOnboardingScreen(workspaceId: string, now: Date) {
   const discovery = await readDiscoveryState(workspaceId, now);
+  const statusReadAt = new Date().toISOString();
   const competitors = await readOnboardingCompetitors(workspaceId);
+  if (discovery === "done" && competitors.on.length + competitors.maybes.length === 0) {
+    console.warn(
+      JSON.stringify({
+        event: "discovery.done_with_empty_list",
+        workspaceId,
+        statusReadAt,
+        listsReadAt: new Date().toISOString(),
+      }),
+    );
+  }
   return { ...competitors, discovery };
 }
