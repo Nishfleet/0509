@@ -16,6 +16,7 @@ import {
   WorkerEnvError,
   workerEnvFailureResponse,
 } from "../app/lib/env.server";
+import { SITE_URL } from "../app/lib/site-url";
 
 const KEYS = [
   "DB",
@@ -42,7 +43,7 @@ const KEYS = [
 function configured() {
   return {
     DB: { prepare: () => "stmt" },
-    BETTER_AUTH_URL: "https://0509.io",
+    BETTER_AUTH_URL: SITE_URL,
     BETTER_AUTH_SECRET: "present",
     TURNSTILE_SECRET_KEY: "present",
     TURNSTILE_SITE_KEY: "present",
@@ -196,15 +197,31 @@ describe("worker env", () => {
     expect(() => createWorkerEnvCheck()()).not.toThrow();
   });
 
-  // playwright.config.ts runs the e2e lane on 127.0.0.1 with
-  // --env-file .dev.vars.example. The lane only exists because those values are
-  // accepted away from the production origin.
-  it("accepts the placeholder secrets on a local origin", () => {
+  // preview-assert's lighthouse step starts wrangler with
+  // --env-file .dev.vars.example and no --var for BETTER_AUTH_URL. Wrangler
+  // overlays keys that already exist in wrangler.jsonc vars, so the example
+  // file must not ship SITE_URL or /design/landing answers 503 (run 37321905876).
+  it("keeps the example env-file off the production origin", () => {
+    const example = exampleSecrets();
+    expect(example.BETTER_AUTH_URL, ".dev.vars.example no longer overrides BETTER_AUTH_URL").toBeDefined();
+    expect(example.BETTER_AUTH_URL).not.toBe(SITE_URL);
+  });
+
+  it("starts lighthouse wrangler on the example env-file", () => {
+    const ci = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+    expect(ci).toContain("npx wrangler dev --env-file .dev.vars.example");
+  });
+
+  // playwright.config.ts --var and lighthouse's --env-file overlay both land
+  // a loopback BETTER_AUTH_URL. The gate must accept the public placeholders
+  // on that origin or the preview-assert lighthouse step 503s /design/landing.
+  it("accepts the placeholder secrets on the example env-file origin", () => {
+    const example = exampleSecrets();
     useEnv({
       ...configured(),
-      BETTER_AUTH_URL: "http://127.0.0.1:5173",
-      BETTER_AUTH_SECRET: "local-only-not-a-production-secret",
-      DODO_WEBHOOK_SECRET: "whsec_bG9jYWwtb25seS1ub3QtYS13ZWJob29rLXNlY3JldA==",
+      BETTER_AUTH_URL: example.BETTER_AUTH_URL,
+      BETTER_AUTH_SECRET: PUBLIC_PLACEHOLDER_VALUES.BETTER_AUTH_SECRET,
+      DODO_WEBHOOK_SECRET: PUBLIC_PLACEHOLDER_VALUES.DODO_WEBHOOK_SECRET,
     });
     expect(() => createWorkerEnvCheck()()).not.toThrow();
   });
