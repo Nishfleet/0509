@@ -19,23 +19,17 @@ export async function withStepCheckIn<T>(
   work: () => Promise<T>,
 ): Promise<T> {
   const checkInId = await step.do("monitor start", CHECK_IN_STEP, () =>
-    Promise.resolve(
-      captureCheckIn({ monitorSlug: monitor.slug, status: "in_progress" }, monitor.config),
-    ),
+    Promise.resolve(captureCheckIn({ monitorSlug: monitor.slug, status: "in_progress" }, monitor.config)),
   );
   try {
     const result = await work();
     await step.do("monitor ok", CHECK_IN_STEP, () =>
-      Promise.resolve(
-        captureCheckIn({ checkInId, monitorSlug: monitor.slug, status: "ok" }, monitor.config),
-      ),
+      Promise.resolve(captureCheckIn({ checkInId, monitorSlug: monitor.slug, status: "ok" }, monitor.config)),
     );
     return result;
   } catch (error) {
     await step.do("monitor error", CHECK_IN_STEP, () =>
-      Promise.resolve(
-        captureCheckIn({ checkInId, monitorSlug: monitor.slug, status: "error" }, monitor.config),
-      ),
+      Promise.resolve(captureCheckIn({ checkInId, monitorSlug: monitor.slug, status: "error" }, monitor.config)),
     );
     throw error;
   }
