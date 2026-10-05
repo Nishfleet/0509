@@ -15,6 +15,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // because a copy would pass forever against a file that moved on. It is loaded
 // once per CI value, because the setting has to follow process.env.CI: locally
 // a retry is a convenience, in CI it is a hidden flake.
+//
+// The explicit timeout is the cost of loading this repo's real config, the same
+// one the eslint-rule tests carry: a cold import of @playwright/test took 5.8 s
+// on a checkout sharing a host with other workers and blew the 5 s default. The
+// import is the assertion, so its cost belongs to the test, not to a retry.
 
 describe("playwright failOnFlakyTests", () => {
   afterEach(() => {
@@ -32,17 +37,17 @@ describe("playwright failOnFlakyTests", () => {
     return (await import("../playwright.config.ts")).default;
   };
 
-  it("fails a pass that only came after a retry in CI", async () => {
+  it("fails a pass that only came after a retry in CI", { timeout: 60_000 }, async () => {
     const config = await loadConfig("true");
     expect(config.failOnFlakyTests).toBe(true);
   });
 
-  it("does not fail a retry on a developer machine", async () => {
+  it("does not fail a retry on a developer machine", { timeout: 60_000 }, async () => {
     const config = await loadConfig(undefined);
     expect(config.failOnFlakyTests).toBe(false);
   });
 
-  it("keeps the retries that capture the trace and the artifacts", async () => {
+  it("keeps the retries that capture the trace and the artifacts", { timeout: 60_000 }, async () => {
     const config = await loadConfig("true");
     expect(config.retries).toBe(2);
     expect(config.use?.trace).toBe("on-first-retry");
