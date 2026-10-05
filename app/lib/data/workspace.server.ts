@@ -55,6 +55,12 @@ export async function fillWorkspaceTimezone(db: WorkspaceDb, id: string, timezon
   await db.prepare(FILL_TIMEZONE).bind(timezone, id).run();
 }
 
+const REVERT_TIMEZONE = `UPDATE workspace SET timezone = 'UTC' WHERE id = ? AND timezone = ?`;
+
+export async function revertWorkspaceTimezone(db: WorkspaceDb, id: string, timezone: string): Promise<void> {
+  await db.prepare(REVERT_TIMEZONE).bind(id, timezone).run();
+}
+
 export async function readWorkspaceR2Prefixes(workspaceId: string): Promise<string[]> {
   const { results } = await env.DB.prepare(SELECT_WORKSPACE_WATCHES).bind(workspaceId).all<{ id: string }>();
   return [

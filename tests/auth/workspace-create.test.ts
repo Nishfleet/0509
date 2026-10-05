@@ -185,6 +185,29 @@ describe("ensureWorkspace", () => {
     );
   });
 
+  it("a failed reschedule leaves the zone unset so the next sign-in retries and recovers (0509#7075)", async () => {
+    const database = openDb();
+    seedUser(database, "user-1", "ada@example.com");
+    const db = asWorkspaceDb(database);
+    const input = { userId: "user-1", email: "ada@example.com", now: "2026-10-11T10:00:00.000Z" };
+    await ensureWorkspace(db, { ...input, timezone: null });
+    reschedule.mockClear();
+    reschedule.mockRejectedValueOnce(new Error("workflow binding unavailable"));
+
+    await expect(ensureWorkspace(db, { ...input, timezone: "Asia/Kolkata" })).rejects.toThrow(
+      "workflow binding unavailable",
+    );
+    const stored = database.prepare("SELECT timezone FROM workspace").get() as { timezone: string };
+    expect(stored.timezone).toBe("UTC");
+
+    const recovered = await ensureWorkspace(db, { ...input, timezone: "Asia/Kolkata" });
+
+    expect(recovered.timezone).toBe("Asia/Kolkata");
+    expect(reschedule).toHaveBeenCalledTimes(2);
+    const settled = database.prepare("SELECT timezone FROM workspace").get() as { timezone: string };
+    expect(settled.timezone).toBe("Asia/Kolkata");
+  });
+
   it("a concurrent second request does not create a second workspace", async () => {
     const database = openDb();
     seedUser(database, "user-1", "ada@example.com");

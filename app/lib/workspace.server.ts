@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { readWorkspaceSelfId } from "./data/entity.server";
 import { ensureOwnerEmailTarget } from "./data/send_target.server";
 import { isPerRunFixtureEmail } from "./fixture-accounts";
-import { fillWorkspaceTimezone, insertWorkspace } from "./data/workspace.server";
+import { fillWorkspaceTimezone, insertWorkspace, revertWorkspaceTimezone } from "./data/workspace.server";
 import type { WorkspaceDb } from "./data/workspace.server";
 import { rescheduleBriefSchedule } from "./standing/reschedule.server";
 import { subjectRedirect } from "./onboarding-subject";
@@ -44,7 +44,12 @@ async function withCapturedTimezone(db: WorkspaceDb, row: WorkspaceRow, timezone
   if (row.timezone !== "UTC" || timezone === "UTC") return row;
   await fillWorkspaceTimezone(db, row.id, timezone);
   const schedule = { weekday: row.brief_weekday, hour: row.brief_hour };
-  await rescheduleBriefSchedule(row.id, { ...schedule, timezone: row.timezone }, { ...schedule, timezone });
+  try {
+    await rescheduleBriefSchedule(row.id, { ...schedule, timezone: row.timezone }, { ...schedule, timezone });
+  } catch (error) {
+    await revertWorkspaceTimezone(db, row.id, timezone);
+    throw error;
+  }
   return { ...row, timezone };
 }
 

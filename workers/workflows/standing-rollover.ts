@@ -3,7 +3,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 
 import { instantStamp, nextBriefAt, rolloverInstance, weekClosingAt } from "../../app/lib/brief-schedule";
 import type { RolloverParams } from "../../app/lib/brief-schedule";
-import { insertWeeklyDigest } from "../../app/lib/data/digest.server";
+import { insertWeeklyDigest, listBriefs } from "../../app/lib/data/digest.server";
 import { composeBrief } from "../standing/compose-brief";
 import { freezeWeek } from "../standing/freeze";
 import { judgeWeek, type JudgedWeek } from "../standing/read-this-first";
@@ -18,7 +18,7 @@ export interface RolloverOutcome {
   workspaceId: string;
   closesAt: string;
   digestId: string | null;
-  skipped: "workspace_gone" | "schedule_moved" | "nothing_to_compare" | "brief_paused" | null;
+  skipped: "workspace_gone" | "schedule_moved" | "already_briefed" | "nothing_to_compare" | "brief_paused" | null;
 }
 
 interface ClosingWeek {
@@ -29,15 +29,23 @@ interface ClosingWeek {
   paused: boolean;
 }
 
+const WEEK_TOLERANCE_MS = 6 * 24 * 60 * 60 * 1000;
+
+async function alreadyBriefed(db: D1Database, workspaceId: string, closesAt: Date): Promise<boolean> {
+  const floor = closesAt.getTime() - WEEK_TOLERANCE_MS;
+  return (await listBriefs(db, workspaceId)).some((brief) => new Date(brief.period_end).getTime() > floor);
+}
+
 async function scoreClosingWeek(
   db: D1Database,
   workspaceId: string,
   closesAt: Date,
-): Promise<ClosingWeek | "workspace_gone" | "schedule_moved"> {
+): Promise<ClosingWeek | "workspace_gone" | "schedule_moved" | "already_briefed"> {
   const workspace = await readWorkspaceSchedule(db, workspaceId);
   if (workspace === null) return "workspace_gone";
   const due = nextBriefAt(workspace.schedule, new Date(closesAt.getTime() - 1));
   if (due.getTime() !== closesAt.getTime()) return "schedule_moved";
+  if (await alreadyBriefed(db, workspaceId, closesAt)) return "already_briefed";
   const week = weekClosingAt(workspace.schedule, closesAt);
   const startsAt = week.startsAt.toISOString();
   await refreshWorkspaceScores(db, {
@@ -91,7 +99,7 @@ export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
     }
 
     const closing = await step.do("final-score", RETRY, () => scoreClosingWeek(this.env.DB, workspaceId, closesAt));
-    if (closing === "workspace_gone" || closing === "schedule_moved") return outcome(null, closing);
+    if (typeof closing === "string") return outcome(null, closing);
 
     const schedule = { timezone: closing.timezone, weekday: closing.weekday, hour: closing.hour };
 
