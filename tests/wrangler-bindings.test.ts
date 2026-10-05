@@ -40,7 +40,10 @@ describe("deployed wrangler configs", () => {
   // production, so the two are pinned together here.
   it("pins the production origin the env gate refuses placeholder secrets on", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
-    expect(rawConfig.vars?.BETTER_AUTH_URL).toBe(PRODUCTION_ORIGIN);
+    expect(
+      rawConfig.vars?.BETTER_AUTH_URL,
+      "wrangler.jsonc no longer deploys BETTER_AUTH_URL to PRODUCTION_ORIGIN",
+    ).toBe(PRODUCTION_ORIGIN);
   });
 
   // The cost guard queries Cloudflare analytics for the same database and bucket
