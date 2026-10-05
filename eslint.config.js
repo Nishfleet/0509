@@ -1018,7 +1018,7 @@ export default tseslint.config(
       // `expect*` registers the shared table-test assertion helpers (the
       // 0509#7020 email-injection sweep) as assertions, alongside the stock
       // expect. `assert` stays from the stock default.
-      "vitest/expect-expect": ["error", { assertFunctionNames: ["expect*", "assert"] }],
+      "vitest/expect-expect": ["error", { assertFunctionNames: ["expect", "expectNoHtmlInjection", "assert"] }],
       "vitest/valid-expect": ["error", { maxArgs: 2 }],
     },
   },
