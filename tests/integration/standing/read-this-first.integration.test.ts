@@ -205,4 +205,82 @@ describe("judgeWeek", () => {
     expect(run).toHaveBeenCalledTimes(2);
     expect(askedTitles(run)).not.toContain(seeded.titleC);
   });
+
+  async function addMention(seeded: Seeded, id: string, title: string, publishedAt: string, observedAt: string) {
+    const [source, entity] = await Promise.all([
+      env.DB.prepare("SELECT source_id FROM signal WHERE id = ?1").bind(seeded.signalA).first<{ source_id: string }>(),
+      env.DB.prepare("SELECT entity_id FROM signal WHERE id = ?1").bind(seeded.signalA).first<{ entity_id: string }>(),
+    ]);
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, canonical_url, url_hash, dedup_key, published_at, observed_at, is_tombstoned) VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?6, ?7, ?8, ?9, ?10, 0)",
+      ).bind(
+        id,
+        seeded.workspaceId,
+        entity?.entity_id,
+        source?.source_id,
+        title,
+        `https://${id}.example/post`,
+        `hash-${id}`,
+        `dedup-${id}`,
+        publishedAt,
+        observedAt,
+      ),
+      env.DB.prepare(
+        "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at) VALUES (?1, ?2, 'mention_matters', ?3, ?4, 0.95, ?5)",
+      ).bind(`verdict-${id}`, seeded.workspaceId, `ih-${id}`, id, DECIDED_AT),
+    ]);
+  }
+
+  it("excludes a story published long before the week even when it was observed inside it", async () => {
+    const seeded = await seed();
+    await addMention(
+      seeded,
+      `${seeded.signalA}-old`,
+      "Old story",
+      "2021-03-04T10:00:00.000Z",
+      "2026-09-18T10:00:00.000Z",
+    );
+    const run = vi.fn(async () => ({ answers: { [READ_THIS_FIRST.id]: { type: "noul", noul: 0.9 } } }));
+    Reflect.set(env, "AI", { run });
+
+    await judgeWeek(env.DB, inputFor(seeded.workspaceId));
+
+    expect(askedTitles(run)).not.toContain("Old story");
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it("compares dates by instant, so offset and second-precision published_at values land in the right week", async () => {
+    const seeded = await seed();
+    await addMention(
+      seeded,
+      `${seeded.signalA}-in`,
+      "Out of week offset",
+      "2026-09-21T23:30:00-05:00",
+      "2026-09-30T00:00:00.000Z",
+    );
+    await addMention(
+      seeded,
+      `${seeded.signalA}-out`,
+      "In week offset",
+      "2026-09-21T23:30:00+05:00",
+      "2026-09-18T00:00:00.000Z",
+    );
+    await addMention(
+      seeded,
+      `${seeded.signalA}-edge`,
+      "Edge no millis",
+      "2026-09-15T00:00:00Z",
+      "2026-09-01T00:00:00.000Z",
+    );
+    const run = vi.fn(async () => ({ answers: { [READ_THIS_FIRST.id]: { type: "noul", noul: 0.9 } } }));
+    Reflect.set(env, "AI", { run });
+
+    await judgeWeek(env.DB, inputFor(seeded.workspaceId));
+
+    const asked = askedTitles(run);
+    expect(asked).toContain("In week offset");
+    expect(asked).toContain("Edge no millis");
+    expect(asked).not.toContain("Out of week offset");
+  });
 });
