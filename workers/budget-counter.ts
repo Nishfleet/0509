@@ -7,6 +7,7 @@ const EXPIRE_MS = 2 * 24 * 60 * 60 * 1000;
 
 export class BrowserBudget extends DurableObject {
   async take(limit: number, amount = 1): Promise<boolean> {
+    if (!(amount > 0)) return false;
     const used = (await this.ctx.storage.get<number>(COUNT_KEY)) ?? 0;
     if (used + amount > limit) return false;
     await this.ctx.storage.put(COUNT_KEY, used + amount);
@@ -22,15 +23,13 @@ export class BrowserBudget extends DurableObject {
   }
 
   async refund(id: string, amount: number): Promise<void> {
-    if (amount <= 0) return;
+    if (!(amount > 0)) return;
     const key = `${RESERVATION_PREFIX}${id}`;
-    const held = (await this.ctx.storage.get<number>(key)) ?? 0;
-    const released = Math.min(amount, held);
-    if (released <= 0) return;
+    const held = await this.ctx.storage.get<number>(key);
+    if (held === undefined) return;
+    await this.ctx.storage.delete(key);
     const used = (await this.ctx.storage.get<number>(COUNT_KEY)) ?? 0;
-    await this.ctx.storage.put(COUNT_KEY, Math.max(0, used - released));
-    if (held === released) await this.ctx.storage.delete(key);
-    else await this.ctx.storage.put(key, held - released);
+    await this.ctx.storage.put(COUNT_KEY, Math.max(0, used - Math.min(amount, held)));
   }
 
   async addMs(ms: number): Promise<void> {
