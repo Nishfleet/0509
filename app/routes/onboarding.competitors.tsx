@@ -2,16 +2,16 @@ import type { Route } from "./+types/onboarding.competitors";
 
 import { useEffect, useState } from "react";
 import { data, Form, redirect, useNavigation, useRevalidator } from "react-router";
+import { z } from "zod";
 
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
 import { Monogram } from "../components/monogram";
 import { OnboardingFrame } from "../components/onboarding-frame";
 import { Button } from "../components/ui/button";
 import { handleCompetitorIntent } from "../lib/competitors.server";
-import { readOnboardingCompetitors } from "../lib/data/entity.server";
 import { markCompetitorsReady, markWatchingStarted } from "../lib/data/onboarding_run.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { readDiscoveryState } from "../lib/discovery/start.server";
+import { readOnboardingScreen } from "../lib/discovery/start.server";
 import { discoveryNotice, type DiscoveryState } from "../lib/discovery/state";
 import { requireFreshSession, requireSession } from "../lib/require-session.server";
 import { createTimings } from "../lib/server-timing.server";
@@ -19,6 +19,8 @@ import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/works
 
 const POLL_MS = 3000;
 const MAX_POLLS = 60;
+
+const startWatchingForm = z.object({ intent: z.literal("start") });
 
 async function workspaceFor(request: Request, fresh = false): Promise<string> {
   const session = await (fresh ? requireFreshSession(request) : requireSession(request));
@@ -33,23 +35,24 @@ export function meta() {
   return [{ title: "Your competitors · Five to Nine" }];
 }
 
+export function headers() {
+  return { "cache-control": "private, no-store" };
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   const timings = createTimings();
   const workspaceId = await timings.measure("workspace", workspaceFor(request));
-  const [competitors, discovery] = await timings.measure(
-    "reads",
-    Promise.all([readOnboardingCompetitors(workspaceId), readDiscoveryState(workspaceId, new Date())]),
-  );
-  if (competitors.on.length + competitors.maybes.length > 0) {
+  const screen = await timings.measure("reads", readOnboardingScreen(workspaceId, new Date()));
+  if (screen.on.length + screen.maybes.length > 0) {
     await timings.measure("ready", markCompetitorsReady(workspaceId, new Date().toISOString()));
   }
-  return data({ ...competitors, discovery }, { headers: timings.header() });
+  return data(screen, { headers: timings.header() });
 }
 
 export async function action({ request }: Route.ActionArgs) {
   const workspaceId = await workspaceFor(request, true);
   const form = await request.formData();
-  if (form.get("intent") === "start") {
+  if (startWatchingForm.safeParse(Object.fromEntries(form)).success) {
     await markWatchingStarted(workspaceId, new Date().toISOString());
     throw redirect("/app");
   }

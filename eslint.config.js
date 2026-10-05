@@ -92,6 +92,13 @@ const UNSCOPED_WRITER_PATTERNS = [
   },
 ];
 
+const WORKFLOW_WITHMONITOR_IMPORT = {
+  name: "@sentry/cloudflare",
+  importNames: ["withMonitor"],
+  message:
+    "A Workflow run() replays after hibernation, so withMonitor around it opens Sentry check-ins that never close. Send captureCheckIn from withStepCheckIn inside step.do('monitor start') and step.do('monitor ok'). The Worker scheduled handler in workers/app.ts still uses withMonitor. Source: 0509#7001.",
+};
+
 const ONE_PAVED_PATH_IMPORTS = [
   {
     name: "better-auth",
@@ -264,7 +271,14 @@ const DOC_READING_TEST_BAN = {
     "A test never reads a .md file. A doc-vs-code check is review's: a doc edit that fails the suite teaches the next writer to change the test instead of the doc. Put the copy in the product's public surface and assert that. docs/REBUILD-DONE.md D. Source: 0509#6953.",
 };
 
+const BARE_TOAST = {
+  selector: "CallExpression[callee.name='toast'], MemberExpression[object.name='toast']",
+  message:
+    "toast() is called in exactly one module, app/components/toaster.tsx, behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo'. The sonner import ban does not catch a toast reached another way, so the call shape is banned too. Source: 0509#4116, 0509#7007.",
+};
+
 const BANNED_SYNTAX = [
+  BARE_TOAST,
   SUPPORT_ADDRESS_BAN,
   GOOGLE_FONTS_BAN,
   CRAWLER_USER_AGENT_BAN,
@@ -326,6 +340,12 @@ const RAW_DML_WRITER = {
 const ENV_DB_IN_ROUTES = {
   selector: "CallExpression[callee.object.name='env'][callee.property.name='DB']",
   message: "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
+};
+
+const FORM_GET_BAN = {
+  selector: "CallExpression[callee.property.name='get'][callee.object.name=/^(form|formData)$/]",
+  message:
+    "Parse form input with a zod schema next to the action; do not read formData.get by hand. Source: 0509#7027.",
 };
 
 const STATIC_HOME_HTML_PARSER = {
@@ -564,7 +584,14 @@ export default tseslint.config(
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
     ignores: ["app/lib/data/**", "workers/e2e-inbox.ts", "workers/fixture-site.ts"],
     rules: {
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, RAW_DML_WRITER, FEED_STATE_LITERAL],
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX,
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+        FORM_GET_BAN,
+      ],
     },
   },
 
@@ -609,6 +636,24 @@ export default tseslint.config(
         ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  {
+    // Identity *.server.ts still exempts DOMAIN_HOSTNAME_BAN (the engine lives
+    // here) and adds FORM_GET_BAN so confirm/card-draft cannot read form.get by
+    // hand. card-fields.ts stays on the block above: isDraftSave reads pending
+    // formData for shouldRevalidate, not action input. 0509#7027, 0509#7033.
+    files: ["app/lib/identity/**/*.server.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== DOMAIN_HOSTNAME_BAN),
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+        FORM_GET_BAN,
       ],
     },
   },
@@ -662,6 +707,22 @@ export default tseslint.config(
   },
 
   {
+    // The one toast() call site, behind toastSaved(). It is client code, so
+    // BARE_FETCH stays off as in the client block above. Flat config replaces
+    // no-restricted-syntax wholesale, so this restates the list. 0509#7007.
+    files: ["app/components/toaster.tsx"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== BARE_FETCH && rule !== BARE_TOAST),
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  {
     // The fetch paved path itself, where the guard's host check and the
     // wrapped call live by definition; its .hostname reads stay allowed too.
     files: ["app/lib/fetch/**"],
@@ -699,6 +760,21 @@ export default tseslint.config(
     ignores: ["app/lib/auth.server.ts", "app/lib/auth-client.ts", "app/components/toaster.tsx"],
     rules: {
       "no-restricted-imports": ["error", { paths: ONE_PAVED_PATH_IMPORTS, patterns: PAVED_PATH_PATTERNS }],
+    },
+  },
+
+  // Flat config replaces a rule's options wholesale, so this restates
+  // ONE_PAVED_PATH_IMPORTS and PAVED_PATH_PATTERNS. Source: 0509#7001.
+  {
+    files: ["workers/workflows/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [...ONE_PAVED_PATH_IMPORTS, WORKFLOW_WITHMONITOR_IMPORT],
+          patterns: PAVED_PATH_PATTERNS,
+        },
+      ],
     },
   },
 
@@ -968,6 +1044,7 @@ export default tseslint.config(
         RAW_DML_WRITER,
         ENV_DB_IN_ROUTES,
         FEED_STATE_LITERAL,
+        FORM_GET_BAN,
       ],
     },
   },
@@ -992,7 +1069,12 @@ export default tseslint.config(
       "vitest/no-focused-tests": "error",
       "vitest/no-disabled-tests": "error",
       "vitest/no-identical-title": "error",
-      "vitest/expect-expect": "error",
+      // Named assertion helpers: `expectNoHtmlInjection` is the 0509#7020
+      // email-injection sweep helper (tests/email-html-injection.ts), named
+      // exactly so an `expect`-prefixed helper that asserts nothing still
+      // fails this rule. A new assertion helper must be added to this list.
+      // `assert` stays from the stock default.
+      "vitest/expect-expect": ["error", { assertFunctionNames: ["expect", "expectNoHtmlInjection", "assert"] }],
       "vitest/valid-expect": ["error", { maxArgs: 2 }],
     },
   },

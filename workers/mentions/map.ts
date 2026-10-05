@@ -1,5 +1,6 @@
 import type { z } from "zod";
 
+import { toIsoInstant } from "../../app/lib/iso-instant";
 import { normUrlHash, titleHash } from "../../app/lib/mentions/normalize";
 import { sha256Hex } from "../../app/lib/sha256";
 import type { mentionItemSchema } from "../sources/mentions/types";
@@ -59,7 +60,7 @@ export async function toSignalRow(item: MentionItem, ctx: SignalRowContext): Pro
     title_hash: await titleHash(item.title),
     norm_url_hash: await normUrlHash(item.url),
     dedup_key: item.dedupKey,
-    published_at: item.publishedAt,
+    published_at: toIsoInstant(item.publishedAt),
     observed_at: ctx.observedAt,
     last_seen_at: ctx.observedAt,
     author: item.author ?? null,

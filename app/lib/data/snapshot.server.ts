@@ -53,7 +53,7 @@ export function insertWatchSnapshot(row: {
   id: string;
   watchId: string;
   fetchedAt: string;
-  r2Key: string;
+  r2Key: string | null;
   hash: string;
   itemCount: number;
   canaryCount: number | null;

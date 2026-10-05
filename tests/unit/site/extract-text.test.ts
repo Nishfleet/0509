@@ -4,12 +4,19 @@ import { extractPageText, hasChanged } from "../../../app/lib/site/extract-text"
 import copyAfter from "../../fixtures/copy-change-after.html?raw";
 import copyBefore from "../../fixtures/copy-change-before.html?raw";
 import gymA from "../../fixtures/gymshark-2026-09-22-a.html?raw";
-import gymB from "../../fixtures/gymshark-2026-09-22-b.html?raw";
 
 // Two real captures of https://www.gymshark.com/ on 2026-09-22.
 // n1 at 12:20:57Z, n2 at 12:21:00Z. Cache-Control: no-cache, separate connections.
 // The 2026-09-21 12:15:40Z byte pair in docs/engines/site-change.md was measured
 // and not stored, so these files are a later pair of the same URL.
+// The n2 capture is not stored: it differs from n1 in 4 bytes, the active
+// variant of two A/B experiments (gs-test_web_t110.0 -> .1 and
+// gs-test_web_t127.0 -> .1) inside `variant` and `originalVariant`. The
+// `allVariants` lists are identical in both captures, so the replacements
+// below target those two JSON keys by name; each context occurs exactly
+// once in n1, and the GYM_B_SHA pin proves the result is n2 byte for byte.
+// A bare replaceAll on the variant names would also rewrite the
+// `allVariants` entries and fail the pin.
 const GYM_A_SHA = "fabf6f9c868c96fde5b8b15232bf80218543e86637c545790277fc2a49053f54";
 const GYM_B_SHA = "439277eb781873ee7476fbdd5dec5d4ca413f00f45e8a2b5d8029d2e120ac9f3";
 
@@ -80,6 +87,13 @@ describe("extractPageText", () => {
   });
 
   it("hashes two real gymshark captures to the same text when the raw bytes differ", async () => {
+    // n2, rebuilt from n1: same visible text, different raw bytes.
+    const gymB = gymA
+      .replaceAll('"variant":{"name":"gs-test_web_t110.0"', '"variant":{"name":"gs-test_web_t110.1"')
+      .replaceAll('"originalVariant":{"name":"gs-test_web_t110.0"', '"originalVariant":{"name":"gs-test_web_t110.1"')
+      .replaceAll('"variant":{"name":"gs-test_web_t127.0"', '"variant":{"name":"gs-test_web_t127.1"')
+      .replaceAll('"originalVariant":{"name":"gs-test_web_t127.0"', '"originalVariant":{"name":"gs-test_web_t127.1"');
+
     const aRaw = await sha256Hex(gymA);
     const bRaw = await sha256Hex(gymB);
 
