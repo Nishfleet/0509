@@ -135,10 +135,7 @@ function resumePoint(hasSelf: boolean, run: RunRow | null): string | null {
   return ONBOARDING_COMPETITORS;
 }
 
-function paidLanding(row: {
-  plan_status: string | null;
-  plan_current_period_end: string | null;
-}): string | null {
+function paidLanding(row: { plan_status: string | null; plan_current_period_end: string | null }): string | null {
   const plan =
     row.plan_status === null ? null : { status: row.plan_status, currentPeriodEnd: row.plan_current_period_end };
   return isWorkspacePaid(plan, new Date()) ? null : ONBOARDING_PLAN;

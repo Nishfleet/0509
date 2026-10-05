@@ -1,20 +1,13 @@
 import type { Route } from "./+types/onboarding";
 
 import { redirect } from "react-router";
-import { z } from "zod";
 
 import { requireFreshSession, requireSession, signOutToLogin } from "../lib/require-session.server";
 import { ONBOARDING_COMPETITORS, ONBOARDING_PLAN, workspaceLandingForRequest } from "../lib/workspace.server";
 import { OneInput } from "../components/one-input";
 import { OnboardingFrame } from "../components/onboarding-frame";
 import { SubjectConfirm } from "../components/onboarding-subject-confirm";
-import { subjectRedirect } from "../lib/onboarding-subject";
-import { isTakenDown } from "../lib/data/takedown.server";
-import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { normaliseSubject } from "../lib/identity/normalise";
-import { screenOnboardingSubject } from "../lib/onboarding-screen.server";
-import { startOnboardingRun } from "../lib/data/onboarding_run.server";
-import { withinProbeLimit } from "../lib/identity/card.server";
+import { submitOnboardingSubject } from "../lib/onboarding-start.server";
 import { createTimings } from "../lib/server-timing.server";
 import { useTimezoneCookie } from "../lib/use-timezone-cookie";
 
@@ -30,96 +23,23 @@ export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
   const { landing, workspaceId } = await workspaceLandingForRequest(request, session.user);
   if (workspaceId === null) return await signOutToLogin(request);
-  if (landing === null || landing === ONBOARDING_COMPETITORS || landing === ONBOARDING_PLAN) throw redirect(landing ?? "/app");
-  return { email: session.user.email };
-}
-
-type Timings = ReturnType<typeof createTimings>;
-type Normalised = ReturnType<typeof normaliseSubject>;
-type AcceptedSubject = Extract<Normalised, { ok: true }>["subject"];
-
-const subjectForm = z.object({
-  subject: z.string().optional(),
-  answer: z.string().optional(),
-});
-
-function readSubjectForm(formData: FormData) {
-  const parsed = subjectForm.safeParse(Object.fromEntries(formData));
-  const rawSubject = parsed.success ? (parsed.data.subject ?? null) : null;
-  return {
-    raw: rawSubject,
-    rawSubject,
-    answer: parsed.success ? (parsed.data.answer ?? null) : null,
-    normalised: rawSubject === null ? null : normaliseSubject(rawSubject),
-  };
-}
-
-async function readTakenAndWorkspace(timings: Timings, userId: string, normalised: Normalised | null) {
-  if (!normalised?.ok) return { taken: false, workspaceId: null };
-  const [taken, workspaceId] = await timings.measure(
-    "workspace",
-    Promise.all([isTakenDown(normalised.subject.registrable), readWorkspaceIdForOwner(userId)]),
-  );
-  return { taken, workspaceId };
-}
-
-interface ScreenInput {
-  timings: Timings;
-  userId: string;
-  workspaceId: string;
-  subject: AcceptedSubject;
-  rawSubject: string;
-  answer: string | null;
-}
-
-async function screenAndStart({ timings, userId, workspaceId, subject, rawSubject, answer }: ScreenInput) {
-  if (!(await timings.measure("limit", withinProbeLimit(userId)))) {
-    return {
-      message: "You've tried a lot of addresses in the last minute. Wait a minute, then try again.",
-      confirm: null,
-    };
+  if (landing === null || landing === ONBOARDING_COMPETITORS || landing === ONBOARDING_PLAN) {
+    throw redirect(landing ?? "/app");
   }
-  const now = new Date().toISOString();
-  const result = await timings.measure(
-    "screen",
-    screenOnboardingSubject({ workspaceId, userId, subject, raw: rawSubject, answer, now }),
-  );
-  if (result.kind === "refuse" || result.kind === "unavailable") return { message: result.message, confirm: null };
-  if (result.kind === "ask") return { message: null, confirm: { subject: result.subject, raw: rawSubject } };
-  await timings.measure("run", startOnboardingRun({ workspaceId, userId, inputRaw: rawSubject, startedAt: now }));
-  return null;
+  return { email: session.user.email };
 }
 
 export async function action({ request }: Route.ActionArgs) {
   const timings = createTimings();
   const session = await timings.measure("session", requireFreshSession(request));
-  const { raw, rawSubject, answer, normalised } = readSubjectForm(await request.formData());
-  const { taken, workspaceId } = await readTakenAndWorkspace(timings, session.user.id, normalised);
-  if (taken) {
-    return {
-      message: "This brand asked us not to track it, so we can't set it up. Try your own website address.",
-      confirm: null,
-    };
-  }
-  if (normalised?.ok && rawSubject !== null) {
-    if (workspaceId === null) throw redirect("/app");
-    const outcome = await screenAndStart({
-      timings,
-      userId: session.user.id,
-      workspaceId,
-      subject: normalised.subject,
-      rawSubject,
-      answer,
-    });
-    if (outcome !== null) return outcome;
-  }
-  const target = subjectRedirect(raw);
-  if (target) throw redirect(target, { headers: timings.header() });
-  return {
-    message:
-      "We couldn't find a website or username in that. Try an address like yourbrand.com or a username like @yourbrand.",
-    confirm: null,
-  };
+  const outcome = await submitOnboardingSubject({
+    timings,
+    userId: session.user.id,
+    formData: await request.formData(),
+  });
+  if (outcome.status === "home") throw redirect("/app");
+  if (outcome.status === "next") throw redirect(outcome.path, { headers: timings.header() });
+  return outcome.reply;
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {

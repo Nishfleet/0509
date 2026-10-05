@@ -183,7 +183,6 @@ async function isUnpaidWorkspace(env: Env, workspaceId: string): Promise<boolean
   );
 }
 
-
 function newUnsubscribeToken(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);

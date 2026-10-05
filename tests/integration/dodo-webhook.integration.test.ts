@@ -80,8 +80,8 @@ describe("Dodo webhook (J13)", () => {
       .run();
   });
 
-  it("flips a scout workspace to the paid tier when subscription.active lands", async () => {
-    expect((await readEntitlements(WORKSPACE)).competitors).toBe(5);
+  it("flips a workspace with no plan row to the paid tier when subscription.active lands", async () => {
+    expect((await readEntitlements(WORKSPACE)).competitors).toBe(0);
 
     const response = await deliver(signedRequest("evt_active_1", eventBody({})));
 
