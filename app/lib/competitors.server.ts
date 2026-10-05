@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 
 import { nameFromDomain } from "./competitor/domain-name";
 import { readCompetitorName } from "./competitor/site-name.server";
@@ -34,10 +35,12 @@ const PROBE_LIMITED: CompetitorActionResult = {
 
 const SELECT_OWNER = "SELECT owner_user_id FROM workspace WHERE id = ?";
 
-function text(form: FormData, name: string): string {
-  const value = form.get(name);
-  return typeof value === "string" ? value.trim() : "";
-}
+const competitorIntentForm = z.object({
+  intent: z.string().trim().default(""),
+  suggestionId: z.string().trim().default(""),
+  entityId: z.string().trim().default(""),
+  competitor: z.string().trim().default(""),
+});
 
 async function upgradePlanIdFor(workspaceId: string): Promise<PlanId | null> {
   const next = nextPlan(await readPlanTier(workspaceId));
@@ -128,11 +131,14 @@ async function switchRival(input: { workspaceId: string; entityId: string; state
   return rival?.state === "off" ? refusedAtCap(workspaceId) : DONE;
 }
 
+function parsedCompetitorIntent(form: FormData) {
+  const parsed = competitorIntentForm.safeParse(Object.fromEntries(form));
+  return parsed.success ? parsed.data : { intent: "", suggestionId: "", entityId: "", competitor: "" };
+}
+
 export async function handleCompetitorIntent(workspaceId: string, form: FormData): Promise<CompetitorActionResult> {
   const now = new Date().toISOString();
-  const intent = text(form, "intent");
-  const suggestionId = text(form, "suggestionId");
-  const entityId = text(form, "entityId");
+  const { intent, suggestionId, entityId, competitor } = parsedCompetitorIntent(form);
   const suggestionAction = SUGGESTION_INTENTS.get(intent);
   if (suggestionAction !== undefined && suggestionId !== "") {
     await suggestionAction({ workspaceId, suggestionId, now });
@@ -144,6 +150,6 @@ export async function handleCompetitorIntent(workspaceId: string, form: FormData
   }
   if ((intent === "on" || intent === "off") && entityId !== "")
     return switchRival({ workspaceId, entityId, state: intent, now });
-  if (intent === "add") return addCompetitor(workspaceId, text(form, "competitor"), now);
+  if (intent === "add") return addCompetitor(workspaceId, competitor, now);
   return DONE;
 }

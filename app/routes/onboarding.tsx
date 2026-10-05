@@ -1,6 +1,7 @@
 import type { Route } from "./+types/onboarding";
 
 import { redirect } from "react-router";
+import { z } from "zod";
 
 import { requireFreshSession, requireSession } from "../lib/require-session.server";
 import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
@@ -36,14 +37,18 @@ type Timings = ReturnType<typeof createTimings>;
 type Normalised = ReturnType<typeof normaliseSubject>;
 type AcceptedSubject = Extract<Normalised, { ok: true }>["subject"];
 
+const subjectForm = z.object({
+  subject: z.string().optional(),
+  answer: z.string().optional(),
+});
+
 function readSubjectForm(formData: FormData) {
-  const raw = formData.get("subject");
-  const answer = formData.get("answer");
-  const rawSubject = typeof raw === "string" ? raw : null;
+  const parsed = subjectForm.safeParse(Object.fromEntries(formData));
+  const rawSubject = parsed.success ? (parsed.data.subject ?? null) : null;
   return {
-    raw,
+    raw: rawSubject,
     rawSubject,
-    answer: typeof answer === "string" ? answer : null,
+    answer: parsed.success ? (parsed.data.answer ?? null) : null,
     normalised: rawSubject === null ? null : normaliseSubject(rawSubject),
   };
 }
