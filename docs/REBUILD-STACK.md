@@ -588,7 +588,7 @@ Dual ESM+CJS with a `browser` field, zero node builtins (`libesm/index.js` grepp
 
 ### 5.3 RSS / Atom / RDF parsing
 
-**Not yet installed.** The feed engine has not shipped. `fast-xml-parser` arrives only as this package's dependency, so it is not installed either.
+**Installed.** `@extractus/feed-extractor` 8.0.3 is in `package.json`, first installed for the mentions source (`workers/sources/mentions/feed.ts`, #4051) and now the only feed parser in the repo: `app/lib/feeds/parse-feed.ts` maps `extractFromXml()` onto `FeedItem` and `app/lib/feeds/discover-feed.ts` reads the homepage `<link>` with `HTMLRewriter` (#7000). `fast-xml-parser` 5.11.1 arrives as its dependency and is not a direct dependency of ours.
 
 **Recommendation: `@extractus/feed-extractor` 8.0.3 — 24.5 KB gzip (bundlejs), one dependency (`fast-xml-parser ^5.10.1`).**
 
@@ -1136,7 +1136,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | HTML → text                                 | `HTMLRewriter`                                                        | platform                                 |
 | OG + schema.org extraction                  | `HTMLRewriter`                                                        | platform                                 |
 | Change diff                                 | `diff` (jsdiff)                                                       | 9.0.0                                    |
-| Feed parsing                                | `@extractus/feed-extractor` (wraps `fast-xml-parser`)                 | 8.0.3 / 5.11.1, not yet installed        |
+| Feed parsing                                | `@extractus/feed-extractor` (wraps `fast-xml-parser`)                 | 8.0.3 / 5.11.1, installed                    |
 | Logo                                        | page metadata via `HTMLRewriter`, DuckDuckGo icon fallback            | platform                                 |
 | Validation                                  | `zod`                                                                 | 4.6.5                                    |
 | Charts                                      | `uplot` (+ `uplot-react`), budget 30 KB gzip                          | 1.6.32 / 1.2.4, installed                |
@@ -1154,7 +1154,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | OpenAPI document                            | `zod-openapi` (samchungy)                                             | 6.0.2                                    |
 | Agent-readable docs                         | `/llms.txt` + `Accept: text/markdown` + `rel="alternate"`             | spec v2 (2026-08-10)                     |
 
-**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `jose` 6.2.12 (Access JWT; already a better-auth transitive), `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8, `diff` 9.0.0, `lucide-react` 1.47.0, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0, `uplot` 1.6.32, `uplot-react` 1.2.4. **Not yet installed**, because the engine that needs it has not shipped: `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it). Do not delete that row. `@modelcontextprotocol/server` 2.1.0, `@cloudflare/workers-oauth-provider` 0.10.4 and `zod-openapi` 6.0.2 shipped with the agent surface (2026-09-24); `uplot` 1.6.32 and `uplot-react` 1.2.4 shipped with the Home four-week chart (#4055). `agents` is rejected in §7.1. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
+**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `jose` 6.2.12 (Access JWT; already a better-auth transitive), `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8, `diff` 9.0.0, `lucide-react` 1.47.0, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0, `uplot` 1.6.32, `uplot-react` 1.2.4, and `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it), which serves the mentions source and the content feed engine alike since #7000. `@modelcontextprotocol/server` 2.1.0, `@cloudflare/workers-oauth-provider` 0.10.4 and `zod-openapi` 6.0.2 shipped with the agent surface (2026-09-24); `uplot` 1.6.32 and `uplot-react` 1.2.4 shipped with the Home four-week chart (#4055). `agents` is rejected in §7.1. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
 
 ---
 

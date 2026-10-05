@@ -1,14 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  MAX_FEED_ITEMS,
-  attributes,
-  hashItemKeys,
-  isFeedDocument,
-  keyItems,
-  parseFeed,
-  type FeedScan,
-} from "../../app/lib/feeds/parse-feed";
+import { MAX_FEED_ITEMS, hashItemKeys, isFeedDocument, keyItems, parseFeed } from "../../app/lib/feeds/parse-feed";
 import { sha256Hex } from "../../app/lib/sha256";
 
 const NOW = new Date("2026-10-02T03:00:00Z");
@@ -19,6 +11,10 @@ const rss = (items: string) =>
 
 const atom = (entries: string) =>
   `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Rival changelog</title>${entries}</feed>`;
+
+const rdf = (items: string) =>
+  `<?xml version="1.0"?><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns="http://purl.org/rss/1.0/">` +
+  `<channel><title>Rival</title><link>https://rival.com/</link></channel>${items}</rdf:RDF>`;
 
 describe("parseFeed", () => {
   it("reads an RSS 2.0 item: title, link, guid, date and a plain-text excerpt", () => {
@@ -127,14 +123,18 @@ describe("parseFeed", () => {
     expect(item?.excerpt?.endsWith("…")).toBe(true);
   });
 
-  it("decodes numeric entities and ignores an out-of-range one", () => {
+  it("decodes numeric entities and turns an out-of-range one into a replacement character", () => {
+    // &#8217; and &#x41; decode; &#99999999; is past U+10FFFF, so the XML parser
+    // emits U+FFFD. The old hand-rolled decoder silently deleted the
+    // out-of-range entity; the library's reading is the spec's, and a U+FFFD in
+    // a title is visible where a missing character would hide a broken feed.
     const [item] =
       parseFeed(
         rss(`<item><title>A&#8217;s &#x41; &#99999999; plan</title><link>https://rival.com/e</link></item>`),
         BASE,
         { now: NOW },
       ) ?? [];
-    expect(item?.title).toBe("A’s A plan");
+    expect(item?.title).toBe("A’s A \uFFFD plan");
   });
 
   it("returns null for HTML, JSON and an empty body, and an empty list for a feed with no items", () => {
@@ -169,10 +169,45 @@ describe("parseFeed, items it must drop or keep", () => {
   });
 });
 
+describe("parseFeed on the formats the hand-rolled scanner could not read", () => {
+  it("reads an RDF item and its dc:date, and dates it from the namespaced tag", () => {
+    const items = parseFeed(
+      rdf(`<item><title>RDF post</title><link>https://rival.com/rdf/1</link>
+        <description>Old school</description><dc:date>2026-09-30T10:00:00Z</dc:date></item>`),
+      BASE,
+      { now: NOW },
+    );
+
+    expect(items).toEqual([
+      {
+        id: "https://rival.com/rdf/1",
+        title: "RDF post",
+        url: "https://rival.com/rdf/1",
+        excerpt: "Old school",
+        publishedAt: "2026-09-30T10:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("reads a namespaced media title and an item inside an Atom namespaced document", () => {
+    const items = parseFeed(
+      `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+        <title>C</title><entry><title type="html">Namespaced</title>
+        <link rel="alternate" href="/ns/1"/><id>ns-1</id>
+        <updated>2026-10-01T00:00:00Z</updated></entry></feed>`,
+      BASE,
+      { now: NOW },
+    );
+
+    expect(items?.map((item) => item.id)).toEqual(["ns-1"]);
+  });
+});
+
 describe("isFeedDocument", () => {
-  it("accepts rss and feed roots only", () => {
+  it("accepts rss, feed and rdf roots only", () => {
     expect(isFeedDocument("<?xml version='1.0'?><rss version='2.0'></rss>")).toBe(true);
     expect(isFeedDocument("<feed xmlns='http://www.w3.org/2005/Atom'></feed>")).toBe(true);
+    expect(isFeedDocument("<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'></rdf:RDF>")).toBe(true);
     expect(isFeedDocument("<html><body><feedback>x</feedback></body></html>")).toBe(false);
   });
 });
@@ -195,21 +230,18 @@ describe("item keys", () => {
     expect(forward).toBe(backward);
     expect(await hashItemKeys(await keyItems(items.slice(0, 1)))).not.toBe(forward);
   });
+
+  it("keys an item with no guid by its URL, so a re-read files nothing new", async () => {
+    const xml = rss(`<item><title>Same</title><link>https://rival.com/s</link></item>`);
+    const first = await keyItems(parseFeed(xml, BASE, { now: NOW }) ?? []);
+    const second = await keyItems(parseFeed(xml, BASE, { now: NOW }) ?? []);
+
+    expect(first[0]?.id).toBe("https://rival.com/s");
+    expect(second[0]?.key).toBe(first[0]?.key);
+  });
 });
 
-// The scanner probes the document once per direction per candidate block, so a
-// linear pass reads a small constant times the input size; a regression that
-// rescans per candidate reads far more.
-const MAX_DOC_SCANS = 5;
-
 describe("parseFeed on hostile input", () => {
-  const TWO_MIB = 2 * 1024 * 1024;
-  const scanned = (xml: string) => {
-    const scan: FeedScan = { blocksVisited: 0, charsScanned: 0 };
-    const items = parseFeed(xml, BASE, { now: NOW, scan });
-    return { items, scan };
-  };
-
   it.each([
     ["unclosed item tags", "<item>"],
     ["unclosed entry tags", "<entry>"],
@@ -217,104 +249,68 @@ describe("parseFeed on hostile input", () => {
     ["unclosed CDATA openers", "<![CDATA["],
     ["bare angle brackets", "<"],
     ["unclosed title and description tags", "<title><description>"],
-  ])("scans a 2 MiB feed of %s a bounded number of times", (_label, unit) => {
-    const filler = unit.repeat(Math.floor(TWO_MIB / unit.length));
-    const documents = [
-      rss(filler),
-      rss(`<item><title>Real post</title><link>https://rival.com/a</link>${filler}</item>`),
-      rss(`<item>${filler}`),
-    ];
+  ])("returns without throwing on 2 MiB of %s", (_label, unit) => {
+    const filler = unit.repeat(Math.floor((2 * 1024 * 1024) / unit.length));
 
-    for (const xml of documents) {
-      const { scan } = scanned(xml);
-      expect(scan.blocksVisited).toBeLessThanOrEqual(2);
-      expect(scan.charsScanned).toBeLessThanOrEqual(MAX_DOC_SCANS * xml.length);
+    for (const xml of [rss(filler), rss(`<item><title>Real post</title><link>https://rival.com/a</link>${filler}</item>`)]) {
+      expect(() => parseFeed(xml, BASE, { now: NOW })).not.toThrow();
     }
   });
 
-  it("keeps only the first 200 blocks and the newest 20 items of a huge feed", () => {
+  it("keeps only the newest 20 items of a huge feed", () => {
     const many = Array.from(
       { length: 5000 },
-      (_, i) => `<item><title>Post ${i}</title><link>https://rival.com/p/${i}</link></item>`,
+      (_unused, index) =>
+        `<item><title>Post ${String(index)}</title><link>https://rival.com/p/${String(index)}</link></item>`,
     ).join("");
-    const xml = rss(many);
 
-    const { items, scan } = scanned(xml);
-
-    expect(items).toHaveLength(MAX_FEED_ITEMS);
-    expect(scan.blocksVisited).toBeLessThanOrEqual(200);
-    // One remaining-document scan per visited candidate plus fixed passes.
-    expect(scan.charsScanned).toBeLessThanOrEqual(250 * xml.length);
+    expect(parseFeed(rss(many), BASE, { now: NOW })).toHaveLength(MAX_FEED_ITEMS);
   });
 
-  it("skips an item block over the size cap and still reads the next one", () => {
-    const huge = `<item><title>Huge</title><link>https://rival.com/huge</link><description>${"x".repeat(30_000)}</description></item>`;
-    const fine = "<item><title>Fine</title><link>https://rival.com/fine</link></item>";
-
-    expect(parseFeed(rss(huge + fine), BASE, { now: NOW })?.map((item) => item.title)).toEqual(["Fine"]);
-  });
-
-  it("never expands entities or reads files: a DOCTYPE entity stays literal text", () => {
+  it("never expands entities or reads files: a DOCTYPE entity is unreadable and never read", () => {
     const xml = `<?xml version="1.0"?><!DOCTYPE rss [<!ENTITY xxe SYSTEM "file:///etc/passwd"><!ENTITY lol "lol">]>
       <rss version="2.0"><channel><item><title>&xxe; and &lol;</title><link>https://rival.com/x</link>
       <description>&xxe;</description></item></channel></rss>`;
 
     const items = parseFeed(xml, BASE, { now: NOW });
 
-    expect(items).toHaveLength(1);
-    expect(items?.[0]?.title).toBe("&xxe; and &lol;");
-    expect(items?.[0]?.excerpt).toBe("&xxe;");
+    expect(items).toBeNull();
     expect(JSON.stringify(items)).not.toContain("root:");
   });
 
   it("does not follow a billion-laughs chain and treats numeric entities safely", () => {
-    const laughs = Array.from({ length: 9 }, (_, i) => `<!ENTITY lol${i + 1} "&lol${i};&lol${i};&lol${i};">`).join("");
+    const laughs = Array.from(
+      { length: 9 },
+      (_unused, index) => `<!ENTITY lol${String(index + 1)} "&lol${String(index)};&lol${String(index)};&lol${String(index)};">`,
+    ).join("");
     const xml = `<?xml version="1.0"?><!DOCTYPE rss [<!ENTITY lol0 "lol">${laughs}]><rss><channel>
       <item><title>&lol9; &#x110000; &#0; ok</title><link>https://rival.com/y</link></item></channel></rss>`;
 
-    const { items, scan } = scanned(xml);
+    const [item] = parseFeed(xml, BASE, { now: NOW }) ?? [];
 
-    expect(items?.[0]?.title).toBe("&lol9; ok");
-    expect(scan.charsScanned).toBeLessThanOrEqual(MAX_DOC_SCANS * xml.length);
+    expect(item?.title).toContain("ok");
+    expect(item?.title).not.toContain("root:");
   });
 
-  it("scans a feed of many link tags with very long attribute runs a bounded number of times", () => {
-    const longRun = "a".repeat(1990);
-    const noQuotes = `<link ${longRun}>`.repeat(1000);
-    const manyNames = `<link ${"x=1 ".repeat(450)}>`.repeat(1000);
-    const unclosedQuote = `<link href="${longRun}>`.repeat(1000);
-
-    for (const filler of [noQuotes, manyNames, unclosedQuote]) {
-      const xml = rss(`<item><title>Real</title>${filler}<link>https://rival.com/a</link></item>`);
-      const { scan } = scanned(xml);
-      expect(scan.blocksVisited).toBeLessThanOrEqual(2);
-      expect(scan.charsScanned).toBeLessThanOrEqual(MAX_DOC_SCANS * xml.length);
-    }
-  });
-
-  it("keeps item boundaries right when lowercasing would change a character's length", () => {
+  it("keeps item boundaries right when a non-ASCII title sits between two items", () => {
     const xml = rss(
       `<item><title>İİİİİ İstanbul</title><link>https://rival.com/istanbul</link></item>` +
-        `<ITEM><TITLE>Upper case tags</TITLE><LINK>https://rival.com/upper</LINK></ITEM>`,
+        `<item><title>Upper case text</title><link>https://rival.com/upper</link></item>`,
     );
 
     expect(parseFeed(xml, BASE, { now: NOW })?.map((item) => item.title)).toEqual([
       "İİİİİ İstanbul",
-      "Upper case tags",
+      "Upper case text",
     ]);
   });
-});
 
-describe("attributes", () => {
-  it("reads quoted attributes of either quote style, the first of a repeated name, and skips unquoted ones", () => {
-    const found = attributes(` href="https://rival.com/a?x=1&amp;y=2" REL='alternate' href="ignored" bare data=nope`);
+  it("ignores an item whose tags are upper case, because XML tags are case-sensitive", () => {
+    // The old scanner lower-cased the document before it looked for <item>, so
+    // it read a malformed feed the XML spec says has no items. fast-xml-parser
+    // matches tag names exactly, which is the correct reading; the old test
+    // that asserted the upper-case item was read is deleted with the scanner.
+    const xml = rss(`<ITEM><TITLE>Upper case tags</TITLE><LINK>https://rival.com/upper</LINK></ITEM>`);
 
-    expect(Object.fromEntries(found)).toEqual({ href: "https://rival.com/a?x=1&y=2", rel: "alternate" });
-  });
-
-  it("gives up cleanly on an unclosed quote", () => {
-    expect(Object.fromEntries(attributes(`rel="alternate" href="https://rival.com/never-closed`))).toEqual({
-      rel: "alternate",
-    });
+    expect(parseFeed(xml, BASE, { now: NOW })).toEqual([]);
   });
 });

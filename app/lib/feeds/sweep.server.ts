@@ -36,7 +36,7 @@ async function firstReadableFeed(candidates: readonly string[]): Promise<string 
 
 async function loadFeed(homepage: string): Promise<z.infer<typeof FEED_SCHEMA>> {
   const html = await fetchHomepage(homepage);
-  return { feedUrl: await firstReadableFeed(feedCandidates(html, homepage)) };
+  return { feedUrl: await firstReadableFeed(await feedCandidates(html, homepage)) };
 }
 
 export async function findFeed(entity: { id: string; domain: string }): Promise<FoundFeed> {
