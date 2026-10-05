@@ -78,6 +78,11 @@ function binding(method?: "prepare" | "get" | "sendBatch" | "limit") {
   });
 }
 
+function urlOrigin(value: string): string | undefined {
+  if (!URL.canParse(value)) return undefined;
+  return new URL(value).origin;
+}
+
 const workerEnvSchema = z
   .object({
     DB: binding("prepare"),
@@ -100,7 +105,7 @@ const workerEnvSchema = z
     SITE_SWEEP_PING_URL: httpUrl.optional(),
   })
   .check((ctx) => {
-    if (ctx.value.BETTER_AUTH_URL !== SITE_URL) return;
+    if (urlOrigin(ctx.value.BETTER_AUTH_URL) !== urlOrigin(SITE_URL)) return;
     for (const name of PUBLIC_TURNSTILE_DUMMY_NAMES) {
       if (ctx.value[name] !== PUBLIC_TURNSTILE_DUMMY_VALUES[name]) continue;
       ctx.issues.push({ code: "custom", input: ctx.value[name], path: [name], message: "public dummy value" });

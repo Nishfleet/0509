@@ -171,6 +171,17 @@ describe("worker env", () => {
     expect(error.message).not.toContain(PUBLIC_TURNSTILE_DUMMY_VALUES.TURNSTILE_SECRET_KEY);
   });
 
+  it("refuses dummy turnstile keys when the production origin has a trailing slash", () => {
+    useEnv({
+      ...configured(),
+      BETTER_AUTH_URL: `${SITE_URL}/`,
+      TURNSTILE_SITE_KEY: PUBLIC_TURNSTILE_DUMMY_VALUES.TURNSTILE_SITE_KEY,
+      TURNSTILE_SECRET_KEY: PUBLIC_TURNSTILE_DUMMY_VALUES.TURNSTILE_SECRET_KEY,
+    });
+    const error = namesOf(createWorkerEnvCheck());
+    expect(error.names).toEqual(["TURNSTILE_SECRET_KEY", "TURNSTILE_SITE_KEY"]);
+  });
+
   it("pins the dummy turnstile table to the values .dev.vars.example ships", () => {
     const example = exampleSecrets();
     for (const name of PUBLIC_TURNSTILE_DUMMY_NAMES) {
@@ -235,6 +246,15 @@ describe("worker env", () => {
     expect(rawConfig.vars?.BETTER_AUTH_URL).toBe(SITE_URL);
     expect(rawConfig.vars?.TURNSTILE_SITE_KEY).not.toBe(PUBLIC_TURNSTILE_DUMMY_VALUES.TURNSTILE_SITE_KEY);
     expect(rawConfig.vars?.TURNSTILE_SECRET_KEY).not.toBe(PUBLIC_TURNSTILE_DUMMY_VALUES.TURNSTILE_SECRET_KEY);
+  });
+
+  it("keeps dummy-token captcha tests on a non-production origin", () => {
+    const captcha = readFileSync(
+      new URL("./integration/magic-link-captcha.integration.test.ts", import.meta.url),
+      "utf8",
+    );
+    expect(captcha).toContain(`const ORIGIN = "http://localhost:8787"`);
+    expect(captcha).toContain(PUBLIC_TURNSTILE_DUMMY_VALUES.TURNSTILE_SECRET_KEY);
   });
 
   it("checks once per isolate", () => {
