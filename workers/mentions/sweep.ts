@@ -584,9 +584,8 @@ async function verifyPendingYoutube(watch: WatchRow, pendingId: string, run: You
 
 async function resolveYoutubeChannel(
   watch: WatchRow,
-  run: YoutubeRun,
+  now: number,
 ): Promise<{ found: true; channelId: string } | { found: false; outcome: TargetOutcome }> {
-  const { now } = run;
   const lookup = await lookupYoutubeChannel(await requireEntityIdentityJson(watch.workspace_id, watch.entity_id));
   switch (lookup.status) {
     case "id":
@@ -614,7 +613,7 @@ async function sweepOneYoutube(watch: WatchRow, run: YoutubeRun): Promise<Target
 
   let channelId = config.channelId;
   if (channelId === null) {
-    const resolution = await resolveYoutubeChannel(watch, run);
+    const resolution = await resolveYoutubeChannel(watch, now);
     if (!resolution.found) return resolution.outcome;
     channelId = resolution.channelId;
   }

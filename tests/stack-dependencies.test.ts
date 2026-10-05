@@ -65,27 +65,33 @@ interface StackRow {
   locked: string;
 }
 
+// Throws with the file and the line, rather than asserting from module scope: a
+// table that no longer parses then fails the named test that reads it, not the
+// whole file's collection.
 function stackRows(): Map<string, StackRow> {
   const lines = allowlist.split("\n");
   const header = lines.findIndex((line) => /^\|\s*Package\s*\|/.test(line));
-  expect(header, `${ALLOWLIST} has no \`| Package |\` header row`).toBeGreaterThanOrEqual(0);
+  if (header < 0) throw new Error(`${ALLOWLIST} has no \`| Package |\` header row`);
 
   const rows = new Map<string, StackRow>();
   for (let at = header + 2; at < lines.length; at += 1) {
     const line = lines[at];
     if (!line.trim().startsWith("|")) break;
+    // `\|` inside a cell is legal Markdown and is not a column separator, so a
+    // row holding one splits into the wrong number of cells and would fail the
+    // width check below with a count that does not name the cell.
     const cells = line
-      .split("|")
+      .split(/(?<!\\)\|/)
       .slice(1, -1)
       .map((cell) => cell.trim());
-    expect(cells.length, `${ALLOWLIST} row ${at + 1} has ${cells.length} columns, not 6`).toBe(6);
+    if (cells.length !== 6) {
+      throw new Error(`${ALLOWLIST} row ${at + 1} has ${cells.length} columns, not 6`);
+    }
     const name = cells[0].replace(/^`|`$/g, "");
     rows.set(name, { name, specifier: cells[1], locked: cells[5] });
   }
   return rows;
 }
-
-const rows = stackRows();
 
 // package-lock.json resolves every direct dependency of the root manifest to
 // `node_modules/<name>` at lockfileVersion 3.
@@ -127,14 +133,23 @@ describe("the number columns", () => {
     expect(manifests, "a second package.json needs its own specifier and lock checks here").toEqual(["package.json"]);
   });
 
+  it("parses the table into six-column rows", () => {
+    const parsed = stackRows();
+    expect(parsed.size, `${ALLOWLIST} parses no rows`).toBeGreaterThan(0);
+    for (const [name, row] of parsed) {
+      expect(row.specifier, `${name} has an empty Specifier cell`).not.toBe("");
+      expect(row.locked, `${name} has an empty Lock cell`).not.toBe("");
+    }
+  });
+
   it.each(directDependencies)("names the package.json specifier for %s", (name, specifier) => {
-    const row = rows.get(name);
+    const row = stackRows().get(name);
     expect(row, `${name} has no ${ALLOWLIST} row`).toBeDefined();
     expect(row?.specifier, `${name} Specifier drifted from package.json`).toBe(specifier);
   });
 
   it.each(directDependencies)("names the resolved lockfile version for %s", (name) => {
-    const row = rows.get(name);
+    const row = stackRows().get(name);
     const version = resolved(name);
     expect(version, `package-lock.json has no node_modules/${name} entry`).toBeDefined();
     expect(row?.locked, `${name} Lock drifted from package-lock.json`).toBe(version);
