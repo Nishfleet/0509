@@ -2,8 +2,6 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createRoutesStub } from "react-router";
 import { describe, expect, it, vi } from "vitest";
-
-vi.mock("cloudflare:workers", () => ({ env: {} }));
 vi.mock("../../app/lib/auth.server", () => ({
   createAuth: () => ({ handler: async () => new Response(null, { status: 200 }) }),
 }));

@@ -1,8 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("cloudflare:workers", () => ({ env: {} }));
-
 const reschedule = vi.hoisted(() => vi.fn(() => Promise.resolve({ cancelledId: null, createdId: null })));
 vi.mock("../../app/lib/standing/reschedule.server", () => ({ rescheduleBriefSchedule: reschedule }));
 
