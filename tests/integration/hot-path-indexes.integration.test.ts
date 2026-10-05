@@ -101,36 +101,12 @@ async function liveIndexColumns(name: string): Promise<string[]> {
  * These are FK children whose parents DO get deleted on live paths — account
  * delete cascades through `workspace`, and competitor forget
  * (`app/lib/data/entity.server.ts` deleteCompetitor) deletes `entity` — so
- * deleting a parent still scans them. They are allowlisted, not excused:
- * 0509#5938 owns indexing them. The five account-delete children that scanned
- * are indexed by migration 0029 and are no longer in this list, and
- * `incident.page_id` ships its index in the same migration — a partial index
- * (`idx_incident_one_open_per_page`, `WHERE closed_at IS NULL`) was masking it,
- * which is why the gate counts only `partial = 0` indexes as covering.
+ * deleting a parent still scans them unless a leading-column index exists.
+ * 0047_cascade_child_indexes.sql (#7080) indexes the remaining allowlisted
+ * columns, so this list is empty. A new unindexed `*_id` still fails the gate
+ * below.
  */
-const LEGACY_UNINDEXED_ID_COLUMNS: readonly string[] = [
-  "alert.entity_id",
-  "alert.incident_id",
-  "alert.page_id",
-  "alert.signal_id",
-  "incident.entity_id",
-  "incident_notice.incident_id",
-  "jev_verdict.entity_id",
-  "jev_verdict.signal_id",
-  "plan.provider_customer_id",
-  "plan.provider_subscription_id",
-  "send_attempt.send_target_id",
-  "send_target.channel_id",
-  "signal.snapshot_id",
-  "signal_delivery.channel_id",
-  "signal_delivery.send_attempt_id",
-  "snapshot.page_id",
-  "standing.entity_id",
-  "suggestion.entity_id",
-  "user_decision.entity_id",
-  "user_decision.signal_id",
-  "watch.source_id",
-];
+const LEGACY_UNINDEXED_ID_COLUMNS: readonly string[] = [];
 
 async function unindexedIdColumns(): Promise<string[]> {
   const tables = await env.DB.prepare(

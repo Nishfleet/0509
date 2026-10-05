@@ -13,13 +13,21 @@ import { watchedClaims } from "../../app/lib/watched-claims";
 // claim, so the PR that switches a source on also puts it on the homepage.
 
 describe("coverage matches the enabled sources", () => {
-  it("claims a source as live exactly when its row is enabled", async () => {
-    const rows = await env.DB.prepare("SELECT key FROM source WHERE is_enabled = 1").all<{ key: string }>();
+  it("claims a source as live exactly when its row is enabled, except a named pilot", async () => {
+    const rows = await env.DB.prepare(
+      `SELECT key, json_extract(CASE WHEN json_valid(config_json) THEN config_json ELSE '{}' END, '$.pilot') AS pilot
+       FROM source WHERE is_enabled = 1`,
+    ).all<{ key: string; pilot: string | null }>();
     const enabled = new Set(rows.results.map((row) => row.key));
+    const piloted = new Set(rows.results.flatMap((row) => (row.pilot === null ? [] : [row.key])));
     const sources = COVERAGE.flatMap((group) => group.sources);
 
     for (const source of sources) {
       if (!("sourceKey" in source)) continue;
+      if (piloted.has(source.sourceKey)) {
+        expect(source.live, `${source.id} is still a named-workspace pilot and must not be claimed live`).toBe(false);
+        continue;
+      }
       expect(
         enabled.has(source.sourceKey),
         `${source.id} names source "${source.sourceKey}", which no migration enables`,
@@ -30,6 +38,7 @@ describe("coverage matches the enabled sources", () => {
       sources.flatMap((source) => ("sourceKey" in source && source.live ? [source.sourceKey] : [])),
     );
     for (const key of enabled) {
+      if (piloted.has(key)) continue;
       expect(
         claimed.has(key),
         `source "${key}" is enabled but no live entry in app/lib/coverage.ts names it as its sourceKey`,

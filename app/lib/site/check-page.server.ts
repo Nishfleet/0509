@@ -110,9 +110,18 @@ async function storeNewSnapshot(
   return { textKey, screenshotKey };
 }
 
+async function refreshUnchangedObject(r2Key: string | null, text: string): Promise<void> {
+  if (r2Key === null) return;
+  await env.SNAPSHOTS.put(r2Key, text);
+  const pngKey = r2Key.replace(/\.txt$/, ".png");
+  const png = await env.SNAPSHOTS.get(pngKey);
+  if (png === null) return;
+  await env.SNAPSHOTS.put(pngKey, png.body, { httpMetadata: png.httpMetadata });
+}
+
 async function recordUnchanged(
   input: CheckPageInput,
-  unchanged: { id: string; fetchedAt: string; hash: string; r2Key: string | null },
+  unchanged: { id: string; fetchedAt: string; hash: string; r2Key: string | null; text: string },
 ): Promise<CheckPageResult> {
   const stored = await insertSnapshot({
     id: unchanged.id,
@@ -122,7 +131,9 @@ async function recordUnchanged(
     r2Key: unchanged.r2Key,
     hash: unchanged.hash,
   });
-  return stored ? { outcome: "unchanged", snapshotId: unchanged.id } : { outcome: "gone" };
+  if (!stored) return { outcome: "gone" };
+  await refreshUnchangedObject(unchanged.r2Key, unchanged.text);
+  return { outcome: "unchanged", snapshotId: unchanged.id };
 }
 
 export async function checkPage(input: CheckPageInput): Promise<CheckPageResult> {
@@ -137,7 +148,13 @@ export async function checkPage(input: CheckPageInput): Promise<CheckPageResult>
   const id = input.snapshotId ?? crypto.randomUUID();
 
   if (previous !== null && previous.payload_hash === extracted.hash) {
-    return recordUnchanged(input, { id, fetchedAt, hash: extracted.hash, r2Key: previous.payload_r2_key });
+    return recordUnchanged(input, {
+      id,
+      fetchedAt,
+      hash: extracted.hash,
+      r2Key: previous.payload_r2_key,
+      text: extracted.text,
+    });
   }
 
   const storedKeys = await storeNewSnapshot(input, extracted, { id, fetchedAt });

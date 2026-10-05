@@ -179,6 +179,19 @@ describe("checkPage (0509#4433)", () => {
     expect(await snapshotCount()).toBe(4);
   });
 
+  it("puts the reused R2 object again so a 1-year age rule cannot delete the baseline (0509#7080)", async () => {
+    const first = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
+    if (first.outcome !== "first") throw new Error("expected first");
+    await env.SNAPSHOTS.delete(first.textKey);
+    expect(await env.SNAPSHOTS.head(first.textKey)).toBeNull();
+
+    const same = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
+    expect(same.outcome).toBe("unchanged");
+    const restored = await env.SNAPSHOTS.get(first.textKey);
+    expect(await restored?.text()).toBe(`Pricing Plan costs ten dollars. ${PAD}`);
+    expect(await objectCount()).toBe(1);
+  });
+
   it("returns gone and leaves no stored objects when the watch is deleted mid-check", async () => {
     browserHolder.current = browserStub();
     const result = await checkPage({

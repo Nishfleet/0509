@@ -162,15 +162,15 @@ describe("D8 duplicate_signal", () => {
     expect((await rows(competitorId)).map((row) => row.duplicate_of)).toEqual([null, null]);
   });
 
-  it("matches on the normalized url when the titles differ", async () => {
+  it("does not store a second row for the same normalized URL (0509#7080)", async () => {
     const brand = freshBrand();
     const { competitorId } = await seedWorkspace(brand);
     const run = jev(0.96);
     Reflect.set(env, "AI", { run });
     await sweep(brand, [article("https://news.example.com/a")], NIGHT_ONE);
     await sweep(brand, [article("https://www.news.example.com/a/?utm_medium=x", "A different headline")], NIGHT_TWO);
-    expect(duplicateAsks(run)).toBe(1);
-    expect((await rows(competitorId)).filter((row) => row.duplicate_of !== null)).toHaveLength(1);
+    expect(duplicateAsks(run)).toBe(0);
+    expect(await rows(competitorId)).toHaveLength(1);
   });
 
   it("never treats an older-than-seven-days mention as a candidate", async () => {
@@ -265,7 +265,7 @@ describe("D8 duplicate_signal", () => {
     expect(feed.map((row) => row.id)).toEqual([earlier?.id]);
   });
 
-  it("pairs a same-sweep item on the normalized url when the titles differ", async () => {
+  it("stores one row when two items share a normalized URL (0509#7080)", async () => {
     const brand = freshBrand();
     const { competitorId } = await seedWorkspace(brand);
     const run = jev(0.96);
@@ -278,8 +278,8 @@ describe("D8 duplicate_signal", () => {
       ],
       NIGHT_ONE,
     );
-    expect(duplicateAsks(run)).toBe(1);
-    expect((await rows(competitorId)).filter((row) => row.duplicate_of !== null)).toHaveLength(1);
+    expect(duplicateAsks(run)).toBe(0);
+    expect(await rows(competitorId)).toHaveLength(1);
   });
 
   it("points a third same-sweep item at the earliest one", async () => {

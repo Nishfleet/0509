@@ -40,3 +40,11 @@ export async function isAddressSuppressed(address: string, db: D1Database = env.
 export async function clearSuppression(address: string): Promise<void> {
   await env.DB.prepare(DELETE_SUPPRESSION).bind(address).run();
 }
+
+export async function clearWorkspaceDeletedSuppression(address: string): Promise<void> {
+  await env.DB.prepare(
+    `DELETE FROM email_suppression WHERE lower(trim(address)) = lower(trim(?)) AND reason = 'workspace_deleted'`,
+  )
+    .bind(address)
+    .run();
+}

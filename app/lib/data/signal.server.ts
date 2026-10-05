@@ -201,6 +201,10 @@ ON CONFLICT (source_id, dedup_key) DO NOTHING`;
 const SEEN_KEYS =
   "SELECT dedup_key FROM signal WHERE source_id = ?1 AND dedup_key IN (SELECT value FROM json_each(?2))";
 
+const SEEN_URLS = `SELECT norm_url_hash FROM signal
+WHERE workspace_id = ?1 AND kind = 'mention' AND is_tombstoned = 0
+  AND norm_url_hash IN (SELECT value FROM json_each(?2))`;
+
 export interface MentionSignal {
   id: string;
   workspaceId: string;
@@ -227,6 +231,14 @@ export async function readSeenDedupKeys(sourceId: string, keys: readonly string[
   if (keys.length === 0) return new Set();
   const rows = await env.DB.prepare(SEEN_KEYS).bind(sourceId, JSON.stringify(keys)).all<{ dedup_key: string }>();
   return new Set(rows.results.map((row) => row.dedup_key));
+}
+
+export async function readSeenNormUrlHashes(workspaceId: string, hashes: readonly string[]): Promise<Set<string>> {
+  if (hashes.length === 0) return new Set();
+  const rows = await env.DB.prepare(SEEN_URLS)
+    .bind(workspaceId, JSON.stringify(hashes))
+    .all<{ norm_url_hash: string }>();
+  return new Set(rows.results.map((row) => row.norm_url_hash));
 }
 
 export function insertMention(signal: MentionSignal): D1PreparedStatement {
