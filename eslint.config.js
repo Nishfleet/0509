@@ -342,10 +342,51 @@ const ENV_DB_IN_ROUTES = {
   message: "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
 };
 
-const FORM_GET_BAN = {
-  selector: "CallExpression[callee.property.name='get'][callee.object.name=/^(form|formData)$/]",
-  message:
-    "Parse form input with a zod schema next to the action; do not read formData.get by hand. Source: 0509#7027.",
+const FORM_DATA_GET_BAN = {
+  meta: {
+    type: "problem",
+    schema: [],
+    messages: {
+      formDataGet:
+        "Parse form input with a zod schema next to the action; do not read formData.get by hand. The receiver is matched on its TypeScript type, so every FormData parameter or local is covered whatever it is called. Source: 0509#7027, 0509#7111.",
+    },
+  },
+  create(context) {
+    const services = context.sourceCode.parserServices;
+    if (services?.getTypeAtLocation === undefined) return {};
+    return {
+      MemberExpression(node) {
+        if (node.optional) return;
+        const name =
+          node.property.type === "Identifier"
+            ? node.property.name
+            : node.property.type === "Literal" && typeof node.property.value === "string"
+              ? node.property.value
+              : null;
+        // form["get"](...) is the only computed shape worth covering: any other
+        // computed key is a dynamic read, not a field name.
+        if (node.computed && node.property.type !== "Literal") return;
+        if (name !== "get") return;
+        if (!isFormData(services.getTypeAtLocation(node.object))) return;
+        context.report({ node, messageId: "formDataGet" });
+      },
+    };
+  },
+};
+
+function isFormData(type) {
+  // FormData | undefined is pending UI (navigation.formData?.get) and
+  // shouldRevalidate, not action input, so a union is never a hit.
+  if (type.isUnion() || type.isIntersection()) return false;
+  return (type.getSymbol() ?? type.aliasSymbol)?.getName() === "FormData";
+}
+
+const FORM_RULES_PLUGIN = {
+  "form-rules": {
+    rules: {
+      "form-data-get": FORM_DATA_GET_BAN,
+    },
+  },
 };
 
 const STATIC_HOME_HTML_PARSER = {
@@ -583,6 +624,7 @@ export default tseslint.config(
     // appending.
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
     ignores: ["app/lib/data/**", "workers/e2e-inbox.ts", "workers/fixture-site.ts"],
+    plugins: FORM_RULES_PLUGIN,
     rules: {
       "no-restricted-syntax": [
         "error",
@@ -590,8 +632,8 @@ export default tseslint.config(
         ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         FEED_STATE_LITERAL,
-        FORM_GET_BAN,
       ],
+      "form-rules/form-data-get": "error",
     },
   },
 
@@ -642,10 +684,12 @@ export default tseslint.config(
 
   {
     // Identity *.server.ts still exempts DOMAIN_HOSTNAME_BAN (the engine lives
-    // here) and adds FORM_GET_BAN so confirm/card-draft cannot read form.get by
-    // hand. card-fields.ts stays on the block above: isDraftSave reads pending
-    // formData for shouldRevalidate, not action input. 0509#7027, 0509#7033.
+    // here) and bans form-rules/form-data-get so confirm/card-draft cannot read
+    // a FormData receiver by hand. card-fields.ts stays on the block above:
+    // isDraftSave reads pending formData (FormData | undefined) for
+    // shouldRevalidate, not action input. 0509#7027, 0509#7033, 0509#7111.
     files: ["app/lib/identity/**/*.server.ts"],
+    plugins: FORM_RULES_PLUGIN,
     rules: {
       "no-restricted-syntax": [
         "error",
@@ -653,8 +697,8 @@ export default tseslint.config(
         ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         FEED_STATE_LITERAL,
-        FORM_GET_BAN,
       ],
+      "form-rules/form-data-get": "error",
     },
   },
 
@@ -1035,6 +1079,7 @@ export default tseslint.config(
 
   {
     files: ["app/routes/**/*.{ts,tsx}"],
+    plugins: FORM_RULES_PLUGIN,
     rules: {
       "max-lines": ["error", { max: 150, skipBlankLines: false, skipComments: false }],
       "no-restricted-syntax": [
@@ -1044,8 +1089,8 @@ export default tseslint.config(
         RAW_DML_WRITER,
         ENV_DB_IN_ROUTES,
         FEED_STATE_LITERAL,
-        FORM_GET_BAN,
       ],
+      "form-rules/form-data-get": "error",
     },
   },
 
