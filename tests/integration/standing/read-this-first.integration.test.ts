@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { READ_THIS_FIRST } from "../../../app/lib/read-this-first";
+import { toSignalRow } from "../../../workers/mentions/map";
 import { judgeWeek } from "../../../workers/standing/read-this-first";
 /**
  * The weekly D4 pass against the real D1 schema the deploy ships.
@@ -124,6 +125,15 @@ function inputFor(workspaceId: string) {
 afterEach(() => {
   Reflect.deleteProperty(env, "AI");
 });
+
+const MAP_CTX = {
+  workspaceId: "ws_map",
+  entityId: "ent_map",
+  sourceId: "src_map",
+  watchId: null,
+  snapshotId: null,
+  observedAt: "2026-09-18T10:00:00.000Z",
+};
 
 describe("judgeWeek", () => {
   it("judges the week's D3/D6-passed items and writes every verdict", async () => {
@@ -282,5 +292,48 @@ describe("judgeWeek", () => {
     expect(asked).toContain("In week offset");
     expect(asked).toContain("Edge no millis");
     expect(asked).not.toContain("Out of week offset");
+  });
+  it("excludes an RFC822 item normalised at ingest from the week, and orders by published date over observed date", async () => {
+    const seeded = await seed();
+    const rfc822 = await toSignalRow(
+      {
+        dedupKey: "old",
+        url: "https://old.example/post",
+        title: "Rfc822 old story",
+        publishedAt: "Mon, 04 Mar 2021 10:00:00 GMT",
+      },
+      { ...MAP_CTX, observedAt: "2026-09-18T10:00:00.000Z" },
+    );
+    expect(rfc822.published_at).toBe("2021-03-04T10:00:00.000Z");
+    await addMention(
+      seeded,
+      `${seeded.signalA}-rfc`,
+      "Rfc822 old story",
+      rfc822.published_at ?? "",
+      rfc822.observed_at,
+    );
+    await addMention(
+      seeded,
+      `${seeded.signalA}-early`,
+      "Published early",
+      "2026-09-16T00:00:00.000Z",
+      "2026-09-30T00:00:00.000Z",
+    );
+    await addMention(
+      seeded,
+      `${seeded.signalA}-late`,
+      "Published late",
+      "2026-09-20T00:00:00.000Z",
+      "2026-09-17T00:00:00.000Z",
+    );
+    const run = vi.fn(async () => ({ answers: { [READ_THIS_FIRST.id]: { type: "noul", noul: 0.9 } } }));
+    Reflect.set(env, "AI", { run });
+
+    await judgeWeek(env.DB, inputFor(seeded.workspaceId));
+
+    const asked = askedTitles(run);
+    expect(asked).not.toContain("Rfc822 old story");
+    expect(asked.indexOf("Published late")).toBeGreaterThanOrEqual(0);
+    expect(asked.indexOf("Published late")).toBeLessThan(asked.indexOf("Published early"));
   });
 });
