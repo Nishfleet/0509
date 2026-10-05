@@ -1,3 +1,5 @@
+import { captureException, captureMessage } from "@sentry/cloudflare";
+
 import {
   FEED_SWEEP_CRON,
   HIRING_SWEEP_CRON,
@@ -48,6 +50,26 @@ function startInstance(env: CronEnv, cron: WorkflowCron, scheduledTime: number) 
   return createOnce(env[entryFor(cron).binding], instanceId(cron, scheduledTime));
 }
 
+export type MissedWorkflow = { cron: WorkflowCron; id: string; created: boolean };
+
+async function startMissedInstance(env: CronEnv, cron: WorkflowCron, scheduledTime: number): Promise<MissedWorkflow> {
+  return { cron, ...(await startInstance(env, cron, scheduledTime)) };
+}
+
+export function reportMissedWorkflows(results: readonly PromiseSettledResult<MissedWorkflow>[]) {
+  results.forEach((result) => {
+    if (result.status === "rejected") {
+      captureException(result.reason);
+    } else if (result.value.created) {
+      captureMessage(`Missed Workflow started: ${entryFor(result.value.cron).name}`, {
+        level: "warning",
+        fingerprint: ["missed-workflow", result.value.cron],
+        extra: { id: result.value.id },
+      });
+    }
+  });
+}
+
 export async function startScheduledWorkflow(env: CronEnv, cron: WorkflowCron, scheduledTime: number) {
   return (await startInstance(env, cron, scheduledTime)).id;
 }
@@ -73,14 +95,17 @@ export function startMissedDailyWorkflows(env: CronEnv, now: number) {
   const due = dailyCrons().flatMap((cron) => {
     const [minute = "0", hour = "0"] = cron.split(" ");
     const scheduledTime = dayStart + (Number(hour) * 60 + Number(minute)) * 60_000;
-    return scheduledTime <= now ? [{ cron, scheduledTime }] : [];
+    // A slot that equals now fires its own cron trigger at this very instant, so the
+    // daily handler alone owns its minute: the hourly catch-up must not claim it too,
+    // or one of the two starts reads as a missed workflow that was never missed.
+    return scheduledTime < now ? [{ cron, scheduledTime }] : [];
   });
-  return Promise.allSettled(due.map(({ cron, scheduledTime }) => startInstance(env, cron, scheduledTime)));
+  return Promise.allSettled(due.map(({ cron, scheduledTime }) => startMissedInstance(env, cron, scheduledTime)));
 }
 
-export async function startMissedWorkflows(env: CronEnv, now: number) {
+export async function startMissedWorkflows(env: CronEnv, now: number): Promise<PromiseSettledResult<MissedWorkflow>[]> {
   return [
     ...(await startMissedDailyWorkflows(env, now)),
-    ...(await Promise.allSettled([startMissedOwnSiteCheck(env, now)])),
+    ...(await Promise.allSettled([startMissedOwnSiteCheck(env, now).then((started) => ({ cron: OWN_SITE_CHECK_CRON, ...started }))])),
   ];
 }
