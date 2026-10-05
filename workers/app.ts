@@ -1,11 +1,5 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
-import {
-  captureException,
-  instrumentWorkflowWithSentry,
-  setTag,
-  withMonitor,
-  withSentry,
-} from "@sentry/cloudflare";
+import { captureException, instrumentWorkflowWithSentry, setTag, withMonitor, withSentry } from "@sentry/cloudflare";
 import { createRequestHandler } from "react-router";
 
 import { NIGHTLY_CRON, OWN_SITE_CHECK_CRON, WEEKLY_REFRESH_CRON } from "../app/lib/cadence";
