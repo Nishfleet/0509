@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 
+import { normalizeEmailAddress } from "../email-address";
 import { decryptSlackWebhook, encryptSlackWebhook, isEncryptedSlackTarget } from "../slack-target-crypto.server";
 import { parseSlackWebhook } from "../slack-webhook";
 import { sha256Hex } from "../sha256";
@@ -34,7 +35,7 @@ const CHANGE_EMAIL_TARGET = `UPDATE send_target
 SET target_value = ?, is_verified = 0, unsubscribe_token = NULL, verify_token = NULL, verify_token_expires_at = NULL
 WHERE workspace_id = ?
   AND channel_id = (SELECT id FROM channel WHERE key = 'email')
-  AND target_value <> ?`;
+  AND lower(trim(target_value)) <> lower(trim(?))`;
 
 const CONFIRM_EMAIL_TARGET_BY_TOKEN = `UPDATE send_target SET is_verified = 1, verify_token = NULL, verify_token_expires_at = NULL
 WHERE verify_token = ? AND verify_token_expires_at > ?`;
@@ -43,7 +44,7 @@ const SELECT_EMAIL_TARGET_BY_TOKEN = `SELECT target_value FROM send_target
 WHERE verify_token = ? AND verify_token_expires_at > ?`;
 
 const INSERT_OWNER_EMAIL_TARGET = `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at)
-SELECT 'st-email-' || w.id, w.id, c.id, u.email, u.emailVerified, ?
+SELECT 'st-email-' || w.id, w.id, c.id, lower(trim(u.email)), u.emailVerified, ?
   FROM workspace w
   JOIN "user" u ON u.id = w.owner_user_id
   JOIN channel c ON c.key = 'email'
@@ -93,7 +94,8 @@ export async function markEmailTargetVerified(db: TargetDb, input: { workspaceId
 }
 
 export async function changeEmailTarget(db: TargetDb, input: { workspaceId: string; address: string }): Promise<void> {
-  await db.prepare(CHANGE_EMAIL_TARGET).bind(input.address, input.workspaceId, input.address).run();
+  const address = normalizeEmailAddress(input.address);
+  await db.prepare(CHANGE_EMAIL_TARGET).bind(address, input.workspaceId, address).run();
 }
 
 export async function readEmailTargetByToken(
