@@ -1,6 +1,7 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
+import { SITE_SWEEP_CRON, sweepMonitor } from "../../app/lib/cadence";
 import { recordSweepRun } from "../../app/lib/data/sweep_run.server";
 import { pingLiveness } from "../../app/lib/liveness-ping.server";
 import { classifyCompetitorSites } from "../../app/lib/site/classify-competitors.server";
@@ -20,12 +21,7 @@ const RETRY: WorkflowStepConfig = {
   timeout: "5 minutes",
 };
 
-const MONITOR = {
-  schedule: { type: "crontab", value: "0 2 * * *" },
-  checkinMargin: 60,
-  maxRuntime: 120,
-  timezone: "UTC",
-} as const;
+const MONITOR = { ...sweepMonitor(SITE_SWEEP_CRON), timezone: "UTC" } as const;
 
 type PageOutcome = "failed" | "gone" | "first" | "unchanged" | "changed";
 
