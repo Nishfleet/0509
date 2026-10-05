@@ -36,6 +36,19 @@ const GATEWAY_MODEL = "@cf/cloudflare/clef";
 
 const JEV_URL = VIA_GATEWAY ? "workers-ai binding" : (process.env.JEV_URL ?? "http://127.0.0.1:4000/jev");
 
+// The yes/no-probability primitive is spelled differently by the two endpoints this
+// harness can post to (0509#7177). VIA_GATEWAY is the production call in
+// app/lib/jev/client.server.ts: Cloudflare Clef keeps TypeSafe's `noul` request and
+// answers `noul`, and it is the path .github/workflows/evals.yml runs. The /jev route
+// on this box was re-pointed at the Vercel AI Gateway evaluation model on 2026-10-04,
+// and that API accepts only choice, score and boolean, so a `noul` request comes back
+// 400 "Invalid discriminator value" and the answer carries `probability`.
+const NOUL_TYPE = VIA_GATEWAY ? "noul" : "boolean";
+
+function noulOf(answer: JevAnswer): number | undefined {
+  return VIA_GATEWAY ? answer.noul : answer.probability;
+}
+
 // Eval calls skip AI Gateway on purpose: error 2003 is the gateway's own rate limit,
 // and sharing the gateway `default` with customers failed two sign-ups on 2026-10-04
 // (docs/incidents/2026-10-04-signup-judge-failure.md). callBudget caps the spend.
@@ -108,9 +121,16 @@ export type Ask<T extends EvalRow> = (row: T) => Promise<Call>;
 
 export type Score<T extends EvalRow> = (row: T, call: Call) => Outcome;
 
+interface JevAnswer {
+  type?: string;
+  noul?: number;
+  probability?: number;
+  choice?: string;
+}
+
 interface JevResponse {
   model?: string;
-  answers?: Record<string, { type?: string; noul?: number; choice?: string }>;
+  answers?: Record<string, JevAnswer>;
 }
 
 export async function loadCases<T extends EvalRow>(
@@ -223,7 +243,7 @@ async function postJev(body: unknown): Promise<JevResponse> {
   return parsed;
 }
 
-function answerOf(body: JevResponse, questionId: string): { type?: string; noul?: number; choice?: string } {
+function answerOf(body: JevResponse, questionId: string): JevAnswer {
   const answer = body.answers?.[questionId];
   if (answer === undefined) throw new Error(`jev answer missing ${questionId}: ${JSON.stringify(body).slice(0, 300)}`);
   return answer;
@@ -260,46 +280,38 @@ export function loadSiteRows<L extends boolean | string>(caseFile: string, quest
   });
 }
 
+// One place builds the noul question body, so the request type and the answer field read
+// back cannot drift apart.
+function noulQuestions(questions: readonly NoulEvalQuestion[]): Record<string, unknown> {
+  return Object.fromEntries(
+    questions.map((question) => [
+      question.id,
+      {
+        type: NOUL_TYPE,
+        instructions: question.instructions,
+        criteria: { true: question.whenTrue, false: question.whenFalse },
+      },
+    ]),
+  );
+}
+
+function noulValue(answer: JevAnswer, questionId: string): number {
+  const value = noulOf(answer);
+  if (typeof value !== "number") throw new Error(`jev answer missing a ${NOUL_TYPE} for ${questionId}`);
+  return value;
+}
+
 export function makeNoulAsk(question: NoulEvalQuestion): StateAsk {
   return async (state) => {
-    const body = await postJev({
-      model: "jev-latest",
-      state,
-      questions: {
-        [question.id]: {
-          type: "noul",
-          instructions: question.instructions,
-          criteria: { true: question.whenTrue, false: question.whenFalse },
-        },
-      },
-    });
-    const answer = answerOf(body, question.id);
-    if (typeof answer.noul !== "number") throw new Error(`jev answer missing a noul: ${question.id}`);
-    return { model: body.model as string, p: answer.noul, choice: null };
+    const body = await postJev({ model: "jev-latest", state, questions: noulQuestions([question]) });
+    return { model: body.model as string, p: noulValue(answerOf(body, question.id), question.id), choice: null };
   };
 }
 
 export function makeNoulsAsk(questions: readonly NoulEvalQuestion[], combine: (ps: number[]) => number): StateAsk {
   return async (state) => {
-    const body = await postJev({
-      model: "jev-latest",
-      state,
-      questions: Object.fromEntries(
-        questions.map((question) => [
-          question.id,
-          {
-            type: "noul",
-            instructions: question.instructions,
-            criteria: { true: question.whenTrue, false: question.whenFalse },
-          },
-        ]),
-      ),
-    });
-    const ps = questions.map((question) => {
-      const answer = answerOf(body, question.id);
-      if (typeof answer.noul !== "number") throw new Error(`jev answer missing a noul: ${question.id}`);
-      return answer.noul;
-    });
+    const body = await postJev({ model: "jev-latest", state, questions: noulQuestions(questions) });
+    const ps = questions.map((question) => noulValue(answerOf(body, question.id), question.id));
     return { model: body.model as string, p: combine(ps), choice: null };
   };
 }
