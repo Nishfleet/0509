@@ -1144,7 +1144,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Dates + timezones                           | `Intl` + `date-fns` + `@date-fns/tz` (never `Temporal`, workerd#6907) | platform / 4.4.0 / 1.5.0                 |
 | Unit + integration tests                    | `vitest` (**pinned 4.1.11**) + `@cloudflare/vitest-plugin`            | 4.1.11 / 1.3.3                           |
 | E2E against production                      | `@playwright/test`                                                    | 1.63.0                                   |
-| Performance gate                            | `treosh/lighthouse-ci-action`                                         | v12.6.2                                  |
+| Performance gate                            | `@lhci/cli` (lockfile; starts `wrangler dev` itself)                  | 0.15.1                                   |
 | Link checking                               | `lycheeverse/lychee-action`                                           | v2.9.0                                   |
 | Red-main issue create-or-update             | `JasonEtco/create-an-issue` (update_existing, search_existing: open)  | v2.9.2                                   |
 | MCP server                                  | `createMcpHandler` (`@modelcontextprotocol/server`)                   | 2.1.0                                    |
