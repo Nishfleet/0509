@@ -1,4 +1,4 @@
--- 0047_drop_rate_limit_events.sql — drop the dead rate_limit_events table.
+-- 0051_drop_rate_limit_events.sql — drop the dead rate_limit_events table.
 -- Issue #7194, parent audit #7080.
 --
 -- Why: 0001_rebuild.sql created the table and nothing on origin/main touches it.
