@@ -54,12 +54,15 @@ type Snapshot = Record<(typeof NAMES)[number], unknown>;
 
 export const PRODUCTION_ORIGIN = "https://0509.io";
 
-const PUBLIC_PLACEHOLDER_VALUES = {
+export const PUBLIC_PLACEHOLDER_NAMES = [
+  "BETTER_AUTH_SECRET",
+  "DODO_WEBHOOK_SECRET",
+] as const satisfies readonly EnvName[];
+
+export const PUBLIC_PLACEHOLDER_VALUES = {
   BETTER_AUTH_SECRET: "local-only-not-a-production-secret",
   DODO_WEBHOOK_SECRET: "whsec_bG9jYWwtb25seS1ub3QtYS13ZWJob29rLXNlY3JldA==",
-} as const satisfies Partial<Record<EnvName, string>>;
-
-const PLACEHOLDER_NAMES = Object.keys(PUBLIC_PLACEHOLDER_VALUES) as readonly (keyof typeof PUBLIC_PLACEHOLDER_VALUES)[];
+} as const satisfies Record<(typeof PUBLIC_PLACEHOLDER_NAMES)[number], string>;
 
 const NAME_SET: ReadonlySet<string> = new Set(NAMES);
 
@@ -101,7 +104,7 @@ const workerEnvSchema = z
   })
   .check((ctx) => {
     if (ctx.value.BETTER_AUTH_URL !== PRODUCTION_ORIGIN) return;
-    for (const name of PLACEHOLDER_NAMES) {
+    for (const name of PUBLIC_PLACEHOLDER_NAMES) {
       if (ctx.value[name] !== PUBLIC_PLACEHOLDER_VALUES[name]) continue;
       ctx.issues.push({ path: [name], input: ctx.value, message: "public placeholder value" });
     }

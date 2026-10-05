@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("cloudflare:workers", () => ({
@@ -9,6 +11,8 @@ import { env } from "cloudflare:workers";
 import {
   createWorkerEnvCheck,
   landingWorkspaceId,
+  PUBLIC_PLACEHOLDER_NAMES,
+  PUBLIC_PLACEHOLDER_VALUES,
   WorkerEnvError,
   workerEnvFailureResponse,
 } from "../app/lib/env.server";
@@ -70,6 +74,16 @@ function namesOf(check: () => void) {
     return error as WorkerEnvError;
   }
   expect.fail("expected a misconfigured env to throw");
+}
+
+function exampleSecrets(): Record<string, string> {
+  const secrets: Record<string, string> = {};
+  const text = readFileSync(new URL("../.dev.vars.example", import.meta.url), "utf8");
+  for (const line of text.split("\n")) {
+    const match = /^([A-Z0-9_]+)=(.*)$/.exec(line);
+    if (match) secrets[String(match[1])] = String(match[2]);
+  }
+  return secrets;
 }
 
 describe("worker env", () => {
@@ -160,6 +174,16 @@ describe("worker env", () => {
     expect(error.message).not.toContain("whsec_");
   });
 
+  // The table is hand-mirrored from .dev.vars.example, and that is the same
+  // drift the origin pin closes. Change the example file and this goes red, so
+  // the gate cannot quietly stop covering production.
+  it("pins the placeholder table to the values .dev.vars.example ships", () => {
+    const example = exampleSecrets();
+    for (const name of PUBLIC_PLACEHOLDER_NAMES) {
+      expect(example[name], `.dev.vars.example no longer ships ${name}`).toBe(PUBLIC_PLACEHOLDER_VALUES[name]);
+    }
+  });
+
   // The Turnstile keys in .dev.vars.example are Cloudflare's published dummy
   // keys and tests/integration/wrangler.test.jsonc runs on this same origin
   // with them on purpose, so the rejection table stays per variable.
@@ -191,7 +215,11 @@ describe("worker env", () => {
   });
 
   it("answers 503 and names a placeholder secret without echoing it", async () => {
-    useEnv({ ...configured(), BETTER_AUTH_SECRET: "local-only-not-a-production-secret" });
+    useEnv({
+      ...configured(),
+      BETTER_AUTH_SECRET: "local-only-not-a-production-secret",
+      DODO_WEBHOOK_SECRET: "whsec_bG9jYWwtb25seS1ub3QtYS13ZWJob29rLXNlY3JldA==",
+    });
     const error = namesOf(createWorkerEnvCheck());
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
@@ -200,7 +228,9 @@ describe("worker env", () => {
       expect(response.headers.get("cache-control")).toBe("no-store");
       const body = await response.text();
       expect(body).toContain("BETTER_AUTH_SECRET");
+      expect(body).toContain("DODO_WEBHOOK_SECRET");
       expect(body).not.toContain("local-only-not-a-production-secret");
+      expect(body).not.toContain("whsec_");
     } finally {
       spy.mockRestore();
     }
