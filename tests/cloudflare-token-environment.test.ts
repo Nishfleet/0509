@@ -22,11 +22,17 @@ interface Job {
   file: string;
   key: string;
   job: WorkflowJob;
+  workflowEnv: unknown;
 }
 
 function readJobs(file: string, source: string): Job[] {
-  const jobs = (parse(source) as { jobs?: Record<string, WorkflowJob> }).jobs ?? {};
-  return Object.entries(jobs).map(([key, job]) => ({ file, key, job }));
+  const workflow = parse(source) as { env?: unknown; jobs?: Record<string, WorkflowJob> };
+  return Object.entries(workflow.jobs ?? {}).map(([key, job]) => ({
+    file,
+    key,
+    job,
+    workflowEnv: workflow.env,
+  }));
 }
 
 function environmentName(job: WorkflowJob): string | undefined {
@@ -36,13 +42,13 @@ function environmentName(job: WorkflowJob): string | undefined {
   return undefined;
 }
 
-function readsCloudflareToken(job: WorkflowJob): boolean {
-  return TOKEN.test(JSON.stringify(job));
+function readsCloudflareToken({ job, workflowEnv }: Job): boolean {
+  return TOKEN.test(JSON.stringify([job, workflowEnv ?? null]));
 }
 
 function tokenJobsWithoutProduction(jobs: Job[]): string[] {
   return jobs
-    .filter(({ job }) => readsCloudflareToken(job) && environmentName(job) !== "production")
+    .filter((entry) => readsCloudflareToken(entry) && environmentName(entry.job) !== "production")
     .map(({ file, key }) => `${file}: ${key}`);
 }
 
@@ -56,7 +62,7 @@ async function allJobs(): Promise<Job[]> {
 
 describe("jobs that read a Cloudflare token use environment: production (0509#7072)", () => {
   it("finds the jobs that read a Cloudflare token", async () => {
-    const tokenJobs = (await allJobs()).filter(({ job }) => readsCloudflareToken(job));
+    const tokenJobs = (await allJobs()).filter(readsCloudflareToken);
     expect(tokenJobs.map(({ file, key }) => `${file}: ${key}`)).toEqual(
       expect.arrayContaining(["deploy-production.yml: deploy", "e2e-scheduled.yml: soak-report"]),
     );
@@ -91,6 +97,19 @@ describe("jobs that read a Cloudflare token use environment: production (0509#70
       "      - run: echo hi",
     ].join("\n");
     expect(tokenJobsWithoutProduction(readJobs("fixture.yml", yaml))).toEqual(["fixture.yml: settings"]);
+  });
+
+  it("flags a workflow-level env reading the token", () => {
+    const yaml = [
+      "on: workflow_dispatch",
+      "env:",
+      "  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}",
+      "jobs:",
+      "  inherits:",
+      "    steps:",
+      "      - run: echo hi",
+    ].join("\n");
+    expect(tokenJobsWithoutProduction(readJobs("fixture.yml", yaml))).toEqual(["fixture.yml: inherits"]);
   });
 
   it("accepts environment.name: production", () => {
