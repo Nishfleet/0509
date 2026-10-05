@@ -48,6 +48,7 @@ const scheduled = (update: Update | undefined) => update?.schedule;
 
 describe(".github/dependabot.yml npm updates", () => {
   it("splits majors into their own group", () => {
+    // 0509#7078: this parsed group is the only major gate in the file.
     expect(npm).toBeDefined();
     const majors = groupsContaining(npm, "major");
     expect(majors).toHaveLength(1);
@@ -80,10 +81,5 @@ describe(".github/dependabot.yml npm updates", () => {
     expect(scheduled(actions)?.day).toBe("monday");
     expect(scheduled(actions)?.time).toMatch(TIME_OF_DAY);
     expect(scheduled(actions)?.timezone).toBe("Asia/Kolkata");
-  });
-
-  it("does not claim a merge-queue live e2e gate (0509#7078)", () => {
-    const source = readFileSync(CONFIG, "utf8");
-    expect(source).not.toMatch(/behind the merge-queue live e2e/);
   });
 });

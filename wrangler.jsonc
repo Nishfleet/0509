@@ -13,7 +13,8 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "0509",
   // >= 2026-08-04 turns nodejs_compat on by default; still set it so a
-  // Vitest inject cannot hide a missing production flag (REBUILD-STACK §5).
+  // Vitest inject cannot hide a missing production flag
+  // (https://developers.cloudflare.com/workers/configuration/compatibility-flags/).
   "compatibility_date": "2026-09-16",
   // Agent sign-in (@cloudflare/workers-oauth-provider) fetches a client's
   // Client ID Metadata Document by URL; global_fetch_strictly_public keeps

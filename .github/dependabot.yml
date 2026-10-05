@@ -32,8 +32,8 @@ updates:
       npm-minor-patch:
         update-types: [minor, patch]
     # Majors flow through Dependabot in their own group (0509#7074).
-    # They are not gated by a live production suite in the merge queue
-    # (0509#7078). typescript and vitest stay ignored because
+    # preview-assert is the merge-queue e2e (built Worker, not production).
+    # typescript and vitest stay ignored because
     # typescript-eslint 8.70.0 peers typescript <6.1.0 and
     # @cloudflare/vitest-plugin 1.1.13 peers vitest ^4.1.0 (verified
     # 2026-09-30; 0509#4913, 0509#4915).
