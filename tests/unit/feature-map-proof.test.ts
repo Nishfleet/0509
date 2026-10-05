@@ -59,9 +59,8 @@ describe("feature map proof coverage", () => {
   // pair, so a second row for the same route and file fails the PR. Row shape
   // is taken from the file: a route row's first cell starts with a backtick,
   // while the header, the separator and the "Not a route" table do not (#6133
-  // pattern). The parser could also drift and read nothing, so a positive
-  // control proves rows were actually seen, and the count is pinned against
-  // the route table's own header so a silent drop fails here too.
+  // pattern). A parser that drifts and reads nothing would pass green while
+  // checking nothing, so a positive control proves rows were actually seen.
   it("has no duplicate route row", async () => {
     const map = await readFile(MAP, "utf8");
     const seen = new Map<string, number>();
