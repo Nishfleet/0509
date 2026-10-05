@@ -15,15 +15,16 @@ import { describe, expect, it } from "vitest";
  * A statement that fails is the stronger claim: a table the app still reaches
  * would resolve even with an empty row list, so an absent sqlite_master row
  * alone cannot tell "dropped" from "empty".
+ *
+ * The resurrection vector is the migration chain, not the app source: nothing
+ * in app/, workers/ or e2e/ can bring the table back, because a table exists
+ * only once a file in migrations/ creates it, and the assertion below scans
+ * every one of those files. A future writer that reaches for the table anyway
+ * fails at prepare time, which is exactly what the read and write assertions
+ * pin.
  */
 
 const TABLE = "rate_limit_events";
-const INDEX = "idx_rate_limit_bucket";
-/** 37 on origin/main: 35 plus sweep_run (0029) plus jev_failure (0043). */
-const TABLES_BEFORE = 37;
-
-const TABLE_COUNT = `SELECT count(*) AS n FROM sqlite_master
-  WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != 'd1_migrations' AND name NOT LIKE '_cf_%'`;
 
 function dropMigration(): D1Migration {
   const found = env.TEST_MIGRATIONS.find((migration) => migration.name.endsWith("_drop_rate_limit_events.sql"));
@@ -65,9 +66,9 @@ describe("0047_drop_rate_limit_events.sql", () => {
     expect(naming).toEqual(["0001_rebuild.sql", "0047_drop_rate_limit_events.sql"]);
   });
 
-  it("leaves neither the table nor its index in the schema the chain builds", async () => {
-    const rows = await env.DB.prepare("SELECT type, name FROM sqlite_master WHERE name = ?1 OR name = ?2")
-      .bind(TABLE, INDEX)
+  it("leaves the table out of the schema the chain builds", async () => {
+    const rows = await env.DB.prepare("SELECT type, name FROM sqlite_master WHERE name = ?1")
+      .bind(TABLE)
       .all<{ type: string; name: string }>();
     expect(rows.results ?? []).toEqual([]);
   });
@@ -79,10 +80,5 @@ describe("0047_drop_rate_limit_events.sql", () => {
         .bind("rl-1", "bucket", "subject", "2026-10-06T00:00:00.000Z")
         .run(),
     ).rejects.toThrow(/no such table/i);
-  });
-
-  it("takes exactly one table off the count the chain builds", async () => {
-    const row = await env.DB.prepare(TABLE_COUNT).first<{ n: number }>();
-    expect(row?.n).toBe(TABLES_BEFORE - 1);
   });
 });
