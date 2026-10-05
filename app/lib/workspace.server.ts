@@ -124,7 +124,6 @@ export async function workspaceLandingForRequest(
   request: Request,
   user: { id: string; email: string },
 ): Promise<{ workspaceId: string | null; landing: string | null }> {
-  if (!user.email) return { workspaceId: null, landing: "/login" };
   return workspaceLanding(env.DB, {
     userId: user.id,
     timezone: await timezoneCookieValue(request.headers.get("cookie")),
