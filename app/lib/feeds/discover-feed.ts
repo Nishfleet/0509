@@ -10,6 +10,7 @@ export const COMMON_FEED_PATHS: readonly string[] = [
   "/changelog/feed.xml",
   "/blog/rss.xml",
   "/feed.xml",
+  "/atom",
 ];
 
 export const MAX_FEED_CANDIDATES = 12;
