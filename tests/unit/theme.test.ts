@@ -538,8 +538,8 @@ describe("the one stylesheet stays the one stylesheet (#3984)", () => {
 
   it("maps every shadcn stock colour token onto a documented one", async () => {
     // #7071: app/components/ui/ ships shadcn stock classes whose tokens had no
-    // declaration, so `bg-primary` compiled to nothing and the dialog, badge,
-    // toggle, textarea and select backgrounds all rendered transparent/black.
+    // declaration, so `bg-popover` compiled to nothing and the dialog, popover,
+    // badge, toggle, avatar and switch surfaces all rendered transparent/black.
     // The eslint no-unknown-classes guard (eslint.config.js) keeps this set
     // complete, but it cannot say WHICH token each maps to, so the aliases are
     // pinned here: a rename of --bone, or a re-aim of --color-primary at some
@@ -549,7 +549,6 @@ describe("the one stylesheet stays the one stylesheet (#3984)", () => {
       "--color-background": "--bone",
       "--color-foreground": "--ink",
       "--color-card": "--card",
-      "--color-card-foreground": "--ink",
       "--color-popover": "--card",
       "--color-popover-foreground": "--ink",
       "--color-primary": "--green",

@@ -80,7 +80,6 @@
   --color-background: var(--bone);
   --color-foreground: var(--ink);
   --color-card: var(--card);
-  --color-card-foreground: var(--ink);
   --color-popover: var(--card);
   --color-popover-foreground: var(--ink);
   --color-primary: var(--green);
