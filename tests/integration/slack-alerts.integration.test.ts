@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { readSlackTarget, saveSlackTarget } from "../../app/lib/data/send_target.server";
 import { runSettingsIntent } from "../../app/lib/settings.server";
+import { encryptSlackWebhook, slackTargetKeyId } from "../../app/lib/slack-target-crypto.server";
 
 const USER = "user-slack-alerts";
 const WS = "ws-slack-alerts";
@@ -120,19 +121,44 @@ describe("Slack alerts setting (0509#6376)", () => {
     }
   });
 
-  it("reads an encrypted row with the previous secret during rotation (dual-read)", async () => {
+  it("reads rows sealed with the previous key during rotation and re-seals them with the new key", async () => {
     stubSlack(200);
     await call({ intent: "slack-save", webhook: HOOK });
     const held = env.SLACK_TARGET_SECRET;
-    const heldPrev = env.SLACK_TARGET_SECRET_PREVIOUS;
-    env.SLACK_TARGET_SECRET_PREVIOUS = held;
-    env.SLACK_TARGET_SECRET = heldPrev || "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=";
+    const next = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=";
+    const storedValue = async () =>
+      (
+        await env.DB.prepare(`SELECT target_value FROM send_target WHERE workspace_id = ?`)
+          .bind(WS)
+          .first<{ target_value: string }>()
+      )?.target_value ?? "";
+    expect(await storedValue()).toContain(`enc:v2:${await slackTargetKeyId(held)}:`);
+    env.SLACK_TARGET_SECRET = `${next},${held}`;
     try {
+      expect((await readSlackTarget(env.DB, WS))?.target_value).toBe(HOOK);
+      expect(await storedValue()).toContain(`enc:v2:${await slackTargetKeyId(next)}:`);
+      env.SLACK_TARGET_SECRET = next;
       expect((await readSlackTarget(env.DB, WS))?.target_value).toBe(HOOK);
     } finally {
       env.SLACK_TARGET_SECRET = held;
-      env.SLACK_TARGET_SECRET_PREVIOUS = heldPrev;
     }
+  });
+
+  it("re-seals a legacy enc:v1 row with the current key on read", async () => {
+    const sealed = await encryptSlackWebhook(HOOK, env.SLACK_TARGET_SECRET, WS);
+    const legacy = `enc:v1:${sealed.split(":")[3] ?? ""}`;
+    await env.DB.prepare(
+      `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at)
+       SELECT 'st-slack-v1', ?, id, ?, 1, '2026-10-01T00:00:00Z' FROM channel WHERE key = 'slack'`,
+    )
+      .bind(WS, legacy)
+      .run();
+
+    expect((await readSlackTarget(env.DB, WS))?.target_value).toBe(HOOK);
+    const stored = await env.DB.prepare(`SELECT target_value FROM send_target WHERE id = 'st-slack-v1'`).first<{
+      target_value: string;
+    }>();
+    expect(stored?.target_value.startsWith(`enc:v2:${await slackTargetKeyId(env.SLACK_TARGET_SECRET)}:`)).toBe(true);
   });
 
   it("refuses an address that is not a Slack webhook without calling anything", async () => {

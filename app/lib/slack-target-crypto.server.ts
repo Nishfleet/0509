@@ -71,6 +71,11 @@ async function sealedWith(envelope: StoredEnvelope, secret: string): Promise<boo
   return envelope.keyId === null || envelope.keyId === (await slackTargetKeyId(secret));
 }
 
+export async function isSealedWithKey(stored: string, secret: string): Promise<boolean> {
+  const envelope = parseEnvelope(stored);
+  return envelope?.keyId === (await slackTargetKeyId(secret));
+}
+
 function boundWorkspace(workspaceId: string): Uint8Array<ArrayBuffer> {
   return copyBytes(new TextEncoder().encode(workspaceId));
 }
@@ -121,4 +126,20 @@ export async function decryptSlackWebhook(stored: string, secret: string, worksp
   const webhook = parseSlackWebhook(new TextDecoder().decode(bytes));
   if (webhook === null) throw new Error("Slack target could not be decrypted");
   return webhook;
+}
+
+export async function decryptSlackWebhookWithKeys(
+  stored: string,
+  secrets: readonly string[],
+  workspaceId: string,
+): Promise<string> {
+  let failure: unknown = new Error("Slack target could not be decrypted");
+  for (const secret of secrets) {
+    try {
+      return await decryptSlackWebhook(stored, secret, workspaceId);
+    } catch (error) {
+      failure = error;
+    }
+  }
+  throw failure;
 }

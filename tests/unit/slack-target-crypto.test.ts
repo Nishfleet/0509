@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   decryptSlackWebhook,
+  decryptSlackWebhookWithKeys,
   encryptSlackWebhook,
   isEncryptedSlackTarget,
+  isSealedWithKey,
   slackTargetKeyId,
 } from "../../app/lib/slack-target-crypto.server";
 
 const SECRET = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+const PREVIOUS = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=";
 const OTHER_SECRET = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=";
 const HOOK = "https://hooks.slack.com/services/T0123ABC/B0456DEF/abcDEF123456";
 const WS = "ws-slack-crypto";
@@ -58,9 +61,32 @@ describe("Slack target AES-GCM", () => {
     await expect(decryptSlackWebhook(HOOK, SECRET, WS)).rejects.toThrow("Slack target is not encrypted");
   });
 
-  it("parses legacy v1 format with no key id for backward compatibility", async () => {
-    const stored = `enc:v1:${btoa(String.fromCharCode(...new Uint8Array(28).fill(0)))}`;
-    await expect(decryptSlackWebhook(stored, SECRET, WS)).rejects.toThrow("Slack target could not be decrypted");
+  it("still reads a legacy enc:v1 row, which carries no key id", async () => {
+    const stored = await encryptSlackWebhook(HOOK, SECRET, WS);
+    const legacy = `enc:v1:${stored.split(":")[3] ?? ""}`;
+    expect(await decryptSlackWebhook(legacy, SECRET, WS)).toBe(HOOK);
+    expect(await isSealedWithKey(legacy, SECRET)).toBe(false);
+  });
+
+  it("reads a row sealed with the previous key while the new key is first in the list", async () => {
+    const stored = await encryptSlackWebhook(HOOK, PREVIOUS, WS);
+    expect(await decryptSlackWebhookWithKeys(stored, [SECRET, PREVIOUS], WS)).toBe(HOOK);
+    expect(await isSealedWithKey(stored, PREVIOUS)).toBe(true);
+    expect(await isSealedWithKey(stored, SECRET)).toBe(false);
+  });
+
+  it("refuses a row whose key is no longer in the list", async () => {
+    const stored = await encryptSlackWebhook(HOOK, PREVIOUS, WS);
+    await expect(decryptSlackWebhookWithKeys(stored, [SECRET], WS)).rejects.toThrow(
+      "Slack target could not be decrypted",
+    );
+    await expect(decryptSlackWebhookWithKeys(stored, [], WS)).rejects.toThrow("Slack target could not be decrypted");
+  });
+
+  it("refuses an enc:v2 row whose key id names another key, without trying it", async () => {
+    const stored = await encryptSlackWebhook(HOOK, SECRET, WS);
+    const relabelled = stored.replace(await slackTargetKeyId(SECRET), await slackTargetKeyId(PREVIOUS));
+    await expect(decryptSlackWebhook(relabelled, SECRET, WS)).rejects.toThrow("Slack target could not be decrypted");
   });
 
   it("refuses a payload shorter than IV plus GCM tag", async () => {

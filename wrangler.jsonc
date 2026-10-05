@@ -110,7 +110,14 @@
   // it, and a client-supplied value would let a link point anywhere.
   // BETTER_AUTH_SECRET stays a Worker secret.
   // TURNSTILE_SECRET_KEY and TURNSTILE_SITE_KEY are Worker secrets too.
-  // SLACK_TARGET_SECRET is the AES-GCM key for send_target Slack webhook rows.
+  // SLACK_TARGET_SECRET is the AES-GCM key for send_target Slack webhook rows:
+  // a comma-separated list of base64 32-byte keys. The first key seals; every
+  // key reads, chosen by the key id stored in the enc:v2:<key id>: prefix (0509#6983).
+  // To rotate, put "<new>,<old>": each row read is re-sealed with <new>. Drop <old>
+  // only once no row is left on it, i.e. this returns 0, where the key id is
+  // printf %s '<new>' | sha256sum | cut -c1-16:
+  // select count(*) from send_target where target_value like 'enc:v1:%'
+  //   or (target_value like 'enc:v2:%' and target_value not like 'enc:v2:<new key id>:%')
   // Listing them under secrets.required makes deploy inherit the values already
   // on the Worker instead of replacing them with a plaintext var.
   // LANDING_WORKSPACE_ID: the public workspace we run ourselves whose changes the landing ticker and mark section show (#4083, #4084). Empty draws no strip and no marks, never filler.
