@@ -564,6 +564,7 @@ describe("the one stylesheet stays the one stylesheet (#3984)", () => {
     };
     for (const [stock, house] of Object.entries(aliases)) {
       expect(css, `${stock} does not alias ${house}`).toContain(`${stock}: var(${house})`);
+      expect(css, `${house} is aliased but never declared`).toMatch(new RegExp(`^\\s*${house}:\\s*#`, "m"));
     }
   });
 

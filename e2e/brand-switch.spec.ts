@@ -48,6 +48,9 @@ test("a row's switch box is 38x22 and the checked thumb stays inside it @smoke",
   });
   expect(edges.thumbRight, JSON.stringify(edges)).toBeLessThanOrEqual(edges.trackRight);
   expect(edges.thumbRight - edges.trackLeft, JSON.stringify(edges)).toBeLessThanOrEqual(38 - 1.5);
+  // And it travels the full 17.5px: a stock `calc(100% - 2px)` travel that won
+  // the cascade would stop the thumb 3.5px short, inside the bounds above.
+  expect(edges.thumbRight - edges.trackLeft, JSON.stringify(edges)).toBeGreaterThanOrEqual(34);
   expect(edges.thumbLeft, JSON.stringify(edges)).toBeGreaterThanOrEqual(edges.trackLeft);
 
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
