@@ -1,6 +1,7 @@
 import type { Route } from "./+types/onboarding.plan";
 
 import { data, redirect } from "react-router";
+import { z } from "zod";
 
 import { OnboardingFrame } from "../components/onboarding-frame";
 import { PlanGate, UpgradeStatus } from "../components/plan-gate";
@@ -12,6 +13,11 @@ import { requireFreshSession, requireSession, signOutToLogin } from "../lib/requ
 import { ONBOARDING_PLAN, workspaceLandingForRequest } from "../lib/workspace.server";
 
 const UNAVAILABLE = { message: "Starting a trial isn't available right now. Try again in a few minutes." };
+
+const planForm = z.object({
+  plan: z.string(),
+  interval: z.string().default("monthly"),
+});
 
 async function workspaceFor(request: Request, fresh = false): Promise<{ workspaceId: string; email: string }> {
   const session = await (fresh ? requireFreshSession(request) : requireSession(request));
@@ -41,9 +47,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export async function action({ request }: Route.ActionArgs) {
   const { workspaceId, email } = await workspaceFor(request, true);
-  const form = await request.formData();
-  const planId = form.get("plan");
-  const interval = form.get("interval") ?? "monthly";
+  const parsed = planForm.safeParse(Object.fromEntries(await request.formData()));
+  const planId = parsed.success ? parsed.data.plan : null;
+  const interval = parsed.success ? parsed.data.interval : "monthly";
   if (!isPlanId(planId) || !isBillingInterval(interval)) return UNAVAILABLE;
   const url = await createCheckoutUrl({
     planId,

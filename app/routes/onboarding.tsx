@@ -30,9 +30,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
   const { landing, workspaceId } = await workspaceLandingForRequest(request, session.user);
   if (workspaceId === null) return await signOutToLogin(request);
-  if (landing === null || landing === ONBOARDING_COMPETITORS || landing === ONBOARDING_PLAN) {
-    throw redirect(landing ?? "/app");
-  }
+  if (landing === null || landing === ONBOARDING_COMPETITORS || landing === ONBOARDING_PLAN) throw redirect(landing ?? "/app");
   return { email: session.user.email };
 }
 
