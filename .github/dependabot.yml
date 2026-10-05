@@ -35,11 +35,16 @@ updates:
     # (0509#5762). typescript and vitest stay ignored because
     # typescript-eslint 8.70.0 peers typescript <6.1.0 and
     # @cloudflare/vitest-plugin 1.1.13 peers vitest ^4.1.0 (verified
-    # 2026-09-30; 0509#4913, 0509#4915).
+    # 2026-09-30; 0509#4913, 0509#4915). @vitest/coverage-v8 moves with
+    # vitest: 5.0.2 peers vitest 5.0.2 and package.json overrides pin it
+    # to 4.1.11, so its major made group PR #7119 fail npm ci with a lock
+    # file out of sync (run 37317116885, 2026-10-05; 0509#5819).
     ignore:
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
       - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitest/coverage-v8"
         update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
