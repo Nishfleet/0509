@@ -102,18 +102,6 @@ function dailyCrons(): WorkflowCron[] {
   );
 }
 
-/**
- * Every nightly sweep feeds the nightly refresh, and the overnight block runs
- * from 19:00 to 01:00 UTC (0509#7191), so an instance dated by its own evening
- * belongs to the *next* day's 03:00 refresh. A missed tick is missed only while
- * the refresh it feeds has not gone out: the catch-up window opens at the last
- * refresh and closes at `now`. Inside a single UTC day that is the same window
- * as before, midnight to now. Across midnight it keeps the previous evening's
- * sweeps catchable, and it never starts a sweep whose refresh has already run,
- * which is what keeps a late catch-up from becoming the overrun this issue
- * removed. `createBatch` skips an id that exists, so repeating the window costs
- * one call per cron and starts nothing twice.
- */
 export function startMissedDailyWorkflows(env: CronEnv, now: number) {
   const day = new Date(now);
   const midnight = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate());
