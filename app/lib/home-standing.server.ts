@@ -3,10 +3,11 @@ import { z } from "zod";
 import { readBriefPayload } from "./brief-payload";
 import type { BriefPayload } from "./brief-payload";
 import type { BriefSchedule } from "./brief-schedule";
-import { SOURCE_KINDS, effectiveKindSql } from "./source-kind";
+import { readEntitlements } from "./data/plan.server";
 import type { HomeCount, HomeEntity, HomeHistoryRow, HomeSource } from "./home-standing";
+import { SOURCE_KINDS, effectiveKindSql } from "./source-kind";
 
-const SELECT_HISTORY = `SELECT entity_id, week_start_at, rank FROM standing WHERE workspace_id = ?1 AND rank IS NOT NULL AND week_start_at IN (SELECT DISTINCT week_start_at FROM standing WHERE workspace_id = ?1 AND rank IS NOT NULL ORDER BY week_start_at DESC LIMIT 4) ORDER BY week_start_at ASC`;
+const SELECT_HISTORY = `SELECT entity_id, week_start_at, rank FROM standing WHERE workspace_id = ?1 AND rank IS NOT NULL AND week_start_at IN (SELECT DISTINCT week_start_at FROM standing WHERE workspace_id = ?1 AND rank IS NOT NULL ORDER BY week_start_at DESC LIMIT ?2) ORDER BY week_start_at ASC`;
 
 const SELECT_HOME_SOURCES = `SELECT key, ${effectiveKindSql("source")} AS kind, platform FROM source WHERE is_enabled = 1 AND id IN (SELECT w.source_id FROM watch w JOIN entity e ON e.id = w.entity_id WHERE e.workspace_id = ?1) ORDER BY kind ASC, key ASC`;
 
@@ -80,9 +81,10 @@ function entityFrom(row: z.infer<typeof homeRow>): HomeEntity | null {
 async function readStandingBatch(db: D1Database, ownerUserId: string, knownWorkspaceId: string | undefined) {
   const standing = db.prepare(SELECT_HOME_STANDING).bind(ownerUserId);
   if (knownWorkspaceId !== undefined) {
+    const weeks = (await readEntitlements(knownWorkspaceId)).standing_history_weeks;
     const [standingResult, historyResult, sourcesResult, countsResult] = await db.batch([
       standing,
-      db.prepare(SELECT_HISTORY).bind(knownWorkspaceId),
+      db.prepare(SELECT_HISTORY).bind(knownWorkspaceId, weeks),
       db.prepare(SELECT_HOME_SOURCES).bind(knownWorkspaceId),
       db.prepare(SELECT_HOME_COUNTS).bind(knownWorkspaceId),
     ]);
@@ -91,8 +93,9 @@ async function readStandingBatch(db: D1Database, ownerUserId: string, knownWorks
   const rows = homeRows.parse((await standing.all()).results);
   const first = rows[0];
   if (first === undefined) return { rows, historyResult: undefined, sourcesResult: undefined, countsResult: undefined };
+  const weeks = (await readEntitlements(first.workspace_id)).standing_history_weeks;
   const [historyResult, sourcesResult, countsResult] = await db.batch([
-    db.prepare(SELECT_HISTORY).bind(first.workspace_id),
+    db.prepare(SELECT_HISTORY).bind(first.workspace_id, weeks),
     db.prepare(SELECT_HOME_SOURCES).bind(first.workspace_id),
     db.prepare(SELECT_HOME_COUNTS).bind(first.workspace_id),
   ]);

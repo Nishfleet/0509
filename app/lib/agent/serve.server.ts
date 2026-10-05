@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 
+import { readEntitlements } from "../data/plan.server";
 import { readWorkspaceIdForOwner } from "../data/workspace.server";
 import { clientIp, withinLimit } from "./client-limit.server";
 import type { AgentProps } from "./context.server";
@@ -31,6 +32,9 @@ async function workspaceFor(props: AgentProps): Promise<string | Response> {
   const workspaceId = await readWorkspaceIdForOwner(props.userId);
   if (workspaceId === null)
     return problem(403, { error: "no_workspace", description: "Finish signing up at 0509.io first." });
+  if (!(await readEntitlements(workspaceId)).api_access) {
+    return problem(403, { error: "plan", description: "This plan does not include API access." });
+  }
   return workspaceId;
 }
 

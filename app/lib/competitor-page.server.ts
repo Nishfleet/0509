@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 
 import type { CompetitorEntity } from "./data/entity.server";
 import { readCompetitor, readCompetitorSocials } from "./data/entity.server";
+import { readEntitlements } from "./data/plan.server";
 import type { PeerRow } from "./data/standing.server";
 import { readLatestPeers } from "./data/standing.server";
 import type { SignalCount } from "./data/signal.server";
@@ -39,7 +40,6 @@ export interface CompetitorPage {
   };
 }
 
-const HISTORY_DAYS = 90;
 const HISTORY_LIMIT = 30;
 const FEED_LIMIT = 100;
 const FACT_DAYS = 30;
@@ -53,11 +53,12 @@ export async function readCompetitorPage(
   if (competitor === null) return null;
   const anchor = historyAnchor(competitor.state, competitor.stateChangedAt, now);
   const weekStart = daysBefore(anchor, 7);
+  const historyDays = (await readEntitlements(workspaceId)).marks_history_days;
   const [watch, changes, developments, peers, facts, sources, verdict, scored, weightResult, socials] =
     await Promise.all([
       readSiteWatchSummary(workspaceId, entityId),
-      readSiteChangeViews({ workspaceId, entityId, since: daysBefore(anchor, HISTORY_DAYS), limit: HISTORY_LIMIT }),
-      readEntityDevelopments({ workspaceId, entityId, since: daysBefore(now, HISTORY_DAYS), limit: FEED_LIMIT }),
+      readSiteChangeViews({ workspaceId, entityId, since: daysBefore(anchor, historyDays), limit: HISTORY_LIMIT }),
+      readEntityDevelopments({ workspaceId, entityId, since: daysBefore(now, historyDays), limit: FEED_LIMIT }),
       readLatestPeers(env.DB, workspaceId),
       readSignalCounts(workspaceId, entityId, daysBefore(now, FACT_DAYS)),
       readEntitySources(workspaceId, entityId),

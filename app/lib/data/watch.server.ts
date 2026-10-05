@@ -1,6 +1,9 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
+
+import { pageRoleInScope, paidSourceAllowed } from "../billing/entitlements";
 import { required } from "../required";
+import { readWorkspaceEntitlements } from "./plan.server";
 
 export interface NewWatch {
   id: string;
@@ -156,9 +159,25 @@ const toSiteSweepTarget = (row: z.infer<typeof targetRows>[number]): SiteSweepTa
   transportTestedAt: row.transport_tested_at,
 });
 
+async function inSitePageScope(targets: readonly SiteSweepTarget[]): Promise<readonly SiteSweepTarget[]> {
+  if (targets.length === 0) return targets;
+  const entitlements = await readWorkspaceEntitlements(targets.map((row) => row.workspaceId));
+  return targets.filter((row) =>
+    pageRoleInScope(row.pageRole, entitlements.get(row.workspaceId)?.site_pages_scope ?? "home_pricing"),
+  );
+}
+
+async function allowedPaidWatches(rows: readonly WatchRow[]): Promise<WatchRow[]> {
+  if (rows.length === 0) return [...rows];
+  const entitlements = await readWorkspaceEntitlements(rows.map((row) => row.workspace_id));
+  return rows.filter((row) =>
+    paidSourceAllowed(row.plugin_key, entitlements.get(row.workspace_id)?.paid_scraper_sources === true),
+  );
+}
+
 export async function readSiteSweepTargets(sourceKey: string): Promise<readonly SiteSweepTarget[]> {
   const rows = await env.DB.prepare(SITE_SWEEP_TARGETS).bind(sourceKey).all();
-  return targetRows.parse(rows.results).map(toSiteSweepTarget);
+  return inSitePageScope(targetRows.parse(rows.results).map(toSiteSweepTarget));
 }
 
 const SITE_SWEEP_TARGET_BY_WATCH = `${SITE_SWEEP_TARGET_JOIN} AND w.id = ?1
@@ -167,7 +186,9 @@ ORDER BY p.url LIMIT 1`;
 export async function readSiteSweepTarget(watchId: string): Promise<SiteSweepTarget | null> {
   const row = await env.DB.prepare(SITE_SWEEP_TARGET_BY_WATCH).bind(watchId).first();
   if (row === null) return null;
-  return toSiteSweepTarget(required(targetRows.parse([row])[0], "watch.site-sweep-target"));
+  const target = toSiteSweepTarget(required(targetRows.parse([row])[0], "watch.site-sweep-target"));
+  const scoped = await inSitePageScope([target]);
+  return scoped[0] ?? null;
 }
 
 const ENSURE_WATCHES = `INSERT INTO watch (id, entity_id, source_id, target_key)
@@ -203,7 +224,7 @@ export interface WatchRow {
 export async function readActiveWatches(kind: "mentions" | "ads"): Promise<WatchRow[]> {
   await env.DB.prepare(ENSURE_WATCHES).bind(kind).run();
   const rows = await env.DB.prepare(SELECT_WATCHES).bind(kind).all<WatchRow>();
-  return rows.results;
+  return allowedPaidWatches(rows.results);
 }
 
 const ENTITIES_WITHOUT_HIRING_WATCH = `SELECT e.id AS id, e.domain AS domain

@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 
+import { entitledTier, resolveEntitlements } from "../billing/entitlements";
 import { canonicalTimezone } from "../timezone";
 
 const SELECT_WORKSPACE_TIMEZONE = "SELECT timezone FROM workspace WHERE id = ?";
@@ -41,10 +42,40 @@ ON CONFLICT(id) DO NOTHING`;
 
 const FILL_TIMEZONE = `UPDATE workspace SET timezone = ? WHERE id = ? AND timezone = 'UTC'`;
 
+const COUNT_OWNER_WORKSPACES = "SELECT count(*) AS n FROM workspace WHERE owner_user_id = ?";
+
+const SELECT_OWNER_PLAN = `SELECT p.tier AS tier, p.status AS status, p.current_period_end AS current_period_end, p.limits_json AS limits_json
+FROM workspace w
+JOIN plan p ON p.workspace_id = w.id
+WHERE w.owner_user_id = ?
+ORDER BY w.created_at ASC
+LIMIT 1`;
+
+async function ownerWorkspacesMax(db: WorkspaceDb, ownerUserId: string): Promise<number | null> {
+  const row = await db
+    .prepare(SELECT_OWNER_PLAN)
+    .bind(ownerUserId)
+    .first<{ tier: string; status: string; current_period_end: string | null; limits_json: string }>();
+  if (row === null) return resolveEntitlements("scout", "{}").workspaces_max;
+  return resolveEntitlements(
+    entitledTier({ tier: row.tier, status: row.status, currentPeriodEnd: row.current_period_end }, new Date()),
+    row.limits_json,
+  ).workspaces_max;
+}
+
+async function assertWorkspaceRoom(db: WorkspaceDb, ownerUserId: string): Promise<void> {
+  const row = await db.prepare(COUNT_OWNER_WORKSPACES).bind(ownerUserId).first<{ n: number }>();
+  const count = row?.n ?? 0;
+  if (count === 0) return;
+  const cap = await ownerWorkspacesMax(db, ownerUserId);
+  if (cap !== null && count >= cap) throw new Error("workspace cap");
+}
+
 export async function insertWorkspace(
   db: WorkspaceDb,
   input: { id: string; name: string; ownerUserId: string; timezone: string; createdAt: string; fixture: boolean },
 ): Promise<void> {
+  await assertWorkspaceRoom(db, input.ownerUserId);
   await db
     .prepare(INSERT_WORKSPACE)
     .bind(input.id, input.name, input.ownerUserId, input.timezone, input.createdAt, input.fixture ? 1 : 0)

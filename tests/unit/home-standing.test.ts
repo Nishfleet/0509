@@ -527,22 +527,22 @@ describe("Home chips", () => {
 });
 
 describe("four-week chart", () => {
-  it("shows four weeks ascending, dropping the oldest, with the London week labelled 21 SEP", () => {
+  it("shows the history weeks ascending, with the London week labelled 21 SEP", () => {
     const standing = chartStanding(HISTORY);
-    expect(standing.chart.weeks).toEqual(["31 AUG", "7 SEP", "14 SEP", "21 SEP"]);
+    expect(standing.chart.weeks).toEqual(["24 AUG", "31 AUG", "7 SEP", "14 SEP", "21 SEP"]);
   });
 
   it("keeps a missing week as null, never a zero", () => {
     const standing = chartStanding(HISTORY);
     const self = standing.chart.lines.find((line) => line.entityId === "ent_self");
-    expect(self?.ranks).toEqual([2, null, 2, 1]);
+    expect(self?.ranks).toEqual([3, 2, null, 2, 1]);
   });
 
   it("marks an entity whose state is off as paused", () => {
     const standing = chartStanding(HISTORY);
     const paused = standing.chart.lines.find((line) => line.entityId === "ent_paused");
     expect(paused?.paused).toBe(true);
-    expect(paused?.ranks).toEqual([3, 3, null, null]);
+    expect(paused?.ranks).toEqual([null, 3, 3, null, null]);
   });
 
   it("labels the self line YOU and the others by their ranked name", () => {

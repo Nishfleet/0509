@@ -1,5 +1,6 @@
 import { markDigestSentStatement } from "../../app/lib/data/digest.server";
 import { claimIncidentNotice } from "../../app/lib/data/incident_notice.server";
+import { readEntitlements } from "../../app/lib/data/plan.server";
 import {
   claimChangeSlot,
   claimSendAttempt,
@@ -355,6 +356,11 @@ function renderIncidentEmail(incident: IncidentRow, to: string, token: string) {
   };
 }
 
+async function ownSiteDeliveryMuted(incident: IncidentRow): Promise<boolean> {
+  if (incident.own_site_alerts === 0) return true;
+  return !(await readEntitlements(incident.workspace_id)).own_site_alerts;
+}
+
 export async function deliverIncident(env: Env, message: IncidentMessage): Promise<DeliveryResult> {
   const incident = await readIncident(env, message.incident_id);
   if (!incident) {
@@ -364,7 +370,7 @@ export async function deliverIncident(env: Env, message: IncidentMessage): Promi
     return { outcome: "not_self", attempt_id: null, idempotency_key: null };
   }
 
-  if (incident.own_site_alerts === 0) {
+  if (await ownSiteDeliveryMuted(incident)) {
     return { outcome: "muted", attempt_id: null, idempotency_key: null };
   }
 

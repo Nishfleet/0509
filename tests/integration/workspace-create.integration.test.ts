@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
+import { insertWorkspace } from "../../app/lib/data/workspace.server";
 import { ensureWorkspace, firstWorkspaceId, workspaceLanding } from "../../app/lib/workspace.server";
 
 async function seedUser(id: string, email: string) {
@@ -93,6 +94,50 @@ describe("ensureWorkspace against migrations/0001_rebuild.sql", () => {
     });
     expect(again.id).toBe(first.id);
     expect(await workspaceCount("user-4")).toBe(2);
+  });
+
+  it("refuses a second workspace on Scout and allows a second on Agency", async () => {
+    await seedUser("user-scout-cap", "scout-cap@example.com");
+    await seedUser("user-agency-cap", "agency-cap@example.com");
+    const now = "2026-09-22T12:00:00.000Z";
+    await ensureWorkspace(env.DB, {
+      userId: "user-scout-cap",
+      email: "scout-cap@example.com",
+      timezone: "UTC",
+      now,
+    });
+    await expect(
+      insertWorkspace(env.DB, {
+        id: "ws-scout-second",
+        name: "second",
+        ownerUserId: "user-scout-cap",
+        timezone: "UTC",
+        createdAt: "2026-09-23T12:00:00.000Z",
+        fixture: false,
+      }),
+    ).rejects.toThrow("workspace cap");
+    expect(await workspaceCount("user-scout-cap")).toBe(1);
+
+    const agency = await ensureWorkspace(env.DB, {
+      userId: "user-agency-cap",
+      email: "agency-cap@example.com",
+      timezone: "UTC",
+      now,
+    });
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'agency', 'active', ?)",
+    )
+      .bind("plan-agency-cap", agency.id, now)
+      .run();
+    await insertWorkspace(env.DB, {
+      id: "ws-agency-second",
+      name: "second",
+      ownerUserId: "user-agency-cap",
+      timezone: "UTC",
+      createdAt: "2026-09-23T12:00:00.000Z",
+      fixture: false,
+    });
+    expect(await workspaceCount("user-agency-cap")).toBe(2);
   });
 
   it("lands on /onboarding until a self entity exists", async () => {

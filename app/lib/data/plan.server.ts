@@ -45,6 +45,13 @@ export async function readEntitlements(workspaceId: string): Promise<Entitlement
   return resolveEntitlements(tier, row === null ? "{}" : row.limits_json);
 }
 
+export async function readWorkspaceEntitlements(
+  workspaceIds: readonly string[],
+): Promise<ReadonlyMap<string, Entitlements>> {
+  const unique = [...new Set(workspaceIds)];
+  return new Map(await Promise.all(unique.map(async (id) => [id, await readEntitlements(id)] as const)));
+}
+
 export async function readPlanTier(workspaceId: string): Promise<PlanId> {
   const { tier } = await readPlan(workspaceId);
   return isPlanId(tier) ? tier : "scout";

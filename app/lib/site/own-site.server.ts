@@ -10,6 +10,7 @@ import {
 } from "../data/incident.server";
 import type { OwnSitePage } from "../data/page.server";
 import { readOwnSitePages } from "../data/page.server";
+import { readWorkspaceEntitlements } from "../data/plan.server";
 import { BlockedRedirectError, cappedText, fetchOutbound } from "../fetch/outbound.server";
 import { CRAWLER_USER_AGENT, robotsAllows } from "../fetch/robots.server";
 import { computeBreakageEvidence } from "./breakage-evidence";
@@ -111,13 +112,19 @@ export async function breakageRepaired(url: string, beforeKey: string | null): P
   return !e.httpError && !e.textHalved && !e.pricesVanished;
 }
 
+async function entitledOwnSitePages(pages: OwnSitePage[]): Promise<OwnSitePage[]> {
+  const entitlements = await readWorkspaceEntitlements(pages.map((page) => page.workspaceId));
+  return pages.filter((page) => entitlements.get(page.workspaceId)?.own_site_alerts === true);
+}
+
 export async function planOwnSiteCheck(now: string): Promise<OwnSitePlan> {
   await ensureHomePages(now);
-  const pages = await readOwnSitePages();
+  const allPages = await readOwnSitePages();
   await closeIncidentsOutside(
-    pages.map((page) => page.pageId),
+    allPages.map((page) => page.pageId),
     now,
   );
+  const pages = await entitledOwnSitePages(allPages);
   return {
     pages,
     openIncidents: await readOpenIncidents(),

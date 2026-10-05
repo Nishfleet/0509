@@ -39,6 +39,9 @@ describe("readEntitlements (0509#5293)", () => {
     const before = await readEntitlements(workspaceId);
     expect(before.competitors).toBe(15);
     expect(before.site_pages_scope).toBe("all");
+    expect(before.own_site_alerts).toBe(true);
+    expect(before.marks_history_days).toBe(365);
+    expect(before.standing_history_weeks).toBe(52);
 
     await env.DB.prepare("UPDATE plan SET limits_json = ? WHERE workspace_id = ?")
       .bind(JSON.stringify({ competitors: 7 }), workspaceId)
@@ -62,6 +65,10 @@ describe("readEntitlements (0509#5293)", () => {
       const entitlements = await readEntitlements(workspaceId);
       expect(entitlements.competitors).toBe(5);
       expect(entitlements.site_pages_scope).toBe("home_pricing");
+      expect(entitlements.own_site_alerts).toBe(false);
+      expect(entitlements.marks_history_days).toBe(90);
+      expect(entitlements.standing_history_weeks).toBe(4);
+      expect(entitlements.workspaces_max).toBe(1);
       expect(errorSpy).not.toHaveBeenCalled();
     } finally {
       errorSpy.mockRestore();
