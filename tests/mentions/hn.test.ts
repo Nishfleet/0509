@@ -41,9 +41,14 @@ describe("hn.algolia mentions adapter", () => {
       const weekUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
       const bound = Number((weekUrl.searchParams.get("numericFilters") ?? "").replace("created_at_i>", ""));
       expect(bound).toBeGreaterThanOrEqual(before);
-      await hnAdapter({ query: "gymshark" }, "1790000000");
+      const cursor = Math.floor(Date.now() / 1000) - 3600;
+      await hnAdapter({ query: "gymshark" }, String(cursor));
       const cursorUrl = new URL(String(fetchMock.mock.calls[1]?.[0]));
-      expect(cursorUrl.searchParams.get("numericFilters")).toBe("created_at_i>1790000000");
+      expect(cursorUrl.searchParams.get("numericFilters")).toBe("created_at_i>" + String(cursor));
+      await hnAdapter({ query: "gymshark" }, "1000");
+      const staleUrl = new URL(String(fetchMock.mock.calls[2]?.[0]));
+      const staleBound = Number((staleUrl.searchParams.get("numericFilters") ?? "").replace("created_at_i>", ""));
+      expect(staleBound).toBeGreaterThanOrEqual(before);
     } finally {
       vi.unstubAllGlobals();
     }

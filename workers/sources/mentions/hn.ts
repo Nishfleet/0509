@@ -30,8 +30,8 @@ const WINDOW_SECONDS = 7 * 24 * 60 * 60;
 
 function lowerBound(cursor: MentionsCursor): number {
   const parsed = Number(cursor);
-  if (cursor !== null && Number.isInteger(parsed) && parsed > 0) return parsed;
-  return Math.floor(Date.now() / 1000) - WINDOW_SECONDS;
+  const stored = cursor !== null && Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+  return Math.max(stored, Math.floor(Date.now() / 1000) - WINDOW_SECONDS);
 }
 
 export const hnAdapter: MentionsAdapter = async (target, cursor) => {

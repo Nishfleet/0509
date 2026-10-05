@@ -18,6 +18,7 @@ import { insertWatchSnapshot } from "../../app/lib/data/snapshot.server";
 import { markSourceTimedOut } from "../../app/lib/data/source.server";
 import type { WatchRow } from "../../app/lib/data/watch.server";
 import {
+  advanceHnCursor,
   markWatchPolled,
   readActiveWatches,
   readWatchConfigJson,
@@ -46,6 +47,7 @@ import {
   withResolvedChannel,
   withoutPendingChannel,
 } from "../../app/lib/mentions/youtube-channel";
+import { isHnPlugin, newestEpoch, predatesWatch, startCursor } from "../../app/lib/mentions/hn-window";
 import { sha256Hex } from "../../app/lib/sha256";
 import { storedDedupKey, toSignalRow, type MentionItem, type SignalRow } from "./map";
 import { recordUpstreamBlock, writeSourcePoint } from "./canary";
@@ -469,6 +471,11 @@ async function statementsForWatch(input: {
   return { statements, stored, unjudged };
 }
 
+async function advanceCursor(pluginKey: string, watchId: string, items: readonly MentionItem[]): Promise<void> {
+  const cursor = newestEpoch(items);
+  if (isHnPlugin(pluginKey) && cursor !== null) await advanceHnCursor(watchId, cursor);
+}
+
 async function putMentionBody(pluginKey: string, rawBody: string): Promise<{ r2Key: string; hash: string }> {
   const hash = await sha256Hex(rawBody);
   const r2Key = `snapshot/mentions/${pluginKey}/${hash}`;
@@ -485,7 +492,9 @@ async function commitMentionWatch(input: {
   now: string;
 }): Promise<{ stored: number; unjudged: number }> {
   const { watch, context, items, snapshot, canaryCount, now } = input;
-  const titled = items.filter((item) => item.title.trim() !== "");
+  const titled = items.filter(
+    (item) => item.title.trim() !== "" && !predatesWatch(watch.plugin_key, watch.watch_created_at, item.publishedAt),
+  );
   const written = await statementsForWatch({
     watch,
     context,
@@ -664,7 +673,7 @@ export async function sweepTarget(
     if (target.pluginKey === "youtube.channel_rss") return await sweepYoutubeTarget(target, now, canaryCount);
     const adapter = adapterFor(target.pluginKey);
     if (adapter === undefined) throw new Error(`no mentions adapter for ${target.pluginKey}`);
-    const result = await adapter({ query: target.query }, null);
+    const result = await adapter({ query: target.query }, startCursor(target.pluginKey, target.watches));
     writeSourcePoint(target.pluginKey, result.items.length, canaryCount);
     const snapshot = await putMentionBody(target.pluginKey, result.rawBody);
     const contexts = new Map<string, DiscoveryContext | null>();
@@ -684,6 +693,7 @@ export async function sweepTarget(
         canaryCount,
         now,
       });
+      await advanceCursor(target.pluginKey, watch.watch_id, result.items);
       stored += committed.stored;
       unjudged += committed.unjudged;
     }
