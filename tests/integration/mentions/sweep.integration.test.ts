@@ -190,6 +190,42 @@ describe("nightly mentions sweep", () => {
     expect(snapshot?.item_count).toBeGreaterThan(0);
   });
 
+  const seedAboutVerdicts = async (entityId: string, workspaceId: string, count: number) => {
+    for (let index = 0; index < count; index += 1) {
+      await env.DB.prepare(
+        `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, entity_id, p, decided_at)
+         VALUES (?1, ?2, 'mention_is_about_brand', ?3, ?4, 0.5, ?5)`,
+      )
+        .bind(`seeded-${entityId}-${String(index)}`, workspaceId, `seeded-${entityId}-${String(index)}`, entityId, NOW)
+        .run();
+    }
+  };
+
+  it("asks the AI nothing for a brand that used its daily allowance", async () => {
+    const { workspaceId, competitorId, brand } = await seedWorkspace();
+    await seedAboutVerdicts(competitorId, workspaceId, 24);
+    stubGdelt();
+    const run = jevAnswering();
+    Reflect.set(env, "AI", { run });
+
+    await sweepTarget(await gdeltTargetFor(brand), NOW, null);
+
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("judges only what is left of a brand's daily allowance", async () => {
+    const { workspaceId, competitorId, brand } = await seedWorkspace();
+    await seedAboutVerdicts(competitorId, workspaceId, 23);
+    stubGdelt();
+    const run = jevAnswering();
+    Reflect.set(env, "AI", { run });
+
+    await sweepTarget(await gdeltTargetFor(brand), NOW, null);
+
+    const aboutAsked = run.mock.calls.filter(([, input]) => "mention_is_about_brand" in input.questions);
+    expect(aboutAsked).toHaveLength(1);
+  });
+
   it("does not judge or alert the same article twice", async () => {
     const { workspaceId, brand } = await seedWorkspace();
     stubGdelt();

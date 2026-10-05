@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { insertSignalAlert } from "../../app/lib/data/alert.server";
 import type { DiscoveryContext } from "../../app/lib/data/entity.server";
 import { readDiscoveryContext, readEntityIdentityJson } from "../../app/lib/data/entity.server";
-import { insertVerdict } from "../../app/lib/data/jev_verdict.server";
+import { countVerdictsSince, insertVerdict } from "../../app/lib/data/jev_verdict.server";
 import {
   type DuplicateCandidate,
   findDuplicateCandidate,
@@ -55,6 +55,13 @@ import { isUpstreamTimeout, UpstreamBlockedError } from "../sources/mentions/typ
 import type { OkYoutubeFeed } from "../sources/mentions/youtube";
 
 const JUDGED_PER_WATCH = 12;
+
+const JUDGED_PER_BRAND_PER_DAY = 24;
+
+async function judgeAllowance(watch: WatchRow, now: string): Promise<number> {
+  const used = await countVerdictsSince(watch.entity_id, `${now.slice(0, 10)}T00:00:00.000Z`, [ABOUT_BRAND.id]);
+  return Math.max(0, Math.min(JUDGED_PER_WATCH, JUDGED_PER_BRAND_PER_DAY - used));
+}
 
 const DUPLICATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -266,13 +273,20 @@ async function rejudgeUnjudged(
   watch: WatchRow,
   context: DiscoveryContext,
   now: string,
-): Promise<{ statements: D1PreparedStatement[]; stored: number; attempted: number; jevDown: boolean }> {
-  const pending = await readUnjudgedMentions(watch.watch_id, JUDGED_PER_WATCH);
+): Promise<{
+  statements: D1PreparedStatement[];
+  stored: number;
+  attempted: number;
+  jevDown: boolean;
+  allowance: number;
+}> {
+  const allowance = await judgeAllowance(watch, now);
+  const pending = await readUnjudgedMentions(watch.watch_id, allowance);
   const statements: D1PreparedStatement[] = [];
   let stored = 0;
   for (const row of pending) {
     const verdicts = await judgeOrNull(watch, context, row);
-    if (verdicts === null) return { statements, stored, attempted: pending.length, jevDown: true };
+    if (verdicts === null) return { statements, stored, attempted: pending.length, jevDown: true, allowance };
     const rejected = noulAction(verdicts.about.p) === "reject";
     statements.push(
       resolveUnjudgedMention(row.id, rejected),
@@ -280,7 +294,7 @@ async function rejudgeUnjudged(
     );
     if (!rejected) stored += 1;
   }
-  return { statements, stored, attempted: pending.length, jevDown: false };
+  return { statements, stored, attempted: pending.length, jevDown: false, allowance };
 }
 
 function mentionSignal(input: {
@@ -453,7 +467,7 @@ async function statementsForWatch(input: {
   let stored = rejudged.stored;
   let unjudged = 0;
   const { jevDown } = rejudged;
-  const freshBudget = jevDown ? JUDGED_PER_WATCH : JUDGED_PER_WATCH - rejudged.attempted;
+  const freshBudget = jevDown ? rejudged.allowance : rejudged.allowance - rejudged.attempted;
   const freshJudged = await judgeFreshItems({
     watch,
     context,

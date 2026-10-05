@@ -27,5 +27,5 @@ Tests: cases f3 to f6 in `tests/integration/site/judge.integration.test.ts` (men
 ## What stops a repeat
 
 1. Code: the tests above.
-2. Not done yet: the mentions sweep has no daily allowance of its own; it is bounded only by the feed sizes. A hard per-brand cap there needs a change under `workers/`.
+2. Code: the mentions sweep has its own hard allowance of 24 judged items per brand per day, counted from the stored `mention_is_about_brand` verdicts (the stacked PR after #6997).
 3. Not done yet: a deferred own-site judgment should be visible (a log line, or a retry on the next sweep).
