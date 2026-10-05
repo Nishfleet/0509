@@ -244,9 +244,6 @@ export async function judgeChange(input: JudgeInput): Promise<JudgedChange> {
   const now = new Date();
   const decidedAt = now.toISOString();
 
-  const usedToday = await countVerdictsSince(input.entityId, todayStartIso(now));
-  if (usedToday >= JEV_JUDGMENTS_PER_BRAND_PER_DAY) return deferredResult(null);
-
   const history30d = await readHistory30d(input.entityId, daysBefore(now, HISTORY_DAYS));
   const state = changeState(input, history30d);
 
@@ -261,6 +258,9 @@ export async function judgeChange(input: JudgeInput): Promise<JudgedChange> {
     };
   }
   const selfBreakage = self?.selfBreakage ?? null;
+
+  const usedToday = await countVerdictsSince(input.entityId, todayStartIso(now));
+  if (usedToday >= JEV_JUDGMENTS_PER_BRAND_PER_DAY) return deferredResult(selfBreakage);
 
   const judged = await judgeNoteworthy(input, state, decidedAt);
   if (judged === null) return deferredResult(selfBreakage);

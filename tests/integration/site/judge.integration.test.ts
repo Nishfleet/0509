@@ -301,6 +301,52 @@ describe("judgeChange", () => {
     expect(jevAnswers.calls).toBe(0);
   });
 
+  it("case f3: an own site that used up its budget on other verdicts is still checked for breakage", async () => {
+    for (let index = 0; index < 6; index += 1) {
+      await insertVerdict({
+        workspaceId: "ws-mine",
+        questionId: "mention_is_about_brand",
+        inputHash: `mention-${index}`,
+        signalId: null,
+        entityId: "mine",
+        p: 0.04,
+        choice: null,
+        reason: null,
+        decidedAt: NOW,
+      }).run();
+    }
+    jevAnswers.noul.set("own_site_breakage", 0.7);
+
+    const judgment = await judgeChange(judgeInput({ entity: "mine", isSelf: true }));
+
+    expect(judgment.deferred).toBe(false);
+    expect(judgment.selfBreakage).toEqual({ p: 0.7, band: "alert" });
+    expect(jevAnswers.calls).toBe(1);
+  });
+
+  it("case f4: an own site over budget whose page looks fine is deferred, not judged for change", async () => {
+    for (let index = 0; index < 6; index += 1) {
+      await insertVerdict({
+        workspaceId: "ws-mine",
+        questionId: "mention_is_about_brand",
+        inputHash: `fine-${index}`,
+        signalId: null,
+        entityId: "mine",
+        p: 0.04,
+        choice: null,
+        reason: null,
+        decidedAt: NOW,
+      }).run();
+    }
+    jevAnswers.noul.set("own_site_breakage", 0.0);
+
+    const judgment = await judgeChange(judgeInput({ entity: "mine", isSelf: true }));
+
+    expect(judgment.selfBreakage).toEqual({ p: 0, band: "clear" });
+    expect(judgment.noteworthy).toBeNull();
+    expect(jevAnswers.calls).toBe(1);
+  });
+
   it("case f2: an entity outside the budget window does not use up budget", async () => {
     for (let index = 0; index < 6; index += 1) {
       await insertVerdict({
