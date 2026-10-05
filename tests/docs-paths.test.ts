@@ -28,7 +28,7 @@ const RETIRED = [
 // gated-site rule moves to "Rules that are not about code", and the pre-wipe
 // reuse rule stays as policy. None of them may leave the file with the section.
 const LIVE = [
-  /Stock only, at the version named in `docs\/REBUILD-STACK\.md`/,
+  /Stock only, at the version named in `docs\/dependencies\.md`/,
   /Jev decides every typed decision/,
   /Browser Rendering capped at 10/,
   /Guardrails/,

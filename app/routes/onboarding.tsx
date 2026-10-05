@@ -1,9 +1,10 @@
 import type { Route } from "./+types/onboarding";
 
 import { redirect } from "react-router";
+import { z } from "zod";
 
-import { requireFreshSession, requireSession } from "../lib/require-session.server";
-import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
+import { requireFreshSession, requireSession, signOutToLogin } from "../lib/require-session.server";
+import { ONBOARDING_COMPETITORS, ONBOARDING_PLAN, workspaceLandingForRequest } from "../lib/workspace.server";
 import { OneInput } from "../components/one-input";
 import { OnboardingFrame } from "../components/onboarding-frame";
 import { SubjectConfirm } from "../components/onboarding-subject-confirm";
@@ -27,8 +28,11 @@ export function headers() {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
-  const landing = await workspaceLandingForRequest(request, session.user);
-  if (landing === null || landing === ONBOARDING_COMPETITORS) throw redirect(landing ?? "/app");
+  const { landing, workspaceId } = await workspaceLandingForRequest(request, session.user);
+  if (workspaceId === null) return await signOutToLogin(request);
+  if (landing === null || landing === ONBOARDING_COMPETITORS || landing === ONBOARDING_PLAN) {
+    throw redirect(landing ?? "/app");
+  }
   return { email: session.user.email };
 }
 
@@ -36,14 +40,18 @@ type Timings = ReturnType<typeof createTimings>;
 type Normalised = ReturnType<typeof normaliseSubject>;
 type AcceptedSubject = Extract<Normalised, { ok: true }>["subject"];
 
+const subjectForm = z.object({
+  subject: z.string().optional(),
+  answer: z.string().optional(),
+});
+
 function readSubjectForm(formData: FormData) {
-  const raw = formData.get("subject");
-  const answer = formData.get("answer");
-  const rawSubject = typeof raw === "string" ? raw : null;
+  const parsed = subjectForm.safeParse(Object.fromEntries(formData));
+  const rawSubject = parsed.success ? (parsed.data.subject ?? null) : null;
   return {
-    raw,
+    raw: rawSubject,
     rawSubject,
-    answer: typeof answer === "string" ? answer : null,
+    answer: parsed.success ? (parsed.data.answer ?? null) : null,
     normalised: rawSubject === null ? null : normaliseSubject(rawSubject),
   };
 }

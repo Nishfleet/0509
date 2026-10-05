@@ -8,19 +8,17 @@ import { createCheckoutUrl } from "../lib/billing/checkout.server";
 import { isWorkspacePaid } from "../lib/billing/entitlements";
 import { isBillingInterval, isPlanId, PLANS, TRIAL_TERMS } from "../lib/billing/plans";
 import { readPlanSubscription, readPlanTier } from "../lib/data/plan.server";
-import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { requireFreshSession, requireSession } from "../lib/require-session.server";
+import { requireFreshSession, requireSession, signOutToLogin } from "../lib/require-session.server";
 import { ONBOARDING_PLAN, workspaceLandingForRequest } from "../lib/workspace.server";
 
 const UNAVAILABLE = { message: "Starting a trial isn't available right now. Try again in a few minutes." };
 
 async function workspaceFor(request: Request, fresh = false): Promise<{ workspaceId: string; email: string }> {
   const session = await (fresh ? requireFreshSession(request) : requireSession(request));
-  const landing = await workspaceLandingForRequest(request, session.user);
+  const { landing, workspaceId } = await workspaceLandingForRequest(request, session.user);
+  if (workspaceId === null) return await signOutToLogin(request);
   if (landing === null) throw redirect("/app");
   if (landing !== ONBOARDING_PLAN) throw redirect(landing);
-  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
-  if (workspaceId === null) throw redirect("/onboarding");
   return { workspaceId, email: session.user.email };
 }
 

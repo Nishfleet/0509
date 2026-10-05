@@ -97,13 +97,17 @@ describe("ensureWorkspace against migrations/0001_rebuild.sql", () => {
 
   it("lands on /onboarding until a self entity exists", async () => {
     await seedUser("user-5", "maya@example.com");
-    const input = {
+    const created = await ensureWorkspace(env.DB, {
       userId: "user-5",
       email: "maya@example.com",
       timezone: "UTC",
       now: "2026-09-22T12:00:00.000Z",
-    };
-    expect(await workspaceLanding(env.DB, input)).toBe("/onboarding");
+    });
+    const input = { userId: "user-5", timezone: "UTC" };
+    expect(await workspaceLanding(env.DB, input)).toEqual({
+      workspaceId: created.id,
+      landing: "/onboarding",
+    });
     const workspaceId = firstWorkspaceId("user-5");
     await env.DB.prepare(
       `INSERT INTO entity (id, workspace_id, role, domain, created_at)
@@ -111,11 +115,23 @@ describe("ensureWorkspace against migrations/0001_rebuild.sql", () => {
     )
       .bind(workspaceId)
       .run();
-    expect(await workspaceLanding(env.DB, input)).toBe("/onboarding/plan");
+    expect(await workspaceLanding(env.DB, input)).toEqual({
+      workspaceId,
+      landing: "/onboarding/plan",
+    });
     expect(await workspaceCount("user-5")).toBe(1);
     const plans = await env.DB.prepare("SELECT count(*) AS n FROM plan WHERE workspace_id = ?")
       .bind(workspaceId)
       .first<{ n: number }>();
     expect(plans?.n).toBe(0);
+  });
+
+  it("does not insert a workspace when the owner has none", async () => {
+    await seedUser("user-6", "no-ws@example.com");
+    expect(await workspaceLanding(env.DB, { userId: "user-6", timezone: "UTC" })).toEqual({
+      workspaceId: null,
+      landing: null,
+    });
+    expect(await workspaceCount("user-6")).toBe(0);
   });
 });

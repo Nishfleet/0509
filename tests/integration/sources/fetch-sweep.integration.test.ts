@@ -3,8 +3,9 @@ import { captureException } from "@sentry/cloudflare";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  FETCH_SWEEP_DLQ,
+  FETCH_SWEEP_QUEUE,
   handleFetchSweepBatch,
-  handleFetchSweepDlqBatch,
   parseFetchSweepMessage,
   type FetchSweepMessage,
 } from "../../../workers/sources/fetch-sweep-consumer";
@@ -77,10 +78,10 @@ interface BatchCall {
   retried: number[];
 }
 
-const batchFor = (bodies: unknown[]): { batch: MessageBatch; calls: BatchCall } => {
+const batchFor = (bodies: unknown[], queue = FETCH_SWEEP_QUEUE): { batch: MessageBatch; calls: BatchCall } => {
   const calls: BatchCall = { acked: [], retried: [] };
   const batch: MessageBatch = {
-    queue: "fetch-sweep",
+    queue,
     messages: bodies.map((body, index) => ({
       id: `msg-${index}`,
       timestamp: new Date("2026-09-24T02:00:03Z"),
@@ -123,6 +124,11 @@ const resetTenant = async () => {
      VALUES (?, 'Fetch sweep', ?, 'UTC', 1, 8, ?)`,
   )
     .bind(WS, USER, NOW)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
+  )
+    .bind(`${WS}-plan`, WS, NOW)
     .run();
   await env.DB.prepare(
     `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
@@ -306,15 +312,6 @@ describe("fetch-sweep consumer (0509#5261)", () => {
     expect(await snapshots()).toHaveLength(0);
   });
 
-  it("acks a dead-lettered batch on its own branch", () => {
-    const { batch, calls } = batchFor([message(), message()]);
-
-    handleFetchSweepDlqBatch(batch);
-
-    expect(calls.acked).toEqual([0, 1]);
-    expect(calls.retried).toEqual([]);
-  });
-
   it("acks and logs a message whose watch is gone instead of looping it", async () => {
     await env.DB.prepare("DELETE FROM watch WHERE id = ?").bind(WATCH).run();
 
@@ -366,5 +363,45 @@ describe("fetch-sweep consumer (0509#5261)", () => {
     expect(digests?.n).toBe(0);
     const attempts = await env.DB.prepare("SELECT COUNT(*) AS n FROM send_attempt").first<{ n: number }>();
     expect(attempts?.n).toBe(0);
+  });
+
+  it("reports one Sentry event per dead-lettered message with no user data, then acks (0509#7032)", async () => {
+    vi.resetModules();
+    const [{ handleFetchSweepDlqBatch }, sentry] = await Promise.all([
+      import("../../../workers/sources/fetch-sweep-consumer"),
+      import("@sentry/cloudflare"),
+    ]);
+    vi.mocked(sentry.captureException).mockClear();
+    const { batch, calls } = batchFor([message(), message()], FETCH_SWEEP_DLQ);
+
+    handleFetchSweepDlqBatch(batch);
+
+    expect(calls.acked).toEqual([0, 1]);
+    expect(calls.retried).toEqual([]);
+    expect(sentry.captureException).toHaveBeenCalledTimes(2);
+    const messages = vi
+      .mocked(sentry.captureException)
+      .mock.calls.map(([error]) => (error instanceof Error ? error.message : String(error)));
+    expect(messages).toEqual([
+      JSON.stringify({
+        event: "fetch-sweep.dead_lettered",
+        queue: FETCH_SWEEP_DLQ,
+        message_id: "msg-0",
+      }),
+      JSON.stringify({
+        event: "fetch-sweep.dead_lettered",
+        queue: FETCH_SWEEP_DLQ,
+        message_id: "msg-1",
+      }),
+    ]);
+    expect(vi.mocked(sentry.captureException).mock.calls.map(([, hint]) => hint)).toEqual([
+      { tags: { queue: FETCH_SWEEP_DLQ } },
+      { tags: { queue: FETCH_SWEEP_DLQ } },
+    ]);
+    const serialized = JSON.stringify(vi.mocked(sentry.captureException).mock.calls);
+    expect(serialized).not.toContain(WATCH);
+    expect(serialized).not.toContain(URL);
+    expect(serialized).not.toContain(ENTITY);
+    expect(serialized).not.toContain("fetch-sweep@0509.io");
   });
 });

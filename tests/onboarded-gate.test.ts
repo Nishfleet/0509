@@ -8,25 +8,26 @@ import routes from "../app/routes";
 import AppLayout, { middleware } from "../app/routes/app-layout";
 import AppSettingsLayout, * as appSettingsLayout from "../app/routes/app-settings-layout";
 
-vi.mock("../app/lib/data/workspace.server", () => ({
-  readWorkspaceIdForOwner: async () => "ws-1",
-}));
-
 vi.mock("../app/lib/require-session.server", () => ({
   requireSession: async () => ({ user: { id: "user-1" } }),
+  signOutToLogin: async () => {
+    throw new Response(null, { status: 302, headers: { Location: "/login" } });
+  },
 }));
 
-const landing = vi.hoisted(() => ({ value: null as string | null }));
+const landing = vi.hoisted(() => ({ missing: false, value: null as string | null }));
 
 vi.mock("../app/lib/workspace.server", () => ({
   ONBOARDING_COMPETITORS: "/onboarding/competitors",
-  workspaceLandingForRequest: async () => landing.value,
+  workspaceLandingForRequest: async () =>
+    landing.missing ? { workspaceId: null, landing: null } : { workspaceId: "ws-1", landing: landing.value },
 }));
 
 describe("requireOnboarded", () => {
   it.each(["/onboarding", "/onboarding/identity?subject=acme.example", "/onboarding/competitors", "/onboarding/plan"])(
     "redirects an unfinished workspace to its resume point %s",
     async (resumePoint) => {
+      landing.missing = false;
       landing.value = resumePoint;
       let thrown: unknown;
       try {
@@ -45,12 +46,30 @@ describe("requireOnboarded", () => {
   );
 
   it("resolves when the workspace has no resume point", async () => {
+    landing.missing = false;
     landing.value = null;
     const context = new RouterContextProvider();
     await expect(
       requireOnboarded({ request: new Request("https://0509.io/app/alerts"), context }),
     ).resolves.toBeUndefined();
     expect(context.get(onboardedContext)).toEqual({ session: { user: { id: "user-1" } }, workspaceId: "ws-1" });
+  });
+
+  it("signs the user out to /login when there is no workspace", async () => {
+    landing.missing = true;
+    let thrown: unknown;
+    try {
+      await requireOnboarded({
+        request: new Request("https://0509.io/app/alerts"),
+        context: new RouterContextProvider(),
+      });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(Response);
+    const response = thrown as Response;
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/login");
   });
 });
 

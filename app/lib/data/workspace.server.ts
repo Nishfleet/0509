@@ -24,9 +24,37 @@ export async function readWorkspaceIdForOwner(userId: string): Promise<string | 
   return row?.id ?? null;
 }
 
+const SELECT_WORKSPACE_LANDING = `SELECT w.id, w.timezone, e.id AS self_id, r.input_raw, r.watching_started_at,
+       p.status AS plan_status, p.current_period_end AS plan_current_period_end
+FROM workspace w
+LEFT JOIN entity e ON e.id = (
+  SELECT id FROM entity WHERE workspace_id = w.id AND role = 'self' LIMIT 1
+)
+LEFT JOIN onboarding_run r ON r.id = (
+  SELECT id FROM onboarding_run WHERE workspace_id = w.id ORDER BY started_at ASC LIMIT 1
+)
+LEFT JOIN plan p ON p.workspace_id = w.id
+WHERE w.owner_user_id = ?
+ORDER BY w.created_at ASC
+LIMIT 1`;
+
+export interface WorkspaceLandingRow {
+  id: string;
+  timezone: string;
+  self_id: string | null;
+  input_raw: string | null;
+  watching_started_at: string | null;
+  plan_status: string | null;
+  plan_current_period_end: string | null;
+}
+
+export async function readWorkspaceLanding(db: WorkspaceDb, userId: string): Promise<WorkspaceLandingRow | null> {
+  return db.prepare(SELECT_WORKSPACE_LANDING).bind(userId).first<WorkspaceLandingRow>();
+}
+
 interface BoundStatement {
   first<T>(): Promise<T | null>;
-  run(): Promise<unknown>;
+  run(): Promise<{ meta: { changes: number } }>;
 }
 
 export interface WorkspaceDb {
@@ -51,8 +79,15 @@ export async function insertWorkspace(
     .run();
 }
 
-export async function fillWorkspaceTimezone(db: WorkspaceDb, id: string, timezone: string): Promise<void> {
-  await db.prepare(FILL_TIMEZONE).bind(timezone, id).run();
+export async function fillWorkspaceTimezone(db: WorkspaceDb, id: string, timezone: string): Promise<boolean> {
+  const result = await db.prepare(FILL_TIMEZONE).bind(timezone, id).run();
+  return result.meta.changes > 0;
+}
+
+const REVERT_TIMEZONE = `UPDATE workspace SET timezone = 'UTC' WHERE id = ? AND timezone = ?`;
+
+export async function revertWorkspaceTimezone(db: WorkspaceDb, id: string, timezone: string): Promise<void> {
+  await db.prepare(REVERT_TIMEZONE).bind(id, timezone).run();
 }
 
 export async function readWorkspaceR2Prefixes(workspaceId: string): Promise<string[]> {

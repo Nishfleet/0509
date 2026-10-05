@@ -34,6 +34,15 @@ const SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then delete y
 const PASSKEY_SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then remove your passkey.";
 const PASSKEY_FAILED = "The passkey wasn't removed. Try again.";
 
+const alertSwitchForm = z.object({ value: z.enum(["on", "off"]) });
+const slackSaveForm = z.object({ webhook: z.string() });
+const deliveryForm = z.object({ address: z.string().optional(), resume: z.string().optional() });
+const emailChangeForm = z.object({ newEmail: z.string() });
+const deleteAccountForm = z.object({ confirm: z.string() });
+const passkeyForm = z.object({ passkeyId: z.string() });
+const suggestionForm = z.object({ suggestionId: z.string() });
+const settingsIntentForm = z.object({ intent: z.string().optional() });
+
 interface SettingsUser {
   id: string;
   email: string;
@@ -116,16 +125,16 @@ async function saveSwitch(
   write: (workspaceId: string, on: boolean) => Promise<void>,
 ): Promise<SettingsResult> {
   const workspaceId = await readWorkspaceIdForOwner(userId);
-  const next = form.get("value") === "on" ? true : form.get("value") === "off" ? false : null;
-  if (workspaceId === null || next === null) return result({ saved: false });
-  await write(workspaceId, next);
+  const parsed = alertSwitchForm.safeParse(Object.fromEntries(form));
+  if (workspaceId === null || !parsed.success) return result({ saved: false });
+  await write(workspaceId, parsed.data.value === "on");
   return result({ saved: true });
 }
 
 async function connectSlack(userId: string, form: FormData): Promise<SettingsResult> {
   const workspaceId = await readWorkspaceIdForOwner(userId);
-  const raw = form.get("webhook");
-  const webhookUrl = parseSlackWebhook(typeof raw === "string" ? raw : "");
+  const parsed = slackSaveForm.safeParse(Object.fromEntries(form));
+  const webhookUrl = parseSlackWebhook(parsed.success ? parsed.data.webhook : "");
   if (workspaceId === null || webhookUrl === null) return result({ slackError: SLACK_INVALID });
   const text = "Five to Nine is connected. Price and plan changes will post here.";
   const accepted = await postToSlack(webhookUrl, text);
@@ -141,20 +150,20 @@ async function disconnectSlack(userId: string): Promise<SettingsResult> {
 }
 
 async function saveAddress(user: SettingsUser, form: FormData): Promise<SettingsResult> {
-  const address = form.get("address");
+  const parsed = deliveryForm.safeParse(Object.fromEntries(form));
   const saved = await saveDeliveryAddress({
     userId: user.id,
     signInEmail: user.email,
     email: env.EMAIL,
-    address: typeof address === "string" ? address : "",
-    resume: form.get("resume") === "yes",
+    address: parsed.success && parsed.data.address !== undefined ? parsed.data.address : "",
+    resume: parsed.success && parsed.data.resume === "yes",
   });
   return result({ deliveryError: saved.error, deliverySuppressed: saved.suppressed });
 }
 
 async function changeEmail(request: Request, form: FormData): Promise<SettingsResult> {
-  const raw = form.get("newEmail");
-  const newEmail = typeof raw === "string" ? raw.trim() : "";
+  const parsed = emailChangeForm.safeParse(Object.fromEntries(form));
+  const newEmail = parsed.success ? parsed.data.newEmail.trim() : "";
   if (!z.email().safeParse(newEmail).success) return result({ emailChangeError: EMAIL_INVALID });
   try {
     if ((await requestEmailChange(env, request, newEmail)) === "limited") {
@@ -177,8 +186,8 @@ async function removeAccount(
   form: FormData,
   call: { request: Request; context: Readonly<RouterContextProvider> },
 ): Promise<SettingsResult> {
-  const confirm = form.get("confirm");
-  const typed = typeof confirm === "string" ? confirm.trim().toLowerCase() : "";
+  const parsed = deleteAccountForm.safeParse(Object.fromEntries(form));
+  const typed = parsed.success ? parsed.data.confirm.trim().toLowerCase() : "";
   if (typed !== user.email.toLowerCase()) return result({ deleteError: MISMATCH });
   const deleted = await deleteAccount(call.context.get(oauthHelpersContext), call.request, user.id);
   if (deleted === null) return result({ deleteError: SIGN_IN_AGAIN });
@@ -186,8 +195,8 @@ async function removeAccount(
 }
 
 async function removePasskey(request: Request, form: FormData): Promise<SettingsResult> {
-  const raw = form.get("passkeyId");
-  const id = typeof raw === "string" ? raw : "";
+  const parsed = passkeyForm.safeParse(Object.fromEntries(form));
+  const id = parsed.success ? parsed.data.passkeyId : "";
   if (id === "") return result({ passkeyError: PASSKEY_FAILED });
   try {
     const outcome = await removeSignedInPasskey(env, request, id);
@@ -205,19 +214,15 @@ async function removePasskey(request: Request, form: FormData): Promise<Settings
 
 async function restore(userId: string, form: FormData): Promise<SettingsResult> {
   const workspaceId = await readWorkspaceIdForOwner(userId);
-  const rawId = form.get("suggestionId");
-  const suggestionId = typeof rawId === "string" ? rawId.trim() : "";
+  const parsed = suggestionForm.safeParse(Object.fromEntries(form));
+  const suggestionId = parsed.success ? parsed.data.suggestionId.trim() : "";
   if (workspaceId !== null && suggestionId !== "") await restoreSuggestion({ workspaceId, suggestionId });
   return result({});
 }
 
 async function saveSchedule(userId: string, form: FormData): Promise<SettingsResult> {
   const owned = await readBriefScheduleForOwner(userId);
-  const schedule = parseBriefSchedule({
-    weekday: form.get("weekday"),
-    hour: form.get("hour"),
-    timezone: form.get("timezone"),
-  });
+  const schedule = parseBriefSchedule(Object.fromEntries(form));
   if (owned === null || schedule === null) return result({ saved: false });
   await saveBriefSchedule(owned.workspaceId, owned.schedule, schedule);
   return result({ saved: true });
@@ -248,8 +253,9 @@ export async function runSettingsIntent(
   context: Readonly<RouterContextProvider>,
 ): Promise<SettingsResult> {
   const form = await request.formData();
-  const intent = form.get("intent");
+  const parsed = settingsIntentForm.safeParse(Object.fromEntries(form));
+  const intent = parsed.success ? parsed.data.intent : undefined;
   if (intent === "sign-out") throw redirect("/login", { headers: await signOut(env, request) });
-  const handler = typeof intent === "string" ? INTENTS.get(intent) : undefined;
+  const handler = intent === undefined ? undefined : INTENTS.get(intent);
   return handler === undefined ? saveSchedule(user.id, form) : handler({ user, request, form, context });
 }
