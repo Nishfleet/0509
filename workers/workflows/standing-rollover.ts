@@ -4,6 +4,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 import { instantStamp, nextBriefAt, rolloverInstance, weekClosingAt } from "../../app/lib/brief-schedule";
 import type { RolloverParams } from "../../app/lib/brief-schedule";
 import { insertWeeklyDigest } from "../../app/lib/data/digest.server";
+import { JevRateLimitedError } from "../../app/lib/jev/client.server";
 import { rejudgeUnjudgedChanges } from "../../app/lib/site/judge.server";
 import { composeBrief } from "../standing/compose-brief";
 import { freezeWeek } from "../standing/freeze";
@@ -78,32 +79,35 @@ async function writeDigest(
 
 async function rejudgeClosingWeek(
   step: WorkflowStep,
-  input: { db: D1Database; workspaceId: string; startsAt: string; closesAt: string },
+  input: { workspaceId: string; startsAt: string; closesAt: string },
 ): Promise<void> {
   try {
-    await step.do("rejudge-changes", RETRY, async () => {
-      await rejudgeUnjudgedChanges({
+    await step.do("rejudge-changes", RETRY, () =>
+      rejudgeUnjudgedChanges({
         workspaceId: input.workspaceId,
         windowStartAt: input.startsAt,
         windowEndAt: input.closesAt,
-      });
-      await refreshWorkspaceScores(input.db, {
-        workspaceId: input.workspaceId,
-        weekStartAt: input.startsAt,
-        windowStartAt: input.startsAt,
-        windowEndAt: input.closesAt,
-        computedAt: new Date().toISOString(),
-      });
-    });
-  } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "standing.rejudge_failed",
-        workspaceId: input.workspaceId,
-        error: error instanceof Error ? error.name : "unknown",
       }),
     );
+  } catch (error) {
+    if (!(error instanceof JevRateLimitedError)) throw error;
+    console.error(JSON.stringify({ event: "standing.rejudge_failed", workspaceId: input.workspaceId }));
   }
+}
+
+function refreshClosingWeek(
+  step: WorkflowStep,
+  input: { db: D1Database; workspaceId: string; startsAt: string; closesAt: string },
+): Promise<void> {
+  return step.do("refresh-scores", RETRY, async () => {
+    await refreshWorkspaceScores(input.db, {
+      workspaceId: input.workspaceId,
+      weekStartAt: input.startsAt,
+      windowStartAt: input.startsAt,
+      windowEndAt: input.closesAt,
+      computedAt: new Date().toISOString(),
+    });
+  });
 }
 
 function freezeClosingWeek(
@@ -146,6 +150,7 @@ export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
       closesAt: closesAt.toISOString(),
     };
     await rejudgeClosingWeek(step, week);
+    await refreshClosingWeek(step, week);
     const rankedCount = await freezeClosingWeek(step, week);
 
     const readThisFirst = await step.do("read-this-first", RETRY, async () =>

@@ -272,10 +272,16 @@ async function judgeChangeBody(input: JudgeInput, now: Date): Promise<JudgedChan
   return { deferred: false, selfBreakage, noteworthy: judged.noteworthy, verdictIds: await storeVerdicts(rows) };
 }
 
+async function takeJudgment(entityId: string, now: Date): Promise<boolean> {
+  const usedToday = await countVerdictsSince(entityId, todayStartIso(now));
+  if (usedToday >= JEV_JUDGMENTS_PER_BRAND_PER_DAY) return false;
+  const id = env.BROWSER_BUDGET.idFromName(`jev-change:${entityId}:${now.toISOString().slice(0, 10)}`);
+  return env.BROWSER_BUDGET.get(id).take(JEV_JUDGMENTS_PER_BRAND_PER_DAY);
+}
+
 export async function judgeChange(input: JudgeInput): Promise<JudgedChange> {
   const now = new Date();
-  const usedToday = await countVerdictsSince(input.entityId, todayStartIso(now));
-  if (usedToday >= JEV_JUDGMENTS_PER_BRAND_PER_DAY) return deferredResult(null);
+  if (!(await takeJudgment(input.entityId, now))) return deferredResult(null);
   return judgeChangeBody(input, now);
 }
 
@@ -289,9 +295,9 @@ function pageUrlOf(row: UnjudgedChange, pageUrl: string | undefined): string {
   return `https://${row.entityDomain}/`;
 }
 
-async function readSnapshotText(key: string): Promise<string> {
+async function readSnapshotText(key: string): Promise<string | null> {
   const object = await env.SNAPSHOTS.get(key);
-  return object === null ? "" : object.text();
+  return object === null ? null : object.text();
 }
 
 async function readStoredHunks(diffKey: string | null): Promise<readonly { lines: readonly string[] }[]> {
@@ -302,18 +308,25 @@ async function readStoredHunks(diffKey: string | null): Promise<readonly { lines
   return hunks === null ? [] : hunks.map((lines) => ({ lines }));
 }
 
-async function evidenceFromPayload(payload: SiteChangePayload | null): Promise<BreakageEvidence | null> {
+async function evidenceFromPayload(payload: SiteChangePayload | null): Promise<BreakageEvidence | null | "missing"> {
   if (payload?.status === undefined) return null;
   const beforeKey = payload.before.textKey;
   const afterKey = payload.after.textKey;
   if (beforeKey === undefined || afterKey === undefined) return null;
   const [beforeText, afterText] = await Promise.all([readSnapshotText(beforeKey), readSnapshotText(afterKey)]);
+  if (beforeText === null || afterText === null) return "missing";
   return computeBreakageEvidence({ status: payload.status, beforeText, afterText });
+}
+
+function logSnapshotMissing(signalId: string): null {
+  console.error(JSON.stringify({ event: "site.rejudge_snapshot_missing", signalId }));
+  return null;
 }
 
 async function judgeInputFromStored(row: UnjudgedChange): Promise<JudgeInput | null> {
   const payload = parseSiteChangePayload(row.payloadJson);
   const evidence = await evidenceFromPayload(payload);
+  if (evidence === "missing") return logSnapshotMissing(row.id);
   if (row.entityRole === "self" && evidence === null) return null;
   return {
     workspaceId: row.workspaceId,
@@ -331,7 +344,7 @@ async function judgeInputFromStored(row: UnjudgedChange): Promise<JudgeInput | n
 async function rejudgeStoredChange(row: UnjudgedChange): Promise<boolean> {
   const input = await judgeInputFromStored(row);
   if (input === null) return false;
-  const judged = await judgeChangeBody(input, new Date());
+  const judged = await judgeChange(input);
   if (judged.verdictIds.length === 0) return false;
   await linkVerdictsStatement({
     signalId: row.id,

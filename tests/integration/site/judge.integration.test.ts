@@ -1,4 +1,4 @@
-import { env } from "cloudflare:test";
+import { env, runInDurableObject } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { insertVerdict } from "../../../app/lib/data/jev_verdict.server";
@@ -76,6 +76,23 @@ async function seedHistory(entity: string, count: number): Promise<void> {
   }
 }
 
+async function resetJudgmentCounter(entityId: string): Promise<void> {
+  const stub = env.BROWSER_BUDGET.get(
+    env.BROWSER_BUDGET.idFromName(`jev-change:${entityId}:${new Date().toISOString().slice(0, 10)}`),
+  );
+  await runInDurableObject(stub, async (_instance, state) => {
+    await state.storage.deleteAll();
+  });
+}
+
+function todayWindow(workspaceId: string) {
+  return {
+    workspaceId,
+    windowStartAt: new Date(Date.parse(NOW) - 86_400_000).toISOString(),
+    windowEndAt: new Date(Date.parse(NOW) + 86_400_000).toISOString(),
+  };
+}
+
 function judgeInput(input: {
   entity: string;
   isSelf: boolean;
@@ -140,6 +157,14 @@ describe("judgeChange", () => {
       )
         .bind(entity, role, `${entity}.example`, entity, NOW)
         .run();
+    }
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES ('capped', 'ws-mine', 'competitor', 'capped.example', 'capped', 'on', ?)`,
+    )
+      .bind(NOW)
+      .run();
+    for (const entity of ["mine", "rival", "noisy", "broken", "dated", "over", "capped"]) {
+      await resetJudgmentCounter(entity);
     }
     for (const entity of ["dated", "over"]) {
       await env.DB.prepare(
@@ -427,7 +452,7 @@ describe("judgeChange", () => {
     ]);
   });
 
-  it("rejudges a filed change even when the brand already used today's judgment budget", async () => {
+  it("does not rejudge a filed change when the brand already used today's judgment budget", async () => {
     for (let index = 0; index < 6; index += 1) {
       await insertVerdict({
         workspaceId: "ws-mine",
@@ -456,14 +481,92 @@ describe("judgeChange", () => {
       windowEndAt: new Date(Date.parse(NOW) + 86_400_000).toISOString(),
     });
 
+    expect(judged).toBe(0);
+    expect(jevAnswers.calls).toBe(0);
+    expect((await rowsFor("rival")).map((row) => row.question_id)).not.toContain("noteworthy_change");
+  });
+
+  it("links the verdicts of a rejudged change to its signal", async () => {
+    await env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, url, payload_json, dedup_key, observed_at)
+       VALUES ('sig-linked', 'ws-mine', 'rival', 'src_site_web', 'change', 'home', 'https://rival.example/', '{}', 'dedup-linked', ?)`,
+    )
+      .bind(NOW)
+      .run();
+    jevAnswers.noul.set("noteworthy_change", 0.95);
+    jevAnswers.choice.set("change_kind", "copy");
+
+    const judged = await rejudgeUnjudgedChanges(todayWindow("ws-mine"));
+
     expect(judged).toBe(1);
-    expect((await rowsFor("rival")).map((row) => row.question_id)).toContain("noteworthy_change");
     const linked = await env.DB.prepare(
       "SELECT signal_id FROM jev_verdict WHERE entity_id = ? AND question_id = 'noteworthy_change'",
     )
       .bind("rival")
       .first<{ signal_id: string | null }>();
-    expect(linked?.signal_id).toBe("sig-deferred");
+    expect(linked?.signal_id).toBe("sig-linked");
+  });
+
+  it("never lets concurrent rejudges and judgments exceed the per-brand daily cap", async () => {
+    const total = 20;
+    for (let index = 0; index < total; index += 1) {
+      await env.DB.prepare(
+        `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, url, payload_json, dedup_key, observed_at)
+         VALUES (?1, 'ws-mine', 'capped', 'src_site_web', 'change', 'home', ?2, '{}', ?3, ?4)`,
+      )
+        .bind(`sig-capped-${index}`, `https://capped.example/${index}`, `dedup-capped-${index}`, NOW)
+        .run();
+    }
+    jevAnswers.noul.set("noteworthy_change", 0.95);
+    jevAnswers.choice.set("change_kind", "copy");
+
+    await Promise.all([
+      rejudgeUnjudgedChanges(todayWindow("ws-mine")),
+      rejudgeUnjudgedChanges(todayWindow("ws-mine")),
+      rejudgeUnjudgedChanges(todayWindow("ws-mine")),
+      rejudgeUnjudgedChanges(todayWindow("ws-mine")),
+      ...Array.from({ length: 4 }, (_, index) =>
+        judgeChange({
+          ...judgeInput({ entity: "capped", isSelf: false }),
+          pageUrl: `https://capped.example/j${index}`,
+        }),
+      ),
+    ]);
+
+    const judgments = await env.DB.prepare(
+      "SELECT COUNT(DISTINCT input_hash) AS n FROM jev_verdict WHERE entity_id = 'capped' AND question_id = 'noteworthy_change'",
+    ).first<{ n: number }>();
+    expect(judgments?.n).toBeGreaterThan(0);
+    expect(judgments?.n).toBeLessThanOrEqual(6);
+    expect(jevAnswers.calls).toBeLessThanOrEqual(12);
+  });
+
+  it("leaves a self change unjudged and logs it when its stored snapshot is missing", async () => {
+    const payload = {
+      page: { role: "home", url: "https://mine.example/" },
+      before: { snapshotId: "a", textKey: "snapshot/site/gone/before.txt", screenshotKey: null },
+      after: { snapshotId: "b", textKey: "snapshot/site/gone/after.txt", screenshotKey: null },
+      diffKey: null,
+      wordsAdded: 0,
+      wordsRemoved: 8,
+      status: 200,
+    };
+    await env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, url, payload_json, dedup_key, observed_at)
+       VALUES ('sig-self-gone', 'ws-mine', 'mine', 'src_site_web', 'change', 'home', 'https://mine.example/', ?, 'dedup-self-gone', ?)`,
+    )
+      .bind(JSON.stringify(payload), NOW)
+      .run();
+    jevAnswers.noul.set("own_site_breakage", 0.8);
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const judged = await rejudgeUnjudgedChanges(todayWindow("ws-mine"));
+
+    expect(judged).toBe(0);
+    expect(jevAnswers.calls).toBe(0);
+    expect(await rowsFor("mine")).toEqual([]);
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining("site.rejudge_snapshot_missing"));
+    logged.mockRestore();
   });
 
   it("does not rejudge a self change whose payload has no stored page text", async () => {
