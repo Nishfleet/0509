@@ -115,6 +115,10 @@ describe("J9 mentions land from three sources", () => {
     stubUpstreams();
     Reflect.set(env, "AI", { run: jevAnswering() });
 
+    await planTargets();
+    await env.DB.prepare("UPDATE watch SET created_at = '2026-09-01T00:00:00.000Z' WHERE entity_id = ?1")
+      .bind(competitorId)
+      .run();
     const targets = (await planTargets()).filter((entry) => entry.watches.some((w) => w.entity_id === competitorId));
     expect(targets.map((entry) => entry.pluginKey).sort()).toEqual(["gdelt.doc", "hn.algolia", "youtube.channel_rss"]);
 
