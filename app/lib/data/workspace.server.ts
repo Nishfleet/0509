@@ -24,6 +24,27 @@ export async function readWorkspaceIdForOwner(userId: string): Promise<string | 
   return row?.id ?? null;
 }
 
+const SELECT_WORKSPACE_LANDING = `SELECT w.id, w.timezone, e.id AS self_id, r.input_raw, r.watching_started_at
+FROM workspace w
+LEFT JOIN entity e ON e.workspace_id = w.id AND e.role = 'self'
+LEFT JOIN onboarding_run r ON r.workspace_id = w.id
+  AND r.started_at = (SELECT MIN(started_at) FROM onboarding_run WHERE workspace_id = w.id)
+WHERE w.owner_user_id = ?
+ORDER BY w.created_at ASC
+LIMIT 1`;
+
+export interface WorkspaceLandingRow {
+  id: string;
+  timezone: string;
+  self_id: string | null;
+  input_raw: string | null;
+  watching_started_at: string | null;
+}
+
+export async function readWorkspaceLanding(db: WorkspaceDb, userId: string): Promise<WorkspaceLandingRow | null> {
+  return db.prepare(SELECT_WORKSPACE_LANDING).bind(userId).first<WorkspaceLandingRow>();
+}
+
 interface BoundStatement {
   first<T>(): Promise<T | null>;
   run(): Promise<unknown>;

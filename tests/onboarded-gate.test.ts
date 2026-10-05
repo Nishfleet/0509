@@ -8,19 +8,21 @@ import routes from "../app/routes";
 import AppLayout, { middleware } from "../app/routes/app-layout";
 import AppSettingsLayout, * as appSettingsLayout from "../app/routes/app-settings-layout";
 
-vi.mock("../app/lib/data/workspace.server", () => ({
-  readWorkspaceIdForOwner: async () => "ws-1",
-}));
-
 vi.mock("../app/lib/require-session.server", () => ({
   requireSession: async () => ({ user: { id: "user-1" } }),
+  signOutToLogin: async () => {
+    throw new Response(null, { status: 302, headers: { Location: "/login" } });
+  },
 }));
 
 const landing = vi.hoisted(() => ({ value: null as string | null }));
 
 vi.mock("../app/lib/workspace.server", () => ({
   ONBOARDING_COMPETITORS: "/onboarding/competitors",
-  workspaceLandingForRequest: async () => landing.value,
+  workspaceLandingForRequest: async () =>
+    landing.value === "/login"
+      ? { workspaceId: null, landing: "/login" }
+      : { workspaceId: "ws-1", landing: landing.value },
 }));
 
 describe("requireOnboarded", () => {
@@ -51,6 +53,23 @@ describe("requireOnboarded", () => {
       requireOnboarded({ request: new Request("https://0509.io/app/alerts"), context }),
     ).resolves.toBeUndefined();
     expect(context.get(onboardedContext)).toEqual({ session: { user: { id: "user-1" } }, workspaceId: "ws-1" });
+  });
+
+  it("signs the user out to /login when there is no workspace", async () => {
+    landing.value = "/login";
+    let thrown: unknown;
+    try {
+      await requireOnboarded({
+        request: new Request("https://0509.io/app/alerts"),
+        context: new RouterContextProvider(),
+      });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(Response);
+    const response = thrown as Response;
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/login");
   });
 });
 

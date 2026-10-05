@@ -1,9 +1,8 @@
 import { env } from "cloudflare:workers";
 
-import { readWorkspaceSelfId } from "./data/entity.server";
 import { ensureOwnerEmailTarget } from "./data/send_target.server";
 import { isPerRunFixtureEmail } from "./fixture-accounts";
-import { fillWorkspaceTimezone, insertWorkspace } from "./data/workspace.server";
+import { fillWorkspaceTimezone, insertWorkspace, readWorkspaceLanding } from "./data/workspace.server";
 import type { WorkspaceDb } from "./data/workspace.server";
 import { subjectRedirect } from "./onboarding-subject";
 import { canonicalTimezone, timezoneCookieValue } from "./timezone";
@@ -108,24 +107,26 @@ function resumePoint(hasSelf: boolean, run: RunRow | null): string | null {
 
 export async function workspaceLanding(
   db: WorkspaceDb,
-  input: { userId: string; email: string; timezone: string | null; now?: string },
-): Promise<string | null> {
-  const workspace = await ensureWorkspace(db, input);
-  const [selfId, run] = await Promise.all([
-    readWorkspaceSelfId(workspace.id),
-    db.prepare(SELECT_RUN).bind(workspace.id).first<RunRow>(),
-  ]);
-  return resumePoint(selfId !== null, run);
+  input: { userId: string; timezone: string | null },
+): Promise<{ workspaceId: string | null; landing: string | null }> {
+  const row = await readWorkspaceLanding(db, input.userId);
+  if (row === null) return { workspaceId: null, landing: "/login" };
+  const timezone = canonicalTimezone(input.timezone);
+  if (row.timezone === "UTC" && timezone !== "UTC") {
+    await fillWorkspaceTimezone(db, row.id, timezone);
+  }
+  const run =
+    row.input_raw === null ? null : { input_raw: row.input_raw, watching_started_at: row.watching_started_at };
+  return { workspaceId: row.id, landing: resumePoint(row.self_id !== null, run) };
 }
 
 export async function workspaceLandingForRequest(
   request: Request,
   user: { id: string; email: string },
-): Promise<string | null> {
-  if (!user.email) return "/onboarding";
+): Promise<{ workspaceId: string | null; landing: string | null }> {
+  if (!user.email) return { workspaceId: null, landing: "/login" };
   return workspaceLanding(env.DB, {
     userId: user.id,
-    email: user.email,
     timezone: await timezoneCookieValue(request.headers.get("cookie")),
   });
 }
