@@ -8,7 +8,7 @@ Impact: **unknown.** Whether any production row was affected needs a read-only c
 
 ## Start and end (UTC)
 
-Start: not looked up. The exact-case lookup is in `email_suppression` code from the 2026-09-20 rebuild, and the bypass opened when owners could change the delivery address (0509#4779). Found: 2026-10-05, from a code report. End: when the fix PR deploys.
+Start: not looked up. The exact-case lookup is in `email_suppression` code from the 2026-09-20 rebuild, and the bypass opened when owners could change the delivery address (0509#4779). Found: 2026-10-05, from a code report. End: when #7128 deploys.
 
 ## Root cause
 
@@ -39,7 +39,7 @@ Code reading, not an alert or a customer. No monitor compares sends against supp
 
 ## The fix
 
-The PR that adds this file:
+#7128:
 
 - `app/lib/email-address.ts` adds `normalizeEmailAddress` (trim plus lowercase).
 - `send_target` (`app/lib/data/send_target.server.ts`) stores the email target normalized when an owner changes it or a workspace is created, and compares `lower(trim())` on both sides when deciding whether the address changed.
