@@ -19,6 +19,7 @@ const KEYS = [
   "BETTER_AUTH_SECRET",
   "TURNSTILE_SECRET_KEY",
   "TURNSTILE_SITE_KEY",
+  "DODO_WEBHOOK_SECRET",
   "EMAIL",
   "SEND_EMAIL",
   "SNAPSHOTS",
@@ -138,6 +139,71 @@ describe("worker env", () => {
     const error = namesOf(createWorkerEnvCheck());
     expect(error.names).toEqual(["TURNSTILE_SITE_KEY"]);
     expect(error.message).toContain("the sign-in form has no Turnstile widget");
+  });
+
+  // 0509#7087. .dev.vars.example is committed and its values are public. They
+  // are right for the local origins wrangler dev and the e2e lane ask for, and
+  // wrong for the Worker: a production boot holding either one signs sign-in
+  // links, or verifies payment webhooks, with a secret anyone can read out of
+  // the repository. The gate rejects them under the variable's own name, so the
+  // 503 an operator reads is the same shape as a missing entry.
+  it("refuses the public placeholder secrets on the production origin", () => {
+    useEnv({
+      ...configured(),
+      BETTER_AUTH_SECRET: "local-only-not-a-production-secret",
+      DODO_WEBHOOK_SECRET: "whsec_bG9jYWwtb25seS1ub3QtYS13ZWJob29rLXNlY3JldA==",
+    });
+    const error = namesOf(createWorkerEnvCheck());
+    expect(error.names).toEqual(["BETTER_AUTH_SECRET", "DODO_WEBHOOK_SECRET"]);
+    expect(error.message).toContain("misconfigured: BETTER_AUTH_SECRET");
+    expect(error.message).not.toContain("local-only-not-a-production-secret");
+    expect(error.message).not.toContain("whsec_");
+  });
+
+  // The Turnstile keys in .dev.vars.example are Cloudflare's published dummy
+  // keys and tests/integration/wrangler.test.jsonc runs on this same origin
+  // with them on purpose, so the rejection table stays per variable.
+  it("still accepts the Cloudflare dummy turnstile keys on the production origin", () => {
+    useEnv({
+      ...configured(),
+      TURNSTILE_SITE_KEY: "1x00000000000000000000BB",
+      TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
+    });
+    expect(() => createWorkerEnvCheck()()).not.toThrow();
+  });
+
+  // playwright.config.ts runs the e2e lane on 127.0.0.1 with
+  // --env-file .dev.vars.example. The lane only exists because those values are
+  // accepted away from the production origin.
+  it("accepts the placeholder secrets on a local origin", () => {
+    useEnv({
+      ...configured(),
+      BETTER_AUTH_URL: "http://127.0.0.1:5173",
+      BETTER_AUTH_SECRET: "local-only-not-a-production-secret",
+      DODO_WEBHOOK_SECRET: "whsec_bG9jYWwtb25seS1ub3QtYS13ZWJob29rLXNlY3JldA==",
+    });
+    expect(() => createWorkerEnvCheck()()).not.toThrow();
+  });
+
+  it("boots with no DODO_WEBHOOK_SECRET at all", () => {
+    useEnv(configured());
+    expect(() => createWorkerEnvCheck()()).not.toThrow();
+  });
+
+  it("answers 503 and names a placeholder secret without echoing it", async () => {
+    useEnv({ ...configured(), BETTER_AUTH_SECRET: "local-only-not-a-production-secret" });
+    const error = namesOf(createWorkerEnvCheck());
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const response = workerEnvFailureResponse(error);
+      expect(response.status).toBe(503);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      const body = await response.text();
+      expect(body).toContain("BETTER_AUTH_SECRET");
+      expect(body).not.toContain("local-only-not-a-production-secret");
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("checks once per isolate", () => {

@@ -4,6 +4,7 @@ import { experimental_readRawConfig } from "wrangler";
 import { describe, expect, it } from "vitest";
 
 import { D1_DATABASE_ID, SNAPSHOT_BUCKET } from "../app/lib/observability/cost-analytics.server";
+import { PRODUCTION_ORIGIN } from "../app/lib/env.server";
 
 // #4631, and 225c3eb before it: the production CLOUDFLARE_API_TOKEN cannot reach
 // the KV namespaces endpoint, so a KV binding without an id sends wrangler to
@@ -31,6 +32,15 @@ describe("deployed wrangler configs", () => {
     expect(snapshotBackup).toBeDefined();
     expect(snapshotBackup?.schedules).toBeUndefined();
     expect(rawConfig.triggers?.crons).toContain("0 5 * * *");
+  });
+
+  // 0509#7087. The env gate refuses the public placeholder secrets from
+  // .dev.vars.example only on the origin this config deploys. If the origin
+  // moves and the constant does not follow it, the check silently stops covering
+  // production, so the two are pinned together here.
+  it("pins the production origin the env gate refuses placeholder secrets on", () => {
+    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    expect(rawConfig.vars?.BETTER_AUTH_URL).toBe(PRODUCTION_ORIGIN);
   });
 
   // The cost guard queries Cloudflare analytics for the same database and bucket

@@ -7,6 +7,7 @@ const BINDING_NAMES = [
   "BETTER_AUTH_SECRET",
   "TURNSTILE_SECRET_KEY",
   "TURNSTILE_SITE_KEY",
+  "DODO_WEBHOOK_SECRET",
   "EMAIL",
   "SEND_EMAIL",
   "SNAPSHOTS",
@@ -26,6 +27,7 @@ const NOTES = {
   BETTER_AUTH_SECRET: "sign-in cannot be trusted",
   TURNSTILE_SECRET_KEY: "a botnet can spray sign-in links",
   TURNSTILE_SITE_KEY: "the sign-in form has no Turnstile widget",
+  DODO_WEBHOOK_SECRET: "a payment webhook signed with a secret anyone can read is accepted as real",
   EMAIL: "magic links and briefs cannot send",
   SEND_EMAIL: "briefs sit unsent",
   SNAPSHOTS: "site snapshots cannot be read or stored",
@@ -50,6 +52,15 @@ const NAMES = [
 type EnvName = (typeof NAMES)[number];
 type Snapshot = Record<(typeof NAMES)[number], unknown>;
 
+export const PRODUCTION_ORIGIN = "https://0509.io";
+
+const PUBLIC_PLACEHOLDER_VALUES = {
+  BETTER_AUTH_SECRET: "local-only-not-a-production-secret",
+  DODO_WEBHOOK_SECRET: "whsec_bG9jYWwtb25seS1ub3QtYS13ZWJob29rLXNlY3JldA==",
+} as const satisfies Partial<Record<EnvName, string>>;
+
+const PLACEHOLDER_NAMES = Object.keys(PUBLIC_PLACEHOLDER_VALUES) as readonly (keyof typeof PUBLIC_PLACEHOLDER_VALUES)[];
+
 const NAME_SET: ReadonlySet<string> = new Set(NAMES);
 
 const httpUrl = z.url({ protocol: /^https?$/ });
@@ -66,26 +77,35 @@ function binding(method?: "prepare" | "get" | "sendBatch" | "limit") {
   });
 }
 
-const workerEnvSchema = z.object({
-  DB: binding("prepare"),
-  BETTER_AUTH_URL: httpUrl,
-  BETTER_AUTH_SECRET: z.string().min(1),
-  TURNSTILE_SECRET_KEY: z.string().min(1),
-  TURNSTILE_SITE_KEY: z.string().min(1),
-  EMAIL: binding(),
-  SEND_EMAIL: binding("sendBatch"),
-  SNAPSHOTS: binding("get"),
-  BROWSER: binding(),
-  OAUTH_KV: binding("get"),
-  AGENT_LIMIT: binding("limit"),
-  SIGN_IN_EMAIL_LIMIT: binding("limit"),
-  SIGN_IN_IP_LIMIT: binding("limit"),
-  AGENT_REGISTER_LIMIT: binding("limit"),
-  PROBE_LIMIT: binding("limit"),
-  CHANGE_EMAIL_LIMIT: binding("limit"),
-  LIVENESS_PING_URL: httpUrl.optional(),
-  SITE_SWEEP_PING_URL: httpUrl.optional(),
-});
+const workerEnvSchema = z
+  .object({
+    DB: binding("prepare"),
+    BETTER_AUTH_URL: httpUrl,
+    BETTER_AUTH_SECRET: z.string().min(1),
+    TURNSTILE_SECRET_KEY: z.string().min(1),
+    TURNSTILE_SITE_KEY: z.string().min(1),
+    EMAIL: binding(),
+    SEND_EMAIL: binding("sendBatch"),
+    SNAPSHOTS: binding("get"),
+    BROWSER: binding(),
+    OAUTH_KV: binding("get"),
+    AGENT_LIMIT: binding("limit"),
+    SIGN_IN_EMAIL_LIMIT: binding("limit"),
+    SIGN_IN_IP_LIMIT: binding("limit"),
+    AGENT_REGISTER_LIMIT: binding("limit"),
+    PROBE_LIMIT: binding("limit"),
+    CHANGE_EMAIL_LIMIT: binding("limit"),
+    DODO_WEBHOOK_SECRET: z.string().min(1).optional(),
+    LIVENESS_PING_URL: httpUrl.optional(),
+    SITE_SWEEP_PING_URL: httpUrl.optional(),
+  })
+  .check((ctx) => {
+    if (ctx.value.BETTER_AUTH_URL !== PRODUCTION_ORIGIN) return;
+    for (const name of PLACEHOLDER_NAMES) {
+      if (ctx.value[name] !== PUBLIC_PLACEHOLDER_VALUES[name]) continue;
+      ctx.issues.push({ path: [name], input: ctx.value, message: "public placeholder value" });
+    }
+  });
 
 export class WorkerEnvError extends Error {
   readonly names: readonly EnvName[];
@@ -129,6 +149,7 @@ function snapshot(): Snapshot {
     AGENT_REGISTER_LIMIT: env.AGENT_REGISTER_LIMIT,
     PROBE_LIMIT: env.PROBE_LIMIT,
     CHANGE_EMAIL_LIMIT: env.CHANGE_EMAIL_LIMIT,
+    DODO_WEBHOOK_SECRET: blank(env.DODO_WEBHOOK_SECRET),
     LIVENESS_PING_URL: pingUrl("LIVENESS_PING_URL"),
     SITE_SWEEP_PING_URL: pingUrl("SITE_SWEEP_PING_URL"),
   };
