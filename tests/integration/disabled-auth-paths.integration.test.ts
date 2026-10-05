@@ -15,42 +15,34 @@ const auth = createAuth({
   BETTER_AUTH_URL: ORIGIN,
 });
 
-const DISABLED: { path: string; method: "GET" | "POST" }[] = [
-  { path: "/delete-user", method: "POST" },
-  { path: "/delete-user/callback", method: "GET" },
-  { path: "/change-email", method: "POST" },
-  { path: "/update-user", method: "POST" },
-  { path: "/change-password", method: "POST" },
-  { path: "/list-sessions", method: "GET" },
-  { path: "/revoke-session", method: "POST" },
-  { path: "/revoke-sessions", method: "POST" },
-  { path: "/revoke-other-sessions", method: "POST" },
-  { path: "/sign-out", method: "POST" },
-  { path: "/sign-up/email", method: "POST" },
-  { path: "/sign-in/email", method: "POST" },
-  { path: "/sign-in/social", method: "POST" },
-  { path: "/send-verification-email", method: "POST" },
-  { path: "/request-password-reset", method: "POST" },
-  { path: "/reset-password", method: "POST" },
-  { path: "/verify-password", method: "POST" },
-  { path: "/update-session", method: "POST" },
-  { path: "/link-social", method: "POST" },
-  { path: "/unlink-account", method: "POST" },
-  { path: "/list-accounts", method: "GET" },
-  { path: "/refresh-token", method: "POST" },
-  { path: "/get-access-token", method: "POST" },
-  { path: "/account-info", method: "GET" },
-  { path: "/ok", method: "GET" },
-  { path: "/error", method: "GET" },
-  { path: "/passkey/delete-passkey", method: "POST" },
-  { path: "/passkey/update-passkey", method: "POST" },
-  { path: "/passkey/list-user-passkeys", method: "GET" },
-  { path: "/api-key/create", method: "POST" },
-  { path: "/api-key/delete", method: "POST" },
-  { path: "/api-key/update", method: "POST" },
-  { path: "/api-key/get", method: "GET" },
-  { path: "/api-key/list", method: "GET" },
-];
+const OPEN = new Set([
+  "/get-session",
+  "/sign-in/magic-link",
+  "/magic-link/verify",
+  "/verify-email",
+  "/passkey/generate-register-options",
+  "/passkey/verify-registration",
+  "/passkey/generate-authenticate-options",
+  "/passkey/verify-authentication",
+]);
+
+function methodOf(endpoint: object | ((...args: never[]) => unknown)): "GET" | "POST" {
+  if (!("options" in endpoint) || typeof endpoint.options !== "object" || endpoint.options === null) return "POST";
+  if (!("method" in endpoint.options)) return "POST";
+  const raw = endpoint.options.method;
+  const first = Array.isArray(raw) ? raw[0] : raw;
+  return first === "GET" ? "GET" : "POST";
+}
+
+function registeredRoutes(): { path: string; method: "GET" | "POST" }[] {
+  const rows: { path: string; method: "GET" | "POST" }[] = [];
+  for (const endpoint of Object.values(auth.api)) {
+    if (typeof endpoint !== "function" || !("path" in endpoint)) continue;
+    if (typeof endpoint.path !== "string" || endpoint.path.includes(":")) continue;
+    rows.push({ path: endpoint.path, method: methodOf(endpoint) });
+  }
+  return rows;
+}
 
 function hit(path: string, method: "GET" | "POST"): Promise<Response> {
   return auth.handler(
@@ -63,13 +55,21 @@ function hit(path: string, method: "GET" | "POST"): Promise<Response> {
 }
 
 describe("raw better-auth HTTP paths the UI does not call", () => {
-  it.each(DISABLED)("$method $path returns 404", async ({ path, method }) => {
+  const routes = registeredRoutes();
+  const closed = routes.filter((route) => !OPEN.has(route.path));
+  const kept = routes.filter((route) => OPEN.has(route.path));
+
+  it("registers every path the UI and email links still need", () => {
+    expect(new Set(kept.map((route) => route.path))).toEqual(OPEN);
+  });
+
+  it.each(closed)("$method $path returns 404", async ({ path, method }) => {
     const response = await hit(path, method);
     expect(response.status).toBe(404);
   });
 
-  it("still answers get-session over HTTP", async () => {
-    const response = await hit("/get-session", "GET");
-    expect(response.status).toBe(200);
+  it.each(kept)("$method $path is not 404", async ({ path, method }) => {
+    const response = await hit(path, method);
+    expect(response.status).not.toBe(404);
   });
 });
