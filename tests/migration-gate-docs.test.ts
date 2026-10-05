@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-// #7003: .github/CODEOWNERS and CLAUDE.md both told the next agent that
-// `/migrations/` "waits for a code-owner review", and CODEOWNERS:2 said the
+// #7003: .github/CODEOWNERS and the house-rules file both told the next agent
+// that `/migrations/` "waits for a code-owner review", and CODEOWNERS:2 said the
 // no-glue lock "uses CODEOWNERS + require_code_owner_review". Ruleset 21391031
 // is the only ruleset on this branch (branch protection returns 404) and its
 // pull_request params are `require_code_owner_review:false` and
@@ -13,16 +13,17 @@ import { describe, expect, it } from "vitest";
 // the fleet opens is authored by nish3451, and GitHub never lets an author
 // approve their own PR.
 //
-// The gate this repo actually has, which the docs now say: a worker PR that
-// touches `migrations/` is outside the fleet-ops `agent.yml` arm allowlist, so it
-// gets `needs-coordinator` and is never auto-armed, and every merge rides the
-// merge queue's four required checks. This is the same shape as
-// tests/required-checks-never-skip.test.ts: a doc line that re-claims a lock
-// the ruleset does not have turns red here, instead of sending the next agent to
-// trust a gate that never runs.
+// 0509#7005 moved the house rules from CLAUDE.md into AGENTS.md; CLAUDE.md is
+// now only `@AGENTS.md`. The gate this repo actually has, which the docs now
+// say: a worker PR that touches `migrations/` is outside the fleet-ops
+// `agent.yml` arm allowlist, so it gets `needs-coordinator` and is never
+// auto-armed, and every merge rides the merge queue's four required checks.
+// This is the same shape as tests/required-checks-never-skip.test.ts: a doc
+// line that re-claims a lock the ruleset does not have turns red here, instead
+// of sending the next agent to trust a gate that never runs.
 
 const CODEOWNERS = new URL("../.github/CODEOWNERS", import.meta.url);
-const CLAUDE = new URL("../CLAUDE.md", import.meta.url);
+const AGENTS = new URL("../AGENTS.md", import.meta.url);
 
 const read = (url: URL): string => readFileSync(url, "utf8");
 
@@ -61,7 +62,7 @@ const CODEOWNERS_BEFORE = `# No-glue lock (fleet-ops#8459): scripts, wrappers an
 /migrations/ @nish3451
 `;
 
-const CLAUDE_BEFORE = `- Migrations (Nish 2026-09-24: "this is allowed too, use your best
+const AGENTS_BEFORE = `- Migrations (Nish 2026-09-24: "this is allowed too, use your best
   judgement"): a merge to \`main\` applies them to production D1, so
   \`/migrations/\` is code-owned and needs a code-owner review before merge.
 `;
@@ -94,13 +95,13 @@ describe("the migration and no-glue locks state the gate this repo has (0509#700
     expect(falseLocks(read(CODEOWNERS))).toEqual([]);
   });
 
-  it("claims no gate in CLAUDE.md that ruleset 21391031 does not enforce", () => {
-    expect(falseLocks(read(CLAUDE))).toEqual([]);
+  it("claims no gate in AGENTS.md that ruleset 21391031 does not enforce", () => {
+    expect(falseLocks(read(AGENTS))).toEqual([]);
   });
 
   it("names needs-coordinator as the migration's gate, in both entry docs", () => {
     expect(ownersBlock(read(CODEOWNERS), "/migrations/ @nish3451")).toMatch(NAMES_REAL_GATE);
-    expect(listItem(read(CLAUDE), /^- Migrations \(/)).toMatch(NAMES_REAL_GATE);
+    expect(listItem(read(AGENTS), /^- Migrations \(/)).toMatch(NAMES_REAL_GATE);
   });
 
   // The pair. Without this the block above could pass by accident — on an empty
@@ -110,7 +111,7 @@ describe("the migration and no-glue locks state the gate this repo has (0509#700
       "# Push rulesets are refused on public repos, so this uses CODEOWNERS + require_code_owner_review.",
       "# (deploy-production.yml), so a migration waits for a code-owner review",
     ]);
-    expect(falseLocks(CLAUDE_BEFORE)).toEqual([
+    expect(falseLocks(AGENTS_BEFORE)).toEqual([
       "`/migrations/` is code-owned and needs a code-owner review before merge.",
     ]);
     expect(ownersBlock(CODEOWNERS_BEFORE, "/migrations/ @nish3451")).not.toMatch(NAMES_REAL_GATE);
@@ -118,6 +119,6 @@ describe("the migration and no-glue locks state the gate this repo has (0509#700
 
   it("finds the block it probes, so a rename of either doc goes red", () => {
     expect(ownersBlock(read(CODEOWNERS), "/migrations/ @nish3451")).toContain("/migrations/ @nish3451");
-    expect(listItem(read(CLAUDE), /^- Migrations \(/)).toContain("a merge to `main` applies them");
+    expect(listItem(read(AGENTS), /^- Migrations \(/)).toContain("a merge to `main` applies them");
   });
 });
