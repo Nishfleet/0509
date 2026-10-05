@@ -1,12 +1,7 @@
 import type { WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { captureCheckIn } from "@sentry/cloudflare";
 
-interface CronMonitorConfig {
-  schedule: { type: "crontab"; value: string };
-  checkinMargin: number;
-  maxRuntime: number;
-  timezone: "UTC";
-}
+type CronMonitorConfig = NonNullable<Parameters<typeof captureCheckIn>[1]>;
 
 const CHECK_IN_STEP: WorkflowStepConfig = {
   retries: { limit: 2, delay: "10 seconds", backoff: "exponential" },
