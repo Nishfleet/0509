@@ -106,7 +106,7 @@ const workerEnvSchema = z
     if (ctx.value.BETTER_AUTH_URL !== PRODUCTION_ORIGIN) return;
     for (const name of PUBLIC_PLACEHOLDER_NAMES) {
       if (ctx.value[name] !== PUBLIC_PLACEHOLDER_VALUES[name]) continue;
-      ctx.issues.push({ path: [name], input: ctx.value, message: "public placeholder value" });
+      ctx.issues.push({ code: "custom", input: ctx.value, path: [name], message: "public placeholder value" });
     }
   });
 
