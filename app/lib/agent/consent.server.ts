@@ -53,6 +53,14 @@ async function parse(helpers: OAuthHelpers, request: Request): Promise<AuthReque
   );
 }
 
+async function clientName(helpers: OAuthHelpers, clientId: string): Promise<string | null | ConsentView | Response> {
+  try {
+    return claimedNameFor((await helpers.lookupClient(clientId))?.clientName);
+  } catch (error) {
+    return refusal(error);
+  }
+}
+
 function hostOf(uri: string): string {
   const url = new URL(uri);
   return url.host === "" ? `${url.protocol}//` : url.host;
@@ -61,12 +69,9 @@ function hostOf(uri: string): string {
 export async function readConsent(helpers: OAuthHelpers, request: Request): Promise<ConsentView | Response> {
   const parsed = await parse(helpers, request);
   if (!("clientId" in parsed)) return parsed;
-  const client = await helpers.lookupClient(parsed.clientId);
-  return {
-    kind: "ask",
-    host: hostOf(parsed.redirectUri),
-    claimedName: claimedNameFor(client?.clientName),
-  };
+  const claimedName = await clientName(helpers, parsed.clientId);
+  if (claimedName !== null && typeof claimedName !== "string") return claimedName;
+  return { kind: "ask", host: hostOf(parsed.redirectUri), claimedName };
 }
 
 export async function decideConsent(
@@ -87,12 +92,13 @@ export async function decideConsent(
       }),
     );
   }
-  const client = await helpers.lookupClient(parsed.clientId);
+  const claimedName = await clientName(helpers, parsed.clientId);
+  if (claimedName !== null && typeof claimedName !== "string") return claimedName;
   const host = hostOf(parsed.redirectUri);
   const { redirectTo } = await helpers.completeAuthorization({
     request: parsed,
     userId: input.userId,
-    metadata: { appName: claimedNameFor(client?.clientName) ?? host, host },
+    metadata: { appName: claimedName ?? host, host },
     scope: [READ_SCOPE],
     props: { userId: input.userId, clientId: parsed.clientId },
   });

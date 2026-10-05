@@ -1,4 +1,5 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+import { CimdFetchError } from "@cloudflare/workers-oauth-provider";
 import { createExecutionContext, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -96,6 +97,19 @@ describe("an AI app signing in to 0509", () => {
     expect(location.searchParams.get("error")).toBe("access_denied");
     expect(location.searchParams.get("state")).toBe("s1");
     expect(location.searchParams.has("code")).toBe(false);
+  });
+
+  it("refuses cleanly when the app's details fail to load between the page and Allow", async () => {
+    const failing: OAuthHelpers = {
+      ...helpers,
+      parseAuthRequest: (request) => helpers.parseAuthRequest(request),
+      lookupClient: () => Promise.reject(new CimdFetchError("https://cimd.example/gone.json", new Error("HTTP 503"))),
+    };
+    const message = "This app's details could not be loaded. Go back and try connecting again.";
+    expect(await readConsent(failing, new Request(authorizeUrl))).toEqual({ kind: "error", message });
+    expect(
+      await decideConsent(failing, new Request(authorizeUrl, { method: "POST" }), { userId: "u_oauth", allow: true }),
+    ).toEqual({ kind: "error", message });
   });
 
   it("issues a read-only token after a yes, and /mcp sees only the user who said yes", async () => {
