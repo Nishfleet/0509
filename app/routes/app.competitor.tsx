@@ -30,10 +30,6 @@ export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: `${loaderData?.competitor.name ?? "Competitor"} · Five to Nine` }];
 }
 
-export function headers() {
-  return { "cache-control": "private, no-store" };
-}
-
 export async function loader({ params, context }: Route.LoaderArgs) {
   const { workspaceId } = context.get(onboardedContext);
   if (workspaceId === null) throw redirect("/onboarding");

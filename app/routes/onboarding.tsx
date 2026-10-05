@@ -20,6 +20,10 @@ export function meta() {
   return [{ title: "Your website or social username · Five to Nine" }];
 }
 
+export function headers() {
+  return { "cache-control": "private, no-store" };
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
   const landing = await workspaceLandingForRequest(request, session.user);

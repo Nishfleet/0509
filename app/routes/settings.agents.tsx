@@ -13,10 +13,6 @@ export function meta() {
   return [{ title: "Agents and API · Five to Nine" }];
 }
 
-export function headers() {
-  return { "cache-control": "no-store" };
-}
-
 export async function loader({ request, context }: Route.LoaderArgs) {
   const session = await requireFreshSession(request);
   const access = await readAgentAccess(context.get(oauthHelpersContext), request, session.user.id);
