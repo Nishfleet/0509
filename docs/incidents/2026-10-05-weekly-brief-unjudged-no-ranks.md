@@ -38,11 +38,12 @@ A second-pass audit of production data (#7065). No alert fired: the freeze path 
 - The site sweep re-judges unjudged changes of the last 8 days.
 - Re-judging reads the stored page text, never an empty page. If a stored snapshot is missing the signal is left unjudged and `site.rejudge_snapshot_missing` is logged.
 - A self change whose `own_site_breakage` verdict is stored counts as judged. A self change with no stored page text is not counted, since it can never be judged.
-- Re-judging and first judging share one atomic per-brand per-day cap of 6 judgments, held in the `BROWSER_BUDGET` Durable Object, so sweeps, rollovers and parallel runs cannot add up to more than 6.
+- Re-judging and first judging share one atomic per-brand per-day cap of 6 verdict rows (a self change reserves 3, any other change 2, and unused rows are handed back), held in the `BROWSER_BUDGET` Durable Object, so sweeps, rollovers and parallel runs cannot add up to more than 6. A call that fails (rate limit or outage) hands its rows back, so Workflow retries cannot use up the cap without a verdict.
+- Re-judging stops at the first Jev refusal that is not a rate limit (for example billing) and does not retry it. A rate limit still makes the step retry.
 - Refreshing scores is a separate step from re-judging, so a scores failure does not repeat paid Jev calls.
 
 ## What stops a repeat
 
-- Code: the integration tests `rejudge-changes.integration.test.ts` (a deferred change blocks the freeze, then freezes after Jev recovers) and `judge.integration.test.ts` (concurrent re-judges and judgments cannot exceed the cap; a missing snapshot leaves the row unjudged). They fail on the old behaviour.
+- Code: the integration tests `rejudge-changes.integration.test.ts` (a deferred change blocks the freeze, then freezes after Jev recovers) and `judge.integration.test.ts` (concurrent re-judges and judgments cannot exceed the cap; rate-limited calls do not spend it; the Durable Object limit equals the 6-row cap; a refusal stops the batch; a missing snapshot leaves the row unjudged). They fail on the old behaviour.
 - Code: the freeze count and the re-judge query share one definition of "has stored evidence", so they cannot drift apart.
 - Still open: a week with a signal whose snapshot is gone from R2 stays unjudged and its ranks still wait. Visible alerting for that, and for rate-limit bursts, is tracked in #6922.

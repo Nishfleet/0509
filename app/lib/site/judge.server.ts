@@ -24,7 +24,11 @@ import { daysBefore } from "../site-changes.server";
 import { D3_QUESTION_ID, D3S_QUESTION_ID } from "../standing-score";
 import { computeBreakageEvidence, type BreakageEvidence } from "./breakage-evidence";
 
-const JEV_JUDGMENTS_PER_BRAND_PER_DAY = 6;
+const CHANGE_VERDICT_ROWS_PER_BRAND_PER_DAY = 6;
+
+const SELF_CHANGE_MAX_ROWS = 3;
+
+const CHANGE_MAX_ROWS = 2;
 
 const HISTORY_DAYS = 30;
 
@@ -116,6 +120,7 @@ export interface JudgeInput extends ChangeStateInput {
   workspaceId: string;
   entityId: string;
   signalId: string | null;
+  stopOnUnavailable?: boolean;
 }
 
 export function changeState<H>(input: ChangeStateInput, history30d: readonly H[]): ChangeState<H> {
@@ -182,8 +187,9 @@ function logJevUnavailable(error: JevUnavailableError): null {
   return null;
 }
 
-function degradeUnlessRateLimited(error: unknown): null {
+function degradeUnlessRateLimited(error: unknown, stopOnUnavailable: boolean | undefined): null {
   if (error instanceof JevRateLimitedError) throw error;
+  if (error instanceof JevUnavailableError && stopOnUnavailable === true) throw error;
   if (error instanceof JevUnavailableError) return logJevUnavailable(error);
   throw error;
 }
@@ -208,7 +214,7 @@ async function judgeSelfBreakage(
   try {
     breakage = await askNoul(input.workspaceId, D3S_BREAKAGE, state);
   } catch (error) {
-    return degradeUnlessRateLimited(error);
+    return degradeUnlessRateLimited(error, input.stopOnUnavailable);
   }
   const p = breakage.p;
   const row = verdictRow({
@@ -237,7 +243,7 @@ async function judgeNoteworthy(
       askChoice(input.workspaceId, D3_KIND, state),
     ]);
   } catch (error) {
-    return degradeUnlessRateLimited(error);
+    return degradeUnlessRateLimited(error, input.stopOnUnavailable);
   }
   const p = noul.p;
   const kind = choice.choice;
@@ -272,17 +278,30 @@ async function judgeChangeBody(input: JudgeInput, now: Date): Promise<JudgedChan
   return { deferred: false, selfBreakage, noteworthy: judged.noteworthy, verdictIds: await storeVerdicts(rows) };
 }
 
-async function takeJudgment(entityId: string, now: Date): Promise<boolean> {
-  const usedToday = await countVerdictsSince(entityId, todayStartIso(now));
-  if (usedToday >= JEV_JUDGMENTS_PER_BRAND_PER_DAY) return false;
+function budgetCounter(entityId: string, now: Date) {
   const id = env.BROWSER_BUDGET.idFromName(`jev-change:${entityId}:${now.toISOString().slice(0, 10)}`);
-  return env.BROWSER_BUDGET.get(id).take(JEV_JUDGMENTS_PER_BRAND_PER_DAY);
+  return env.BROWSER_BUDGET.get(id);
+}
+
+async function reserveRows(entityId: string, now: Date, rows: number): Promise<boolean> {
+  const usedToday = await countVerdictsSince(entityId, todayStartIso(now));
+  if (usedToday + rows > CHANGE_VERDICT_ROWS_PER_BRAND_PER_DAY) return false;
+  return budgetCounter(entityId, now).take(CHANGE_VERDICT_ROWS_PER_BRAND_PER_DAY, rows);
 }
 
 export async function judgeChange(input: JudgeInput): Promise<JudgedChange> {
   const now = new Date();
-  if (!(await takeJudgment(input.entityId, now))) return deferredResult(null);
-  return judgeChangeBody(input, now);
+  const reserved = input.isSelf ? SELF_CHANGE_MAX_ROWS : CHANGE_MAX_ROWS;
+  if (!(await reserveRows(input.entityId, now, reserved))) return deferredResult(null);
+  const counter = budgetCounter(input.entityId, now);
+  try {
+    const judged = await judgeChangeBody(input, now);
+    await counter.refund(reserved - judged.verdictIds.length);
+    return judged;
+  } catch (error) {
+    await counter.refund(reserved);
+    throw error;
+  }
 }
 
 const REJUDGE_LIMIT = 50;
@@ -332,6 +351,7 @@ async function judgeInputFromStored(row: UnjudgedChange): Promise<JudgeInput | n
     workspaceId: row.workspaceId,
     entityId: row.entityId,
     signalId: row.id,
+    stopOnUnavailable: true,
     isSelf: row.entityRole === "self",
     subject: { name: row.entityName, domain: row.entityDomain },
     pageUrl: pageUrlOf(row, payload === null ? undefined : payload.page.url),
@@ -361,8 +381,13 @@ export async function rejudgeUnjudgedChanges(input: {
 }): Promise<number> {
   const pending = await readUnjudgedChanges({ ...input, limit: REJUDGE_LIMIT });
   let judged = 0;
-  for (const row of pending) {
-    if (await rejudgeStoredChange(row)) judged += 1;
+  try {
+    for (const row of pending) {
+      if (await rejudgeStoredChange(row)) judged += 1;
+    }
+  } catch (error) {
+    if (error instanceof JevRateLimitedError || !(error instanceof JevUnavailableError)) throw error;
+    logJevUnavailable(error);
   }
   return judged;
 }

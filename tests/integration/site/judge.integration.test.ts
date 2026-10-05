@@ -85,6 +85,28 @@ async function resetJudgmentCounter(entityId: string): Promise<void> {
   });
 }
 
+async function judgmentCounter(entityId: string): Promise<number> {
+  const stub = env.BROWSER_BUDGET.get(
+    env.BROWSER_BUDGET.idFromName(`jev-change:${entityId}:${new Date().toISOString().slice(0, 10)}`),
+  );
+  return runInDurableObject(stub, async (_instance, state) => (await state.storage.get<number>("count")) ?? 0);
+}
+
+async function seedChangeSignals(entity: string, count: number): Promise<void> {
+  for (let index = 0; index < count; index += 1) {
+    await env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, url, payload_json, dedup_key, observed_at)
+       VALUES (?1, 'ws-mine', ?2, 'src_site_web', 'change', 'home', ?3, '{}', ?4, ?5)`,
+    )
+      .bind(`sig-${entity}-${index}`, entity, `https://${entity}.example/${index}`, `dedup-${entity}-${index}`, NOW)
+      .run();
+  }
+}
+
+function judgeAt(entity: string, isSelf: boolean, index: number) {
+  return { ...judgeInput({ entity, isSelf }), pageUrl: `https://${entity}.example/p${index}` };
+}
+
 function todayWindow(workspaceId: string) {
   return {
     workspaceId,
@@ -505,6 +527,68 @@ describe("judgeChange", () => {
       .bind("rival")
       .first<{ signal_id: string | null }>();
     expect(linked?.signal_id).toBe("sig-linked");
+  });
+
+  it("does not spend the daily cap on rate-limited calls, so retries cannot exhaust it", async () => {
+    jevAnswers.noul.set("noteworthy_change", 0.95);
+    jevAnswers.choice.set("change_kind", "copy");
+    jevFailures.message = "2003: Rate limited";
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      jevFailures.next = 1;
+      await expect(judgeChange(judgeAt("rival", false, attempt))).rejects.toThrow(JevRateLimitedError);
+    }
+    jevFailures.next = 0;
+
+    expect(await judgmentCounter("rival")).toBe(0);
+    for (let index = 0; index < 3; index += 1) {
+      expect((await judgeChange(judgeAt("rival", false, index))).deferred).toBe(false);
+    }
+    expect((await judgeChange(judgeAt("rival", false, 3))).deferred).toBe(true);
+  });
+
+  it("keeps the Durable Object limit equal to the six verdict rows, counting a self change as three rows", async () => {
+    jevAnswers.noul.set("own_site_breakage", 0.05);
+    jevAnswers.noul.set("noteworthy_change", 0.95);
+    jevAnswers.choice.set("change_kind", "copy");
+
+    const first = await judgeChange(judgeAt("mine", true, 0));
+    const second = await judgeChange(judgeAt("mine", true, 1));
+    const callsBeforeThird = jevAnswers.calls;
+    const third = await judgeChange(judgeAt("mine", true, 2));
+
+    expect(first.verdictIds).toHaveLength(3);
+    expect(second.verdictIds).toHaveLength(3);
+    expect(third.deferred).toBe(true);
+    expect(jevAnswers.calls).toBe(callsBeforeThird);
+    expect(await rowsFor("mine")).toHaveLength(6);
+    expect(await judgmentCounter("mine")).toBe(6);
+  });
+
+  it("refunds the rows a judgment did not write", async () => {
+    jevAnswers.noul.set("own_site_breakage", 0.9);
+
+    const judged = await judgeChange(judgeAt("mine", true, 0));
+
+    expect(judged.verdictIds).toHaveLength(1);
+    expect(await judgmentCounter("mine")).toBe(1);
+  });
+
+  it("stops a rejudge batch at the first Jev refusal that is not a rate limit", async () => {
+    await seedChangeSignals("rival", 3);
+    jevAnswers.noul.set("noteworthy_change", 0.95);
+    jevAnswers.choice.set("change_kind", "copy");
+    jevFailures.next = 100;
+    jevFailures.message = "5xxx: payment required";
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const judged = await rejudgeUnjudgedChanges(todayWindow("ws-mine"));
+
+    const events = logged.mock.calls.map(([line]) => JSON.parse(String(line)).event);
+    logged.mockRestore();
+    expect(judged).toBe(0);
+    expect(jevAnswers.calls).toBe(2);
+    expect(events).toContain("site.jev_unavailable");
+    expect(await judgmentCounter("rival")).toBe(0);
   });
 
   it("never lets concurrent rejudges and judgments exceed the per-brand daily cap", async () => {
