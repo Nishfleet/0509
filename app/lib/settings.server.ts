@@ -34,6 +34,15 @@ const SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then delete y
 const PASSKEY_SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then remove your passkey.";
 const PASSKEY_FAILED = "The passkey wasn't removed. Try again.";
 
+const alertSwitchForm = z.object({ value: z.enum(["on", "off"]) });
+const slackSaveForm = z.object({ webhook: z.string() });
+const deliveryForm = z.object({ address: z.string().optional(), resume: z.string().optional() });
+const emailChangeForm = z.object({ newEmail: z.string() });
+const deleteAccountForm = z.object({ confirm: z.string() });
+const passkeyForm = z.object({ passkeyId: z.string() });
+const suggestionForm = z.object({ suggestionId: z.string() });
+const settingsIntentForm = z.object({ intent: z.string().optional() });
+
 interface SettingsUser {
   id: string;
   email: string;
@@ -116,7 +125,7 @@ async function saveSwitch(
   write: (workspaceId: string, on: boolean) => Promise<void>,
 ): Promise<SettingsResult> {
   const workspaceId = await readWorkspaceIdForOwner(userId);
-  const parsed = z.object({ value: z.enum(["on", "off"]) }).safeParse(Object.fromEntries(form));
+  const parsed = alertSwitchForm.safeParse(Object.fromEntries(form));
   if (workspaceId === null || !parsed.success) return result({ saved: false });
   await write(workspaceId, parsed.data.value === "on");
   return result({ saved: true });
@@ -124,7 +133,7 @@ async function saveSwitch(
 
 async function connectSlack(userId: string, form: FormData): Promise<SettingsResult> {
   const workspaceId = await readWorkspaceIdForOwner(userId);
-  const parsed = z.object({ webhook: z.string() }).safeParse(Object.fromEntries(form));
+  const parsed = slackSaveForm.safeParse(Object.fromEntries(form));
   const webhookUrl = parseSlackWebhook(parsed.success ? parsed.data.webhook : "");
   if (workspaceId === null || webhookUrl === null) return result({ slackError: SLACK_INVALID });
   const text = "Five to Nine is connected. Price and plan changes will post here.";
@@ -141,9 +150,7 @@ async function disconnectSlack(userId: string): Promise<SettingsResult> {
 }
 
 async function saveAddress(user: SettingsUser, form: FormData): Promise<SettingsResult> {
-  const parsed = z
-    .object({ address: z.string().optional(), resume: z.string().optional() })
-    .safeParse(Object.fromEntries(form));
+  const parsed = deliveryForm.safeParse(Object.fromEntries(form));
   const saved = await saveDeliveryAddress({
     userId: user.id,
     signInEmail: user.email,
@@ -155,7 +162,7 @@ async function saveAddress(user: SettingsUser, form: FormData): Promise<Settings
 }
 
 async function changeEmail(request: Request, form: FormData): Promise<SettingsResult> {
-  const parsed = z.object({ newEmail: z.string() }).safeParse(Object.fromEntries(form));
+  const parsed = emailChangeForm.safeParse(Object.fromEntries(form));
   const newEmail = parsed.success ? parsed.data.newEmail.trim() : "";
   if (!z.email().safeParse(newEmail).success) return result({ emailChangeError: EMAIL_INVALID });
   try {
@@ -179,7 +186,7 @@ async function removeAccount(
   form: FormData,
   call: { request: Request; context: Readonly<RouterContextProvider> },
 ): Promise<SettingsResult> {
-  const parsed = z.object({ confirm: z.string() }).safeParse(Object.fromEntries(form));
+  const parsed = deleteAccountForm.safeParse(Object.fromEntries(form));
   const typed = parsed.success ? parsed.data.confirm.trim().toLowerCase() : "";
   if (typed !== user.email.toLowerCase()) return result({ deleteError: MISMATCH });
   const deleted = await deleteAccount(call.context.get(oauthHelpersContext), call.request, user.id);
@@ -188,7 +195,7 @@ async function removeAccount(
 }
 
 async function removePasskey(request: Request, form: FormData): Promise<SettingsResult> {
-  const parsed = z.object({ passkeyId: z.string() }).safeParse(Object.fromEntries(form));
+  const parsed = passkeyForm.safeParse(Object.fromEntries(form));
   const id = parsed.success ? parsed.data.passkeyId : "";
   if (id === "") return result({ passkeyError: PASSKEY_FAILED });
   try {
@@ -207,7 +214,7 @@ async function removePasskey(request: Request, form: FormData): Promise<Settings
 
 async function restore(userId: string, form: FormData): Promise<SettingsResult> {
   const workspaceId = await readWorkspaceIdForOwner(userId);
-  const parsed = z.object({ suggestionId: z.string() }).safeParse(Object.fromEntries(form));
+  const parsed = suggestionForm.safeParse(Object.fromEntries(form));
   const suggestionId = parsed.success ? parsed.data.suggestionId.trim() : "";
   if (workspaceId !== null && suggestionId !== "") await restoreSuggestion({ workspaceId, suggestionId });
   return result({});
@@ -215,12 +222,7 @@ async function restore(userId: string, form: FormData): Promise<SettingsResult> 
 
 async function saveSchedule(userId: string, form: FormData): Promise<SettingsResult> {
   const owned = await readBriefScheduleForOwner(userId);
-  const fields = Object.fromEntries(form);
-  const schedule = parseBriefSchedule({
-    weekday: fields.weekday,
-    hour: fields.hour,
-    timezone: fields.timezone,
-  });
+  const schedule = parseBriefSchedule(Object.fromEntries(form));
   if (owned === null || schedule === null) return result({ saved: false });
   await saveBriefSchedule(owned.workspaceId, owned.schedule, schedule);
   return result({ saved: true });
@@ -251,7 +253,7 @@ export async function runSettingsIntent(
   context: Readonly<RouterContextProvider>,
 ): Promise<SettingsResult> {
   const form = await request.formData();
-  const parsed = z.object({ intent: z.string().optional() }).safeParse(Object.fromEntries(form));
+  const parsed = settingsIntentForm.safeParse(Object.fromEntries(form));
   const intent = parsed.success ? parsed.data.intent : undefined;
   if (intent === "sign-out") throw redirect("/login", { headers: await signOut(env, request) });
   const handler = intent === undefined ? undefined : INTENTS.get(intent);

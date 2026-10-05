@@ -10,10 +10,9 @@ import { OnboardingFrame } from "../components/onboarding-frame";
 import { Button } from "../components/ui/button";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import { markCompetitorsReady, markWatchingStarted } from "../lib/data/onboarding_run.server";
-import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { readOnboardingScreen } from "../lib/discovery/start.server";
 import { discoveryNotice, type DiscoveryState } from "../lib/discovery/state";
-import { requireFreshSession, requireSession } from "../lib/require-session.server";
+import { requireFreshSession, requireSession, signOutToLogin } from "../lib/require-session.server";
 import { createTimings } from "../lib/server-timing.server";
 import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 
@@ -24,10 +23,9 @@ const startWatchingForm = z.object({ intent: z.literal("start") });
 
 async function workspaceFor(request: Request, fresh = false): Promise<string> {
   const session = await (fresh ? requireFreshSession(request) : requireSession(request));
-  const landing = await workspaceLandingForRequest(request, session.user);
+  const { landing, workspaceId } = await workspaceLandingForRequest(request, session.user);
+  if (workspaceId === null) return await signOutToLogin(request);
   if (landing !== null && landing !== ONBOARDING_COMPETITORS) throw redirect(landing);
-  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
-  if (workspaceId === null) throw redirect("/onboarding");
   return workspaceId;
 }
 

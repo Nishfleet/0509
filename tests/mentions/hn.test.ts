@@ -32,6 +32,28 @@ describe("hn.algolia mentions adapter", () => {
     }
   });
 
+  it("bounds the Algolia query to the last week, or to the stored cursor", async () => {
+    const fetchMock = vi.fn(async () => new Response(fixture));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const before = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
+      await hnAdapter({ query: "gymshark" }, null);
+      const weekUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
+      const bound = Number((weekUrl.searchParams.get("numericFilters") ?? "").replace("created_at_i>", ""));
+      expect(bound).toBeGreaterThanOrEqual(before);
+      const cursor = Math.floor(Date.now() / 1000) - 3600;
+      await hnAdapter({ query: "gymshark" }, String(cursor));
+      const cursorUrl = new URL(String(fetchMock.mock.calls[1]?.[0]));
+      expect(cursorUrl.searchParams.get("numericFilters")).toBe("created_at_i>" + String(cursor));
+      await hnAdapter({ query: "gymshark" }, "1000");
+      const staleUrl = new URL(String(fetchMock.mock.calls[2]?.[0]));
+      const staleBound = Number((staleUrl.searchParams.get("numericFilters") ?? "").replace("created_at_i>", ""));
+      expect(staleBound).toBeGreaterThanOrEqual(before);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("falls back to the HN permalink when Algolia returns an empty url", () => {
     const rawBody = JSON.stringify({
       hits: [
