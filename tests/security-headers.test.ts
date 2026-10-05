@@ -29,8 +29,8 @@ describe("document security headers", () => {
     expect(route.has("content-security-policy")).toBe(false);
   });
 
-  it("keeps the edge from injecting its analytics module into a Worker-rendered document", () => {
-    expect(withDocumentSecurityHeaders(new Headers(), "n1").get("cache-control")).toBe("no-transform");
+  it("never marks a Worker-rendered document no-transform, so the edge can compress it", () => {
+    expect(withDocumentSecurityHeaders(new Headers(), "n1").get("cache-control")).toBeNull();
     const cached = new Headers({ "Cache-Control": "public, max-age=300" });
     expect(withDocumentSecurityHeaders(cached, "n1").get("cache-control")).toBe("public, max-age=300");
   });

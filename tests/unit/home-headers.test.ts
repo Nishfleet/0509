@@ -31,7 +31,7 @@ function headerValue(block: string, name: string): string | undefined {
 }
 
 describe("static home analytics", () => {
-  it("sets no-transform on / so the edge cannot inject the analytics module", () => {
+  it("caches / without no-transform so the edge can compress it", () => {
     const html = readFileSync(join(REPO_ROOT, "public/index.html"), "utf8");
     const cacheControl = headerValue(headersBlock("/"), "Cache-Control");
     if (cacheControl === undefined) {
@@ -44,7 +44,7 @@ describe("static home analytics", () => {
 
     expect(directives).toContain("public");
     expect(directives).toContain("max-age=300");
-    expect(directives).toContain("no-transform");
+    expect(directives).not.toContain("no-transform");
     expect(html).toContain("Quietly, we");
     expect(html).not.toContain("<script src");
     expect(html).not.toContain("cloudflareinsights.com");
