@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { insertSignalAlert } from "../../app/lib/data/alert.server";
 import type { DiscoveryContext } from "../../app/lib/data/entity.server";
 import { readDiscoveryContext, readEntityIdentityJson } from "../../app/lib/data/entity.server";
-import { countVerdictsSince, insertVerdict } from "../../app/lib/data/jev_verdict.server";
+import { insertVerdict } from "../../app/lib/data/jev_verdict.server";
 import {
   type DuplicateCandidate,
   findDuplicateCandidate,
@@ -25,6 +25,7 @@ import {
 } from "../../app/lib/data/watch.server";
 import type { NoulVerdict } from "../../app/lib/jev/client.server";
 import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
+import { withMentionCall } from "../../app/lib/mentions/call-budget.server";
 import { lookupYoutubeChannel } from "../../app/lib/identity/youtube-channel.server";
 import { noulAction } from "../../app/lib/jev/thresholds";
 import { mentionReasonLine } from "../../app/lib/mentions/reason-customer";
@@ -55,13 +56,6 @@ import { isUpstreamTimeout, UpstreamBlockedError } from "../sources/mentions/typ
 import type { OkYoutubeFeed } from "../sources/mentions/youtube";
 
 const JUDGED_PER_WATCH = 12;
-
-const JUDGED_PER_BRAND_PER_DAY = 24;
-
-async function judgeAllowance(watch: WatchRow, now: string): Promise<number> {
-  const used = await countVerdictsSince(watch.entity_id, `${now.slice(0, 10)}T00:00:00.000Z`, [ABOUT_BRAND.id]);
-  return Math.max(0, Math.min(JUDGED_PER_WATCH, JUDGED_PER_BRAND_PER_DAY - used));
-}
 
 const DUPLICATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -109,23 +103,18 @@ async function judge(
   item: JudgedItem,
 ): Promise<{ about: NoulVerdict; matters: NoulVerdict | null }> {
   const subject = subjectOf(watch);
-  const about = await askNoul(
-    watch.workspace_id,
-    ABOUT_BRAND,
-    aboutBrandState({ subject, item, reliability: watch.reliability }),
+  const about = await withMentionCall(watch.entity_id, () =>
+    askNoul(watch.workspace_id, ABOUT_BRAND, aboutBrandState({ subject, item, reliability: watch.reliability })),
   );
   if (noulAction(about.p) === "reject") return { about, matters: null };
-  const matters = await askNoul(
-    watch.workspace_id,
-    MATTERS,
-    mentionMattersState({
-      self: { name: context.self.name, domain: context.self.domain, description: context.self.description },
-      subject,
-      competitors: context.competitors,
-      item,
-      reliability: watch.reliability,
-    }),
-  );
+  const mattersState = mentionMattersState({
+    self: { name: context.self.name, domain: context.self.domain, description: context.self.description },
+    subject,
+    competitors: context.competitors,
+    item,
+    reliability: watch.reliability,
+  });
+  const matters = await withMentionCall(watch.entity_id, () => askNoul(watch.workspace_id, MATTERS, mattersState));
   return { about, matters };
 }
 
@@ -259,7 +248,7 @@ async function judgeDuplicate(input: {
     second: candidate,
   });
   try {
-    const verdict = await askNoul(watch.workspace_id, DUPLICATE_SIGNAL, state);
+    const verdict = await withMentionCall(watch.entity_id, () => askNoul(watch.workspace_id, DUPLICATE_SIGNAL, state));
     const statements = duplicateStatements({ watch, signalId, candidateId: candidate.id, verdict, now });
     return { statements, asked: true, jevDown: false };
   } catch (error) {
@@ -273,20 +262,13 @@ async function rejudgeUnjudged(
   watch: WatchRow,
   context: DiscoveryContext,
   now: string,
-): Promise<{
-  statements: D1PreparedStatement[];
-  stored: number;
-  attempted: number;
-  jevDown: boolean;
-  allowance: number;
-}> {
-  const allowance = await judgeAllowance(watch, now);
-  const pending = await readUnjudgedMentions(watch.watch_id, allowance);
+): Promise<{ statements: D1PreparedStatement[]; stored: number; attempted: number; jevDown: boolean }> {
+  const pending = await readUnjudgedMentions(watch.watch_id, JUDGED_PER_WATCH);
   const statements: D1PreparedStatement[] = [];
   let stored = 0;
   for (const row of pending) {
     const verdicts = await judgeOrNull(watch, context, row);
-    if (verdicts === null) return { statements, stored, attempted: pending.length, jevDown: true, allowance };
+    if (verdicts === null) return { statements, stored, attempted: pending.length, jevDown: true };
     const rejected = noulAction(verdicts.about.p) === "reject";
     statements.push(
       resolveUnjudgedMention(row.id, rejected),
@@ -294,7 +276,7 @@ async function rejudgeUnjudged(
     );
     if (!rejected) stored += 1;
   }
-  return { statements, stored, attempted: pending.length, jevDown: false, allowance };
+  return { statements, stored, attempted: pending.length, jevDown: false };
 }
 
 function mentionSignal(input: {
@@ -467,7 +449,7 @@ async function statementsForWatch(input: {
   let stored = rejudged.stored;
   let unjudged = 0;
   const { jevDown } = rejudged;
-  const freshBudget = jevDown ? rejudged.allowance : rejudged.allowance - rejudged.attempted;
+  const freshBudget = jevDown ? JUDGED_PER_WATCH : JUDGED_PER_WATCH - rejudged.attempted;
   const freshJudged = await judgeFreshItems({
     watch,
     context,
