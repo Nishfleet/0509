@@ -80,10 +80,10 @@
 
   // #7187: the stock version_metadata binding
   // (https://developers.cloudflare.com/workers/runtime-apis/bindings/version-metadata/)
-  // hands the Worker the deployed version's id and tag. The deploy step turns
-  // that tag into the pushed commit by passing the SHA at deploy time, so
-  // /api/health can name the exact commit that is live. Nothing is
-  // provisioned: the binding is deploy metadata the runtime injects.
+  // hands the Worker the deployed version's id and tag, so a public route can
+  // name what is live. Nothing is provisioned: the binding is deploy metadata
+  // the runtime injects. The tag is the pushed commit once a deploy passes the
+  // SHA as the version tag (Nishfleet/fleet-ops#9307).
   "version_metadata": { "binding": "VERSION_METADATA" },
 
   "durable_objects": {
