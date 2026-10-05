@@ -103,7 +103,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         quiet={loaderData.quiet}
         pages={loaderData.watch.pages}
         lastChecked={loaderData.lastChecked}
-        pausedOn={pausedAt === null ? null : dayMonthLabel(pausedAt)}
+        pausedOn={pausedAt === null ? null : dayMonthLabel(pausedAt, loaderData.timezone)}
         unreadable={loaderData.watch.unreadable}
         sweepClock={loaderData.sweepClock}
         rail={{ ...loaderData.rail, entityId: competitor.id, now: loaderData.now }}

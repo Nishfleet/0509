@@ -34,6 +34,7 @@ describe("canonicalTimezone", () => {
   it("treats Asia/Calcutta and Asia/Kolkata as the same zone", () => {
     expect(sameTimezone("Asia/Calcutta", "Asia/Kolkata")).toBe(true);
     expect(sameTimezone("Asia/Kolkata", "America/New_York")).toBe(false);
+    expect(sameTimezone("Not/AZone", "UTC")).toBe(false);
   });
 
   it("returns UTC and logs one timezone.resolve_failed line for a zone Intl rejects", () => {

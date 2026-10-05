@@ -28,14 +28,14 @@ export function canonicalTimezone(value: string | null | undefined): string {
   }
 }
 
-function resolvedZone(value: string): string {
-  try {
-    return new Intl.DateTimeFormat("en-US", { timeZone: value.trim() }).resolvedOptions().timeZone;
-  } catch {
-    return canonicalTimezone(value);
-  }
-}
-
 export function sameTimezone(left: string, right: string): boolean {
-  return resolvedZone(left) === resolvedZone(right);
+  const leftZone = left.trim();
+  const rightZone = right.trim();
+  if (leftZone.length === 0 || rightZone.length === 0) return false;
+  if (canonicalTimezone(leftZone) === "UTC" && leftZone !== "UTC") return false;
+  if (canonicalTimezone(rightZone) === "UTC" && rightZone !== "UTC") return false;
+  return (
+    new Intl.DateTimeFormat("en-US", { timeZone: leftZone }).resolvedOptions().timeZone ===
+    new Intl.DateTimeFormat("en-US", { timeZone: rightZone }).resolvedOptions().timeZone
+  );
 }

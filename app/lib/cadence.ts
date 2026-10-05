@@ -4,7 +4,7 @@ export const SITE_SWEEP_ALLOWANCE_HOURS = 4;
 export const SITE_SWEEP_CRON = `0 ${String(SITE_SWEEP_UTC_HOUR)} * * *`;
 export const SITE_SWEEP_UTC_LABEL = `${String(SITE_SWEEP_UTC_HOUR).padStart(2, "0")}:00 UTC`;
 
-export function siteSweepAt(now: Date): Date {
+function siteSweepAt(now: Date): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), SITE_SWEEP_UTC_HOUR, 0, 0));
 }
 

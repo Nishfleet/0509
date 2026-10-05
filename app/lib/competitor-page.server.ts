@@ -33,6 +33,7 @@ export interface CompetitorPage {
   biggestMove: BiggestMoveView | null;
   quiet: string;
   sweepClock: string;
+  timezone: string;
   youtubeUrl: string | null;
   rail: {
     peers: readonly PeerRow[];
@@ -86,6 +87,7 @@ export async function readCompetitorPage(
       sweepClock,
     ),
     sweepClock,
+    timezone,
     youtubeUrl: socials?.find((social) => social.platform === "youtube")?.url ?? null,
     rail: { peers, facts, sources, verdict },
   };

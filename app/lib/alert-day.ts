@@ -5,12 +5,8 @@ export type DayGroup = "Today" | "Yesterday" | "Earlier";
 
 const DAY_GROUPS: readonly DayGroup[] = ["Today", "Yesterday", "Earlier"];
 
-function localDay(at: Date, timeZone: string): string {
+export function localDay(at: Date, timeZone: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
-}
-
-export function localCalendarDay(at: Date, timeZone: string): string {
-  return localDay(at, timeZone);
 }
 
 export function startOfLocalDay(now: Date, timeZone: string): Date {

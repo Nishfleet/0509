@@ -75,6 +75,16 @@ describe("the brief schedule (0509#4004)", () => {
     expect(weekAfter.closesAt.getTime() - weekAfter.startsAt.getTime()).toBeGreaterThan(6 * 24 * 60 * 60 * 1000);
   });
 
+  it("uses the first valid local hour when the brief hour is inside a spring-forward gap", () => {
+    const newYorkTwo: BriefSchedule = { timezone: "America/New_York", weekday: 0, hour: 2 };
+    const gapInstant = nextBriefAt(newYorkTwo, at("2026-03-01T12:00:00.000Z"));
+    const weekAfter = openWeek(newYorkTwo, gapInstant);
+    expect(gapInstant.toISOString()).toBe("2026-03-08T07:00:00.000Z");
+    expect(weekAfter.startsAt.toISOString()).toBe(gapInstant.toISOString());
+    expect(weekAfter.closesAt.toISOString()).toBe("2026-03-15T06:00:00.000Z");
+    expect(weekAfter.closesAt.getTime() - weekAfter.startsAt.getTime()).toBeGreaterThan(6 * 24 * 60 * 60 * 1000);
+  });
+
   it("names the week that closes at an instant", () => {
     const closesAt = at("2026-09-28T08:00:00.000Z");
     expect(weekClosingAt(MONDAY_8_UTC, closesAt)).toEqual({

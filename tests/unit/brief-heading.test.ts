@@ -124,6 +124,9 @@ describe("the brief page's Previous briefs links", () => {
 });
 
 describe("the brief page's week label", () => {
+  // period_start is the week-start instant (workers/standing/compose-brief.ts),
+  // the same value the email formats in payload.timezone. 2026-09-14T00:00Z is
+  // 13 Sept in America/New_York, so a UTC label would disagree with the email.
   it("finishes every week's label in the workspace zone, and the selected one's", async () => {
     const data = await loader(loaderArgs({ digestId: "dig_1" }));
     expect(data.weeks.map((week) => week.weekLabel)).toEqual(["An earlier week", "Week of 13 Sept"]);
