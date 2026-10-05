@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../../app/lib/require-onboarded.server", () => ({ requireOnboarded: async () => {} }));
+vi.mock("../../app/lib/require-onboarded.server", () => ({ requireOnboarded: () => Promise.resolve() }));
 
 import { headers as appLayoutHeaders } from "../../app/routes/app-layout";
 import { headers as appSettingsLayoutHeaders } from "../../app/routes/app-settings-layout";
