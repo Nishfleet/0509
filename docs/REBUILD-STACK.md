@@ -719,7 +719,7 @@ We need cards for a handful of public surfaces, not per-request at scale. Browse
 | Rejected                       | Why                                                                                                                                                                                                                                                  |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `luxon` 3.7.2 — 22.1 KB gzip   | One monolithic `DateTime` class, **no tree-shaking** — you pay all 22 KB to format one date. ~10× the date-fns + tz pairing for the same `Intl`-backed capability.                                                                                   |
-| `dayjs` 1.11.23 — 3.45 KB core | No `"exports"` map, no `"module"` field, no `"type": "module"` — a CJS package with a mutable-global plugin registry (`dayjs.extend(timezone)`) that defeats static analysis, plus the Moment-style mutable API the house immutability rule forbids. |
+| `dayjs` 1.11.23 — 3.45 KB core | No `"exports"` map, no `"module"` field, no `"type": "module"` — a CJS package with a mutable-global plugin registry (`dayjs.extend(timezone)`) that defeats static analysis, plus the Moment-style mutable API, for the same reason a mutable-global registry is disqualified here. |
 
 ### 5.10 Toasts
 

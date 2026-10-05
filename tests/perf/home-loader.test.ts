@@ -83,7 +83,7 @@ describe("home loader", () => {
     let readOk = true;
     for (let i = 0; i < 100; i++) {
       const started = performance.now();
-      const inputs = await readHomeStandingInputs(env.DB, USER);
+      const inputs = await readHomeStandingInputs(USER);
       samples.push(performance.now() - started);
       readOk =
         readOk &&

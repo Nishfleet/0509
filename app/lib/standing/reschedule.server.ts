@@ -12,7 +12,7 @@ export async function saveBriefSchedule(
   next: BriefSchedule,
 ): Promise<RescheduleResult> {
   await updateBriefSchedule(workspaceId, next);
-  const latest = (await listBriefs(env.DB, workspaceId))[0];
+  const latest = (await listBriefs(workspaceId))[0];
   const lastBriefPeriodEnd = latest === undefined ? null : new Date(latest.period_end);
   return rescheduleRollover(env.STANDING_ROLLOVER, {
     workspaceId,

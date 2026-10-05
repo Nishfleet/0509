@@ -73,7 +73,6 @@ you.
   `playwright/no-networkidle`). Conditional `test.skip(condition, reason)` and
   `test.fail()` stay allowed. The full enforced set is the two test-lint blocks
   in `eslint.config.js`. Source: 0509#5785.
-- **Immutability.** New objects, never mutation.
 - **Formatting is Prettier.** `npm run lint` runs `prettier --check .`; run `npm run format` before committing.
 - **Stock only, at the version named in `docs/REBUILD-STACK.md`.** `tests/stack-dependencies.test.ts` fails a dependency with no row there. A PR names the library or Cloudflare primitive it uses and what it rejected. Hand-rolled schedulers, diffing, crawlers, queues, retries, auth, billing, email, charts or design systems are rejected. A hand-written type annotation over a framework value is a hand-rolled assertion: use the generated types.
 - **Jev decides every typed decision** (`docs/REBUILD-JEV.md`, D1–D9). Code never guesses with regexes where a judgment is needed; Jev internals are never shown to customers.

@@ -1,3 +1,5 @@
+import { env } from "cloudflare:workers";
+
 const MARK_SENT = `UPDATE digest SET status = 'sent', sent_at = ? WHERE id = ?`;
 
 const CANCEL_PENDING = `UPDATE digest SET status = 'cancelled'
@@ -48,17 +50,13 @@ export async function markDigestFailed(db: D1Database, digestId: string): Promis
   await db.prepare(MARK_FAILED).bind(digestId).run();
 }
 
-export async function listBriefs(db: D1Database, workspaceId: string): Promise<BriefRow[]> {
-  const { results } = await db.prepare(LIST_BRIEFS).bind(workspaceId).all<BriefRow>();
+export async function listBriefs(workspaceId: string): Promise<BriefRow[]> {
+  const { results } = await env.DB.prepare(LIST_BRIEFS).bind(workspaceId).all<BriefRow>();
   return results;
 }
 
-export async function readBrief(
-  db: D1Database,
-  workspaceId: string,
-  digestId: string,
-): Promise<BriefWithPayload | null> {
-  return db.prepare(READ_BRIEF).bind(workspaceId, digestId).first<BriefWithPayload>();
+export async function readBrief(workspaceId: string, digestId: string): Promise<BriefWithPayload | null> {
+  return env.DB.prepare(READ_BRIEF).bind(workspaceId, digestId).first<BriefWithPayload>();
 }
 
 export async function insertWeeklyDigest(db: D1Database, digest: WeeklyDigest): Promise<void> {

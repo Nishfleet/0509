@@ -74,7 +74,7 @@ describe("readHomeStandingInputs", () => {
     await seedDigest("older", "2026-09-14T07:00:00.000Z", 2);
     await seedDigest("newest", "2026-09-21T07:00:00.000Z", 1);
 
-    const inputs = await readHomeStandingInputs(env.DB, USER);
+    const inputs = await readHomeStandingInputs(USER);
 
     expect(inputs?.schedule).toEqual({ timezone: "Europe/London", weekday: 1, hour: 8 });
     expect(inputs?.entities.map((entity) => [entity.role, entity.domain, entity.state]).sort()).toEqual([
@@ -87,7 +87,7 @@ describe("readHomeStandingInputs", () => {
   });
 
   it("has no brief to show before the first week closes", async () => {
-    const inputs = await readHomeStandingInputs(env.DB, USER);
+    const inputs = await readHomeStandingInputs(USER);
     expect(inputs?.payload).toBeNull();
     expect(inputs?.entities).toHaveLength(3);
   });
@@ -99,7 +99,7 @@ describe("readHomeStandingInputs", () => {
       .bind(`${WS}_noname`, WS, "2026-08-02T00:00:00.000Z")
       .run();
 
-    const inputs = await readHomeStandingInputs(env.DB, USER);
+    const inputs = await readHomeStandingInputs(USER);
 
     expect(inputs?.entities.find((entity) => entity.domain === "rival.example")?.name).toBe("rival");
     expect(inputs?.entities.find((entity) => entity.domain === "noname.example")?.name).toBe("noname.example");
@@ -108,15 +108,15 @@ describe("readHomeStandingInputs", () => {
   it("reads the same inputs in one trip when the workspace id is already known", async () => {
     await seedDigest("newest", "2026-09-21T07:00:00.000Z", 1);
 
-    const lookedUp = await readHomeStandingInputs(env.DB, USER);
-    const known = await readHomeStandingInputs(env.DB, USER, WS);
+    const lookedUp = await readHomeStandingInputs(USER);
+    const known = await readHomeStandingInputs(USER, WS);
 
     expect(known).toEqual(lookedUp);
     expect(known?.entities).toHaveLength(3);
   });
 
   it("returns null for a user with no workspace", async () => {
-    expect(await readHomeStandingInputs(env.DB, "user_nobody")).toBeNull();
+    expect(await readHomeStandingInputs("user_nobody")).toBeNull();
   });
 
   it("reads and writes the newest brief through the digest index", async () => {
@@ -130,7 +130,7 @@ describe("readHomeStandingInputs", () => {
     expect(details.some((detail) => detail.includes("idx_digest_ws_kind_period"))).toBe(true);
     expect(details.every((detail) => !detail.startsWith("SCAN "))).toBe(true);
 
-    const inputs = await readHomeStandingInputs(env.DB, USER);
+    const inputs = await readHomeStandingInputs(USER);
     expect(inputs?.payload?.headline_rank).toBe(1);
     expect(inputs?.payload?.why_line).toBe("week ending 2026-09-21T07:00:00.000Z");
   });
@@ -147,7 +147,7 @@ describe("readHomeStandingInputs", () => {
       ).bind(`${newer}_self`, newer, createdAt),
     ]);
 
-    const inputs = await readHomeStandingInputs(env.DB, USER);
+    const inputs = await readHomeStandingInputs(USER);
     expect(inputs?.schedule.timezone).toBe("Europe/London");
     expect(inputs?.entities.some((entity) => entity.domain === "newer.example")).toBe(false);
   });
@@ -172,14 +172,14 @@ describe("readHomeStandingInputs", () => {
       ),
     ]);
 
-    const inputs = await readHomeStandingInputs(env.DB, USER);
+    const inputs = await readHomeStandingInputs(USER);
 
     expect(inputs?.counts).toEqual([{ entityId: `${WS}_rival`, sourceKey: "home.site.web", count: 1 }]);
     expect(inputs?.sources).toEqual([{ key: "home.site.web", kind: "site", platform: "web" }]);
   });
 
   it("returns no sources for a workspace that watches nothing", async () => {
-    const inputs = await readHomeStandingInputs(env.DB, USER);
+    const inputs = await readHomeStandingInputs(USER);
 
     expect(inputs?.sources).toEqual([]);
   });
@@ -195,7 +195,7 @@ describe("readHomeStandingInputs", () => {
     for (const [index, week] of rankedWeeks.entries()) await seedStanding(week, week, index + 1);
     await seedStanding("unranked", "2026-09-22T07:00:00.000Z", null);
 
-    const inputs = await readHomeStandingInputs(env.DB, USER);
+    const inputs = await readHomeStandingInputs(USER);
     expect(inputs).not.toBeNull();
     const history = inputs?.history ?? [];
 
