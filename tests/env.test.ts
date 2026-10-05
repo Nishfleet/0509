@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("cloudflare:workers", () => ({
-  env: {},
-}));
+vi.mock("cloudflare:workers", () => {
+  return { env: {} };
+});
 
 import { env } from "cloudflare:workers";
 

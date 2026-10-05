@@ -1,9 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, RouterProvider } from "react-router";
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("cloudflare:workers", () => ({ env: {} }));
+import { describe, expect, it } from "vitest";
 
 import Page from "../../app/routes/onboarding.competitors";
 
