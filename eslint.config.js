@@ -273,7 +273,7 @@ const DOC_READING_TEST_BAN = {
 
 const EMPTY_WORKERS_ENV_MOCK = {
   selector:
-    "CallExpression[callee.object.name='vi'][callee.property.name='mock'][arguments.0.value='cloudflare:workers'] ArrowFunctionExpression[body.properties.length=1] Property[key.name='env'] > ObjectExpression[properties.length=0]",
+    "CallExpression[callee.object.name='vi'][callee.property.name=/^(mock|doMock)$/][arguments.0.value='cloudflare:workers'] ObjectExpression[properties.length=1] > Property[key.name='env'] > ObjectExpression[properties.length=0]",
   message:
     "The node project already aliases cloudflare:workers to tests/workers-env-empty-stub.ts. An empty vi.mock({ env: {} }) is dead duplication; a test that needs values still mocks real bindings. Evals keep the throwing Proxy in tests/evals/workers-env-stub.ts. Source: 0509#7026.",
 };
@@ -1180,8 +1180,9 @@ export default tseslint.config(
     // .agents/skills/verify/feature-map.md to prove every mapped screen was
     // actually visited, and theme.test.ts reads DESIGN.md §3 and §4 to keep the
     // tokens in step with the doc. A third is a new rule here, in review, not
-    // an `ignores` entry. The block is the only matching one that sets
-    // no-restricted-syntax for tests/unit/.
+    // an `ignores` entry. no-restricted-syntax is replaced, not merged, by the
+    // last matching block, so this one repeats EMPTY_WORKERS_ENV_MOCK from the
+    // tests/**/*.ts block above.
     files: ["tests/unit/**/*.ts"],
     ignores: ["tests/unit/feature-map-proof.test.ts", "tests/unit/theme.test.ts"],
     rules: {

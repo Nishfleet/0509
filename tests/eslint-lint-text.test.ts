@@ -52,4 +52,22 @@ describe("eslint lintText helper (#7026)", () => {
     );
     expect(result.messages.some((message) => message.includes("empty vi.mock({ env: {} })"))).toBe(true);
   });
+
+  it.each([
+    ["arrow body", `vi.mock("cloudflare:workers", () => ({ env: {} }));`],
+    ["block body", `vi.mock("cloudflare:workers", () => {\n  return { env: {} };\n});`],
+    ["async block body", `vi.mock("cloudflare:workers", async () => {\n  return { env: {} };\n});`],
+    ["doMock", `vi.doMock("cloudflare:workers", () => ({ env: {} }));`],
+  ])("flags an empty cloudflare:workers env mock with %s", { timeout: 60_000 }, async (_name, mock) => {
+    const result = await lintTextAt("tests/session-gate.test.ts", `import { vi } from "vitest";\n${mock}\n`);
+    expect(result.messages.some((message) => message.includes("empty vi.mock({ env: {} })"))).toBe(true);
+  });
+
+  it("leaves a cloudflare:workers mock with real bindings alone", { timeout: 60_000 }, async () => {
+    const result = await lintTextAt(
+      "tests/session-gate.test.ts",
+      `import { vi } from "vitest";\nvi.mock("cloudflare:workers", () => ({ env: { DB: {} } }));\n`,
+    );
+    expect(result.messages.some((message) => message.includes("empty vi.mock({ env: {} })"))).toBe(false);
+  });
 });
