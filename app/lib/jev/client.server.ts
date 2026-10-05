@@ -1,4 +1,4 @@
-import { captureException } from "@sentry/cloudflare";
+import { captureException, captureMessage } from "@sentry/cloudflare";
 import { env, waitUntil } from "cloudflare:workers";
 import { z } from "zod";
 
@@ -252,4 +252,43 @@ export async function askChoice(workspaceId: string, question: ChoiceQuestion, s
   if (cached !== null) return { questionId: question.id, inputHash: hash, choice: cached, cached: true };
   const choice = await runChoice(question, state);
   return { questionId: question.id, inputHash: hash, choice, cached: false };
+}
+
+export const JEV_BATCH_SIZE = 4;
+
+function reportRateLimited(settled: readonly PromiseSettledResult<unknown>[]): void {
+  const limited = settled.filter(
+    (result) => result.status === "rejected" && result.reason instanceof JevRateLimitedError,
+  ).length;
+  if (limited === 0) return;
+  captureMessage("jev rate limited: a batch was cut short", {
+    level: "warning",
+    fingerprint: ["jev-rate-limited"],
+    extra: { limited, asked: settled.length },
+  });
+}
+
+export async function askChoices(
+  workspaceId: string,
+  question: ChoiceQuestion,
+  states: readonly unknown[],
+): Promise<PromiseSettledResult<ChoiceVerdict>[]> {
+  let settled: PromiseSettledResult<ChoiceVerdict>[] = [];
+  for (let start = 0; start < states.length; start += JEV_BATCH_SIZE) {
+    const chunk = await Promise.allSettled(
+      states.slice(start, start + JEV_BATCH_SIZE).map((state) => askChoice(workspaceId, question, state)),
+    );
+    settled = [...settled, ...chunk];
+    const limited = chunk.find(
+      (result) => result.status === "rejected" && result.reason instanceof JevRateLimitedError,
+    );
+    if (limited?.status === "rejected") {
+      const reason: unknown = limited.reason;
+      const skipped = states.slice(start + JEV_BATCH_SIZE).map(() => ({ status: "rejected" as const, reason }));
+      settled = [...settled, ...skipped];
+      break;
+    }
+  }
+  reportRateLimited(settled);
+  return settled;
 }
