@@ -19,7 +19,7 @@ vi.mock("../app/lib/workspace.server", () => ({
 import { createAuth, hasSessionCookie } from "../app/lib/auth.server";
 
 describe("hasSessionCookie", () => {
-  it("matches the cookie the auth module issues, including the secure prefix", () => {
+  it("matches the cookie the auth module issues, including the secure prefix", async () => {
     createAuth({
       DB: {} as never,
       EMAIL: { send: async () => undefined },
@@ -30,34 +30,52 @@ describe("hasSessionCookie", () => {
     expect(betterAuth).toHaveBeenCalledWith(
       expect.objectContaining({ advanced: expect.objectContaining({ cookiePrefix: "better-auth" }) }),
     );
-    expect(hasSessionCookie(new Request("https://0509.io/missing"))).toBe(false);
-    expect(
+    await expect(hasSessionCookie(new Request("https://0509.io/missing"))).resolves.toBe(false);
+    await expect(
       hasSessionCookie(
         new Request("https://0509.io/missing", {
           headers: { cookie: "better-auth.session_token=abc" },
         }),
       ),
-    ).toBe(true);
-    expect(
+    ).resolves.toBe(true);
+    await expect(
       hasSessionCookie(
         new Request("https://0509.io/missing", {
           headers: { cookie: "theme=dark; __Secure-better-auth.session_token=abc" },
         }),
       ),
-    ).toBe(true);
-    expect(
+    ).resolves.toBe(true);
+    await expect(
       hasSessionCookie(
         new Request("https://0509.io/missing", {
           headers: { cookie: "better-auth.session_data=abc" },
         }),
       ),
-    ).toBe(false);
-    expect(
+    ).resolves.toBe(false);
+    await expect(
       hasSessionCookie(
         new Request("https://0509.io/missing", {
           headers: { cookie: "not-the-session_token=abc" },
         }),
       ),
-    ).toBe(false);
+    ).resolves.toBe(false);
+  });
+
+  it("reads a malformed cookie header without throwing", async () => {
+    await expect(hasSessionCookie(new Request("https://0509.io/missing"))).resolves.toBe(false);
+    await expect(
+      hasSessionCookie(
+        new Request("https://0509.io/missing", {
+          headers: { cookie: "; ;; = ; ; better-auth.session_token" },
+        }),
+      ),
+    ).resolves.toBe(false);
+    await expect(
+      hasSessionCookie(
+        new Request("https://0509.io/missing", {
+          headers: { cookie: ";;;better-auth.session_token=abc;;;" },
+        }),
+      ),
+    ).resolves.toBe(true);
   });
 });

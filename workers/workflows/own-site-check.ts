@@ -1,8 +1,6 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
-import { withMonitor } from "@sentry/cloudflare";
-
 import type { OwnSitePage } from "../../app/lib/data/page.server";
 import type { OwnSiteHealth } from "../../app/lib/site/own-site.server";
 import {
@@ -13,6 +11,7 @@ import {
   probeOwnSite,
 } from "../../app/lib/site/own-site.server";
 import { isNativeSchedule, startOwnSiteCheckHour } from "../workflow-crons";
+import { withStepCheckIn } from "../workflow-monitor";
 
 const RETRY: WorkflowStepConfig = {
   retries: { limit: 3, delay: "30 seconds", backoff: "exponential" },
@@ -24,6 +23,7 @@ const CONFIRM_AFTER = "5 minutes";
 const MONITOR = {
   schedule: { type: "crontab", value: "0 * * * *" },
   checkinMargin: 15,
+  maxRuntime: 30,
   timezone: "UTC",
 } as const;
 
@@ -113,7 +113,7 @@ export class OwnSiteCheck extends WorkflowEntrypoint<Env> {
       await startOwnSiteCheckHour(this.env, event.timestamp.getTime());
       return null;
     }
-    return withMonitor("own-site-check", () => this.runCheck(event, step), MONITOR);
+    return withStepCheckIn(step, { slug: "own-site-check", config: MONITOR }, () => this.runCheck(event, step));
   }
 
   private async runCheck(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<OwnSiteCheckOutcome> {

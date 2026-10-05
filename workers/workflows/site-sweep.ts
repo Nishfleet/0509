@@ -1,8 +1,6 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
-import { withMonitor } from "@sentry/cloudflare";
-
 import { recordSweepRun } from "../../app/lib/data/sweep_run.server";
 import { pingLiveness } from "../../app/lib/liveness-ping.server";
 import { classifyCompetitorSites } from "../../app/lib/site/classify-competitors.server";
@@ -15,6 +13,7 @@ import {
 } from "../../app/lib/site/sweep.server";
 import { plannedAt } from "../../app/lib/workflow-time";
 import { isNativeSchedule } from "../workflow-crons";
+import { withStepCheckIn } from "../workflow-monitor";
 
 const RETRY: WorkflowStepConfig = {
   retries: { limit: 3, delay: "30 seconds", backoff: "exponential" },
@@ -24,6 +23,7 @@ const RETRY: WorkflowStepConfig = {
 const MONITOR = {
   schedule: { type: "crontab", value: "0 2 * * *" },
   checkinMargin: 60,
+  maxRuntime: 120,
   timezone: "UTC",
 } as const;
 
@@ -119,7 +119,7 @@ async function recordRun(
 export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: string }> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<SiteSweepOutcome | null> {
     if (isNativeSchedule(event)) return null;
-    return withMonitor("site-sweep", () => this.runSweep(event, step), MONITOR);
+    return withStepCheckIn(step, { slug: "site-sweep", config: MONITOR }, () => this.runSweep(event, step));
   }
 
   private async runSweep(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<SiteSweepOutcome> {
