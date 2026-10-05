@@ -299,7 +299,7 @@ describe("Slack target backfill (0509#6983, 0509#6981)", () => {
     await expect(backfillSlackTargets(broken)).rejects.toThrow("D1 unavailable");
   });
 
-  it("seals a good row behind more unreadable rows than the cap, and stops retrying the unreadable ones", async () => {
+  it("seals a good row behind more unreadable rows than the cap in one run, and stops retrying the unreadable ones", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
     for (const id of ["st-a-junk", "st-b-junk", "st-c-junk", "st-d-junk"])
       await insertTarget(id, `not a webhook ${id}`, WS);
@@ -312,13 +312,7 @@ describe("Slack target backfill (0509#6983, 0509#6981)", () => {
         }>()
       ).results;
 
-    let nights = 0;
-    while (nights < 10 && (await rawRows()).at(-1)?.target_value === HOOK) {
-      await runNightlySlackBackfill(env.DB, { maxRows: 2 });
-      nights += 1;
-    }
-
-    expect(nights).toBeLessThan(10);
+    expect(await runNightlySlackBackfill(env.DB, { maxRows: 2 })).toBe(4);
     expect(await decryptSlackWebhook((await rawRows()).at(-1)?.target_value ?? "", CURRENT_KEY, WS2)).toBe(HOOK);
     for (let night = 0; night < 10; night += 1) await runNightlySlackBackfill(env.DB, { maxRows: 2 });
     expect((await attempts()).map((row) => row.n)).toEqual([3, 3, 3, 3, 0]);

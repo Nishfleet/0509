@@ -219,8 +219,8 @@ function addOutcome(total: SlackBackfillResult, outcome: SlackBackfillOutcome): 
   return { ...total, [outcome]: total[outcome] + 1 };
 }
 
-function processedCount(total: SlackBackfillResult): number {
-  return total.sealed + total.skipped + total.failed;
+function cappedCount(total: SlackBackfillResult): number {
+  return total.sealed + total.skipped;
 }
 
 export async function backfillSlackTargets(
@@ -235,8 +235,8 @@ export async function backfillSlackTargets(
   const maxRows = options.maxRows ?? Number.POSITIVE_INFINITY;
   let total: SlackBackfillResult = { sealed: 0, skipped: 0, failed: 0 };
   let cursor = "";
-  while (processedCount(total) < maxRows) {
-    const limit = Math.min(batchSize, maxRows - processedCount(total));
+  while (cappedCount(total) < maxRows) {
+    const limit = Math.min(batchSize, maxRows - cappedCount(total));
     const page = await db
       .prepare(SELECT_UNSEALED_SLACK_TARGETS)
       .bind(cursor, MAX_SEAL_ATTEMPTS, currentId, limit)
