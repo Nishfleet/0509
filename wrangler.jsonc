@@ -260,6 +260,10 @@
         "max_batch_timeout": 30,
         "max_retries": 5,
         "max_concurrency": 2,
+        // retry_delay 60 matches fetch-sweep (0509#7084 / #7032): without it a
+        // failed send is redelivered at once, so a brief SMTP or D1 blip is
+        // retried before the provider has recovered.
+        "retry_delay": 60,
         "dead_letter_queue": "send-email-dlq",
       },
       // #4065: a message that exhausts send-email lands here and becomes one alert.

@@ -104,7 +104,7 @@ function scrubEvent<T extends ErrorEvent | TransactionEvent>(event: T): T {
 }
 
 function scrubText(value: string): string {
-  return value.replace(URL_PATTERN, (match) => scrubRequestUrl(match) ?? match).replace(EMAIL_PATTERN, REDACTED);
+  return value.replace(URL_PATTERN, REDACTED).replace(EMAIL_PATTERN, REDACTED);
 }
 
 function scrubRequestUrl(url: string | undefined): string | undefined {

@@ -26,10 +26,10 @@ const MIME = [
   "https://0509.io/app/pages?ref=mail",
 ].join("\r\n");
 
-const fakeMessage = (forward: () => Promise<void>, mime = MIME): EmailMessage =>
+const fakeMessage = (forward: () => Promise<void>, mime = MIME, from = "jane@customer.example"): EmailMessage =>
   ({
     to: "support+vitest@0509.io",
-    from: "jane@customer.example",
+    from,
     headers: new Headers({ subject: "Refund please", "user-agent": "Thunderbird 128" }),
     raw: new Response(mime).body,
     rawSize: mime.length,
@@ -155,5 +155,29 @@ describe("0509-support-inbox-v2", () => {
     expect(forward).toHaveBeenCalledWith("nishant345@gmail.com");
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalledWith("support-inbox: SUPPORT_INBOX_GITHUB_TOKEN is not set", row?.id);
+  });
+
+  it("opens at most 20 issues a day across sender domains (0509#7084)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 201 }));
+
+    for (let i = 0; i < 21; i += 1) {
+      const mime = MIME.replace("jane@customer.example", `jane@d${String(i)}.example`);
+      const ctx = createExecutionContext();
+      await worker.email(
+        fakeMessage(
+          vi.fn(() => Promise.resolve()),
+          mime,
+          `jane@d${String(i)}.example`,
+        ),
+        env,
+        ctx,
+      );
+      await waitOnExecutionContext(ctx);
+    }
+
+    expect(fetchSpy).toHaveBeenCalledTimes(20);
+    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM support_report").first<{ n: number }>();
+    expect(count?.n).toBe(21);
   });
 });

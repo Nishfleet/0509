@@ -60,4 +60,8 @@ describe("slackEscape", () => {
   it("returns an empty string unchanged", () => {
     expect(slackEscape("")).toBe("");
   });
+
+  it("breaks a bare URL so Slack cannot autolink third-party text (0509#7084)", () => {
+    expect(slackEscape("see https://evil.example/x")).toBe("see https[:]//evil.example/x");
+  });
 });

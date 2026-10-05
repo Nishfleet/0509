@@ -123,7 +123,7 @@ describe("Sentry beforeSend", () => {
       },
     });
 
-    expect(result.exception?.values?.[0]?.value).toBe("GET https://0509.io/u/[redacted] failed for [redacted]");
+    expect(result.exception?.values?.[0]?.value).toBe("GET [redacted] failed for [redacted]");
   });
 
   it("drops extra and keeps only the runtime and os contexts", async () => {
@@ -193,7 +193,7 @@ describe("Sentry beforeSend", () => {
       attributes: { url: "https://0509.io/v/abc?x=1", count: 3 },
     });
 
-    expect(result?.message).toBe("failed for [redacted] at https://0509.io/u/[redacted]");
-    expect(result?.attributes).toEqual({ url: "https://0509.io/v/[redacted]", count: 3 });
+    expect(result?.message).toBe("failed for [redacted] at [redacted]");
+    expect(result?.attributes).toEqual({ url: "[redacted]", count: 3 });
   });
 });

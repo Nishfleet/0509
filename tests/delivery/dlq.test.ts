@@ -6,13 +6,17 @@ vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn() }));
 import { captureException } from "@sentry/cloudflare";
 
 import {
+  CHANGE_UNDELIVERED_BODY,
+  CHANGE_UNDELIVERED_TITLE,
   DELIVERY_FAILED_BODY,
   DELIVERY_FAILED_KIND,
   DELIVERY_FAILED_TITLE,
   DLQ_ALERT_PREFIX,
+  DLQ_CHANGE_PREFIX,
   DLQ_INCIDENT_PREFIX,
   INCIDENT_UNDELIVERED_BODY,
   INCIDENT_UNDELIVERED_TITLE,
+  changeUndeliveredAlert,
   deliveryFailedAlert,
   handleDlqBatch,
   incidentUndeliveredAlert,
@@ -207,5 +211,52 @@ describe("handleDlqBatch", () => {
     expect(retry).not.toHaveBeenCalled();
     expect(ids).toEqual([]);
     error.mockRestore();
+  });
+
+  it("raises Sentry and writes an in-app alert for a dead-lettered change (0509#7084)", async () => {
+    vi.mocked(captureException).mockClear();
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { env, recorded } = fakeEnv((sql) => {
+      if (sql.includes("FROM signal")) {
+        return Promise.resolve({ workspace_id: "ws_1" });
+      }
+      if (sql.includes("FROM send_attempt")) {
+        return Promise.resolve({ error: "smtp down" });
+      }
+      return Promise.resolve(null);
+    });
+    const { batch, ack, retry } = fakeBatch({ signal_id: "sig_1" });
+
+    const ids = await handleDlqBatch(env, batch);
+
+    const inserts = recorded.filter((row) => row.sql.startsWith("INSERT INTO alert"));
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0]?.args[0]).toBe(`${DLQ_CHANGE_PREFIX}sig_1`);
+    expect(inserts[0]?.args[1]).toBe("ws_1");
+    expect(inserts[0]?.args[2]).toBe(DELIVERY_FAILED_KIND);
+    expect(inserts[0]?.args[3]).toBe("high");
+    expect(inserts[0]?.args[4]).toBe(CHANGE_UNDELIVERED_TITLE);
+    expect(inserts[0]?.args[5]).toBe(CHANGE_UNDELIVERED_BODY);
+    expect(ack).toHaveBeenCalledOnce();
+    expect(retry).not.toHaveBeenCalled();
+    expect(ids).toEqual([`${DLQ_CHANGE_PREFIX}sig_1`]);
+    expect(capturedReasons()).toHaveLength(1);
+    expect(capturedReasons()[0]).toContain("sig_1");
+    expect(capturedReasons()[0]).toContain("smtp down");
+    error.mockRestore();
+  });
+});
+
+describe("changeUndeliveredAlert", () => {
+  it("names the missed change without the signal id in the customer copy", () => {
+    const alert = changeUndeliveredAlert({
+      signal_id: "sig_1",
+      workspace_id: "ws_1",
+      now: "2026-10-05T00:00:00.000Z",
+    });
+    expect(alert.id).toBe(`${DLQ_CHANGE_PREFIX}sig_1`);
+    expect(alert.title).toBe(CHANGE_UNDELIVERED_TITLE);
+    expect(alert.body).toBe(CHANGE_UNDELIVERED_BODY);
+    expect(alert.body).not.toContain("sig_1");
   });
 });

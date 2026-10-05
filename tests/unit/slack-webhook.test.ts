@@ -21,6 +21,6 @@ describe("Slack webhook address", () => {
   });
 
   it("escapes what a rival's page said so it cannot add Slack links", () => {
-    expect(slackEscape("<https://evil.example|click> & more")).toBe("&lt;https://evil.example|click&gt; &amp; more");
+    expect(slackEscape("<https://evil.example|click> & more")).toBe("&lt;https[:]//evil.example|click&gt; &amp; more");
   });
 });

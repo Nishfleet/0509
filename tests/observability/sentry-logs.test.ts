@@ -192,7 +192,7 @@ describe("Sentry Logs (#6604)", () => {
     const [shipped] = logItems().filter((log) => log.body?.includes("probe.nested"));
     expect(shipped).toBeDefined();
     expect(attribute(shipped, "contact")).toBe('{"name":"[redacted]"}');
-    expect(attribute(shipped, "links")).toBe('["https://0509.io/u/[redacted]",{"inner":"[redacted]"}]');
+    expect(attribute(shipped, "links")).toBe('["[redacted]",{"inner":"[redacted]"}]');
     // Past the depth cap the subtree is redacted whole, never copied through.
     expect(attribute(shipped, "deep")).toBe('{"a":{"b":{"c":{"d":{"e":{"f":"[redacted]"}}}}}}');
     // A self-referencing attribute terminates and is redacted.

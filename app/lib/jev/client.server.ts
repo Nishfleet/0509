@@ -17,6 +17,10 @@ const MODEL_SELECTOR = "clef";
 
 export const GATEWAY_ID = "default";
 
+export const JEV_TIMEOUT_MS = 20_000;
+
+export const CHOICE_RETRIES: AttemptPolicy = { maxAttempts: 2, retryDelayMs: 300, backoff: "constant" };
+
 export interface NoulVerdict {
   questionId: string;
   inputHash: string;
@@ -28,6 +32,7 @@ export interface ChoiceQuestion {
   id: string;
   instructions: string;
   options: Readonly<Record<string, string>>;
+  retries?: AttemptPolicy;
 }
 
 export interface ChoiceVerdict {
@@ -147,7 +152,11 @@ function noulAsk(question: NoulQuestion): NoulAsk {
 
 function decide(state: unknown, questions: Record<string, unknown>, retries?: AttemptPolicy): Promise<unknown> {
   const gateway = retries === undefined ? { id: GATEWAY_ID } : { id: GATEWAY_ID, retries };
-  return env.AI.run(MODEL, { model: MODEL_SELECTOR, state, questions }, { gateway });
+  return env.AI.run(
+    MODEL,
+    { model: MODEL_SELECTOR, state, questions },
+    { gateway, extraHeaders: { "cf-aig-timeout": String(JEV_TIMEOUT_MS) } },
+  );
 }
 
 async function run(question: NoulQuestion, state: unknown): Promise<number> {
@@ -224,9 +233,13 @@ export async function askNouls(
 async function runChoice(question: ChoiceQuestion, state: unknown): Promise<string> {
   let raw: unknown;
   try {
-    raw = await decide(state, {
-      [question.id]: { type: "choice", instructions: question.instructions, criteria: question.options },
-    });
+    raw = await decide(
+      state,
+      {
+        [question.id]: { type: "choice", instructions: question.instructions, criteria: question.options },
+      },
+      question.retries ?? CHOICE_RETRIES,
+    );
   } catch (error) {
     throw recorded(question.id, unavailable(error));
   }
