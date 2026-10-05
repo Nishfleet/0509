@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { extractMagicLink } from "../../e2e/inbox";
+import { PROBE, expectNoHtmlInjection } from "../email-html-injection";
 import { magicLinkEmail } from "../../app/lib/auth/magic-link-email";
 
 const email = "reader@0509.io";
@@ -39,5 +40,19 @@ describe("magicLinkEmail", () => {
 
   it("round-trips through the e2e link extractor", () => {
     expect(extractMagicLink(magicLinkEmail({ email, url }).html)).toBe(url);
+  });
+});
+
+/**
+ * 0509#7020: the sign-in email escapes both fields by hand. This table plants
+ * the injection probe in every string field, one row per field, so a missed
+ * escapeHtml turns CI red — the plain template module stays.
+ */
+describe("every string field carries the injection probe escaped, never raw (0509#7020)", () => {
+  it.each([
+    ["email", { email: PROBE, url }],
+    ["url", { email, url: PROBE }],
+  ] as [string, { email: string; url: string }][])("%s lands in the html only escaped", (field, input) => {
+    expectNoHtmlInjection(magicLinkEmail(input).html, field);
   });
 });
