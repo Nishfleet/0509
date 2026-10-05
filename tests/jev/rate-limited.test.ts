@@ -1,4 +1,4 @@
-import { captureMessage } from "@sentry/cloudflare";
+import { captureException, captureMessage } from "@sentry/cloudflare";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const ai = vi.hoisted(() => ({ run: vi.fn() }));
@@ -27,6 +27,7 @@ beforeEach(() => {
   cache.readChoice.mockReset();
   cache.readChoice.mockResolvedValue(null);
   vi.mocked(captureMessage).mockClear();
+  vi.mocked(captureException).mockClear();
 });
 
 describe("a Jev call Clef rate limits", () => {
@@ -98,6 +99,7 @@ describe("a batch of choice questions that Clef rate limits", () => {
     expect(settled).toHaveLength(40);
     expect(ai.run).toHaveBeenCalledTimes(4);
     expect(captureMessage).toHaveBeenCalledTimes(1);
+    expect(captureException).not.toHaveBeenCalled();
   });
 
   it("reports answers rejected for other reasons once when some verdicts landed", async () => {
