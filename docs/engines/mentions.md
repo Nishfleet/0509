@@ -18,7 +18,7 @@ The migration that introduces the two enabled `source` rows is a numbered file u
 
 ### The runner: the scheduled Workflow `mentions-sweep`
 
-The runner is the **Workflow** `mentions-sweep` (`workers/workflows/mentions.ts`), bound to `wrangler.jsonc` as the binding `MENTIONS`. Its `schedules: ["0 1 * * *"]` fires once a night at **01:00 UTC**, off-the-hour from the 02:00 site sweep and the 03:00 standing refresh. The schedule list in `wrangler.jsonc` carries `"*/5 * * * *"`, `"0 3 * * *"`, `"0 4 * * 1"` — the mentions sweep is **not** on that list, it is a Workflow schedule, and there are **no queues** for mentions anywhere in this codebase.
+The runner is the **Workflow** `mentions-sweep` (`workers/workflows/mentions.ts`), bound to `wrangler.jsonc` as the binding `MENTIONS`. Its `schedules: ["0 1 * * *"]` fires once a night at **01:00 UTC**, off-the-hour from the 02:00 site sweep and the 03:00 standing refresh. The schedule list in `wrangler.jsonc` carries `"*/5 * * * *"`, `"0 3 * * *"`, `"0 4 * * MON"` — the mentions sweep is **not** on that list, it is a Workflow schedule, and there are **no queues** for mentions anywhere in this codebase.
 
 `wrangler.jsonc` names the class `MentionsWorkflow`, which `workers/app.ts` exports as an instrumented wrapper around `MentionsSweep` from `workers/workflows/mentions.ts`. It runs one `step.do` per `(plugin_key, target_key)` pair (one target per source per brand), each with `retries: { limit: 2, delay: "10 seconds", backoff: "exponential" }`. The pacing constant is `PACED_PLUGINS = { "gdelt.doc" }`; between two GDELT targets it `step.sleep("6 seconds")` to honour GDELT's one-request-per-five-seconds ceiling. Non-GDELT adapters are not paced.
 

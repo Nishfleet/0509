@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
+import { parse } from "yaml";
 
 // #5547: the preview-assert job skips setup-node, npm ci and the build when a
 // pull request touches only docs/tests (the `scope` step sets skip=true), so
@@ -13,37 +14,28 @@ import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-// `readJob` extracts one job block as raw text: from `  <name>:` to the next
-// two-space sibling job header (or EOF).
-function readJob(yaml: string, name: string): string {
-  const lines = yaml.split("\n");
-  const start = lines.indexOf(`  ${name}:`);
-  if (start === -1) throw new Error(`${name} job not found in ci.yml`);
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i += 1) {
-    if (/^ {2}[a-z][a-z0-9_-]*:$/.test(lines[i])) {
-      end = i;
-      break;
-    }
-  }
-  return lines.slice(start, end).join("\n");
+interface Step {
+  id?: string;
+  name?: string;
+  uses?: string;
+  if?: string;
 }
 
 describe("preview-assert docs/tests skip guard", () => {
   it("guards every step after `scope` with the skip flag", async () => {
     const yaml = await readFile(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8");
-    const job = readJob(yaml, "preview-assert");
-    const steps = job.split("\n      - ").slice(1);
-    const scopeAt = steps.findIndex((step) => step.includes("id: scope"));
+    const steps = (parse(yaml) as { jobs: Record<string, { steps: Step[] }> }).jobs["preview-assert"].steps;
+    const scopeAt = steps.findIndex((step) => step.id === "scope");
     expect(scopeAt).toBeGreaterThanOrEqual(0);
     const postScope = steps.slice(scopeAt + 1);
     expect(postScope.length).toBeGreaterThan(0);
     for (const step of postScope) {
+      const guard = step.if ?? "";
       const guarded =
-        step.includes("steps.scope.outputs.skip != 'true'") ||
+        guard.includes("steps.scope.outputs.skip != 'true'") ||
         // The failure-artifact upload must still run on a red non-skipped run.
-        step.includes("if: failure()");
-      expect(guarded, `unguarded step: ${step.split("\n", 1)[0].trim()}`).toBe(true);
+        guard.startsWith("failure()");
+      expect(guarded, `unguarded step: ${step.name ?? step.uses ?? "?"}`).toBe(true);
     }
   });
 });

@@ -62,7 +62,7 @@ describe("the allowlist lives in one file", () => {
     expect(approvingRow().test(readFileSync(path.join(ROOT, file), "utf8"))).toBe(false);
   });
 
-  it.each(["CLAUDE.md", "README.md", "docs/REBUILD-STACK.md"])("%s points at the allowlist", (doc) => {
+  it.each(["AGENTS.md", "README.md", "docs/REBUILD-STACK.md"])("%s points at the allowlist", (doc) => {
     expect(readFileSync(path.join(ROOT, doc), "utf8")).toContain(ALLOWLIST);
   });
 });

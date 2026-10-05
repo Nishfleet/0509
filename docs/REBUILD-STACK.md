@@ -858,7 +858,7 @@ jobs:
           PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.target_url }}
 ```
 
-Cloudflare Workers Builds emit GitHub deployments, so this fires on our real deploy with zero polling logic. Official container image: `mcr.microsoft.com/playwright:v1.63.0-noble`.
+This repo's deployments come from `environment: production` in `deploy-production.yml`; the production e2e suite now runs from `e2e-scheduled.yml` and lighthouse runs as a job after the deploy (0509#7013). Official container image: `mcr.microsoft.com/playwright:v1.63.0-noble`.
 
 ### 6.3 Lighthouse CI
 
@@ -1144,7 +1144,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Dates + timezones                           | `Intl` + `date-fns` + `@date-fns/tz` (never `Temporal`, workerd#6907) | platform / 4.4.0 / 1.5.0                 |
 | Unit + integration tests                    | `vitest` (**pinned 4.1.11**) + `@cloudflare/vitest-plugin`            | 4.1.11 / 1.3.3                           |
 | E2E against production                      | `@playwright/test`                                                    | 1.63.0                                   |
-| Performance gate                            | `treosh/lighthouse-ci-action`                                         | v12.6.2                                  |
+| Performance gate                            | `@lhci/cli` (lockfile; starts `wrangler dev` itself)                  | 0.15.1                                   |
 | Link checking                               | `lycheeverse/lychee-action`                                           | v2.9.0                                   |
 | Red-main issue create-or-update             | `JasonEtco/create-an-issue` (update_existing, search_existing: open)  | v2.9.2                                   |
 | MCP server                                  | `createMcpHandler` (`@modelcontextprotocol/server`)                   | 2.1.0                                    |
