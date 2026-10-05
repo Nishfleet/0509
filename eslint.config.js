@@ -626,13 +626,7 @@ export default tseslint.config(
     ignores: ["app/lib/data/**", "workers/e2e-inbox.ts", "workers/fixture-site.ts"],
     plugins: FORM_RULES_PLUGIN,
     rules: {
-      "no-restricted-syntax": [
-        "error",
-        ...BANNED_SYNTAX,
-        ...NO_USER_DATA_IN_LOGS,
-        RAW_DML_WRITER,
-        FEED_STATE_LITERAL,
-      ],
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, RAW_DML_WRITER, FEED_STATE_LITERAL],
       "form-rules/form-data-get": "error",
     },
   },

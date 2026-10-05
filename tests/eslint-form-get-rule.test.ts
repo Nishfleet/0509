@@ -131,7 +131,7 @@ describe("eslint formData.get rule (#7027)", () => {
     expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(true);
   });
 
-  it("rejects a computed form[\"get\"] read", { timeout: 60_000 }, async () => {
+  it('rejects a computed form["get"] read', { timeout: 60_000 }, async () => {
     const result = await lintProbe("app/routes/probe-form-get-tmp.ts", COMPUTED_GET);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(true);
