@@ -23,8 +23,7 @@ export async function readWorkspaceExport(input: { workspaceId: string; email: s
   const [workspace, brands, signals, briefs, target] = await Promise.all([
     env.DB.prepare(SELECT_WORKSPACE).bind(workspaceId).first(),
     env.DB.prepare(SELECT_BRANDS).bind(workspaceId).all(),
-    env.DB
-      .prepare(SELECT_SIGNALS)
+    env.DB.prepare(SELECT_SIGNALS)
       .bind(workspaceId, SIGNAL_LIMIT + 1)
       .all(),
     env.DB.prepare(SELECT_BRIEFS).bind(workspaceId).all(),

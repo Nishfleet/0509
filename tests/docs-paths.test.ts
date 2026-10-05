@@ -16,7 +16,8 @@ const PATH = /`((?:app|docs|workers|tests|e2e|migrations|\.agents)\/[\w./-]+[\w-
 // 0509#6999: "Conventions, enforced not described" listed Immutability as
 // enforced, but eslint.config.js has no mutation rule — 0509#5783 parked
 // eslint-plugin-functional until the violation count is measured. The bullet
-// stays out of the enforced list until that mechanism exists.
+// stays out of the enforced list until that mechanism exists. The rule itself
+// stays in the file, stated as reviewer-only.
 const RETIRED = [
   /\bhash-checked\b/,
   /\bFable\b/,
@@ -36,6 +37,7 @@ const LIVE = [
   /Browser Rendering capped at 10/,
   /Guardrails/,
   /Nothing from the pre-wipe code is reused/,
+  /new objects,\s+never mutation/,
   /site is gated until the audit passes/,
 ] as const;
 
