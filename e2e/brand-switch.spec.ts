@@ -53,37 +53,56 @@ test("a row's switch box is 38x22 and the checked thumb stays inside it @smoke",
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
 
+// The off state needs a switch that answers a click without a server round
+// trip: `/app/competitors` is where the fetcher's own pending intent drives
+// `BrandSwitch`'s state (`CompetitorItem` reads `fetcher.formData`), so the off
+// paint is measured on the same component the Home row draws, without waiting
+// on the post to `/app/competitors` that Home's switch makes.
 test("a row's switch is square and paints the card fill when off @smoke", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
 
   const cookie = await seedRankedHomeSession("switch-geometry");
   await page.setExtraHTTPHeaders({ cookie });
 
-  await page.goto("/app");
+  await page.goto("/app/competitors");
   const track = page.getByRole("switch", { name: "Kindred tracking" });
   await expect(track).toBeVisible();
+  await expect(track).toBeChecked();
   await track.click();
   await expect(track).not.toBeChecked();
 
-  const paint = await track.evaluate((element) => {
-    const style = getComputedStyle(element);
-    const thumb = element.querySelector<HTMLElement>('[data-slot="switch-thumb"]');
-    return {
-      radius: style.borderRadius,
-      background: style.backgroundColor,
-      width: element.getBoundingClientRect().width,
-      thumbLeft: thumb?.getBoundingClientRect().left ?? 0,
-      trackLeft: element.getBoundingClientRect().left,
-    };
-  });
-  // DESIGN §3: radius is 0 everywhere, on the track as on the thumb.
-  expect(paint.radius, JSON.stringify(paint)).toBe("0px");
-  // --card, not --line: --color-input aliases --line, and the stock off track
-  // filled with bg-input, which is why brand-switch pins the off fill to card.
-  expect(paint.background, JSON.stringify(paint)).toBe("rgb(255, 253, 246)");
-  expect(paint.width).toBe(38);
-  // Off thumb sits flush at the 1.5px hairline, inside the track.
-  expect(paint.thumbLeft - paint.trackLeft).toBeGreaterThanOrEqual(1.4);
+  // The stock root carries `transition-all` and the thumb `duration-180`, so
+  // the off paint is read through a polling assert: a single read lands
+  // mid-flight (measured: 84% of the 180ms travel, thumb at 5.8px and the fill
+  // still blending `--green` toward `--card`).
+  await expect(async () => {
+    const paint = await track.evaluate((element) => {
+      const style = getComputedStyle(element);
+      const thumb = element.querySelector<HTMLElement>('[data-slot="switch-thumb"]');
+      return {
+        radius: style.borderRadius,
+        background: style.backgroundColor,
+        width: element.getBoundingClientRect().width,
+        thumbLeft: thumb?.getBoundingClientRect().left ?? 0,
+        thumbRight: thumb?.getBoundingClientRect().right ?? 0,
+        trackLeft: element.getBoundingClientRect().left,
+        trackRight: element.getBoundingClientRect().right,
+      };
+    });
+    // DESIGN §3: radius is 0 everywhere, on the track as on the thumb.
+    expect(paint.radius, JSON.stringify(paint)).toBe("0px");
+    // --card, not --line: --color-input aliases --line, and the stock off track
+    // filled with bg-input, which is why brand-switch pins the off fill to card.
+    expect(paint.background, JSON.stringify(paint)).toBe("rgb(255, 253, 246)");
+    expect(paint.width).toBe(38);
+    // Off thumb sits flush at the track's hairline and stays inside it: the
+    // stock `data-unchecked:translate-x-0` out-sorts brand-switch's own
+    // `translate-x-[1.5px]` (its selector is longer), so the thumb rests on the
+    // border edge — 1px, because Chrome rounds the 1.5px border down at DPR 1.
+    expect(paint.thumbLeft - paint.trackLeft, JSON.stringify(paint)).toBeGreaterThanOrEqual(1);
+    expect(paint.thumbLeft - paint.trackLeft, JSON.stringify(paint)).toBeLessThanOrEqual(2);
+    expect(paint.thumbRight, JSON.stringify(paint)).toBeLessThanOrEqual(paint.trackRight);
+  }).toPass({ timeout: 3000 });
 
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
