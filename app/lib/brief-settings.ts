@@ -27,7 +27,9 @@ const briefScheduleInput = z.object({
     .refine((zone) => zone === "UTC" || canonicalTimezone(zone) === zone),
 });
 
-export function parseBriefSchedule(input: Record<string, unknown>): BriefSchedule | null {
+export function parseBriefSchedule(
+  input: Partial<Record<"weekday" | "hour" | "timezone", unknown>>,
+): BriefSchedule | null {
   const parsed = briefScheduleInput.safeParse(input);
   if (!parsed.success) return null;
   return { weekday: parsed.data.weekday, hour: parsed.data.hour, timezone: parsed.data.timezone };

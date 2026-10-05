@@ -66,6 +66,13 @@ const HEADERS_GET = `export function readField(): string | null {
 }
 `;
 
+const SUBCLASS_GET = `class DraftForm extends FormData {}
+
+export function readField(form: DraftForm): unknown {
+  return form.get("intent");
+}
+`;
+
 async function lintProbe(rel: string, code: string): Promise<{ ignored: boolean; messages: string[] }> {
   const file = path.join(REPO_ROOT, rel);
   await mkdir(path.dirname(file), { recursive: true });
@@ -145,5 +152,11 @@ describe("eslint formData.get rule (#7027)", () => {
   it("leaves a Headers.get unblocked", { timeout: 60_000 }, async () => {
     const result = await lintProbe("app/routes/probe-form-get-tmp.ts", HEADERS_GET);
     expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(false);
+  });
+
+  it("rejects a FormData subclass", { timeout: 60_000 }, async () => {
+    const result = await lintProbe("app/routes/probe-form-get-tmp.ts", SUBCLASS_GET);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(true);
   });
 });

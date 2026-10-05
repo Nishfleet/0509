@@ -353,7 +353,21 @@ const FORM_DATA_GET_BAN = {
   },
   create(context) {
     const services = context.sourceCode.parserServices;
-    if (services?.getTypeAtLocation === undefined) return {};
+    if (services?.getTypeAtLocation === undefined) {
+      // A gate that silently passes every file it was armed for is the old
+      // defect in a new costume, so a missing program is an error, not a
+      // no-op. Nothing in this config can reach it: the rule is armed only on
+      // app/** and workers/**, and every one of those files has type
+      // information. 0509#7111.
+      return {
+        Program(node) {
+          context.report({
+            node,
+            message: "form-rules/form-data-get needs TypeScript type information to match the receiver type.",
+          });
+        },
+      };
+    }
     return {
       MemberExpression(node) {
         if (node.optional) return;
@@ -376,9 +390,20 @@ const FORM_DATA_GET_BAN = {
 
 function isFormData(type) {
   // FormData | undefined is pending UI (navigation.formData?.get) and
-  // shouldRevalidate, not action input, so a union is never a hit.
+  // shouldRevalidate, not action input, so a union or an intersection is never
+  // a hit.
   if (type.isUnion() || type.isIntersection()) return false;
-  return (type.getSymbol() ?? type.aliasSymbol)?.getName() === "FormData";
+  const seen = new Set();
+  let current = type;
+  while (current !== undefined && !seen.has(current)) {
+    seen.add(current);
+    if ((current.getSymbol() ?? current.aliasSymbol)?.getName() === "FormData") return true;
+    // A hand-written FormData subclass still reads form input.
+    const bases = current.getBaseTypes?.() ?? [];
+    if (bases.length !== 1) return false;
+    current = bases[0];
+  }
+  return false;
 }
 
 const FORM_RULES_PLUGIN = {
