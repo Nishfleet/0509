@@ -20,7 +20,7 @@ on:
       journey:
         description: Journey to run now
         type: choice
-        options: [none, j12, suite, signin, j8-hard, j8-soft, soak-report, backup-proof, jev-failures]
+        options: [none, j12, suite, signin, j8-hard, j8-soft, soak-report, backup-proof, jev-failures, feed-diag]
         default: none
       spec:
         description: 'One spec or a filter to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts (0509 sign-up verdict, 2026-09-28)'
@@ -336,6 +336,19 @@ jobs:
           PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+  feed-diag:
+    name: feed-diag
+    if: inputs.journey == 'feed-diag'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          UA='FiveToNineBot/1.0 (+https://0509.io)'
+          curl -s -m 20 -A "$UA" https://vercel.com/robots.txt | head -40
+          for p in /atom /feed /rss.xml /atom.xml /blog/feed /changelog.xml /changelog/rss.xml /changelog/feed.xml /blog/rss.xml /feed.xml /changelog/atom.xml /blog/atom; do
+            echo "== $p"; curl -s -m 20 -A "$UA" -o /tmp/o -w '%{http_code} %{content_type}\n' "https://vercel.com$p"; head -c 120 /tmp/o | tr '\n' ' '; echo
+          done
+          echo "== home alternates"; curl -s -m 20 -A "$UA" https://vercel.com/ | grep -o '<link[^>]*alternate[^>]*>' | head
+          echo "== blog alternates"; curl -s -m 20 -A "$UA" https://vercel.com/blog | grep -o '<link[^>]*alternate[^>]*>' | head
   suite:
     name: e2e-production
     needs: [production-sha, suite-shard]
