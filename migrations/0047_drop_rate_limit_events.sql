@@ -12,6 +12,11 @@
 -- there executes in no later deploy and nowhere else (precedent
 -- migrations/0012_drop_legacy_tables.sql, #4039).
 --
+-- Restore plan: no down-migration exists, so the only way back is
+-- wrangler d1 time-travel restore with a bookmark before this file applies
+-- (docs/REBUILD-SCHEMA.md). That restore rewrites the whole database to that
+-- point, losing every write since; it is Nish's call and not a routine rollback.
+--
 -- One statement and nothing else, per the D1 expand/contract rule: this PR
 -- carries no code change, so a drop is the whole of it. D1 has no
 -- down-migration, so the table cannot come back except through a newer file
