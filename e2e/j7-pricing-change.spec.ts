@@ -164,6 +164,11 @@ test("J7 a fixture price flip reaches Alerts as a before-and-after mark @own-sig
   await expect(slab.locator("[data-slot='biggest-move-read']")).toContainText(
     /\d+ × \d+ = \d+ points, the most of anything this brand did this week\./,
   );
+  const feedMark = page
+    .locator("[data-section='developments'] [data-testid='site-change']")
+    .filter({ has: page.locator("s", { hasText: OLD_AND_NEW[variant].before }) })
+    .filter({ has: page.locator("ins", { hasText: OLD_AND_NEW[variant].after }) });
+  await expect(feedMark.first()).toBeVisible();
   if ((await slab.getByTestId("biggest-move").count()) === 0) {
     await expect(slab.locator("s", { hasText: OLD_AND_NEW[variant].before })).toBeVisible();
     await expect(slab.locator("ins", { hasText: OLD_AND_NEW[variant].after })).toBeVisible();
