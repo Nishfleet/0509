@@ -577,6 +577,26 @@ async function verifyPendingYoutube(watch: WatchRow, pendingId: string, run: You
   return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
 }
 
+async function resolveYoutubeChannel(
+  watch: WatchRow,
+  run: YoutubeRun,
+): Promise<{ found: true; channelId: string } | { found: false; outcome: TargetOutcome }> {
+  const { now } = run;
+  const lookup = await lookupYoutubeChannel(await requireEntityIdentityJson(watch.workspace_id, watch.entity_id));
+  switch (lookup.status) {
+    case "id":
+      return { found: true, channelId: lookup.channelId };
+    case "no-url":
+      await flagNoChannel(watch.watch_id, now);
+      await markWatchPolled(watch.watch_id, now);
+      return { found: false, outcome: { items: 0, stored: 0, unjudged: 0, skipped: 0 } };
+    case "unresolved":
+      await flagLostChannel(watch.watch_id, now);
+      await markWatchPolled(watch.watch_id, now);
+      return { found: false, outcome: { items: 0, stored: 0, unjudged: 0, skipped: 0 } };
+  }
+}
+
 async function sweepOneYoutube(watch: WatchRow, run: YoutubeRun): Promise<TargetOutcome> {
   const { now } = run;
   const configRaw = await requireWatchConfigJson(watch.watch_id);
@@ -589,18 +609,9 @@ async function sweepOneYoutube(watch: WatchRow, run: YoutubeRun): Promise<Target
 
   let channelId = config.channelId;
   if (channelId === null) {
-    const lookup = await lookupYoutubeChannel(await requireEntityIdentityJson(watch.workspace_id, watch.entity_id));
-    switch (lookup.status) {
-      case "no-url":
-        await flagNoChannel(watch.watch_id, now);
-        await markWatchPolled(watch.watch_id, now);
-        return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
-      case "unresolved":
-        await flagLostChannel(watch.watch_id, now);
-        await markWatchPolled(watch.watch_id, now);
-        return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
-    }
-    channelId = lookup.channelId;
+    const resolution = await resolveYoutubeChannel(watch, run);
+    if (!resolution.found) return resolution.outcome;
+    channelId = resolution.channelId;
   }
 
   const first = await youtubeAdapter({ query: channelId }, null);
