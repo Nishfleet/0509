@@ -57,6 +57,53 @@ describe("cadence", () => {
   });
 });
 
+/**
+ * One cron constant feeds two parsers that disagree about the numbers.
+ * Cloudflare counts days of the week 1 = Sunday .. 7 = Saturday (its docs:
+ * "1-7, case-insensitive 3-letter abbreviations"); Sentry's cronsim counts
+ * 0 = Sunday .. 6 = Saturday, where SYMBOLIC_DAYS is "SUN MON TUE WED THU FRI
+ * SAT", so its 1 is Monday. `triggers.crons` runs the Worker, and
+ * `cronMonitor()` hands the same string to the Sentry Cron Monitor, so
+ * `0 4 * * 1` started the refresh on Sunday and left Sentry waiting for the
+ * check-in on the Monday it had computed, which raised a missed-check-in
+ * alert every week while the job had already run (0509#7067). Both parsers
+ * take the abbreviation, so no constant here carries a numeric weekday.
+ */
+const CRON_CONSTANTS: Record<string, string> = {
+  MENTIONS_SWEEP_CRON,
+  SITE_SWEEP_CRON,
+  OWN_SITE_CHECK_CRON,
+  NIGHTLY_CRON,
+  WEEKLY_REFRESH_CRON,
+  HIRING_SWEEP_CRON,
+  FEED_SWEEP_CRON,
+  SNAPSHOT_BACKUP_CRON,
+};
+
+function dayOfWeekField(cron: string): string {
+  return cron.trim().split(/\s+/).at(-1) ?? "";
+}
+
+describe("cron weekday fields", () => {
+  it.each(Object.entries(CRON_CONSTANTS))("%s spells its weekday out instead of numbering it", (name, cron) => {
+    const fields = cron.trim().split(/\s+/);
+    expect(fields, `${name} = ${JSON.stringify(cron)} is not a five-field cron.`).toHaveLength(5);
+    const weekday = dayOfWeekField(cron);
+    expect(
+      weekday === "*" || !/\d/.test(weekday),
+      `${name} = ${JSON.stringify(cron)} numbers its day of week. Cloudflare reads 1 as Sunday and Sentry reads it as Monday; write it out (MON, not 1).`,
+    ).toBe(true);
+  });
+
+  it("leaves every wrangler trigger free of a numbered weekday", () => {
+    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    const crons = rawConfig.triggers?.crons ?? [];
+    expect(crons).toEqual(expect.arrayContaining([...Object.values(CRON_CONSTANTS), "*/5 * * * *"]));
+    const numbered = crons.filter((cron) => /\d/.test(dayOfWeekField(cron)));
+    expect(numbered, `wrangler.jsonc numbers the day of week in: ${numbered.join(", ")}`).toEqual([]);
+  });
+});
+
 describe("isDiscoveryDay", () => {
   it("is true on the weekday the workspace was created and false on the other six", () => {
     const createdAt = "2026-09-14T22:30:00.000Z";
