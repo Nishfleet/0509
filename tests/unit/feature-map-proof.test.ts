@@ -51,4 +51,30 @@ describe("feature map proof coverage", () => {
         .join("\n"),
     ).toEqual([]);
   });
+
+  // #7016: a merge-conflict resolution left two `/login` rows (lines 27 and
+  // 28), each claiming `app/routes/login.tsx`, and only the newer one carries
+  // the turnstile-blocked spec. Nothing failed, so the stale twin stayed. The
+  // fix is this gate: every route row is unique on its Route + File pair, so a
+  // second row for the same route and file fails the PR. Row shape is taken
+  // from the file: a route row's first cell starts with a backtick, while the
+  // header, the separator and the "Not a route" table do not (#6133 pattern).
+  it("has no duplicate route row", async () => {
+    const map = await readFile(MAP, "utf8");
+    const seen = new Map<string, number>();
+    const duplicates: string[] = [];
+    map.split("\n").forEach((line, index) => {
+      if (!line.startsWith("|")) return;
+      const cells = line.replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
+      if (cells.length < 2 || !cells[0].startsWith("`")) return;
+      const key = `${cells[0]}\t${cells[1]}`;
+      const first = seen.get(key);
+      if (first !== undefined) {
+        duplicates.push(`lines ${first} and ${index + 1} both claim ${cells[0]} in ${cells[1]}`);
+        return;
+      }
+      seen.set(key, index + 1);
+    });
+    expect(duplicates, duplicates.join("\n")).toEqual([]);
+  });
 });
