@@ -8,10 +8,9 @@ import { Monogram } from "../components/monogram";
 import { OnboardingFrame } from "../components/onboarding-frame";
 import { Button } from "../components/ui/button";
 import { handleCompetitorIntent } from "../lib/competitors.server";
-import { readOnboardingCompetitors } from "../lib/data/entity.server";
 import { markCompetitorsReady, markWatchingStarted } from "../lib/data/onboarding_run.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { readDiscoveryState } from "../lib/discovery/start.server";
+import { readOnboardingScreen } from "../lib/discovery/start.server";
 import { discoveryNotice, type DiscoveryState } from "../lib/discovery/state";
 import { requireFreshSession, requireSession } from "../lib/require-session.server";
 import { createTimings } from "../lib/server-timing.server";
@@ -36,14 +35,11 @@ export function meta() {
 export async function loader({ request }: Route.LoaderArgs) {
   const timings = createTimings();
   const workspaceId = await timings.measure("workspace", workspaceFor(request));
-  const [competitors, discovery] = await timings.measure(
-    "reads",
-    Promise.all([readOnboardingCompetitors(workspaceId), readDiscoveryState(workspaceId, new Date())]),
-  );
-  if (competitors.on.length + competitors.maybes.length > 0) {
+  const screen = await timings.measure("reads", readOnboardingScreen(workspaceId, new Date()));
+  if (screen.on.length + screen.maybes.length > 0) {
     await timings.measure("ready", markCompetitorsReady(workspaceId, new Date().toISOString()));
   }
-  return data({ ...competitors, discovery }, { headers: timings.header() });
+  return data(screen, { headers: timings.header() });
 }
 
 export async function action({ request }: Route.ActionArgs) {
