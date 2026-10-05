@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { registeredToolDescriptors } from "../../app/lib/agent/mcp-tools";
+
 // #6133: drift in the feature map was found and never fixed — six open issues
 // said the same thing. The class fix is this gate: a spec that no Proof row
 // names, or a Proof row that names a spec not on disk, fails the PR. The shape
@@ -90,5 +92,32 @@ describe("feature map proof coverage", () => {
       "the `/` route must be in the map",
     ).toBe(true);
     expect(duplicates, duplicates.join("\n")).toEqual([]);
+  });
+
+  // 0509#7085 (item 7): the map's `/mcp` row named three tools
+  // (`get_brief`, `list_competitors`, `list_alerts`) long after the server
+  // registered five — the map is hand-written, so it drifts silently. The
+  // tool list is machine-checkable against `registeredToolDescriptors`, so
+  // this gate names every registered tool and forbids naming a dead one.
+  it("names every registered MCP tool in the `/mcp` row", async () => {
+    const map = await readFile(MAP, "utf8");
+    const row = map.split("\n").find((line) => line.startsWith("| `/mcp`"));
+    expect(row, "the map has no `/mcp` row").toBeDefined();
+    const names: string[] = Object.keys(registeredToolDescriptors);
+    // Positive control: the registry must not be empty, or the gate is vacuous.
+    expect(names.length, "registeredToolDescriptors must not be empty").toBeGreaterThan(0);
+    const missing = names.filter((name) => !row?.includes(`\`${name}\``));
+    expect(missing, missing.map((name) => `name \`${name}\` in the /mcp row`).join("\n")).toEqual([]);
+    // The tool list is the clause "read-only tools, each with an output schema:
+    // …" up to the first parenthesis; other backticked tokens in the row are
+    // not tools, so only this clause is checked for dead names.
+    const clause = row?.split("tools, each with an output schema:")[1]?.split("(")[0] ?? "";
+    const named = [...clause.matchAll(/`([a-z][a-z_]+)`/g)].map((match) => match[1]);
+    expect(named.length, "the /mcp row must name its tools").toBeGreaterThan(0);
+    const dead = named.filter((word) => !names.includes(word));
+    expect(
+      dead,
+      dead.map((word) => `\`${word}\` is named in the /mcp row but is not a registered tool`).join("\n"),
+    ).toEqual([]);
   });
 });
