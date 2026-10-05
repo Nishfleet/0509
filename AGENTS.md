@@ -118,10 +118,14 @@ assertions both times.
 runs the specs that cover it locally first, in preview mode, by file:
 `npm run e2e -- e2e/<name>.spec.ts` (Playwright's own file filter). Nothing
 is pasted into the PR body: `preview-assert` runs the whole suite at the PR
-head and is the proof. Do not run the full suite, `npm run build` or
-`npm run typecheck` locally as well: CI runs all three, and on a fleet
-worker (25% of a core, 55-minute wall) the full local set is what timed
-workers out on 2026-09-23. Chromium is already installed on this host
+head and is the proof. Do not run the full suite or `npm run build`
+locally as well: CI runs both, and on a fleet worker (25% of a core,
+55-minute wall) the full local set is what timed workers out on
+2026-09-23. Run `npm run typecheck` before the PR opens anyway: 0509
+defines no `check` script, so it is the repo's static check, and CI's
+typecheck job is the first gate that sees a TS error — a red one costs
+one of the issue's three runs (#6398, #6983, #7082). Measured 26 s on
+this host on 2026-10-05. Chromium is already installed on this host
 (`~/.cache/ms-playwright`).
 
 ## Reproducing a user report
