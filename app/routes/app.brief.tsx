@@ -1,6 +1,5 @@
 import type { Route } from "./+types/app.brief";
 
-import { env } from "cloudflare:workers";
 import { Link, redirect } from "react-router";
 
 import { BriefUnavailable } from "../components/brief-unavailable";
