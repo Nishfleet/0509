@@ -1,5 +1,6 @@
-import { createElement } from "react";
+import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { prerender } from "react-dom/static";
 import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
@@ -225,10 +226,16 @@ const KINDRED_EVIDENCE: readonly WeekEvidence[] = [
   },
 ];
 
+async function renderSettled(element: ReactElement): Promise<string> {
+  const { prelude } = await prerender(element);
+  const html = await new Response(prelude).text();
+  return html.replaceAll(/<!--.*?-->/g, "");
+}
+
 describe("a ranked row expands in place to the week's evidence", () => {
-  function renderStanding(openId: string | null, evidence: readonly WeekEvidence[] | null): string {
+  function renderStanding(openId: string | null, evidence: readonly WeekEvidence[] | null): Promise<string> {
     const entries = openId === null ? ["/app"] : [`/app?open=${openId}`];
-    return renderToStaticMarkup(
+    return renderSettled(
       createElement(
         MemoryRouter,
         { initialEntries: entries },
@@ -241,8 +248,8 @@ describe("a ranked row expands in place to the week's evidence", () => {
     );
   }
 
-  it("opens Kindred's row on ?open=ent_kindred with an evidence slot", () => {
-    const html = renderStanding("ent_kindred", KINDRED_EVIDENCE);
+  it("opens Kindred's row on ?open=ent_kindred with type tabs and its evidence once the lazy chunk loads", async () => {
+    const html = await renderStanding("ent_kindred", KINDRED_EVIDENCE);
     expect(html).toContain('data-open="true"');
     expect(html).toContain('aria-controls="evidence-ent_kindred"');
     expect(html).toContain('id="evidence-ent_kindred"');
@@ -252,10 +259,16 @@ describe("a ranked row expands in place to the week's evidence", () => {
     expect(html).toContain("Kindred expanded");
     expect(html).toContain("Own Brand collapsed");
     expect(html).toContain("Casetta collapsed");
+    expect(html).toContain("Site changes 2");
+    expect(html).toContain("Mentions 1");
+    expect(html).toContain("Ads 0");
+    expect(html).toContain("Hiring 0");
+    expect(html).toContain("Pricing page rewrote its hero");
+    expect(html).toContain('data-slot="evidence-row"');
   });
 
-  it("keeps every row collapsed without an open param", () => {
-    const html = renderStanding(null, null);
+  it("keeps every row collapsed without an open param", async () => {
+    const html = await renderStanding(null, null);
     expect(html).not.toContain('data-open="true"');
     expect(html).not.toContain('data-slot="row-evidence"');
     expect(html.match(/aria-expanded="false"/g)).toHaveLength(3);
@@ -263,7 +276,7 @@ describe("a ranked row expands in place to the week's evidence", () => {
 });
 
 describe("below 860px an open ranked row's evidence is a bottom sheet", () => {
-  it("server-render keeps the in-place evidence and the sheet stays closed", () => {
+  it("server-render keeps the in-place evidence and the sheet stays closed", async () => {
     const view = homeView({
       payload: PAYLOAD,
       entities: ENTITIES,
@@ -274,7 +287,7 @@ describe("below 860px an open ranked row's evidence is a bottom sheet", () => {
       now: NOW,
       moves: [],
     });
-    const html = renderToStaticMarkup(
+    const html = await renderSettled(
       createElement(
         MemoryRouter,
         { initialEntries: ["/app?open=ent_kindred"] },
@@ -282,6 +295,7 @@ describe("below 860px an open ranked row's evidence is a bottom sheet", () => {
       ),
     );
     expect(html.match(/data-slot="row-evidence"/g)).toHaveLength(1);
+    expect(html).toContain("Pricing page rewrote its hero");
     expect(html).not.toContain('data-slot="row-sheet"');
   });
 });

@@ -1,4 +1,3 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -9,7 +8,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 
 const TAB_MESSAGE = "hand-rolled role=tab";
 
-const PROBE = "app/components/probe-tabs-tmp.tsx";
+const PROBE = "app/components/ranked-row.tsx";
 
 const HAND_TAB = `export function probe() {
   return <button type="button" role="tab" />;
@@ -48,15 +47,13 @@ export function probe(evidence: never[]) {
 `;
 
 async function lintProbe(code: string): Promise<string[]> {
-  const file = path.join(REPO_ROOT, PROBE);
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, code);
-  try {
-    const results = await new ESLint({ cwd: REPO_ROOT }).lintFiles([file]);
-    return results.flatMap((result) => result.messages.map((m) => m.message));
-  } finally {
-    await rm(file, { force: true });
-  }
+  const results = await new ESLint({ cwd: REPO_ROOT }).lintText(code, {
+    filePath: path.join(REPO_ROOT, PROBE),
+    warnIgnored: true,
+  });
+  const messages = results.flatMap((result) => result.messages.map((m) => m.message));
+  expect(messages.filter((m) => m.includes("was not found by the project service"))).toEqual([]);
+  return messages;
 }
 
 async function lintExisting(rel: string): Promise<string[]> {
