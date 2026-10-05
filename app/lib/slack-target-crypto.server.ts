@@ -124,10 +124,11 @@ export async function decryptSlackWebhook(stored: string, secret: string, worksp
   return webhook;
 }
 
-export function parseSlackTargetKeys(raw: unknown): readonly string[] {
+export async function parseSlackTargetKeys(raw: unknown): Promise<readonly string[]> {
   if (typeof raw !== "string") throw new Error(NOT_CONFIGURED);
   const keys = raw.split(",").map((key) => key.trim());
   if (keys.length > MAX_KEYS || keys.some((key) => key.length === 0)) throw new Error(NOT_CONFIGURED);
+  await Promise.all(keys.map((key) => importSecret(key)));
   return keys;
 }
 

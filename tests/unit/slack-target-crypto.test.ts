@@ -119,24 +119,34 @@ describe("Slack target AES-GCM", () => {
 });
 
 describe("SLACK_TARGET_SECRET key list", () => {
-  it("parses one key, and up to three in order", () => {
-    expect(parseSlackTargetKeys(SECRET)).toEqual([SECRET]);
-    expect(parseSlackTargetKeys(` ${SECRET} , ${OTHER_SECRET},${THIRD_SECRET}`)).toEqual([
+  it("parses one key, and up to three in order", async () => {
+    expect(await parseSlackTargetKeys(SECRET)).toEqual([SECRET]);
+    expect(await parseSlackTargetKeys(` ${SECRET} , ${OTHER_SECRET},${THIRD_SECRET}`)).toEqual([
       SECRET,
       OTHER_SECRET,
       THIRD_SECRET,
     ]);
   });
 
-  it("refuses more than three keys", () => {
-    expect(() => parseSlackTargetKeys([SECRET, OTHER_SECRET, THIRD_SECRET, FOURTH_SECRET].join(","))).toThrow(
+  it("refuses more than three keys", async () => {
+    await expect(parseSlackTargetKeys([SECRET, OTHER_SECRET, THIRD_SECRET, FOURTH_SECRET].join(","))).rejects.toThrow(
       "SLACK_TARGET_SECRET is not configured",
     );
   });
 
-  it("fails closed on an empty list, an empty key, or a missing value", () => {
+  it("fails closed on an empty list, an empty key, or a missing value", async () => {
     for (const raw of ["", "   ", `${SECRET},`, `,${SECRET}`, `${SECRET},,${OTHER_SECRET}`, undefined, 7]) {
-      expect(() => parseSlackTargetKeys(raw)).toThrow("SLACK_TARGET_SECRET is not configured");
+      await expect(parseSlackTargetKeys(raw)).rejects.toThrow("SLACK_TARGET_SECRET is not configured");
+    }
+  });
+
+  it("fails closed when any key in the list is malformed, in any position", async () => {
+    const short = "AAAA";
+    const notBase64 = "!!!not-base64!!!";
+    for (const bad of [short, notBase64]) {
+      for (const raw of [bad, `${SECRET},${bad}`, `${bad},${SECRET}`, `${SECRET},${bad},${OTHER_SECRET}`]) {
+        await expect(parseSlackTargetKeys(raw)).rejects.toThrow("SLACK_TARGET_SECRET must be 32 bytes");
+      }
     }
   });
 });

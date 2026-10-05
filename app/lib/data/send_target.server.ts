@@ -133,18 +133,25 @@ SELECT ?, ?, id, ?, 1, ? FROM channel WHERE key = 'slack'`;
 
 const SELECT_UNSEALED_SLACK_TARGETS = `SELECT st.id, st.workspace_id, st.target_value FROM send_target st
 JOIN channel c ON c.id = st.channel_id
-WHERE c.key = 'slack' AND st.id > ? AND st.target_value NOT LIKE 'enc:v2:' || ? || ':%'
+WHERE c.key = 'slack' AND st.id > ? AND st.seal_attempts < ? AND st.target_value NOT LIKE 'enc:v2:' || ? || ':%'
 ORDER BY st.id ASC
 LIMIT ?`;
 
 const SEAL_SLACK_TARGET = `UPDATE send_target SET target_value = ? WHERE id = ? AND target_value = ?`;
 
+const RECORD_FAILED_SEAL = `UPDATE send_target SET seal_attempts = seal_attempts + 1 WHERE id = ?`;
+
 const COUNT_UNSEALED_SLACK_TARGETS = `SELECT COUNT(*) AS remaining FROM send_target st
 JOIN channel c ON c.id = st.channel_id
-WHERE c.key = 'slack' AND st.target_value NOT LIKE 'enc:v2:' || ? || ':%'`;
+WHERE c.key = 'slack' AND st.seal_attempts < ? AND st.target_value NOT LIKE 'enc:v2:' || ? || ':%'`;
+
+const COUNT_STUCK_SLACK_TARGETS = `SELECT COUNT(*) AS stuck FROM send_target st
+JOIN channel c ON c.id = st.channel_id
+WHERE c.key = 'slack' AND st.seal_attempts >= ? AND st.target_value NOT LIKE 'enc:v2:' || ? || ':%'`;
 
 const DEFAULT_BACKFILL_BATCH = 50;
 const NIGHTLY_SLACK_BACKFILL_CAP = 500;
+const MAX_SEAL_ATTEMPTS = 3;
 
 interface SlackTargetRow {
   id: string;
@@ -160,12 +167,12 @@ export interface SlackBackfillResult {
 
 type SlackBackfillOutcome = keyof SlackBackfillResult;
 
-function slackTargetKeys(): readonly string[] {
+function slackTargetKeys(): Promise<readonly string[]> {
   return parseSlackTargetKeys(env.SLACK_TARGET_SECRET);
 }
 
-function slackTargetWriteSecret(): string {
-  const [current] = slackTargetKeys();
+async function slackTargetWriteSecret(): Promise<string> {
+  const [current] = await slackTargetKeys();
   if (current === undefined) throw new Error("SLACK_TARGET_SECRET is not configured");
   return current;
 }
@@ -177,7 +184,7 @@ export async function readSlackTarget(
   const row = await db.prepare(SELECT_SLACK_TARGET).bind(workspaceId).first<{ id: string; target_value: string }>();
   if (row === null) return null;
   if (isEncryptedSlackTarget(row.target_value)) {
-    const webhook = await decryptSlackWebhookWithKeys(row.target_value, slackTargetKeys(), workspaceId);
+    const webhook = await decryptSlackWebhookWithKeys(row.target_value, await slackTargetKeys(), workspaceId);
     return { id: row.id, target_value: webhook };
   }
   const webhook = parseSlackWebhook(row.target_value);
@@ -186,10 +193,13 @@ export async function readSlackTarget(
 }
 
 async function openSlackTarget(row: SlackTargetRow, keys: readonly string[]): Promise<string | null> {
-  if (isEncryptedSlackTarget(row.target_value)) {
-    return decryptSlackWebhookWithKeys(row.target_value, keys, row.workspace_id);
-  }
-  return parseSlackWebhook(row.target_value);
+  if (!isEncryptedSlackTarget(row.target_value)) return parseSlackWebhook(row.target_value);
+  return decryptSlackWebhookWithKeys(row.target_value, keys, row.workspace_id).catch(() => null);
+}
+
+async function recordFailedSeal(db: D1Database, id: string): Promise<"failed"> {
+  await db.prepare(RECORD_FAILED_SEAL).bind(id).run();
+  return "failed";
 }
 
 async function sealSlackTargetRow(
@@ -197,17 +207,12 @@ async function sealSlackTargetRow(
   row: SlackTargetRow,
   keys: readonly string[],
 ): Promise<SlackBackfillOutcome> {
-  try {
-    const webhook = await openSlackTarget(row, keys);
-    if (webhook === null) return "failed";
-    const [current] = keys;
-    if (current === undefined) return "failed";
-    const sealed = await encryptSlackWebhook(webhook, current, row.workspace_id);
-    const result = await db.prepare(SEAL_SLACK_TARGET).bind(sealed, row.id, row.target_value).run();
-    return result.meta.changes === 1 ? "sealed" : "skipped";
-  } catch {
-    return "failed";
-  }
+  const webhook = await openSlackTarget(row, keys);
+  const [current] = keys;
+  if (webhook === null || current === undefined) return recordFailedSeal(db, row.id);
+  const sealed = await encryptSlackWebhook(webhook, current, row.workspace_id);
+  const result = await db.prepare(SEAL_SLACK_TARGET).bind(sealed, row.id, row.target_value).run();
+  return result.meta.changes === 1 ? "sealed" : "skipped";
 }
 
 function addOutcome(total: SlackBackfillResult, outcome: SlackBackfillOutcome): SlackBackfillResult {
@@ -222,7 +227,7 @@ export async function backfillSlackTargets(
   db: D1Database,
   options: { batchSize?: number; maxRows?: number } = {},
 ): Promise<SlackBackfillResult> {
-  const keys = slackTargetKeys();
+  const keys = await slackTargetKeys();
   const [current] = keys;
   if (current === undefined) throw new Error("SLACK_TARGET_SECRET is not configured");
   const currentId = await slackTargetKeyId(current);
@@ -232,7 +237,10 @@ export async function backfillSlackTargets(
   let cursor = "";
   while (processedCount(total) < maxRows) {
     const limit = Math.min(batchSize, maxRows - processedCount(total));
-    const page = await db.prepare(SELECT_UNSEALED_SLACK_TARGETS).bind(cursor, currentId, limit).all<SlackTargetRow>();
+    const page = await db
+      .prepare(SELECT_UNSEALED_SLACK_TARGETS)
+      .bind(cursor, MAX_SEAL_ATTEMPTS, currentId, limit)
+      .all<SlackTargetRow>();
     for (const row of page.results) total = addOutcome(total, await sealSlackTargetRow(db, row, keys));
     const last = page.results.at(-1);
     if (last === undefined || page.results.length < limit) break;
@@ -241,20 +249,35 @@ export async function backfillSlackTargets(
   return total;
 }
 
-export async function countUnsealedSlackTargets(db: D1Database): Promise<number> {
-  const [current] = slackTargetKeys();
+async function currentKeyId(): Promise<string> {
+  const [current] = await slackTargetKeys();
   if (current === undefined) throw new Error("SLACK_TARGET_SECRET is not configured");
+  return slackTargetKeyId(current);
+}
+
+export async function countUnsealedSlackTargets(db: D1Database): Promise<number> {
   const row = await db
     .prepare(COUNT_UNSEALED_SLACK_TARGETS)
-    .bind(await slackTargetKeyId(current))
+    .bind(MAX_SEAL_ATTEMPTS, await currentKeyId())
     .first<{ remaining: number }>();
   return row?.remaining ?? 0;
+}
+
+export async function countStuckSlackTargets(db: D1Database): Promise<number> {
+  const row = await db
+    .prepare(COUNT_STUCK_SLACK_TARGETS)
+    .bind(MAX_SEAL_ATTEMPTS, await currentKeyId())
+    .first<{ stuck: number }>();
+  return row?.stuck ?? 0;
 }
 
 export async function runNightlySlackBackfill(db: D1Database, options: { maxRows?: number } = {}): Promise<number> {
   const result = await backfillSlackTargets(db, { maxRows: options.maxRows ?? NIGHTLY_SLACK_BACKFILL_CAP });
   const remaining = await countUnsealedSlackTargets(db);
-  if (remaining > 0) console.info(JSON.stringify({ event: "slack_backfill.remaining", remaining, ...result }));
+  const stuck = await countStuckSlackTargets(db);
+  if (remaining > 0 || stuck > 0) {
+    console.info(JSON.stringify({ event: "slack_backfill.remaining", remaining, stuck, ...result }));
+  }
   return remaining;
 }
 
@@ -266,7 +289,7 @@ export async function saveSlackTarget(
   db: D1Database,
   input: { workspaceId: string; webhookUrl: string; now: string },
 ): Promise<void> {
-  const sealed = await encryptSlackWebhook(input.webhookUrl, slackTargetWriteSecret(), input.workspaceId);
+  const sealed = await encryptSlackWebhook(input.webhookUrl, await slackTargetWriteSecret(), input.workspaceId);
   await db.batch([
     db.prepare(DELETE_SLACK_TARGET).bind(input.workspaceId),
     db.prepare(INSERT_SLACK_TARGET).bind(crypto.randomUUID(), input.workspaceId, sealed, input.now),

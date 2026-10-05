@@ -270,6 +270,66 @@ describe("Slack target backfill (0509#6983, 0509#6981)", () => {
     expect(rows[0]?.target_value).toBe("not a webhook");
   });
 
+  it("refuses to run when any key in the list is malformed", async () => {
+    await insertTarget("st-a-plain", HOOK, WS);
+    env.SLACK_TARGET_SECRET = `${CURRENT_KEY},AAAA`;
+    await expect(backfillSlackTargets(env.DB)).rejects.toThrow("SLACK_TARGET_SECRET must be 32 bytes");
+    expect((await rawRows())[0]?.target_value).toBe(HOOK);
+  });
+
+  it("lets a database error surface instead of counting the row as failed", async () => {
+    await insertTarget("st-a-plain", HOOK, WS);
+    const broken = {
+      prepare: (query: string) => {
+        if (!query.startsWith("UPDATE send_target SET target_value")) return env.DB.prepare(query);
+        return { bind: () => ({ run: () => Promise.reject(new Error("D1 unavailable")) }) };
+      },
+    } as unknown as D1Database;
+
+    await expect(backfillSlackTargets(broken)).rejects.toThrow("D1 unavailable");
+    expect((await rawRows())[0]?.target_value).toBe(HOOK);
+    const attempts = await env.DB.prepare(`SELECT seal_attempts AS n FROM send_target`).first<{ n: number }>();
+    expect(attempts?.n).toBe(0);
+  });
+
+  it("lets a database error on the select surface", async () => {
+    const broken = {
+      prepare: () => ({ bind: () => ({ all: () => Promise.reject(new Error("D1 unavailable")) }) }),
+    } as unknown as D1Database;
+    await expect(backfillSlackTargets(broken)).rejects.toThrow("D1 unavailable");
+  });
+
+  it("seals a good row behind more unreadable rows than the cap, and stops retrying the unreadable ones", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    for (const id of ["st-a-junk", "st-b-junk", "st-c-junk", "st-d-junk"])
+      await insertTarget(id, `not a webhook ${id}`, WS);
+    await insertTarget("st-z-good", HOOK, WS2);
+    const attempts = async () =>
+      (
+        await env.DB.prepare(`SELECT id, seal_attempts AS n FROM send_target ORDER BY id`).all<{
+          id: string;
+          n: number;
+        }>()
+      ).results;
+
+    let nights = 0;
+    while (nights < 10 && (await rawRows()).at(-1)?.target_value === HOOK) {
+      await runNightlySlackBackfill(env.DB, { maxRows: 2 });
+      nights += 1;
+    }
+
+    expect(nights).toBeLessThan(10);
+    expect(await decryptSlackWebhook((await rawRows()).at(-1)?.target_value ?? "", CURRENT_KEY, WS2)).toBe(HOOK);
+    for (let night = 0; night < 10; night += 1) await runNightlySlackBackfill(env.DB, { maxRows: 2 });
+    expect((await attempts()).map((row) => row.n)).toEqual([3, 3, 3, 3, 0]);
+    expect(await countUnsealedSlackTargets(env.DB)).toBe(0);
+    expect(await backfillSlackTargets(env.DB, { maxRows: 2 })).toEqual({ sealed: 0, skipped: 0, failed: 0 });
+    info.mockClear();
+    expect(await runNightlySlackBackfill(env.DB, { maxRows: 2 })).toBe(0);
+    expect(JSON.parse(String(info.mock.calls[0]?.[0]))).toMatchObject({ remaining: 0, stuck: 4 });
+    info.mockRestore();
+  });
+
   it("refuses to run without a usable key list", async () => {
     env.SLACK_TARGET_SECRET = `${CURRENT_KEY},`;
     await expect(backfillSlackTargets(env.DB)).rejects.toThrow("SLACK_TARGET_SECRET is not configured");
@@ -285,6 +345,7 @@ describe("Slack target backfill (0509#6983, 0509#6981)", () => {
     expect(JSON.parse(String(info.mock.calls[0]?.[0]))).toEqual({
       event: "slack_backfill.remaining",
       remaining: 1,
+      stuck: 0,
       sealed: 2,
       skipped: 0,
       failed: 0,
