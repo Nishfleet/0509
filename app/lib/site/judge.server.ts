@@ -21,6 +21,7 @@ import {
 import { ACT_AT, CHANGE_KIND_QUESTION_ID, PRICING_ACT_AT, REJECT_AT } from "../jev/thresholds";
 import { parseDiffHunks, parseSiteChangePayload, type SiteChangePayload } from "../site-change";
 import { daysBefore } from "../site-changes.server";
+import { D3_QUESTION_ID, D3S_QUESTION_ID } from "../standing-score";
 import { computeBreakageEvidence, type BreakageEvidence } from "./breakage-evidence";
 
 const JEV_JUDGMENTS_PER_BRAND_PER_DAY = 6;
@@ -37,21 +38,17 @@ const PUBLISH_P = ACT_AT;
 
 const DISCARD_P = REJECT_AT;
 
-const D3S_BREAKAGE_QID = "own_site_breakage";
-
-const D3_NOTEWORTHY_QID = "noteworthy_change";
-
 const D3_KIND_QID = CHANGE_KIND_QUESTION_ID;
 
 export const D3S_BREAKAGE: NoulQuestion = {
-  id: D3S_BREAKAGE_QID,
+  id: D3S_QUESTION_ID,
   instructions: "Does this change make the brand own website look broken or unintentionally degraded for a visitor?",
   whenTrue: "The page looks broken or degraded for a visitor working normally.",
   whenFalse: "The change looks deliberate and the page looks fine for a visitor working normally.",
 };
 
 export const D3_NOTEWORTHY: NoulQuestion = {
-  id: D3_NOTEWORTHY_QID,
+  id: D3_QUESTION_ID,
   instructions: "Is this change to the brand website worth telling a customer who tracks this brand?",
   whenTrue: "A customer tracking this brand would want to know about this change.",
   whenFalse: "Nothing here would matter to a customer tracking this brand.",
@@ -218,7 +215,7 @@ async function judgeSelfBreakage(
     workspaceId: input.workspaceId,
     entityId: input.entityId,
     signalId: input.signalId,
-    questionId: D3S_BREAKAGE_QID,
+    questionId: D3S_QUESTION_ID,
     inputHash: breakage.inputHash,
     p,
     choice: null,
@@ -248,7 +245,7 @@ async function judgeNoteworthy(
   return {
     noteworthy: { p, kind, band: noteworthyBandOf(p, kind) },
     rows: [
-      verdictRow({ ...base, questionId: D3_NOTEWORTHY_QID, inputHash: noul.inputHash, p, choice: null }),
+      verdictRow({ ...base, questionId: D3_QUESTION_ID, inputHash: noul.inputHash, p, choice: null }),
       verdictRow({ ...base, questionId: D3_KIND_QID, inputHash: choice.inputHash, p: null, choice: kind }),
     ],
   };

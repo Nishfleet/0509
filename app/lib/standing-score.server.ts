@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { ACT_AT, REJECT_AT, changeActsSql } from "./jev/thresholds";
+import { CHANGE_HAS_STORED_EVIDENCE } from "./site-change";
 import {
   D3_QUESTION_ID,
   D3S_QUESTION_ID,
@@ -37,7 +38,7 @@ WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.i
     (s.kind = 'mention' AND NOT EXISTS (
       SELECT 1 FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id = ?4
     ))
-    OR (s.kind = 'change' AND NOT EXISTS (
+    OR (s.kind = 'change' AND (e.role <> 'self' OR ${CHANGE_HAS_STORED_EVIDENCE}) AND NOT EXISTS (
       SELECT 1 FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id IN (?5, ?6)
     ))
   )`;

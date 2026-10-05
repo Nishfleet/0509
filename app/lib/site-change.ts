@@ -23,6 +23,10 @@ const siteChangePayload = z.object({
 
 export type SiteChangePayload = z.output<typeof siteChangePayload>;
 
+export const CHANGE_HAS_STORED_EVIDENCE = `(json_extract(s.payload_json, '$.status') IS NOT NULL
+  AND json_extract(s.payload_json, '$.before.textKey') IS NOT NULL
+  AND json_extract(s.payload_json, '$.after.textKey') IS NOT NULL)`;
+
 function parseJson(json: string, what: string): unknown {
   try {
     return JSON.parse(json);

@@ -100,6 +100,21 @@ describe("rejudging unjudged change signals (0509#7065)", () => {
     expect(ranked.every((row) => row.rank >= 1)).toBe(true);
   });
 
+  it("does not block freeze when a self change has no stored page text", async () => {
+    const { workspaceId, rivalId, selfId } = await seedWorkspace();
+    await seedStanding(workspaceId, [selfId, rivalId]);
+    await seedChange(workspaceId, selfId, "empty-self");
+
+    expect(
+      await countUnjudgedInputs(env.DB, {
+        workspaceId,
+        windowStartAt: WEEK_START,
+        windowEndAt: WEEK_END,
+      }),
+    ).toBe(0);
+    expect(await freezeWeek(env.DB, windowFor(workspaceId))).toHaveLength(2);
+  });
+
   it("counts a self-breakage verdict as judged so freeze can run", async () => {
     const { workspaceId, rivalId, selfId } = await seedWorkspace();
     await seedStanding(workspaceId, [selfId, rivalId]);

@@ -99,6 +99,7 @@ async function rejudgeClosingWeek(
     console.error(
       JSON.stringify({
         event: "standing.rejudge_failed",
+        workspaceId: input.workspaceId,
         error: error instanceof Error ? error.name : "unknown",
       }),
     );
