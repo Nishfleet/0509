@@ -141,6 +141,8 @@ describe("apikey plugin against the shipped schema", () => {
     expect(await propsForApiKey(created.key)).toMatchObject({ userId: "u_apikey_scope" });
     await env.DB.prepare("UPDATE apikey SET permissions = NULL WHERE id = ?").bind(created.id).run();
     expect(await propsForApiKey(created.key)).toBeNull();
+    await env.DB.prepare("UPDATE apikey SET permissions = ? WHERE id = ?").bind('{"write":["*"]}', created.id).run();
+    expect(await propsForApiKey(created.key)).toBeNull();
   });
 
   it("honours ISO expiry stamped by the apikey backfill", async () => {

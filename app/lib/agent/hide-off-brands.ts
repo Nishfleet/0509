@@ -12,6 +12,26 @@ function signalCounts(brands: readonly BrandLine[]) {
   };
 }
 
+function wordChar(char: string): boolean {
+  if (char.length !== 1) return false;
+  const code = char.charCodeAt(0);
+  return (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+}
+
+function lineNamesBrand(why: string, name: string): boolean {
+  if (name.length === 0) return false;
+  let from = 0;
+  while (from <= why.length - name.length) {
+    const at = why.indexOf(name, from);
+    if (at === -1) return false;
+    const left = at === 0 ? "" : why[at - 1];
+    const right = why[at + name.length] ?? "";
+    if (!wordChar(left) && !wordChar(right)) return true;
+    from = at + 1;
+  }
+  return false;
+}
+
 function whyLine(input: {
   payload: BriefPayload;
   marks: Marks;
@@ -19,7 +39,7 @@ function whyLine(input: {
   remaining: readonly BrandLine[];
 }): string {
   const { payload, marks, hiddenNames, remaining } = input;
-  if (!hiddenNames.some((name) => payload.why_line.includes(name))) return payload.why_line;
+  if (!hiddenNames.some((name) => lineNamesBrand(payload.why_line, name))) return payload.why_line;
   if (payload.is_unjudged) return UNJUDGED_WEEK_LINE;
   const lead = marks[0];
   if (lead !== undefined) return readThisFirstLine(marks.length, marks.length, lead.entity_name);

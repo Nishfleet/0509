@@ -93,4 +93,28 @@ describe("hideOffBrands", () => {
       "You held first on new ads.",
     );
   });
+
+  it("does not treat a short brand name as a substring of ordinary prose", () => {
+    const template = payload("Continuation of ads this week.");
+    const brief = {
+      ...template,
+      read_this_first: [],
+      brands: [
+        {
+          entity_id: "ent_short",
+          name: "on",
+          rank: 2,
+          movement: 0,
+          is_new: false,
+          biggest_move: null,
+          ad_delta: 0,
+          mention_delta: 0,
+          site_change_count: 0,
+          new_roles: 0,
+        },
+        ...template.brands.filter((line) => line.entity_id === ON),
+      ],
+    };
+    expect(hideOffBrands(brief, new Set(["ent_short"])).why_line).toBe("Continuation of ads this week.");
+  });
 });

@@ -1,7 +1,8 @@
+import type { GrantSummary, OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { createAgentKey } from "../../app/lib/agent/access.server";
+import { createAgentKey, listAllGrants } from "../../app/lib/agent/access.server";
 import { createAuth } from "../../app/lib/auth.server";
 
 const ORIGIN = "http://localhost:8787";
@@ -109,5 +110,34 @@ describe("create-key is idempotent per submission", () => {
 
     expect(failure).toBeInstanceOf(Error);
     expect(await keyRows("nobody")).toBe(0);
+  });
+});
+
+function grant(id: string): GrantSummary {
+  return { id, clientId: "c", userId: "u", scope: ["read"], metadata: {}, createdAt: 1 };
+}
+
+describe("listAllGrants pages until the cursor ends", () => {
+  it("concatenates two pages", async () => {
+    const helpers = {
+      listUserGrants: async (_user: string, options?: { cursor?: string }) =>
+        options?.cursor === "p2" ? { items: [grant("g2")] } : { items: [grant("g1")], cursor: "p2" },
+    };
+    expect((await listAllGrants(helpers as OAuthHelpers, "u")).map((row) => row.id)).toEqual(["g1", "g2"]);
+  });
+
+  it("stops on an empty cursor and on a repeated cursor", async () => {
+    const empty = { listUserGrants: async () => ({ items: [grant("g1")], cursor: "" }) };
+    expect((await listAllGrants(empty as OAuthHelpers, "u")).map((row) => row.id)).toEqual(["g1"]);
+
+    let calls = 0;
+    const repeating = {
+      listUserGrants: async () => {
+        calls += 1;
+        return { items: [grant("g1")], cursor: "same" };
+      },
+    };
+    await listAllGrants(repeating as OAuthHelpers, "u");
+    expect(calls).toBe(2);
   });
 });

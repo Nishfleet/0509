@@ -7,6 +7,8 @@ describe("allowedRedirectUri", () => {
     expect(allowedRedirectUri("https://app.example/callback")).toBe(true);
     expect(allowedRedirectUri("http://localhost:8787/cb")).toBe(true);
     expect(allowedRedirectUri("http://127.0.0.1/cb")).toBe(true);
+    expect(allowedRedirectUri("http://[::1]/cb")).toBe(true);
+    expect(allowedRedirectUri("http://127.0.0.8/cb")).toBe(true);
   });
 
   it("rejects remote http, custom schemes, and garbage", () => {

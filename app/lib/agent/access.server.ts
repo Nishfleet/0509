@@ -7,6 +7,7 @@ import type { AgentKey, ConnectedApp, CreateKeyResult } from "./access";
 
 const FRESH = { disableCookieCache: true };
 const GRANT_PAGE = 100;
+const GRANT_PAGES = 50;
 
 function appLabel(metadata: unknown, fallback: string): { name: string; host: string } {
   if (typeof metadata !== "object" || metadata === null) return { name: fallback, host: fallback };
@@ -17,14 +18,16 @@ function appLabel(metadata: unknown, fallback: string): { name: string; host: st
   return { name: labelled, host: redirectHost };
 }
 
-async function listAllGrants(helpers: OAuthHelpers, userId: string): Promise<GrantSummary[]> {
+export async function listAllGrants(helpers: OAuthHelpers, userId: string): Promise<GrantSummary[]> {
   const items: GrantSummary[] = [];
   let cursor: string | undefined;
-  do {
+  for (let pages = 0; pages < GRANT_PAGES; pages += 1) {
     const page = await helpers.listUserGrants(userId, { limit: GRANT_PAGE, cursor });
     items.push(...page.items);
-    cursor = page.cursor;
-  } while (cursor !== undefined);
+    const next = page.cursor;
+    if (next === undefined || next === "" || next === cursor) return items;
+    cursor = next;
+  }
   return items;
 }
 

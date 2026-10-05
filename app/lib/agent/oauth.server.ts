@@ -55,6 +55,7 @@ function oauthOptions<E>(handlers: Handlers<E>): OAuthProviderOptions<E> {
 export function createOAuthProvider<E>(handlers: Handlers<E>): OAuthProvider<E> {
   const provider = new OAuthProvider<E>(oauthOptions(handlers));
   const inner = provider.fetch.bind(provider);
-  provider.fetch = (request, workerEnv, ctx) => fetchOAuth({ inner, request, env: workerEnv, ctx });
-  return provider;
+  const wrapped = Object.create(provider) as OAuthProvider<E>;
+  wrapped.fetch = (request, workerEnv, ctx) => fetchOAuth({ inner, request, env: workerEnv, ctx });
+  return wrapped;
 }
