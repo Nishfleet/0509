@@ -100,6 +100,9 @@ jobs:
         # 0509#7004: id'd so the rollback below can tell a failed deploy from
         # a red smoke test.
         id: smoke
+        # 0509#7004: a step timeout fails the step and the rollback still
+        # runs; the job timeout would cancel the job and skip the rollback.
+        timeout-minutes: 3
         # A deploy that reports success while the site 500s is not a success.
         run: curl -fsS --retry 20 --retry-delay 5 --retry-all-errors https://0509.io/api/health | grep -q '"status":"ok"'
 
