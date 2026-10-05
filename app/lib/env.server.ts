@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
+import { SITE_URL } from "./site-url";
+
 const BINDING_NAMES = [
   "DB",
   "BETTER_AUTH_URL",
@@ -50,6 +52,16 @@ const NAMES = [
 type EnvName = (typeof NAMES)[number];
 type Snapshot = Record<(typeof NAMES)[number], unknown>;
 
+export const PUBLIC_TURNSTILE_DUMMY_NAMES = [
+  "TURNSTILE_SITE_KEY",
+  "TURNSTILE_SECRET_KEY",
+] as const satisfies readonly EnvName[];
+
+export const PUBLIC_TURNSTILE_DUMMY_VALUES = {
+  TURNSTILE_SITE_KEY: "1x00000000000000000000BB",
+  TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
+} as const satisfies Record<(typeof PUBLIC_TURNSTILE_DUMMY_NAMES)[number], string>;
+
 const NAME_SET: ReadonlySet<string> = new Set(NAMES);
 
 const httpUrl = z.url({ protocol: /^https?$/ });
@@ -66,26 +78,34 @@ function binding(method?: "prepare" | "get" | "sendBatch" | "limit") {
   });
 }
 
-const workerEnvSchema = z.object({
-  DB: binding("prepare"),
-  BETTER_AUTH_URL: httpUrl,
-  BETTER_AUTH_SECRET: z.string().min(1),
-  TURNSTILE_SECRET_KEY: z.string().min(1),
-  TURNSTILE_SITE_KEY: z.string().min(1),
-  EMAIL: binding(),
-  SEND_EMAIL: binding("sendBatch"),
-  SNAPSHOTS: binding("get"),
-  BROWSER: binding(),
-  OAUTH_KV: binding("get"),
-  AGENT_LIMIT: binding("limit"),
-  SIGN_IN_EMAIL_LIMIT: binding("limit"),
-  SIGN_IN_IP_LIMIT: binding("limit"),
-  AGENT_REGISTER_LIMIT: binding("limit"),
-  PROBE_LIMIT: binding("limit"),
-  CHANGE_EMAIL_LIMIT: binding("limit"),
-  LIVENESS_PING_URL: httpUrl.optional(),
-  SITE_SWEEP_PING_URL: httpUrl.optional(),
-});
+const workerEnvSchema = z
+  .object({
+    DB: binding("prepare"),
+    BETTER_AUTH_URL: httpUrl,
+    BETTER_AUTH_SECRET: z.string().min(1),
+    TURNSTILE_SECRET_KEY: z.string().min(1),
+    TURNSTILE_SITE_KEY: z.string().min(1),
+    EMAIL: binding(),
+    SEND_EMAIL: binding("sendBatch"),
+    SNAPSHOTS: binding("get"),
+    BROWSER: binding(),
+    OAUTH_KV: binding("get"),
+    AGENT_LIMIT: binding("limit"),
+    SIGN_IN_EMAIL_LIMIT: binding("limit"),
+    SIGN_IN_IP_LIMIT: binding("limit"),
+    AGENT_REGISTER_LIMIT: binding("limit"),
+    PROBE_LIMIT: binding("limit"),
+    CHANGE_EMAIL_LIMIT: binding("limit"),
+    LIVENESS_PING_URL: httpUrl.optional(),
+    SITE_SWEEP_PING_URL: httpUrl.optional(),
+  })
+  .check((ctx) => {
+    if (ctx.value.BETTER_AUTH_URL !== SITE_URL) return;
+    for (const name of PUBLIC_TURNSTILE_DUMMY_NAMES) {
+      if (ctx.value[name] !== PUBLIC_TURNSTILE_DUMMY_VALUES[name]) continue;
+      ctx.issues.push({ code: "custom", input: ctx.value[name], path: [name], message: "public dummy value" });
+    }
+  });
 
 export class WorkerEnvError extends Error {
   readonly names: readonly EnvName[];

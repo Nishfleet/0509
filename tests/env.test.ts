@@ -1,13 +1,19 @@
+import { readFileSync } from "node:fs";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { experimental_readRawConfig } from "wrangler";
 
 import { env } from "cloudflare:workers";
 
 import {
   createWorkerEnvCheck,
   landingWorkspaceId,
+  PUBLIC_TURNSTILE_DUMMY_NAMES,
+  PUBLIC_TURNSTILE_DUMMY_VALUES,
   WorkerEnvError,
   workerEnvFailureResponse,
 } from "../app/lib/env.server";
+import { SITE_URL } from "../app/lib/site-url";
 
 const KEYS = [
   "DB",
@@ -33,7 +39,7 @@ const KEYS = [
 function configured() {
   return {
     DB: { prepare: () => "stmt" },
-    BETTER_AUTH_URL: "https://0509.io",
+    BETTER_AUTH_URL: SITE_URL,
     BETTER_AUTH_SECRET: "present",
     TURNSTILE_SECRET_KEY: "present",
     TURNSTILE_SITE_KEY: "present",
@@ -65,6 +71,16 @@ function namesOf(check: () => void) {
     return error as WorkerEnvError;
   }
   expect.fail("expected a misconfigured env to throw");
+}
+
+function exampleSecrets(): Record<string, string> {
+  const secrets: Record<string, string> = {};
+  const text = readFileSync(new URL("../.dev.vars.example", import.meta.url), "utf8");
+  for (const line of text.split("\n")) {
+    const match = /^([A-Z0-9_]+)=(.*)$/.exec(line);
+    if (match) secrets[String(match[1])] = String(match[2]);
+  }
+  return secrets;
 }
 
 describe("worker env", () => {
@@ -134,6 +150,91 @@ describe("worker env", () => {
     const error = namesOf(createWorkerEnvCheck());
     expect(error.names).toEqual(["TURNSTILE_SITE_KEY"]);
     expect(error.message).toContain("the sign-in form has no Turnstile widget");
+  });
+
+  // 0509#7170. .dev.vars.example ships Cloudflare's published dummy Turnstile
+  // keys so local wrangler and lighthouse can mint. Those values on the
+  // production origin mean sign-in has no real captcha. The gate rejects them
+  // under the variable's own name, so the 503 an operator reads is the same
+  // shape as a missing entry.
+  it("refuses the Cloudflare dummy turnstile keys on the production origin", () => {
+    useEnv({
+      ...configured(),
+      TURNSTILE_SITE_KEY: PUBLIC_TURNSTILE_DUMMY_VALUES.TURNSTILE_SITE_KEY,
+      TURNSTILE_SECRET_KEY: PUBLIC_TURNSTILE_DUMMY_VALUES.TURNSTILE_SECRET_KEY,
+    });
+    const error = namesOf(createWorkerEnvCheck());
+    expect(error.names).toEqual(["TURNSTILE_SECRET_KEY", "TURNSTILE_SITE_KEY"]);
+    expect(error.message).toContain("misconfigured: TURNSTILE_SECRET_KEY");
+    expect(error.message).toContain("TURNSTILE_SITE_KEY");
+    expect(error.message).not.toContain(PUBLIC_TURNSTILE_DUMMY_VALUES.TURNSTILE_SITE_KEY);
+    expect(error.message).not.toContain(PUBLIC_TURNSTILE_DUMMY_VALUES.TURNSTILE_SECRET_KEY);
+  });
+
+  it("pins the dummy turnstile table to the values .dev.vars.example ships", () => {
+    const example = exampleSecrets();
+    for (const name of PUBLIC_TURNSTILE_DUMMY_NAMES) {
+      expect(example[name], `.dev.vars.example no longer ships ${name}`).toBe(PUBLIC_TURNSTILE_DUMMY_VALUES[name]);
+    }
+  });
+
+  // preview-assert's lighthouse step starts wrangler with
+  // --env-file .dev.vars.example and no --var for BETTER_AUTH_URL. Wrangler
+  // overlays keys that already exist in wrangler.jsonc vars, so the example
+  // file must ship a non-production origin or /design/landing answers 503.
+  it("keeps the example env-file off the production origin", () => {
+    const example = exampleSecrets();
+    expect(example.BETTER_AUTH_URL, ".dev.vars.example no longer overrides BETTER_AUTH_URL").toBeDefined();
+    expect(example.BETTER_AUTH_URL).not.toBe(SITE_URL);
+  });
+
+  it("starts lighthouse wrangler on the example env-file", () => {
+    const ci = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+    expect(ci).toContain("npx wrangler dev --env-file .dev.vars.example");
+  });
+
+  it("accepts the dummy turnstile keys on the example env-file origin", () => {
+    const example = exampleSecrets();
+    useEnv({
+      ...configured(),
+      BETTER_AUTH_URL: example.BETTER_AUTH_URL,
+      TURNSTILE_SITE_KEY: PUBLIC_TURNSTILE_DUMMY_VALUES.TURNSTILE_SITE_KEY,
+      TURNSTILE_SECRET_KEY: PUBLIC_TURNSTILE_DUMMY_VALUES.TURNSTILE_SECRET_KEY,
+    });
+    expect(() => createWorkerEnvCheck()()).not.toThrow();
+  });
+
+  it("answers 503 and names a dummy turnstile key without echoing it", async () => {
+    useEnv({
+      ...configured(),
+      TURNSTILE_SITE_KEY: PUBLIC_TURNSTILE_DUMMY_VALUES.TURNSTILE_SITE_KEY,
+      TURNSTILE_SECRET_KEY: PUBLIC_TURNSTILE_DUMMY_VALUES.TURNSTILE_SECRET_KEY,
+    });
+    const error = namesOf(createWorkerEnvCheck());
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const response = workerEnvFailureResponse(error);
+      expect(response.status).toBe(503);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      const body = await response.text();
+      expect(body).toContain("TURNSTILE_SITE_KEY");
+      expect(body).toContain("TURNSTILE_SECRET_KEY");
+      expect(body).not.toContain(PUBLIC_TURNSTILE_DUMMY_VALUES.TURNSTILE_SITE_KEY);
+      expect(body).not.toContain(PUBLIC_TURNSTILE_DUMMY_VALUES.TURNSTILE_SECRET_KEY);
+      expect(spy).toHaveBeenCalledWith(error.message);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  // tests/integration/wrangler.test.jsonc used to pin those dummy keys to
+  // SITE_URL on purpose. After the gate closes, that config must use
+  // non-dummy values or a non-production origin, or every workers test 503s.
+  it("does not pin dummy turnstile keys to the production origin in the integration Worker", () => {
+    const { rawConfig } = experimental_readRawConfig({ config: "tests/integration/wrangler.test.jsonc" });
+    expect(rawConfig.vars?.BETTER_AUTH_URL).toBe(SITE_URL);
+    expect(rawConfig.vars?.TURNSTILE_SITE_KEY).not.toBe(PUBLIC_TURNSTILE_DUMMY_VALUES.TURNSTILE_SITE_KEY);
+    expect(rawConfig.vars?.TURNSTILE_SECRET_KEY).not.toBe(PUBLIC_TURNSTILE_DUMMY_VALUES.TURNSTILE_SECRET_KEY);
   });
 
   it("checks once per isolate", () => {
