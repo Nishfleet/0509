@@ -263,7 +263,7 @@ export async function countUnsealedSlackTargets(db: D1Database): Promise<number>
   return row?.remaining ?? 0;
 }
 
-export async function countStuckSlackTargets(db: D1Database): Promise<number> {
+async function countStuckSlackTargets(db: D1Database): Promise<number> {
   const row = await db
     .prepare(COUNT_STUCK_SLACK_TARGETS)
     .bind(MAX_SEAL_ATTEMPTS, await currentKeyId())
