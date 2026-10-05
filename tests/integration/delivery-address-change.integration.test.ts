@@ -242,6 +242,29 @@ describe("change the workspace's email address (0509#4779)", () => {
     });
   });
 
+  it("(c4) an expired or unknown confirm token leaves the suppression and the target alone (0509#6998)", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    await suppress("gone@0509.io");
+    const rec = recorder();
+    await saveDeliveryAddress({
+      userId: USER_ID,
+      signInEmail: SIGN_IN_EMAIL,
+      email: bindingFor(rec),
+      address: "gone@0509.io",
+      resume: true,
+    });
+    await env.DB.prepare("UPDATE send_target SET verify_token_expires_at = ? WHERE workspace_id = ?")
+      .bind("2020-01-01T00:00:00.000Z", workspaceId)
+      .run();
+    const before = await allTargets(workspaceId);
+
+    await confirmDeliveryAddress(emailedToken(rec));
+    await confirmDeliveryAddress("f".repeat(64));
+
+    expect(await suppressionRow("gone@0509.io")).not.toBeNull();
+    expect(await allTargets(workspaceId)).toEqual(before);
+  });
+
   it("(d) rejects an address with no @", async () => {
     const result = await saveDeliveryAddress({
       userId: USER_ID,
