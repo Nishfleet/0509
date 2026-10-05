@@ -10,7 +10,7 @@ import {
 } from "../../app/lib/slack-target-crypto.server";
 
 const SECRET = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-const PREVIOUS = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=";
+const PREVIOUS = "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=";
 const OTHER_SECRET = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=";
 const HOOK = "https://hooks.slack.com/services/T0123ABC/B0456DEF/abcDEF123456";
 const WS = "ws-slack-crypto";
@@ -90,7 +90,7 @@ describe("Slack target AES-GCM", () => {
   });
 
   it("refuses a payload shorter than IV plus GCM tag", async () => {
-    await expect(decryptSlackWebhook("enc:v2:AAAAAAAAAAAAAAAA:AA", SECRET, WS)).rejects.toThrow(
+    await expect(decryptSlackWebhook(`enc:v2:${await slackTargetKeyId(SECRET)}:AA`, SECRET, WS)).rejects.toThrow(
       "Slack target could not be decrypted",
     );
   });
