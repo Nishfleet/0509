@@ -49,6 +49,15 @@ export async function startIdentityTail(params: IdentityTailParams): Promise<str
   return id;
 }
 
+export async function terminateIdentityTail(entityId: string): Promise<void> {
+  await env.IDENTITY_TAIL.get(identityTailInstanceId(entityId))
+    .then((instance) => instance.terminate())
+    .then(
+      () => undefined,
+      () => undefined,
+    );
+}
+
 export async function persistTail(params: IdentityTailParams): Promise<{ entityId: string }> {
   const entityId = await readSelfEntityId(params.workspaceId, params.entityId);
   if (entityId === null) {
@@ -71,6 +80,7 @@ export async function classifyTailPages(
   now: string,
   options: { archive?: boolean } = {},
 ): Promise<boolean> {
+  await persistTail(params);
   if (params.handle !== undefined || params.homepageUrl === null) return false;
   try {
     const page = await readHome(params, params.homepageUrl, {
@@ -170,6 +180,7 @@ function uniqueTargets(targets: readonly WatchTarget[]): WatchTarget[] {
 }
 
 export async function seedTailWatches(params: IdentityTailParams, discoveredAt: string): Promise<EntityWatch[]> {
+  await persistTail(params);
   const subject = subjectFor(params);
   const proof = subject === null ? { adLibraryHints: [], navLinks: [] } : await readCachedSiteProof(subject);
   const pricing = await readJudgedPricingUrl(params.entityId);

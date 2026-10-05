@@ -421,4 +421,34 @@ describe("delete my account", () => {
     });
     errors.mockRestore();
   });
+
+  it("stops in-flight identity-tail instances for every entity before the rows go", async () => {
+    const { cookie, userId } = await signIn();
+    const workspaceId = firstWorkspaceId(userId);
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at)
+       VALUES ('self-leaving', ?, 'self', 'own.example', 'Own', 'on', '2026-09-24T00:00:00Z'),
+              ('comp-leaving', ?, 'competitor', 'rival.example', 'Rival', 'on', '2026-09-24T00:00:00Z')`,
+    )
+      .bind(workspaceId, workspaceId)
+      .run();
+    const terminate = vi.fn(() => Promise.resolve());
+    const get = vi.spyOn(env.IDENTITY_TAIL, "get").mockResolvedValue({ terminate } as never);
+    const helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant"> = {
+      listUserGrants: async () => ({ items: [] }),
+      revokeGrant: async () => undefined,
+    };
+
+    try {
+      const deleted = await deleteAccount(helpers, settingsRequest(cookie), userId);
+      if (deleted === null) throw new Error("deleteAccount refused a fresh session");
+      expect(get.mock.calls.map((call) => call[0]).sort()).toEqual([
+        "identity-tail-comp-leaving",
+        "identity-tail-self-leaving",
+      ]);
+      expect(terminate).toHaveBeenCalledTimes(2);
+    } finally {
+      get.mockRestore();
+    }
+  });
 });

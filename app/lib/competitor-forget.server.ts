@@ -4,6 +4,7 @@ import type { AccountDeleteParams } from "./account-delete.server";
 import { deleteCompetitor, readCompetitor } from "./data/entity.server";
 import { dismissForgottenCompetitor } from "./data/suggestion.server";
 import { readEntityR2Prefixes } from "./data/watch.server";
+import { terminateIdentityTail } from "./identity/tail.server";
 
 type ForgetOutcome = "forgotten" | "mismatch" | "missing";
 
@@ -16,6 +17,7 @@ export async function forgetCompetitor(
   if (competitor === null) return "missing";
   if (typedName.trim().toLowerCase() !== competitor.name.trim().toLowerCase()) return "mismatch";
   const prefixes = await readEntityR2Prefixes(workspaceId, entityId);
+  await terminateIdentityTail(entityId);
   await env.DB.batch([
     dismissForgottenCompetitor({ workspaceId, entityId, now: new Date().toISOString() }),
     deleteCompetitor(workspaceId, entityId),

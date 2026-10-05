@@ -113,6 +113,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   Reflect.deleteProperty(env, "ACCOUNT_DELETE");
 });
 
@@ -234,5 +235,26 @@ describe("forgetCompetitor", () => {
     expect(await count("signal", "signal-self-a")).toBe(1);
     expect(await count("snapshot", "snapshot-self-a")).toBe(1);
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it("stops the identity-tail instance for the forgotten competitor", async () => {
+    const create = vi.fn(() => Promise.resolve({ id: "account-delete" }));
+    Reflect.set(env, "ACCOUNT_DELETE", { create });
+    const terminate = vi.fn(() => Promise.resolve());
+    vi.spyOn(env.IDENTITY_TAIL, "get").mockResolvedValue({ terminate } as never);
+
+    await expect(forgetCompetitor("workspace-a", "competitor-a", "Brand")).resolves.toBe("forgotten");
+
+    expect(env.IDENTITY_TAIL.get).toHaveBeenCalledWith("identity-tail-competitor-a");
+    expect(terminate).toHaveBeenCalledTimes(1);
+  });
+
+  it("still forgets the competitor when the identity-tail instance is already gone", async () => {
+    const create = vi.fn(() => Promise.resolve({ id: "account-delete" }));
+    Reflect.set(env, "ACCOUNT_DELETE", { create });
+    vi.spyOn(env.IDENTITY_TAIL, "get").mockRejectedValue(new Error("instance.not_found"));
+
+    await expect(forgetCompetitor("workspace-a", "competitor-a", "Brand")).resolves.toBe("forgotten");
+    expect(await count("entity", "competitor-a")).toBe(0);
   });
 });

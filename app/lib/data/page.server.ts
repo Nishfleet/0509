@@ -20,7 +20,7 @@ export interface JudgedPage {
 }
 
 const INSERT_PAGE = `INSERT INTO page (id, entity_id, url, role, discovered_at)
-VALUES (?1, ?2, ?3, ?4, ?5)
+SELECT ?1, ?2, ?3, ?4, ?5 WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
 ON CONFLICT (entity_id, url) DO NOTHING`;
 
 const UPSERT_JUDGED_PAGE = `INSERT INTO page (id, entity_id, url, title, role, role_decided_for_hash, discovered_at)
