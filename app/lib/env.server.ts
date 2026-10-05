@@ -107,6 +107,11 @@ function blank(value: unknown): unknown {
   return trimmed.length === 0 ? undefined : trimmed;
 }
 
+export function blankEnvString(value: unknown): string | null {
+  const trimmed = blank(value);
+  return typeof trimmed === "string" ? trimmed : null;
+}
+
 function pingUrl(name: "LIVENESS_PING_URL" | "SITE_SWEEP_PING_URL"): unknown {
   return blank(Reflect.get(env, name));
 }

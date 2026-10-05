@@ -2,6 +2,7 @@ import { createExecutionContext, env } from "cloudflare:test";
 import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { MENTIONS_SWEEP_CRON, SITE_SWEEP_CRON, sweepMonitor } from "../../app/lib/cadence";
 import type { MentionsSweep } from "../../workers/workflows/mentions";
 import type { OwnSiteCheck } from "../../workers/workflows/own-site-check";
 import type { SiteSweep } from "../../workers/workflows/site-sweep";
@@ -54,19 +55,9 @@ const makeWorkflow = <T extends object>(workflow: { prototype: T }): T => {
   return instance;
 };
 
-const SITE_MONITOR = {
-  schedule: { type: "crontab", value: "0 2 * * *" },
-  checkinMargin: 60,
-  maxRuntime: 120,
-  timezone: "UTC",
-} as const;
+const SITE_MONITOR = { ...sweepMonitor(SITE_SWEEP_CRON), timezone: "UTC" } as const;
 
-const MENTIONS_MONITOR = {
-  schedule: { type: "crontab", value: "0 1 * * *" },
-  checkinMargin: 60,
-  maxRuntime: 90,
-  timezone: "UTC",
-} as const;
+const MENTIONS_MONITOR = { ...sweepMonitor(MENTIONS_SWEEP_CRON), timezone: "UTC" } as const;
 
 const OWN_SITE_MONITOR = {
   schedule: { type: "crontab", value: "0 * * * *" },
@@ -103,7 +94,7 @@ describe("an instance started by a Workflow's own registered schedule", () => {
 });
 
 describe("workflow Sentry cron monitors", () => {
-  it("checks site-sweep in on its 02:00 UTC monitor and returns the zeroed sweep", async () => {
+  it("checks site-sweep in on its own registered monitor and returns the zeroed sweep", async () => {
     const outcome = await makeWorkflow(siteSweep).run(event, immediateStep);
     expect(checkInMock.mock.calls).toEqual([
       [{ monitorSlug: "site-sweep", status: "in_progress" }, SITE_MONITOR],
@@ -121,7 +112,7 @@ describe("workflow Sentry cron monitors", () => {
     });
   });
 
-  it("checks mentions-sweep in on its 01:00 UTC monitor and returns the zeroed sweep", async () => {
+  it("checks mentions-sweep in on its own registered monitor and returns the zeroed sweep", async () => {
     await env.DB.exec("UPDATE source SET canary_query = NULL");
     const outcome = await makeWorkflow(mentionsSweep).run(event, immediateStep);
     expect(checkInMock.mock.calls).toEqual([
