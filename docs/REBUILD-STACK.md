@@ -1161,7 +1161,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 ## 9. Every package.json dependency
 
 The table moved to [`docs/dependencies.md`](dependencies.md) on 2026-10-05
-(0509#7017), with `tests/stack-dependencies.test.ts` and the CLAUDE.md and README
+(0509#7017), with `tests/stack-dependencies.test.ts` and the AGENTS.md and README
 pointers. Sections 1-8 above stay until #7018 archives the probe notes that no
 code reads; they are research, not the allowlist.
 

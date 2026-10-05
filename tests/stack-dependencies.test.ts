@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-// CLAUDE.md: "Adding a dependency that is not in that file is a rejection."
+// AGENTS.md: "Adding a dependency that is not in that file is a rejection."
 // A reviewer enforced it until Nish 2026-09-28 16:47Z asked for the lean-code
 // rules as hard blocks (0509#5783). Every dependency, of every kind, in every
 // package.json the repo tracks needs its own approving row in
