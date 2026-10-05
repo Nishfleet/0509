@@ -1,13 +1,12 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
-import { withMonitor } from "@sentry/cloudflare";
-
 import { readCanarySources } from "../../app/lib/data/source.server";
 import { runCanary } from "../mentions/canary";
 import type { TargetOutcome } from "../mentions/sweep";
 import { planTargets, sweepTarget } from "../mentions/sweep";
 import { isNativeSchedule } from "../workflow-crons";
+import { withStepCheckIn } from "../workflow-monitor";
 
 const RETRY: WorkflowStepConfig = {
   retries: { limit: 2, delay: "10 seconds", backoff: "exponential" },
@@ -16,6 +15,7 @@ const RETRY: WorkflowStepConfig = {
 const MONITOR = {
   schedule: { type: "crontab", value: "0 1 * * *" },
   checkinMargin: 60,
+  maxRuntime: 90,
   timezone: "UTC",
 } as const;
 
@@ -31,7 +31,7 @@ export interface MentionsOutcome {
 export class MentionsSweep extends WorkflowEntrypoint<Env> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<MentionsOutcome | null> {
     if (isNativeSchedule(event)) return null;
-    return withMonitor("mentions-sweep", () => this.runMentions(event, step), MONITOR);
+    return withStepCheckIn(step, { slug: "mentions-sweep", config: MONITOR }, () => this.runMentions(event, step));
   }
 
   private async runMentions(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<MentionsOutcome> {

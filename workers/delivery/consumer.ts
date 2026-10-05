@@ -1,4 +1,5 @@
 import { markDigestSentStatement } from "../../app/lib/data/digest.server";
+import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
 import { claimIncidentNotice } from "../../app/lib/data/incident_notice.server";
 import {
   claimChangeSlot,
@@ -171,13 +172,6 @@ async function noTarget(
   return { outcome: "no_target", attempt_id: null, idempotency_key: null };
 }
 
-async function isSuppressed(env: Env, address: string): Promise<boolean> {
-  const row = await env.DB.prepare(`SELECT address FROM email_suppression WHERE address = ?`)
-    .bind(address)
-    .first<{ address: string }>();
-  return row !== null;
-}
-
 function newUnsubscribeToken(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
@@ -259,7 +253,7 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
     return noTarget(env, digest.workspace_id, { digest_id: digest.id });
   }
 
-  if (await isSuppressed(env, target.target_value)) {
+  if (await isAddressSuppressed(target.target_value, env.DB)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
 
@@ -373,7 +367,7 @@ export async function deliverIncident(env: Env, message: IncidentMessage): Promi
     return noTarget(env, incident.workspace_id, { incident_id: incident.id });
   }
 
-  if (await isSuppressed(env, target.target_value)) {
+  if (await isAddressSuppressed(target.target_value, env.DB)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
 
@@ -557,7 +551,7 @@ async function emailChange(
   if (!target) {
     return noTarget(env, change.workspace_id, { signal_id: change.id });
   }
-  if (await isSuppressed(env, target.target_value)) {
+  if (await isAddressSuppressed(target.target_value, env.DB)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
   return sendChange(env, { change, payload, target });

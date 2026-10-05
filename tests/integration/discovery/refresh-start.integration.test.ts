@@ -77,6 +77,6 @@ describe("startWeeklyRefresh", () => {
 
 describe("WEEKLY_REFRESH_CRON", () => {
   it("is the Monday 04:00 UTC cron", () => {
-    expect(WEEKLY_REFRESH_CRON).toBe("0 4 * * 1");
+    expect(WEEKLY_REFRESH_CRON).toBe("0 4 * * MON");
   });
 });

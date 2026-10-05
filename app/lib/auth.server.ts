@@ -1,3 +1,4 @@
+import { createCookie } from "react-router";
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { captcha, magicLink } from "better-auth/plugins";
@@ -44,12 +45,13 @@ const EMAIL_CHANGE_TTL_SECONDS = 60 * 60;
 const SESSION_COOKIE_CACHE_SECONDS = 5 * 60;
 const FRESH = { disableCookieCache: true };
 const SESSION_COOKIE = `${COOKIE_PREFIX}.session_token`;
-const sessionCookieNames = new Set([SESSION_COOKIE, `__Secure-${SESSION_COOKIE}`]);
+const sessionCookies = [SESSION_COOKIE, `__Secure-${SESSION_COOKIE}`].map((name) => createCookie(name));
 
-export function hasSessionCookie(request: Request) {
+export async function hasSessionCookie(request: Request) {
   const header = request.headers.get("cookie");
   if (!header) return false;
-  return header.split(";").some((part) => sessionCookieNames.has(part.trim().split("=")[0] ?? ""));
+  const parsed = await Promise.all(sessionCookies.map((cookie) => cookie.parse(header)));
+  return parsed.some((value) => value !== null);
 }
 
 function sendChangeEmailMessage(

@@ -188,7 +188,7 @@ function KeyRow({ apiKey }: { apiKey: AgentKey }) {
   const deleting =
     navigation.state !== "idle" &&
     navigation.formData?.get("intent") === "revoke-key" &&
-    navigation.formData.get("id") === apiKey.id;
+    navigation.formData?.get("id") === apiKey.id;
   return (
     <li data-testid="api-key" className={ROW}>
       <p className="min-w-0">

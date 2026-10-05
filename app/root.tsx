@@ -56,9 +56,9 @@ export default function App() {
   return <Outlet />;
 }
 
-export function loader({ request }: Route.LoaderArgs) {
+export async function loader({ request }: Route.LoaderArgs) {
   return {
-    signedIn: hasSessionCookie(request),
+    signedIn: await hasSessionCookie(request),
     pathname: new URL(request.url).pathname,
   };
 }

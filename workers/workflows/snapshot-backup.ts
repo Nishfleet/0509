@@ -1,10 +1,9 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
-import { withMonitor } from "@sentry/cloudflare";
-
 import { copyMissingPage } from "../../app/lib/snapshot-backup.server";
 import { isNativeSchedule } from "../workflow-crons";
+import { withStepCheckIn } from "../workflow-monitor";
 
 const RETRY: WorkflowStepConfig = {
   retries: { limit: 5, delay: "30 seconds", backoff: "exponential" },
@@ -14,6 +13,7 @@ const RETRY: WorkflowStepConfig = {
 const MONITOR = {
   schedule: { type: "crontab", value: "0 5 * * *" },
   checkinMargin: 60,
+  maxRuntime: 60,
   timezone: "UTC",
 } as const;
 
@@ -41,14 +41,10 @@ async function copyPages(
 export class SnapshotBackup extends WorkflowEntrypoint<Env> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<BackupTotals | null> {
     if (isNativeSchedule(event)) return null;
-    return withMonitor(
-      "snapshot-backup",
-      async () => {
-        const totals = await copyPages(step, { page: 0, cursor: null }, { listed: 0, copied: 0, present: 0 });
-        console.log(JSON.stringify({ event: "snapshot.backup", ...totals }));
-        return totals;
-      },
-      MONITOR,
-    );
+    return withStepCheckIn(step, { slug: "snapshot-backup", config: MONITOR }, async () => {
+      const totals = await copyPages(step, { page: 0, cursor: null }, { listed: 0, copied: 0, present: 0 });
+      console.log(JSON.stringify({ event: "snapshot.backup", ...totals }));
+      return totals;
+    });
   }
 }

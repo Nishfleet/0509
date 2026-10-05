@@ -1,3 +1,4 @@
+import { createCookie } from "react-router";
 import { createRemoteJWKSet, errors, jwtVerify, type JWTPayload } from "jose";
 
 const ASSERTION_HEADER = "cf-access-jwt-assertion";
@@ -52,19 +53,25 @@ async function denialReason(assertion: string, config: { iss: string; aud: strin
   return null;
 }
 
-function assertionFromCookie(header: string | null): string | null {
+const assertionCookie = createCookie(ASSERTION_COOKIE);
+
+async function assertionFromCookie(header: string | null): Promise<string | null> {
   if (!header) return null;
-  for (const part of header.split(";")) {
-    const [name, ...rest] = part.trim().split("=");
-    if (name === ASSERTION_COOKIE) return rest.join("=") || null;
-  }
-  return null;
+  let raw: string | null = null;
+  await assertionCookie.parse(header, {
+    filter: (name) => name === ASSERTION_COOKIE,
+    decode: (value) => {
+      raw = value || null;
+      return value;
+    },
+  });
+  return raw;
 }
 
 export async function accessPrecleared(request: Request, env: AccessPreclearanceEnv): Promise<boolean> {
   const iss = env.ACCESS_TEAM_DOMAIN?.trim();
   const aud = env.ACCESS_AUD?.trim();
-  const assertion = request.headers.get(ASSERTION_HEADER) ?? assertionFromCookie(request.headers.get("cookie"));
+  const assertion = request.headers.get(ASSERTION_HEADER) ?? (await assertionFromCookie(request.headers.get("cookie")));
   if (!iss || !aud || !assertion) return false;
   try {
     const reason = await denialReason(assertion, { iss, aud });
