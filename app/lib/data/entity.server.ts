@@ -100,9 +100,9 @@ function displayName(name: string | null, domain: string): string {
 }
 
 export async function readCompetitor(workspaceId: string, entityId: string): Promise<CompetitorEntity | null> {
-  const row = readCompetitorRow.nullable().parse(
-    await env.DB.prepare(SELECT_COMPETITOR).bind(entityId, workspaceId).first(),
-  );
+  const row = readCompetitorRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_COMPETITOR).bind(entityId, workspaceId).first());
   if (row === null) return null;
   return {
     id: row.id,
@@ -345,9 +345,9 @@ interface DiscoverableWorkspace {
 }
 
 export async function readDiscoverableWorkspaces(): Promise<DiscoverableWorkspace[]> {
-  const rows = z.array(readDiscoverableWorkspacesRow).parse(
-    (await env.DB.prepare(SELECT_DISCOVERABLE_WORKSPACES).all()).results,
-  );
+  const rows = z
+    .array(readDiscoverableWorkspacesRow)
+    .parse((await env.DB.prepare(SELECT_DISCOVERABLE_WORKSPACES).all()).results);
   return rows.map((row) => ({
     workspaceId: row.workspace_id,
     createdAt: row.created_at,
@@ -368,12 +368,15 @@ const refreshRow = z.object({
 
 export async function readRefreshTargets(workspaceId: string): Promise<RefreshTarget[]> {
   const { results } = await env.DB.prepare(SELECT_REFRESH_TARGETS).bind(workspaceId).all();
-  return z.array(refreshRow).parse(results).map((row) => ({
-    entityId: row.id,
-    name: displayName(row.name, row.domain),
-    domain: row.domain,
-    origin: row.origin,
-  }));
+  return z
+    .array(refreshRow)
+    .parse(results)
+    .map((row) => ({
+      entityId: row.id,
+      name: displayName(row.name, row.domain),
+      domain: row.domain,
+      origin: row.origin,
+    }));
 }
 
 const INSERT_MANUAL_COMPETITOR =
@@ -406,7 +409,9 @@ export async function addManualCompetitor(input: {
     shouldRetryD1,
   );
   if (result.meta.changes === 1) return "added";
-  const count = countRow.nullable().parse(await env.DB.prepare(COUNT_OTHER_ON).bind(input.workspaceId, input.domain).first());
+  const count = countRow
+    .nullable()
+    .parse(await env.DB.prepare(COUNT_OTHER_ON).bind(input.workspaceId, input.domain).first());
   if (count !== null && count.n >= input.cap) return "at_cap";
   return "added";
 }
@@ -505,22 +510,28 @@ export async function readCompetitors(
     env.DB.prepare(SELECT_RETIRE_QUESTIONS).bind(workspaceId).all(),
   ]);
   return {
-    competitors: z.array(competitorDbRow).parse(rows.results).map((row) => ({
-      entityId: row.entity_id,
-      name: displayName(row.name, row.domain),
-      domain: row.domain,
-      state: row.state,
-      stateChangedAt: row.state_changed_at,
-      reason: row.reason,
-    })),
+    competitors: z
+      .array(competitorDbRow)
+      .parse(rows.results)
+      .map((row) => ({
+        entityId: row.entity_id,
+        name: displayName(row.name, row.domain),
+        domain: row.domain,
+        state: row.state,
+        stateChangedAt: row.state_changed_at,
+        reason: row.reason,
+      })),
     maybes,
-    questions: z.array(retireQuestionRow).parse(questions.results).map((row) => ({
-      suggestionId: row.suggestion_id,
-      entityId: row.entity_id,
-      name: displayName(row.name, row.domain),
-      domain: row.domain,
-      reason: row.reason,
-    })),
+    questions: z
+      .array(retireQuestionRow)
+      .parse(questions.results)
+      .map((row) => ({
+        suggestionId: row.suggestion_id,
+        entityId: row.entity_id,
+        name: displayName(row.name, row.domain),
+        domain: row.domain,
+        reason: row.reason,
+      })),
   };
 }
 
@@ -567,7 +578,7 @@ export async function markSelfSiteFill(workspaceId: string, entityId: string, st
 const READ_SELF_SITE_FILL =
   "SELECT json_extract(identity_json, '$.siteFill') AS site_fill FROM entity WHERE workspace_id = ?1 AND role = 'self'";
 
-const siteFillRow = z.object({ site_fill: z.string().nullable() });
+const siteFillRow = z.object({ site_fill: z.string().nullable().catch(null) });
 
 export async function readSelfSiteFill(workspaceId: string): Promise<SiteFillState | null> {
   const row = siteFillRow.nullable().parse(await env.DB.prepare(READ_SELF_SITE_FILL).bind(workspaceId).first());

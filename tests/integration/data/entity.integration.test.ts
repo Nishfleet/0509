@@ -58,11 +58,7 @@ describe("entity data layer row parsing", () => {
       expect(await readEntityDomain(otherWorkspaceId, `entity-domain-${suffix}`)).toBeNull();
       expect(await readEntityDomain(workspaceId, `entity-domain-missing-${suffix}`)).toBeNull();
     } finally {
-      await cleanup(
-        [`entity-domain-${suffix}`],
-        [workspaceId, otherWorkspaceId],
-        [userId, otherUserId],
-      );
+      await cleanup([`entity-domain-${suffix}`], [workspaceId, otherWorkspaceId], [userId, otherUserId]);
     }
   });
 
@@ -107,7 +103,12 @@ describe("entity data layer row parsing", () => {
       domain: "off.example",
       state: "off",
     });
-    await insertEntity({ id: `entity-count-other-${suffix}`, workspaceId: otherWorkspaceId, role: "competitor", domain: "c.example" });
+    await insertEntity({
+      id: `entity-count-other-${suffix}`,
+      workspaceId: otherWorkspaceId,
+      role: "competitor",
+      domain: "c.example",
+    });
 
     try {
       expect(await countOtherOnCompetitors(workspaceId, "a.example")).toBe(1);
