@@ -3,13 +3,21 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("cloudflare:workers", () => ({ env: {} }));
 
+const sessionMocks = vi.hoisted(() => ({
+  requireSessionMiddleware: () => Promise.resolve(),
+}));
+
 import { onboardedContext, requireOnboarded } from "../app/lib/require-onboarded.server";
 import routes from "../app/routes";
 import AppLayout, { middleware } from "../app/routes/app-layout";
 import AppSettingsLayout, * as appSettingsLayout from "../app/routes/app-settings-layout";
+import * as appSessionLayout from "../app/routes/app-session-layout";
 
 vi.mock("../app/lib/require-session.server", () => ({
   requireSession: async () => ({ user: { id: "user-1" } }),
+  requireFreshSession: async () => ({ user: { id: "user-1" } }),
+  sessionForRequest: async () => ({ user: { id: "user-1" } }),
+  requireSessionMiddleware: sessionMocks.requireSessionMiddleware,
   signOutToLogin: async () => {
     throw new Response(null, { status: 302, headers: { Location: "/login" } });
   },
@@ -101,9 +109,16 @@ describe("app layout middleware", () => {
     ]);
   });
 
-  it("leaves the /app/settings routes ungated, so account delete is always reachable", () => {
+  it("gates the /app/settings routes with session-only middleware, so account delete stays reachable", () => {
     expect(childPathsOf("routes/app-settings-layout.tsx")).toEqual(SETTINGS_PATHS);
-    expect("middleware" in appSettingsLayout).toBe(false);
+    expect(appSettingsLayout.middleware).toEqual([sessionMocks.requireSessionMiddleware]);
+    expect(appSettingsLayout.middleware).not.toContain(requireOnboarded);
     expect(AppSettingsLayout().type).toBe(AppLayout().type);
+  });
+
+  it("gates share.png and logos with session-only middleware, not the onboarding gate", () => {
+    expect(childPathsOf("routes/app-session-layout.tsx")).toEqual(["app/share.png", "app/logos/:entityId"]);
+    expect(appSessionLayout.middleware).toEqual([sessionMocks.requireSessionMiddleware]);
+    expect(appSessionLayout.middleware).not.toContain(requireOnboarded);
   });
 });

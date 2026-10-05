@@ -1,5 +1,6 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { RouterContextProvider } from "react-router";
 
 import checkoutSession from "../fixtures/dodo/checkout-session-created.json";
 
@@ -7,12 +8,9 @@ const session = vi.hoisted(() => ({
   user: { id: "user-tester", email: "Tester@Example.com", emailVerified: true },
 }));
 
-vi.mock("../../app/lib/require-session.server", () => ({
-  requireFreshSession: async () => session,
-}));
-
 import { checkoutProof } from "../../app/lib/billing/checkout-proof.server";
 import { planIdForProduct } from "../../app/lib/billing/products.server";
+import { onboardedContext } from "../../app/lib/require-onboarded.server";
 import { loader } from "../../app/routes/app.tester";
 
 async function seedOwner(id: string, email: string): Promise<void> {
@@ -30,9 +28,11 @@ async function seedOwner(id: string, email: string): Promise<void> {
     .run();
 }
 
-function testerRequest(): Parameters<typeof loader>[0] {
+function testerRequest(workspaceId: string | null = `ws-${session.user.id}`): Parameters<typeof loader>[0] {
   const request = new Request("https://0509.io/app/tester");
-  return { request, params: {}, context: {} } as unknown as Parameters<typeof loader>[0];
+  const context = new RouterContextProvider();
+  context.set(onboardedContext, { session, workspaceId } as never);
+  return { request, params: {}, context } as unknown as Parameters<typeof loader>[0];
 }
 
 afterEach(() => {
@@ -84,7 +84,7 @@ describe("tester checkout", () => {
     await env.DB.prepare("DELETE FROM workspace WHERE owner_user_id = 'user-no-workspace'").run();
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
-    await expect(loader(testerRequest())).rejects.toMatchObject({ status: 404 });
+    await expect(loader(testerRequest(null))).rejects.toMatchObject({ status: 404 });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

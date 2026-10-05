@@ -26,6 +26,57 @@ function topLevel(entries: RouteConfigEntry[]): RouteConfigEntry[] {
   return entries.flatMap((entry) => (entry.path === undefined && entry.children ? topLevel(entry.children) : [entry]));
 }
 
+const SESSION_LAYOUT_FILES = new Set([
+  "routes/app-layout.tsx",
+  "routes/app-settings-layout.tsx",
+  "routes/app-session-layout.tsx",
+]);
+
+const SESSION_GATE_ALLOWLIST = new Set([
+  "/login",
+  "/api/health",
+  "/api/docs",
+  "/design/landing",
+  "/onboarding",
+  "/onboarding/competitors",
+  "/onboarding/identity",
+  "/oauth/authorize",
+  "/app/changes/:signalId/:side",
+]);
+
+function isSessionExempt(urlPath: string) {
+  return (
+    urlPath === "/u" ||
+    urlPath.startsWith("/u/") ||
+    urlPath === "/v" ||
+    urlPath.startsWith("/v/") ||
+    urlPath === "/api/auth" ||
+    urlPath.startsWith("/api/auth/") ||
+    urlPath === "/api/webhooks" ||
+    urlPath.startsWith("/api/webhooks/") ||
+    urlPath === "/api/v1" ||
+    urlPath.startsWith("/api/v1/")
+  );
+}
+
+function unguardedDisallowed(entries: RouteConfigEntry[], layouts: readonly string[] = []): string[] {
+  const missing: string[] = [];
+  for (const entry of entries) {
+    const nextLayouts =
+      entry.path === undefined && entry.file !== undefined && entry.children !== undefined
+        ? [...layouts, entry.file]
+        : layouts;
+    if (entry.children !== undefined) {
+      missing.push(...unguardedDisallowed(entry.children, nextLayouts));
+    }
+    if (entry.path === undefined || entry.path === "*") continue;
+    const urlPath = `/${entry.path}`;
+    if (!isDisallowed(urlPath) || isSessionExempt(urlPath) || SESSION_GATE_ALLOWLIST.has(urlPath)) continue;
+    if (!nextLayouts.some((file) => SESSION_LAYOUT_FILES.has(file))) missing.push(urlPath);
+  }
+  return missing;
+}
+
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const isDisallowed = (urlPath: string) =>
@@ -82,6 +133,10 @@ describe("public-route manifest", () => {
         isDisallowed(urlPath);
       expect(classified, `route "${path}" is not classified in app/lib/public-routes.ts`).toBe(true);
     }
+  });
+
+  it("puts every private disallowed route under a session layout or an explicit allowlist", () => {
+    expect(unguardedDisallowed(routes)).toEqual([]);
   });
 
   it("sitemap.xml dates the legal pages by their last update and leaves other urls undated", () => {
