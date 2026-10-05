@@ -140,4 +140,60 @@ describe("rescheduling the standing rollover (0509#5156)", () => {
     expect(workflow.createBatch).toHaveBeenCalledWith([fresh]);
     expect(result).toEqual({ cancelledId: stale.id, createdId: fresh.id });
   });
+
+  describe("brief-day changes send exactly one brief that week (0509#7075)", () => {
+    const monday8: BriefSchedule = { timezone: "UTC", weekday: 1, hour: 8 };
+    const run = async (input: { previous: BriefSchedule; next: BriefSchedule; now: string; last: string | null }) => {
+      const workflow = fakeWorkflow(() => Promise.resolve({ terminate: vi.fn(() => Promise.resolve()) }));
+      await rescheduleRollover(workflow, {
+        workspaceId: WS,
+        previous: input.previous,
+        next: input.next,
+        now: new Date(input.now),
+        lastBriefPeriodEnd: input.last === null ? null : new Date(input.last),
+      });
+      const [batch] = workflow.createBatch.mock.calls[0];
+      return batch.map((instance: RolloverInstance) => instance.params.closesAt);
+    };
+
+    it("moving the hour later after the brief went out does not send a second one", async () => {
+      const closes = await run({
+        previous: monday8,
+        next: { ...monday8, hour: 9 },
+        now: "2026-10-05T08:30:00Z",
+        last: "2026-10-05T08:00:00Z",
+      });
+      expect(closes).toEqual(["2026-10-12T09:00:00.000Z"]);
+    });
+
+    it("moving the hour earlier before the slot catches up instead of skipping to the next week", async () => {
+      const closes = await run({
+        previous: monday8,
+        next: { ...monday8, hour: 6 },
+        now: "2026-10-05T07:30:00Z",
+        last: "2026-09-28T08:00:00Z",
+      });
+      expect(closes).toEqual(["2026-10-12T06:00:00.000Z", "2026-10-05T06:00:00.000Z"]);
+    });
+
+    it("the device-zone change on Monday after the new slot passed still sends this week", async () => {
+      const closes = await run({
+        previous: monday8,
+        next: { timezone: "Asia/Calcutta", weekday: 1, hour: 8 },
+        now: "2026-10-05T04:00:00Z",
+        last: "2026-09-28T08:00:00Z",
+      });
+      expect(closes).toEqual(["2026-10-12T02:30:00.000Z", "2026-10-05T02:30:00.000Z"]);
+    });
+
+    it("a zone captured on Sunday moves the Monday brief with no catch-up", async () => {
+      const closes = await run({
+        previous: monday8,
+        next: { timezone: "Asia/Calcutta", weekday: 1, hour: 8 },
+        now: "2026-10-11T10:00:00Z",
+        last: "2026-10-05T02:30:00Z",
+      });
+      expect(closes).toEqual(["2026-10-12T02:30:00.000Z"]);
+    });
+  });
 });

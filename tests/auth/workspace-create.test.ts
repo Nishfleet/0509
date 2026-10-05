@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("cloudflare:workers", () => ({ env: {} }));
 
+const reschedule = vi.hoisted(() => vi.fn(() => Promise.resolve({ cancelledId: null, createdId: null })));
+vi.mock("../../app/lib/standing/reschedule.server", () => ({ rescheduleBriefSchedule: reschedule }));
+
 import { timezoneCookie, timezoneCookieValue } from "../../app/lib/timezone";
 import {
   ensureWorkspace,
@@ -159,6 +162,27 @@ describe("ensureWorkspace", () => {
     });
     expect(kept.timezone).toBe("Asia/Kolkata");
     expect(countOf(database, "SELECT count(*) AS n FROM workspace")).toBe(1);
+  });
+
+  it("reschedules the rollover once when the captured zone changes the schedule (0509#7075)", async () => {
+    const database = openDb();
+    seedUser(database, "user-1", "ada@example.com");
+    const db = asWorkspaceDb(database);
+    reschedule.mockClear();
+    const input = { userId: "user-1", email: "ada@example.com", now: "2026-10-11T10:00:00.000Z" };
+    await ensureWorkspace(db, { ...input, timezone: null });
+    await ensureWorkspace(db, { ...input, timezone: "UTC" });
+    expect(reschedule).not.toHaveBeenCalled();
+
+    await ensureWorkspace(db, { ...input, timezone: "Asia/Kolkata" });
+    await ensureWorkspace(db, { ...input, timezone: "Europe/London" });
+
+    expect(reschedule).toHaveBeenCalledTimes(1);
+    expect(reschedule).toHaveBeenCalledWith(
+      firstWorkspaceId("user-1"),
+      { timezone: "UTC", weekday: 1, hour: 8 },
+      { timezone: "Asia/Kolkata", weekday: 1, hour: 8 },
+    );
   });
 
   it("a concurrent second request does not create a second workspace", async () => {

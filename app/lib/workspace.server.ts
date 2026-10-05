@@ -5,6 +5,7 @@ import { ensureOwnerEmailTarget } from "./data/send_target.server";
 import { isPerRunFixtureEmail } from "./fixture-accounts";
 import { fillWorkspaceTimezone, insertWorkspace } from "./data/workspace.server";
 import type { WorkspaceDb } from "./data/workspace.server";
+import { rescheduleBriefSchedule } from "./standing/reschedule.server";
 import { subjectRedirect } from "./onboarding-subject";
 import { canonicalTimezone, timezoneCookieValue } from "./timezone";
 
@@ -42,6 +43,8 @@ async function readWorkspace(db: WorkspaceDb, userId: string): Promise<Workspace
 async function withCapturedTimezone(db: WorkspaceDb, row: WorkspaceRow, timezone: string): Promise<WorkspaceRow> {
   if (row.timezone !== "UTC" || timezone === "UTC") return row;
   await fillWorkspaceTimezone(db, row.id, timezone);
+  const schedule = { weekday: row.brief_weekday, hour: row.brief_hour };
+  await rescheduleBriefSchedule(row.id, { ...schedule, timezone: row.timezone }, { ...schedule, timezone });
   return { ...row, timezone };
 }
 
