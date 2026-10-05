@@ -252,7 +252,10 @@ describe("parseFeed on hostile input", () => {
   ])("returns without throwing on 2 MiB of %s", (_label, unit) => {
     const filler = unit.repeat(Math.floor((2 * 1024 * 1024) / unit.length));
 
-    for (const xml of [rss(filler), rss(`<item><title>Real post</title><link>https://rival.com/a</link>${filler}</item>`)]) {
+    for (const xml of [
+      rss(filler),
+      rss(`<item><title>Real post</title><link>https://rival.com/a</link>${filler}</item>`),
+    ]) {
       expect(() => parseFeed(xml, BASE, { now: NOW })).not.toThrow();
     }
   });
@@ -281,7 +284,8 @@ describe("parseFeed on hostile input", () => {
   it("does not follow a billion-laughs chain and treats numeric entities safely", () => {
     const laughs = Array.from(
       { length: 9 },
-      (_unused, index) => `<!ENTITY lol${String(index + 1)} "&lol${String(index)};&lol${String(index)};&lol${String(index)};">`,
+      (_unused, index) =>
+        `<!ENTITY lol${String(index + 1)} "&lol${String(index)};&lol${String(index)};&lol${String(index)};">`,
     ).join("");
     const xml = `<?xml version="1.0"?><!DOCTYPE rss [<!ENTITY lol0 "lol">${laughs}]><rss><channel>
       <item><title>&lol9; &#x110000; &#0; ok</title><link>https://rival.com/y</link></item></channel></rss>`;

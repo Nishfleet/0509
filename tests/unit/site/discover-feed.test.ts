@@ -127,10 +127,7 @@ describe("feedCandidates", () => {
     // The declared feed goes through the same https only guard: a site that
     // serves its whole page over plain http contributes no https candidate.
     expect(
-      await feedCandidates(
-        `<link rel="alternate" type="application/rss+xml" href="/feed.xml">`,
-        "http://rival.com/",
-      ),
+      await feedCandidates(`<link rel="alternate" type="application/rss+xml" href="/feed.xml">`, "http://rival.com/"),
     ).toEqual([]);
     expect(await feedCandidates(null, HOME)).toEqual(COMMON_FEED_PATHS.map((path) => new URL(path, HOME).href));
   });

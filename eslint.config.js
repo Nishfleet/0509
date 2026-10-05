@@ -781,7 +781,15 @@ export default tseslint.config(
     // extractor does not surface it.
     files: ["app/lib/feeds/**"],
     rules: {
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, HAND_ROLLED_FEED_TAG_SCAN, HAND_ROLLED_TAG_READER],
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX,
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+        HAND_ROLLED_FEED_TAG_SCAN,
+        HAND_ROLLED_TAG_READER,
+      ],
     },
   },
 

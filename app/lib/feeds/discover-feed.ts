@@ -25,11 +25,6 @@ function httpsHref(href: string, base: string): string | null {
   return url.protocol === "https:" ? url.href : null;
 }
 
-// HTMLRewriter hands back the attribute value with its character references
-// still encoded, so a feed declared as href="/odd.xml?a=1&amp;b=2" would be
-// fetched with a literal "&amp;" in the query. Decode the five references an
-// attribute value can legally carry, and nothing else: an unrecognised
-// reference is left as written rather than guessed at.
 const ATTRIBUTE_REFERENCES: ReadonlyMap<string, string> = new Map([
   ["&amp;", "&"],
   ["&lt;", "<"],
@@ -52,11 +47,6 @@ function pushDeclared(state: DeclaredFeeds, href: string, base: string): void {
   if (resolved !== null) state.found.push(resolved);
 }
 
-// The one HTML link reader, HTMLRewriter's own `link` handler: the same
-// paved path app/lib/identity/extract.ts uses for link[rel]. The selector
-// carries rel=alternate and a type attribute, so stylesheets, canonicals and
-// JSON feeds never reach the handler, and a case-folded or entity-encoded
-// attribute arrives already decoded.
 function alternateLinkHandler(state: DeclaredFeeds, base: string): HTMLRewriterElementContentHandlers {
   return {
     element(element) {
