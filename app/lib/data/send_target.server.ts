@@ -39,6 +39,9 @@ WHERE workspace_id = ?
 const CONFIRM_EMAIL_TARGET_BY_TOKEN = `UPDATE send_target SET is_verified = 1, verify_token = NULL, verify_token_expires_at = NULL
 WHERE verify_token = ? AND verify_token_expires_at > ?`;
 
+const SELECT_EMAIL_TARGET_BY_TOKEN = `SELECT target_value FROM send_target
+WHERE verify_token = ? AND verify_token_expires_at > ?`;
+
 const INSERT_OWNER_EMAIL_TARGET = `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at)
 SELECT 'st-email-' || w.id, w.id, c.id, u.email, u.emailVerified, ?
   FROM workspace w
@@ -91,6 +94,18 @@ export async function markEmailTargetVerified(db: TargetDb, input: { workspaceId
 
 export async function changeEmailTarget(db: TargetDb, input: { workspaceId: string; address: string }): Promise<void> {
   await db.prepare(CHANGE_EMAIL_TARGET).bind(input.address, input.workspaceId, input.address).run();
+}
+
+export async function readEmailTargetByToken(
+  db: TargetDb,
+  input: { token: string; now: string },
+): Promise<string | null> {
+  const tokenHash = await sha256Hex(input.token);
+  const row = await db
+    .prepare(SELECT_EMAIL_TARGET_BY_TOKEN)
+    .bind(tokenHash, input.now)
+    .first<{ target_value: string }>();
+  return row?.target_value ?? null;
 }
 
 export async function confirmEmailTargetByToken(db: TargetDb, input: { token: string; now: string }): Promise<void> {
