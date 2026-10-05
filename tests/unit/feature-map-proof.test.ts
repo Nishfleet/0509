@@ -65,7 +65,11 @@ describe("feature map proof coverage", () => {
     const duplicates: string[] = [];
     map.split("\n").forEach((line, index) => {
       if (!line.startsWith("|")) return;
-      const cells = line.replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
+      const cells = line
+        .replace(/^\|/, "")
+        .replace(/\|$/, "")
+        .split("|")
+        .map((cell) => cell.trim());
       if (cells.length < 2 || !cells[0].startsWith("`")) return;
       const key = `${cells[0]}\t${cells[1]}`;
       const first = seen.get(key);
