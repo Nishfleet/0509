@@ -98,14 +98,22 @@ jobs:
         # 545 s of the 17 min PR run 36432985831 was the full suite (#5849).
         if: github.event_name == 'pull_request'
         run: npx vitest run --changed HEAD^1 --passWithNoTests
-      - name: Feature map names every e2e spec
-        # `vitest --changed` selects tests through the import graph, and this
-        # test reads e2e/ and the map from disk — a spec added without a map
-        # edit touches no file it imports, so it is never selected and the
-        # drift would reach the queue unseen (#6133). The merge_group
-        # `npm test` below already runs it inside the full suite.
+      - name: Detectors that read repo files from disk
+        # `vitest --changed` selects tests through the import graph. These
+        # tests read e2e/, .github/workflows/, app/routes/ and the feature map
+        # as text, so a change there touches no file they import and they are
+        # never selected; the drift would first fail in the merge queue (#6133,
+        # #7007). A forceRerunTriggers glob on e2e/** would rerun the whole
+        # suite for every spec-only PR (#5849), so they run here by name.
         if: github.event_name == 'pull_request'
-        run: npx vitest run tests/unit/feature-map-proof.test.ts
+        run: >-
+          npx vitest run
+          tests/unit/feature-map-proof.test.ts
+          tests/unit/e2e-fixture-cleanup.test.ts
+          tests/unit/e2e-session-seeder.test.ts
+          tests/unit/route-titles.test.ts
+          tests/preview-assert-skip.test.ts
+          tests/required-checks-never-skip.test.ts
       - name: Test
         if: github.event_name == 'merge_group'
         run: npx vitest run --project '!node'
