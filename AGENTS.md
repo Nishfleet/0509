@@ -79,7 +79,7 @@ you.
   in `eslint.config.js`. Source: 0509#5785.
 - **Immutability.** New objects, never mutation.
 - **Formatting is Prettier.** `npm run lint` runs `prettier --check .`; run `npm run format` before committing.
-- **Stock only, at the version named in `docs/REBUILD-STACK.md`.** `tests/stack-dependencies.test.ts` fails a dependency with no row there. A PR names the library or Cloudflare primitive it uses and what it rejected. Hand-rolled schedulers, diffing, crawlers, queues, retries, auth, billing, email, charts or design systems are rejected. A hand-written type annotation over a framework value is a hand-rolled assertion: use the generated types.
+- **Stock only, at the version named in `docs/dependencies.md`.** `tests/stack-dependencies.test.ts` fails a dependency with no row there. A PR names the library or Cloudflare primitive it uses and what it rejected. Hand-rolled schedulers, diffing, crawlers, queues, retries, auth, billing, email, charts or design systems are rejected. A hand-written type annotation over a framework value is a hand-rolled assertion: use the generated types.
 - **Jev decides every typed decision** (`docs/REBUILD-JEV.md`, D1–D9). Code never guesses with regexes where a judgment is needed; Jev internals are never shown to customers.
 - **Cost** (`docs/REBUILD-COST.md`): writes batched, blobs in R2, counters in KV/DO, Browser Rendering capped at 10 concurrent sessions as a config value. Raising the cap needs Nish's yes with the cost in the PR, and is never left to degrade customers.
 - **Guardrails** (`docs/REBUILD-GUARDRAILS.md`): brands and creators only, never private individuals; disposable identities for collection; paid data providers only with Nish's yes.
@@ -171,7 +171,7 @@ passkey, API keys) · D1 · Tailwind 4 · vitest 4.1.11 with
 `@cloudflare/vitest-plugin` · Playwright 1.63.0.
 
 Every dependency and every version is justified with a vendor doc URL in
-`docs/REBUILD-STACK.md`. **Adding a dependency that is not in that file is a
+`docs/dependencies.md`. **Adding a dependency that is not in that file is a
 rejection**, not a review comment. The row format is asserted by
 `tests/stack-dependencies.test.ts`.
 
@@ -242,7 +242,7 @@ Service daily quota (Nish 2026-09-28).
 `DESIGN.md` (the design system — read it before any UI work) ·
 `.agents/skills/verify/feature-map.md` (what exists and how to reach it; search, never read whole) ·
 `docs/REBUILD-TRUST.md` (verification, the ladder, the gardener) ·
-`docs/REBUILD-STACK.md` (every dependency, probed) ·
+`docs/dependencies.md` (every dependency, the allowlist) ·
 `docs/REBUILD-DONE.md` (the definition of complete) ·
 `docs/REBUILD-SCHEMA.md`, `REBUILD-DELIVERY.md`, `REBUILD-ONBOARDING.md`,
 `REBUILD-STANDING.md`, `REBUILD-STANDING-CARD.md`, `REBUILD-COST.md`,
