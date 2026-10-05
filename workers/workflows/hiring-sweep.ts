@@ -1,14 +1,13 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
-import { withMonitor } from "@sentry/cloudflare";
-
 import { readHiringTargets } from "../../app/lib/data/watch.server";
 import type { BoardResult } from "../../app/lib/hiring/read-board.server";
 import { readBoard } from "../../app/lib/hiring/read-board.server";
 import type { FoundBoard } from "../../app/lib/hiring/sweep.server";
 import { findBoard, planHiringSweep } from "../../app/lib/hiring/sweep.server";
 import { isNativeSchedule } from "../workflow-crons";
+import { withStepCheckIn } from "../workflow-monitor";
 
 const RETRY: WorkflowStepConfig = {
   retries: { limit: 3, delay: "30 seconds", backoff: "exponential" },
@@ -18,6 +17,7 @@ const RETRY: WorkflowStepConfig = {
 const MONITOR = {
   schedule: { type: "crontab", value: "30 2 * * *" },
   checkinMargin: 60,
+  maxRuntime: 90,
   timezone: "UTC",
 } as const;
 
@@ -49,7 +49,7 @@ async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null
 export class HiringSweep extends WorkflowEntrypoint<Env> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<HiringSweepOutcome | null> {
     if (isNativeSchedule(event)) return null;
-    return withMonitor("hiring-sweep", () => this.runSweep(event, step), MONITOR);
+    return withStepCheckIn(step, { slug: "hiring-sweep", config: MONITOR }, () => this.runSweep(event, step));
   }
 
   private async runSweep(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<HiringSweepOutcome> {
