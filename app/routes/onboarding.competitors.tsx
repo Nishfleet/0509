@@ -24,7 +24,7 @@ const startWatchingForm = z.object({ intent: z.literal("start") });
 async function workspaceFor(request: Request, fresh = false): Promise<string> {
   const session = await (fresh ? requireFreshSession(request) : requireSession(request));
   const { landing, workspaceId } = await workspaceLandingForRequest(request, session.user);
-  if (workspaceId === null) throw await signOutToLogin(request);
+  if (workspaceId === null) return await signOutToLogin(request);
   if (landing !== null && landing !== ONBOARDING_COMPETITORS) throw redirect(landing);
   return workspaceId;
 }

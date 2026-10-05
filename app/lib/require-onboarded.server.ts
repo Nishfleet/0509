@@ -17,7 +17,7 @@ export async function requireOnboarded({
 }): Promise<void> {
   const session = await requireSession(request);
   const { landing, workspaceId } = await workspaceLandingForRequest(request, session.user);
-  if (workspaceId === null) throw await signOutToLogin(request);
+  if (workspaceId === null) return await signOutToLogin(request);
   if (landing !== null) throw redirect(landing);
   context.set(onboardedContext, { session, workspaceId });
 }

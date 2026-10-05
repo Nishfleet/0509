@@ -29,7 +29,7 @@ export function headers() {
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
   const { landing, workspaceId } = await workspaceLandingForRequest(request, session.user);
-  if (workspaceId === null) throw await signOutToLogin(request);
+  if (workspaceId === null) return await signOutToLogin(request);
   if (landing === null || landing === ONBOARDING_COMPETITORS) throw redirect(landing ?? "/app");
   return { email: session.user.email };
 }
