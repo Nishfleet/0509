@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { PROBE, expectNoHtmlInjection } from "../email-html-injection";
 import {
   renderIncidentFixed,
   renderIncidentOpen,
@@ -170,5 +171,44 @@ describe("the voice", () => {
       expect(rendered.text).not.toContain("!");
       expect(rendered.html.replace("<!doctype html>", "")).not.toContain("!");
     }
+  });
+});
+
+/**
+ * 0509#7020: the incident emails escape their sites by hand. These tables
+ * plant the injection probe in every string field, one row per field, so a
+ * missed escapeHtml turns CI red — the plain template modules stay.
+ */
+describe("every string field carries the injection probe escaped, never raw (0509#7020)", () => {
+  const openRows: Array<[string, Partial<IncidentOpenContext>]> = [
+    ["site", { site: PROBE }],
+    ["kind", { kind: PROBE }],
+    ["opened_at", { opened_at: PROBE }],
+    ["recheck_at", { recheck_at: PROBE }],
+    ["mark", { mark: PROBE }],
+    ["link", { link: PROBE }],
+    ["timezone", { timezone: PROBE }],
+    ["unsubscribe_url", { unsubscribe_url: PROBE }],
+    ["settings_link", { settings_link: PROBE }],
+  ];
+
+  it.each(openRows)("%s lands in the open email's html only escaped", (field, patch) => {
+    const { html } = renderIncidentOpen({ ...OPEN, ...patch });
+    expectNoHtmlInjection(html, `renderIncidentOpen ${field}`);
+  });
+
+  const fixedRows: Array<[string, Partial<IncidentFixedContext>]> = [
+    ["site", { site: PROBE }],
+    ["kind", { kind: PROBE }],
+    ["closed_at", { closed_at: PROBE }],
+    ["link", { link: PROBE }],
+    ["timezone", { timezone: PROBE }],
+    ["unsubscribe_url", { unsubscribe_url: PROBE }],
+    ["settings_link", { settings_link: PROBE }],
+  ];
+
+  it.each(fixedRows)("%s lands in the fixed email's html only escaped", (field, patch) => {
+    const { html } = renderIncidentFixed({ ...FIXED, ...patch });
+    expectNoHtmlInjection(html, `renderIncidentFixed ${field}`);
   });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { PROBE, expectNoHtmlInjection } from "../email-html-injection";
 import {
   type AlertFooterContext,
   renderAlertFooter,
@@ -40,5 +41,19 @@ describe("the alert email's footer text (0509#6511)", () => {
     expect(renderAlertFooter(CTX).text).toBe(
       `Choose which alerts you get in Settings: ${SETTINGS_LINK}\nUnsubscribe: ${UNSUBSCRIBE_URL}`,
     );
+  });
+});
+
+/**
+ * 0509#7020: the footer escapes both links by hand. This table plants the
+ * injection probe in every string field, one row per field, so a missed
+ * escapeHtml turns CI red — the plain template module stays.
+ */
+describe("every string field carries the injection probe escaped, never raw (0509#7020)", () => {
+  it.each([
+    ["settings_link", { ...CTX, settings_link: PROBE }],
+    ["unsubscribe_url", { ...CTX, unsubscribe_url: PROBE }],
+  ] as Array<[string, AlertFooterContext]>)("%s lands in the html only escaped", (field, ctx) => {
+    expectNoHtmlInjection(renderAlertFooter(ctx).html, field);
   });
 });

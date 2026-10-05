@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { BRAND_LINES_QUERY, parseBriefPayload, type BriefPayload } from "../../app/lib/brief-payload";
+import { PROBE, URL_PROBE, expectNoHtmlInjection } from "../email-html-injection";
 import { renderBrief } from "../../workers/delivery/brief-template";
 
 /**
@@ -652,5 +653,126 @@ describe("the subject line", () => {
 
   it("stays generic when there is no rank", () => {
     expect(renderBrief(payload({ headline_rank: null }), CONTEXT).subject).toBe("Your weekly brief");
+  });
+});
+
+/**
+ * 0509#7020: the brief escapes about 27 sites by hand. This table plants the
+ * injection probe in every string field that reaches the html, one row per
+ * field, so a missed escapeHtml anywhere in the template turns CI red — no
+ * new renderer, the plain template modules stay.
+ */
+function injectionPayload(): BriefPayload {
+  return {
+    workspace_id: "ws_probe",
+    timezone: "UTC",
+    period_start: "2026-09-14T12:00:00.000Z",
+    period_end: "2026-09-21T12:00:00.000Z",
+    headline_rank: 2,
+    headline_total: 5,
+    headline_movement: 1,
+    headline_is_new: false,
+    why_line: "benign mover",
+    is_quiet_week: false,
+    is_unjudged: false,
+    read_this_first: [
+      {
+        signal_id: "sig_probe",
+        entity_id: "ent_probe",
+        entity_name: "Probe Co",
+        title: "benign title",
+        source: "site change",
+        observed_at: "2026-09-16T15:30:00.000Z",
+        thumbnail_r2_key: "captures/ws_probe/before.png",
+        url: "https://rival.example/pricing",
+        before: "old price",
+        after: "new price",
+        jev_reason: "benign reason",
+      },
+    ],
+    brands: [
+      {
+        entity_id: "ent_probe",
+        name: "Probe Co",
+        rank: 2,
+        movement: 1,
+        is_new: false,
+        biggest_move: "raised prices",
+        ad_delta: 1,
+        mention_delta: 2,
+        site_change_count: 3,
+        new_roles: 0,
+      },
+    ],
+    own_site: {
+      status: "broken",
+      incidents: [
+        {
+          page_url: "https://me.example/pricing",
+          kind: "checkout",
+          observed_at: "2026-09-18T10:00:00.000Z",
+          is_open: true,
+        },
+      ],
+    },
+    checked: {
+      mention_count: 1,
+      site_change_count: 1,
+      new_ad_count: 0,
+      source_keys: ["rss"],
+      degraded_source_keys: [],
+      degraded_sources: [{ key: "rss", name: "Rival feed", last_landed_at: "2026-09-15T00:00:00.000Z" }],
+    },
+    next_brief_at: "2026-09-28T12:00:00.000Z",
+  };
+}
+
+describe("every string field carries the injection probe escaped, never raw (0509#7020)", () => {
+  const base = injectionPayload();
+
+  const withMark = (patch: Partial<BriefPayload["read_this_first"][number]>): BriefPayload => ({
+    ...base,
+    read_this_first: [{ ...base.read_this_first[0], ...patch }],
+  });
+  const withOwnSite = (patch: Partial<BriefPayload["own_site"]["incidents"][number]>): BriefPayload => ({
+    ...base,
+    own_site: { status: "broken", incidents: [{ ...base.own_site.incidents[0], ...patch }] },
+  });
+  const quietWithDegraded = (
+    patch: Partial<BriefPayload["checked"]["degraded_sources"][number]>,
+  ): BriefPayload => ({
+    ...base,
+    // The degraded-source names reach the html only in the quiet-week line.
+    is_quiet_week: true,
+    read_this_first: [],
+    checked: { ...base.checked, degraded_sources: [{ ...base.checked.degraded_sources[0], ...patch }] },
+  });
+
+  const rows: Array<[string, BriefPayload]> = [
+    ["why_line", { ...base, why_line: PROBE }],
+    ["period_start", { ...base, period_start: PROBE }],
+    ["timezone", { ...base, timezone: PROBE }],
+    ["next_brief_at", { ...base, next_brief_at: PROBE }],
+    ["read_this_first[].entity_name", withMark({ entity_name: PROBE })],
+    ["read_this_first[].source", withMark({ source: PROBE })],
+    ["read_this_first[].title", withMark({ title: PROBE })],
+    ["read_this_first[].observed_at", withMark({ observed_at: PROBE })],
+    ["read_this_first[].url", withMark({ url: URL_PROBE })],
+    ["read_this_first[].thumbnail_r2_key", withMark({ thumbnail_r2_key: PROBE })],
+    ["read_this_first[].before", withMark({ before: PROBE })],
+    ["read_this_first[].after", withMark({ after: PROBE })],
+    ["read_this_first[].jev_reason", withMark({ jev_reason: PROBE })],
+    ["brands[].name", { ...base, brands: [{ ...base.brands[0], name: PROBE }] }],
+    ["brands[].biggest_move", { ...base, brands: [{ ...base.brands[0], biggest_move: PROBE }] }],
+    ["own_site.incidents[].page_url", withOwnSite({ page_url: PROBE })],
+    ["own_site.incidents[].kind", withOwnSite({ kind: PROBE })],
+    ["own_site.incidents[].observed_at", withOwnSite({ observed_at: PROBE })],
+    ["checked.degraded_sources[].name", quietWithDegraded({ name: PROBE })],
+    ["checked.degraded_sources[].last_landed_at", quietWithDegraded({ last_landed_at: PROBE })],
+  ];
+
+  it.each(rows)("%s lands in the html only escaped", (field, probed) => {
+    const { html } = renderBrief(probed, CONTEXT);
+    expectNoHtmlInjection(html, field);
   });
 });
