@@ -69,7 +69,7 @@ export class JevRateLimitedError extends JevUnavailableError {
   }
 }
 
-export class JevBillingRefusedError extends JevUnavailableError {
+class JevBillingRefusedError extends JevUnavailableError {
   constructor(cause: unknown) {
     super(cause);
     this.name = "JevBillingRefusedError";
