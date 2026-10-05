@@ -5,6 +5,7 @@ import { SITE_SWEEP_CRON, sweepMonitor } from "../../app/lib/cadence";
 import { recordSweepRun } from "../../app/lib/data/sweep_run.server";
 import { pingLiveness } from "../../app/lib/liveness-ping.server";
 import { classifyCompetitorSites } from "../../app/lib/site/classify-competitors.server";
+import { sweepRunReason, type SweepStepFailure } from "../../app/lib/site/sweep-run-reason";
 import {
   CHUNK_SIZE,
   checkSitePage,
@@ -31,15 +32,17 @@ export type SiteSweepOutcome = Record<PageOutcome, number> & {
   recorded: boolean;
 };
 
-async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null> {
+async function settle<T>(label: string, run: () => Promise<T>, failures: SweepStepFailure[]): Promise<T | null> {
   try {
     return await run();
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    failures.push({ step: label, error: message });
     console.error(
       JSON.stringify({
         event: "site.sweep_step_failed",
         step: label,
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
       }),
     );
     return null;
@@ -53,37 +56,56 @@ interface SweepTick {
   plannedAt: string;
 }
 
-function checkTargets(step: WorkflowStep, targets: SweepTargets, tick: SweepTick): Promise<readonly PageOutcome[]> {
+function checkTargets(
+  step: WorkflowStep,
+  targets: SweepTargets,
+  tick: SweepTick,
+  failures: SweepStepFailure[],
+): Promise<readonly PageOutcome[]> {
   return targets.reduce<Promise<readonly PageOutcome[]>>(async (done, target) => {
     const previous = await done;
     const checkLabel = `check ${target.pageId}`;
-    const checked = await settle(checkLabel, () => step.do(checkLabel, RETRY, () => checkSitePage(target, tick)));
+    const checked = await settle(checkLabel, () => step.do(checkLabel, RETRY, () => checkSitePage(target, tick)), failures);
     if (checked === null) return [...previous, "failed"];
+    if (checked.outcome === "failed") {
+      failures.push({ step: checkLabel, error: `${checked.reason}: ${checked.detail}` });
+      return [...previous, "failed"];
+    }
     if (checked.outcome !== "changed") return [...previous, checked.outcome];
     const publishLabel = `publish ${target.pageId}`;
-    const published = await settle(publishLabel, () =>
-      step.do(publishLabel, RETRY, () => publishSiteChange(target, checked)),
+    const published = await settle(
+      publishLabel,
+      () => step.do(publishLabel, RETRY, () => publishSiteChange(target, checked)),
+      failures,
     );
     return [...previous, published === null ? "failed" : "changed"];
   }, Promise.resolve([]));
 }
 
-function recheckMissing(step: WorkflowStep, missing: SweepTargets, tick: SweepTick): Promise<readonly PageOutcome[]> {
+function recheckMissing(
+  step: WorkflowStep,
+  missing: SweepTargets,
+  tick: SweepTick,
+  failures: SweepStepFailure[],
+): Promise<readonly PageOutcome[]> {
   const recheckChunks = Array.from({ length: Math.ceil(missing.length / CHUNK_SIZE) }, (_, index) =>
     missing.slice(index * CHUNK_SIZE, (index + 1) * CHUNK_SIZE),
   );
   return recheckChunks.reduce<Promise<readonly PageOutcome[]>>(async (done, chunk, index) => {
     const previous = await done;
     const recheckLabel = `recheck ${String(index)}`;
-    const settled = await settle(recheckLabel, () =>
-      step.do(recheckLabel, RETRY, () =>
-        chunk.reduce<Promise<readonly PageOutcome[]>>(async (pending, target) => {
-          const earlier = await pending;
-          const checked = await checkSitePage(target, tick);
-          if (checked.outcome === "changed") await publishSiteChange(target, checked);
-          return [...earlier, checked.outcome];
-        }, Promise.resolve([])),
-      ),
+    const settled = await settle(
+      recheckLabel,
+      () =>
+        step.do(recheckLabel, RETRY, () =>
+          chunk.reduce<Promise<readonly PageOutcome[]>>(async (pending, target) => {
+            const earlier = await pending;
+            const checked = await checkSitePage(target, tick);
+            if (checked.outcome === "changed") await publishSiteChange(target, checked);
+            return [...earlier, checked.outcome];
+          }, Promise.resolve([])),
+        ),
+      failures,
     );
     return [...previous, ...(settled ?? chunk.map(() => "failed" as const))];
   }, Promise.resolve([]));
@@ -93,21 +115,27 @@ async function recordRun(
   step: WorkflowStep,
   tick: SweepTick,
   totals: { pages: number; failed: number },
+  reason: string | null,
+  failures: SweepStepFailure[],
 ): Promise<boolean> {
-  const recorded = await settle("record", () =>
-    step.do("record", RETRY, async () => {
-      const finishedAt = new Date();
-      await recordSweepRun({
-        id: tick.instanceId,
-        kind: "site",
-        plannedAt: tick.plannedAt,
-        finishedAt: finishedAt.toISOString(),
-        wallMs: finishedAt.getTime() - Date.parse(tick.plannedAt),
-        pages: totals.pages,
-        failed: totals.failed,
-      });
-      return true;
-    }),
+  const recorded = await settle(
+    "record",
+    () =>
+      step.do("record", RETRY, async () => {
+        const finishedAt = new Date();
+        await recordSweepRun({
+          id: tick.instanceId,
+          kind: "site",
+          plannedAt: tick.plannedAt,
+          finishedAt: finishedAt.toISOString(),
+          wallMs: finishedAt.getTime() - Date.parse(tick.plannedAt),
+          pages: totals.pages,
+          failed: totals.failed,
+          reason,
+        });
+        return true;
+      }),
+    failures,
   );
   return recorded === true;
 }
@@ -123,20 +151,26 @@ export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: 
       instanceId: event.instanceId,
       plannedAt: plannedAt(event.timestamp, event.schedule?.scheduledTime),
     };
-    await settle("classify", () => step.do("classify", RETRY, () => classifyCompetitorSites(tick.plannedAt)));
+    const failures: SweepStepFailure[] = [];
+    await settle(
+      "classify",
+      () => step.do("classify", RETRY, () => classifyCompetitorSites(tick.plannedAt)),
+      failures,
+    );
     const targets = await step.do("plan", RETRY, () => planSiteSweep(tick.plannedAt));
 
-    const outcomes = await checkTargets(step, targets, tick);
+    const outcomes = await checkTargets(step, targets, tick, failures);
 
     const missing = await step.do("find missing", RETRY, () => uncoveredItems(targets, tick.plannedAt));
-    const recheckOutcomes = await recheckMissing(step, missing, tick);
+    const recheckOutcomes = await recheckMissing(step, missing, tick, failures);
     const recheckByPage = new Map(missing.map((target, index) => [target.pageId, recheckOutcomes[index]] as const));
     const finalOutcomes = targets.map((target, index) => recheckByPage.get(target.pageId) ?? outcomes[index]);
 
     const count = (outcome: PageOutcome) => finalOutcomes.filter((o) => o === outcome).length;
     const pages = finalOutcomes.length;
     const failed = count("failed");
-    const recorded = await recordRun(step, tick, { pages, failed });
+    const reason = sweepRunReason(failures, failed, pages);
+    const recorded = await recordRun(step, tick, { pages, failed }, reason, failures);
     const summary: SiteSweepOutcome = {
       pages,
       failed,
