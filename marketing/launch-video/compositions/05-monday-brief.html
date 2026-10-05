@@ -1,0 +1,105 @@
+<template id="act-5-brief-template">
+  <div data-composition-id="act-5-brief" data-width="1920" data-height="1080"
+       data-start="0" data-duration="10.0">
+    <style>
+      @font-face { font-family: "Bricolage Grotesque"; src: url("assets/fonts/bricolage-hero.woff2") format("woff2"); font-weight: 700 800; font-display: block; }
+      @font-face { font-family: "Bricolage Grotesque"; src: url("assets/fonts/bricolage-grotesque-latin.woff2") format("woff2"); font-weight: 200 800; font-display: block; }
+      @font-face { font-family: "Instrument Sans"; src: url("assets/fonts/instrument-sans-latin.woff2") format("woff2"); font-weight: 400 600; font-display: block; }
+      @font-face { font-family: "IBM Plex Mono"; src: url("assets/fonts/ibm-plex-mono-latin-400.woff2") format("woff2"); font-weight: 400; font-display: block; }
+      @font-face { font-family: "IBM Plex Mono"; src: url("assets/fonts/ibm-plex-mono-latin-500.woff2") format("woff2"); font-weight: 500; font-display: block; }
+
+      .a5 {
+        position: absolute; inset: 0;
+        background: var(--bone);
+        font-family: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+        color: var(--ink);
+      }
+      .a5-top {
+        position: absolute; left: 96px; top: 84px;
+        font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 22px;
+        letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft);
+      }
+      .a5-h {
+        position: absolute; left: 96px; top: 134px; width: 900px;
+        font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif;
+        font-weight: 800; font-size: 88px; line-height: 0.99; letter-spacing: -0.04em;
+      }
+      .a5-h em { font-style: normal; color: var(--accent); }
+      .a5-body {
+        position: absolute; left: 96px; top: 470px; width: 780px;
+        font-size: 31px; line-height: 1.4; color: var(--ink-soft);
+      }
+      .a5-body b { font-weight: 600; color: var(--ink); }
+      .a5-foot {
+        position: absolute; left: 96px; top: 806px; width: 780px;
+        border-top: 1px solid var(--line); padding-top: 22px;
+        font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 18px;
+        letter-spacing: 0.05em; color: var(--ink-faint); text-transform: uppercase;
+      }
+      .a5-shot {
+        position: absolute; left: 1064px; top: 190px; width: 760px; height: 475px;
+        border-radius: 10px; border: 1px solid var(--line);
+        box-shadow: 0 26px 60px rgba(14, 13, 10, 0.16);
+        object-fit: cover; object-position: 50% 0;
+      }
+      .a5-cap {
+        position: absolute; left: 1064px; top: 684px; width: 760px;
+        font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 16px;
+        letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint);
+      }
+      /* The three lines of a brief, stacked. */
+      .a5-lines { position: absolute; left: 1064px; top: 726px; width: 760px; }
+      .a5-line {
+        border-top: 1px solid var(--line); padding: 20px 0;
+        display: grid; grid-template-columns: 46px 1fr; column-gap: 18px; align-items: baseline;
+      }
+      .a5-line-k {
+        font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 17px; color: var(--ink-faint);
+      }
+      .a5-line-v { font-size: 27px; line-height: 1.32; }
+      .a5-line-v .pf { color: var(--accent); font-weight: 600; }
+    </style>
+
+    <div class="a5 clip" data-start="0" data-duration="10.0" id="act-5-brief-a5-1">
+      <div class="a5-top clip" data-start="0.10" data-duration="9.90" id="act-5-brief-a5-top-1">What lands in your inbox</div>
+      <h1 class="a5-h clip" data-start="0" data-duration="10.0" id="act-5-brief-a5-h-1">Read <em>one email</em><br />on Monday.</h1>
+      <p class="a5-body clip" data-start="2.40" data-duration="7.60" id="act-5-brief-a5-body-1">
+        <b>Where you stand this week,</b> the three things worth knowing, and the proof behind each.
+        No daily noise.
+      </p>
+      <div class="a5-foot clip" data-start="2.50" data-duration="7.50" id="act-5-brief-a5-foot-1">Tap any line for the screenshots</div>
+
+      <img class="a5-shot clip" data-start="0.80" data-duration="9.20"
+           src="assets/keyframe-home-1440x900.png" width="760" height="475" alt="" id="act-5-brief-a5-shot-1">
+      <div class="a5-cap clip" data-start="0.90" data-duration="9.10" id="act-5-brief-a5-cap-1">Home screen, this week&rsquo;s standing</div>
+
+      <div class="a5-lines">
+        <div class="a5-line clip" data-start="2.90" data-duration="7.10" id="act-5-brief-a5-line-1">
+          <div class="a5-line-k">01</div><div class="a5-line-v">Where you stood</div>
+        </div>
+        <div class="a5-line clip" data-start="3.20" data-duration="6.80" id="act-5-brief-a5-line-2">
+          <div class="a5-line-k">02</div><div class="a5-line-v">Where everyone stands</div>
+        </div>
+        <div class="a5-line clip" data-start="3.50" data-duration="6.50" id="act-5-brief-a5-line-3">
+          <div class="a5-line-k">03</div><div class="a5-line-v"><span class="pf">The three things worth knowing</span></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var ID = "act-5-brief";
+        var tl = gsap.timeline({ paused: true });
+        tl.fromTo(".a5-h", { y: 26, opacity: 0 }, { y: 0, opacity: 1, duration: 0.9, ease: "power3.out" }, 0.0)
+          .fromTo(".a5-body", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.7, ease: "power2.out" }, 2.40)
+          .fromTo(".a5-shot", { opacity: 0, y: 34 }, { opacity: 1, y: 0, duration: 0.9, ease: "power2.out" }, 0.80)
+          .fromTo(".a5-line", { opacity: 0, x: 24 }, { opacity: 1, x: 0, duration: 0.5, ease: "power2.out", stagger: 0.2 }, 2.90)
+          .set(".a5-line", { opacity: 0.45 }, 4.90)
+          .set(".a5-line:nth-child(2)", { opacity: 0.45 }, 5.20)
+          .set(".a5-line:nth-child(3)", { opacity: 1 }, 5.50);
+        window.__timelines[ID] = tl;
+        tl.seek(0);
+      })();
+    </script>
+  </div>
+</template>
