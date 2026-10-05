@@ -58,6 +58,16 @@ async function sendVerifyConfirmation(email: SendEmail, workspaceId: string, add
   return null;
 }
 
+async function isRefusedAsSuppressed(
+  address: string,
+  input: { signInEmail: string; resume: boolean },
+): Promise<boolean> {
+  if (!(await isAddressSuppressed(address))) return false;
+  if (!input.resume) return true;
+  if (address === input.signInEmail) await clearSuppression(address);
+  return false;
+}
+
 export async function readDeliveryAddress(
   userId: string,
   signInEmail: string,
@@ -88,10 +98,7 @@ export async function saveDeliveryAddress(input: {
   const { success } = await env.SIGN_IN_EMAIL_LIMIT.limit({ key: `delivery-address:${workspaceId}` });
   if (!success) return { error: RATE_LIMITED, suppressed: false };
 
-  if (await isAddressSuppressed(address)) {
-    if (!input.resume) return { error: SUPPRESSED, suppressed: true };
-    await clearSuppression(address);
-  }
+  if (await isRefusedAsSuppressed(address, input)) return { error: SUPPRESSED, suppressed: true };
 
   await ensureOwnerEmailTarget(env.DB, { workspaceId, now: new Date().toISOString() });
   const target = await readEmailTarget(env.DB, workspaceId);
