@@ -94,6 +94,11 @@ export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
       skipped,
     });
 
+    const stillThere = await step.do("workspace-exists", RETRY, () =>
+      readWorkspaceSchedule(this.env.DB, workspaceId).then((workspace) => workspace !== null),
+    );
+    if (!stillThere) return outcome(null, "workspace_gone");
+
     if (closesAt.getTime() > Date.now()) {
       await step.sleepUntil("until-brief", closesAt);
     }
