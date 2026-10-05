@@ -1,6 +1,5 @@
 import type { Route } from "./+types/app.alerts";
 
-import { env } from "cloudflare:workers";
 import { Link } from "react-router";
 
 import { AlertChipEmpty } from "../components/alert-chip-empty";
@@ -22,7 +21,7 @@ export function meta() {
 const WHEN_CLASS = "mt-2 block font-mono text-meta text-ink-soft uppercase";
 
 async function readLatestBrief(workspaceId: string | null) {
-  return workspaceId === null ? undefined : (await listBriefs(env.DB, workspaceId))[0];
+  return workspaceId === null ? undefined : (await listBriefs(workspaceId))[0];
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {

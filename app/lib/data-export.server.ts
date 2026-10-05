@@ -1,3 +1,5 @@
+import { env } from "cloudflare:workers";
+
 import { readEmailTarget } from "./data/send_target.server";
 
 const SIGNAL_LIMIT = 10_000;
@@ -16,17 +18,17 @@ ORDER BY s.observed_at DESC LIMIT ?`;
 const SELECT_BRIEFS = `SELECT subject, period_start, period_end, status, sent_at
 FROM digest WHERE workspace_id = ? ORDER BY period_start DESC`;
 
-export async function readWorkspaceExport(db: D1Database, input: { workspaceId: string; email: string; now: Date }) {
+export async function readWorkspaceExport(input: { workspaceId: string; email: string; now: Date }) {
   const { workspaceId } = input;
   const [workspace, brands, signals, briefs, target] = await Promise.all([
-    db.prepare(SELECT_WORKSPACE).bind(workspaceId).first(),
-    db.prepare(SELECT_BRANDS).bind(workspaceId).all(),
-    db
+    env.DB.prepare(SELECT_WORKSPACE).bind(workspaceId).first(),
+    env.DB.prepare(SELECT_BRANDS).bind(workspaceId).all(),
+    env.DB
       .prepare(SELECT_SIGNALS)
       .bind(workspaceId, SIGNAL_LIMIT + 1)
       .all(),
-    db.prepare(SELECT_BRIEFS).bind(workspaceId).all(),
-    readEmailTarget(db, workspaceId),
+    env.DB.prepare(SELECT_BRIEFS).bind(workspaceId).all(),
+    readEmailTarget(env.DB, workspaceId),
   ]);
   return {
     exportedAt: input.now.toISOString(),

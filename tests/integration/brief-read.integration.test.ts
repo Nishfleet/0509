@@ -65,21 +65,21 @@ describe("brief reads (0509#5145)", () => {
   });
 
   it("lists a workspace's weekly briefs newest first", async () => {
-    const rows = await listBriefs(env.DB, WS_A);
+    const rows = await listBriefs(WS_A);
     expect(rows.map((row) => row.id)).toEqual(["dg-a-2", "dg-a-1"]);
   });
 
   it("keeps a listed brief's sent_at instant", async () => {
-    const rows = await listBriefs(env.DB, WS_A);
+    const rows = await listBriefs(WS_A);
     expect(rows[1]?.sent_at).toBe("2026-09-14T08:00:05.000Z");
   });
 
   it("does not read another workspace's brief", async () => {
-    expect(await readBrief(env.DB, WS_A, "dg-b-1")).toBeNull();
+    expect(await readBrief(WS_A, "dg-b-1")).toBeNull();
   });
 
   it("reads one of a workspace's briefs with its payload", async () => {
-    const brief = await readBrief(env.DB, WS_A, "dg-a-1");
+    const brief = await readBrief(WS_A, "dg-a-1");
     expect(brief?.payload_json).toBe('{"n":1}');
   });
 });

@@ -1,3 +1,4 @@
+import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { readBriefPayload } from "./brief-payload";
@@ -100,12 +101,11 @@ async function readStandingBatch(db: D1Database, ownerUserId: string, knownWorks
 }
 
 export async function readHomeStandingInputs(
-  db: D1Database,
   ownerUserId: string,
   knownWorkspaceId?: string,
 ): Promise<HomeStandingInputs | null> {
   const { rows, historyResult, sourcesResult, countsResult } = await readStandingBatch(
-    db,
+    env.DB,
     ownerUserId,
     knownWorkspaceId,
   );

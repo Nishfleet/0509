@@ -324,8 +324,8 @@ const RAW_DML_WRITER = {
 };
 
 const ENV_DB_IN_ROUTES = {
-  selector: "CallExpression[callee.object.name='env'][callee.property.name='DB']",
-  message: "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
+  selector: "MemberExpression[object.name='env'][property.name='DB']",
+  message: "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4. Source: 0509#6999 — the old CallExpression[callee...] selector matched only a direct env.DB(...) call, so the five routes passing env.DB as an argument linted green.",
 };
 
 const STATIC_HOME_HTML_PARSER = {

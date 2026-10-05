@@ -35,9 +35,9 @@ export async function loader({ params, context }: Route.LoaderArgs) {
   const owned = await readBriefScheduleForOwner(session.user.id);
   if (owned === null) throw redirect("/onboarding");
   const { schedule } = owned;
-  const weeks = await listBriefs(env.DB, workspaceId);
+  const weeks = await listBriefs(workspaceId);
   const selectedId = params.digestId ?? weeks[0]?.id ?? null;
-  const brief = selectedId === null ? null : await readBrief(env.DB, workspaceId, selectedId);
+  const brief = selectedId === null ? null : await readBrief(workspaceId, selectedId);
   if (params.digestId !== undefined && brief === null) {
     throw new Response("That brief isn't here.", { status: 404 });
   }
