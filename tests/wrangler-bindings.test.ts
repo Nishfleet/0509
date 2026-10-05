@@ -101,6 +101,7 @@ describe("deployed wrangler configs", () => {
     // docs/engines/README.md "What the four share": no browser on this lane.
     expect(consumer?.max_concurrency).toBe(20);
     expect(consumer?.max_retries).toBe(3);
+    expect(consumer?.retry_delay).toBe(60);
     const dlq = (rawConfig.queues?.consumers ?? []).find((queue) => queue.queue === "fetch-sweep-dlq");
     expect(dlq).toBeDefined();
   });
