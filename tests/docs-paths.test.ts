@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 // A path named in the agent entry docs that does not exist sends the next agent
 // grepping for it. Only the two files every agent reads first are checked.
-const ENTRY_DOCS = ["CLAUDE.md", "README.md"] as const;
+const ENTRY_DOCS = ["AGENTS.md", "README.md"] as const;
 const PATH = /`((?:app|docs|workers|tests|e2e|migrations|\.agents)\/[\w./-]+[\w-])`/g;
 
 describe("agent entry docs", () => {
