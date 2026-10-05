@@ -79,7 +79,9 @@ you.
 - **Cost** (`docs/REBUILD-COST.md`): writes batched, blobs in R2, counters in KV/DO, Browser Rendering capped at 10 concurrent sessions as a config value. Raising the cap needs Nish's yes with the cost in the PR, and is never left to degrade customers.
 - **Guardrails** (`docs/REBUILD-GUARDRAILS.md`): brands and creators only, never private individuals; disposable identities for collection; paid data providers only with Nish's yes.
 
-One house rule is not in lint yet, so only a reviewer catches it: new objects,
+## Conventions a reviewer enforces
+
+Not in lint yet, so only a reviewer catches it: new objects,
 never mutation. 0509#5783 parked `eslint-plugin-functional` until the violation
 count is measured (0509#6999).
 
