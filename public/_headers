@@ -7,9 +7,6 @@
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
-# /fonts/* must stay CORS-open: the share picture (app/components/share-image.tsx) is
-# screenshotted by Browser Rendering cross-origin, and without this header it silently
-# falls back to system fonts.
 /fonts/*
   Cache-Control: public, max-age=31536000, immutable
   Access-Control-Allow-Origin: *

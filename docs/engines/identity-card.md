@@ -1,6 +1,6 @@
 # Engine: identity card
 
-Issue #3885. Umbrella #3842. Author: the Opus architect, **2026-09-21**. Designed against `docs/REBUILD-SCHEMA.md`, `REBUILD-JEV.md`, `REBUILD-ONBOARDING.md`, `REBUILD-COST.md`, `REBUILD-GUARDRAILS.md` (#3899) and `REBUILD-STACK.md` (#3906). Every version below comes from the stack doc; every probe below was run today from this VPS and is timestamped UTC.
+Issue #3885. Umbrella #3842. Author: the Opus architect, **2026-09-21**. Designed against `docs/REBUILD-SCHEMA.md`, `REBUILD-JEV.md`, `REBUILD-ONBOARDING.md (deleted, in git history)`, `REBUILD-COST.md`, `REBUILD-GUARDRAILS.md` (#3899) and `REBUILD-STACK.md` (#3906). Every version below comes from the stack doc; every probe below was run today from this VPS and is timestamped UTC.
 
 The job: one input — a domain, a URL, an `@handle` or a channel URL — becomes a confirmed brand card in under 30 seconds, with no form anywhere.
 
@@ -105,7 +105,7 @@ That is the wire contract every engine here uses: `questions` is a **record** of
 
 ### Findings
 
-1. **The brand homepage answered a plain fetch from this VPS, with and without a browser UA.** `REBUILD-KEEPLIST.md` finding 6 — that `gymshark.com` returns `fetch_failed` to workerd — is about **workerd's fetch signature**, not the origin's tolerance of datacenter IPs, and my probe cannot and does not contradict it. The design keeps the browser path, but as an **escalation**, not as the default: cheap fetch first, browser when the fetch is refused or yields no copy. The measured saving is the whole cost model (1.07 s of Worker time versus ~8 browser-seconds).
+1. **The brand homepage answered a plain fetch from this VPS, with and without a browser UA.** `REBUILD-KEEPLIST.md (deleted, in git history)` finding 6 — that `gymshark.com` returns `fetch_failed` to workerd — is about **workerd's fetch signature**, not the origin's tolerance of datacenter IPs, and my probe cannot and does not contradict it. The design keeps the browser path, but as an **escalation**, not as the default: cheap fetch first, browser when the fetch is refused or yields no copy. The measured saving is the whole cost model (1.07 s of Worker time versus ~8 browser-seconds).
 2. **The manifest is empty on a brand that has one.** `"name": ""` — so `site.webmanifest` is an icon source, never a name source. The name cascade is `ld+json Organization.name` → `og:site_name` → `<title>` minus the tagline → Wikidata label.
 3. **The Cloudflare tokens on this host cannot call Browser Rendering.** `~/.config/cloudflare/deploy-ci.env`'s token verifies active (`/user/tokens/verify` → 200, id `1bfdb479e69ca9e9393c43111f75ca51`) but both it and `deploy.env`'s token return `{"code":10000,"message":"Authentication error"}` on `/browser-rendering/markdown`. The Worker binding needs no token, so this blocks nothing in production — but a packet that wants to prove the browser leg from CI or the VPS needs a token with **Browser Rendering: Edit**, and that is Nish's to mint. Every browser proof in these packets is therefore specified against the deployed Worker, not against REST.
 4. **Wikidata is high precision, low recall.** Gymshark resolves; the control, `Alphalete Athletics`, returns **0 hits** (`wbsearchentities`, 12:22:33Z). It enriches; it never gates.
@@ -227,7 +227,7 @@ The card never shows a spinner in place of a field. Every empty field says what 
 
 **FORBIDDEN.** `browser.close()` per request — use `disconnect()` if a session is ever opened. Going through a queue: this path is interactive and uses the two reserved browser slots. Retry loops — one escalation, then a typed failure. A third transport.
 
-**PROOF REQUIRED.** Deployed, on a real brand: one URL served by `fetch` and one served by the browser escalation, each with status, elapsed ms and (for the browser) the `X-Browser-Ms-Used` value, cited with timestamps. State in the PR whether the escalation fired on `gymshark.com` from workerd — that is the open question `REBUILD-KEEPLIST.md` finding 6 leaves, and this packet is where it gets answered with evidence.
+**PROOF REQUIRED.** Deployed, on a real brand: one URL served by `fetch` and one served by the browser escalation, each with status, elapsed ms and (for the browser) the `X-Browser-Ms-Used` value, cited with timestamps. State in the PR whether the escalation fired on `gymshark.com` from workerd — that is the open question `REBUILD-KEEPLIST.md (deleted, in git history)` finding 6 leaves, and this packet is where it gets answered with evidence.
 
 **PUSH.** `wip/issue-3885-p3`.
 
@@ -257,7 +257,7 @@ The card never shows a spinner in place of a field. Every empty field says what 
 
 **FILES IN SCOPE.** `app/routes/onboarding.identity.tsx`, `app/components/identity-card.tsx`, `workers/identity-tail-workflow.ts`, `wrangler.jsonc` (the workflow binding), `e2e/onboarding-identity.spec.ts`.
 
-**FORBIDDEN.** A form with labelled fields — the card is the form (`REBUILD-ONBOARDING.md`). A spinner standing in for a field: an empty field says what will fill it. Client-side polling of the workflow instance. A `step.do` per line of code — steps are the billing unit and each is a durable boundary (`REBUILD-STACK.md` §4.1). Returning a page snapshot from a step instead of an R2 key (1 MiB step output cap).
+**FORBIDDEN.** A form with labelled fields — the card is the form (`REBUILD-ONBOARDING.md (deleted, in git history)`). A spinner standing in for a field: an empty field says what will fill it. Client-side polling of the workflow instance. A `step.do` per line of code — steps are the billing unit and each is a durable boundary (`REBUILD-STACK.md` §4.1). Returning a page snapshot from a step instead of an R2 key (1 MiB step output cap).
 
 **PROOF REQUIRED.** Three real inputs — a company domain, a creator handle, a bot-blocking brand site — recorded with Playwright **1.63.0** at 1440 and 390: input-to-first-field, input-to-card-complete, card-to-competitors, each stage timed against the 30 s budget, plus which source filled each field. One `step.do` retry visible in the workflow run history, cited by instance id.
 

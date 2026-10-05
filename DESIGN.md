@@ -223,13 +223,18 @@ No public card page (Nish, 2026-09-24). The owner shares a picture, made from Ho
 signed-in app, the way Spotify shares work: the brand's monogram and name, the rank line
 with the rank on its green marker, the week label in mono, and the `05|09` wordmark with
 `0509.io`, on the real cream ground. No competitor names, no captures, no marks, no counts
-table.
+table. Never mentions text and never own-site incidents (docs/REBUILD-GUARDRAILS.md).
+The landing's sample is this same image, made from a workspace we own for a well-known
+brand we track ourselves: real, never sample data. The unused `workspace.card_is_published`,
+`card_slug` and `card_is_indexable` columns stay in D1 and are dropped only with Nish's yes.
 
 **It is a square composition (`app/components/share-image.tsx`) drawn with the same tokens,
 fonts and built stylesheet as Home**, screenshotted by Cloudflare Browser Rendering at
 1080x1080 on demand when the owner taps **Share my rank**. No second renderer, no second
 stylesheet, no hand-maintained SVG twin. On a phone the share sheet opens with the image;
-elsewhere it downloads.
+elsewhere it downloads. When Browser Rendering is full (10-session cap, docs/REBUILD-COST.md)
+the route answers 503 with `retry-after: 60` and the button says to try again in a minute;
+it never queues behind the sweeps.
 
 ---
 
