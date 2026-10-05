@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 
 const COUNT_KEY = "count";
+const RESERVATION_PREFIX = "reservation:";
 const MS_KEY = "ms";
 const EXPIRE_MS = 2 * 24 * 60 * 60 * 1000;
 
@@ -13,9 +14,23 @@ export class BrowserBudget extends DurableObject {
     return true;
   }
 
-  async refund(amount: number): Promise<void> {
+  async reserve(limit: number, amount: number): Promise<string | null> {
+    if (!(await this.take(limit, amount))) return null;
+    const id = crypto.randomUUID();
+    await this.ctx.storage.put(`${RESERVATION_PREFIX}${id}`, amount);
+    return id;
+  }
+
+  async refund(id: string, amount: number): Promise<void> {
+    if (amount <= 0) return;
+    const key = `${RESERVATION_PREFIX}${id}`;
+    const held = (await this.ctx.storage.get<number>(key)) ?? 0;
+    const released = Math.min(amount, held);
+    if (released <= 0) return;
     const used = (await this.ctx.storage.get<number>(COUNT_KEY)) ?? 0;
-    await this.ctx.storage.put(COUNT_KEY, Math.max(0, used - amount));
+    await this.ctx.storage.put(COUNT_KEY, Math.max(0, used - released));
+    if (held === released) await this.ctx.storage.delete(key);
+    else await this.ctx.storage.put(key, held - released);
   }
 
   async addMs(ms: number): Promise<void> {

@@ -591,6 +591,68 @@ describe("judgeChange", () => {
     expect(await judgmentCounter("rival")).toBe(0);
   });
 
+  it("releases a reservation once, so a double refund cannot leak the cap", async () => {
+    const stub = env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("jev-change:rival:double-refund"));
+    const id = await stub.reserve(6, 3);
+    await stub.reserve(6, 3);
+
+    await stub.refund(id ?? "", 2);
+    await stub.refund(id ?? "", 2);
+    await stub.refund(id ?? "", 2);
+
+    expect(await stub.reserve(6, 5)).toBeNull();
+    expect(await stub.reserve(6, 3)).not.toBeNull();
+  });
+
+  it("ignores a zero or negative refund and an unknown reservation", async () => {
+    const stub = env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("jev-change:rival:bad-refund"));
+    const id = await stub.reserve(6, 3);
+
+    await stub.refund(id ?? "", 0);
+    await stub.refund(id ?? "", -5);
+    await stub.refund("unknown", 3);
+
+    expect(await stub.reserve(6, 4)).toBeNull();
+    expect(await stub.reserve(6, 3)).not.toBeNull();
+  });
+
+  it("keeps the cap exact when reserves and refunds run concurrently", async () => {
+    const stub = env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("jev-change:rival:concurrent"));
+
+    const ids = await Promise.all(Array.from({ length: 5 }, () => stub.reserve(6, 2)));
+    const held = ids.filter((id): id is string => id !== null);
+    await Promise.all([...held, ...held].map((id) => stub.refund(id, 2)));
+
+    expect(held).toHaveLength(3);
+    const again = await Promise.all(Array.from({ length: 5 }, () => stub.reserve(6, 2)));
+    expect(again.filter((id) => id !== null)).toHaveLength(3);
+  });
+
+  it("returns the judgment when the refund throws, and keeps the original error when both fail", async () => {
+    jevAnswers.noul.set("noteworthy_change", 0.95);
+    jevAnswers.choice.set("change_kind", "copy");
+    const real = env.BROWSER_BUDGET.get.bind(env.BROWSER_BUDGET);
+    vi.spyOn(env.BROWSER_BUDGET, "get").mockImplementation((id) => {
+      const stub = real(id);
+      return {
+        reserve: (limit: number, amount: number) => stub.reserve(limit, amount),
+        refund: () => Promise.reject(new Error("refund down")),
+      } as unknown as ReturnType<typeof real>;
+    });
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const judged = await judgeChange(judgeAt("rival", false, 0));
+    jevFailures.next = 1;
+    jevFailures.message = "2003: Rate limited";
+    const failed = judgeChange(judgeAt("rival", false, 1));
+    await expect(failed).rejects.toThrow(JevRateLimitedError);
+
+    const events = logged.mock.calls.map(([line]) => JSON.parse(String(line)).event);
+    vi.restoreAllMocks();
+    expect(judged.deferred).toBe(false);
+    expect(events).toContain("site.judgment_refund_failed");
+  });
+
   it("never lets concurrent rejudges and judgments exceed the per-brand daily cap", async () => {
     const total = 20;
     for (let index = 0; index < total; index += 1) {

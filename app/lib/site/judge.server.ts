@@ -283,24 +283,32 @@ function budgetCounter(entityId: string, now: Date) {
   return env.BROWSER_BUDGET.get(id);
 }
 
-async function reserveRows(entityId: string, now: Date, rows: number): Promise<boolean> {
+async function reserveRows(entityId: string, now: Date, rows: number): Promise<string | null> {
   const usedToday = await countVerdictsSince(entityId, todayStartIso(now));
-  if (usedToday + rows > CHANGE_VERDICT_ROWS_PER_BRAND_PER_DAY) return false;
-  return budgetCounter(entityId, now).take(CHANGE_VERDICT_ROWS_PER_BRAND_PER_DAY, rows);
+  if (usedToday + rows > CHANGE_VERDICT_ROWS_PER_BRAND_PER_DAY) return null;
+  return budgetCounter(entityId, now).reserve(CHANGE_VERDICT_ROWS_PER_BRAND_PER_DAY, rows);
+}
+
+async function releaseRows(entityId: string, now: Date, release: { id: string; rows: number }): Promise<void> {
+  try {
+    await budgetCounter(entityId, now).refund(release.id, release.rows);
+  } catch {
+    console.error(JSON.stringify({ event: "site.judgment_refund_failed" }));
+  }
 }
 
 export async function judgeChange(input: JudgeInput): Promise<JudgedChange> {
   const now = new Date();
   const reserved = input.isSelf ? SELF_CHANGE_MAX_ROWS : CHANGE_MAX_ROWS;
-  if (!(await reserveRows(input.entityId, now, reserved))) return deferredResult(null);
-  const counter = budgetCounter(input.entityId, now);
+  const reservation = await reserveRows(input.entityId, now, reserved);
+  if (reservation === null) return deferredResult(null);
+  let unused = reserved;
   try {
     const judged = await judgeChangeBody(input, now);
-    await counter.refund(reserved - judged.verdictIds.length);
+    unused = reserved - judged.verdictIds.length;
     return judged;
-  } catch (error) {
-    await counter.refund(reserved);
-    throw error;
+  } finally {
+    await releaseRows(input.entityId, now, { id: reservation, rows: unused });
   }
 }
 
