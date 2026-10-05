@@ -23,9 +23,6 @@ import { createTimings } from "../lib/server-timing.server";
 import { readSubjectAccess } from "../lib/onboarding/subject-access.server";
 
 export function headers({ loaderHeaders }: Route.HeadersArgs) {
-  // A leaf headers() replaces the layout default (only Set-Cookie carries
-  // over), so it must restate the no-store itself. Spread order puts the
-  // private default last so a loader-set cache-control cannot beat it.
   return { ...Object.fromEntries(loaderHeaders), "cache-control": "private, no-store" };
 }
 
