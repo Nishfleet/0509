@@ -2,6 +2,7 @@ import { captureException } from "@sentry/cloudflare";
 import { env, waitUntil } from "cloudflare:workers";
 import { z } from "zod";
 
+import { refuseWhenAiSpendOff } from "../ai/spend.server";
 import { insertJevFailure } from "../data/jev_failure.server";
 import { readCachedChoice, readCachedNoul } from "../data/jev_verdict.server";
 import { sha256Hex } from "../sha256";
@@ -146,6 +147,7 @@ function noulAsk(question: NoulQuestion): NoulAsk {
 }
 
 function decide(state: unknown, questions: Record<string, unknown>, retries?: AttemptPolicy): Promise<unknown> {
+  refuseWhenAiSpendOff();
   const gateway = retries === undefined ? { id: GATEWAY_ID } : { id: GATEWAY_ID, retries };
   return env.AI.run(MODEL, { model: MODEL_SELECTOR, state, questions }, { gateway });
 }
