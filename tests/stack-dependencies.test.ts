@@ -37,7 +37,7 @@ const names = manifests.flatMap((file) => {
 // approving row in the file, which is what stops the table growing a second
 // home (0509#7017). The specifier cell is one token, because a cell that starts
 // with a digit is not only a version: docs/REBUILD-STACK.md §4 has probe-result
-// rows whose second cell is `200, `image/x-icon``, and the looser shape matched
+// rows whose second cell reads `200, image/x-icon`, and the looser shape matched
 // all three of them.
 const approvingRow = (name?: string): RegExp => {
   const cell = name === undefined ? "[^`]+" : name.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
