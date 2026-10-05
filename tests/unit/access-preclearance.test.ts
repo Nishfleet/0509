@@ -106,6 +106,22 @@ describe("accessPrecleared", () => {
     ).resolves.toBe(false);
   });
 
+  it("still finds the assertion cookie when other cookies follow it", async () => {
+    const iss = freshIssuer();
+    const pair = await rsaPair();
+    const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    jwk.kid = "test-kid";
+    stubJwks(iss, jwk);
+    const jwt = await mintJwt(pair.privateKey, serviceClaims(iss));
+
+    await expect(
+      accessPrecleared(requestWithCookie(`CF_Authorization=${jwt}; theme=dark; locale=en-IN`), {
+        ACCESS_TEAM_DOMAIN: iss,
+        ACCESS_AUD: AUD,
+      }),
+    ).resolves.toBe(true);
+  });
+
   it("clears a verified service-token assertion", async () => {
     const iss = freshIssuer();
     const pair = await rsaPair();
