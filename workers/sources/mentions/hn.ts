@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { fetchUpstream, type MentionsAdapter, type MentionsResult } from "./types";
+import { fetchUpstream, type MentionsAdapter, type MentionsCursor, type MentionsResult } from "./types";
 
 const algoliaSchema = z.object({
   hits: z.array(
@@ -26,11 +26,20 @@ export function parseHn(rawBody: string): MentionsResult {
   return { items, canaryCount: hits.length, rawBody };
 }
 
-export const hnAdapter: MentionsAdapter = async (target, _cursor) => {
+const WINDOW_SECONDS = 7 * 24 * 60 * 60;
+
+function lowerBound(cursor: MentionsCursor): number {
+  const parsed = Number(cursor);
+  if (cursor !== null && Number.isInteger(parsed) && parsed > 0) return parsed;
+  return Math.floor(Date.now() / 1000) - WINDOW_SECONDS;
+}
+
+export const hnAdapter: MentionsAdapter = async (target, cursor) => {
   const url =
     "https://hn.algolia.com/api/v1/search_by_date?query=" +
     encodeURIComponent(target.query) +
-    "&tags=story&hitsPerPage=50";
+    "&tags=story&hitsPerPage=50&numericFilters=" +
+    encodeURIComponent("created_at_i>" + String(lowerBound(cursor)));
   const response = await fetchUpstream(url);
   if (!response.ok) {
     throw new Error("hn.algolia " + String(response.status));

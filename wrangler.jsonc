@@ -278,13 +278,18 @@
       // is mandatory for the same reason as send-email's: a message that reaches
       // the retry limit is deleted permanently otherwise, and a dropped first
       // collection is a brand whose Home page stays empty until the nightly
-      // sweep.
+      // sweep. retry_delay 60 (0509#7032) is the stock Queues consumer setting
+      // (https://developers.cloudflare.com/queues/configuration/batching-retries/):
+      // without it a failed message is redelivered immediately, so a deferred
+      // fetch or a D1 blip is retried before the origin or the database has
+      // recovered. Three retries then take about three minutes before the DLQ.
       {
         "queue": "fetch-sweep",
         "max_batch_size": 5,
         "max_batch_timeout": 30,
         "max_retries": 3,
         "max_concurrency": 20,
+        "retry_delay": 60,
         "dead_letter_queue": "fetch-sweep-dlq",
       },
       {

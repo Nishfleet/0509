@@ -2,8 +2,14 @@ import { env } from "cloudflare:workers";
 
 import { ensureOwnerEmailTarget } from "./data/send_target.server";
 import { isPerRunFixtureEmail } from "./fixture-accounts";
-import { fillWorkspaceTimezone, insertWorkspace, readWorkspaceLanding } from "./data/workspace.server";
+import {
+  fillWorkspaceTimezone,
+  insertWorkspace,
+  readWorkspaceLanding,
+  revertWorkspaceTimezone,
+} from "./data/workspace.server";
 import type { WorkspaceDb } from "./data/workspace.server";
+import { rescheduleBriefSchedule } from "./standing/reschedule.server";
 import { subjectRedirect } from "./onboarding-subject";
 import { canonicalTimezone, timezoneCookieValue } from "./timezone";
 
@@ -38,9 +44,31 @@ async function readWorkspace(db: WorkspaceDb, userId: string): Promise<Workspace
   return db.prepare(SELECT_WORKSPACE).bind(userId).first<WorkspaceRow>();
 }
 
+async function revertQuietly(db: WorkspaceDb, workspaceId: string, timezone: string): Promise<void> {
+  try {
+    await revertWorkspaceTimezone(db, workspaceId, timezone);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "workspace.timezone_revert_failed",
+        workspaceId,
+        error: String(error).slice(0, 300),
+      }),
+    );
+  }
+}
+
 async function withCapturedTimezone(db: WorkspaceDb, row: WorkspaceRow, timezone: string): Promise<WorkspaceRow> {
   if (row.timezone !== "UTC" || timezone === "UTC") return row;
-  await fillWorkspaceTimezone(db, row.id, timezone);
+  const filled = await fillWorkspaceTimezone(db, row.id, timezone);
+  if (!filled) return row;
+  const schedule = { weekday: row.brief_weekday, hour: row.brief_hour };
+  try {
+    await rescheduleBriefSchedule(row.id, { ...schedule, timezone: row.timezone }, { ...schedule, timezone });
+  } catch (error) {
+    await revertQuietly(db, row.id, timezone);
+    throw error;
+  }
   return { ...row, timezone };
 }
 

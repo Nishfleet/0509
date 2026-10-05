@@ -109,6 +109,15 @@ async function seedTitledNotable(slug: string, entity: string, title: string, ob
   return id;
 }
 
+async function seedBrief(periodEnd: Date) {
+  const periodStart = new Date(periodEnd.getTime() - 7 * 24 * hour);
+  await env.DB.prepare(
+    "INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status, payload_json) VALUES (?1, ?2, 'weekly', ?3, ?4, 'sent', '{}')",
+  )
+    .bind(`digest_${WS}_${instantStamp(periodEnd)}`, WS, periodStart.toISOString(), periodEnd.toISOString())
+    .run();
+}
+
 async function seedFrozenWeek(weekStartAt: string, ranks: readonly [string, number][]) {
   await env.DB.batch(
     ranks.map(([entity, rank]) =>
@@ -350,6 +359,45 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
       .bind(WS)
       .first<{ n: number }>();
     expect(digests?.n).toBe(0);
+  });
+
+  it("skips when the workspace already has a brief that closed within the week (0509#7075)", async () => {
+    const schedule = { ...scheduleOffsetFromToday(3), hour: 9 };
+    await seedWorkspace(schedule);
+    const closesAt = nextBriefAt(schedule, new Date());
+    const earlier = new Date(closesAt.getTime() - hour);
+    await seedBrief(earlier);
+    const instance = rolloverInstance(WS, closesAt, "scheduled");
+
+    await using introspector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, instance.id);
+    await introspector.modify(async (m) => {
+      await m.disableSleeps();
+    });
+    await env.STANDING_ROLLOVER.create(instance);
+    await introspector.waitForStatus("complete");
+
+    expect(await introspector.getOutput()).toMatchObject({ digestId: null, skipped: "already_briefed" });
+    const digests = await env.DB.prepare("SELECT COUNT(*) AS n FROM digest WHERE workspace_id = ?1")
+      .bind(WS)
+      .first<{ n: number }>();
+    expect(digests?.n).toBe(1);
+  });
+
+  it("does not skip when the only brief is last week's", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    await seedWorkspace(schedule);
+    const closesAt = nextBriefAt(schedule, new Date());
+    await seedBrief(previousBriefAt(schedule, previousBriefAt(schedule, closesAt)));
+    const instance = rolloverInstance(WS, closesAt, "scheduled");
+
+    await using introspector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, instance.id);
+    await introspector.modify(async (m) => {
+      await m.disableSleeps();
+    });
+    await env.STANDING_ROLLOVER.create(instance);
+    await introspector.waitForStatus("complete");
+
+    expect(await introspector.getOutput()).not.toMatchObject({ skipped: "already_briefed" });
   });
 
   it("carries the week's read-this-first marks and names the lead brand", async () => {

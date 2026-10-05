@@ -2,6 +2,7 @@ import type { Route } from "./+types/onboarding.competitors";
 
 import { useEffect, useState } from "react";
 import { data, Form, redirect, useNavigation, useRevalidator } from "react-router";
+import { z } from "zod";
 
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
 import { Monogram } from "../components/monogram";
@@ -17,6 +18,8 @@ import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/works
 
 const POLL_MS = 3000;
 const MAX_POLLS = 60;
+
+const startWatchingForm = z.object({ intent: z.literal("start") });
 
 async function workspaceFor(request: Request, fresh = false): Promise<string> {
   const session = await (fresh ? requireFreshSession(request) : requireSession(request));
@@ -47,7 +50,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 export async function action({ request }: Route.ActionArgs) {
   const workspaceId = await workspaceFor(request, true);
   const form = await request.formData();
-  if (form.get("intent") === "start") {
+  if (startWatchingForm.safeParse(Object.fromEntries(form)).success) {
     await markWatchingStarted(workspaceId, new Date().toISOString());
     throw redirect("/app");
   }
