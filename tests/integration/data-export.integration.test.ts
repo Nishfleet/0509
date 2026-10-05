@@ -68,6 +68,7 @@ describe("workspace export", () => {
       email: "mine@test.dev",
       now: new Date(NOW),
     });
+    if (data === null) throw new Error("expected export");
     const text = JSON.stringify(data);
 
     expect(data.account.signInEmail).toBe("mine@test.dev");
@@ -86,6 +87,18 @@ describe("workspace export", () => {
     expect(text).not.toContain("internal");
     expect(text).not.toContain("jev");
     expect(text).not.toContain("pubkey");
-    expect(text).not.toContain(`key-${"mine"}`);
+    expect(text).not.toContain("key-mine");
+  });
+
+  it("returns null when the owner row is gone", async () => {
+    const mine = await seed("no-owner");
+    await expect(
+      readWorkspaceExport(env.DB, {
+        workspaceId: mine.workspaceId,
+        userId: "missing-user",
+        email: "no-owner@test.dev",
+        now: new Date(NOW),
+      }),
+    ).resolves.toBeNull();
   });
 });

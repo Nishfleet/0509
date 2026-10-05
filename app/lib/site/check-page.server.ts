@@ -112,11 +112,8 @@ async function storeNewSnapshot(
 
 async function refreshUnchangedObject(r2Key: string | null, text: string): Promise<void> {
   if (r2Key === null) return;
+  if ((await env.SNAPSHOTS.head(r2Key)) !== null) return;
   await env.SNAPSHOTS.put(r2Key, text);
-  const pngKey = r2Key.replace(/\.txt$/, ".png");
-  const png = await env.SNAPSHOTS.get(pngKey);
-  if (png === null) return;
-  await env.SNAPSHOTS.put(pngKey, png.body, { httpMetadata: png.httpMetadata });
 }
 
 async function recordUnchanged(

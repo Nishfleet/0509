@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 import { DELETE_EXPIRED_SESSIONS, DELETE_EXPIRED_VERIFICATIONS } from "../../app/lib/data/auth_expiry.server";
-import { SELECT_HIRING_SIGNAL_STATES } from "../../app/lib/data/signal.server";
+import { SELECT_HIRING_SIGNAL_STATES, SEEN_URLS } from "../../app/lib/data/signal.server";
 import { SELECT_RUN } from "../../app/lib/workspace.server";
 import { SELECT_LATEST_ATTEMPT_ERROR } from "../../workers/delivery/dlq-consumer";
 import { SELECT_STALE_PENDING_ATTEMPTS, SELECT_STALE_PENDING_DIGESTS } from "../../workers/delivery/sweeper";
@@ -183,5 +183,18 @@ describe("0029_hot_path_indexes_and_sweep_run.sql", () => {
     } finally {
       await env.DB.exec("DROP TABLE gate_probe");
     }
+  });
+
+  it("reads seen mention URLs through idx_signal_dup_url (0509#7080)", async () => {
+    expect((await liveIndexColumns("idx_signal_dup_url")).slice(0, 2)).toEqual(["entity_id", "norm_url_hash"]);
+    const result = await env.DB.prepare(`EXPLAIN QUERY PLAN ${SEEN_URLS}`)
+      .bind("ent_mentions", JSON.stringify(["hash"]))
+      .all<{ detail: string }>();
+    const details = (result.results ?? []).map((row) => row.detail);
+    expect(
+      details.some((detail) => /USING (?:COVERING )?INDEX idx_signal_dup_url/.test(detail)),
+      `SEEN_URLS did not read through idx_signal_dup_url: ${details.join(" | ")}`,
+    ).toBe(true);
+    expect(details.filter((detail) => detail.startsWith("SCAN ") && !detail.includes("json_each"))).toEqual([]);
   });
 });

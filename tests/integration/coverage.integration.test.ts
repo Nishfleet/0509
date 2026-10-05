@@ -17,9 +17,9 @@ describe("coverage matches the enabled sources", () => {
     const rows = await env.DB.prepare(
       `SELECT key, json_extract(CASE WHEN json_valid(config_json) THEN config_json ELSE '{}' END, '$.pilot') AS pilot
        FROM source WHERE is_enabled = 1`,
-    ).all<{ key: string; pilot: string | null }>();
+    ).all<{ key: string; pilot: string | number | null }>();
     const enabled = new Set(rows.results.map((row) => row.key));
-    const piloted = new Set(rows.results.flatMap((row) => (row.pilot === null ? [] : [row.key])));
+    const piloted = new Set(rows.results.flatMap((row) => (row.pilot ? [row.key] : [])));
     const sources = COVERAGE.flatMap((group) => group.sources);
 
     for (const source of sources) {

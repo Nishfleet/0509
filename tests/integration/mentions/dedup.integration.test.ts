@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readMentionFeed } from "../../../app/lib/data/mention.server";
+import { normUrlHash } from "../../../app/lib/mentions/normalize";
 import { planTargets, sweepTarget } from "../../../workers/mentions/sweep";
 
 const NIGHT_ONE = "2026-09-24T03:00:00.000Z";
@@ -171,6 +172,28 @@ describe("D8 duplicate_signal", () => {
     await sweep(brand, [article("https://www.news.example.com/a/?utm_medium=x", "A different headline")], NIGHT_TWO);
     expect(duplicateAsks(run)).toBe(0);
     expect(await rows(competitorId)).toHaveLength(1);
+  });
+
+  it("still stores the same URL for a second brand in the workspace (0509#7080)", async () => {
+    const brand = freshBrand();
+    const { workspaceId, competitorId } = await seedWorkspace(brand);
+    const otherId = `${workspaceId}-other`;
+    const url = "https://news.example.com/a";
+    const hash = await normUrlHash(url);
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO entity (id, workspace_id, role, domain, name, created_at) VALUES (?1, ?2, 'competitor', ?3, ?4, ?5)",
+      ).bind(otherId, workspaceId, `${otherId}.com`, "Other Brand", NIGHT_ONE),
+      env.DB.prepare(
+        `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, canonical_url, url_hash, payload_json, dedup_key, observed_at, last_seen_at, title_hash, norm_url_hash)
+         VALUES (?1, ?2, ?3, 'src_mentions_gdelt', 'mention', 'Other story', ?4, ?4, ?5, '{}', ?6, ?7, ?7, ?5, ?5)`,
+      ).bind(`sig-${otherId}`, workspaceId, otherId, url, hash, `${otherId}:${url}`, NIGHT_ONE),
+    ]);
+    const run = jev(0.96);
+    Reflect.set(env, "AI", { run });
+    await sweep(brand, [article(url)], NIGHT_TWO);
+    expect(await rows(competitorId)).toHaveLength(1);
+    expect(duplicateAsks(run)).toBe(0);
   });
 
   it("never treats an older-than-seven-days mention as a candidate", async () => {

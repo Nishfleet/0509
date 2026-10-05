@@ -16,6 +16,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     email: session.user.email,
     now,
   });
+  if (data === null) throw new Response("There is nothing to export yet.", { status: 404 });
   return new Response(JSON.stringify(data, null, 2), {
     headers: {
       "content-type": "application/json; charset=utf-8",

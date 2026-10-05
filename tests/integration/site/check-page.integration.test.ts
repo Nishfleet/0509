@@ -179,16 +179,32 @@ describe("checkPage (0509#4433)", () => {
     expect(await snapshotCount()).toBe(4);
   });
 
-  it("puts the reused R2 object again so a 1-year age rule cannot delete the baseline (0509#7080)", async () => {
-    const first = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
+  it("restores a missing reused R2 text object and leaves a missing screenshot missing (0509#7080)", async () => {
+    browserHolder.current = browserStub();
+    const first = await checkPage({
+      watchId: WATCH,
+      pageId: PAGE,
+      url: URL,
+      mayScreenshot: async () => true,
+    });
     if (first.outcome !== "first") throw new Error("expected first");
+    if (first.screenshotKey === null) throw new Error("expected screenshot");
+    const pngKey = first.screenshotKey;
     await env.SNAPSHOTS.delete(first.textKey);
+    await env.SNAPSHOTS.delete(pngKey);
     expect(await env.SNAPSHOTS.head(first.textKey)).toBeNull();
+    expect(await env.SNAPSHOTS.head(pngKey)).toBeNull();
 
-    const same = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
+    const same = await checkPage({
+      watchId: WATCH,
+      pageId: PAGE,
+      url: URL,
+      mayScreenshot: async () => true,
+    });
     expect(same.outcome).toBe("unchanged");
     const restored = await env.SNAPSHOTS.get(first.textKey);
     expect(await restored?.text()).toBe(`Pricing Plan costs ten dollars. ${PAD}`);
+    expect(await env.SNAPSHOTS.head(pngKey)).toBeNull();
     expect(await objectCount()).toBe(1);
   });
 

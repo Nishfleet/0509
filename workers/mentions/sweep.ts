@@ -435,7 +435,7 @@ async function unseenMentionItems(watch: WatchRow, items: readonly MentionItem[]
     keyed.map((entry) => entry.dedupKey),
   );
   const seenUrls = await readSeenNormUrlHashes(
-    watch.workspace_id,
+    watch.entity_id,
     keyed.map((entry) => entry.urlHash),
   );
   const batchUrls = new Set<string>();

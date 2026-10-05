@@ -51,7 +51,7 @@ export async function readWorkspaceExport(
 ) {
   const { workspaceId, userId } = input;
   const owner = await db.prepare(SELECT_OWNER).bind(userId).first<{ name: string; email: string }>();
-  if (owner === null) throw new Error("export owner missing");
+  if (owner === null) return null;
   const [workspace, brands, signals, briefs, target, sessions, passkeys, keys, choices, decisions, incidents, plan] =
     await Promise.all([
       db.prepare(SELECT_WORKSPACE).bind(workspaceId).first(),
