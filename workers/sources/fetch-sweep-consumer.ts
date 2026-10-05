@@ -125,12 +125,17 @@ export async function handleFetchSweepBatch(batch: MessageBatch): Promise<FetchS
 }
 
 export function handleFetchSweepDlqBatch(batch: MessageBatch): void {
-  console.error(
-    JSON.stringify({
-      event: "fetch-sweep.dead_lettered",
-      queue: batch.queue,
-      messages: batch.messages.length,
-    }),
-  );
-  batch.ackAll();
+  for (const item of batch.messages) {
+    captureException(
+      new Error(
+        JSON.stringify({
+          event: "fetch-sweep.dead_lettered",
+          queue: FETCH_SWEEP_DLQ,
+          message_id: item.id,
+        }),
+      ),
+      { tags: { queue: FETCH_SWEEP_DLQ } },
+    );
+    item.ack();
+  }
 }
