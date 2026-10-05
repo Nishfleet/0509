@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
 
-// migrations/0048_email_suppression_normalize.sql (0509#7128). The lookup now matches
+// migrations/0046_email_suppression_normalize.sql (0509#7128). The lookup now matches
 // the primary key exactly, so a suppression stored before the fix with capitals or
 // spaces is only found if this migration rewrote it. Its own file so the statements
 // run against the rows seeded here and nothing else.
@@ -29,7 +29,7 @@ function migrationQueries(): string[] {
   const found: D1Migration | undefined = env.TEST_MIGRATIONS.find((migration) =>
     migration.name.endsWith("_email_suppression_normalize.sql"),
   );
-  if (found === undefined) throw new Error("0048_email_suppression_normalize.sql is missing from TEST_MIGRATIONS");
+  if (found === undefined) throw new Error("0046_email_suppression_normalize.sql is missing from TEST_MIGRATIONS");
   return found.queries;
 }
 
@@ -44,7 +44,7 @@ async function rows(): Promise<Row[]> {
   return results;
 }
 
-describe("the 0048 email_suppression normalization", () => {
+describe("the 0046 email_suppression normalization", () => {
   it("lowercases every address, collapses case duplicates to the earliest, and keeps every suppression", async () => {
     await env.DB.exec("DELETE FROM email_suppression");
     await env.DB.batch(
