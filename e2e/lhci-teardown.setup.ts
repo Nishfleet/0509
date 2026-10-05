@@ -8,6 +8,7 @@ import { expect, test as setup } from "@playwright/test";
 // 24h fresh-session window (app/lib/auth.server.ts). The redirect to
 // /login?deleted= is the proof the row is gone, the same way inbox.ts reads it.
 setup("delete the signed-in e2e address", async ({ request, baseURL }) => {
+  if (!baseURL) throw new Error("baseURL is not set");
   const cookie = process.env.BETTER_AUTH_SESSION_COOKIE;
   if (!cookie) throw new Error("BETTER_AUTH_SESSION_COOKIE is not set: the sign-in step recorded no session");
   const email = process.env.LHCI_EMAIL;

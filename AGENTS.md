@@ -101,9 +101,9 @@ npm run verify:stop  # chrome-devtools stop
 ```
 
 **`npm run typecheck` is the only real type gate.** `tsc --noEmit -p
-tsconfig.json` is a no-op here — `tsconfig.json` is `"files": []` plus two
-project references, so without `-b` it checks zero files and exits 0. Never
-cite it as type evidence.
+tsconfig.json` is a no-op here — `tsconfig.json` is `"files": []` plus three
+project references (node, cloudflare, test), so without `-b` it checks zero
+files and exits 0. Never cite it as type evidence.
 
 Signing in locally needs the `--var` overrides in `.agents/skills/verify/SKILL.md` (`BETTER_AUTH_URL` is pinned to production in `wrangler.jsonc`, so the emailed link would point at 0509.io).
 
