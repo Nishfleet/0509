@@ -38,6 +38,8 @@ describe("soak-report measures the two DONE lines (0509#7076)", () => {
     expect(step.env?.HEALTHCHECKS_API_KEY).toBe("${{ secrets.HEALTHCHECKS_API_KEY }}");
     expect(run).toContain("https://healthchecks.io/api/v3/checks/");
     expect(run).toContain('status == "up"');
+    expect(run).toContain("-H @-");
+    expect(run).not.toContain('-H "X-Api-Key: $HEALTHCHECKS_API_KEY"');
     expect(run).not.toContain("no healthchecks.io read key is a repository secret");
   });
 

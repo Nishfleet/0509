@@ -528,15 +528,17 @@ jobs:
           [ "$sentry_n" = "0" ] || failed=1
           hc_json=null
           if [ -n "${HEALTHCHECKS_API_KEY:-}" ]; then
-            hc_json=$(curl -sS --fail-with-body -H "X-Api-Key: $HEALTHCHECKS_API_KEY" https://healthchecks.io/api/v3/checks/) || hc_json=null
+            hc_json=$(printf 'X-Api-Key: %s\n' "$HEALTHCHECKS_API_KEY" | curl -sS --fail-with-body --max-time 30 -H @- https://healthchecks.io/api/v3/checks/) || hc_json=null
           fi
           hc_up=$(jq -r '.checks | if type == "array" then map(select(.status == "up")) | length else 0 end' <<< "$hc_json") || hc_up=0
           hc_bad=$(jq -r '.checks | if type == "array" then map(select(.status != "paused" and .status != "up")) | length else 1 end' <<< "$hc_json") || hc_bad=1
           hc_lines=$(jq -r '.checks | if type == "array" and length > 0 then map(select(.status != "paused") | "\(.name) \(.status)") | join("; ") else empty end' <<< "$hc_json") || hc_lines=""
           if [ -z "${HEALTHCHECKS_API_KEY:-}" ]; then
             hc_line="unreadable, HEALTHCHECKS_API_KEY repository secret is empty"
-          elif [ -z "$hc_lines" ]; then
+          elif [ "$(jq -r '.checks | type' <<< "$hc_json" 2>/dev/null)" != "array" ]; then
             hc_line="unreadable"
+          elif [ -z "$hc_lines" ]; then
+            hc_line="no unpaused checks"
           else
             hc_line="$hc_lines"
           fi
