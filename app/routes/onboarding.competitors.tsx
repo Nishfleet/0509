@@ -33,6 +33,10 @@ export function meta() {
   return [{ title: "Your competitors · Five to Nine" }];
 }
 
+export function headers() {
+  return { "cache-control": "private, no-store" };
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   const timings = createTimings();
   const workspaceId = await timings.measure("workspace", workspaceFor(request));

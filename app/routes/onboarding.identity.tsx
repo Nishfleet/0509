@@ -23,7 +23,7 @@ import { createTimings } from "../lib/server-timing.server";
 import { readSubjectAccess } from "../lib/onboarding/subject-access.server";
 
 export function headers({ loaderHeaders }: Route.HeadersArgs) {
-  return loaderHeaders;
+  return { "cache-control": "private, no-store", ...Object.fromEntries(loaderHeaders) };
 }
 
 export function meta() {
