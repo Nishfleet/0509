@@ -44,12 +44,14 @@ export interface DiscoveryOutcome {
   judged: number;
 }
 
-async function judgeAndWriteBatch(
-  step: WorkflowStep,
-  context: DiscoveryContext,
-  batch: readonly ResolvedCandidate[],
-  index: number,
-): Promise<DiscoveryResult[]> {
+interface BatchJob {
+  step: WorkflowStep;
+  context: DiscoveryContext;
+  batch: readonly ResolvedCandidate[];
+  index: number;
+}
+
+async function judgeAndWriteBatch({ step, context, batch, index }: BatchJob): Promise<DiscoveryResult[]> {
   const judgedBatch = await step.do(`judge-${String(index)}`, RETRY, () => judgeCandidates(context, batch));
   await step.do(`write-${String(index)}`, RETRY, () =>
     writeDiscoveryResults(context.self.workspaceId, judgedBatch, new Date().toISOString()),
@@ -68,7 +70,7 @@ async function judgeAndWriteBatches(
     const wave = await Promise.all(
       batches
         .slice(start, start + JEV_BATCH_SIZE)
-        .map((batch, offset) => judgeAndWriteBatch(step, context, batch, start + offset)),
+        .map((batch, offset) => judgeAndWriteBatch({ step, context, batch, index: start + offset })),
     );
     results = [...results, ...wave.flat()];
   }
