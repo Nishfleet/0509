@@ -96,7 +96,7 @@ again" that is disabled for 30 seconds with the count visible.
 
 ### 2.3 Onboarding
 
-Three screens, each one action, per `docs/REBUILD-ONBOARDING.md`. A mono step bar with
+Three screens, each one action. A mono step bar with
 the current step on the marker runs across the top of all three.
 
 1. **One input.** Placeholder "yourbrand.com or @yourbrand", button "Continue". Nothing else on screen.
@@ -223,7 +223,7 @@ No public card page (Nish, 2026-09-24). The owner shares a picture, made from Ho
 signed-in app, the way Spotify shares work: the brand's monogram and name, the rank line
 with the rank on its green marker, the week label in mono, and the `05|09` wordmark with
 `0509.io`, on the real cream ground. No competitor names, no captures, no marks, no counts
-table. Per `docs/REBUILD-STANDING-CARD.md`.
+table.
 
 **It is a square composition (`app/components/share-image.tsx`) drawn with the same tokens,
 fonts and built stylesheet as Home**, screenshotted by Cloudflare Browser Rendering at
@@ -576,9 +576,7 @@ that is a decision for Fable, recorded in the PR, not a silent divergence.
 
 These need Nish, and the brief deliberately stops rather than picking:
 
-1. **The name.** Three concepts rebranded the product to "Five to Nine"; the charter says
-   rebuild in place and says nothing about a rename. The concept pages use the `05|09`
-   wordmark, which works for either answer. Unresolved.
+1. **The name.** Decided: the product is Five to Nine, and `0509.io` is its domain (AGENTS.md).
 2. **A trial.** Decided 2026-09-22 (#3912 item 2): a 7-day trial on every paid plan through
    Dodo, card up front, charged on day 8 unless cancelled. No free tier. Landing and pricing
    copy say so (#4014, #4132).
