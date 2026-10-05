@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 
 import { nameFromDomain } from "./competitor/domain-name";
 import { readCompetitorName } from "./competitor/site-name.server";
-import { addManualCompetitor, readCompetitor, setCompetitorState } from "./data/entity.server";
+import { addManualCompetitor, countOtherOnCompetitors, readCompetitor, setCompetitorState } from "./data/entity.server";
 import { nextPlan, type PlanId } from "./billing/plans";
 import { readEntitlements, readPlanTier } from "./data/plan.server";
 import { withinProbeLimit } from "./identity/card.server";
@@ -32,8 +32,6 @@ const PROBE_LIMITED: CompetitorActionResult = {
   message: "You've tried a lot of addresses in the last minute. Wait a minute, then try again.",
 };
 
-const COUNT_OTHER_ON =
-  "SELECT count(*) AS n FROM entity WHERE workspace_id = ? AND role = 'competitor' AND state = 'on' AND domain <> ?";
 const SELECT_OWNER = "SELECT owner_user_id FROM workspace WHERE id = ?";
 
 function text(form: FormData, name: string): string {
@@ -64,11 +62,6 @@ async function targetOf(raw: string, normalised: ReturnType<typeof normaliseSubj
   return resolution.domain === null ? UNRESOLVED : { domain: resolution.domain, name: raw.trim() };
 }
 
-async function otherOnCount(workspaceId: string, exceptDomain: string): Promise<number | null> {
-  const row = await env.DB.prepare(COUNT_OTHER_ON).bind(workspaceId, exceptDomain).first<{ n: number }>();
-  return row === null ? null : row.n;
-}
-
 async function workspaceOwnerId(workspaceId: string): Promise<string | null> {
   const row = await env.DB.prepare(SELECT_OWNER).bind(workspaceId).first<{ owner_user_id: string }>();
   return row === null ? null : row.owner_user_id;
@@ -85,7 +78,7 @@ async function refusedBeforeFetch(
   normalised: ReturnType<typeof normaliseSubject>,
 ): Promise<CompetitorActionResult | null> {
   const exceptDomain = normalised.ok ? normalised.subject.registrable : "";
-  const onCount = await otherOnCount(workspaceId, exceptDomain);
+  const onCount = await countOtherOnCompetitors(workspaceId, exceptDomain);
   if (onCount !== null && onCount >= cap) return capRefusal(workspaceId, cap);
   const owner = await workspaceOwnerId(workspaceId);
   if (owner === null) return COULD_NOT_READ;
