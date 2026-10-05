@@ -11,6 +11,7 @@
     "DODO_ENVIRONMENT": "test_mode",
     "DODO_PAYMENTS_API_KEY": "test-key-not-a-dodo-key",
     "DODO_WEBHOOK_SECRET": "whsec_dGVzdC13ZWJob29rLXNlY3JldC1ub3QtcmVhbA==",
+    "SLACK_TARGET_SECRET": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     "DODO_PRODUCT_SCOUT": "pdt_test_scout",
     "DODO_PRODUCT_STARTER": "pdt_test_starter",
     "DODO_PRODUCT_AGENCY": "pdt_test_agency",
