@@ -7,8 +7,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ConsentView } from "../../app/lib/agent/consent.server";
 
-vi.mock("cloudflare:workers", () => ({ env: {} }));
-
 vi.mock("../../app/lib/agent/consent.server", () => ({
   decideConsent: () =>
     Promise.resolve({
