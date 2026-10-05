@@ -79,12 +79,13 @@ test("a row's switch is square and paints the card fill when off @smoke", async 
     const paint = await track.evaluate((element) => {
       const style = getComputedStyle(element);
       const thumb = element.querySelector<HTMLElement>('[data-slot="switch-thumb"]');
+      if (thumb === null) throw new Error("the switch renders no thumb");
       return {
         radius: style.borderRadius,
         background: style.backgroundColor,
         width: element.getBoundingClientRect().width,
-        thumbLeft: thumb?.getBoundingClientRect().left ?? 0,
-        thumbRight: thumb?.getBoundingClientRect().right ?? 0,
+        thumbLeft: thumb.getBoundingClientRect().left,
+        thumbRight: thumb.getBoundingClientRect().right,
         trackLeft: element.getBoundingClientRect().left,
         trackRight: element.getBoundingClientRect().right,
       };
