@@ -68,9 +68,32 @@
   --transition-duration-press: var(--duration-press);
 
   --radius-none: 0px;
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
 
-  --color-bone: var(--bone);
+  --color-background: var(--bone);
+  --color-foreground: var(--ink);
   --color-card: var(--card);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--card);
+  --color-popover-foreground: var(--ink);
+  --color-primary: var(--green);
+  --color-primary-foreground: var(--on-green);
+  --color-secondary: var(--bone);
+  --color-secondary-foreground: var(--ink);
+  --color-muted: var(--bone);
+  --color-muted-foreground: var(--ink-soft);
+  --color-destructive: var(--red);
+  --color-border: var(--line);
+  --color-input: var(--line);
+  --color-ring: var(--ink);
+  --color-bone: var(--bone);
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
   --color-ink-faint: var(--ink-faint);

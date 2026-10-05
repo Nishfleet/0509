@@ -125,3 +125,40 @@ describe("the brand switch field", () => {
     expect(html).not.toContain("text-ink-faint");
   });
 });
+
+describe("the brand switch geometry (0509#7071)", () => {
+  function switchClass(html: string): string {
+    return html.replace(/&amp;/g, "&").match(/role="switch"[^>]*class="([^"]*)"/)?.[1] ?? "";
+  }
+
+  it("sizes the track at 38x22 by winning the size against the stock 32x18.4 track", () => {
+    const html = render("off");
+    const cls = switchClass(html);
+    expect(cls).toContain("data-[size=default]:h-[22px]");
+    expect(cls).toContain("data-[size=default]:w-[38px]");
+    expect(cls).not.toContain("h-[18.4px]");
+    expect(cls).not.toContain("w-[32px]");
+  });
+
+  it("never lets the stock track leak an undefined token class", () => {
+    const html = render("off");
+    const cls = switchClass(html);
+    expect(cls).not.toContain("data-[size=default]:h-[18.4px]");
+    expect(cls).not.toContain("data-[size=default]:w-[32px]");
+  });
+
+  it("paints the off track card fill, so the stock unchecked fill loses", () => {
+    const html = render("off");
+    const cls = switchClass(html);
+    expect(cls).toContain("data-unchecked:bg-card");
+    expect(cls).toContain("dark:data-unchecked:bg-card");
+    expect(cls).not.toContain("data-unchecked:bg-input");
+    expect(cls).not.toContain("dark:data-unchecked:bg-input/80");
+  });
+
+  it("carries the checked thumb translate that keeps the thumb inside a 38px track", () => {
+    // 1.5 inset + 16 thumb + 17.5 travel = 35 <= 38 - 2*1.5 = 35. Any larger leaves the track.
+    const html = render("on").replace(/&amp;/g, "&");
+    expect(switchClass(html)).toContain("data-checked:[&_[data-slot=switch-thumb]]:translate-x-[17.5px]");
+  });
+});
