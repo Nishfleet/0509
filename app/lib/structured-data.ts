@@ -3,9 +3,6 @@ import { PLANS } from "./billing/plans";
 import type { FaqEntry } from "./faq";
 import { SITE_URL } from "./site-url";
 
-// Re-exported, not redeclared: the literal lives in the import-free
-// app/lib/site-url.ts so env.server.ts can hold the same origin without
-// pulling this module's React imports into the Worker's boot path (0509#7124).
 export { SITE_URL };
 
 const ORGANIZATION_ID = `${SITE_URL}/#organization`;
