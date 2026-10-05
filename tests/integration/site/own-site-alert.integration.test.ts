@@ -136,6 +136,11 @@ describe("own-site alert in one sweep pass", () => {
     )
       .bind(WS, USER, NOW)
       .run();
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
+    )
+      .bind(`plan-${WS}`, WS, NOW)
+      .run();
     await seedEntity(SELF, "self", "mybrand.com", "MyBrand");
     await seedEntity(RIVAL, "competitor", "rival.com", "Rival");
     await env.DB.exec("UPDATE source SET is_enabled = 1 WHERE id = 'src_site_web'");

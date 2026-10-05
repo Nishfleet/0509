@@ -129,6 +129,11 @@ const resetTenant = async () => {
   )
     .bind(WS, USER, NOW)
     .run();
+  await env.DB.prepare(
+    "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
+  )
+    .bind(`plan-${WS}`, WS, NOW)
+    .run();
 };
 
 const seedSweep = async () => {

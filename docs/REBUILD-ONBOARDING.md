@@ -32,7 +32,7 @@ How the budget is kept (measured 2026-09-21 by the deputy: the ads leg is ~7 s, 
 - Back always works and loses nothing; the card and competitor list are saved on every edit.
 - Timings are measured and stored per onboarding (input to card, card to competitors, competitors to first signal). Anything over budget is a defect, filed by the audit packet, not a tolerance.
 - One brand per workspace in v1. A second brand is a second workspace (a row, not a redesign). Creators and companies use the same flow.
-- The plan gate (free vs paid) is not in onboarding. It appears the first time a paid thing is asked for, and it says the price on the button.
+- The plan gate is the last onboarding step: after Start watching, the user picks a plan and starts the 7-day card-up-front trial before /app opens. A workspace with no live subscription cannot reach Home.
 
 ## Proof required in every onboarding packet
 

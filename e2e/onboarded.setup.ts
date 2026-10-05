@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs";
 import { expect, test as setup, type Page } from "@playwright/test";
 
 import { accessStatePath, onboardedEmailPath, onboardedStatePath } from "../playwright.config";
-import { requireInboxToken, signInWithMagicLink } from "./inbox";
+import { isLocalLane, requireInboxToken, seedLivePlanForEmail, signInWithMagicLink } from "./inbox";
 
 // This setup mints one onboarded session per viewport lane (desktop + phone).
 // It exists because the parent issue (#6026) identifies a repeated magic-link
@@ -92,7 +92,12 @@ setup("mint one onboarded session per viewport lane", async ({ browser }) => {
         await expect(watching.first()).toBeVisible();
       }
       await page.getByRole("button", { name: "Start watching" }).click();
-      await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
+      await expect(page).toHaveURL(/\/onboarding\/plan$/, { timeout: 30_000 });
+      if (isLocalLane()) {
+        seedLivePlanForEmail(email);
+        await page.goto("/app");
+        await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
+      }
 
       await page.goto("/app/competitors");
       await addCompetitor(page, "nike.com");

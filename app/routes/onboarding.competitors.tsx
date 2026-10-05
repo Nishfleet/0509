@@ -51,7 +51,7 @@ export async function action({ request }: Route.ActionArgs) {
   const form = await request.formData();
   if (form.get("intent") === "start") {
     await markWatchingStarted(workspaceId, new Date().toISOString());
-    throw redirect("/app");
+    throw redirect("/onboarding/plan");
   }
   return handleCompetitorIntent(workspaceId, form);
 }

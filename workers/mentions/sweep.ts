@@ -16,6 +16,7 @@ import {
 } from "../../app/lib/data/signal.server";
 import { insertWatchSnapshot } from "../../app/lib/data/snapshot.server";
 import { markSourceTimedOut } from "../../app/lib/data/source.server";
+import { readPaidWorkspaceIds } from "../../app/lib/data/plan.server";
 import type { WatchRow } from "../../app/lib/data/watch.server";
 import {
   markWatchPolled,
@@ -74,7 +75,8 @@ export interface TargetOutcome {
 }
 
 export async function planTargets(): Promise<MentionTarget[]> {
-  const watches = await readActiveWatches("mentions");
+  const paid = await readPaidWorkspaceIds(new Date());
+  const watches = (await readActiveWatches("mentions")).filter((watch) => paid.has(watch.workspace_id));
   const byTarget = new Map<string, MentionTarget>();
   for (const watch of watches) {
     const key = `${watch.source_id}\u0000${watch.target_key}`;

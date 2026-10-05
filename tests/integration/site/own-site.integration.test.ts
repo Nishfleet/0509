@@ -113,6 +113,11 @@ describe("own-site check", () => {
     )
       .bind(WS, USER, NOW)
       .run();
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
+    )
+      .bind(`plan-${WS}`, WS, NOW)
+      .run();
     await seedEntity("ent-self", "self", "mybrand.com");
     await seedEntity("ent-rival", "competitor", "rival.com");
     site.status = 200;

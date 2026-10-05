@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 
+import { isWorkspacePaid } from "./billing/entitlements";
 import { readWorkspaceSelfId } from "./data/entity.server";
+import { readPlanSubscription } from "./data/plan.server";
 import { ensureOwnerEmailTarget } from "./data/send_target.server";
 import { isPerRunFixtureEmail } from "./fixture-accounts";
 import { fillWorkspaceTimezone, insertWorkspace } from "./data/workspace.server";
@@ -91,6 +93,7 @@ export async function ensureWorkspaceForSignIn(
 }
 
 export const ONBOARDING_COMPETITORS = "/onboarding/competitors";
+export const ONBOARDING_PLAN = "/onboarding/plan";
 
 export const SELECT_RUN =
   "SELECT input_raw, watching_started_at FROM onboarding_run WHERE workspace_id = ? ORDER BY started_at ASC LIMIT 1";
@@ -115,7 +118,11 @@ export async function workspaceLanding(
     readWorkspaceSelfId(workspace.id),
     db.prepare(SELECT_RUN).bind(workspace.id).first<RunRow>(),
   ]);
-  return resumePoint(selfId !== null, run);
+  const landing = resumePoint(selfId !== null, run);
+  if (landing !== null) return landing;
+  const plan = await readPlanSubscription(workspace.id);
+  if (!isWorkspacePaid(plan, new Date(input.now ?? Date.now()))) return ONBOARDING_PLAN;
+  return null;
 }
 
 export async function workspaceLandingForRequest(
