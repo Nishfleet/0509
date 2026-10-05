@@ -1,11 +1,26 @@
 import { parseSlackWebhook } from "./slack-webhook";
+import { sha256Hex } from "./sha256";
 
-const PREFIX = "enc:v1:";
+const PREFIX = "enc:";
+const KEYED_VERSION = "v2";
+const LEGACY_VERSION = "v1";
 const IV_LENGTH = 12;
 const KEY_LENGTH = 32;
+const KEY_ID_LENGTH = 16;
+const MAX_KEYS = 3;
+const NOT_CONFIGURED = "SLACK_TARGET_SECRET is not configured";
+
+interface StoredEnvelope {
+  readonly keyId: string | null;
+  readonly payload: string;
+}
 
 export function isEncryptedSlackTarget(stored: string): boolean {
   return stored.startsWith(PREFIX);
+}
+
+export async function slackTargetKeyId(secret: string): Promise<string> {
+  return (await sha256Hex(secret)).slice(0, KEY_ID_LENGTH);
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -40,15 +55,37 @@ async function importSecret(secret: string): Promise<CryptoKey> {
   return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
 }
 
+function parseEnvelope(stored: string): StoredEnvelope | null {
+  if (!stored.startsWith(PREFIX)) return null;
+  const withoutPrefix = stored.slice(PREFIX.length);
+  const versionEnd = withoutPrefix.indexOf(":");
+  if (versionEnd < 1) return null;
+  const version = withoutPrefix.slice(0, versionEnd);
+  const rest = withoutPrefix.slice(versionEnd + 1);
+  if (version === LEGACY_VERSION) return { keyId: null, payload: rest };
+  if (version !== KEYED_VERSION) return null;
+  const payloadStart = rest.indexOf(":");
+  if (payloadStart < 1) return null;
+  return { keyId: rest.slice(0, payloadStart), payload: rest.slice(payloadStart + 1) };
+}
+
+export async function isSealedWithKey(stored: string, secret: string): Promise<boolean> {
+  const envelope = parseEnvelope(stored);
+  return envelope?.keyId === (await slackTargetKeyId(secret));
+}
+
+function boundWorkspace(workspaceId: string): Uint8Array<ArrayBuffer> {
+  return copyBytes(new TextEncoder().encode(workspaceId));
+}
+
 export async function encryptSlackWebhook(url: string, secret: string, workspaceId: string): Promise<string> {
   const webhook = parseSlackWebhook(url);
   if (webhook === null) throw new Error("Slack webhook address is not valid");
   const iv = new Uint8Array(new ArrayBuffer(IV_LENGTH));
   crypto.getRandomValues(iv);
-  const bound = copyBytes(new TextEncoder().encode(workspaceId));
   const sealed = new Uint8Array(
     await crypto.subtle.encrypt(
-      { name: "AES-GCM", iv, additionalData: bound },
+      { name: "AES-GCM", iv, additionalData: boundWorkspace(workspaceId) },
       await importSecret(secret),
       copyBytes(new TextEncoder().encode(webhook)),
     ),
@@ -56,25 +93,26 @@ export async function encryptSlackWebhook(url: string, secret: string, workspace
   const packed = new Uint8Array(new ArrayBuffer(iv.byteLength + sealed.byteLength));
   packed.set(iv);
   packed.set(sealed, iv.byteLength);
-  return PREFIX + bytesToBase64(packed);
+  return `${PREFIX}${KEYED_VERSION}:${await slackTargetKeyId(secret)}:${bytesToBase64(packed)}`;
 }
 
 export async function decryptSlackWebhook(stored: string, secret: string, workspaceId: string): Promise<string> {
   if (!isEncryptedSlackTarget(stored)) throw new Error("Slack target is not encrypted");
+  const envelope = parseEnvelope(stored);
+  if (envelope === null) throw new Error("Slack target could not be decrypted");
   let packed: Uint8Array<ArrayBuffer>;
   try {
-    packed = base64ToBytes(stored.slice(PREFIX.length));
+    packed = base64ToBytes(envelope.payload);
   } catch (error) {
     throw new Error("Slack target could not be decrypted", { cause: error });
   }
   if (packed.byteLength < IV_LENGTH + 16) throw new Error("Slack target could not be decrypted");
   const iv = copyBytes(packed, 0, IV_LENGTH);
   const sealed = copyBytes(packed, IV_LENGTH);
-  const bound = copyBytes(new TextEncoder().encode(workspaceId));
   let bytes: ArrayBuffer;
   try {
     bytes = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv, additionalData: bound },
+      { name: "AES-GCM", iv, additionalData: boundWorkspace(workspaceId) },
       await importSecret(secret),
       sealed,
     );
@@ -84,4 +122,34 @@ export async function decryptSlackWebhook(stored: string, secret: string, worksp
   const webhook = parseSlackWebhook(new TextDecoder().decode(bytes));
   if (webhook === null) throw new Error("Slack target could not be decrypted");
   return webhook;
+}
+
+export function parseSlackTargetKeys(raw: unknown): readonly string[] {
+  if (typeof raw !== "string") throw new Error(NOT_CONFIGURED);
+  const keys = raw.split(",").map((key) => key.trim());
+  if (keys.length > MAX_KEYS || keys.some((key) => key.length === 0)) throw new Error(NOT_CONFIGURED);
+  return keys;
+}
+
+async function candidateKeys(stored: string, secrets: readonly string[]): Promise<readonly string[]> {
+  const keyId = parseEnvelope(stored)?.keyId ?? null;
+  if (keyId === null) return secrets;
+  const ids = await Promise.all(secrets.map((secret) => slackTargetKeyId(secret)));
+  const named = secrets.filter((_, index) => ids[index] === keyId);
+  return named.length > 0 ? named : secrets;
+}
+
+export async function decryptSlackWebhookWithKeys(
+  stored: string,
+  secrets: readonly string[],
+  workspaceId: string,
+): Promise<string> {
+  for (const secret of await candidateKeys(stored, secrets)) {
+    try {
+      return await decryptSlackWebhook(stored, secret, workspaceId);
+    } catch {
+      continue;
+    }
+  }
+  throw new Error("Slack target could not be decrypted");
 }
