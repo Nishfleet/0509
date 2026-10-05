@@ -27,7 +27,7 @@ test.afterEach(async ({ page }, testInfo) => {
 // aria-describedby.
 //
 // Two lanes, one contract:
-// - production (PLAYWRIGHT_TEST_BASE_URL set, the deployment_status run): a
+// - production (PLAYWRIGHT_TEST_BASE_URL set, the e2e-scheduled.yml run): a
 //   real magic-link sign-in and the J3 onboarding, gymshark.com watched, the
 //   same journey competitor-page.spec.ts drives.
 // - preview (unset, the PR's own e2e run): the local Worker cannot mint a
@@ -76,20 +76,10 @@ async function watchOneCompetitor(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
 
   const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
-  await expect(
-    watching
-      .first()
-      .or(page.getByRole("button", { name: /^Watch / }).first())
-      .first(),
-  ).toBeVisible({
-    timeout: 60_000,
-  });
   if ((await watching.count()) === 0) {
-    await page
-      .getByRole("button", { name: /^Watch / })
-      .first()
-      .click();
-    await expect(watching.first()).toBeVisible();
+    await page.locator("#add-competitor").fill("nike.com");
+    await page.getByRole("button", { name: "Add" }).click();
+    await expect(watching.first()).toBeVisible({ timeout: 30_000 });
   }
   await page.getByRole("button", { name: "Start watching" }).click();
   await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });

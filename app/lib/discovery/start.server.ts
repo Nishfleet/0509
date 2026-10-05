@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 
 import { isSubscriptionLive } from "../billing/entitlements";
 import { isDiscoveryDay } from "../cadence";
-import { readDiscoverableWorkspaces } from "../data/entity.server";
+import { readDiscoverableWorkspaces, readOnboardingCompetitors } from "../data/entity.server";
 import { discoveryStateFor, type DiscoveryState } from "./state";
 
 export interface DiscoveryParams {
@@ -65,4 +65,21 @@ export async function readDiscoveryState(workspaceId: string, now: Date): Promis
     console.warn(JSON.stringify({ event: "discovery.status_unread", message: String(error) }));
     return "looking";
   }
+}
+
+export async function readOnboardingScreen(workspaceId: string, now: Date) {
+  const discovery = await readDiscoveryState(workspaceId, now);
+  const statusReadAt = new Date().toISOString();
+  const competitors = await readOnboardingCompetitors(workspaceId);
+  if (discovery === "done" && competitors.on.length + competitors.maybes.length === 0) {
+    console.warn(
+      JSON.stringify({
+        event: "discovery.done_with_empty_list",
+        workspaceId,
+        statusReadAt,
+        listsReadAt: new Date().toISOString(),
+      }),
+    );
+  }
+  return { ...competitors, discovery };
 }

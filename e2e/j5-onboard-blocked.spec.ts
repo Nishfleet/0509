@@ -24,8 +24,8 @@ function fixtureToken(): string {
   return token;
 }
 
-async function setWall(state: "on" | "off"): Promise<void> {
-  const res = await fetch(`https://j5.fixture.0509.in/__wall?state=${state}`, {
+async function raiseWall(): Promise<void> {
+  const res = await fetch("https://j5.fixture.0509.in/__wall?state=on", {
     method: "POST",
     headers: { authorization: `Bearer ${fixtureToken()}` },
   });
@@ -40,11 +40,7 @@ test.describe("J5", () => {
   test.describe.configure({ mode: "serial" });
 
   test.beforeAll(async () => {
-    await setWall("on");
-  });
-
-  test.afterAll(async () => {
-    await setWall("off");
+    await raiseWall();
   });
 
   test("J5: a bot-blocking site still gets a card whose empty fields say when they fill @own-signin", async ({

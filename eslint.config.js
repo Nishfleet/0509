@@ -264,7 +264,14 @@ const DOC_READING_TEST_BAN = {
     "A test never reads a .md file. A doc-vs-code check is review's: a doc edit that fails the suite teaches the next writer to change the test instead of the doc. Put the copy in the product's public surface and assert that. docs/REBUILD-DONE.md D. Source: 0509#6953.",
 };
 
+const BARE_TOAST = {
+  selector: "CallExpression[callee.name='toast'], MemberExpression[object.name='toast']",
+  message:
+    "toast() is called in exactly one module, app/components/toaster.tsx, behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo'. The sonner import ban does not catch a toast reached another way, so the call shape is banned too. Source: 0509#4116, 0509#7007.",
+};
+
 const BANNED_SYNTAX = [
+  BARE_TOAST,
   SUPPORT_ADDRESS_BAN,
   GOOGLE_FONTS_BAN,
   CRAWLER_USER_AGENT_BAN,
@@ -662,6 +669,22 @@ export default tseslint.config(
   },
 
   {
+    // The one toast() call site, behind toastSaved(). It is client code, so
+    // BARE_FETCH stays off as in the client block above. Flat config replaces
+    // no-restricted-syntax wholesale, so this restates the list. 0509#7007.
+    files: ["app/components/toaster.tsx"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== BARE_FETCH && rule !== BARE_TOAST),
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  {
     // The fetch paved path itself, where the guard's host check and the
     // wrapped call live by definition; its .hostname reads stay allowed too.
     files: ["app/lib/fetch/**"],
@@ -992,7 +1015,12 @@ export default tseslint.config(
       "vitest/no-focused-tests": "error",
       "vitest/no-disabled-tests": "error",
       "vitest/no-identical-title": "error",
-      "vitest/expect-expect": "error",
+      // Named assertion helpers: `expectNoHtmlInjection` is the 0509#7020
+      // email-injection sweep helper (tests/email-html-injection.ts), named
+      // exactly so an `expect`-prefixed helper that asserts nothing still
+      // fails this rule. A new assertion helper must be added to this list.
+      // `assert` stays from the stock default.
+      "vitest/expect-expect": ["error", { assertFunctionNames: ["expect", "expectNoHtmlInjection", "assert"] }],
       "vitest/valid-expect": ["error", { maxArgs: 2 }],
     },
   },

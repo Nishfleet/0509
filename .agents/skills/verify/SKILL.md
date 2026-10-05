@@ -104,6 +104,10 @@ An inbox that still holds an earlier message answers with that spent link; sign 
 
 A brand-new account lands on `/onboarding`, not `/app`: the workspace has no confirmed brand yet. Finish the one input — `fill` "gymshark.com", `press_key Enter`, and if the card marks the name `CHECK THIS` open `edit name`, `fill` it and `press_key Enter` (the POST rejects an empty name), then `click "That's me"`, `click "Start watching"` — and the app lands on `/app`. The next sign-in as that address goes straight to `/app`, which is the state `e2e/.auth/onboarded-<lane>.json` caches. Take the `/app` snapshot here and paste it as the proof.
 
+### A fresh account
+
+A check that needs a new account (onboarding, an empty workspace) signs up a fresh `e2e+<12 hex>@0509.io` address through the same steps. On production that address is a real row, and the soak report counts every one left behind as a leak (0509#6968: two such rows outlived migration 0044). Before you finish, even when the check failed, delete it through the path `deleteCreatedAccount` in `e2e/inbox.ts` drives: open `/app/settings`, fill the box labelled `Type <address> to confirm` with the address, click `Delete my account`, and confirm the page lands on `/login?deleted=`. A lost session means sign in once more first. Never delete it with SQL. The fixed journey accounts (`e2e+j7@0509.io` and the rest of `KEPT_JOURNEY_ACCOUNTS`) are never deleted.
+
 ## Drive it
 
 `take_snapshot <pageId>` lists elements with uids. Act on a uid from that snapshot:

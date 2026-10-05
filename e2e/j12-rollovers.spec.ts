@@ -60,7 +60,12 @@ async function rotate(page: Page): Promise<string> {
   await page.goto("/app/competitors");
   const toggle = switchFor(page, ROTATING);
   const wasOn = await toggle.isChecked();
+  const saved = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" && response.ok() && response.url().includes("/app/competitors"),
+  );
   await toggle.click();
+  await saved;
   if (wasOn) await expect(toggle).not.toBeChecked();
   else await expect(toggle).toBeChecked();
   await page.reload();

@@ -23,8 +23,6 @@ test("the sent state lands in place and the resend waits 30 seconds with a visib
 }, testInfo) => {
   const watched = watchConsole(page);
 
-  await page.clock.install();
-
   const response = await page.goto("/login");
   expect(response?.status()).toBe(200);
 
@@ -32,6 +30,9 @@ test("the sent state lands in place and the resend waits 30 seconds with a visib
   createdEmail = email;
   await page.locator('input[name="email"]').fill(email);
   await settleSignInWidget(page);
+  // Fake timers after Turnstile has minted. Installing before navigation makes
+  // the widget's own scripts throw, and those pageerrors have no URL to exclude.
+  await page.clock.install();
   await page.locator('button[type="submit"]').click();
 
   await expect(page).toHaveURL(/\/login$/);

@@ -290,6 +290,11 @@ jobs:
     timeout-minutes: 35
     strategy:
       fail-fast: false
+      # The live-ai group holds one running job and one waiting job, so four
+      # shards started together cancel two of themselves ("Canceling since a
+      # higher priority waiting request for live-ai exists", run 37225811829)
+      # and the suite can never pass (0509#6968). One shard at a time.
+      max-parallel: 1
       matrix:
         shard: [1, 2, 3, 4]
     permissions:
