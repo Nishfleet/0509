@@ -62,7 +62,7 @@
       }
       .a5-h em {
         font-style: normal;
-        color: var(--accent);
+        color: var(--green-ink);
       }
       .a5-body {
         position: absolute;
@@ -138,7 +138,7 @@
         line-height: 1.32;
       }
       .a5-line-v .pf {
-        color: var(--accent);
+        color: var(--green-ink);
         font-weight: 600;
       }
     </style>
@@ -174,15 +174,15 @@
       <div class="a5-lines">
         <div class="a5-line clip" data-start="2.90" data-duration="7.10" id="act-5-brief-a5-line-1">
           <div class="a5-line-k">01</div>
-          <div class="a5-line-v">Where you stood</div>
+          <div class="a5-line-v">Read this first</div>
         </div>
         <div class="a5-line clip" data-start="3.20" data-duration="6.80" id="act-5-brief-a5-line-2">
           <div class="a5-line-k">02</div>
-          <div class="a5-line-v">Where everyone stands</div>
+          <div class="a5-line-v">Where you&rsquo;ve stood</div>
         </div>
         <div class="a5-line clip" data-start="3.50" data-duration="6.50" id="act-5-brief-a5-line-3">
           <div class="a5-line-k">03</div>
-          <div class="a5-line-v"><span class="pf">The three things worth knowing</span></div>
+          <div class="a5-line-v"><span class="pf">Where everyone stands</span></div>
         </div>
       </div>
     </div>
@@ -201,7 +201,6 @@
             2.9,
           )
           .set(".a5-line", { opacity: 0.45 }, 4.9)
-          .set(".a5-line:nth-child(2)", { opacity: 0.45 }, 5.2)
           .set(".a5-line:nth-child(3)", { opacity: 1 }, 5.5);
         window.__timelines[ID] = tl;
         tl.seek(0);

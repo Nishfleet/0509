@@ -73,7 +73,7 @@ Picture: the alerts screen from the committed design keyframes, with the before/
 >
 > Where you stand this week, the three things worth knowing, and the proof behind each.
 >
-> 01 Where you stood · 02 Where everyone stands · 03 The three things worth knowing
+> 01 Read this first · 02 Where you've stood · 03 Where everyone stands
 
 Picture: the home screen from the committed design keyframes, captioned "Home screen, this week's standing".
 
@@ -85,9 +85,9 @@ Picture: the home screen from the committed design keyframes, captioned "Home sc
 >
 > Three plans. One is enough.
 >
-> Scout — €10 / month — One brand, watched weekly.
-> Starter — €46 / month — More competitors, more sources.
-> Agency — €136 / month — For the ones who watch many.
+> Scout — €10 / month — Up to 5 competitors.
+> Starter — €46 / month — Up to 15 competitors.
+> Agency — €136 / month — Up to 50 competitors.
 >
 > _Pricing as published on the app's pricing page._
 

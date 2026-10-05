@@ -76,7 +76,7 @@
         color: var(--ink-faint);
       }
       .a3-step.on .a3-num {
-        color: var(--accent);
+        color: var(--green-ink);
       }
       .a3-title {
         font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif;
@@ -133,7 +133,7 @@
         var steps = [".a3-step:nth-child(1)", ".a3-step:nth-child(2)", ".a3-step:nth-child(3)"];
         var starts = [0.5, 6.5, 12.5];
         steps.forEach(function (sel, i) {
-          var node = document.querySelectorAll(".a3-step")[i];
+          var node = document.querySelector(sel);
           tl.fromTo(node, { opacity: 0, y: 34 }, { opacity: 1, y: 0, duration: 0.7, ease: "power3.out" }, starts[i]);
           tl.fromTo(
             node.querySelector(".a3-title"),
@@ -142,7 +142,6 @@
             starts[i] + 0.12,
           );
         });
-        // The step in focus keeps full contrast; the others dim.
         // The step in focus keeps its green number; the others fall back to grey.
         tl.set(".a3-step", { className: "a3-step clip" }, 0)
           .set("#a3-s1", { className: "a3-step clip on" }, 0.5)

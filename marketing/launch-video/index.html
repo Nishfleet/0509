@@ -54,14 +54,20 @@
         src: url("assets/fonts/ibm-plex-mono-latin-500.woff2") format("woff2");
       }
 
-      /* ── Brand tokens (public/index.html) ──────────────────────────────── */
+      /* ── Brand tokens (app/app.css:85-96) ────────────────────────────────
+         The product has ONE accent, used two ways (docs/design-directions/a-final/style.css:70):
+         --green is the marker swipe over the dark acts, --green-ink is green text on bone.
+         #16c47f is 2.0:1 on bone, so it is never used as text on a light act.
+         --ink-faint stays #67635c: the app's own #8e8878 is 3.1:1 on bone, and the
+         16-18px labels that use it need 4.5:1. */
       :root {
-        --bone: #f4f1e8;
-        --ink: #0e0d0a;
-        --accent: #129f67;
-        --ink-soft: #4a4740;
-        --ink-faint: #67635c;
-        --line: #d9d4c6;
+        --bone: #f4f1e8; /* app/app.css:86 */
+        --ink: #0e0d0a; /* app/app.css:88 — also the background of the live landing capture */
+        --green: #16c47f; /* app/app.css:92 */
+        --green-ink: #064d31; /* app/app.css:93 */
+        --ink-soft: #55524a; /* app/app.css:89 */
+        --ink-faint: #67635c; /* darkened from app/app.css:90, see the note above */
+        --line: #ddd6c6; /* app/app.css:91 */
       }
 
       * {
@@ -88,8 +94,9 @@
         position: absolute;
         inset: 0;
       }
-      /* A seek must paint one deterministic frame, so each clip is told to
-         hold its final values rather than only autoplay. */
+      /* A seek must paint one deterministic frame. Every composition registers its
+         timeline in window.__timelines and calls tl.seek(0), so each element is
+         already at its start value instead of autoplaying. */
       .clip {
         will-change: transform, opacity;
       }

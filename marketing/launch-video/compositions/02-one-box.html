@@ -61,7 +61,7 @@
         letter-spacing: -0.045em;
       }
       .a2-h .one {
-        color: var(--accent);
+        color: var(--green);
       }
       .a2-sub {
         position: absolute;
@@ -119,7 +119,7 @@
         width: 3px;
         height: 34px;
         margin-left: 4px;
-        background: var(--accent);
+        background: var(--green);
         vertical-align: middle;
       }
     </style>
@@ -156,7 +156,7 @@
         var PLACEHOLDER = "yourbrand.com";
         var el = document.getElementById("a2-typed");
         var tl = gsap.timeline({ paused: true });
-        // 2.2s of type-on = ~11 chars, one every 200ms.
+        // 2.6s of type-on = 13 chars, one every 200ms.
         for (var i = 0; i <= PLACEHOLDER.length; i++) {
           (function (n) {
             tl.set(el, { textContent: PLACEHOLDER.slice(0, n) }, 4.3 + n * 0.2);
