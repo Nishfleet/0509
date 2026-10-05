@@ -68,8 +68,12 @@ export async function readPageHashes(entityId: string): Promise<ReadonlyMap<stri
 const SELECT_JUDGED_PRICING =
   "SELECT url FROM page WHERE entity_id = ?1 AND role = 'pricing' AND role_decided_for_hash IS NOT NULL ORDER BY url LIMIT 1";
 
+const readJudgedPricingUrlRow = z.object({ url: z.string() });
+
 export async function readJudgedPricingUrl(entityId: string): Promise<string | null> {
-  const row = await env.DB.prepare(SELECT_JUDGED_PRICING).bind(entityId).first<{ url: string }>();
+  const row = readJudgedPricingUrlRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_JUDGED_PRICING).bind(entityId).first());
   return row?.url ?? null;
 }
 
