@@ -584,7 +584,7 @@ async function verifyPendingYoutube(watch: WatchRow, pendingId: string, run: You
 
 async function resolveYoutubeChannel(
   watch: WatchRow,
-  now: number,
+  now: string,
 ): Promise<{ found: true; channelId: string } | { found: false; outcome: TargetOutcome }> {
   const lookup = await lookupYoutubeChannel(await requireEntityIdentityJson(watch.workspace_id, watch.entity_id));
   switch (lookup.status) {
