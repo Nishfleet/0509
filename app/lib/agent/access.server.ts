@@ -1,5 +1,6 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 
 import { createAuth } from "../auth.server";
 import type { AgentKey, ConnectedApp, CreateKeyResult } from "./access";
@@ -41,10 +42,10 @@ export async function readAgentAccess(
 
 const SUBMISSION = /^[0-9a-f-]{36}$/;
 
-function formText(form: FormData, field: string): string | null {
-  const value = form.get(field);
-  return typeof value === "string" ? value : null;
-}
+const createKeyForm = z.object({
+  name: z.string().optional(),
+  submission: z.string().optional(),
+});
 
 async function submissionMinted(request: Request, submission: string): Promise<boolean> {
   const listed = await createAuth(env).api.listApiKeys({ headers: request.headers });
@@ -52,9 +53,10 @@ async function submissionMinted(request: Request, submission: string): Promise<b
 }
 
 export async function createAgentKey(request: Request, form: FormData): Promise<CreateKeyResult> {
-  const submitted = formText(form, "name")?.trim() ?? "";
+  const parsed = createKeyForm.safeParse(Object.fromEntries(form));
+  const submitted = parsed.success ? (parsed.data.name === undefined ? "" : parsed.data.name.trim()) : "";
   const name = submitted === "" ? "My agent" : submitted.slice(0, 60);
-  const token = formText(form, "submission");
+  const token = parsed.success && parsed.data.submission !== undefined ? parsed.data.submission : null;
   const submission = token !== null && SUBMISSION.test(token) ? token : crypto.randomUUID();
   try {
     const body = { name, metadata: { submission } };

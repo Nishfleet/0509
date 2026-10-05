@@ -47,6 +47,8 @@ async function seed(identityJson: string, configJson: string): Promise<{ watchId
   const watch: WatchRow = {
     watch_id: watchId,
     target_key: name,
+    hn_cursor: 0,
+    watch_created_at: null,
     entity_id: competitorId,
     workspace_id: workspaceId,
     role: "competitor",

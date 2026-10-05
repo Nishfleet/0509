@@ -144,9 +144,10 @@ describe("nightly mentions sweep", () => {
       "SELECT sn.payload_r2_key AS r2_key FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.entity_id = ?",
     )
       .bind(competitorId)
-      .first<{ r2_key: string }>();
-    const stored = await env.SNAPSHOTS.get(snapshot?.r2_key ?? "");
-    expect(JSON.parse((await stored?.text()) ?? "{}")).toEqual({ articles: ARTICLES });
+      .first<{ r2_key: string | null }>();
+    expect(snapshot?.r2_key).toBeNull();
+    expect((await env.SNAPSHOTS.list({ prefix: "snapshot/mentions/" })).objects).toEqual([]);
+    expect((await env.SNAPSHOTS.list({ prefix: "mentions/" })).objects).toEqual([]);
   });
 
   it("stores a snapshot when GDELT answers slowly but inside its timeout (0509#6079)", async () => {
