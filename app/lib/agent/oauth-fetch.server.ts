@@ -58,7 +58,9 @@ async function gatedRegister<E>(call: OAuthCall<E>): Promise<Response> {
     REGISTER_MAX_BYTES,
   );
   if (bytes === null) return jsonError(413, TOO_LARGE);
-  return call.inner(new Request(call.request, { body: bytes }), call.env, call.ctx);
+  const body = new Uint8Array(new ArrayBuffer(bytes.byteLength));
+  body.set(bytes);
+  return call.inner(new Request(call.request, { body }), call.env, call.ctx);
 }
 
 export function fetchOAuth<E>(call: OAuthCall<E>): Promise<Response> {
