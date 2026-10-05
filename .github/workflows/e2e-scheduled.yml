@@ -493,7 +493,7 @@ jobs:
           npx wrangler workflows instances list competitor-discovery --date-start 2026-10-05T03:29:00Z --date-end 2026-10-05T03:40:00Z --per-page 50 --json > di.json || true
           echo "discovery instances: $(jq -s -c '(add // []) | map({id: (.id|tostring|.[0:50]), status, created: (.created_on // .created_at // null)})' di.json)"
           for id in $(jq -s -r '(add // []) | .[].id' di.json | head -6); do
-            echo "discovery $id: $(npx wrangler workflows instances describe competitor-discovery "$id" --json 2>&1 | jq -c '{status, output: (.output|tostring|.[0:400]), steps: [.steps[]? | select(.name|test("^(generate|resolve|backlog|write|judge-0|promote|finish)")) | {name, out: (.output|tostring|.[0:350])}]}' 2>&1 | head -c 3500)"
+            echo "discovery timing $id: $(npx wrangler workflows instances describe competitor-discovery "$id" --json 2>&1 | jq -c '{start, end, status, writes: [.steps[]? | select(.name|startswith("write")) | {n: .name, s: .attempts[0].start, e: .attempts[0].end}]}' 2>&1 | head -c 2500)"
           done
           echo "J7 entities: $(d1 "SELECT e.role, e.state, e.domain, (SELECT COUNT(*) FROM signal s WHERE s.entity_id = e.id) AS signals FROM entity e WHERE e.workspace_id IN$wj7")"
           failed=0
