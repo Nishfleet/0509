@@ -1,10 +1,19 @@
 import { captureMessage } from "@sentry/cloudflare";
 
 import { insertCostAlerts } from "../data/cost_alert.server";
+import { countVerdictsOnDay } from "../data/jev_verdict.server";
 import { readBrowserMsForDay } from "../site/browser-budget.server";
 import { fetchDailyUsage } from "./cost-analytics.server";
-import { BROWSER_ONLY_LINES, evaluateCost } from "./cost-guard";
+import { LOCAL_LINES, evaluateCost } from "./cost-guard";
 import type { CostBreach, DailyUsage } from "./cost-guard";
+
+function reportMissingAnalyticsToken(apiToken: string | undefined): void {
+  if (apiToken !== undefined) return;
+  captureMessage("cost guard skipped D1 and R2: CLOUDFLARE_API_TOKEN unset", {
+    level: "error",
+    fingerprint: ["cost-guard-token-missing"],
+  });
+}
 
 export async function runCostGuard(
   db: D1Database,
@@ -16,16 +25,18 @@ export async function runCostGuard(
   breaches: readonly CostBreach[];
   alertIds: readonly string[];
 }> {
-  const [cloudflare, browserMs] = await Promise.all([
+  reportMissingAnalyticsToken(apiToken);
+  const [cloudflare, browserMs, aiCalls] = await Promise.all([
     apiToken === undefined ? { day, d1RowsWritten: 0, r2ClassAOps: 0 } : fetchDailyUsage(day, apiToken),
     readBrowserMsForDay(day),
+    countVerdictsOnDay(db, day),
   ]);
-  const usage: DailyUsage = { ...cloudflare, browserMs };
+  const usage: DailyUsage = { ...cloudflare, browserMs, aiCalls };
   const row = await db
     .prepare("SELECT COUNT(*) AS n FROM entity WHERE role = 'competitor' AND state = 'on'")
     .first<{ n: number }>();
   const onBrands = row?.n ?? 0;
-  const breaches = evaluateCost(usage, onBrands, apiToken === undefined ? BROWSER_ONLY_LINES : undefined);
+  const breaches = evaluateCost(usage, onBrands, apiToken === undefined ? LOCAL_LINES : undefined);
   const alertIds = await insertCostAlerts(db, breaches);
   if (alertIds.length > 0) {
     captureMessage(`cost guard breach on ${day}: ${breaches.map((breach) => breach.line).join(", ")}`, {

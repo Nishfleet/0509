@@ -106,6 +106,12 @@ describe("deployed wrangler configs", () => {
   // rate at the top of `observability`, and wrangler normalises
   // `logs.head_sampling_rate` to the same 1, so a change to either alone is
   // visible in this assertion.
+  it("binds Worker version metadata so Sentry events carry a release (0509#7079)", () => {
+    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    expect(rawConfig.version_metadata).toEqual({ binding: "CF_VERSION_METADATA" });
+    expect(rawConfig.upload_source_maps).toBe(true);
+  });
+
   it("declares the Workers Logs policy (0509#5758)", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
     expect(rawConfig.observability?.enabled).toBe(true);

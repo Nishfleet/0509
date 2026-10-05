@@ -7,6 +7,8 @@ const SELECT_CHOICE = "SELECT choice FROM jev_verdict WHERE question_id = ?1 AND
 const COUNT_VERDICTS =
   "SELECT COUNT(*) AS n FROM jev_verdict WHERE entity_id = ?1 AND decided_at >= ?2 AND question_id IN (SELECT value FROM json_each(?3))";
 
+const COUNT_VERDICTS_ON_DAY = "SELECT COUNT(*) AS n FROM jev_verdict WHERE decided_at >= ?1 AND decided_at < ?2";
+
 const SELECT_LAST_STILL_COMPETITOR =
   "SELECT choice, decided_at FROM jev_verdict WHERE workspace_id = ?1 AND entity_id = ?2 AND question_id = 'still_competitor_reason' AND choice IS NOT NULL ORDER BY decided_at DESC LIMIT 1";
 
@@ -53,6 +55,13 @@ export async function countVerdictsSince(
   const row = await env.DB.prepare(COUNT_VERDICTS)
     .bind(entityId, sinceIso, JSON.stringify(questionIds))
     .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+export async function countVerdictsOnDay(db: D1Database, day: string): Promise<number> {
+  const start = `${day}T00:00:00.000Z`;
+  const end = new Date(Date.parse(start) + 86_400_000).toISOString();
+  const row = await db.prepare(COUNT_VERDICTS_ON_DAY).bind(start, end).first<{ n: number }>();
   return row?.n ?? 0;
 }
 
