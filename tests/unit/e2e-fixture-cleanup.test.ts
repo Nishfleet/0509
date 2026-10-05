@@ -281,6 +281,7 @@ describe("e2e-scheduled dispatch rules (0509#7186)", () => {
     );
     const refused = runStep(guard.steps?.[0]?.run ?? "", tmpdir(), { JOURNEY: "suite", REF: "refs/heads/x" });
     expect(refused.code).toBe(1);
+    expect(refused.out).toContain("journey=suite dispatches from main only, not refs/heads/x");
   });
 
   it("installs with scripts off in every job whose job-level env holds a Cloudflare token", async () => {
