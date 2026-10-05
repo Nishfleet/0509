@@ -11,7 +11,7 @@ import { changeEmailEmail } from "../../app/lib/auth/change-email-email";
  */
 describe("every string field carries the injection probe escaped, never raw (0509#7020)", () => {
   const url = "https://0509.io/api/auth/change-email/confirm?token=abc";
-  const rows: Array<[string, { kind: "approve" | "confirm"; email: string; url: string }]> = [
+  const rows: [string, { kind: "approve" | "confirm"; email: string; url: string }][] = [
     ["approve email", { kind: "approve", email: PROBE, url }],
     ["approve url", { kind: "approve", email: "reader@0509.io", url: PROBE }],
     ["confirm email", { kind: "confirm", email: PROBE, url }],

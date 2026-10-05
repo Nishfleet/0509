@@ -180,7 +180,7 @@ describe("the voice", () => {
  * missed escapeHtml turns CI red — the plain template modules stay.
  */
 describe("every string field carries the injection probe escaped, never raw (0509#7020)", () => {
-  const openRows: Array<[string, Partial<IncidentOpenContext>]> = [
+  const openRows: [string, Partial<IncidentOpenContext>][] = [
     ["site", { site: PROBE }],
     ["kind", { kind: PROBE }],
     ["opened_at", { opened_at: PROBE }],
@@ -197,7 +197,7 @@ describe("every string field carries the injection probe escaped, never raw (050
     expectNoHtmlInjection(html, `renderIncidentOpen ${field}`);
   });
 
-  const fixedRows: Array<[string, Partial<IncidentFixedContext>]> = [
+  const fixedRows: [string, Partial<IncidentFixedContext>][] = [
     ["site", { site: PROBE }],
     ["kind", { kind: PROBE }],
     ["closed_at", { closed_at: PROBE }],

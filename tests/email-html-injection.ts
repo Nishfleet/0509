@@ -11,7 +11,7 @@ import { expect } from "vitest";
 // (<img src=x), an event handler (onerror=1>) and the quote-apostrophe pair
 // that walks out of a double-quoted attribute. escapeHtml turns all three
 // into inert text, so any of them appearing raw means a missed call.
-export const PROBE = '<img src=x onerror=1>"\'';
+export const PROBE = "<img src=x onerror=1>\"'";
 
 // The same payload behind an allowlisted scheme, for fields that pass through
 // the SAFE_URL_SCHEMES gate (safeUrl) before they reach the html.

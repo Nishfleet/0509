@@ -52,7 +52,7 @@ describe("every string field carries the injection probe escaped, never raw (050
   it.each([
     ["email", { email: PROBE, url }],
     ["url", { email, url: PROBE }],
-  ] as Array<[string, { email: string; url: string }]>) ("%s lands in the html only escaped", (field, input) => {
+  ] as [string, { email: string; url: string }][])("%s lands in the html only escaped", (field, input) => {
     expectNoHtmlInjection(magicLinkEmail(input).html, field);
   });
 });

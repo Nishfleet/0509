@@ -68,7 +68,7 @@ describe("the daily cap notice", () => {
  * escapeHtml turns CI red — the plain template module stays.
  */
 describe("every string field carries the injection probe escaped, never raw (0509#7020)", () => {
-  const rows: Array<[string, Partial<typeof CTX>]> = [
+  const rows: [string, Partial<typeof CTX>][] = [
     ["headline", { headline: PROBE }],
     ["observed_at", { observed_at: PROBE }],
     ["mark.removed", { mark: { removed: PROBE, added: "benign" } }],
@@ -84,7 +84,7 @@ describe("every string field carries the injection probe escaped, never raw (050
     expectNoHtmlInjection(html, `renderChange ${field}`);
   });
 
-  const overflowRows: Array<[string, Partial<ChangeOverflowContext>]> = [
+  const overflowRows: [string, Partial<ChangeOverflowContext>][] = [
     ["link", { link: PROBE }],
     ["unsubscribe_url", { unsubscribe_url: PROBE }],
     ["settings_link", { settings_link: PROBE }],

@@ -53,7 +53,7 @@ describe("every string field carries the injection probe escaped, never raw (050
   it.each([
     ["settings_link", { ...CTX, settings_link: PROBE }],
     ["unsubscribe_url", { ...CTX, unsubscribe_url: PROBE }],
-  ] as Array<[string, AlertFooterContext]>)("%s lands in the html only escaped", (field, ctx) => {
+  ] as [string, AlertFooterContext][])("%s lands in the html only escaped", (field, ctx) => {
     expectNoHtmlInjection(renderAlertFooter(ctx).html, field);
   });
 });

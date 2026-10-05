@@ -738,9 +738,7 @@ describe("every string field carries the injection probe escaped, never raw (050
     ...base,
     own_site: { status: "broken", incidents: [{ ...base.own_site.incidents[0], ...patch }] },
   });
-  const quietWithDegraded = (
-    patch: Partial<BriefPayload["checked"]["degraded_sources"][number]>,
-  ): BriefPayload => ({
+  const quietWithDegraded = (patch: Partial<BriefPayload["checked"]["degraded_sources"][number]>): BriefPayload => ({
     ...base,
     // The degraded-source names reach the html only in the quiet-week line.
     is_quiet_week: true,
@@ -748,7 +746,7 @@ describe("every string field carries the injection probe escaped, never raw (050
     checked: { ...base.checked, degraded_sources: [{ ...base.checked.degraded_sources[0], ...patch }] },
   });
 
-  const rows: Array<[string, BriefPayload]> = [
+  const rows: [string, BriefPayload][] = [
     ["why_line", { ...base, why_line: PROBE }],
     ["period_start", { ...base, period_start: PROBE }],
     ["timezone", { ...base, timezone: PROBE }],
