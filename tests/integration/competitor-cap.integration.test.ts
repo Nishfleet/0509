@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { handleCompetitorIntent } from "../../app/lib/competitors.server";
+import { withinProbeLimit } from "../../app/lib/identity/card.server";
 
 /**
  * Manual-add cap (0509#4891): adding a competitor by hand is refused once the
@@ -12,9 +13,11 @@ import { handleCompetitorIntent } from "../../app/lib/competitors.server";
  */
 
 let seededRuns = 0;
+let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  vi.stubGlobal("fetch", () => Promise.resolve(new Response("not found", { status: 404 })));
+  fetchMock = vi.fn(() => Promise.resolve(new Response("not found", { status: 404 })));
+  vi.stubGlobal("fetch", fetchMock);
 });
 
 afterEach(() => {
@@ -76,11 +79,13 @@ describe("addManualCompetitor cap (0509#4891)", () => {
       );
       expect(result.message).toBeNull();
     }
+    fetchMock.mockClear();
     const sixth = await handleCompetitorIntent(workspaceId, intentForm({ intent: "add", competitor: "a6.com" }));
     expect(sixth.message).not.toBeNull();
     expect(sixth.message).toContain("5 competitors");
     expect(sixth.upgradePlanId).toBe("starter");
     expect(await domainCount(workspaceId, "a6.com")).toBe(0);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("still adds a competitor that is already ON at cap (silent no-op)", async () => {
@@ -298,5 +303,25 @@ describe("the cap on every path that turns a rival on", () => {
     expect(result.message).toContain("5 competitors");
     expect(result.upgradePlanId).toBe("starter");
     expect(await domainCount(workspaceId, "maybe.com")).toBe(0);
+  });
+
+  it("does not fetch a competitor site after the user hits the probe limit", async () => {
+    seededRuns += 1;
+    const n = String(seededRuns);
+    const userId = `user-cap-probe-${n}`;
+    const workspaceId = `ws-cap-probe-${n}`;
+    await seedUser(userId, `cap-probe-${n}@example.com`);
+    await seedWorkspace(workspaceId, userId, "Cap Probe");
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      expect(await withinProbeLimit(userId)).toBe(true);
+    }
+    fetchMock.mockClear();
+    const result = await handleCompetitorIntent(
+      workspaceId,
+      intentForm({ intent: "add", competitor: "probe-blocked.com" }),
+    );
+    expect(result.message).toContain("last minute");
+    expect(await domainCount(workspaceId, "probe-blocked.com")).toBe(0);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

@@ -114,6 +114,7 @@ describe("feedCandidates", () => {
       "https://rival.com/changelog/feed.xml",
       "https://rival.com/blog/rss.xml",
       "https://rival.com/feed.xml",
+      "https://rival.com/atom",
     ]);
   });
 

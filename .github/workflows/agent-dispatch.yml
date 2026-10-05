@@ -17,8 +17,11 @@ on:
         description: 'miss-review to replay a miss on issue, empty for a normal sweep'
         required: false
         type: string
+  # The last five types feed fleet-ops' hold-risky job, which disarms, dequeues
+  # and labels needs-coordinator any risky PR whose head sha has no
+  # coordinator-approval=success status (0509#7092). It only calls the API.
   pull_request_target:
-    types: [dequeued, auto_merge_disabled, closed]
+    types: [dequeued, auto_merge_disabled, closed, auto_merge_enabled, synchronize, labeled, opened, reopened]
   workflow_run:
     workflows: [CI]
     types: [completed]

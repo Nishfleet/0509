@@ -22,10 +22,10 @@ describe("cronMonitor", () => {
   });
 
   it("maps the weekly refresh cron to a 60-minute check-in margin and a 30-minute run budget", () => {
-    expect(WEEKLY_REFRESH_CRON).toBe("0 4 * * 1");
+    expect(WEEKLY_REFRESH_CRON).toBe("0 4 * * MON");
     expect(cronMonitor(WEEKLY_REFRESH_CRON)).toEqual({
       slug: "weekly-refresh",
-      schedule: "0 4 * * 1",
+      schedule: "0 4 * * MON",
       checkinMargin: 60,
       maxRuntime: 30,
     });

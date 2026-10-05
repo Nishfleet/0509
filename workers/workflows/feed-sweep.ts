@@ -1,8 +1,6 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
-import { withMonitor } from "@sentry/cloudflare";
-
 import { readEnabledSourceId } from "../../app/lib/data/source.server";
 import { readFeedTargets } from "../../app/lib/data/watch.server";
 import type { FeedResult } from "../../app/lib/feeds/read-feed.server";
@@ -10,6 +8,7 @@ import { readFeed } from "../../app/lib/feeds/read-feed.server";
 import type { FoundFeed } from "../../app/lib/feeds/sweep.server";
 import { findFeed, planFeedSweep } from "../../app/lib/feeds/sweep.server";
 import { isNativeSchedule } from "../workflow-crons";
+import { withStepCheckIn } from "../workflow-monitor";
 
 const RETRY: WorkflowStepConfig = {
   retries: { limit: 3, delay: "30 seconds", backoff: "exponential" },
@@ -19,6 +18,7 @@ const RETRY: WorkflowStepConfig = {
 const MONITOR = {
   schedule: { type: "crontab", value: "45 2 * * *" },
   checkinMargin: 60,
+  maxRuntime: 90,
   timezone: "UTC",
 } as const;
 
@@ -62,7 +62,7 @@ async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null
 export class FeedSweep extends WorkflowEntrypoint<Env> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<FeedSweepOutcome | null> {
     if (isNativeSchedule(event)) return null;
-    return withMonitor("feed-sweep", () => this.runSweep(event, step), MONITOR);
+    return withStepCheckIn(step, { slug: "feed-sweep", config: MONITOR }, () => this.runSweep(event, step));
   }
 
   private async runSweep(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<FeedSweepOutcome> {
