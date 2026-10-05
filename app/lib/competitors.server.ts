@@ -1,8 +1,11 @@
+import { env } from "cloudflare:workers";
+
 import { nameFromDomain } from "./competitor/domain-name";
 import { readCompetitorName } from "./competitor/site-name.server";
-import { addManualCompetitor, readCompetitor, setCompetitorState } from "./data/entity.server";
+import { addManualCompetitor, countOtherOnCompetitors, readCompetitor, setCompetitorState } from "./data/entity.server";
 import { nextPlan, type PlanId } from "./billing/plans";
 import { readEntitlements, readPlanTier } from "./data/plan.server";
+import { withinProbeLimit } from "./identity/card.server";
 import {
   acceptSuggestion,
   confirmRetireSuggestion,
@@ -25,6 +28,11 @@ const COULD_NOT_READ: CompetitorActionResult = {
 const UNRESOLVED: CompetitorActionResult = {
   message: "We couldn't find that brand's website. Try their main website, like brand.com.",
 };
+const PROBE_LIMITED: CompetitorActionResult = {
+  message: "You've tried a lot of addresses in the last minute. Wait a minute, then try again.",
+};
+
+const SELECT_OWNER = "SELECT owner_user_id FROM workspace WHERE id = ?";
 
 function text(form: FormData, name: string): string {
   const value = form.get(name);
@@ -54,17 +62,43 @@ async function targetOf(raw: string, normalised: ReturnType<typeof normaliseSubj
   return resolution.domain === null ? UNRESOLVED : { domain: resolution.domain, name: raw.trim() };
 }
 
+async function workspaceOwnerId(workspaceId: string): Promise<string | null> {
+  const row = await env.DB.prepare(SELECT_OWNER).bind(workspaceId).first<{ owner_user_id: string }>();
+  return row === null ? null : row.owner_user_id;
+}
+
+function unreadableAdd(normalised: ReturnType<typeof normaliseSubject>): CompetitorActionResult | null {
+  if (normalised.ok) return normalised.subject.kind === "domain" ? null : COULD_NOT_READ;
+  return normalised.reason === "empty" ? COULD_NOT_READ : null;
+}
+
+async function refusedBeforeFetch(
+  workspaceId: string,
+  cap: number,
+  normalised: ReturnType<typeof normaliseSubject>,
+): Promise<CompetitorActionResult | null> {
+  const exceptDomain = normalised.ok ? normalised.subject.registrable : "";
+  const onCount = await countOtherOnCompetitors(workspaceId, exceptDomain);
+  if (onCount !== null && onCount >= cap) return capRefusal(workspaceId, cap);
+  const owner = await workspaceOwnerId(workspaceId);
+  if (owner === null) return COULD_NOT_READ;
+  if (!(await withinProbeLimit(owner))) return PROBE_LIMITED;
+  return null;
+}
+
 async function addCompetitor(workspaceId: string, raw: string, now: string): Promise<CompetitorActionResult> {
   const normalised = normaliseSubject(raw);
-  if (normalised.ok && normalised.subject.kind !== "domain") return COULD_NOT_READ;
-  if (!normalised.ok && normalised.reason === "empty") return COULD_NOT_READ;
+  const unread = unreadableAdd(normalised);
+  if (unread !== null) return unread;
+  const cap = (await readEntitlements(workspaceId)).competitors;
+  const blocked = await refusedBeforeFetch(workspaceId, cap, normalised);
+  if (blocked !== null) return blocked;
 
   const target = await targetOf(raw, normalised);
   if ("message" in target) return target;
   const { domain, name } = target;
 
   if (await isTakenDown(domain)) return { message: "That brand asked not to be tracked, so we can't add it." };
-  const cap = (await readEntitlements(workspaceId)).competitors;
   const outcome = await addManualCompetitor({
     workspaceId,
     domain,

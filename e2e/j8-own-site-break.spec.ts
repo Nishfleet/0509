@@ -72,18 +72,40 @@ async function latestMessageId(to: string, token: string): Promise<string | null
   }
 }
 
+const SWEEP_HOUR_UTC = 2;
+const SWEEP_GRACE_MS = 45 * 60_000;
+
+function sweepDeadlineMs(from: Date, minimumMs: number): number {
+  const sweep = new Date(from);
+  sweep.setUTCHours(SWEEP_HOUR_UTC, 0, 0, 0);
+  if (sweep.getTime() <= from.getTime()) sweep.setUTCDate(sweep.getUTCDate() + 1);
+  return Math.max(minimumMs, sweep.getTime() + SWEEP_GRACE_MS - from.getTime());
+}
+
+async function servedMode(host: string): Promise<string> {
+  const html = await (await fetch(`https://${host}/`, { headers: { "cache-control": "no-cache" } })).text();
+  return /<p id="mode" data-mode="(\w+)"/.exec(html)?.[1] ?? "hard";
+}
+
 async function waitForMail(
   to: string,
   token: string,
   subject: string,
   after: Date,
   timeoutMs: number,
+  held?: { host: string; mode: Mode },
 ): Promise<string> {
   let raw = "";
   let last = "the inbox held no message";
   await expect
     .poll(
       async () => {
+        if (held) {
+          const served = await servedMode(held.host);
+          expect(served, `the fixture ${held.host} must keep serving ${held.mode} until the email arrives`).toBe(
+            held.mode,
+          );
+        }
         try {
           raw = await readRawMessage(to, token);
         } catch (error) {
@@ -167,7 +189,8 @@ for (const { mode, kind, waitMs, account, host } of MODES) {
 
       const brokenAt = new Date();
       await setMode(host, mode);
-      const openRaw = await waitForMail(email, token, openSubject, brokenAt, waitMs);
+      const openWaitMs = mode === "soft" ? sweepDeadlineMs(brokenAt, waitMs) : waitMs;
+      const openRaw = await waitForMail(email, token, openSubject, brokenAt, openWaitMs, { host, mode });
       const openSentAt = new Date(header(openRaw, SENT_DATE));
       const openBody = decodedBodies(openRaw).join("\n");
       expect(openBody).toContain("Seen at");

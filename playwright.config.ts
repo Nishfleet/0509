@@ -5,7 +5,7 @@ import { defineConfig, devices } from "@playwright/test";
 // Unset  -> Playwright starts the built Worker itself (webServer) and tests it.
 //           This is what `preview-assert` does on every PR.
 // Set    -> no webServer; the suite runs against that URL. This is what the
-//           `deployment_status` run does against production.
+//           `e2e-scheduled.yml` runs do against production.
 //
 // webServer's own doc says it is for "when you don't have a staging or
 // production url to test against", which is exactly the split above:
