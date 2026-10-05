@@ -549,6 +549,23 @@ describe("IdentityTailWorkflow", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("does not raise a foreign-key error when judging pages for an entity that was deleted", async () => {
+    await seed();
+    await expect(
+      upsertJudgedPages([
+        {
+          id: crypto.randomUUID(),
+          entityId: `gone-judged-${String(runs)}`,
+          url: "https://gymshark.com/plans",
+          title: "Plans",
+          role: "pricing",
+          roleDecidedForHash: "h",
+          discoveredAt: "2026-09-25T08:00:00Z",
+        },
+      ]),
+    ).resolves.toBeUndefined();
+  });
+
   it("does not raise a foreign-key error when seeding watches for an entity that was deleted", async () => {
     await seed();
     await expect(

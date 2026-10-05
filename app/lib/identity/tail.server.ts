@@ -80,7 +80,6 @@ export async function classifyTailPages(
   now: string,
   options: { archive?: boolean } = {},
 ): Promise<boolean> {
-  await persistTail(params);
   if (params.handle !== undefined || params.homepageUrl === null) return false;
   try {
     const page = await readHome(params, params.homepageUrl, {
