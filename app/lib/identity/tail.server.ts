@@ -50,12 +50,13 @@ export async function startIdentityTail(params: IdentityTailParams): Promise<str
 }
 
 export async function terminateIdentityTail(entityId: string): Promise<void> {
-  await env.IDENTITY_TAIL.get(identityTailInstanceId(entityId))
-    .then((instance) => instance.terminate())
-    .then(
-      () => undefined,
-      () => undefined,
-    );
+  try {
+    const instance = await env.IDENTITY_TAIL.get(identityTailInstanceId(entityId));
+    await instance.terminate();
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("instance.not_found")) return;
+    console.error(JSON.stringify({ event: "identity_tail.terminate_failed", entityId, message: String(error) }));
+  }
 }
 
 export async function persistTail(params: IdentityTailParams): Promise<{ entityId: string }> {

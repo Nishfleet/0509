@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { createCookie } from "react-router";
 
 import { deleteSignedInUser } from "./auth.server";
+import { readWorkspaceEntityIds } from "./data/entity.server";
 import { readWorkspaceIdForOwner, readWorkspaceR2Prefixes } from "./data/workspace.server";
 import { terminateIdentityTail } from "./identity/tail.server";
 
@@ -31,18 +32,11 @@ export async function deleteAccount(
   const entityIds = workspaceId === null ? [] : await readWorkspaceEntityIds(workspaceId);
   const headers = await deleteSignedInUser(env, request, new Date());
   if (headers === null) return null;
-  await Promise.all(entityIds.map(terminateIdentityTail));
+  for (const entityId of entityIds) await terminateIdentityTail(entityId);
   const instance = await env.ACCOUNT_DELETE.create({ params: { prefixes } satisfies AccountDeleteParams });
   headers.append("set-cookie", await cookie.serialize(instance.id));
   await revokeGrants(helpers, userId);
   return { headers, instanceId: instance.id };
-}
-
-async function readWorkspaceEntityIds(workspaceId: string): Promise<string[]> {
-  const rows = await env.DB.prepare("SELECT id FROM entity WHERE workspace_id = ?1 ORDER BY id")
-    .bind(workspaceId)
-    .all<{ id: string }>();
-  return rows.results.map((row) => row.id);
 }
 
 async function revokeGrants(helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant">, userId: string) {
