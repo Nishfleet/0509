@@ -39,9 +39,9 @@ const JEV_URL = VIA_GATEWAY ? "workers-ai binding" : (process.env.JEV_URL ?? "ht
 // One descriptor holds the whole spelling of the yes/no-probability primitive for the
 // endpoint this run posts to, so the request type and the answer field stay paired
 // (0509#7177): the Workers AI binding path (VIA_GATEWAY) is the production call in
-// app/lib/jev/client.server.ts and Clef keeps `noul`, while the /jev route on this box
-// goes to the Vercel AI Gateway evaluation model, which dropped `noul` and answers
-// `probability`.
+// app/lib/jev/client.server.ts:140,149,218 and Clef keeps `noul`, while the /jev route
+// on this box goes to the Vercel AI Gateway evaluation model, which dropped `noul` and
+// answers `probability`.
 export const NOUL_WIRE: { type: string; field: string; value: (answer: JevAnswer) => number | undefined } = VIA_GATEWAY
   ? { type: "noul", field: "noul", value: (answer) => answer.noul }
   : { type: "boolean", field: "probability", value: (answer) => answer.probability };
@@ -118,7 +118,7 @@ export type Ask<T extends EvalRow> = (row: T) => Promise<Call>;
 
 export type Score<T extends EvalRow> = (row: T, call: Call) => Outcome;
 
-interface JevAnswer {
+export interface JevAnswer {
   type?: string;
   noul?: number;
   probability?: number;

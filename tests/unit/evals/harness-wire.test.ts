@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { JevAnswer } from "../../evals/harness";
 
 // The harness asks its noul question with one request type and reads one answer field,
 // and both come from the endpoint it posts to (0509#7177). The /jev route on this box
@@ -9,12 +11,20 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 interface Wire {
   type: string;
   field: string;
-  value: (answer: { noul?: number; probability?: number }) => number | undefined;
+  value: (answer: JevAnswer) => number | undefined;
 }
 
+// The descriptor is fixed when the harness module is evaluated, so each case imports a
+// fresh copy. beforeEach sets the endpoint-selecting variables first: without it an
+// ambient CLOUDFLARE_ACCOUNT_ID/CLOUDFLARE_API_TOKEN on the host (or in CI) would flip
+// the /jev cases onto the binding path and fail them.
+beforeEach(() => {
+  vi.stubEnv("LITELLM_JEV_KEY", "");
+  vi.stubEnv("CLOUDFLARE_ACCOUNT_ID", "");
+  vi.stubEnv("CLOUDFLARE_API_TOKEN", "");
+});
+
 function wire(): Promise<{ NOUL_WIRE: Wire }> {
-  // The descriptor is read from the harness's module scope, which is evaluated at
-  // import time, so each case imports a fresh copy with its own environment.
   vi.resetModules();
   return import("../../evals/harness") as Promise<{ NOUL_WIRE: Wire }>;
 }
@@ -22,9 +32,6 @@ function wire(): Promise<{ NOUL_WIRE: Wire }> {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.resetModules();
-  vi.stubEnv("LITELLM_JEV_KEY", "");
-  Reflect.deleteProperty(process.env, "CLOUDFLARE_ACCOUNT_ID");
-  Reflect.deleteProperty(process.env, "CLOUDFLARE_API_TOKEN");
 });
 
 describe("the /jev route on this box", () => {
