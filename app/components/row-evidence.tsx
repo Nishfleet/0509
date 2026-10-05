@@ -67,16 +67,9 @@ export function RowEvidence({ evidence }: { evidence: readonly WeekEvidence[] })
   const selected = TABS.find((tab) => (counts.get(tab.kind) ?? 0) > 0)?.kind ?? "site";
   return (
     <Tabs defaultValue={selected} className="pt-2">
-      <TabsList
-        aria-label="This week's evidence"
-        className="flex h-auto flex-wrap gap-2 rounded-none bg-transparent p-0"
-      >
+      <TabsList variant="evidence" aria-label="This week's evidence" activateOnFocus>
         {TABS.map((tab) => (
-          <TabsTrigger
-            key={tab.kind}
-            value={tab.kind}
-            className="min-h-11 flex-none rounded-none border border-line px-2 py-1 font-mono text-eyebrow text-ink-soft uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid data-active:bg-green-wash data-active:text-ink"
-          >
+          <TabsTrigger key={tab.kind} variant="evidence" value={tab.kind}>
             {`${tab.label} ${String(counts.get(tab.kind) ?? 0)}`}
           </TabsTrigger>
         ))}

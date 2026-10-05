@@ -16,6 +16,16 @@ const HAND_TAB = `export function probe() {
 }
 `;
 
+const HAND_TAB_EXPR = `export function probe() {
+  return <button type="button" role={"tab"} />;
+}
+`;
+
+const HAND_TAB_TEMPLATE = `export function probe() {
+  return <button type="button" role={\`tab\`} />;
+}
+`;
+
 const HAND_LIST = `export function probe() {
   return <div role="tablist" />;
 }
@@ -52,6 +62,13 @@ describe("eslint hand-rolled ARIA tabs rule (#7014)", () => {
   it("rejects a hand-rolled role=tab", { timeout: 60_000 }, async () => {
     const messages = await lintProbe(HAND_TAB);
     expect(messages.some((m) => m.includes(TAB_MESSAGE))).toBe(true);
+  });
+
+  it('rejects role={"tab"} and a template literal', { timeout: 60_000 }, async () => {
+    const expr = await lintProbe(HAND_TAB_EXPR);
+    const template = await lintProbe(HAND_TAB_TEMPLATE);
+    expect(expr.some((m) => m.includes(TAB_MESSAGE))).toBe(true);
+    expect(template.some((m) => m.includes(TAB_MESSAGE))).toBe(true);
   });
 
   it("rejects a hand-rolled role=tablist", { timeout: 60_000 }, async () => {

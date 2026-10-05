@@ -278,7 +278,8 @@ const BARE_TOAST = {
 };
 
 const HAND_ROLLED_ARIA_TAB = {
-  selector: "JSXAttribute[name.name='role'] Literal[value=/^(tab|tablist|tabpanel)$/]",
+  selector:
+    "JSXAttribute[name.name='role'] Literal[value=/^(tab|tablist|tabpanel)$/], JSXAttribute[name.name='role'] TemplateElement[value.raw=/^(tab|tablist|tabpanel)$/]",
   message:
     "Tabs come from app/components/ui/tabs.tsx (shadcn on @base-ui/react/tabs). A hand-rolled role=tab/tablist/tabpanel has no arrow keys and no roving tabIndex. Source: 0509#7014.",
 };
@@ -504,6 +505,7 @@ const TAILWIND_DEFAULT_PALETTE = {
     "The Tailwind default palette is banned: every colour is a @theme token in app/app.css (bg-green is the one accent, DESIGN.md rule 8). Source: 0509#5871.",
 };
 
+// outline- covers the stock tabs trigger's focus-visible:outline-ring (0509#7014).
 const SHADCN_STOCK_TOKEN_CLASSES =
   "(?:^|:)(?:bg|text|border|ring|fill|stroke|outline)-(?:background|foreground|muted|muted-foreground|primary|primary-foreground|secondary|secondary-foreground|destructive|border|input|ring|popover|popover-foreground)(?:/[0-9]+)?$";
 
