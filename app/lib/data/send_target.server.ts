@@ -1,3 +1,7 @@
+import { env } from "cloudflare:workers";
+
+import { decryptSlackWebhook, encryptSlackWebhook, isEncryptedSlackTarget } from "../slack-target-crypto.server";
+import { parseSlackWebhook } from "../slack-webhook";
 import { sha256Hex } from "../sha256";
 
 const WRITE_UNSUBSCRIBE_TOKEN = `UPDATE send_target SET unsubscribe_token = ? WHERE id = ? AND unsubscribe_token IS NULL`;
@@ -97,6 +101,7 @@ export async function confirmEmailTargetByToken(db: TargetDb, input: { token: st
 const SELECT_SLACK_TARGET = `SELECT st.id, st.target_value FROM send_target st
 JOIN channel c ON c.id = st.channel_id
 WHERE st.workspace_id = ? AND c.key = 'slack' AND c.is_enabled = 1 AND st.is_verified = 1
+ORDER BY st.created_at ASC
 LIMIT 1`;
 
 const DELETE_SLACK_TARGET = `DELETE FROM send_target
@@ -105,11 +110,26 @@ WHERE workspace_id = ? AND channel_id = (SELECT id FROM channel WHERE key = 'sla
 const INSERT_SLACK_TARGET = `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at)
 SELECT ?, ?, id, ?, 1, ? FROM channel WHERE key = 'slack'`;
 
+function slackTargetSecret(): string {
+  const raw: unknown = env.SLACK_TARGET_SECRET;
+  if (typeof raw !== "string") throw new Error("SLACK_TARGET_SECRET is not configured");
+  const secret = raw.trim();
+  if (secret.length === 0) throw new Error("SLACK_TARGET_SECRET is not configured");
+  return secret;
+}
+
 export async function readSlackTarget(
   db: TargetDb,
   workspaceId: string,
 ): Promise<{ id: string; target_value: string } | null> {
-  return db.prepare(SELECT_SLACK_TARGET).bind(workspaceId).first<{ id: string; target_value: string }>();
+  const row = await db.prepare(SELECT_SLACK_TARGET).bind(workspaceId).first<{ id: string; target_value: string }>();
+  if (row === null) return null;
+  if (isEncryptedSlackTarget(row.target_value)) {
+    return { id: row.id, target_value: await decryptSlackWebhook(row.target_value, slackTargetSecret(), workspaceId) };
+  }
+  const webhook = parseSlackWebhook(row.target_value);
+  if (webhook === null) throw new Error("Slack target is not a webhook address");
+  return { id: row.id, target_value: webhook };
 }
 
 export async function removeSlackTarget(db: D1Database, workspaceId: string): Promise<void> {
@@ -120,8 +140,9 @@ export async function saveSlackTarget(
   db: D1Database,
   input: { workspaceId: string; webhookUrl: string; now: string },
 ): Promise<void> {
+  const sealed = await encryptSlackWebhook(input.webhookUrl, slackTargetSecret(), input.workspaceId);
   await db.batch([
     db.prepare(DELETE_SLACK_TARGET).bind(input.workspaceId),
-    db.prepare(INSERT_SLACK_TARGET).bind(crypto.randomUUID(), input.workspaceId, input.webhookUrl, input.now),
+    db.prepare(INSERT_SLACK_TARGET).bind(crypto.randomUUID(), input.workspaceId, sealed, input.now),
   ]);
 }
