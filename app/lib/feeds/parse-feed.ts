@@ -111,7 +111,7 @@ function entryDate(raw: Record<string, unknown>, published: string): string | nu
 }
 
 function unmarkup(value: string): string {
-  return value.replace(/<[^>]*>/g, "");
+  return value.replace(/<[^>]*>/g, "").replace(/[<>]/g, "");
 }
 
 function entryId(raw: Record<string, unknown>, url: string, parsedId: string): string {

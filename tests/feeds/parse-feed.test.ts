@@ -81,6 +81,15 @@ describe("parseFeed", () => {
     expect(items?.map((item) => item.title)).toEqual(["Fine"]);
   });
 
+  it("leaves no angle bracket in a title whose markup is nested to survive one strip", () => {
+    const items = parseFeed(
+      rss(`<item><title>Hi &lt;scr&lt;script&gt;ipt&gt;there</title><link>https://rival.com/x</link></item>`),
+      BASE,
+      { now: NOW },
+    );
+    expect(items?.[0]?.title).toBe("Hi iptthere");
+  });
+
   it("drops items older than 30 days but keeps undated ones", () => {
     const items = parseFeed(
       rss(`<item><title>Old</title><link>https://rival.com/old</link><pubDate>Mon, 31 Aug 2026 10:00:00 GMT</pubDate></item>
