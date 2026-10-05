@@ -144,6 +144,11 @@
     // the request paths alike. Any value other than "on" stops spend, and leaving
     // it unset is the deployed behaviour today.
     "AI_SPEND": "on",
+    // 0509#7191, and the operations follow-up on #7079: the named AI Gateway
+    // that carries the product's Jev traffic. Creating it is a dashboard step, so
+    // the id stays "default" until it exists and both model call sites read it
+    // from here rather than each pinning their own.
+    "AI_GATEWAY_ID": "default",
     "ACCESS_TEAM_DOMAIN": "https://nish345.cloudflareaccess.com",
     "ACCESS_AUD": "b4fa400a1848c913b92c3212dc0714fcdbd1b1b66eb24659e4a7cc01c790575d",
   },

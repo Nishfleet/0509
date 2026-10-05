@@ -305,7 +305,7 @@ describe("Home standing", () => {
   it("says when the first standing comes while the first week is still open", () => {
     const html = render({ payload: null });
     expect(html).toContain(
-      `We&#x27;re collecting your first week of data: ${WATCHED_NOUNS} for 3 brands. Your first site snapshots arrive on Friday 25 September, around 07:00 BST. Your first ranking arrives with your brief on Monday 08:00.`,
+      `We&#x27;re collecting your first week of data: ${WATCHED_NOUNS} for 3 brands. Your first site snapshots arrive on Friday 25 September, around 00:00 BST. Your first ranking arrives with your brief on Monday 08:00.`,
     );
     expect(html).toContain('data-home="first-file"');
     expect(html).toContain("Good morning.</h1>");
@@ -362,16 +362,16 @@ describe("Home standing", () => {
     expect(addCompetitor).not.toContain('class="mt-4"');
   });
 
-  it("lands the first site sweep on the next 02:00Z strictly after now", () => {
-    expect(nextSiteSweepAt(new Date("2026-09-24T01:00:00Z"))).toEqual(new Date("2026-09-24T02:00:00Z"));
-    expect(nextSiteSweepAt(new Date("2026-09-24T02:00:00Z"))).toEqual(new Date("2026-09-25T02:00:00Z"));
+  it("lands the first site sweep on the next 21:00Z strictly after now (0509#7191)", () => {
+    expect(nextSiteSweepAt(new Date("2026-09-24T01:00:00Z"))).toEqual(new Date("2026-09-24T21:00:00Z"));
+    expect(nextSiteSweepAt(new Date("2026-09-24T21:00:00Z"))).toEqual(new Date("2026-09-25T21:00:00Z"));
   });
 
   it("names the next sweep before the site source exists, because a brand is on", () => {
     for (const sources of [[], MENTION_SOURCES]) {
       const standing = homeStanding({ ...GATHERING_INPUT, sources });
       if (standing.kind !== "gathering") throw new Error("expected a gathering standing");
-      expect(standing.firstSweepAt).toBe("Friday 25 September, around 07:00 BST");
+      expect(standing.firstSweepAt).toBe("Friday 25 September, around 00:00 BST");
     }
   });
 
@@ -381,7 +381,7 @@ describe("Home standing", () => {
     );
     const standing = homeStanding(GATHERING_INPUT);
     if (standing.kind !== "gathering") throw new Error("expected a gathering standing");
-    expect(standing.firstSweepAt).toBe("Friday 25 September, around 07:00 BST");
+    expect(standing.firstSweepAt).toBe("Friday 25 September, around 00:00 BST");
     expect(homeView(GATHERING_INPUT).standing).toEqual(standing);
   });
 
