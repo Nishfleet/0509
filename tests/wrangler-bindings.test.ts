@@ -4,6 +4,7 @@ import { experimental_readRawConfig } from "wrangler";
 import { describe, expect, it } from "vitest";
 
 import { D1_DATABASE_ID, SNAPSHOT_BUCKET } from "../app/lib/observability/cost-analytics.server";
+import { SITE_URL } from "../app/lib/site-url";
 
 // #4631, and 225c3eb before it: the production CLOUDFLARE_API_TOKEN cannot reach
 // the KV namespaces endpoint, so a KV binding without an id sends wrangler to
@@ -42,6 +43,19 @@ describe("deployed wrangler configs", () => {
     const bucket = (rawConfig.r2_buckets ?? []).find((b) => b.binding === "SNAPSHOTS");
     expect(db?.database_id).toBe(D1_DATABASE_ID);
     expect(bucket?.bucket_name).toBe(SNAPSHOT_BUCKET);
+  });
+
+  // 0509#7124. The production origin is written in three places, and the one
+  // that deploys is this config's BETTER_AUTH_URL. The other two are
+  // app/lib/site-url.ts (SITE_URL, which feeds canonical tags, og:url and the
+  // MCP URL) and env.server.ts's env gate. A SITE_URL that drifts from the
+  // deployed origin changes every canonical URL the site emits, with no red
+  // test anywhere, so pin them together here rather than in three places.
+  it("pins the deployed BETTER_AUTH_URL to the site origin every node builds on", () => {
+    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    expect(rawConfig.vars?.BETTER_AUTH_URL, "wrangler.jsonc no longer deploys BETTER_AUTH_URL to SITE_URL").toBe(
+      SITE_URL,
+    );
   });
 
   // 0509#5758. Without these the paid defaults apply: 30,000 ms of CPU and
