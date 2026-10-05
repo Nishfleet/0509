@@ -90,10 +90,9 @@ test("/api/health answers ok @smoke", async ({ request }) => {
   expect(body.app).toBe("0509");
   expect(Number.isNaN(Date.parse(body.timestamp))).toBe(false);
   // #7187: the health body names the deployed version's tag through the stock
-  // version_metadata binding, so production exposes what is live. The built
-  // worker answers in the preview lane with an empty tag (miniflare injects the
-  // binding, a real deploy fills it), so the shape is asserted everywhere and
-  // the value comes from the deploy workflow's own commit grep.
+  // version_metadata binding. A deploy that passes the SHA as the tag makes that
+  // value the live commit (Nishfleet/fleet-ops#9307); until one does, the tag is
+  // empty, so this asserts the field is there.
   expect(typeof body.commit).toBe("string");
 });
 
