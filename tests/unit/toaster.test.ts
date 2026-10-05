@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,11 +12,10 @@ import type { ToasterProps } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // #4116: toasts exist for exactly two moments — "saved" and "undo" — and
-// nothing else in the product may raise one. The lock is two rungs deep:
-// eslint.config.js bans the sonner import outside app/components/toaster.tsx
-// at the static gate, and the scanner below fails the suite on any call that
-// reached around it — the pure-regex probes prove the pattern still bites and
-// the clean-tree run proves no toast slipped in ahead of it. sonner is mocked
+// nothing else in the product may raise one. eslint.config.js holds that lock
+// on the changed file itself: SONNER_IMPORT bans the import and BARE_TOAST the
+// call shape outside app/components/toaster.tsx (tests/eslint-toast-rule.test.ts,
+// 0509#7007). sonner is mocked
 // partially: toast is a vi.fn() so toastSaved's calls are observable, while
 // Toaster stays real so the render tests below produce the markup the axe run
 // checks on production.
@@ -59,50 +58,6 @@ import { Toaster, toastSaved } from "../../app/components/toaster";
 import { BriefScheduleSettings } from "../../app/components/brief-schedule-settings";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const SCANNED_DIRS = ["app", "workers"];
-const ALLOWED = new Set(["app/components/toaster.tsx"]);
-const TOAST_USE = /from\s+["']sonner["']|(?<![\w.])toast\s*\(|(?<![\w.])toast\./;
-
-async function toastCallSites(dir: string): Promise<string[]> {
-  const found: string[] = [];
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      found.push(...(await toastCallSites(full)));
-      continue;
-    }
-    if (!/\.tsx?$/.test(entry.name)) continue;
-    const rel = path.relative(REPO_ROOT, full).split(path.sep).join("/");
-    if (ALLOWED.has(rel)) continue;
-    if (TOAST_USE.test(await readFile(full, "utf8"))) found.push(rel);
-  }
-  return found;
-}
-
-async function allToastCallSites(): Promise<string[]> {
-  const found: string[] = [];
-  for (const dir of SCANNED_DIRS) {
-    found.push(...(await toastCallSites(path.join(REPO_ROOT, dir))));
-  }
-  return found;
-}
-
-describe("toast call-site lock", () => {
-  it("catches a sonner import and a bare toast() call", () => {
-    expect(TOAST_USE.test('import { toast } from "sonner";')).toBe(true);
-    expect(TOAST_USE.test('toast("hi");')).toBe(true);
-  });
-
-  it("does not fire on a member named toast or a toastSaved caller", () => {
-    expect(TOAST_USE.test("return props.toast.label;")).toBe(false);
-    // Callers go through the paved path; only the raw sonner call is banned.
-    expect(TOAST_USE.test('toastSaved("saved");')).toBe(false);
-  });
-
-  it("finds no toast calls outside the allowed module", async () => {
-    expect(await allToastCallSites()).toEqual([]);
-  });
-});
 
 describe("toastSaved", () => {
   beforeEach(() => {
