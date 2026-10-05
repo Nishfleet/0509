@@ -56,7 +56,7 @@ async function submissionMinted(request: Request, submission: string): Promise<b
 
 async function apiAccessAllowed(userId: string): Promise<boolean> {
   const workspaceId = await readWorkspaceIdForOwner(userId);
-  return workspaceId === null || (await readEntitlements(workspaceId)).api_access;
+  return workspaceId !== null && (await readEntitlements(workspaceId)).api_access;
 }
 
 export async function createAgentKey(request: Request, form: FormData): Promise<CreateKeyResult> {

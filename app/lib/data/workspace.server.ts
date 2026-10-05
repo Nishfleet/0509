@@ -51,6 +51,7 @@ export async function readWorkspaceLanding(db: WorkspaceDb, userId: string): Pro
 
 interface BoundStatement {
   first<T>(): Promise<T | null>;
+  all<T>(): Promise<{ results: T[] }>;
   run(): Promise<{ meta: { changes: number } }>;
 }
 
@@ -60,50 +61,83 @@ export interface WorkspaceDb {
   };
 }
 
+export class WorkspaceCapError extends Error {
+  constructor() {
+    super("workspace cap");
+    this.name = "WorkspaceCapError";
+  }
+}
+
 const INSERT_WORKSPACE = `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at, fixture)
-VALUES (?, ?, ?, ?, 1, 8, ?, ?)
+SELECT ?, ?, ?, ?, 1, 8, ?, ?
+WHERE (
+  SELECT count(*) FROM workspace WHERE owner_user_id = ?
+) = 0
+OR ? = 1
+OR (
+  SELECT count(*) FROM workspace WHERE owner_user_id = ?
+) < ?
 ON CONFLICT(id) DO NOTHING`;
 
 const FILL_TIMEZONE = `UPDATE workspace SET timezone = ? WHERE id = ? AND timezone = 'UTC'`;
 
-const COUNT_OWNER_WORKSPACES = "SELECT count(*) AS n FROM workspace WHERE owner_user_id = ?";
+const SELECT_WORKSPACE_ID = "SELECT id FROM workspace WHERE id = ?";
 
-const SELECT_OWNER_PLAN = `SELECT p.tier AS tier, p.status AS status, p.current_period_end AS current_period_end, p.limits_json AS limits_json
+const SELECT_OWNER_PLANS = `SELECT p.tier AS tier, p.status AS status, p.current_period_end AS current_period_end, p.limits_json AS limits_json
 FROM workspace w
 JOIN plan p ON p.workspace_id = w.id
-WHERE w.owner_user_id = ?
-ORDER BY w.created_at ASC
-LIMIT 1`;
+WHERE w.owner_user_id = ?`;
 
-async function ownerWorkspacesMax(db: WorkspaceDb, ownerUserId: string): Promise<number | null> {
-  const row = await db
-    .prepare(SELECT_OWNER_PLAN)
-    .bind(ownerUserId)
-    .first<{ tier: string; status: string; current_period_end: string | null; limits_json: string }>();
-  if (row === null) return resolveEntitlements("scout", "{}").workspaces_max;
-  return resolveEntitlements(
-    entitledTier({ tier: row.tier, status: row.status, currentPeriodEnd: row.current_period_end }, new Date()),
-    row.limits_json,
-  ).workspaces_max;
+interface OwnerPlanRow {
+  tier: string;
+  status: string;
+  current_period_end: string | null;
+  limits_json: string;
 }
 
-async function assertWorkspaceRoom(db: WorkspaceDb, ownerUserId: string): Promise<void> {
-  const row = await db.prepare(COUNT_OWNER_WORKSPACES).bind(ownerUserId).first<{ n: number }>();
-  const count = row?.n ?? 0;
-  if (count === 0) return;
-  const cap = await ownerWorkspacesMax(db, ownerUserId);
-  if (cap !== null && count >= cap) throw new Error("workspace cap");
+function widerWorkspacesMax(left: number | null, right: number | null): number | null {
+  if (left === null || right === null) return null;
+  return left > right ? left : right;
+}
+
+async function ownerWorkspacesMax(db: WorkspaceDb, ownerUserId: string): Promise<number | null> {
+  const { results } = await db.prepare(SELECT_OWNER_PLANS).bind(ownerUserId).all<OwnerPlanRow>();
+  if (results.length === 0) return resolveEntitlements("scout", "{}").workspaces_max;
+  const now = new Date();
+  return results
+    .map((row) =>
+      resolveEntitlements(
+        entitledTier({ tier: row.tier, status: row.status, currentPeriodEnd: row.current_period_end }, now),
+        row.limits_json,
+      ).workspaces_max,
+    )
+    .reduce(widerWorkspacesMax);
 }
 
 export async function insertWorkspace(
   db: WorkspaceDb,
   input: { id: string; name: string; ownerUserId: string; timezone: string; createdAt: string; fixture: boolean },
 ): Promise<void> {
-  await assertWorkspaceRoom(db, input.ownerUserId);
-  await db
+  const cap = await ownerWorkspacesMax(db, input.ownerUserId);
+  const result = await db
     .prepare(INSERT_WORKSPACE)
-    .bind(input.id, input.name, input.ownerUserId, input.timezone, input.createdAt, input.fixture ? 1 : 0)
+    .bind(
+      input.id,
+      input.name,
+      input.ownerUserId,
+      input.timezone,
+      input.createdAt,
+      input.fixture ? 1 : 0,
+      input.ownerUserId,
+      cap === null ? 1 : 0,
+      input.ownerUserId,
+      cap ?? 0,
+    )
     .run();
+  if (result.meta.changes === 1) return;
+  const existing = await db.prepare(SELECT_WORKSPACE_ID).bind(input.id).first<{ id: string }>();
+  if (existing !== null) return;
+  throw new WorkspaceCapError();
 }
 
 export async function fillWorkspaceTimezone(db: WorkspaceDb, id: string, timezone: string): Promise<boolean> {

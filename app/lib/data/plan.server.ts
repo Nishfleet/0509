@@ -49,7 +49,35 @@ export async function readWorkspaceEntitlements(
   workspaceIds: readonly string[],
 ): Promise<ReadonlyMap<string, Entitlements>> {
   const unique = [...new Set(workspaceIds)];
-  return new Map(await Promise.all(unique.map(async (id) => [id, await readEntitlements(id)] as const)));
+  const entitlements = new Map<string, Entitlements>();
+  if (unique.length === 0) return entitlements;
+  const placeholders = unique.map(() => "?").join(", ");
+  const { results } = await env.DB.prepare(
+    `SELECT workspace_id, tier, status, current_period_end, limits_json FROM plan WHERE workspace_id IN (${placeholders})`,
+  )
+    .bind(...unique)
+    .all<{
+      workspace_id: string;
+      tier: string;
+      status: string;
+      current_period_end: string | null;
+      limits_json: string;
+    }>();
+  const now = new Date();
+  const found = new Map(results.map((row) => [row.workspace_id, row] as const));
+  for (const id of unique) {
+    const row = found.get(id);
+    entitlements.set(
+      id,
+      row === undefined
+        ? resolveEntitlements("scout", "{}")
+        : resolveEntitlements(
+            entitledTier({ tier: row.tier, status: row.status, currentPeriodEnd: row.current_period_end }, now),
+            row.limits_json,
+          ),
+    );
+  }
+  return entitlements;
 }
 
 export async function readPlanTier(workspaceId: string): Promise<PlanId> {

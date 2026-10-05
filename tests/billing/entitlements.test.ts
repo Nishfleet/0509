@@ -106,17 +106,19 @@ describe("resolveEntitlements", () => {
 
 describe("every entitlement key has a reader (0509#7062)", () => {
   const ROOT = path.resolve(import.meta.dirname, "../..");
-  const files = globSync("{app,workers}/**/*.{ts,tsx}", { cwd: ROOT }).filter(
-    (file) => !file.startsWith("app/lib/billing/"),
-  );
+  const texts = globSync("{app,workers}/**/*.{ts,tsx}", { cwd: ROOT })
+    .filter((file) => !file.startsWith("app/lib/billing/"))
+    .map((file) => ({ file, text: readFileSync(path.join(ROOT, file), "utf8") }));
 
   it.each([...ENTITLEMENT_KEYS])("%s is read outside billing", (key) => {
-    const hits = files.filter((file) => {
-      const text = readFileSync(path.join(ROOT, file), "utf8");
+    const hits = texts.filter(({ text }) => {
       if (!/readEntitlements|resolveEntitlements|readWorkspaceEntitlements/.test(text)) return false;
       return text.includes(`.${key}`);
     });
-    expect(hits, `${key} needs a reader outside app/lib/billing`).not.toEqual([]);
+    expect(
+      hits.map(({ file }) => file),
+      `${key} needs a reader outside app/lib/billing`,
+    ).not.toEqual([]);
   });
 
   it("keeps api_access on every live plan", () => {
@@ -134,7 +136,9 @@ describe("pageRoleInScope", () => {
 });
 
 describe("paidSourceAllowed", () => {
-  it("allows every current source while no paid scraper key exists", () => {
+  it("denies scraper.paid unless the workspace is entitled", () => {
+    expect(paidSourceAllowed("scraper.paid", false)).toBe(false);
+    expect(paidSourceAllowed("scraper.paid", true)).toBe(true);
     expect(paidSourceAllowed("site.web", false)).toBe(true);
     expect(paidSourceAllowed("site.web", true)).toBe(true);
   });

@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
-import { insertWorkspace } from "../../app/lib/data/workspace.server";
+import { insertWorkspace, WorkspaceCapError } from "../../app/lib/data/workspace.server";
 import { ensureWorkspace, firstWorkspaceId, workspaceLanding } from "../../app/lib/workspace.server";
 
 async function seedUser(id: string, email: string) {
@@ -115,7 +115,7 @@ describe("ensureWorkspace against migrations/0001_rebuild.sql", () => {
         createdAt: "2026-09-23T12:00:00.000Z",
         fixture: false,
       }),
-    ).rejects.toThrow("workspace cap");
+    ).rejects.toThrow(WorkspaceCapError);
     expect(await workspaceCount("user-scout-cap")).toBe(1);
 
     const agency = await ensureWorkspace(env.DB, {
@@ -138,6 +138,42 @@ describe("ensureWorkspace against migrations/0001_rebuild.sql", () => {
       fixture: false,
     });
     expect(await workspaceCount("user-agency-cap")).toBe(2);
+  });
+
+  it("uses the widest live plan when an older workspace is still Scout", async () => {
+    await seedUser("user-wide-cap", "wide-cap@example.com");
+    const now = "2026-09-22T12:00:00.000Z";
+    const first = await ensureWorkspace(env.DB, {
+      userId: "user-wide-cap",
+      email: "wide-cap@example.com",
+      timezone: "UTC",
+      now,
+    });
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'active', ?)",
+    )
+      .bind("plan-wide-scout", first.id, now)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
+       VALUES ('ws-wide-agency', 'agency', 'user-wide-cap', 'UTC', 1, 8, ?)`,
+    )
+      .bind("2026-09-23T12:00:00.000Z")
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'agency', 'active', ?)",
+    )
+      .bind("plan-wide-agency", "ws-wide-agency", now)
+      .run();
+    await insertWorkspace(env.DB, {
+      id: "ws-wide-third",
+      name: "third",
+      ownerUserId: "user-wide-cap",
+      timezone: "UTC",
+      createdAt: "2026-09-24T12:00:00.000Z",
+      fixture: false,
+    });
+    expect(await workspaceCount("user-wide-cap")).toBe(3);
   });
 
   it("lands on /onboarding until a self entity exists", async () => {
