@@ -36,18 +36,15 @@ const GATEWAY_MODEL = "@cf/cloudflare/clef";
 
 const JEV_URL = VIA_GATEWAY ? "workers-ai binding" : (process.env.JEV_URL ?? "http://127.0.0.1:4000/jev");
 
-// The yes/no-probability primitive is spelled differently by the two endpoints this
-// harness can post to (0509#7177). VIA_GATEWAY is the production call in
-// app/lib/jev/client.server.ts: Cloudflare Clef keeps TypeSafe's `noul` request and
-// answers `noul`, and it is the path .github/workflows/evals.yml runs. The /jev route
-// on this box was re-pointed at the Vercel AI Gateway evaluation model on 2026-10-04,
-// and that API accepts only choice, score and boolean, so a `noul` request comes back
-// 400 "Invalid discriminator value" and the answer carries `probability`.
-const NOUL_TYPE = VIA_GATEWAY ? "noul" : "boolean";
-
-function noulOf(answer: JevAnswer): number | undefined {
-  return VIA_GATEWAY ? answer.noul : answer.probability;
-}
+// One descriptor holds the whole spelling of the yes/no-probability primitive for the
+// endpoint this run posts to, so the request type and the answer field stay paired
+// (0509#7177): the Workers AI binding path (VIA_GATEWAY) is the production call in
+// app/lib/jev/client.server.ts and Clef keeps `noul`, while the /jev route on this box
+// goes to the Vercel AI Gateway evaluation model, which dropped `noul` and answers
+// `probability`.
+export const NOUL_WIRE: { type: string; field: string; value: (answer: JevAnswer) => number | undefined } = VIA_GATEWAY
+  ? { type: "noul", field: "noul", value: (answer) => answer.noul }
+  : { type: "boolean", field: "probability", value: (answer) => answer.probability };
 
 // Eval calls skip AI Gateway on purpose: error 2003 is the gateway's own rate limit,
 // and sharing the gateway `default` with customers failed two sign-ups on 2026-10-04
@@ -287,7 +284,7 @@ function noulQuestions(questions: readonly NoulEvalQuestion[]): Record<string, u
     questions.map((question) => [
       question.id,
       {
-        type: NOUL_TYPE,
+        type: NOUL_WIRE.type,
         instructions: question.instructions,
         criteria: { true: question.whenTrue, false: question.whenFalse },
       },
@@ -296,8 +293,8 @@ function noulQuestions(questions: readonly NoulEvalQuestion[]): Record<string, u
 }
 
 function noulValue(answer: JevAnswer, questionId: string): number {
-  const value = noulOf(answer);
-  if (typeof value !== "number") throw new Error(`jev answer missing a ${NOUL_TYPE} for ${questionId}`);
+  const value = NOUL_WIRE.value(answer);
+  if (typeof value !== "number") throw new Error(`jev answer missing a ${NOUL_WIRE.field} for ${questionId}`);
   return value;
 }
 
