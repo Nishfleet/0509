@@ -28,12 +28,13 @@ const manifests = globSync("**/package.json", {
   exclude: (file) => file.includes("node_modules") || file.startsWith(".") || file.startsWith("build"),
 });
 
-const names = manifests.flatMap((file) => {
-  const pkg = JSON.parse(readFileSync(path.join(ROOT, file), "utf8")) as PackageJson;
-  return KINDS.flatMap((kind) => Object.keys(pkg[kind] ?? {}));
-});
-
 const rootPackage = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8")) as PackageJson;
+
+// Exactly one manifest today. The specifier and Lock checks below read the root
+// manifest and the root lock, so a second package.json would fail the row check
+// above while silently escaping both number checks. Fail loudly instead of
+// under-checking: adding a manifest means extending this file.
+const names = KINDS.flatMap((kind) => Object.keys(rootPackage[kind] ?? {}));
 
 const lock = JSON.parse(readFileSync(path.join(ROOT, "package-lock.json"), "utf8")) as {
   packages?: Record<string, { version?: string }>;
@@ -85,6 +86,10 @@ const resolved = (name: string): string | undefined => lock.packages?.[`node_mod
 const directDependencies = KINDS.flatMap((kind) => Object.entries(rootPackage[kind] ?? {}));
 
 describe("docs/REBUILD-STACK.md §9", () => {
+  it("tracks exactly one package.json", () => {
+    expect(manifests, "a second package.json needs its own specifier and lock checks here").toEqual(["package.json"]);
+  });
+
   it.each([...new Set(names)])("approves %s in its own row", (name) => {
     expect(approvedRow(name).test(stack), `${name} has no approving row in docs/REBUILD-STACK.md §9`).toBe(true);
   });

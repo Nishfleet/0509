@@ -17,6 +17,9 @@ const MAP = path.join(REPO_ROOT, ".agents", "skills", "verify", "feature-map.md"
 // The same pattern the gardener sweeps used, so this gate fails on exactly
 // the references a human sweep would report.
 const SPEC_REF = /e2e\/[A-Za-z0-9_./-]+\.spec\.ts/g;
+// The `/mcp` row lists its tools inside one clause. The split phrase is named
+// here so a reword of that clause fails with the phrase, not a bare count.
+const TOOL_CLAUSE = "tools, each with an output schema:";
 
 async function e2eSpecFiles(dir: string): Promise<string[]> {
   const found: string[] = [];
@@ -110,10 +113,11 @@ describe("feature map proof coverage", () => {
     expect(missing, missing.map((name) => `name \`${name}\` in the /mcp row`).join("\n")).toEqual([]);
     // The tool list is the clause "read-only tools, each with an output schema:
     // …" up to the first parenthesis; other backticked tokens in the row are
-    // not tools, so only this clause is checked for dead names.
-    const clause = row?.split("tools, each with an output schema:")[1]?.split("(")[0] ?? "";
+    // not tools, so only this clause is checked for dead names. The split phrase
+    // is named in the failure so a reword says what moved.
+    const clause = row?.split(TOOL_CLAUSE)[1]?.split("(")[0] ?? "";
     const named = [...clause.matchAll(/`([a-z][a-z_]+)`/g)].map((match) => match[1]);
-    expect(named.length, "the /mcp row must name its tools").toBeGreaterThan(0);
+    expect(named.length, `the /mcp row must name its tools after \`${TOOL_CLAUSE}\``).toBeGreaterThan(0);
     const dead = named.filter((word) => !names.includes(word));
     expect(
       dead,

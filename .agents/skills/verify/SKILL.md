@@ -16,7 +16,7 @@ npm run verify:start
 npm run verify:stop
 ```
 
-`verify:start` runs `chrome-devtools start --headless --chromeArg=--no-sandbox` with `--executablePath` set to `node -p "require('playwright-core').chromium.executablePath()"`. `verify:stop` runs `chrome-devtools stop`. `chrome-devtools status` should report version `1.9.0`.
+`verify:start` runs `chrome-devtools start --headless --chromeArg=--no-sandbox` with `--executablePath` set to `node -p "require('@playwright/test').chromium.executablePath()"`. It resolves the browser through `@playwright/test`, the one declared dependency, because `playwright-core` is only a transitive package and an undeclared require stops resolving after the next lockfile trim. `verify:stop` runs `chrome-devtools stop`. `chrome-devtools status` should report version `1.9.0`.
 
 ### Local
 
