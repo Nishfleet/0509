@@ -32,4 +32,10 @@ describe("reportNightlyResults", () => {
     expect(captureException).toHaveBeenNthCalledWith(1, first);
     expect(captureException).toHaveBeenNthCalledWith(2, second);
   });
+
+  it("wraps a non-Error rejection so AggregateError still throws", () => {
+    vi.mocked(captureException).mockClear();
+    expect(() => reportNightlyResults([{ status: "rejected", reason: "standing-failed" }])).toThrow(AggregateError);
+    expect(captureException).toHaveBeenCalledWith(expect.any(Error));
+  });
 });

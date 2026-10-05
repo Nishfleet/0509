@@ -29,6 +29,12 @@ describe("/api/health", () => {
     await expect(response.json()).resolves.toMatchObject({ status: "error", app: "0509", d1: "error" });
   });
 
+  it("answers 503 when D1 returns a row that is not 1", async () => {
+    const response = await healthResponse(dbReturning({ ok: 0 }));
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ status: "error", app: "0509", d1: "error" });
+  });
+
   it("answers 503 when D1 rejects", async () => {
     const response = await healthResponse(dbRejecting(new Error("D1_ERROR")));
     expect(response.status).toBe(503);
