@@ -248,6 +248,9 @@ describe("worker env", () => {
       expect(body).toContain("DODO_WEBHOOK_SECRET");
       expect(body).not.toContain("local-only-not-a-production-secret");
       expect(body).not.toContain("whsec_");
+      expect(spy).toHaveBeenCalledWith(error.message);
+      expect(String(spy.mock.calls[0]?.[0])).not.toContain("local-only-not-a-production-secret");
+      expect(String(spy.mock.calls[0]?.[0])).not.toContain("whsec_");
     } finally {
       spy.mockRestore();
     }
