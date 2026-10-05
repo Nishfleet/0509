@@ -306,7 +306,7 @@ async function readStoredHunks(diffKey: string | null): Promise<readonly { lines
 }
 
 async function evidenceFromPayload(payload: SiteChangePayload | null): Promise<BreakageEvidence | null> {
-  if (payload === null || payload.status === undefined) return null;
+  if (payload?.status === undefined) return null;
   const beforeKey = payload.before.textKey;
   const afterKey = payload.after.textKey;
   if (beforeKey === undefined || afterKey === undefined) return null;
@@ -327,7 +327,7 @@ async function judgeInputFromStored(row: UnjudgedChange): Promise<JudgeInput | n
     pageUrl: pageUrlOf(row, payload === null ? undefined : payload.page.url),
     pageRole: payload === null ? row.aspect : payload.page.role,
     hunks: await readStoredHunks(payload === null ? null : payload.diffKey),
-    evidence: evidence === null ? EMPTY_EVIDENCE : evidence,
+    evidence: evidence ?? EMPTY_EVIDENCE,
   };
 }
 

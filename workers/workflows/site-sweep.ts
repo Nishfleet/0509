@@ -106,7 +106,7 @@ async function rejudgeChanges(step: WorkflowStep): Promise<number> {
       }),
     ),
   );
-  return judged === null ? 0 : judged;
+  return judged ?? 0;
 }
 
 async function recordRun(
