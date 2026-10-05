@@ -63,6 +63,12 @@ function openDb(): DatabaseSync {
       started_at TEXT NOT NULL,
       watching_started_at TEXT
     );
+    CREATE TABLE plan (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'trialing',
+      current_period_end TEXT
+    );
   `);
   return database;
 }
