@@ -52,13 +52,16 @@ describe("feature map proof coverage", () => {
     ).toEqual([]);
   });
 
-  // #7016: a merge-conflict resolution left two `/login` rows (lines 27 and
-  // 28), each claiming `app/routes/login.tsx`, and only the newer one carries
-  // the turnstile-blocked spec. Nothing failed, so the stale twin stayed. The
-  // fix is this gate: every route row is unique on its Route + File pair, so a
-  // second row for the same route and file fails the PR. Row shape is taken
-  // from the file: a route row's first cell starts with a backtick, while the
-  // header, the separator and the "Not a route" table do not (#6133 pattern).
+  // #7016: a merge-conflict resolution (ab00c365f) left two `/login` rows
+  // (lines 27 and 28), each claiming `app/routes/login.tsx`, and only the newer
+  // one carries the turnstile-blocked spec. Nothing failed, so the stale twin
+  // stayed. The fix is this gate: every route row is unique on its Route + File
+  // pair, so a second row for the same route and file fails the PR. Row shape
+  // is taken from the file: a route row's first cell starts with a backtick,
+  // while the header, the separator and the "Not a route" table do not (#6133
+  // pattern). The parser could also drift and read nothing, so a positive
+  // control proves rows were actually seen, and the count is pinned against
+  // the route table's own header so a silent drop fails here too.
   it("has no duplicate route row", async () => {
     const map = await readFile(MAP, "utf8");
     const seen = new Map<string, number>();
@@ -79,6 +82,14 @@ describe("feature map proof coverage", () => {
       }
       seen.set(key, index + 1);
     });
+    // Positive control: a parse that reads nothing must not pass green. The
+    // map's route tables carry far more than a handful of rows, and `/` is on
+    // every one of them.
+    expect(seen.size, "the parser must have read rows from the map").toBeGreaterThan(0);
+    expect(
+      [...seen.keys()].some((key) => key.startsWith("`/`\t")),
+      "the `/` route must be in the map",
+    ).toBe(true);
     expect(duplicates, duplicates.join("\n")).toEqual([]);
   });
 });

@@ -8,9 +8,11 @@ that is not here cannot be reached, and a row here that no route serves is a
 lie. `app/routes.ts` is the only registry — start there, not from a guess.
 
 **Every PR that adds, removes or changes a route updates this file in the same
-PR.** `tests/unit/feature-map-proof.test.ts` fails a PR whose
+PR.** `app/routes.ts` is the only registry: no gate in this repo reads it
+against this file, so keeping the two in step is the PR author's job, and
+`tests/unit/feature-map-proof.test.ts` fails a PR whose
 spec is named by no Proof row here or whose Proof row names a spec not on
-disk (#6133).
+disk (#6133), or that repeats a Route + File row (#7016).
 
 Legend: **Reach** is how a human gets there — the route or entry point, the
 element's role and accessible name, and the keyboard path with no pointer.
