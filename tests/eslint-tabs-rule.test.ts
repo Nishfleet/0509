@@ -41,6 +41,12 @@ const NEAR_MISS = `export function probe() {
 }
 `;
 
+const STATIC_ROW_EVIDENCE = `import { RowEvidence } from "./row-evidence";
+export function probe(evidence: never[]) {
+  return <RowEvidence evidence={evidence} />;
+}
+`;
+
 async function lintProbe(code: string): Promise<string[]> {
   const file = path.join(REPO_ROOT, PROBE);
   await mkdir(path.dirname(file), { recursive: true });
@@ -84,6 +90,11 @@ describe("eslint hand-rolled ARIA tabs rule (#7014)", () => {
   it("does not flag a role=button", { timeout: 60_000 }, async () => {
     const messages = await lintProbe(NEAR_MISS);
     expect(messages.some((m) => m.includes(TAB_MESSAGE))).toBe(false);
+  });
+
+  it("rejects a static row-evidence import that would put tabs in the /app entry", { timeout: 60_000 }, async () => {
+    const messages = await lintProbe(STATIC_ROW_EVIDENCE);
+    expect(messages.some((m) => m.includes("React.lazy"))).toBe(true);
   });
 
   it("leaves the stock tabs primitive and RowEvidence alone", { timeout: 60_000 }, async () => {

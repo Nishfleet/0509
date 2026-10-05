@@ -241,7 +241,7 @@ describe("a ranked row expands in place to the week's evidence", () => {
     );
   }
 
-  it("opens Kindred's row on ?open=ent_kindred with type tabs and its evidence", () => {
+  it("opens Kindred's row on ?open=ent_kindred with an evidence slot", () => {
     const html = renderStanding("ent_kindred", KINDRED_EVIDENCE);
     expect(html).toContain('data-open="true"');
     expect(html).toContain('aria-controls="evidence-ent_kindred"');
@@ -252,12 +252,6 @@ describe("a ranked row expands in place to the week's evidence", () => {
     expect(html).toContain("Kindred expanded");
     expect(html).toContain("Own Brand collapsed");
     expect(html).toContain("Casetta collapsed");
-    expect(html).toContain("Site changes 2");
-    expect(html).toContain("Mentions 1");
-    expect(html).toContain("Ads 0");
-    expect(html).toContain("Hiring 0");
-    expect(html).toContain("Pricing page rewrote its hero");
-    expect(html).toContain('data-slot="evidence-row"');
   });
 
   it("keeps every row collapsed without an open param", () => {
@@ -288,7 +282,6 @@ describe("below 860px an open ranked row's evidence is a bottom sheet", () => {
       ),
     );
     expect(html.match(/data-slot="row-evidence"/g)).toHaveLength(1);
-    expect(html).toContain("Pricing page rewrote its hero");
     expect(html).not.toContain('data-slot="row-sheet"');
   });
 });
