@@ -113,8 +113,13 @@ describe("agent brief hides OFF brands", () => {
     expect(brief?.standing.map((line) => line.competitorId)).toEqual([ON_ID]);
     expect(brief?.standing.map((line) => line.name)).toEqual(["Rival On"]);
     expect(brief?.standing.map((line) => line.competitorId)).not.toContain(OFF_ID);
-    expect(brief?.readThisFirst.map((mark) => mark.competitor)).toEqual(["Rival On"]);
-    expect(brief?.readThisFirst.map((mark) => mark.competitor)).not.toContain("Rival Off");
+    expect(brief?.headline.of).toBe(1);
+    expect(brief?.headline.rank).toBe(1);
+    expect(brief?.headline.why).toBe("You held first on new ads.");
+    expect(brief?.headline.why).not.toContain("Rival Off");
+    expect(brief?.checked.siteChanges).toBe(1);
+    expect(brief?.checked.newAds).toBe(2);
+    expect(brief?.checked.mentions).toBe(0);
 
     const { standing } = await readAgentStanding(WORKSPACE_ID);
     expect(standing?.lines.map((line) => line.competitorId)).toEqual([ON_ID]);

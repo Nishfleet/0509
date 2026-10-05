@@ -1,0 +1,53 @@
+import type { BriefPayload } from "../brief-payload";
+import { UNJUDGED_WEEK_LINE, readThisFirstLine } from "../read-this-first";
+
+type BrandLine = BriefPayload["brands"][number];
+type Marks = BriefPayload["read_this_first"];
+
+function signalCounts(brands: readonly BrandLine[]) {
+  return {
+    mention_count: brands.reduce((total, line) => total + line.mention_delta, 0),
+    site_change_count: brands.reduce((total, line) => total + line.site_change_count, 0),
+    new_ad_count: brands.reduce((total, line) => total + line.ad_delta, 0),
+  };
+}
+
+function whyLine(input: {
+  payload: BriefPayload;
+  marks: Marks;
+  hiddenNames: readonly string[];
+  remaining: readonly BrandLine[];
+}): string {
+  const { payload, marks, hiddenNames, remaining } = input;
+  if (!hiddenNames.some((name) => payload.why_line.includes(name))) return payload.why_line;
+  if (payload.is_unjudged) return UNJUDGED_WEEK_LINE;
+  const lead = marks[0];
+  if (lead !== undefined) return readThisFirstLine(marks.length, marks.length, lead.entity_name);
+  const counts = signalCounts(remaining);
+  return `Quiet week: ${String(counts.mention_count)} mentions, ${String(counts.site_change_count)} site changes, ${String(counts.new_ad_count)} new ads.`;
+}
+
+export function hideOffBrands(payload: BriefPayload, hidden: Set<string>): BriefPayload {
+  const brands = payload.brands.filter((line) => !hidden.has(line.entity_id));
+  if (brands.length === payload.brands.length) return payload;
+  const read_this_first = payload.read_this_first.filter((mark) => !hidden.has(mark.entity_id));
+  const removed = payload.brands.filter((line) => hidden.has(line.entity_id));
+  const rank = payload.headline_rank;
+  const droppedAbove = rank === null ? 0 : removed.filter((line) => line.rank !== null && line.rank < rank).length;
+  const counts = signalCounts(brands);
+  return {
+    ...payload,
+    brands,
+    read_this_first,
+    headline_rank: rank === null ? null : rank - droppedAbove,
+    headline_total: brands.length,
+    why_line: whyLine({
+      payload,
+      marks: read_this_first,
+      hiddenNames: removed.map((line) => line.name).filter((name) => name.length > 0),
+      remaining: brands,
+    }),
+    is_quiet_week: read_this_first.length === 0 && !payload.is_unjudged,
+    checked: { ...payload.checked, ...counts },
+  };
+}

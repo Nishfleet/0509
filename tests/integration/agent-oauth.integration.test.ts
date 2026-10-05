@@ -8,6 +8,7 @@ import { createOAuthProvider } from "../../app/lib/agent/oauth.server";
 const ORIGIN = "http://localhost";
 const REDIRECT = "https://app.example/callback";
 const VERIFIER = "a-long-enough-pkce-code-verifier-for-this-test-0123456789";
+const REGISTER_OVERSIZE = 1_048_576;
 
 type TestEnv = typeof env & { OAUTH_PROVIDER?: OAuthHelpers };
 
@@ -132,7 +133,7 @@ describe("an AI app signing in to 0509", () => {
     expect(await mcp.json()).toEqual({ userId: "u_oauth", clientId });
 
     const grants = await helpers.listUserGrants("u_oauth");
-    expect(grants.items.map((grant) => grant.metadata)).toEqual([{ appName: "app.example" }]);
+    expect(grants.items.map((grant) => grant.metadata)).toEqual([{ appName: "Test App", host: "app.example" }]);
     await helpers.revokeGrant(grants.items[0]?.id ?? "", "u_oauth");
     const revoked = await send(
       new Request(`${ORIGIN}/mcp`, { headers: { authorization: `Bearer ${tokens.access_token}` } }),
@@ -172,5 +173,198 @@ describe("an AI app signing in to 0509", () => {
     }
     expect(statuses.slice(0, 10).every((status) => status === 201)).toBe(true);
     expect(statuses[10]).toBe(429);
+  });
+
+  it("registers through DCR, then issues a token that /mcp accepts", async () => {
+    const registered = await send(
+      new Request(`${ORIGIN}/oauth/register`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "cf-connecting-ip": "198.51.100.80" },
+        body: JSON.stringify({
+          redirect_uris: [REDIRECT],
+          client_name: "DCR App",
+          token_endpoint_auth_method: "none",
+        }),
+      }),
+    );
+    expect(registered.status).toBe(201);
+    const body: { client_id: string } = await registered.json();
+    const query = new URLSearchParams({
+      response_type: "code",
+      client_id: body.client_id,
+      redirect_uri: REDIRECT,
+      state: "dcr",
+      code_challenge: await challenge(),
+      code_challenge_method: "S256",
+      resource: `${ORIGIN}/mcp`,
+    });
+    const allowed = await decideConsent(
+      helpers,
+      new Request(`${ORIGIN}/oauth/authorize?${query.toString()}`, { method: "POST" }),
+      { userId: "u_oauth", allow: true },
+    );
+    const code = new URL((allowed as Response).headers.get("location") ?? "").searchParams.get("code") ?? "";
+    const token = await send(
+      new Request(`${ORIGIN}/oauth/token`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          code,
+          redirect_uri: REDIRECT,
+          client_id: body.client_id,
+          code_verifier: VERIFIER,
+          resource: `${ORIGIN}/mcp`,
+        }),
+      }),
+    );
+    expect(token.status).toBe(200);
+    const tokens: { access_token: string } = await token.json();
+    const mcp = await send(
+      new Request(`${ORIGIN}/mcp`, { headers: { authorization: `Bearer ${tokens.access_token}` } }),
+    );
+    expect(mcp.status).toBe(200);
+    expect(await mcp.json()).toEqual({ userId: "u_oauth", clientId: body.client_id });
+  });
+
+  it("refuses remote http and custom-scheme redirect URIs at registration", async () => {
+    for (const [ip, uri] of [
+      ["198.51.100.81", "http://evil.example/callback"],
+      ["198.51.100.82", "cursor://callback"],
+    ] as const) {
+      const response = await send(
+        new Request(`${ORIGIN}/oauth/register`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "cf-connecting-ip": ip },
+          body: JSON.stringify({
+            redirect_uris: [uri],
+            client_name: "Bad redirect",
+            token_endpoint_auth_method: "none",
+          }),
+        }),
+      );
+      expect(response.status, uri).toBe(400);
+    }
+  });
+
+  it("refuses a registration body over 1 MiB before the provider stores a client", async () => {
+    const response = await send(
+      new Request(`${ORIGIN}/oauth/register`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "cf-connecting-ip": "198.51.100.83" },
+        body: JSON.stringify({
+          redirect_uris: [REDIRECT],
+          client_name: "x".repeat(REGISTER_OVERSIZE),
+          token_endpoint_auth_method: "none",
+        }),
+      }),
+    );
+    expect(response.status).toBe(413);
+  });
+
+  it("treats GET /MCP as /mcp so a missing token is 401", async () => {
+    const response = await send(new Request(`${ORIGIN}/MCP`));
+    expect(response.status).toBe(401);
+  });
+
+  it("refuses a foreign-origin MCP preflight and allows the product origin", async () => {
+    const foreign = await send(
+      new Request(`${ORIGIN}/mcp`, {
+        method: "OPTIONS",
+        headers: { origin: "https://evil.example", "access-control-request-method": "POST" },
+      }),
+    );
+    expect(foreign.status).toBe(403);
+    const own = await send(
+      new Request(`${ORIGIN}/mcp`, {
+        method: "OPTIONS",
+        headers: { origin: new URL(env.BETTER_AUTH_URL).origin, "access-control-request-method": "POST" },
+      }),
+    );
+    expect(own.status).toBe(204);
+  });
+
+  it("shows a clean refusal when CIMD metadata cannot be fetched", async () => {
+    const metadataUrl = "https://cimd.example/missing.json";
+    const previous = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url === metadataUrl) return new Response("gone", { status: 404 });
+      return previous(input, init);
+    };
+    try {
+      const query = new URLSearchParams({
+        response_type: "code",
+        client_id: metadataUrl,
+        redirect_uri: REDIRECT,
+        state: "s1",
+        code_challenge: await challenge(),
+        code_challenge_method: "S256",
+        resource: `${ORIGIN}/mcp`,
+      });
+      expect(await readConsent(helpers, new Request(`${ORIGIN}/oauth/authorize?${query.toString()}`))).toEqual({
+        kind: "error",
+        message: "This app's details could not be loaded. Go back and try connecting again.",
+      });
+    } finally {
+      globalThis.fetch = previous;
+    }
+  });
+
+  it("signs in a CIMD client whose metadata document fetches", async () => {
+    const metadataUrl = "https://cimd.example/oauth-client.json";
+    const document = {
+      client_id: metadataUrl,
+      client_name: "CIMD App",
+      redirect_uris: [REDIRECT],
+      token_endpoint_auth_method: "none",
+      grant_types: ["authorization_code"],
+      response_types: ["code"],
+    };
+    const previous = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url === metadataUrl) return Response.json(document);
+      return previous(input, init);
+    };
+    try {
+      const query = new URLSearchParams({
+        response_type: "code",
+        client_id: metadataUrl,
+        redirect_uri: REDIRECT,
+        state: "cimd",
+        code_challenge: await challenge(),
+        code_challenge_method: "S256",
+        resource: `${ORIGIN}/mcp`,
+      });
+      expect(await readConsent(helpers, new Request(`${ORIGIN}/oauth/authorize?${query.toString()}`))).toEqual({
+        kind: "ask",
+        host: "app.example",
+        claimedName: "CIMD App",
+      });
+      const allowed = await decideConsent(
+        helpers,
+        new Request(`${ORIGIN}/oauth/authorize?${query.toString()}`, { method: "POST" }),
+        { userId: "u_oauth", allow: true },
+      );
+      const code = new URL((allowed as Response).headers.get("location") ?? "").searchParams.get("code") ?? "";
+      const token = await send(
+        new Request(`${ORIGIN}/oauth/token`, {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            grant_type: "authorization_code",
+            code,
+            redirect_uri: REDIRECT,
+            client_id: metadataUrl,
+            code_verifier: VERIFIER,
+            resource: `${ORIGIN}/mcp`,
+          }),
+        }),
+      );
+      expect(token.status).toBe(200);
+    } finally {
+      globalThis.fetch = previous;
+    }
   });
 });

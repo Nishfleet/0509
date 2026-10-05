@@ -4,20 +4,21 @@ import { ExternalTokenError, OAuthProvider } from "@cloudflare/workers-oauth-pro
 
 import { clientIp, withinLimit } from "./client-limit.server";
 import { RATE_LIMITED, propsForApiKey } from "./keys.server";
-import { AUTHORIZE_PATH, MCP_PATH, READ_SCOPE } from "./paths";
+import { denyInsecureRedirects, fetchOAuth } from "./oauth-fetch.server";
+import { AUTHORIZE_PATH, MCP_PATH, READ_SCOPE, REGISTER_PATH } from "./paths";
 
 const HOUR = 60 * 60;
 const DAY = 24 * HOUR;
 
 type Handlers<E> = Pick<OAuthProviderOptions<E>, "apiHandler" | "defaultHandler">;
 
-export function createOAuthProvider<E>(handlers: Handlers<E>): OAuthProvider<E> {
-  return new OAuthProvider<E>({
+function oauthOptions<E>(handlers: Handlers<E>): OAuthProviderOptions<E> {
+  return {
     ...handlers,
     apiRoute: MCP_PATH,
     authorizeEndpoint: AUTHORIZE_PATH,
     tokenEndpoint: "/oauth/token",
-    clientRegistrationEndpoint: "/oauth/register",
+    clientRegistrationEndpoint: REGISTER_PATH,
     clientIdMetadataDocumentEnabled: true,
     scopesSupported: [READ_SCOPE],
     resourceMetadata: {
@@ -27,15 +28,8 @@ export function createOAuthProvider<E>(handlers: Handlers<E>): OAuthProvider<E> 
     },
     accessTokenTTL: HOUR,
     refreshTokenTTL: 30 * DAY,
-    clientRegistrationTTL: 30 * DAY,
-    clientRegistrationCallback: async ({ request }) => {
-      if (await withinLimit(env.AGENT_REGISTER_LIMIT, clientIp(request))) return;
-      return {
-        code: "temporarily_unavailable",
-        description: "Too many app registrations. Retry in a minute.",
-        status: 429,
-      };
-    },
+    clientRegistrationTTL: undefined,
+    clientRegistrationCallback: denyInsecureRedirects,
     resolveExternalToken: async ({ token, request }) => {
       if (!(await withinLimit(env.AGENT_LIMIT, clientIp(request)))) {
         throw new ExternalTokenError("temporarily_unavailable", {
@@ -55,5 +49,12 @@ export function createOAuthProvider<E>(handlers: Handlers<E>): OAuthProvider<E> 
       if (props === null) return null;
       return { props, audience: `${new URL(request.url).origin}${MCP_PATH}` };
     },
-  });
+  };
+}
+
+export function createOAuthProvider<E>(handlers: Handlers<E>): OAuthProvider<E> {
+  const provider = new OAuthProvider<E>(oauthOptions(handlers));
+  const inner = provider.fetch.bind(provider);
+  provider.fetch = (request, workerEnv, ctx) => fetchOAuth({ inner, request, env: workerEnv, ctx });
+  return provider;
 }

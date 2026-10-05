@@ -2,8 +2,11 @@ import { ONBOARDING_IDENTITY_PATH } from "../onboarding-subject";
 
 export const MCP_PATH = "/mcp";
 export const AUTHORIZE_PATH = "/oauth/authorize";
+export const REGISTER_PATH = "/oauth/register";
 export const READ_SCOPE = "read";
 export const API_KEY_PREFIX = "0509_";
+export const API_KEY_TTL_SECONDS = 90 * 24 * 60 * 60;
+export const REGISTER_MAX_BYTES = 1_048_576;
 
 const BASE = "https://base.invalid";
 

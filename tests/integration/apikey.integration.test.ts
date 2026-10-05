@@ -122,4 +122,24 @@ describe("apikey plugin against the shipped schema", () => {
     expect(res.valid).toBe(false);
     expect(res.key).toBeNull();
   });
+
+  it("mints a key that expires and carries the advertised read scope", async () => {
+    await seedUser("u_apikey_scope");
+    const created = await auth.api.createApiKey({
+      body: { userId: "u_apikey_scope", name: "scoped" },
+    });
+    const row = await env.DB.prepare('SELECT permissions, "expiresAt" FROM apikey WHERE id = ?')
+      .bind(created.id)
+      .first<{ permissions: string | null; expiresAt: string | null }>();
+    expect(row?.permissions).toBe('{"read":["*"]}');
+    expect(row?.expiresAt, "a new key must expire").not.toBeNull();
+    const expiresAt = new Date(row?.expiresAt ?? "").getTime();
+    const inNinetyDays = Date.now() + 90 * 24 * 60 * 60 * 1000;
+    expect(Math.abs(expiresAt - inNinetyDays)).toBeLessThan(24 * 60 * 60 * 1000);
+
+    const { propsForApiKey } = await import("../../app/lib/agent/keys.server");
+    expect(await propsForApiKey(created.key)).toMatchObject({ userId: "u_apikey_scope" });
+    await env.DB.prepare("UPDATE apikey SET permissions = NULL WHERE id = ?").bind(created.id).run();
+    expect(await propsForApiKey(created.key)).toBeNull();
+  });
 });
