@@ -34,6 +34,8 @@ export default defineConfig({
       // verdict is left to the merge queue instead of the PR.
       "**/AGENTS.md",
       "**/CLAUDE.md",
+      // tests/dependabot-config.test.ts reads this from disk (0509#7078).
+      "**/.github/dependabot.yml",
     ],
     coverage: {
       provider: "v8",

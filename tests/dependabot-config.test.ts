@@ -81,4 +81,9 @@ describe(".github/dependabot.yml npm updates", () => {
     expect(scheduled(actions)?.time).toMatch(TIME_OF_DAY);
     expect(scheduled(actions)?.timezone).toBe("Asia/Kolkata");
   });
+
+  it("does not claim a merge-queue live e2e gate (0509#7078)", () => {
+    const source = readFileSync(CONFIG, "utf8");
+    expect(source).not.toMatch(/behind the merge-queue live e2e/);
+  });
 });

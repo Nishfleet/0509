@@ -132,6 +132,13 @@ describe("deployed wrangler configs", () => {
     expect(dlq).toBeDefined();
   });
 
+  it("sets nodejs_compat explicitly so tests cannot hide a missing production flag (0509#7078)", () => {
+    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    expect(rawConfig.compatibility_flags).toContain("nodejs_compat");
+    expect(rawConfig.compatibility_flags).toContain("global_fetch_strictly_public");
+    expect(rawConfig.triggers?.crons?.length).toBeGreaterThan(0);
+  });
+
   it("routes every consumer queue in wrangler.jsonc to its own branch in queue()", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
     const consumers = (rawConfig.queues?.consumers ?? []).map((queue) => queue.queue);
