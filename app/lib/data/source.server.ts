@@ -254,19 +254,9 @@ export async function readWorkspaceMentionSources(workspaceId: string): Promise<
 
 export const SELECT_REGISTRY_SOURCES = `SELECT s.key, s.plugin_key, s.platform, ${SOURCE_KIND} AS kind, s.is_enabled, s.config_json, s.degraded_reason, s.last_good_at, s.latest_fetched_at AS fetched_at, s.latest_item_count AS item_count, s.latest_canary_count AS canary_count FROM source s ORDER BY s.kind, s.key`;
 
-const registrySourceRow = z.object({
-  key: z.string(),
-  plugin_key: z.string(),
-  platform: z.string(),
-  kind: z.string(),
-  is_enabled: z.number(),
-  config_json: z.string(),
-  degraded_reason: z.string().nullable(),
-  last_good_at: z.string().nullable(),
-  fetched_at: z.string().nullable(),
-  item_count: z.number().nullable(),
-  canary_count: z.number().nullable(),
-});
+const registrySourceRow = workspaceMentionSourceRow
+  .omit({ watch_config_json: true })
+  .extend({ plugin_key: z.string() });
 
 export async function readRegistrySources(): Promise<readonly FreshnessSource[]> {
   const { results } = await env.DB.prepare(SELECT_REGISTRY_SOURCES).all();

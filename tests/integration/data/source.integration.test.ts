@@ -1,7 +1,12 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { readSourceLastGood, readSourceTicks, readWorkspacesWatchingSource } from "../../../app/lib/data/source.server";
+import {
+  readEnabledSourceId,
+  readSourceLastGood,
+  readSourceTicks,
+  readWorkspacesWatchingSource,
+} from "../../../app/lib/data/source.server";
 
 const NOW = "2026-09-24T00:00:00Z";
 
@@ -50,6 +55,20 @@ beforeEach(async () => {
   }
   await seedWorkspace("ws-a");
   await seedWorkspace("ws-b");
+});
+
+describe("readEnabledSourceId", () => {
+  it("returns the id of an enabled source by key", async () => {
+    await insertSource("src-1", "hn", "mentions", "hn").run();
+    expect(await readEnabledSourceId("hn")).toBe("src-1");
+    expect(await readEnabledSourceId("gdelt")).toBeNull();
+  });
+
+  it("does not return a disabled source", async () => {
+    await insertSource("src-1", "hn", "mentions", "hn").run();
+    await env.DB.prepare("UPDATE source SET is_enabled = 0 WHERE id = 'src-1'").run();
+    expect(await readEnabledSourceId("hn")).toBeNull();
+  });
 });
 
 describe("readWorkspacesWatchingSource", () => {
