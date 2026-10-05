@@ -110,6 +110,8 @@ WHERE workspace_id = ? AND channel_id = (SELECT id FROM channel WHERE key = 'sla
 const INSERT_SLACK_TARGET = `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at)
 SELECT ?, ?, id, ?, 1, ? FROM channel WHERE key = 'slack'`;
 
+const SEAL_SLACK_TARGET = `UPDATE send_target SET target_value = ? WHERE id = ? AND target_value = ?`;
+
 function slackTargetSecret(): string {
   const raw: unknown = env.SLACK_TARGET_SECRET;
   if (typeof raw !== "string") throw new Error("SLACK_TARGET_SECRET is not configured");
@@ -129,7 +131,18 @@ export async function readSlackTarget(
   }
   const webhook = parseSlackWebhook(row.target_value);
   if (webhook === null) throw new Error("Slack target is not a webhook address");
+  await sealPlaintextSlackTarget(db, { id: row.id, workspaceId, plaintext: row.target_value });
   return { id: row.id, target_value: webhook };
+}
+
+async function sealPlaintextSlackTarget(
+  db: TargetDb,
+  row: { id: string; workspaceId: string; plaintext: string },
+): Promise<void> {
+  const raw: unknown = env.SLACK_TARGET_SECRET;
+  if (typeof raw !== "string" || raw.trim().length === 0) return;
+  const sealed = await encryptSlackWebhook(row.plaintext, raw.trim(), row.workspaceId);
+  await db.prepare(SEAL_SLACK_TARGET).bind(sealed, row.id, row.plaintext).run();
 }
 
 export async function removeSlackTarget(db: D1Database, workspaceId: string): Promise<void> {
