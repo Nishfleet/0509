@@ -256,15 +256,27 @@ export async function askChoice(workspaceId: string, question: ChoiceQuestion, s
 
 export const JEV_BATCH_SIZE = 4;
 
-function reportRateLimited(settled: readonly PromiseSettledResult<unknown>[]): void {
-  const limited = settled.filter(
-    (result) => result.status === "rejected" && result.reason instanceof JevRateLimitedError,
-  ).length;
-  if (limited === 0) return;
-  captureMessage("jev rate limited: a batch was cut short", {
+function rejections(settled: readonly PromiseSettledResult<unknown>[]): unknown[] {
+  return settled.flatMap((result): unknown[] => (result.status === "rejected" ? [result.reason as unknown] : []));
+}
+
+function reportBatch(settled: readonly PromiseSettledResult<unknown>[]): void {
+  const reasons = rejections(settled);
+  const stopped = reasons.find((reason) => reason instanceof JevUnavailableError);
+  if (stopped !== undefined) {
+    const limited = stopped instanceof JevRateLimitedError;
+    captureMessage("jev unavailable: a batch was cut short", {
+      level: "warning",
+      fingerprint: [limited ? "jev-rate-limited" : "jev-batch-refused"],
+      extra: { reason: limited ? "rate_limited" : "refused", failed: reasons.length, asked: settled.length },
+    });
+  }
+  const unexpected = reasons.filter((reason) => !(reason instanceof JevUnavailableError));
+  if (unexpected.length === 0 || unexpected.length === settled.length) return;
+  captureMessage("jev choice batch: answers rejected", {
     level: "warning",
-    fingerprint: ["jev-rate-limited"],
-    extra: { limited, asked: settled.length },
+    fingerprint: ["jev-choice-rejected"],
+    extra: { rejected: unexpected.length, asked: settled.length },
   });
 }
 
@@ -274,21 +286,18 @@ export async function askChoices(
   states: readonly unknown[],
 ): Promise<PromiseSettledResult<ChoiceVerdict>[]> {
   let settled: PromiseSettledResult<ChoiceVerdict>[] = [];
-  for (let start = 0; start < states.length; start += JEV_BATCH_SIZE) {
+  let stop: PromiseRejectedResult | undefined;
+  for (let start = 0; start < states.length && stop === undefined; start += JEV_BATCH_SIZE) {
     const chunk = await Promise.allSettled(
       states.slice(start, start + JEV_BATCH_SIZE).map((state) => askChoice(workspaceId, question, state)),
     );
     settled = [...settled, ...chunk];
-    const limited = chunk.find(
-      (result) => result.status === "rejected" && result.reason instanceof JevRateLimitedError,
+    stop = chunk.find(
+      (result): result is PromiseRejectedResult =>
+        result.status === "rejected" && result.reason instanceof JevUnavailableError,
     );
-    if (limited?.status === "rejected") {
-      const reason: unknown = limited.reason;
-      const skipped = states.slice(start + JEV_BATCH_SIZE).map(() => ({ status: "rejected" as const, reason }));
-      settled = [...settled, ...skipped];
-      break;
-    }
   }
-  reportRateLimited(settled);
-  return settled;
+  reportBatch(settled);
+  const skipped = stop === undefined ? [] : states.slice(settled.length).map(() => stop);
+  return [...settled, ...skipped];
 }

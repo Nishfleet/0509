@@ -2,12 +2,13 @@ import { captureMessage } from "@sentry/cloudflare";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const ai = vi.hoisted(() => ({ run: vi.fn() }));
+const cache = vi.hoisted(() => ({ readChoice: vi.fn() }));
 
 vi.mock("cloudflare:workers", () => ({ env: { AI: ai } }));
 vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn(), captureMessage: vi.fn() }));
 vi.mock("../../app/lib/data/jev_verdict.server", () => ({
   readCachedNoul: () => Promise.resolve(null),
-  readCachedChoice: () => Promise.resolve(null),
+  readCachedChoice: cache.readChoice,
 }));
 
 import {
@@ -23,6 +24,8 @@ const QUESTION: NoulQuestion = { id: "q", instructions: "i", whenTrue: "t", when
 
 beforeEach(() => {
   ai.run.mockReset();
+  cache.readChoice.mockReset();
+  cache.readChoice.mockResolvedValue(null);
   vi.mocked(captureMessage).mockClear();
 });
 
@@ -81,5 +84,36 @@ describe("a batch of choice questions that Clef rate limits", () => {
     await askChoices("ws-1", CHOICE, [{}, {}]);
 
     expect(captureMessage).not.toHaveBeenCalled();
+  });
+
+  it("stops on a billing refusal too and sends one batch message", async () => {
+    ai.run.mockRejectedValue(new Error("2021: Payment error"));
+
+    const settled = await askChoices(
+      "ws-1",
+      CHOICE,
+      Array.from({ length: 40 }, () => ({})),
+    );
+
+    expect(settled).toHaveLength(40);
+    expect(ai.run).toHaveBeenCalledTimes(4);
+    expect(captureMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports answers rejected for other reasons once when some verdicts landed", async () => {
+    ai.run.mockResolvedValue({ answers: { c: { type: "choice", choice: "a" } } });
+    cache.readChoice
+      .mockResolvedValueOnce(null)
+      .mockRejectedValueOnce(new Error("d1 down"))
+      .mockRejectedValueOnce(new Error("d1 down"));
+
+    const settled = await askChoices("ws-1", CHOICE, [{}, {}, {}]);
+
+    expect(settled.map((result) => result.status)).toEqual(["fulfilled", "rejected", "rejected"]);
+    expect(captureMessage).toHaveBeenCalledTimes(1);
+    expect(captureMessage).toHaveBeenCalledWith(
+      "jev choice batch: answers rejected",
+      expect.objectContaining({ extra: { rejected: 2, asked: 3 } }),
+    );
   });
 });
