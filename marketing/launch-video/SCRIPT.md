@@ -16,7 +16,7 @@ invented. `README.md` lists each claim with the file and line it comes from.
 > Know where you stand.
 > And who's gaining on you.
 >
-> *One brief, every Monday. The three things worth knowing about your competitors, and the proof behind each.*
+> _One brief, every Monday. The three things worth knowing about your competitors, and the proof behind each._
 
 Picture: the live top of 0509.io, captured from the running app.
 
@@ -89,7 +89,7 @@ Picture: the home screen from the committed design keyframes, captioned "Home sc
 > Starter — €46 / month — More competitors, more sources.
 > Agency — €136 / month — For the ones who watch many.
 >
-> *Pricing as published on the app's pricing page.*
+> _Pricing as published on the app's pricing page._
 
 ---
 

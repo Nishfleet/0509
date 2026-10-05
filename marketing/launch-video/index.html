@@ -56,65 +56,108 @@
         --line: #d9d4c6;
       }
 
-      * { margin: 0; padding: 0; box-sizing: border-box; }
-      html, body {
-        margin: 0; padding: 0;
-        width: 1920px; height: 1080px;
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 1920px;
+        height: 1080px;
         background: #0e0d0a;
         overflow: hidden;
       }
-      #master-root { width: 1920px; height: 1080px; position: relative; overflow: hidden; }
+      #master-root {
+        width: 1920px;
+        height: 1080px;
+        position: relative;
+        overflow: hidden;
+      }
       [data-composition-id="master"] > div[data-composition-id] {
-        position: absolute; inset: 0;
+        position: absolute;
+        inset: 0;
       }
       /* A seek must paint one deterministic frame, so each clip is told to
          hold its final values rather than only autoplay. */
-      .clip { will-change: transform, opacity; }
+      .clip {
+        will-change: transform, opacity;
+      }
     </style>
   </head>
   <body>
-    <div id="master-root"
-         data-composition-id="master"
-         data-start="0"
-         data-duration="75.0"
-         data-width="1920"
-         data-height="1080">
+    <div
+      id="master-root"
+      data-composition-id="master"
+      data-start="0"
+      data-duration="75.0"
+      data-width="1920"
+      data-height="1080"
+    >
+      <!-- 0.0 – 11.0 · who it is for, what it does -->
+      <div
+        id="act-1-hero-track"
+        data-composition-id="act-1-hero"
+        data-composition-src="compositions/01-hero.html"
+        data-start="0"
+        data-duration="11.0"
+      ></div>
 
-        <!-- 0.0 – 11.0 · who it is for, what it does -->
-        <div id="act-1-hero-track" data-composition-id="act-1-hero"
-             data-composition-src="compositions/01-hero.html"
-             data-start="0" data-duration="11.0"></div>
+      <!-- 11.0 – 21.0 · one box to fill in -->
+      <div
+        id="act-2-one-box-track"
+        data-composition-id="act-2-one-box"
+        data-composition-src="compositions/02-one-box.html"
+        data-start="11.0"
+        data-duration="10.0"
+      ></div>
 
-        <!-- 11.0 – 21.0 · one box to fill in -->
-        <div id="act-2-one-box-track" data-composition-id="act-2-one-box"
-             data-composition-src="compositions/02-one-box.html"
-             data-start="11.0" data-duration="10.0"></div>
+      <!-- 21.0 – 39.0 · three steps -->
+      <div
+        id="act-3-how-track"
+        data-composition-id="act-3-how"
+        data-composition-src="compositions/03-how-it-works.html"
+        data-start="21.0"
+        data-duration="18.0"
+      ></div>
 
-        <!-- 21.0 – 39.0 · three steps -->
-        <div id="act-3-how-track" data-composition-id="act-3-how"
-             data-composition-src="compositions/03-how-it-works.html"
-             data-start="21.0" data-duration="18.0"></div>
+      <!-- 39.0 – 52.0 · the mark -->
+      <div
+        id="act-4-mark-track"
+        data-composition-id="act-4-mark"
+        data-composition-src="compositions/04-the-mark.html"
+        data-start="39.0"
+        data-duration="13.0"
+      ></div>
 
-        <!-- 39.0 – 52.0 · the mark -->
-        <div id="act-4-mark-track" data-composition-id="act-4-mark"
-             data-composition-src="compositions/04-the-mark.html"
-             data-start="39.0" data-duration="13.0"></div>
+      <!-- 52.0 – 62.0 · one email on Monday -->
+      <div
+        id="act-5-brief-track"
+        data-composition-id="act-5-brief"
+        data-composition-src="compositions/05-monday-brief.html"
+        data-start="52.0"
+        data-duration="10.0"
+      ></div>
 
-        <!-- 52.0 – 62.0 · one email on Monday -->
-        <div id="act-5-brief-track" data-composition-id="act-5-brief"
-             data-composition-src="compositions/05-monday-brief.html"
-             data-start="52.0" data-duration="10.0"></div>
+      <!-- 62.0 – 68.0 · price -->
+      <div
+        id="act-6-price-track"
+        data-composition-id="act-6-price"
+        data-composition-src="compositions/06-price.html"
+        data-start="62.0"
+        data-duration="6.0"
+      ></div>
 
-        <!-- 62.0 – 68.0 · price -->
-        <div id="act-6-price-track" data-composition-id="act-6-price"
-             data-composition-src="compositions/06-price.html"
-             data-start="62.0" data-duration="6.0"></div>
-
-        <!-- 68.0 – 75.0 · call to action -->
-        <div id="act-7-close-track" data-composition-id="act-7-close"
-             data-composition-src="compositions/07-close.html"
-             data-start="68.0" data-duration="7.0"></div>
-
+      <!-- 68.0 – 75.0 · call to action -->
+      <div
+        id="act-7-close-track"
+        data-composition-id="act-7-close"
+        data-composition-src="compositions/07-close.html"
+        data-start="68.0"
+        data-duration="7.0"
+      ></div>
     </div>
     <script>
       window.__timelines = window.__timelines || {};
