@@ -92,6 +92,13 @@ const UNSCOPED_WRITER_PATTERNS = [
   },
 ];
 
+const WORKFLOW_WITHMONITOR_IMPORT = {
+  name: "@sentry/cloudflare",
+  importNames: ["withMonitor"],
+  message:
+    "A Workflow run() replays after hibernation, so withMonitor around it opens Sentry check-ins that never close. Send captureCheckIn from withStepCheckIn inside step.do('monitor start') and step.do('monitor ok'). The Worker scheduled handler in workers/app.ts still uses withMonitor. Source: 0509#7001.",
+};
+
 const ONE_PAVED_PATH_IMPORTS = [
   {
     name: "better-auth",
@@ -699,6 +706,21 @@ export default tseslint.config(
     ignores: ["app/lib/auth.server.ts", "app/lib/auth-client.ts", "app/components/toaster.tsx"],
     rules: {
       "no-restricted-imports": ["error", { paths: ONE_PAVED_PATH_IMPORTS, patterns: PAVED_PATH_PATTERNS }],
+    },
+  },
+
+  // Flat config replaces a rule's options wholesale, so this restates
+  // ONE_PAVED_PATH_IMPORTS and PAVED_PATH_PATTERNS. Source: 0509#7001.
+  {
+    files: ["workers/workflows/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [...ONE_PAVED_PATH_IMPORTS, WORKFLOW_WITHMONITOR_IMPORT],
+          patterns: PAVED_PATH_PATTERNS,
+        },
+      ],
     },
   },
 
