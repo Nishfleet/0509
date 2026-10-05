@@ -156,6 +156,18 @@ describe("e2e fixture teardown detector", () => {
     expect(source).not.toContain("treating as already gone");
   });
 
+  it("registers the competitor-switch POST wait before rotate() clicks and reloads", async () => {
+    const source = await readFile(path.join(REPO_ROOT, "e2e/j12-rollovers.spec.ts"), "utf8");
+    const rotate = source.slice(source.indexOf("async function rotate"), source.indexOf("async function briefLinks"));
+    expect(rotate).toContain("waitForResponse");
+    expect(rotate).toContain('response.request().method() === "POST"');
+    expect(rotate).toContain("/app/competitors");
+    expect(rotate.indexOf("waitForResponse")).toBeLessThan(rotate.indexOf("await toggle.click()"));
+    expect(rotate.indexOf("await toggle.click()")).toBeLessThan(rotate.indexOf("await page.reload()"));
+    expect(rotate.indexOf("await toggle.click()")).toBeLessThan(rotate.indexOf("await saved"));
+    expect(rotate.indexOf("await saved")).toBeLessThan(rotate.indexOf("await page.reload()"));
+  });
+
   it("waits for the competitor-switch POST before the reload that checks slack.com stayed off", async () => {
     const source = await readFile(path.join(REPO_ROOT, "e2e/j11-weekly-brief.spec.ts"), "utf8");
     expect(source).toContain("waitForResponse");
