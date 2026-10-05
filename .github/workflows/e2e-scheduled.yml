@@ -23,7 +23,7 @@ on:
         options: [none, j12, suite, signin, j8-hard, j8-soft, soak-report, backup-proof, jev-failures]
         default: none
       spec:
-        description: 'One spec or a filter to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts (0509 sign-up verdict, 2026-09-28)'
+        description: 'One spec file to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts, no flags (0509 sign-up verdict, 2026-09-28; 0509#7186)'
         type: string
         default: ''
 
@@ -35,9 +35,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  main-only:
+    name: main-only
+    # Every journey mints accounts, sends real mail or reads production with a
+    # Cloudflare token, so a dispatch runs one only from main; the jobs below
+    # skip on any other ref and this job makes that skip red, not a quiet
+    # green (0509#7186). The spec input stays open to any branch.
+    if: github.event_name == 'workflow_dispatch' && inputs.journey != 'none' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Refuse a journey dispatched from a branch
+        env:
+          JOURNEY: ${{ inputs.journey }}
+          REF: ${{ github.ref }}
+        run: |
+          echo "::error::journey=$JOURNEY dispatches from main only, not $REF"
+          exit 1
   j12:
     name: j12
-    if: github.event.schedule == '5 10 * * 3' || inputs.journey == 'j12'
+    if: github.event.schedule == '5 10 * * 3' || (inputs.journey == 'j12' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     # One live-AI job at a time: they share the account's Clef call rate (about 60
     # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
@@ -85,6 +102,12 @@ jobs:
           PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      - name: Print what the page showed when it failed
+        if: failure()
+        run: |
+          shopt -s globstar nullglob
+          files=(test-results/**/error-context.md)
+          if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
   spec:
     name: spec
     # No trace is uploaded: the repo is public and a trace can hold the Access
@@ -102,6 +125,13 @@ jobs:
       cancel-in-progress: false
     timeout-minutes: 30
     steps:
+      - name: Accept one spec file and no flags
+        # The spec input is the one dispatch allowed from any branch, so it runs
+        # one named file and nothing Playwright would read as an option (0509#7186).
+        env:
+          SPEC: ${{ inputs.spec }}
+        run: |
+          [[ "$SPEC" =~ ^e2e/[A-Za-z0-9._-]+\.spec\.ts$ ]] || { echo "::error::spec must be one file, e2e/<name>.spec.ts, with no flags"; exit 1; }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -140,14 +170,17 @@ jobs:
         # Playwright writes the page snapshot next to each failure; printing it
         # is how a failure is read, since nothing is uploaded.
         if: failure()
-        run: tail -n +1 test-results/*/error-context.md
+        run: |
+          shopt -s globstar nullglob
+          files=(test-results/**/error-context.md)
+          if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
   signin:
     name: signin
     # One sign-in, one real email against the Email Service daily quota
     # (0509#6033, 0509#6093): no retries, no loop, no other spec. No trace is
     # uploaded: the repo is public and a trace can hold the Access cookie
     # (0509#5999); a failure is read from the job log.
-    if: github.event.schedule == '17 4 * * *' || (inputs.journey == 'signin' && inputs.spec == '')
+    if: github.event.schedule == '17 4 * * *' || (inputs.journey == 'signin' && inputs.spec == '' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     # One live-AI job at a time: they share the account's Clef call rate (about 60
     # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
@@ -186,7 +219,10 @@ jobs:
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
       - name: Print what the page showed when it failed
         if: failure()
-        run: tail -n +1 test-results/*/error-context.md
+        run: |
+          shopt -s globstar nullglob
+          files=(test-results/**/error-context.md)
+          if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
   j8:
     name: j8
     # One break of j8-hard.fixture.0509.in or j8-soft.fixture.0509.in per dispatch, journey j8-hard or j8-soft,
@@ -198,7 +234,7 @@ jobs:
     # public and a trace can hold the Access cookie (0509#5999); a failure is
     # read from the job log. 350 minutes is the most a hosted job may run under
     # the 6 hour cap.
-    if: startsWith(inputs.journey, 'j8-') && inputs.spec == ''
+    if: startsWith(inputs.journey, 'j8-') && inputs.spec == '' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 350
     steps:
@@ -240,13 +276,16 @@ jobs:
           FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
       - name: Print what the page showed when it failed
         if: failure()
-        run: tail -n +1 test-results/*/error-context.md
+        run: |
+          shopt -s globstar nullglob
+          files=(test-results/**/error-context.md)
+          if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
   production-sha:
     name: production-sha
     # The suite runs the code of the deploy that is live, not main's head; no
     # deployment, or one that is not yet successful, fails this job and the
     # shards never start.
-    if: inputs.journey == 'suite'
+    if: inputs.journey == 'suite' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -276,7 +315,7 @@ jobs:
     # uploaded: the repo is public and a trace can hold the Access cookie
     # (0509#5999); a failure is read from the job log.
     needs: production-sha
-    if: inputs.journey == 'suite'
+    if: inputs.journey == 'suite' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # One live-AI job at a time: they share the account's Clef call rate (about 60
     # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
@@ -336,10 +375,16 @@ jobs:
           PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      - name: Print what the page showed when it failed
+        if: failure()
+        run: |
+          shopt -s globstar nullglob
+          files=(test-results/**/error-context.md)
+          if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
   suite:
     name: e2e-production
     needs: [production-sha, suite-shard]
-    if: always() && inputs.journey == 'suite'
+    if: always() && inputs.journey == 'suite' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -384,7 +429,7 @@ jobs:
     name: backup-proof
     # Reads the snapshot-backup instances of the last 48 h and describes each
     # cron-started one (0509#5982, 0509#6289). Counts and R2 cursors only, no rows.
-    if: inputs.journey == 'backup-proof' && inputs.spec == ''
+    if: inputs.journey == 'backup-proof' && inputs.spec == '' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -414,7 +459,7 @@ jobs:
     # counts by kind and code over 24 h, then the latest 20 rows. Rows hold a
     # kind, a 4-digit code, a 160-char redacted message and the question ids.
     # Dispatch: `journey=jev-failures`, then read the job log.
-    if: inputs.journey == 'jev-failures' && inputs.spec == ''
+    if: inputs.journey == 'jev-failures' && inputs.spec == '' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -443,7 +488,7 @@ jobs:
     # data reaches the log or the comment. Every query is a SELECT. The
     # healthchecks.io pings and the Sentry issue count are not read here: no
     # read credential for either is a repository secret, and the comment says so.
-    if: github.event.schedule == '30 6 * * *' || (inputs.journey == 'soak-report' && inputs.spec == '')
+    if: github.event.schedule == '30 6 * * *' || (inputs.journey == 'soak-report' && inputs.spec == '' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
