@@ -15,10 +15,10 @@ async function seedUser(id: string, email: string) {
 }
 
 describe("workspaceLanding resume point", () => {
-  it("a user with no workspace lands on /login and does not insert", async () => {
+  it("a user with no workspace gets a null landing and does not insert", async () => {
     await seedUser("user-resume-0", "resume-0@example.com");
     const input = { userId: "user-resume-0", timezone: "UTC" };
-    expect(await workspaceLanding(env.DB, input)).toEqual({ workspaceId: null, landing: "/login" });
+    expect(await workspaceLanding(env.DB, input)).toEqual({ workspaceId: null, landing: null });
     const count = await env.DB.prepare("SELECT count(*) AS n FROM workspace WHERE owner_user_id = ?")
       .bind("user-resume-0")
       .first<{ n: number }>();

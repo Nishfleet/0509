@@ -15,20 +15,19 @@ vi.mock("../app/lib/require-session.server", () => ({
   },
 }));
 
-const landing = vi.hoisted(() => ({ value: null as string | null }));
+const landing = vi.hoisted(() => ({ missing: false, value: null as string | null }));
 
 vi.mock("../app/lib/workspace.server", () => ({
   ONBOARDING_COMPETITORS: "/onboarding/competitors",
   workspaceLandingForRequest: async () =>
-    landing.value === "/login"
-      ? { workspaceId: null, landing: "/login" }
-      : { workspaceId: "ws-1", landing: landing.value },
+    landing.missing ? { workspaceId: null, landing: null } : { workspaceId: "ws-1", landing: landing.value },
 }));
 
 describe("requireOnboarded", () => {
   it.each(["/onboarding", "/onboarding/identity?subject=acme.example", "/onboarding/competitors"])(
     "redirects an unfinished workspace to its resume point %s",
     async (resumePoint) => {
+      landing.missing = false;
       landing.value = resumePoint;
       let thrown: unknown;
       try {
@@ -47,6 +46,7 @@ describe("requireOnboarded", () => {
   );
 
   it("resolves when the workspace has no resume point", async () => {
+    landing.missing = false;
     landing.value = null;
     const context = new RouterContextProvider();
     await expect(
@@ -56,7 +56,7 @@ describe("requireOnboarded", () => {
   });
 
   it("signs the user out to /login when there is no workspace", async () => {
-    landing.value = "/login";
+    landing.missing = true;
     let thrown: unknown;
     try {
       await requireOnboarded({

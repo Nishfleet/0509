@@ -446,7 +446,7 @@ describe("ensureWorkspace", () => {
 });
 
 describe("workspaceLanding", () => {
-  it("does not insert when the owner has no workspace, and lands on /login", async () => {
+  it("does not insert when the owner has no workspace", async () => {
     const queries: string[] = [];
     const db: WorkspaceDb = {
       prepare(query: string) {
@@ -471,7 +471,7 @@ describe("workspaceLanding", () => {
         userId: "user-gone",
         timezone: "Asia/Kolkata",
       }),
-    ).resolves.toEqual({ workspaceId: null, landing: "/login" });
+    ).resolves.toEqual({ workspaceId: null, landing: null });
     expect(queries.some((query) => query.includes("INSERT"))).toBe(false);
   });
 

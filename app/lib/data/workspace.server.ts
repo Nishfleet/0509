@@ -26,9 +26,12 @@ export async function readWorkspaceIdForOwner(userId: string): Promise<string | 
 
 const SELECT_WORKSPACE_LANDING = `SELECT w.id, w.timezone, e.id AS self_id, r.input_raw, r.watching_started_at
 FROM workspace w
-LEFT JOIN entity e ON e.workspace_id = w.id AND e.role = 'self'
-LEFT JOIN onboarding_run r ON r.workspace_id = w.id
-  AND r.started_at = (SELECT MIN(started_at) FROM onboarding_run WHERE workspace_id = w.id)
+LEFT JOIN entity e ON e.id = (
+  SELECT id FROM entity WHERE workspace_id = w.id AND role = 'self' LIMIT 1
+)
+LEFT JOIN onboarding_run r ON r.id = (
+  SELECT id FROM onboarding_run WHERE workspace_id = w.id ORDER BY started_at ASC LIMIT 1
+)
 WHERE w.owner_user_id = ?
 ORDER BY w.created_at ASC
 LIMIT 1`;

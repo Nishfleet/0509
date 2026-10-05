@@ -138,7 +138,7 @@ export async function workspaceLanding(
   input: { userId: string; timezone: string | null },
 ): Promise<{ workspaceId: string | null; landing: string | null }> {
   const row = await readWorkspaceLanding(db, input.userId);
-  if (row === null) return { workspaceId: null, landing: "/login" };
+  if (row === null) return { workspaceId: null, landing: null };
   const timezone = canonicalTimezone(input.timezone);
   if (row.timezone === "UTC" && timezone !== "UTC") {
     await fillWorkspaceTimezone(db, row.id, timezone);

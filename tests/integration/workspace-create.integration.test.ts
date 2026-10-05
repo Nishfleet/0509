@@ -127,7 +127,7 @@ describe("ensureWorkspace against migrations/0001_rebuild.sql", () => {
     await seedUser("user-6", "no-ws@example.com");
     expect(await workspaceLanding(env.DB, { userId: "user-6", timezone: "UTC" })).toEqual({
       workspaceId: null,
-      landing: "/login",
+      landing: null,
     });
     expect(await workspaceCount("user-6")).toBe(0);
   });
