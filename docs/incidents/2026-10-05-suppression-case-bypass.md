@@ -49,11 +49,11 @@ Code reading, not an alert or a customer. No monitor compares sends against supp
 
 The follow-up PR, stacked on #7128:
 
-- `migrations/0046_email_suppression_normalize.sql` rewrites stored addresses to `lower(trim(address))`. Rows that differ only by case or spaces collapse to one suppression, keeping the earliest `created_at` and its reason, so no address loses its suppression. `send_target` is not rewritten: its email reads are scoped to one workspace through the `(workspace_id, channel_id, target_value)` unique index, so they do not scan the table.
+- `migrations/0047_email_suppression_normalize.sql` rewrites stored addresses to `lower(trim(address))`. Rows that differ only by case or spaces collapse to one suppression, keeping the earliest `created_at` and its reason, so no address loses its suppression. `send_target` is not rewritten: its email reads are scoped to one workspace through the `(workspace_id, channel_id, target_value)` unique index, so they do not scan the table.
 - Reads and clears match the normalized address exactly again. `normalizeEmailAddress` lowercases ASCII only, as SQLite's `lower()` does, so the address the app looks up is the address the SQL writers store.
 
 ## What stops a repeat
 
 1. **Codebase.** There is now one suppression read path, and both writers normalize. The send lane cannot drift from the settings page because it uses the same function.
 2. **Static analysis.** `EMAIL_SUPPRESSION_SQL` in `eslint.config.js` rejects `email_suppression` SQL anywhere in `app/` or `workers/` except `app/lib/data/email_suppression.server.ts`, so a second exact-case reader cannot be added again. `tests/eslint-email-suppression-rule.test.ts` probes it.
-3. **Tests.** The tests named under Root cause, and `tests/integration/migration-0046.integration.test.ts`, stay in the integration project and run on every PR.
+3. **Tests.** The tests named under Root cause, and `tests/integration/migration-0047.integration.test.ts`, stay in the integration project and run on every PR.
