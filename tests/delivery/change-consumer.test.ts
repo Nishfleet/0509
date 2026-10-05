@@ -68,6 +68,9 @@ let sent: EmailMessageBuilder[];
 
 function rowFor(sql: string): unknown {
   if (sql.includes("FROM signal s")) return world.change;
+  if (sql.includes("FROM plan WHERE workspace_id")) {
+    return { status: "trialing", current_period_end: null };
+  }
   if (sql.includes("c.is_enabled = 1")) return world.target;
   if (sql.includes("SELECT st.is_verified")) return world.targetState;
   if (sql.includes("email_suppression")) return world.suppressed ? { address: "owner@example.com" } : null;

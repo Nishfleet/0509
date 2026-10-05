@@ -3,7 +3,6 @@ import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
 import { markDigestSentStatement } from "../../app/lib/data/digest.server";
 import { claimIncidentNotice } from "../../app/lib/data/incident_notice.server";
-import { readPlanSubscription } from "../../app/lib/data/plan.server";
 import {
   claimChangeSlot,
   claimSendAttempt,
@@ -173,8 +172,14 @@ async function noTarget(
   return { outcome: "no_target", attempt_id: null, idempotency_key: null };
 }
 
-async function isUnpaidWorkspace(workspaceId: string): Promise<boolean> {
-  return !isWorkspacePaid(await readPlanSubscription(workspaceId), new Date());
+async function isUnpaidWorkspace(env: Env, workspaceId: string): Promise<boolean> {
+  const row = await env.DB.prepare("SELECT status, current_period_end FROM plan WHERE workspace_id = ?")
+    .bind(workspaceId)
+    .first<{ status: string; current_period_end: string | null }>();
+  return !isWorkspacePaid(
+    row === null ? null : { status: row.status, currentPeriodEnd: row.current_period_end },
+    new Date(),
+  );
 }
 
 async function isSuppressed(env: Env, address: string): Promise<boolean> {
@@ -259,7 +264,7 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
   if (!digest) {
     return { outcome: "no_digest", attempt_id: null, idempotency_key: null };
   }
-  if (await isUnpaidWorkspace(digest.workspace_id)) {
+  if (await isUnpaidWorkspace(env, digest.workspace_id)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
 
@@ -367,7 +372,7 @@ function renderIncidentEmail(incident: IncidentRow, to: string, token: string) {
 async function incidentBlocked(env: Env, incident: IncidentRow): Promise<DeliveryResult | null> {
   if (incident.role !== "self") return { outcome: "not_self", attempt_id: null, idempotency_key: null };
   if (incident.own_site_alerts === 0) return { outcome: "muted", attempt_id: null, idempotency_key: null };
-  if (await isUnpaidWorkspace(incident.workspace_id)) {
+  if (await isUnpaidWorkspace(env, incident.workspace_id)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
   return null;
@@ -585,7 +590,7 @@ export async function deliverChange(env: Env, message: ChangeMessage): Promise<D
   if (change.change_alerts === 0) {
     return { outcome: "muted", attempt_id: null, idempotency_key: null };
   }
-  if (await isUnpaidWorkspace(change.workspace_id)) {
+  if (await isUnpaidWorkspace(env, change.workspace_id)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
   const slack = await postChangeToSlack(env, { change, payload });
