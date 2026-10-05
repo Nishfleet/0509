@@ -30,7 +30,7 @@ Every observed item becomes a `signal` row. Polls insert what they find; `tombst
 
 ### Candidate B — raw in R2, curated in D1
 
-A poll writes **one** `snapshot` row per watch per tick — `payload_r2_key`, `payload_hash`, `item_count` — with the body in R2, and the same batch updates the `source` row's `latest_fetched_at` / `latest_item_count` / `latest_canary_count` facts, so a poll writes two rows per check. An item becomes a `signal` row only once it has passed the judgments that decide it is worth showing: D5 for mentions, D3 or D6 for everything else.
+A poll writes **one** `snapshot` row per watch per tick — `payload_r2_key`, `payload_hash`, `item_count` — with the body in R2 (except mentions polls, which store no body: keeps its sha256 in `payload_hash` and leaves `payload_r2_key` NULL, #7069), and the same batch updates the `source` row's `latest_fetched_at` / `latest_item_count` / `latest_canary_count` facts, so a poll writes two rows per check. An item becomes a `signal` row only once it has passed the judgments that decide it is worth showing: D5 for mentions, D3 or D6 for everything else.
 
 - `signal` is the curated set, and its size is bounded by what is worth telling the user, not by what was observed.
 - The hash gate is cheap, not free: an unchanged page still writes its `snapshot` row and the paired `source` latest-facts update, but no R2 body and no screenshot.
@@ -84,7 +84,7 @@ The asymmetry between those last two is deliberate. `kind` is CHECKed to `mentio
 
 **`page`** — pages discovered for an entity, with **`role`** from D9 and `role_decided_for_hash` so the role is re-judged only when URL or title changes.
 
-**`snapshot`** — one row per watch per tick: `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at`. The cost boundary.
+**`snapshot`** — one row per watch per tick: `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at`. The cost boundary. Mentions snapshots keep only the sha256 in `payload_hash`; `payload_r2_key` stays NULL (#7069).
 
 **`signal`** — the curated spine every view reads. `kind` is a plugin-owned string, never an enum. Conditional CHECKs enforce per-kind requirements. `mention` and `change` are views over it.
 
