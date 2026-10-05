@@ -64,19 +64,42 @@ async function targetOf(raw: string, normalised: ReturnType<typeof normaliseSubj
   return resolution.domain === null ? UNRESOLVED : { domain: resolution.domain, name: raw.trim() };
 }
 
+async function otherOnCount(workspaceId: string, exceptDomain: string): Promise<number | null> {
+  const row = await env.DB.prepare(COUNT_OTHER_ON).bind(workspaceId, exceptDomain).first<{ n: number }>();
+  return row === null ? null : row.n;
+}
+
+async function workspaceOwnerId(workspaceId: string): Promise<string | null> {
+  const row = await env.DB.prepare(SELECT_OWNER).bind(workspaceId).first<{ owner_user_id: string }>();
+  return row === null ? null : row.owner_user_id;
+}
+
+function unreadableAdd(normalised: ReturnType<typeof normaliseSubject>): CompetitorActionResult | null {
+  if (normalised.ok) return normalised.subject.kind === "domain" ? null : COULD_NOT_READ;
+  return normalised.reason === "empty" ? COULD_NOT_READ : null;
+}
+
+async function refusedBeforeFetch(
+  workspaceId: string,
+  cap: number,
+  normalised: ReturnType<typeof normaliseSubject>,
+): Promise<CompetitorActionResult | null> {
+  const exceptDomain = normalised.ok ? normalised.subject.registrable : "";
+  const onCount = await otherOnCount(workspaceId, exceptDomain);
+  if (onCount !== null && onCount >= cap) return capRefusal(workspaceId, cap);
+  const owner = await workspaceOwnerId(workspaceId);
+  if (owner === null) return COULD_NOT_READ;
+  if (!(await withinProbeLimit(owner))) return PROBE_LIMITED;
+  return null;
+}
+
 async function addCompetitor(workspaceId: string, raw: string, now: string): Promise<CompetitorActionResult> {
   const normalised = normaliseSubject(raw);
-  if (normalised.ok && normalised.subject.kind !== "domain") return COULD_NOT_READ;
-  if (!normalised.ok && normalised.reason === "empty") return COULD_NOT_READ;
-
+  const unread = unreadableAdd(normalised);
+  if (unread !== null) return unread;
   const cap = (await readEntitlements(workspaceId)).competitors;
-  const exceptDomain = normalised.ok ? normalised.subject.registrable : "";
-  const onCount = await env.DB.prepare(COUNT_OTHER_ON).bind(workspaceId, exceptDomain).first<{ n: number }>();
-  if (onCount !== null && onCount.n >= cap) return capRefusal(workspaceId, cap);
-
-  const owner = await env.DB.prepare(SELECT_OWNER).bind(workspaceId).first<{ owner_user_id: string }>();
-  if (owner === null) return COULD_NOT_READ;
-  if (!(await withinProbeLimit(owner.owner_user_id))) return PROBE_LIMITED;
+  const blocked = await refusedBeforeFetch(workspaceId, cap, normalised);
+  if (blocked !== null) return blocked;
 
   const target = await targetOf(raw, normalised);
   if ("message" in target) return target;
