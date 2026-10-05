@@ -284,7 +284,7 @@ describe("judgeChange", () => {
     for (let index = 0; index < 6; index += 1) {
       await insertVerdict({
         workspaceId: "ws-history",
-        questionId: `seeded-${index}`,
+        questionId: "noteworthy_change",
         inputHash: `seeded-${index}`,
         signalId: null,
         entityId: "over",
@@ -301,11 +301,75 @@ describe("judgeChange", () => {
     expect(jevAnswers.calls).toBe(0);
   });
 
+  const seedToday = async (entityId: string, workspaceId: string, questionId: string, count: number) => {
+    for (let index = 0; index < count; index += 1) {
+      await insertVerdict({
+        workspaceId,
+        questionId,
+        inputHash: `${questionId}-${entityId}-${index}`,
+        signalId: null,
+        entityId,
+        p: 0.04,
+        choice: null,
+        reason: null,
+        decidedAt: NOW,
+      }).run();
+    }
+  };
+
+  it("case f3: an own site whose budget went on mention verdicts is still checked, and the breakage verdict is kept", async () => {
+    await seedToday("mine", "ws-mine", "mention_is_about_brand", 17);
+    jevAnswers.noul.set("own_site_breakage", 0.7);
+
+    const judgment = await judgeChange(judgeInput({ entity: "mine", isSelf: true }));
+
+    expect(judgment.deferred).toBe(false);
+    expect(judgment.selfBreakage).toEqual({ p: 0.7, band: "alert" });
+    expect(judgment.verdictIds).toHaveLength(1);
+    expect((await rowsFor("mine")).filter((row) => row.question_id === "own_site_breakage")).toHaveLength(1);
+  });
+
+  it("case f4: an own site over its change budget with a clear page is deferred and keeps the breakage verdict", async () => {
+    await seedToday("mine", "ws-mine", "noteworthy_change", 6);
+    jevAnswers.noul.set("own_site_breakage", 0.0);
+
+    const judgment = await judgeChange(judgeInput({ entity: "mine", isSelf: true }));
+
+    expect(judgment.deferred).toBe(true);
+    expect(judgment.selfBreakage).toEqual({ p: 0, band: "clear" });
+    expect(judgment.noteworthy).toBeNull();
+    expect(judgment.verdictIds).toHaveLength(1);
+    expect(jevAnswers.calls).toBe(1);
+    expect((await rowsFor("mine")).filter((row) => row.question_id === "own_site_breakage")).toHaveLength(1);
+  });
+
+  it("case f5: mention verdicts never defer a competitor change", async () => {
+    await seedToday("rival", "ws-mine", "mention_is_about_brand", 40);
+    await seedToday("rival", "ws-mine", "mention_matters", 40);
+    jevAnswers.noul.set("noteworthy_change", 0.95);
+    jevAnswers.choice.set("change_kind", "pricing");
+
+    const judgment = await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
+
+    expect(judgment.deferred).toBe(false);
+    expect(judgment.noteworthy?.band).toBe("publish");
+  });
+
+  it("case f6: breakage checks stay bounded per own site per day", async () => {
+    await seedToday("mine", "ws-mine", "own_site_breakage", 6);
+    jevAnswers.noul.set("own_site_breakage", 0.9);
+
+    const judgment = await judgeChange(judgeInput({ entity: "mine", isSelf: true }));
+
+    expect(judgment).toEqual({ deferred: true, selfBreakage: null, noteworthy: null, verdictIds: [] });
+    expect(jevAnswers.calls).toBe(0);
+  });
+
   it("case f2: an entity outside the budget window does not use up budget", async () => {
     for (let index = 0; index < 6; index += 1) {
       await insertVerdict({
         workspaceId: "ws-history",
-        questionId: `stale-${index}`,
+        questionId: "noteworthy_change",
         inputHash: `stale-${index}`,
         signalId: null,
         entityId: "dated",

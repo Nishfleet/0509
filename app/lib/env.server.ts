@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
+import { SITE_URL } from "./site-url";
+
 const BINDING_NAMES = [
   "DB",
   "BETTER_AUTH_URL",
@@ -52,8 +54,6 @@ const NAMES = [
 type EnvName = (typeof NAMES)[number];
 type Snapshot = Record<(typeof NAMES)[number], unknown>;
 
-export const PRODUCTION_ORIGIN = "https://0509.io";
-
 export const PUBLIC_PLACEHOLDER_NAMES = [
   "BETTER_AUTH_SECRET",
   "DODO_WEBHOOK_SECRET",
@@ -103,7 +103,7 @@ const workerEnvSchema = z
     SITE_SWEEP_PING_URL: httpUrl.optional(),
   })
   .check((ctx) => {
-    if (ctx.value.BETTER_AUTH_URL !== PRODUCTION_ORIGIN) return;
+    if (ctx.value.BETTER_AUTH_URL !== SITE_URL) return;
     for (const name of PUBLIC_PLACEHOLDER_NAMES) {
       if (ctx.value[name] !== PUBLIC_PLACEHOLDER_VALUES[name]) continue;
       ctx.issues.push({ code: "custom", input: ctx.value, path: [name], message: "public placeholder value" });

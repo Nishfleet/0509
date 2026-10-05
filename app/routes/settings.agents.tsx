@@ -1,6 +1,7 @@
 import type { Route } from "./+types/settings.agents";
 
 import { Link } from "react-router";
+import { z } from "zod";
 
 import { PAGE, PageHeading } from "../components/page-heading";
 import { AgentKeys, ConnectedApps, ConnectDetails } from "../components/agent-settings";
@@ -8,6 +9,11 @@ import { createAgentKey, disconnectApp, readAgentAccess, revokeAgentKey } from "
 import { oauthHelpersContext } from "../lib/agent/context.server";
 import { MCP_PATH } from "../lib/agent/paths";
 import { requireFreshSession } from "../lib/require-session.server";
+
+const agentActionForm = z.object({
+  intent: z.string(),
+  id: z.string().optional(),
+});
 
 export function meta() {
   return [{ title: "Agents and API · Five to Nine" }];
@@ -23,14 +29,15 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 export async function action({ request, context }: Route.ActionArgs) {
   const session = await requireFreshSession(request);
   const form = await request.formData();
-  const intent = form.get("intent");
-  const target = form.get("id");
+  const parsed = agentActionForm.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return { newKey: null, duplicate: false };
+  const { intent, id: target } = parsed.data;
 
   if (intent === "create-key") return await createAgentKey(request, form);
-  if (intent === "revoke-key" && typeof target === "string") {
+  if (intent === "revoke-key" && target !== undefined) {
     await revokeAgentKey(request, target);
   }
-  if (intent === "disconnect-app" && typeof target === "string") {
+  if (intent === "disconnect-app" && target !== undefined) {
     await disconnectApp(context.get(oauthHelpersContext), session.user.id, target);
   }
   return { newKey: null, duplicate: false };
