@@ -90,15 +90,9 @@ describe("extractPageText", () => {
     // n2, rebuilt from n1: same visible text, different raw bytes.
     const gymB = gymA
       .replaceAll('"variant":{"name":"gs-test_web_t110.0"', '"variant":{"name":"gs-test_web_t110.1"')
-      .replaceAll(
-        '"originalVariant":{"name":"gs-test_web_t110.0"',
-        '"originalVariant":{"name":"gs-test_web_t110.1"',
-      )
+      .replaceAll('"originalVariant":{"name":"gs-test_web_t110.0"', '"originalVariant":{"name":"gs-test_web_t110.1"')
       .replaceAll('"variant":{"name":"gs-test_web_t127.0"', '"variant":{"name":"gs-test_web_t127.1"')
-      .replaceAll(
-        '"originalVariant":{"name":"gs-test_web_t127.0"',
-        '"originalVariant":{"name":"gs-test_web_t127.1"',
-      );
+      .replaceAll('"originalVariant":{"name":"gs-test_web_t127.0"', '"originalVariant":{"name":"gs-test_web_t127.1"');
 
     const aRaw = await sha256Hex(gymA);
     const bRaw = await sha256Hex(gymB);
