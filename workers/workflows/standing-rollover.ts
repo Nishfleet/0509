@@ -4,7 +4,6 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 import { instantStamp, nextBriefAt, rolloverInstance, weekClosingAt } from "../../app/lib/brief-schedule";
 import type { RolloverParams } from "../../app/lib/brief-schedule";
 import { insertWeeklyDigest } from "../../app/lib/data/digest.server";
-import { JevRateLimitedError } from "../../app/lib/jev/client.server";
 import { rejudgeUnjudgedChanges } from "../../app/lib/site/judge.server";
 import { composeBrief } from "../standing/compose-brief";
 import { freezeWeek } from "../standing/freeze";
@@ -97,8 +96,12 @@ async function rejudgeClosingWeek(
       });
     });
   } catch (error) {
-    if (!(error instanceof JevRateLimitedError)) throw error;
-    console.error(JSON.stringify({ event: "standing.rejudge_rate_limited" }));
+    console.error(
+      JSON.stringify({
+        event: "standing.rejudge_failed",
+        error: error instanceof Error ? error.name : "unknown",
+      }),
+    );
   }
 }
 

@@ -458,6 +458,71 @@ describe("judgeChange", () => {
 
     expect(judged).toBe(1);
     expect((await rowsFor("rival")).map((row) => row.question_id)).toContain("noteworthy_change");
+    const linked = await env.DB.prepare(
+      "SELECT signal_id FROM jev_verdict WHERE entity_id = ? AND question_id = 'noteworthy_change'",
+    )
+      .bind("rival")
+      .first<{ signal_id: string | null }>();
+    expect(linked?.signal_id).toBe("sig-deferred");
+  });
+
+  it("does not rejudge a self change whose payload has no stored page text", async () => {
+    await env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, url, payload_json, dedup_key, observed_at)
+       VALUES ('sig-self-empty', 'ws-mine', 'mine', 'src_site_web', 'change', 'home', 'https://mine.example/', '{}', 'dedup-self-empty', ?)`,
+    )
+      .bind(NOW)
+      .run();
+    jevAnswers.noul.set("own_site_breakage", 0.8);
+
+    const judged = await rejudgeUnjudgedChanges({
+      workspaceId: "ws-mine",
+      windowStartAt: new Date(Date.parse(NOW) - 86_400_000).toISOString(),
+      windowEndAt: new Date(Date.parse(NOW) + 86_400_000).toISOString(),
+    });
+
+    expect(judged).toBe(0);
+    expect(jevAnswers.calls).toBe(0);
+    expect(await rowsFor("mine")).toEqual([]);
+  });
+
+  it("rejudges a self change from the stored snapshot text, not an empty page", async () => {
+    await env.SNAPSHOTS.put("snapshot/site/w/before.txt", "Plans from $29 a month for teams with a named manager.");
+    await env.SNAPSHOTS.put("snapshot/site/w/after.txt", "Error");
+    const payload = {
+      page: { role: "home", url: "https://mine.example/" },
+      before: { snapshotId: "a", textKey: "snapshot/site/w/before.txt", screenshotKey: null },
+      after: { snapshotId: "b", textKey: "snapshot/site/w/after.txt", screenshotKey: null },
+      diffKey: null,
+      wordsAdded: 0,
+      wordsRemoved: 8,
+      status: 503,
+    };
+    await env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, url, payload_json, dedup_key, observed_at)
+       VALUES ('sig-self-stored', 'ws-mine', 'mine', 'src_site_web', 'change', 'home', 'https://mine.example/', ?, 'dedup-self-stored', ?)`,
+    )
+      .bind(JSON.stringify(payload), NOW)
+      .run();
+    jevAnswers.noul.set("own_site_breakage", 0.8);
+
+    const judged = await rejudgeUnjudgedChanges({
+      workspaceId: "ws-mine",
+      windowStartAt: new Date(Date.parse(NOW) - 86_400_000).toISOString(),
+      windowEndAt: new Date(Date.parse(NOW) + 86_400_000).toISOString(),
+    });
+
+    expect(judged).toBe(1);
+    expect(await rowsFor("mine")).toEqual([
+      { question_id: "own_site_breakage", p: 0.8, choice: null, entity_id: "mine", reason: null },
+    ]);
+    expect(jevAnswers.states[0]).toEqual(
+      expect.objectContaining({
+        item: expect.objectContaining({
+          evidence: expect.objectContaining({ status: 503, httpError: true }),
+        }),
+      }),
+    );
   });
 });
 

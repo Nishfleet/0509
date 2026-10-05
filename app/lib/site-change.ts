@@ -7,6 +7,7 @@ import type { WhyFlagged } from "./why-flagged";
 const shotSide = z.object({
   snapshotId: z.string(),
   screenshotKey: z.string().nullable(),
+  textKey: z.string().optional(),
 });
 
 const siteChangePayload = z.object({
@@ -17,6 +18,7 @@ const siteChangePayload = z.object({
   wordsAdded: z.number().int().nonnegative(),
   wordsRemoved: z.number().int().nonnegative(),
   viaArchive: z.boolean().optional(),
+  status: z.number().int().optional(),
 });
 
 export type SiteChangePayload = z.output<typeof siteChangePayload>;

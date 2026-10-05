@@ -19,7 +19,7 @@ import {
   type NoulVerdict,
 } from "../jev/client.server";
 import { ACT_AT, CHANGE_KIND_QUESTION_ID, PRICING_ACT_AT, REJECT_AT } from "../jev/thresholds";
-import { parseDiffHunks, parseSiteChangePayload } from "../site-change";
+import { parseDiffHunks, parseSiteChangePayload, type SiteChangePayload } from "../site-change";
 import { daysBefore } from "../site-changes.server";
 import { computeBreakageEvidence, type BreakageEvidence } from "./breakage-evidence";
 
@@ -292,6 +292,11 @@ function pageUrlOf(row: UnjudgedChange, pageUrl: string | undefined): string {
   return `https://${row.entityDomain}/`;
 }
 
+async function readSnapshotText(key: string): Promise<string> {
+  const object = await env.SNAPSHOTS.get(key);
+  return object === null ? "" : object.text();
+}
+
 async function readStoredHunks(diffKey: string | null): Promise<readonly { lines: readonly string[] }[]> {
   if (diffKey === null || diffKey.length === 0) return [];
   const object = await env.SNAPSHOTS.get(diffKey);
@@ -300,8 +305,19 @@ async function readStoredHunks(diffKey: string | null): Promise<readonly { lines
   return hunks === null ? [] : hunks.map((lines) => ({ lines }));
 }
 
-async function judgeInputFromStored(row: UnjudgedChange): Promise<JudgeInput> {
+async function evidenceFromPayload(payload: SiteChangePayload | null): Promise<BreakageEvidence | null> {
+  if (payload === null || payload.status === undefined) return null;
+  const beforeKey = payload.before.textKey;
+  const afterKey = payload.after.textKey;
+  if (beforeKey === undefined || afterKey === undefined) return null;
+  const [beforeText, afterText] = await Promise.all([readSnapshotText(beforeKey), readSnapshotText(afterKey)]);
+  return computeBreakageEvidence({ status: payload.status, beforeText, afterText });
+}
+
+async function judgeInputFromStored(row: UnjudgedChange): Promise<JudgeInput | null> {
   const payload = parseSiteChangePayload(row.payloadJson);
+  const evidence = await evidenceFromPayload(payload);
+  if (row.entityRole === "self" && evidence === null) return null;
   return {
     workspaceId: row.workspaceId,
     entityId: row.entityId,
@@ -311,12 +327,14 @@ async function judgeInputFromStored(row: UnjudgedChange): Promise<JudgeInput> {
     pageUrl: pageUrlOf(row, payload === null ? undefined : payload.page.url),
     pageRole: payload === null ? row.aspect : payload.page.role,
     hunks: await readStoredHunks(payload === null ? null : payload.diffKey),
-    evidence: EMPTY_EVIDENCE,
+    evidence: evidence === null ? EMPTY_EVIDENCE : evidence,
   };
 }
 
 async function rejudgeStoredChange(row: UnjudgedChange): Promise<boolean> {
-  const judged = await judgeChangeBody(await judgeInputFromStored(row), new Date());
+  const input = await judgeInputFromStored(row);
+  if (input === null) return false;
+  const judged = await judgeChangeBody(input, new Date());
   if (judged.verdictIds.length === 0) return false;
   await linkVerdictsStatement({
     signalId: row.id,
