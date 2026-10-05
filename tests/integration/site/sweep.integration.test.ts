@@ -1,4 +1,4 @@
-import { env, introspectWorkflowInstance } from "cloudflare:test";
+import { env, introspectWorkflowInstance, runInDurableObject } from "cloudflare:test";
 import { env as workerEnv } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -142,6 +142,13 @@ const seedSweep = async () => {
 describe("nightly site sweep", () => {
   beforeEach(async () => {
     await seedSweep();
+    for (const entityId of ["ent-rival", "ent-self"]) {
+      const day = new Date().toISOString().slice(0, 10);
+      const stub = env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName(`jev-change:${entityId}:${day}`));
+      await runInDurableObject(stub, async (_instance, state) => {
+        await state.storage.deleteAll();
+      });
+    }
     const listed = await env.SNAPSHOTS.list({ prefix: "snapshot/site/" });
     await Promise.all(listed.objects.map((object) => env.SNAPSHOTS.delete(object.key)));
 
