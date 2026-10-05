@@ -13,6 +13,6 @@ export async function readSubjectAccess(request: Request, timings: ReturnType<ty
     subject === null ? false : timings.measure("takedown", isTakenDown(subject.registrable)),
     timings.measure("workspace", workspaceLandingForRequest(request, session.user)),
   ]);
-  if (workspaceId === null) await signOutToLogin(request);
+  if (workspaceId === null) throw await signOutToLogin(request);
   return { raw, subject, taken, landing, workspaceId, userId: session.user.id };
 }
