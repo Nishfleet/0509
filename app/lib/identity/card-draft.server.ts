@@ -15,6 +15,13 @@ const DRAFT_SCHEMA = z.object({
   description: z.string().max(DRAFT_FIELD_MAX.description).optional(),
 });
 
+const draftIntentForm = z.object({
+  intent: z.string(),
+  subject: z.string().optional(),
+  field: z.string().optional(),
+  value: z.string().optional(),
+});
+
 export function draftKey(workspaceId: string, registrable: string): string {
   return `draft:${workspaceId}:${registrable}`;
 }
@@ -53,22 +60,25 @@ export async function clearDraftField(workspaceId: string, registrable: string, 
   });
 }
 
+function parsedDraftIntent(form: FormData) {
+  const parsed = draftIntentForm.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return null;
+  if (parsed.data.intent !== "draft" && parsed.data.intent !== "revert") return null;
+  return parsed.data;
+}
+
 export async function applyDraftIntent(workspaceId: string, form: FormData): Promise<boolean> {
-  const intent = form.get("intent");
-  if (intent !== "draft" && intent !== "revert") return false;
-  const draftSubject = form.get("subject");
-  const field = form.get("field");
-  const value = form.get("value");
-  if (typeof draftSubject === "string" && (field === "name" || field === "description")) {
-    const normalised = normaliseSubject(draftSubject);
-    if (normalised.ok) {
-      if (intent === "draft" && typeof value === "string") {
-        await saveDraftField(workspaceId, normalised.subject.registrable, { field, value });
-      }
-      if (intent === "revert") {
-        await clearDraftField(workspaceId, normalised.subject.registrable, field);
-      }
-    }
+  const parsed = parsedDraftIntent(form);
+  if (parsed === null) return false;
+  const { intent, subject: draftSubject, field, value } = parsed;
+  if (draftSubject === undefined || (field !== "name" && field !== "description")) return true;
+  const normalised = normaliseSubject(draftSubject);
+  if (!normalised.ok) return true;
+  if (intent === "draft" && value !== undefined) {
+    await saveDraftField(workspaceId, normalised.subject.registrable, { field, value });
+  }
+  if (intent === "revert") {
+    await clearDraftField(workspaceId, normalised.subject.registrable, field);
   }
   return true;
 }

@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 
 import { sendMessage } from "../../workers/delivery/send";
 import { redactEmailShaped } from "./auth/redact-email-shaped";
+import { normalizeEmailAddress } from "./email-address";
 import { clearSuppression, isAddressSuppressed } from "./data/email_suppression.server";
 import {
   changeEmailTarget,
@@ -31,7 +32,7 @@ function isUnchangedVerifiedTarget(
   target: { target_value: string; is_verified: number } | null,
   address: string,
 ): boolean {
-  return target !== null && target.target_value === address && target.is_verified === 1;
+  return target !== null && normalizeEmailAddress(target.target_value) === address && target.is_verified === 1;
 }
 
 async function sendVerifyConfirmation(email: SendEmail, workspaceId: string, address: string): Promise<string | null> {
@@ -64,7 +65,7 @@ async function refuseOrResumeSuppressed(
 ): Promise<boolean> {
   if (!(await isAddressSuppressed(address))) return false;
   if (!input.resume) return true;
-  if (address === input.signInEmail) await clearSuppression(address);
+  if (address === normalizeEmailAddress(input.signInEmail)) await clearSuppression(address);
   return false;
 }
 
@@ -86,7 +87,7 @@ export async function saveDeliveryAddress(input: {
   resume: boolean;
   email: SendEmail;
 }): Promise<{ error: string | null; suppressed: boolean }> {
-  const address = input.address.trim();
+  const address = normalizeEmailAddress(input.address);
   const at = address.indexOf("@");
   if (at < 1 || at !== address.lastIndexOf("@") || at === address.length - 1) {
     return { error: INVALID, suppressed: false };
@@ -104,7 +105,7 @@ export async function saveDeliveryAddress(input: {
   const target = await readEmailTarget(env.DB, workspaceId);
   await changeEmailTarget(env.DB, { workspaceId, address });
 
-  if (address === input.signInEmail) {
+  if (address === normalizeEmailAddress(input.signInEmail)) {
     await markEmailTargetVerified(env.DB, { workspaceId });
     return { error: null, suppressed: false };
   }

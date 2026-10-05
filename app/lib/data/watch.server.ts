@@ -25,8 +25,8 @@ export interface SiteSweepTarget {
   transportTestedAt: string | null;
 }
 
-const INSERT_WATCH = `INSERT INTO watch (id, entity_id, source_id, target_key)
-VALUES (?1, ?2, ?3, ?4)
+const INSERT_WATCH = `INSERT INTO watch (id, entity_id, source_id, target_key, created_at)
+VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
 
 const UNWATCHED_ENTITIES = `SELECT e.id AS id, e.domain AS domain, CASE WHEN json_valid(e.identity_json) THEN json_extract(e.identity_json, '$.url') END AS url,
@@ -129,6 +129,12 @@ export async function readUnwatchedEntities(sourceId: string): Promise<readonly 
   return unwatchedEntityRows.parse(rows.results);
 }
 
+const ADVANCE_HN_CURSOR = `UPDATE watch SET hn_cursor = ?2 WHERE id = ?1 AND hn_cursor < ?2`;
+
+export async function advanceHnCursor(watchId: string, cursor: number): Promise<void> {
+  await env.DB.prepare(ADVANCE_HN_CURSOR).bind(watchId, cursor).run();
+}
+
 export async function markWatchPolled(watchId: string, polledAt: string): Promise<void> {
   await env.DB.prepare(MARK_POLLED).bind(watchId, polledAt).run();
 }
@@ -191,13 +197,13 @@ export async function readSiteSweepTarget(watchId: string): Promise<SiteSweepTar
   return scoped[0] ?? null;
 }
 
-const ENSURE_WATCHES = `INSERT INTO watch (id, entity_id, source_id, target_key)
-SELECT lower(hex(randomblob(16))), e.id, s.id, COALESCE(NULLIF(e.name, ''), e.domain)
+const ENSURE_WATCHES = `INSERT INTO watch (id, entity_id, source_id, target_key, created_at)
+SELECT lower(hex(randomblob(16))), e.id, s.id, COALESCE(NULLIF(e.name, ''), e.domain), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 FROM entity e JOIN source s ON s.kind = ?1 AND s.is_enabled = 1
 WHERE e.state = 'on'
 ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
 
-const SELECT_WATCHES = `SELECT w.id AS watch_id, w.target_key, e.id AS entity_id, e.workspace_id, e.role,
+const SELECT_WATCHES = `SELECT w.id AS watch_id, w.target_key, w.hn_cursor, w.created_at AS watch_created_at, e.id AS entity_id, e.workspace_id, e.role,
   COALESCE(NULLIF(e.name, ''), e.domain) AS name, e.domain,
   s.id AS source_id, s.plugin_key, s.reliability,
   COALESCE(json_extract(CASE WHEN json_valid(s.config_json) THEN s.config_json ELSE '{}' END, '$.min_interval_seconds'), 0) AS min_interval_seconds
@@ -210,6 +216,8 @@ ORDER BY s.plugin_key, w.target_key, w.id`;
 export interface WatchRow {
   watch_id: string;
   target_key: string;
+  hn_cursor: number;
+  watch_created_at: string | null;
   entity_id: string;
   workspace_id: string;
   role: "self" | "competitor";

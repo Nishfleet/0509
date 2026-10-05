@@ -296,6 +296,21 @@ describe("send lane (0509#3979)", () => {
     expect((await digestStatus(digestId))?.status).toBe("pending");
   });
 
+  it("(c-case) skips a target whose suppression was stored with different capitals", async () => {
+    const rec = recorder();
+    const digestId = await seedDigest("pending");
+    await env.DB.prepare(
+      `INSERT INTO email_suppression (address, reason, created_at) VALUES (?, 'unsubscribed', '2026-09-22T00:00:02Z')`,
+    )
+      .bind(TARGET.toUpperCase())
+      .run();
+
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
+
+    expect(result.outcome).toBe("suppressed");
+    expect(rec.sent).toHaveLength(0);
+  });
+
   it("never records 'delivered' any path", async () => {
     const rec = recorder();
     const digestId = await seedDigest("pending");
