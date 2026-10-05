@@ -1004,7 +1004,8 @@ export default tseslint.config(
     // tests/docs-paths.test.ts also read .md files, but they are repo-hygiene
     // gates on the agent's own entry docs rather than copy-versus-code checks
     // about the product, and CLAUDE.md makes the first a rejection rule ("a
-    // dependency with no row in docs/REBUILD-STACK.md is a rejection"). Both
+    // dependency with no row in docs/dependencies.md is a rejection", moved out
+    // of docs/REBUILD-STACK.md §9 by 0509#7017). Both
     // are follow-up work to migrate, not exemptions to add here.
     //
     // Two files hold a named exception and only these two, because Nish has not
