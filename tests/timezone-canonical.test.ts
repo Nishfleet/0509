@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { canonicalTimezone } from "../app/lib/timezone";
+import { canonicalTimezone, sameTimezone } from "../app/lib/timezone";
 
 describe("canonicalTimezone", () => {
   afterEach(() => {
@@ -29,6 +29,11 @@ describe("canonicalTimezone", () => {
     expect(canonicalTimezone("x".repeat(101))).toBe("UTC");
     expect(formatter).not.toHaveBeenCalled();
     expect(error).not.toHaveBeenCalled();
+  });
+
+  it("treats Asia/Calcutta and Asia/Kolkata as the same zone", () => {
+    expect(sameTimezone("Asia/Calcutta", "Asia/Kolkata")).toBe(true);
+    expect(sameTimezone("Asia/Kolkata", "America/New_York")).toBe(false);
   });
 
   it("returns UTC and logs one timezone.resolve_failed line for a zone Intl rejects", () => {

@@ -27,3 +27,15 @@ export function canonicalTimezone(value: string | null | undefined): string {
     return "UTC";
   }
 }
+
+function resolvedZone(value: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-US", { timeZone: value.trim() }).resolvedOptions().timeZone;
+  } catch {
+    return canonicalTimezone(value);
+  }
+}
+
+export function sameTimezone(left: string, right: string): boolean {
+  return resolvedZone(left) === resolvedZone(right);
+}

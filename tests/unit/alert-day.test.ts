@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { alertDayGroup, groupByDay } from "../../app/lib/alert-day";
+import { alertDayGroup, groupByDay, localCalendarDay, startOfLocalDay } from "../../app/lib/alert-day";
 
 const UTC_NOW = new Date("2026-09-24T10:00:00Z");
 const NEW_YORK_NOW = new Date("2026-09-24T03:00:00Z");
@@ -29,6 +29,16 @@ describe("an alert, put in its day group by the workspace clock", () => {
 
   it("puts an unreadable time in Earlier instead of crashing", () => {
     expect(alertDayGroup("garbage", UTC_NOW, "UTC")).toBe("Earlier");
+  });
+});
+
+describe("the workspace calendar day for the change-alert cap", () => {
+  it("starts the Kolkata day at 18:30Z, not at UTC midnight", () => {
+    const eveningUtc = new Date("2026-10-05T19:00:00.000Z");
+    expect(localCalendarDay(eveningUtc, "Asia/Kolkata")).toBe("2026-10-06");
+    expect(startOfLocalDay(eveningUtc, "Asia/Kolkata").toISOString()).toBe("2026-10-05T18:30:00.000Z");
+    expect(localCalendarDay(eveningUtc, "UTC")).toBe("2026-10-05");
+    expect(startOfLocalDay(eveningUtc, "UTC").toISOString()).toBe("2026-10-05T00:00:00.000Z");
   });
 });
 

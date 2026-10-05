@@ -105,6 +105,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         lastChecked={loaderData.lastChecked}
         pausedOn={pausedAt === null ? null : dayMonthLabel(pausedAt)}
         unreadable={loaderData.watch.unreadable}
+        sweepClock={loaderData.sweepClock}
         rail={{ ...loaderData.rail, entityId: competitor.id, now: loaderData.now }}
       />
       <CompetitorFoot
