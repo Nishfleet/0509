@@ -30,6 +30,11 @@ describe("feedLinksFromHtml", () => {
     ]);
   });
 
+  it("decodes an href's entities once, so a literal &amp; in the URL survives", async () => {
+    const html = `<link rel="alternate" type="application/rss+xml" href="/feed?q=a&amp;amp;b">`;
+    expect(await feedLinksFromHtml(html, HOME)).toEqual(["https://rival.com/feed?q=a&amp;b"]);
+  });
+
   it("ignores stylesheets, canonical links, other types and non-https hrefs", async () => {
     const html = `
       <link rel="stylesheet" href="/a.css">

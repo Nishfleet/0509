@@ -112,14 +112,15 @@ function excerptOf(value: string | undefined): string | null {
   return value === undefined || value === "" ? null : cut(value, MAX_EXCERPT_CHARS);
 }
 
-function toItem(entry: FeedEntry & { raw: Record<string, unknown> }, base: string): FeedItem | null {
-  const picked = pickHref(entry.raw);
+function toItem(entry: FeedEntry, base: string): FeedItem | null {
+  const raw = isNode(entry.raw) ? entry.raw : {};
+  const picked = pickHref(raw);
   const href = picked === "" ? (entry.link ?? "") : picked;
   const url = resolveHttp(href, base);
   if (url === null) return null;
   const title = cut(entry.title ?? "", MAX_TITLE_CHARS);
   if (title === "") return null;
-  const declared = firstText([entry.raw.guid, entry.raw.id]);
+  const declared = firstText([raw.guid, raw.id]);
   return {
     id: declared === "" ? url : declared,
     title,
@@ -161,7 +162,7 @@ export function parseFeed(xml: string, base: string, options: ParseFeedOptions):
   }
   const items: FeedItem[] = [];
   for (const entry of entries) {
-    const item = toItem(entry as FeedEntry & { raw: Record<string, unknown> }, base);
+    const item = toItem(entry, base);
     if (item === null) continue;
     if (item.publishedAt !== null && Date.parse(item.publishedAt) < cutoff) continue;
     items.push(item);
