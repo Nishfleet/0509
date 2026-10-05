@@ -7,7 +7,12 @@ vi.mock("../../../app/lib/data/plan.server", () => ({
   readEntitlements: () => Promise.resolve({ competitors: 5 }),
 }));
 
-import { insertSelfEntity, replaceCompetitorYoutube, setCompetitorState } from "../../../app/lib/data/entity.server";
+import {
+  addManualCompetitor,
+  insertSelfEntity,
+  replaceCompetitorYoutube,
+  setCompetitorState,
+} from "../../../app/lib/data/entity.server";
 import { shouldRetryD1 } from "../../../app/lib/data/retries.server";
 
 const NETWORK_LOST = "D1_ERROR: 50018: Network connection lost";
@@ -97,6 +102,45 @@ describe("idempotent D1 writes retry transient errors (0509#6986)", () => {
       replaceCompetitorYoutube({ workspaceId: "ws-1", entityId: "e-1", url: "https://www.youtube.com/@rival" }),
     ).resolves.toBe(true);
     expect(batch).toHaveBeenCalledTimes(2);
+  });
+
+  it("replaceCompetitorYoutube does not retry a non-retryable D1 error", async () => {
+    const batch = vi.fn().mockRejectedValue(new Error("D1_ERROR: no such table: entity (1)"));
+    db.batch.mockImplementation(batch);
+    db.prepare.mockReturnValue({ bind: () => ({}) });
+
+    await expect(
+      replaceCompetitorYoutube({ workspaceId: "ws-1", entityId: "e-1", url: "https://www.youtube.com/@rival" }),
+    ).rejects.toThrow("no such table");
+    expect(batch).toHaveBeenCalledTimes(1);
+  });
+
+  it("addManualCompetitor binds one stable id across a retry, so a replay cannot insert a second row", async () => {
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(new Error(NETWORK_LOST))
+      .mockResolvedValueOnce({ meta: { changes: 1 } });
+    const bound: unknown[][] = [];
+    db.prepare.mockReturnValue({
+      bind: (...args: unknown[]) => {
+        bound.push(args);
+        return { run };
+      },
+    });
+
+    await expect(
+      addManualCompetitor({
+        workspaceId: "ws-1",
+        domain: "rival.example",
+        name: "Rival",
+        url: null,
+        now: NOW,
+        cap: 5,
+      }),
+    ).resolves.toBe("added");
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(bound).toHaveLength(2);
+    expect(bound[1]).toEqual(bound[0]);
   });
 });
 

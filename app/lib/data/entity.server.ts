@@ -373,10 +373,11 @@ export async function addManualCompetitor(input: {
   now: string;
   cap: number;
 }): Promise<"added" | "at_cap"> {
+  const entityId = crypto.randomUUID();
   const result = await tryWhile(
     () =>
       env.DB.prepare(INSERT_MANUAL_COMPETITOR)
-        .bind(crypto.randomUUID(), input.workspaceId, input.domain, input.name, input.now, input.cap, input.url)
+        .bind(entityId, input.workspaceId, input.domain, input.name, input.now, input.cap, input.url)
         .run(),
     shouldRetryD1,
   );
