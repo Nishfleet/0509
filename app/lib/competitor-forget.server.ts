@@ -4,7 +4,7 @@ import type { AccountDeleteParams } from "./account-delete.server";
 import { deleteCompetitor, readCompetitor } from "./data/entity.server";
 import { dismissForgottenCompetitor } from "./data/suggestion.server";
 import { readEntityR2Prefixes } from "./data/watch.server";
-import { terminateIdentityTail } from "./identity/tail.server";
+import { terminateIdentityTail } from "./identity/tail-instance.server";
 
 type ForgetOutcome = "forgotten" | "mismatch" | "missing";
 

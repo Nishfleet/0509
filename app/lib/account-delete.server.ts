@@ -5,7 +5,7 @@ import { createCookie } from "react-router";
 import { deleteSignedInUser } from "./auth.server";
 import { readWorkspaceEntityIds } from "./data/entity.server";
 import { readWorkspaceIdForOwner, readWorkspaceR2Prefixes } from "./data/workspace.server";
-import { terminateIdentityTail } from "./identity/tail.server";
+import { terminateIdentityTail } from "./identity/tail-instance.server";
 
 const PAGE_SIZE = 1000;
 const DELETE_INSTANCE_COOKIE = "account-delete";

@@ -15,6 +15,9 @@ import { brandBudget, readCachedSiteProof, readSiteCard } from "./card.server";
 import { extractIdentity } from "./extract";
 import { normaliseSubject, type Subject } from "./normalise";
 import { classifyNavPages } from "./page-role.server";
+import { identityTailInstanceId } from "./tail-instance.server";
+
+export { identityTailInstanceId };
 
 export interface IdentityTailParams {
   workspaceId: string;
@@ -39,24 +42,10 @@ interface AdTarget {
   targetKey: string;
 }
 
-export function identityTailInstanceId(entityId: string): string {
-  return `identity-tail-${entityId}`;
-}
-
 export async function startIdentityTail(params: IdentityTailParams): Promise<string> {
   const id = identityTailInstanceId(params.entityId);
   await env.IDENTITY_TAIL.createBatch([{ id, params }]);
   return id;
-}
-
-export async function terminateIdentityTail(entityId: string): Promise<void> {
-  try {
-    const instance = await env.IDENTITY_TAIL.get(identityTailInstanceId(entityId));
-    await instance.terminate();
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("instance.not_found")) return;
-    console.error(JSON.stringify({ event: "identity_tail.terminate_failed", entityId, message: String(error) }));
-  }
 }
 
 export async function persistTail(params: IdentityTailParams): Promise<{ entityId: string }> {
