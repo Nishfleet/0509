@@ -1240,6 +1240,18 @@ export default tseslint.config(
     },
   },
 
+  // 0509#7073: type-aware lint is on for e2e and *.config.ts. The comment
+  // exemption used to live on the disableTypeChecked block that also listed
+  // those globs; keep it here so inline comments in specs and configs stay
+  // allowed (AGENTS.md: config files and tests are exempt).
+  {
+    files: ["e2e/**/*.ts", "*.config.ts"],
+    rules: {
+      "no-inline-comments": "off",
+      "no-warning-comments": "off",
+    },
+  },
+
   // 0509#7073: tests/** stay untyped until the excluded files in
   // tsconfig.test.json typecheck. e2e/** and *.config.ts are off this list.
   {

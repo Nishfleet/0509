@@ -9,6 +9,7 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 
 interface Tsconfig {
   include?: string[];
+  exclude?: string[];
   references?: { path: string }[];
 }
 
@@ -29,6 +30,8 @@ describe("tsconfig.test.json (#7073)", () => {
     expect(paths).toContain("./tsconfig.test.json");
     const testProject = readTsconfig("tsconfig.test.json");
     expect(testProject.include).toEqual(expect.arrayContaining(["tests/**/*.ts", "e2e/**/*.ts", "*.config.ts"]));
+    const skipped = (testProject.exclude ?? []).filter((entry) => entry.startsWith("tests/"));
+    expect(skipped.length).toBeLessThanOrEqual(89);
   });
 
   it("type-aware lint flags a floating promise in e2e", { timeout: 60_000 }, async () => {
