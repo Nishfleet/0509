@@ -277,7 +277,14 @@ const BARE_TOAST = {
     "toast() is called in exactly one module, app/components/toaster.tsx, behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo'. The sonner import ban does not catch a toast reached another way, so the call shape is banned too. Source: 0509#4116, 0509#7007.",
 };
 
+const HAND_ROLLED_ARIA_TAB = {
+  selector: "JSXAttribute[name.name='role'] Literal[value=/^(tab|tablist|tabpanel)$/]",
+  message:
+    "Tabs come from app/components/ui/tabs.tsx (shadcn on @base-ui/react/tabs). A hand-rolled role=tab/tablist/tabpanel has no arrow keys and no roving tabIndex. Source: 0509#7014.",
+};
+
 const BANNED_SYNTAX = [
+  HAND_ROLLED_ARIA_TAB,
   BARE_TOAST,
   SUPPORT_ADDRESS_BAN,
   GOOGLE_FONTS_BAN,
@@ -498,7 +505,7 @@ const TAILWIND_DEFAULT_PALETTE = {
 };
 
 const SHADCN_STOCK_TOKEN_CLASSES =
-  "(?:^|:)(?:bg|text|border|ring|fill|stroke)-(?:background|foreground|muted|muted-foreground|primary|primary-foreground|secondary|secondary-foreground|destructive|border|input|ring|popover|popover-foreground)(?:/[0-9]+)?$";
+  "(?:^|:)(?:bg|text|border|ring|fill|stroke|outline)-(?:background|foreground|muted|muted-foreground|primary|primary-foreground|secondary|secondary-foreground|destructive|border|input|ring|popover|popover-foreground)(?:/[0-9]+)?$";
 
 const TW_ANIMATE_STOCK_CLASSES =
   "(?:^|:)(?:animate-in|animate-out|fade-in-0|fade-out-0|zoom-in-95|zoom-out-95|slide-in-from-(?:top|bottom|left|right)-2)$";

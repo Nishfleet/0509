@@ -120,6 +120,14 @@ describe("the row evidence tabs", () => {
     expect(selectedLabels(html)).toEqual(["Site changes 0"]);
     expect(text(panel(html))).toBe("Nothing this week.");
   });
+
+  it("renders through the stock tabs primitive, not a hand-rolled role=tab", () => {
+    const html = render(WEEK);
+    expect(html).toContain('data-slot="tabs"');
+    expect(html).toContain('data-slot="tabs-list"');
+    expect(html.match(/data-slot="tabs-trigger"/g)).toHaveLength(5);
+    expect(html).toContain('data-slot="tabs-content"');
+  });
 });
 
 describe("the row evidence panel", () => {

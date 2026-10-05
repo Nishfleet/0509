@@ -1,10 +1,9 @@
-import { useId, useState } from "react";
 import type { ReactElement } from "react";
 
 import type { WeekEvidence } from "../lib/home-standing";
 import { httpUrl } from "../lib/http-url";
 import { shortUtc } from "../lib/short-utc";
-import { cn } from "../lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 
 const TABS = [
   { kind: "site", label: "Site changes" },
@@ -13,35 +12,6 @@ const TABS = [
   { kind: "hiring", label: "Hiring" },
   { kind: "content", label: "Blog posts" },
 ] as const;
-
-interface EvidenceTabProps {
-  kind: string;
-  label: string;
-  active: boolean;
-  panelId: string;
-  onSelect: (kind: string) => void;
-}
-
-function EvidenceTab({ kind, label, active, panelId, onSelect }: EvidenceTabProps): ReactElement {
-  return (
-    <button
-      type="button"
-      role="tab"
-      id={`${panelId}-${kind}`}
-      aria-controls={panelId}
-      aria-selected={active}
-      onClick={() => {
-        onSelect(kind);
-      }}
-      className={cn(
-        "min-h-11 border border-line px-2 py-1 font-mono text-eyebrow uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid",
-        active ? "bg-green-wash text-ink" : "text-ink-soft",
-      )}
-    >
-      {label}
-    </button>
-  );
-}
 
 function EvidenceItem({ item }: { item: WeekEvidence }): ReactElement {
   const image = item.evidenceUrl === null ? null : httpUrl(item.evidenceUrl);
@@ -78,39 +48,44 @@ function EvidenceItem({ item }: { item: WeekEvidence }): ReactElement {
   );
 }
 
+function EvidencePanel({ rows }: { rows: readonly WeekEvidence[] }): ReactElement {
+  if (rows.length === 0) {
+    return <p className="text-[0.88rem] text-ink-soft">Nothing this week.</p>;
+  }
+  return (
+    <ul className="flex min-w-0 flex-col gap-3">
+      {rows.map((item) => (
+        <EvidenceItem key={item.id} item={item} />
+      ))}
+    </ul>
+  );
+}
+
 export function RowEvidence({ evidence }: { evidence: readonly WeekEvidence[] }): ReactElement {
   const counts = new Map<string, number>();
   for (const item of evidence) counts.set(item.sourceKind, (counts.get(item.sourceKind) ?? 0) + 1);
-  const [selected, setSelected] = useState<string>(
-    () => TABS.find((tab) => (counts.get(tab.kind) ?? 0) > 0)?.kind ?? "site",
-  );
-  const rows = evidence.filter((item) => item.sourceKind === selected);
-  const panelId = useId();
+  const selected = TABS.find((tab) => (counts.get(tab.kind) ?? 0) > 0)?.kind ?? "site";
   return (
-    <div className="pt-2">
-      <div role="tablist" aria-label="This week's evidence" className="flex flex-wrap gap-2">
+    <Tabs defaultValue={selected} className="pt-2">
+      <TabsList
+        aria-label="This week's evidence"
+        className="flex h-auto flex-wrap gap-2 rounded-none bg-transparent p-0"
+      >
         {TABS.map((tab) => (
-          <EvidenceTab
+          <TabsTrigger
             key={tab.kind}
-            kind={tab.kind}
-            label={`${tab.label} ${String(counts.get(tab.kind) ?? 0)}`}
-            active={selected === tab.kind}
-            panelId={panelId}
-            onSelect={setSelected}
-          />
+            value={tab.kind}
+            className="min-h-11 flex-none rounded-none border border-line px-2 py-1 font-mono text-eyebrow text-ink-soft uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid data-active:bg-green-wash data-active:text-ink"
+          >
+            {`${tab.label} ${String(counts.get(tab.kind) ?? 0)}`}
+          </TabsTrigger>
         ))}
-      </div>
-      <div role="tabpanel" id={panelId} aria-labelledby={`${panelId}-${selected}`} className="pt-2">
-        {rows.length === 0 ? (
-          <p className="text-[0.88rem] text-ink-soft">Nothing this week.</p>
-        ) : (
-          <ul className="flex min-w-0 flex-col gap-3">
-            {rows.map((item) => (
-              <EvidenceItem key={item.id} item={item} />
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
+      </TabsList>
+      {TABS.map((tab) => (
+        <TabsContent key={tab.kind} value={tab.kind} className="pt-2">
+          <EvidencePanel rows={evidence.filter((item) => item.sourceKind === tab.kind)} />
+        </TabsContent>
+      ))}
+    </Tabs>
   );
 }
