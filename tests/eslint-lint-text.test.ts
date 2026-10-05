@@ -37,11 +37,12 @@ describe("eslint lintText helper (#7026)", () => {
     expect(await pathIsIgnored(".wrangler/tmp/bundle-abc/middleware-insertion-facade.js")).toBe(true);
   });
 
-  it("flags a writeFile disk probe in an eslint rule test", { timeout: 60_000 }, async () => {
-    const result = await lintTextAt(
-      "tests/eslint-fetch-rule.test.ts",
-      `import { writeFile } from "node:fs/promises";\nawait writeFile("x", "y");\n`,
-    );
+  it.each([
+    ["writeFile", `import { writeFile } from "node:fs/promises";\nawait writeFile("x", "y");\n`],
+    ["fs.writeFileSync", `import fs from "node:fs";\nfs.writeFileSync("x", "y");\n`],
+    ["fsp.mkdir", `import fsp from "node:fs/promises";\nawait fsp.mkdir("x");\n`],
+  ])("flags a %s disk probe in an eslint rule test", { timeout: 60_000 }, async (_name, code) => {
+    const result = await lintTextAt("tests/eslint-fetch-rule.test.ts", code);
     expect(result.messages.some((message) => message.includes("lint in memory with lintText"))).toBe(true);
   });
 

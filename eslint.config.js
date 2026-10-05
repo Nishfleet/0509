@@ -279,7 +279,8 @@ const EMPTY_WORKERS_ENV_MOCK = {
 };
 
 const ESLINT_DISK_PROBE_BAN = {
-  selector: "CallExpression[callee.name='writeFile'], CallExpression[callee.name='mkdir']",
+  selector:
+    "CallExpression[callee.name=/^(writeFile|mkdir)(Sync)?$/], CallExpression[callee.property.name=/^(writeFile|mkdir)(Sync)?$/]",
   message:
     "ESLint rule tests lint in memory with lintText against a real filePath. Disk probes under app/ and workers/ collide when vitest runs files in parallel and leave stray files on a crash. Cross-file rules (import-x/no-cycle, boundaries) stay in tests/architecture-boundaries.test.ts. Source: 0509#7026.",
 };
