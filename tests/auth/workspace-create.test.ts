@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("cloudflare:workers", () => ({ env: {} }));
 
+const reschedule = vi.hoisted(() => vi.fn(() => Promise.resolve({ cancelledId: null, createdId: null })));
+vi.mock("../../app/lib/standing/reschedule.server", () => ({ rescheduleBriefSchedule: reschedule }));
+
 import { timezoneCookie, timezoneCookieValue } from "../../app/lib/timezone";
 import {
   ensureWorkspace,
@@ -56,7 +59,8 @@ function asWorkspaceDb(database: DatabaseSync): WorkspaceDb {
               return row ?? null;
             },
             async run() {
-              statement.run(...params);
+              const result = statement.run(...params);
+              return { meta: { changes: Number(result.changes) } };
             },
           };
         },
@@ -159,6 +163,116 @@ describe("ensureWorkspace", () => {
     });
     expect(kept.timezone).toBe("Asia/Kolkata");
     expect(countOf(database, "SELECT count(*) AS n FROM workspace")).toBe(1);
+  });
+
+  it("reschedules the rollover once when the captured zone changes the schedule (0509#7075)", async () => {
+    const database = openDb();
+    seedUser(database, "user-1", "ada@example.com");
+    const db = asWorkspaceDb(database);
+    reschedule.mockClear();
+    const input = { userId: "user-1", email: "ada@example.com", now: "2026-10-11T10:00:00.000Z" };
+    await ensureWorkspace(db, { ...input, timezone: null });
+    await ensureWorkspace(db, { ...input, timezone: "UTC" });
+    expect(reschedule).not.toHaveBeenCalled();
+
+    await ensureWorkspace(db, { ...input, timezone: "Asia/Kolkata" });
+    await ensureWorkspace(db, { ...input, timezone: "Europe/London" });
+
+    expect(reschedule).toHaveBeenCalledTimes(1);
+    expect(reschedule).toHaveBeenCalledWith(
+      firstWorkspaceId("user-1"),
+      { timezone: "UTC", weekday: 1, hour: 8 },
+      { timezone: "Asia/Kolkata", weekday: 1, hour: 8 },
+    );
+  });
+
+  it("a failed reschedule leaves the zone unset so the next sign-in retries and recovers (0509#7075)", async () => {
+    const database = openDb();
+    seedUser(database, "user-1", "ada@example.com");
+    const db = asWorkspaceDb(database);
+    const input = { userId: "user-1", email: "ada@example.com", now: "2026-10-11T10:00:00.000Z" };
+    await ensureWorkspace(db, { ...input, timezone: null });
+    reschedule.mockClear();
+    reschedule.mockRejectedValueOnce(new Error("workflow binding unavailable"));
+
+    await expect(ensureWorkspace(db, { ...input, timezone: "Asia/Kolkata" })).rejects.toThrow(
+      "workflow binding unavailable",
+    );
+    const stored = database.prepare("SELECT timezone FROM workspace").get() as { timezone: string };
+    expect(stored.timezone).toBe("UTC");
+
+    const recovered = await ensureWorkspace(db, { ...input, timezone: "Asia/Kolkata" });
+
+    expect(recovered.timezone).toBe("Asia/Kolkata");
+    expect(reschedule).toHaveBeenCalledTimes(2);
+    const settled = database.prepare("SELECT timezone FROM workspace").get() as { timezone: string };
+    expect(settled.timezone).toBe("Asia/Kolkata");
+  });
+
+  it("a failing revert does not mask the original reschedule error (0509#7075)", async () => {
+    const database = openDb();
+    seedUser(database, "user-1", "ada@example.com");
+    const base = asWorkspaceDb(database);
+    const db: WorkspaceDb = {
+      prepare(query: string) {
+        if (query.startsWith("UPDATE workspace SET timezone = 'UTC'")) throw new Error("d1 unavailable");
+        return base.prepare(query);
+      },
+    };
+    const input = { userId: "user-1", email: "ada@example.com", now: "2026-10-11T10:00:00.000Z" };
+    await ensureWorkspace(db, { ...input, timezone: null });
+    reschedule.mockRejectedValueOnce(new Error("workflow binding unavailable"));
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(ensureWorkspace(db, { ...input, timezone: "Asia/Kolkata" })).rejects.toThrow(
+      "workflow binding unavailable",
+    );
+
+    expect(logged).toHaveBeenCalledTimes(1);
+    expect(String(logged.mock.calls[0]?.[0])).toContain("workspace.timezone_revert_failed");
+    logged.mockRestore();
+  });
+
+  it("a losing concurrent fill neither reschedules nor reverts the winner's zone (0509#7075)", async () => {
+    const database = openDb();
+    seedUser(database, "user-1", "ada@example.com");
+    const base = asWorkspaceDb(database);
+    const input = { userId: "user-1", email: "ada@example.com", now: "2026-10-11T10:00:00.000Z" };
+    await ensureWorkspace(base, { ...input, timezone: null });
+    const racing: WorkspaceDb = {
+      prepare(query: string) {
+        if (query.startsWith("SELECT id, name")) {
+          return {
+            bind: () => ({
+              first: async <T>() =>
+                ({
+                  id: "ws_user-1",
+                  name: "ada",
+                  owner_user_id: "user-1",
+                  timezone: "UTC",
+                  brief_weekday: 1,
+                  brief_hour: 8,
+                  created_at: input.now,
+                }) as T,
+              run: async () => ({ meta: { changes: 0 } }),
+            }),
+          };
+        }
+        return base.prepare(query);
+      },
+    };
+    database.prepare("UPDATE workspace SET timezone = 'Europe/London'").run();
+    reschedule.mockClear();
+    reschedule.mockRejectedValueOnce(new Error("must not be called"));
+
+    const result = await ensureWorkspace(racing, { ...input, timezone: "Asia/Kolkata" });
+
+    expect(result.timezone).toBe("UTC");
+    expect(reschedule).not.toHaveBeenCalled();
+    const stored = database.prepare("SELECT timezone FROM workspace").get() as { timezone: string };
+    expect(stored.timezone).toBe("Europe/London");
+    reschedule.mockReset();
+    reschedule.mockResolvedValue({ cancelledId: null, createdId: null });
   });
 
   it("a concurrent second request does not create a second workspace", async () => {
