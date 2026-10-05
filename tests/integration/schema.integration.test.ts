@@ -14,9 +14,10 @@ describe("0001_rebuild.sql", () => {
       "SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != 'd1_migrations' AND name NOT LIKE '_cf_%'",
     ).first<{ n: number }>();
     // 36 = 35 on main plus sweep_run (0029, 0509#5755): every finished
-    // site sweep records its wall clock, pages and failures; 37 adds
-    // jev_failure (0043), one row per failed judge call.
-    expect(tables?.n).toBe(37);
+    // site sweep records its wall clock, pages and failures; 0043 added
+    // jev_failure, one row per failed judge call, which made 37; 0047
+    // dropped the dead rate_limit_events (0509#7194), back to 36.
+    expect(tables?.n).toBe(36);
   });
 
   it("carries better-auth's six generated tables", async () => {

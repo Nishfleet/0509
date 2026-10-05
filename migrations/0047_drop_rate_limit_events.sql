@@ -1,0 +1,20 @@
+-- 0047_drop_rate_limit_events.sql — drop the dead rate_limit_events table.
+-- Issue #7194, parent audit #7080.
+--
+-- Why: 0001_rebuild.sql created the table and nothing on origin/main touches it.
+-- No module in app/, workers/ or e2e/ names it, no route, workflow or MCP tool
+-- reads or writes it, and no migration after 0001 alters it. Production held 0
+-- rows when the parent audit measured it (#7194). The index 0001 created on it
+-- goes with the table: SQLite drops an index with its table.
+--
+-- Its own file, never an edit to 0001_rebuild.sql: d1_migrations tracks by
+-- filename and production applied 0001 on 2026-09-21, so a statement appended
+-- there executes in no later deploy and nowhere else (precedent
+-- migrations/0012_drop_legacy_tables.sql, #4039).
+--
+-- One statement and nothing else, per the D1 expand/contract rule: this PR
+-- carries no code change, so a drop is the whole of it. D1 has no
+-- down-migration, so the table cannot come back except through a newer file
+-- that recreates it. IF EXISTS keeps the file re-runnable against a local or
+-- test D1 built by the same chain.
+DROP TABLE IF EXISTS rate_limit_events;
