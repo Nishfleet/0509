@@ -1,8 +1,11 @@
+import { env } from "cloudflare:workers";
+
 import { nameFromDomain } from "./competitor/domain-name";
 import { readCompetitorName } from "./competitor/site-name.server";
 import { addManualCompetitor, readCompetitor, setCompetitorState } from "./data/entity.server";
 import { nextPlan, type PlanId } from "./billing/plans";
 import { readEntitlements, readPlanTier } from "./data/plan.server";
+import { withinProbeLimit } from "./identity/card.server";
 import {
   acceptSuggestion,
   confirmRetireSuggestion,
@@ -25,6 +28,13 @@ const COULD_NOT_READ: CompetitorActionResult = {
 const UNRESOLVED: CompetitorActionResult = {
   message: "We couldn't find that brand's website. Try their main website, like brand.com.",
 };
+const PROBE_LIMITED: CompetitorActionResult = {
+  message: "You've tried a lot of addresses in the last minute. Wait a minute, then try again.",
+};
+
+const COUNT_OTHER_ON =
+  "SELECT count(*) AS n FROM entity WHERE workspace_id = ? AND role = 'competitor' AND state = 'on' AND domain <> ?";
+const SELECT_OWNER = "SELECT owner_user_id FROM workspace WHERE id = ?";
 
 function text(form: FormData, name: string): string {
   const value = form.get(name);
@@ -59,12 +69,20 @@ async function addCompetitor(workspaceId: string, raw: string, now: string): Pro
   if (normalised.ok && normalised.subject.kind !== "domain") return COULD_NOT_READ;
   if (!normalised.ok && normalised.reason === "empty") return COULD_NOT_READ;
 
+  const cap = (await readEntitlements(workspaceId)).competitors;
+  const exceptDomain = normalised.ok ? normalised.subject.registrable : "";
+  const onCount = await env.DB.prepare(COUNT_OTHER_ON).bind(workspaceId, exceptDomain).first<{ n: number }>();
+  if (onCount !== null && onCount.n >= cap) return capRefusal(workspaceId, cap);
+
+  const owner = await env.DB.prepare(SELECT_OWNER).bind(workspaceId).first<{ owner_user_id: string }>();
+  if (owner === null) return COULD_NOT_READ;
+  if (!(await withinProbeLimit(owner.owner_user_id))) return PROBE_LIMITED;
+
   const target = await targetOf(raw, normalised);
   if ("message" in target) return target;
   const { domain, name } = target;
 
   if (await isTakenDown(domain)) return { message: "That brand asked not to be tracked, so we can't add it." };
-  const cap = (await readEntitlements(workspaceId)).competitors;
   const outcome = await addManualCompetitor({
     workspaceId,
     domain,
