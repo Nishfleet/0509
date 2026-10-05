@@ -78,7 +78,34 @@ function request(assertion?: string): Request {
   return new Request("https://0509.io/login", { method: "POST", headers });
 }
 
+function requestWithCookie(cookie: string): Request {
+  return new Request("https://0509.io/login", { method: "POST", headers: { cookie } });
+}
+
 describe("accessPrecleared", () => {
+  it("clears a service-token assertion carried in the CF_Authorization cookie", async () => {
+    const iss = freshIssuer();
+    const pair = await rsaPair();
+    const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    jwk.kid = "test-kid";
+    stubJwks(iss, jwk);
+    const jwt = await mintJwt(pair.privateKey, serviceClaims(iss));
+
+    await expect(
+      accessPrecleared(requestWithCookie(`theme=dark; CF_Authorization=${jwt}`), {
+        ACCESS_TEAM_DOMAIN: iss,
+        ACCESS_AUD: AUD,
+      }),
+    ).resolves.toBe(true);
+  });
+
+  it("reads a malformed cookie header without throwing", async () => {
+    const iss = freshIssuer();
+    await expect(
+      accessPrecleared(requestWithCookie("; ;; = ; CF_Authorization"), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
+    ).resolves.toBe(false);
+  });
+
   it("clears a verified service-token assertion", async () => {
     const iss = freshIssuer();
     const pair = await rsaPair();
