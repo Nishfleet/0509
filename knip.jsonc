@@ -33,7 +33,8 @@
   // Neither is a missing dependency.
   // `tailwindcss` is imported by `@import "tailwindcss"` in app/app.css; knip
   // does not follow CSS imports and says so in its own hint output.
-  "ignoreDependencies": ["cloudflare", "@react-router/node", "tailwindcss"],
+  // `@lhci/cli` runs as `npx lhci` in ci.yml, never imported by app code.
+  "ignoreDependencies": ["cloudflare", "@react-router/node", "tailwindcss", "@lhci/cli"],
 
   "ignore": ["**/+types/**", "docs/design-directions/**"],
 }

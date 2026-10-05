@@ -7,13 +7,13 @@ import type { OwnSiteCheck } from "../../workers/workflows/own-site-check";
 import type { SiteSweep } from "../../workers/workflows/site-sweep";
 
 vi.mock("@sentry/cloudflare", () => ({
-  withMonitor: vi.fn((_slug: string, cb: () => unknown) => cb()),
+  captureCheckIn: vi.fn(() => "check-in-1"),
 }));
 
 let siteSweep: { prototype: SiteSweep };
 let mentionsSweep: { prototype: MentionsSweep };
 let ownSiteCheck: { prototype: OwnSiteCheck };
-let monitorMock: ReturnType<typeof vi.fn>;
+let checkInMock: ReturnType<typeof vi.fn>;
 
 beforeAll(async () => {
   vi.resetModules();
@@ -26,11 +26,11 @@ beforeAll(async () => {
   siteSweep = site.SiteSweep;
   mentionsSweep = mentions.MentionsSweep;
   ownSiteCheck = ownSite.OwnSiteCheck;
-  monitorMock = vi.mocked(sentry.withMonitor);
+  checkInMock = vi.mocked(sentry.captureCheckIn);
 });
 
 beforeEach(() => {
-  monitorMock.mockClear();
+  checkInMock.mockClear();
 });
 
 const event = {
@@ -40,7 +40,11 @@ const event = {
 } as unknown as WorkflowEvent<unknown>;
 
 const immediateStep = {
-  do: async (_label: string, _config: unknown, fn: () => Promise<unknown>) => fn(),
+  do: async (_label: string, configOrFn: unknown, maybeFn?: () => Promise<unknown>) => {
+    const fn = typeof configOrFn === "function" ? configOrFn : maybeFn;
+    if (typeof fn !== "function") throw new Error("no step callback");
+    return fn();
+  },
   sleep: async () => undefined,
 } as unknown as WorkflowStep;
 
@@ -49,6 +53,27 @@ const makeWorkflow = <T extends object>(workflow: { prototype: T }): T => {
   Object.assign(instance, { env, ctx: createExecutionContext() });
   return instance;
 };
+
+const SITE_MONITOR = {
+  schedule: { type: "crontab", value: "0 2 * * *" },
+  checkinMargin: 60,
+  maxRuntime: 120,
+  timezone: "UTC",
+} as const;
+
+const MENTIONS_MONITOR = {
+  schedule: { type: "crontab", value: "0 1 * * *" },
+  checkinMargin: 60,
+  maxRuntime: 90,
+  timezone: "UTC",
+} as const;
+
+const OWN_SITE_MONITOR = {
+  schedule: { type: "crontab", value: "0 * * * *" },
+  checkinMargin: 15,
+  maxRuntime: 30,
+  timezone: "UTC",
+} as const;
 
 describe("an instance started by a Workflow's own registered schedule", () => {
   const scheduled = {
@@ -59,7 +84,7 @@ describe("an instance started by a Workflow's own registered schedule", () => {
   it("does no work and checks no monitor in, so the Worker cron is the only scheduler of the daily sweeps", async () => {
     expect(await makeWorkflow(siteSweep).run(scheduled, immediateStep)).toBeNull();
     expect(await makeWorkflow(mentionsSweep).run(scheduled, immediateStep)).toBeNull();
-    expect(monitorMock).not.toHaveBeenCalled();
+    expect(checkInMock).not.toHaveBeenCalled();
   });
 
   it("starts the own-site-check hour for itself and does no other work", async () => {
@@ -73,19 +98,17 @@ describe("an instance started by a Workflow's own registered schedule", () => {
     } as unknown as WorkflowEvent<unknown>;
     expect(await workflow.run(hourly, immediateStep)).toBeNull();
     expect(createBatch).toHaveBeenCalledExactlyOnceWith([{ id: "own-site-check-2026-10-02T06" }]);
-    expect(monitorMock).not.toHaveBeenCalled();
+    expect(checkInMock).not.toHaveBeenCalled();
   });
 });
 
 describe("workflow Sentry cron monitors", () => {
   it("checks site-sweep in on its 02:00 UTC monitor and returns the zeroed sweep", async () => {
     const outcome = await makeWorkflow(siteSweep).run(event, immediateStep);
-    expect(monitorMock).toHaveBeenCalledTimes(1);
-    expect(monitorMock).toHaveBeenCalledWith("site-sweep", expect.any(Function), {
-      schedule: { type: "crontab", value: "0 2 * * *" },
-      checkinMargin: 60,
-      timezone: "UTC",
-    });
+    expect(checkInMock.mock.calls).toEqual([
+      [{ monitorSlug: "site-sweep", status: "in_progress" }, SITE_MONITOR],
+      [{ checkInId: "check-in-1", monitorSlug: "site-sweep", status: "ok" }, SITE_MONITOR],
+    ]);
     expect(outcome).toEqual({
       pages: 0,
       failed: 0,
@@ -101,40 +124,36 @@ describe("workflow Sentry cron monitors", () => {
   it("checks mentions-sweep in on its 01:00 UTC monitor and returns the zeroed sweep", async () => {
     await env.DB.exec("UPDATE source SET canary_query = NULL");
     const outcome = await makeWorkflow(mentionsSweep).run(event, immediateStep);
-    expect(monitorMock).toHaveBeenCalledTimes(1);
-    expect(monitorMock).toHaveBeenCalledWith("mentions-sweep", expect.any(Function), {
-      schedule: { type: "crontab", value: "0 1 * * *" },
-      checkinMargin: 60,
-      timezone: "UTC",
-    });
+    expect(checkInMock.mock.calls).toEqual([
+      [{ monitorSlug: "mentions-sweep", status: "in_progress" }, MENTIONS_MONITOR],
+      [{ checkInId: "check-in-1", monitorSlug: "mentions-sweep", status: "ok" }, MENTIONS_MONITOR],
+    ]);
     expect(outcome).toEqual({ targets: 0, swept: 0, failed: 0, stored: 0, unjudged: 0, skipped: 0 });
   });
 
   it("checks own-site-check in on its hourly monitor and returns the zeroed check", async () => {
     const outcome = await makeWorkflow(ownSiteCheck).run(event, immediateStep);
-    expect(monitorMock).toHaveBeenCalledTimes(1);
-    expect(monitorMock).toHaveBeenCalledWith("own-site-check", expect.any(Function), {
-      schedule: { type: "crontab", value: "0 * * * *" },
-      checkinMargin: 15,
-      timezone: "UTC",
-    });
+    expect(checkInMock.mock.calls).toEqual([
+      [{ monitorSlug: "own-site-check", status: "in_progress" }, OWN_SITE_MONITOR],
+      [{ checkInId: "check-in-1", monitorSlug: "own-site-check", status: "ok" }, OWN_SITE_MONITOR],
+    ]);
     expect(outcome).toEqual({ pages: 0, opened: 0, closed: 0, failed: 0 });
   });
 
-  it("rejects out of the monitor callback when a step fails", async () => {
+  it("records an error check-in when a step fails and never sends ok", async () => {
     const failingStep = {
-      do: async (label: string, _config: unknown, fn: () => Promise<unknown>) => {
+      do: async (label: string, configOrFn: unknown, maybeFn?: () => Promise<unknown>) => {
         if (label === "plan") throw new Error("plan down");
+        const fn = typeof configOrFn === "function" ? configOrFn : maybeFn;
+        if (typeof fn !== "function") throw new Error("no step callback");
         return fn();
       },
       sleep: async () => undefined,
     } as unknown as WorkflowStep;
     await expect(makeWorkflow(siteSweep).run(event, failingStep)).rejects.toThrow("plan down");
-    expect(monitorMock).toHaveBeenCalledTimes(1);
-    expect(monitorMock).toHaveBeenCalledWith("site-sweep", expect.any(Function), {
-      schedule: { type: "crontab", value: "0 2 * * *" },
-      checkinMargin: 60,
-      timezone: "UTC",
-    });
+    expect(checkInMock.mock.calls).toEqual([
+      [{ monitorSlug: "site-sweep", status: "in_progress" }, SITE_MONITOR],
+      [{ checkInId: "check-in-1", monitorSlug: "site-sweep", status: "error" }, SITE_MONITOR],
+    ]);
   });
 });

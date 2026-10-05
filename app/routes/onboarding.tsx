@@ -13,6 +13,7 @@ import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { normaliseSubject } from "../lib/identity/normalise";
 import { screenOnboardingSubject } from "../lib/onboarding-screen.server";
 import { startOnboardingRun } from "../lib/data/onboarding_run.server";
+import { withinProbeLimit } from "../lib/identity/card.server";
 import { createTimings } from "../lib/server-timing.server";
 import { useTimezoneCookie } from "../lib/use-timezone-cookie";
 
@@ -66,6 +67,12 @@ interface ScreenInput {
 }
 
 async function screenAndStart({ timings, userId, workspaceId, subject, rawSubject, answer }: ScreenInput) {
+  if (!(await timings.measure("limit", withinProbeLimit(userId)))) {
+    return {
+      message: "You've tried a lot of addresses in the last minute. Wait a minute, then try again.",
+      confirm: null,
+    };
+  }
   const now = new Date().toISOString();
   const result = await timings.measure(
     "screen",
