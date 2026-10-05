@@ -16,7 +16,7 @@ const WEEK_ITEMS = `SELECT s.id AS signal_id, s.entity_id AS entity_id, s.kind A
        s.url AS url, s.aspect AS aspect, s.observed_at AS observed_at
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
-WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.is_tombstoned = 0
+WHERE s.workspace_id = ?1 AND COALESCE(s.published_at, s.observed_at) >= ?2 AND COALESCE(s.published_at, s.observed_at) < ?3 AND s.is_tombstoned = 0
   AND NOT EXISTS (SELECT 1 FROM signal_delivery d WHERE d.signal_id = s.id)
   AND EXISTS (SELECT 1 FROM jev_verdict v WHERE v.signal_id = s.id AND ((v.question_id = ?4 AND s.kind = 'change') OR (v.question_id = ?5 AND s.kind = 'mention')) AND ${changeActsSql("s", "v")})
 ORDER BY s.observed_at DESC, s.id ASC

@@ -32,6 +32,23 @@ describe("hn.algolia mentions adapter", () => {
     }
   });
 
+  it("bounds the Algolia query to the last week, or to the stored cursor", async () => {
+    const fetchMock = vi.fn(async () => new Response(fixture));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const before = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
+      await hnAdapter({ query: "gymshark" }, null);
+      const weekUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
+      const bound = Number((weekUrl.searchParams.get("numericFilters") ?? "").replace("created_at_i>", ""));
+      expect(bound).toBeGreaterThanOrEqual(before);
+      await hnAdapter({ query: "gymshark" }, "1790000000");
+      const cursorUrl = new URL(String(fetchMock.mock.calls[1]?.[0]));
+      expect(cursorUrl.searchParams.get("numericFilters")).toBe("created_at_i>1790000000");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("falls back to the HN permalink when Algolia returns an empty url", () => {
     const rawBody = JSON.stringify({
       hits: [
