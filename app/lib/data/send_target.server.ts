@@ -139,7 +139,12 @@ LIMIT ?`;
 
 const SEAL_SLACK_TARGET = `UPDATE send_target SET target_value = ? WHERE id = ? AND target_value = ?`;
 
+const COUNT_UNSEALED_SLACK_TARGETS = `SELECT COUNT(*) AS remaining FROM send_target st
+JOIN channel c ON c.id = st.channel_id
+WHERE c.key = 'slack' AND st.target_value NOT LIKE 'enc:v2:' || ? || ':%'`;
+
 const DEFAULT_BACKFILL_BATCH = 50;
+const NIGHTLY_SLACK_BACKFILL_CAP = 500;
 
 interface SlackTargetRow {
   id: string;
@@ -209,27 +214,48 @@ function addOutcome(total: SlackBackfillResult, outcome: SlackBackfillOutcome): 
   return { ...total, [outcome]: total[outcome] + 1 };
 }
 
+function processedCount(total: SlackBackfillResult): number {
+  return total.sealed + total.skipped + total.failed;
+}
+
 export async function backfillSlackTargets(
   db: D1Database,
-  options: { batchSize?: number } = {},
+  options: { batchSize?: number; maxRows?: number } = {},
 ): Promise<SlackBackfillResult> {
   const keys = slackTargetKeys();
   const [current] = keys;
   if (current === undefined) throw new Error("SLACK_TARGET_SECRET is not configured");
   const currentId = await slackTargetKeyId(current);
   const batchSize = options.batchSize ?? DEFAULT_BACKFILL_BATCH;
+  const maxRows = options.maxRows ?? Number.POSITIVE_INFINITY;
   let total: SlackBackfillResult = { sealed: 0, skipped: 0, failed: 0 };
   let cursor = "";
-  for (;;) {
-    const page = await db
-      .prepare(SELECT_UNSEALED_SLACK_TARGETS)
-      .bind(cursor, currentId, batchSize)
-      .all<SlackTargetRow>();
+  while (processedCount(total) < maxRows) {
+    const limit = Math.min(batchSize, maxRows - processedCount(total));
+    const page = await db.prepare(SELECT_UNSEALED_SLACK_TARGETS).bind(cursor, currentId, limit).all<SlackTargetRow>();
     for (const row of page.results) total = addOutcome(total, await sealSlackTargetRow(db, row, keys));
     const last = page.results.at(-1);
-    if (last === undefined || page.results.length < batchSize) return total;
+    if (last === undefined || page.results.length < limit) break;
     cursor = last.id;
   }
+  return total;
+}
+
+export async function countUnsealedSlackTargets(db: D1Database): Promise<number> {
+  const [current] = slackTargetKeys();
+  if (current === undefined) throw new Error("SLACK_TARGET_SECRET is not configured");
+  const row = await db
+    .prepare(COUNT_UNSEALED_SLACK_TARGETS)
+    .bind(await slackTargetKeyId(current))
+    .first<{ remaining: number }>();
+  return row?.remaining ?? 0;
+}
+
+export async function runNightlySlackBackfill(db: D1Database, options: { maxRows?: number } = {}): Promise<number> {
+  const result = await backfillSlackTargets(db, { maxRows: options.maxRows ?? NIGHTLY_SLACK_BACKFILL_CAP });
+  const remaining = await countUnsealedSlackTargets(db);
+  if (remaining > 0) console.info(JSON.stringify({ event: "slack_backfill.remaining", remaining, ...result }));
+  return remaining;
 }
 
 export async function removeSlackTarget(db: D1Database, workspaceId: string): Promise<void> {

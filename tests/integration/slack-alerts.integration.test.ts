@@ -1,7 +1,13 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { backfillSlackTargets, readSlackTarget, saveSlackTarget } from "../../app/lib/data/send_target.server";
+import {
+  backfillSlackTargets,
+  countUnsealedSlackTargets,
+  readSlackTarget,
+  runNightlySlackBackfill,
+  saveSlackTarget,
+} from "../../app/lib/data/send_target.server";
 import { decryptSlackWebhook, encryptSlackWebhook } from "../../app/lib/slack-target-crypto.server";
 import { runSettingsIntent } from "../../app/lib/settings.server";
 
@@ -267,5 +273,47 @@ describe("Slack target backfill (0509#6983, 0509#6981)", () => {
   it("refuses to run without a usable key list", async () => {
     env.SLACK_TARGET_SECRET = `${CURRENT_KEY},`;
     await expect(backfillSlackTargets(env.DB)).rejects.toThrow("SLACK_TARGET_SECRET is not configured");
+  });
+
+  it("nightly run seals up to the cap, reports only counts, and a second run is quiet", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    await seed();
+
+    expect(await runNightlySlackBackfill(env.DB, { maxRows: 2 })).toBe(1);
+    expect(await countUnsealedSlackTargets(env.DB)).toBe(1);
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(info.mock.calls[0]?.[0]))).toEqual({
+      event: "slack_backfill.remaining",
+      remaining: 1,
+      sealed: 2,
+      skipped: 0,
+      failed: 0,
+    });
+    expect(String(info.mock.calls[0]?.[0])).not.toContain("hooks.slack.com");
+
+    info.mockClear();
+    expect(await runNightlySlackBackfill(env.DB, { maxRows: 2 })).toBe(0);
+    const after = await rawRows();
+    expect(await runNightlySlackBackfill(env.DB, { maxRows: 2 })).toBe(0);
+    expect(await rawRows()).toEqual(after);
+    expect(info).not.toHaveBeenCalled();
+    info.mockRestore();
+  });
+
+  it("nightly run fails closed without a key and leaves rows untouched", async () => {
+    await seed();
+    const before = await rawRows();
+    env.SLACK_TARGET_SECRET = "";
+
+    await expect(runNightlySlackBackfill(env.DB)).rejects.toThrow("SLACK_TARGET_SECRET is not configured");
+    expect(await rawRows()).toEqual(before);
+  });
+
+  it("reading a target never writes", async () => {
+    await insertTarget("st-a-plain", HOOK, WS);
+    const before = await rawRows();
+
+    expect((await readSlackTarget(env.DB, WS))?.target_value).toBe(HOOK);
+    expect(await rawRows()).toEqual(before);
   });
 });
