@@ -1,9 +1,16 @@
+import { TZDate } from "@date-fns/tz";
+import { startOfDay } from "date-fns";
+
 export type DayGroup = "Today" | "Yesterday" | "Earlier";
 
 const DAY_GROUPS: readonly DayGroup[] = ["Today", "Yesterday", "Earlier"];
 
-function localDay(at: Date, timeZone: string): string {
+export function localDay(at: Date, timeZone: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
+}
+
+export function startOfLocalDay(now: Date, timeZone: string): Date {
+  return new Date(startOfDay(new TZDate(now.getTime(), timeZone)).getTime());
 }
 
 function time(at: string): number {

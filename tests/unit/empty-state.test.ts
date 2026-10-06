@@ -261,8 +261,12 @@ describe("the Home second-zero copy comes from the real schedule (#5862)", () =>
 describe("the strings customers can reach are full sentences (#5963)", () => {
   it("both competitor-page sentences render through the component", async () => {
     const { developmentsEmpty } = await import("../../app/components/competitor-frame");
-    const sentences = [developmentsEmpty(null), developmentsEmpty("Monday 08:00")];
-    expect(sentences).toHaveLength(2);
+    const sentences = [
+      developmentsEmpty(null),
+      developmentsEmpty("Monday 08:00"),
+      developmentsEmpty(null, "07:30 GMT+5:30"),
+    ];
+    expect(sentences).toHaveLength(3);
     for (const sentence of sentences) {
       expect(sentence.length).toBeGreaterThan("Nothing here".length);
       expect(() => emptyState(sentence)).not.toThrow();
