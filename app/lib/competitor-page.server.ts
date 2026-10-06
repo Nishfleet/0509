@@ -53,11 +53,14 @@ export async function readCompetitorPage(
   entityId: string,
   now: Date,
 ): Promise<CompetitorPage | null> {
-  const competitor = await readCompetitor(workspaceId, entityId);
+  const [competitor, entitlements] = await Promise.all([
+    readCompetitor(workspaceId, entityId),
+    readEntitlements(workspaceId),
+  ]);
   if (competitor === null) return null;
   const anchor = historyAnchor(competitor.state, competitor.stateChangedAt, now);
   const weekStart = daysBefore(anchor, 7);
-  const historyDays = (await readEntitlements(workspaceId)).marks_history_days;
+  const historyDays = entitlements.marks_history_days;
   const [watch, changes, developments, peers, facts, sources, verdict, scored, weightResult, socials, timezone] =
     await Promise.all([
       readSiteWatchSummary(workspaceId, entityId),

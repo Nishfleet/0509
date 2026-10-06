@@ -151,9 +151,18 @@ describe("own-site check", () => {
     )
       .bind(NOW)
       .run();
+    await env.DB.prepare(
+      `INSERT INTO incident (id, workspace_id, entity_id, page_id, kind, opened_at)
+       VALUES ('inc-scout', ?, 'ent-self', 'page-scout-home', 'error 503', ?)`,
+    )
+      .bind(WS, NOW)
+      .run();
     expect(await runCheck("own-scout")).toEqual({ pages: 0, opened: 0, closed: 0, failed: 0 });
     expect(fetched).toEqual([]);
-    expect(await incidents()).toEqual([]);
+    const scout = await incidents();
+    expect(scout).toHaveLength(1);
+    expect(scout[0]).toMatchObject({ entity_id: "ent-self", kind: "error 503" });
+    expect(scout[0]?.closed_at).not.toBeNull();
   });
 
   it("opens one incident with a pinned alert when the site still fails on the confirming read, and closes it on the next clean hour", async () => {

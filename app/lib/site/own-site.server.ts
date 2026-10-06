@@ -119,12 +119,11 @@ async function entitledOwnSitePages(pages: OwnSitePage[]): Promise<OwnSitePage[]
 
 export async function planOwnSiteCheck(now: string): Promise<OwnSitePlan> {
   await ensureHomePages(now);
-  const allPages = await readOwnSitePages();
+  const pages = await entitledOwnSitePages(await readOwnSitePages());
   await closeIncidentsOutside(
-    allPages.map((page) => page.pageId),
+    pages.map((page) => page.pageId),
     now,
   );
-  const pages = await entitledOwnSitePages(allPages);
   return {
     pages,
     openIncidents: await readOpenIncidents(),
