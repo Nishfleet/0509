@@ -1,6 +1,6 @@
 # Engine 10 — Guardrails
 
-P3 step 10 of umbrella #3842, contract **#3899** (`docs/REBUILD-GUARDRAILS.md`). Written by the Opus deputy (second architect), **2026-09-21**. Pairs with `docs/REBUILD-JEV.md`, `docs/REBUILD-SCHEMA.md`, `docs/REBUILD-ONBOARDING.md`, `docs/REBUILD-STANDING-CARD.md` (engine 9), `docs/REBUILD-DONE.md` J14, `docs/REBUILD-STACK.md` §4.4.
+P3 step 10 of umbrella #3842, contract **#3899** (`docs/REBUILD-GUARDRAILS.md`). Written by the Opus deputy (second architect), **2026-09-21**. Pairs with `docs/REBUILD-JEV.md`, `docs/REBUILD-SCHEMA.md`, `docs/REBUILD-ONBOARDING.md (deleted, in git history)`, `docs/REBUILD-STANDING-CARD.md (deleted, in git history)` (engine 9), `docs/REBUILD-DONE.md` J14, `docs/REBUILD-STACK.md` §4.4.
 
 This engine is the one whose failures are not bugs. Everything else in the product degrades; this one either holds or it has already done the harm.
 
@@ -82,7 +82,7 @@ A takedown writes a row to a global `takedown` table, then a Workflow fans out: 
 
 **Grafted from A, at the points where B's eventual consistency is not acceptable:**
 
-1. **The public card is gone** (Nish, 2026-09-24): customers share a picture rendered from live rows instead (docs/REBUILD-STANDING-CARD.md), so there is no unauthenticated surface left to check at serve time.
+1. **The public card is gone** (Nish, 2026-09-24): customers share a picture rendered from live rows instead (docs/REBUILD-STANDING-CARD.md (deleted, in git history)), so there is no unauthenticated surface left to check at serve time.
 2. **Onboarding and discovery check `takedown` before anything is crawled.** These are the two places a subject enters the product, and B's fan-out cannot reach a workspace that does not exist yet.
 3. **The fan-out is a Workflow with retries**, not a best-effort loop, and the nightly cron reconciles any `takedown` row whose `fanned_out_at` is null — the same watchdog shape engines 6 and 7 use, for the same reason.
 

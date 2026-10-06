@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>0509 — launch video</title>
+    <!-- Subresource integrity over HyperFrames' documented CDN scaffold: the tag is
+         the vendor's own, pinned to gsap@3.14.2, so the browser can still verify it.
+         jsdelivr serves this version immutable with access-control-allow-origin: *,
+         which is what lets a cross-origin script carry a SRI check at all. -->
+    <script
+      src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"
+      integrity="sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8KNCil1kvfL3Hbbk2"
+      crossorigin="anonymous"
+    ></script>
+    <style>
+      /* ── Brand fonts (copied from this repo's public/fonts/) ───────────── */
+      @font-face {
+        font-family: "Bricolage Grotesque";
+        font-style: normal;
+        font-weight: 700 800;
+        font-stretch: 100%;
+        font-display: block;
+        src: url("assets/fonts/bricolage-hero.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Bricolage Grotesque";
+        font-style: normal;
+        font-weight: 200 800;
+        font-stretch: 100%;
+        font-display: block;
+        src: url("assets/fonts/bricolage-grotesque-latin.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Instrument Sans";
+        font-style: normal;
+        font-weight: 400 600;
+        font-stretch: 100%;
+        font-display: block;
+        src: url("assets/fonts/instrument-sans-latin.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "IBM Plex Mono";
+        font-style: normal;
+        font-weight: 400;
+        font-display: block;
+        src: url("assets/fonts/ibm-plex-mono-latin-400.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "IBM Plex Mono";
+        font-style: normal;
+        font-weight: 500;
+        font-display: block;
+        src: url("assets/fonts/ibm-plex-mono-latin-500.woff2") format("woff2");
+      }
+
+      /* ── Brand tokens (app/app.css:85-96) ────────────────────────────────
+         The product has ONE accent, used two ways (docs/design-directions/a-final/style.css:70):
+         --green is the marker swipe over the dark acts, --green-ink is green text on bone.
+         #16c47f is 2.0:1 on bone, so it is never used as text on a light act.
+         --ink-faint stays #67635c: the app's own #8e8878 is 3.1:1 on bone, and the
+         16-18px labels that use it need 4.5:1. */
+      :root {
+        --bone: #f4f1e8; /* app/app.css:86 */
+        --ink: #0e0d0a; /* app/app.css:88 — also the background of the live landing capture */
+        --green: #16c47f; /* app/app.css:92 */
+        --green-ink: #064d31; /* app/app.css:93 */
+        --ink-soft: #55524a; /* app/app.css:89 */
+        --ink-faint: #67635c; /* darkened from app/app.css:90, see the note above */
+        --line: #ddd6c6; /* app/app.css:91 */
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 1920px;
+        height: 1080px;
+        background: #0e0d0a;
+        overflow: hidden;
+      }
+      #master-root {
+        width: 1920px;
+        height: 1080px;
+        position: relative;
+        overflow: hidden;
+      }
+      [data-composition-id="master"] > div[data-composition-id] {
+        position: absolute;
+        inset: 0;
+      }
+      /* A seek must paint one deterministic frame. Every composition registers its
+         timeline in window.__timelines and calls tl.seek(0), so each element is
+         already at its start value instead of autoplaying. */
+      .clip {
+        will-change: transform, opacity;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="master-root"
+      data-composition-id="master"
+      data-start="0"
+      data-duration="75.0"
+      data-width="1920"
+      data-height="1080"
+    >
+      <!-- 0.0 – 11.0 · who it is for, what it does -->
+      <div
+        id="act-1-hero-track"
+        data-composition-id="act-1-hero"
+        data-composition-src="compositions/01-hero.html"
+        data-start="0"
+        data-duration="11.0"
+      ></div>
+
+      <!-- 11.0 – 21.0 · one box to fill in -->
+      <div
+        id="act-2-one-box-track"
+        data-composition-id="act-2-one-box"
+        data-composition-src="compositions/02-one-box.html"
+        data-start="11.0"
+        data-duration="10.0"
+      ></div>
+
+      <!-- 21.0 – 39.0 · three steps -->
+      <div
+        id="act-3-how-track"
+        data-composition-id="act-3-how"
+        data-composition-src="compositions/03-how-it-works.html"
+        data-start="21.0"
+        data-duration="18.0"
+      ></div>
+
+      <!-- 39.0 – 52.0 · the mark -->
+      <div
+        id="act-4-mark-track"
+        data-composition-id="act-4-mark"
+        data-composition-src="compositions/04-the-mark.html"
+        data-start="39.0"
+        data-duration="13.0"
+      ></div>
+
+      <!-- 52.0 – 62.0 · one email on Monday -->
+      <div
+        id="act-5-brief-track"
+        data-composition-id="act-5-brief"
+        data-composition-src="compositions/05-monday-brief.html"
+        data-start="52.0"
+        data-duration="10.0"
+      ></div>
+
+      <!-- 62.0 – 68.0 · price -->
+      <div
+        id="act-6-price-track"
+        data-composition-id="act-6-price"
+        data-composition-src="compositions/06-price.html"
+        data-start="62.0"
+        data-duration="6.0"
+      ></div>
+
+      <!-- 68.0 – 75.0 · call to action -->
+      <div
+        id="act-7-close-track"
+        data-composition-id="act-7-close"
+        data-composition-src="compositions/07-close.html"
+        data-start="68.0"
+        data-duration="7.0"
+      ></div>
+    </div>
+    <script>
+      window.__timelines = window.__timelines || {};
+      // No music, no voice-over: acts are cut on scene changes only, so the
+      // master timeline carries no animation of its own.
+      window.__timelines["master"] = gsap.timeline({ paused: true });
+      window.__timelines["master"].seek(0);
+    </script>
+  </body>
+</html>

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { env } from "cloudflare:workers";
@@ -5,9 +7,12 @@ import { env } from "cloudflare:workers";
 import {
   createWorkerEnvCheck,
   landingWorkspaceId,
+  PUBLIC_PLACEHOLDER_NAMES,
+  PUBLIC_PLACEHOLDER_VALUES,
   WorkerEnvError,
   workerEnvFailureResponse,
 } from "../app/lib/env.server";
+import { SITE_URL } from "../app/lib/site-url";
 
 const KEYS = [
   "DB",
@@ -15,6 +20,7 @@ const KEYS = [
   "BETTER_AUTH_SECRET",
   "TURNSTILE_SECRET_KEY",
   "TURNSTILE_SITE_KEY",
+  "DODO_WEBHOOK_SECRET",
   "EMAIL",
   "SEND_EMAIL",
   "SNAPSHOTS",
@@ -33,7 +39,7 @@ const KEYS = [
 function configured() {
   return {
     DB: { prepare: () => "stmt" },
-    BETTER_AUTH_URL: "https://0509.io",
+    BETTER_AUTH_URL: SITE_URL,
     BETTER_AUTH_SECRET: "present",
     TURNSTILE_SECRET_KEY: "present",
     TURNSTILE_SITE_KEY: "present",
@@ -65,6 +71,16 @@ function namesOf(check: () => void) {
     return error as WorkerEnvError;
   }
   expect.fail("expected a misconfigured env to throw");
+}
+
+function exampleSecrets(): Record<string, string> {
+  const secrets: Record<string, string> = {};
+  const text = readFileSync(new URL("../.dev.vars.example", import.meta.url), "utf8");
+  for (const line of text.split("\n")) {
+    const match = /^([A-Z0-9_]+)=(.*)$/.exec(line);
+    if (match) secrets[String(match[1])] = String(match[2]);
+  }
+  return secrets;
 }
 
 describe("worker env", () => {
@@ -134,6 +150,106 @@ describe("worker env", () => {
     const error = namesOf(createWorkerEnvCheck());
     expect(error.names).toEqual(["TURNSTILE_SITE_KEY"]);
     expect(error.message).toContain("the sign-in form has no Turnstile widget");
+  });
+
+  // 0509#7087. .dev.vars.example is committed and its values are public. They
+  // are right for the local origins wrangler dev and the e2e lane ask for, and
+  // wrong for the Worker: a production boot holding either one signs sign-in
+  // links, or verifies payment webhooks, with a secret anyone can read out of
+  // the repository. The gate rejects them under the variable's own name, so the
+  // 503 an operator reads is the same shape as a missing entry.
+  it("refuses the public placeholder secrets on the production origin", () => {
+    useEnv({
+      ...configured(),
+      BETTER_AUTH_SECRET: "local-only-not-a-production-secret",
+      DODO_WEBHOOK_SECRET: "whsec_bG9jYWwtb25seS1ub3QtYS13ZWJob29rLXNlY3JldA==",
+    });
+    const error = namesOf(createWorkerEnvCheck());
+    expect(error.names).toEqual(["BETTER_AUTH_SECRET", "DODO_WEBHOOK_SECRET"]);
+    expect(error.message).toContain("misconfigured: BETTER_AUTH_SECRET");
+    expect(error.message).not.toContain("local-only-not-a-production-secret");
+    expect(error.message).not.toContain("whsec_");
+  });
+
+  // The table is hand-mirrored from .dev.vars.example, and that is the same
+  // drift the origin pin closes. Change the example file and this goes red, so
+  // the gate cannot quietly stop covering production.
+  it("pins the placeholder table to the values .dev.vars.example ships", () => {
+    const example = exampleSecrets();
+    for (const name of PUBLIC_PLACEHOLDER_NAMES) {
+      expect(example[name], `.dev.vars.example no longer ships ${name}`).toBe(PUBLIC_PLACEHOLDER_VALUES[name]);
+    }
+  });
+
+  // The Turnstile keys in .dev.vars.example are Cloudflare's published dummy
+  // keys and tests/integration/wrangler.test.jsonc runs on this same origin
+  // with them on purpose, so the rejection table stays per variable.
+  it("still accepts the Cloudflare dummy turnstile keys on the production origin", () => {
+    useEnv({
+      ...configured(),
+      TURNSTILE_SITE_KEY: "1x00000000000000000000BB",
+      TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
+    });
+    expect(() => createWorkerEnvCheck()()).not.toThrow();
+  });
+
+  // preview-assert's lighthouse step starts wrangler with
+  // --env-file .dev.vars.example and no --var for BETTER_AUTH_URL. Wrangler
+  // overlays keys that already exist in wrangler.jsonc vars, so the example
+  // file must not ship SITE_URL or /design/landing answers 503 (run 37321905876).
+  it("keeps the example env-file off the production origin", () => {
+    const example = exampleSecrets();
+    expect(example.BETTER_AUTH_URL, ".dev.vars.example no longer overrides BETTER_AUTH_URL").toBeDefined();
+    expect(example.BETTER_AUTH_URL).not.toBe(SITE_URL);
+  });
+
+  it("starts lighthouse wrangler on the example env-file", () => {
+    const ci = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+    expect(ci).toContain("npx wrangler dev --env-file .dev.vars.example");
+  });
+
+  // playwright.config.ts --var and lighthouse's --env-file overlay both land
+  // a loopback BETTER_AUTH_URL. The gate must accept the public placeholders
+  // on that origin or the preview-assert lighthouse step 503s /design/landing.
+  it("accepts the placeholder secrets on the example env-file origin", () => {
+    const example = exampleSecrets();
+    useEnv({
+      ...configured(),
+      BETTER_AUTH_URL: example.BETTER_AUTH_URL,
+      BETTER_AUTH_SECRET: PUBLIC_PLACEHOLDER_VALUES.BETTER_AUTH_SECRET,
+      DODO_WEBHOOK_SECRET: PUBLIC_PLACEHOLDER_VALUES.DODO_WEBHOOK_SECRET,
+    });
+    expect(() => createWorkerEnvCheck()()).not.toThrow();
+  });
+
+  it("boots with no DODO_WEBHOOK_SECRET at all", () => {
+    useEnv(configured());
+    expect(() => createWorkerEnvCheck()()).not.toThrow();
+  });
+
+  it("answers 503 and names a placeholder secret without echoing it", async () => {
+    useEnv({
+      ...configured(),
+      BETTER_AUTH_SECRET: "local-only-not-a-production-secret",
+      DODO_WEBHOOK_SECRET: "whsec_bG9jYWwtb25seS1ub3QtYS13ZWJob29rLXNlY3JldA==",
+    });
+    const error = namesOf(createWorkerEnvCheck());
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const response = workerEnvFailureResponse(error);
+      expect(response.status).toBe(503);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      const body = await response.text();
+      expect(body).toContain("BETTER_AUTH_SECRET");
+      expect(body).toContain("DODO_WEBHOOK_SECRET");
+      expect(body).not.toContain("local-only-not-a-production-secret");
+      expect(body).not.toContain("whsec_");
+      expect(spy).toHaveBeenCalledWith(error.message);
+      expect(String(spy.mock.calls[0]?.[0])).not.toContain("local-only-not-a-production-secret");
+      expect(String(spy.mock.calls[0]?.[0])).not.toContain("whsec_");
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("checks once per isolate", () => {

@@ -1,5 +1,5 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
-import { captureException, instrumentWorkflowWithSentry, setTag, withMonitor, withSentry } from "@sentry/cloudflare";
+import { instrumentWorkflowWithSentry, setTag, withMonitor, withSentry } from "@sentry/cloudflare";
 import { createRequestHandler } from "react-router";
 
 import { NIGHTLY_CRON, OWN_SITE_CHECK_CRON, WEEKLY_REFRESH_CRON } from "../app/lib/cadence";
@@ -7,6 +7,7 @@ import { requestContext } from "../app/lib/agent/context.server";
 import { createOAuthProvider } from "../app/lib/agent/oauth.server";
 import { deleteExpiredAuthRows } from "../app/lib/data/auth_expiry.server";
 import { deleteExpiredJevFailures } from "../app/lib/data/jev_failure.server";
+import { runNightlySlackBackfill } from "../app/lib/data/send_target.server";
 import { stampFirstSignals } from "../app/lib/data/onboarding_run.server";
 import { startNightlyDiscovery, startWeeklyRefresh } from "../app/lib/discovery/start.server";
 import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
@@ -35,6 +36,7 @@ import { SiteSweep } from "./workflows/site-sweep";
 import { SnapshotBackup } from "./workflows/snapshot-backup";
 import { MentionsSweep } from "./workflows/mentions";
 import { StandingRollover } from "./workflows/standing-rollover";
+import { reportNightlyResults } from "./nightly-jobs";
 import { isWorkflowCron, reportMissedWorkflows, startMissedWorkflows, startScheduledWorkflow } from "./workflow-crons";
 
 type WorkerEnv = Env & { SENTRY_DSN?: string; LIVENESS_PING_URL?: string; CLOUDFLARE_API_TOKEN?: string };
@@ -74,11 +76,10 @@ const handler = {
           deleteExpiredAuthRows(env.DB, now),
           deleteExpiredJevFailures(env.DB, now),
           stampFirstSignals(),
+          runNightlySlackBackfill(env.DB),
           runNightlyCostGuard(env.DB, env.CLOUDFLARE_API_TOKEN, controller.scheduledTime),
         ]);
-        results.forEach((result) => {
-          if (result.status === "rejected") captureException(result.reason);
-        });
+        reportNightlyResults(results);
         return;
       }
       if (controller.cron === WEEKLY_REFRESH_CRON) {

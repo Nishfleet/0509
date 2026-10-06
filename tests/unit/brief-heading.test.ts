@@ -36,7 +36,7 @@ vi.mock("../../app/lib/data/workspace.server", () => ({
   readBriefScheduleForOwner: () =>
     Promise.resolve({
       workspaceId: holder.workspaceId,
-      schedule: { timezone: "UTC", weekday: 1, hour: 7, pausedAt: null },
+      schedule: { timezone: "America/New_York", weekday: 1, hour: 7, pausedAt: null },
     }),
 }));
 
@@ -124,16 +124,19 @@ describe("the brief page's Previous briefs links", () => {
 });
 
 describe("the brief page's week label", () => {
-  it("finishes every week's label in UTC, and the selected one's", async () => {
+  // period_start is the week-start instant (workers/standing/compose-brief.ts),
+  // the same value the email formats in payload.timezone. 2026-09-14T00:00Z is
+  // 13 Sept in America/New_York, so a UTC label would disagree with the email.
+  it("finishes every week's label in the workspace zone, and the selected one's", async () => {
     const data = await loader(loaderArgs({ digestId: "dig_1" }));
-    expect(data.weeks.map((week) => week.weekLabel)).toEqual(["An earlier week", "Week of 14 Sept"]);
-    expect(data.selected?.weekLabel).toBe("Week of 14 Sept");
+    expect(data.weeks.map((week) => week.weekLabel)).toEqual(["An earlier week", "Week of 13 Sept"]);
+    expect(data.selected?.weekLabel).toBe("Week of 13 Sept");
   });
 
   it("prints the finished label, never the raw ISO period_start", async () => {
     const html = await renderBrief(await loader(loaderArgs({ digestId: "dig_1" })));
-    expect(html).toContain("Week of 14 Sept ·");
-    expect(html).toContain("Week of 14 Sept</a>");
+    expect(html).toContain("Week of 13 Sept ·");
+    expect(html).toContain("Week of 13 Sept</a>");
     expect(html).not.toContain("2026-09-14");
   });
 

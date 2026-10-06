@@ -79,3 +79,22 @@ The version in this table is the `package.json` specifier. A section of `docs/RE
 | `wrangler`                           | ^4.144.0  | §1.3                                            | `wrangler types` and `wrangler deploy`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `@cloudflare/workers-types`. It fights the generated `Env`                                                                                                                                                                  | 4.144.0 |
 | `yaml`                               | ^2.9.1    | §9, 0509#7013                                   | Parses `.github/workflows/*.yml` in the workflow tests (`parse(source).jobs`), replacing three hand-written indentation readers. Already installed transitively at 2.9.1; listed directly so knip accepts the import ([docs](https://eemeli.org/yaml/))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | A hand-written indentation reader, `js-yaml` (no YAML 1.2 default)                                                                                                                                                          | 2.9.1   |
 | `chrome-devtools-mcp`                | 1.10.1    | `.agents/skills/verify/SKILL.md`                | Google's stock `chrome-devtools` CLI ([ChromeDevTools/chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp) 1.10.1). `verify:start` pins `--executablePath` to Playwright's Chromium, so the CLI does not launch a second browser. Optional peers `@blackwell-systems/gcf` and `@toon-format/toon` are upstream devDependencies; the lockfile does not install them                                                                                                                                                                                                                                                                                                                                                                                             | A script under `scripts/`, `bin/` or `tools/`                                                                                                                                                                               | 1.10.1  |
+
+## Outside this table
+
+`marketing/launch-video/` is the exception to the table's shape, and the test above
+deliberately does not catch it, so it is recorded here instead. Two tools are used to
+build the 0509.io launch video, and neither is a dependency of any tracked
+`package.json`:
+
+- **`hyperframes` 0.8.133** — not in `marketing/launch-video/package.json`
+  `dependencies` or `devDependencies`. The folder's `package.json` has no dependency
+  fields at all; the CLI runs through `npx -y hyperframes@0.8.133` in the folder's
+  own scripts, pinned in the command line and in this repo's docs.
+- **`gsap` 3.14.2** — not in any `package.json`. It arrives as one pinned script tag
+  in `marketing/launch-video/index.html` with a subresource-integrity hash over it,
+  because HyperFrames' documented minimal composition loads it that way. See the
+  README in that folder for the hash's provenance.
+
+Everything else in the video (fonts, screenshots, colours, copy) comes from this
+repo's own files. No new package.json dependency is added by the video.
