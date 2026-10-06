@@ -2,7 +2,7 @@ import { data } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { handler } = vi.hoisted(() => ({
-  handler: vi.fn(async () => new Response("ok", { status: 200 })),
+  handler: vi.fn(async (_request: Request) => new Response("ok", { status: 200 })),
 }));
 
 vi.mock("cloudflare:workers", () => ({
@@ -39,7 +39,7 @@ describe("login magic-link action", () => {
   });
 
   it("asks for an email before it calls the sign-in handler", async () => {
-    const result = await action({ request: formRequest({ email: "  " }) });
+    const result = await action({ request: formRequest({ email: "  " }) } as Parameters<typeof action>[0]);
     expect(result).toEqual({ error: "Enter your email address, then we'll send the link." });
     expect(handler).not.toHaveBeenCalled();
   });
@@ -48,7 +48,7 @@ describe("login magic-link action", () => {
     handler.mockResolvedValue(new Response("Missing CAPTCHA response", { status: 400 }));
     const refused = await action({
       request: formRequest({ email: "Person@0509.io", "cf-turnstile-response": "  token-1  " }),
-    });
+    } as Parameters<typeof action>[0]);
     expect(refused).toEqual({ error: "Confirm you're a person, then we'll send the link." });
     const call = handler.mock.calls[0];
     if (call === undefined) throw new Error("sign-in handler was not called");
@@ -63,7 +63,7 @@ describe("login magic-link action", () => {
   it("carries the hero subject into the link's return address", async () => {
     await action({
       request: formRequest({ email: "person@0509.io" }, undefined, "https://0509.io/login?subject=gymshark.com"),
-    });
+    } as Parameters<typeof action>[0]);
     expect(await sentCallbackURL()).toEqual({
       email: "person@0509.io",
       callbackURL: "/onboarding/identity?subject=gymshark.com",
@@ -77,7 +77,7 @@ describe("login magic-link action", () => {
         undefined,
         "https://0509.io/login?subject=https%3A%2F%2Fevil.example",
       ),
-    });
+    } as Parameters<typeof action>[0]);
     expect(await sentCallbackURL()).toEqual({
       email: "person@0509.io",
       callbackURL: "/onboarding/identity?subject=https%3A%2F%2Fevil.example",
@@ -91,7 +91,7 @@ describe("login magic-link action", () => {
         undefined,
         "https://0509.io/login?next=/oauth/authorize%3Fclient_id%3Dx&subject=gymshark.com",
       ),
-    });
+    } as Parameters<typeof action>[0]);
     expect(await sentCallbackURL()).toEqual({
       email: "person@0509.io",
       callbackURL: "/oauth/authorize?client_id=x",
@@ -101,14 +101,14 @@ describe("login magic-link action", () => {
   it("treats a blank subject as no subject", async () => {
     await action({
       request: formRequest({ email: "person@0509.io" }, undefined, "https://0509.io/login?subject="),
-    });
+    } as Parameters<typeof action>[0]);
     expect(await sentCallbackURL()).toEqual({ email: "person@0509.io", callbackURL: "/app" });
   });
 
   it("forwards the client ip and does not invent a captcha header", async () => {
     const result = await action({
       request: formRequest({ email: "agent@0509.io" }, { "cf-connecting-ip": "203.0.113.5" }),
-    });
+    } as Parameters<typeof action>[0]);
     expect(result).toMatchObject({ sent: { email: "agent@0509.io" } });
     const call = handler.mock.calls[0];
     if (call === undefined) throw new Error("sign-in handler was not called");
@@ -125,7 +125,7 @@ describe("login magic-link action", () => {
       handler.mockResolvedValue(new Response("account daily sending quota exceeded", { status: 500 }));
       const result = await action({
         request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }),
-      });
+      } as Parameters<typeof action>[0]);
       expect(result).toEqual(data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 }));
       expect(result).not.toHaveProperty("sent");
       const text = logged.mock.calls.map((call) => String(call[0])).join("\n");
@@ -143,7 +143,7 @@ describe("login magic-link action", () => {
       handler.mockResolvedValue(
         new Response("account daily sending quota exceeded for victim@example.com", { status: 500 }),
       );
-      await action({ request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }) });
+      await action({ request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }) } as Parameters<typeof action>[0]);
       const text = logged.mock.calls.map((call) => String(call[0])).join("\n");
       expect(text).toContain("login.magic_link_send_failed");
       expect(text).toContain('"status":500');
@@ -158,7 +158,7 @@ describe("login magic-link action", () => {
     handler.mockResolvedValue(new Response('{"message":"Invalid email"}', { status: 400 }));
     const result = await action({
       request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }),
-    });
+    } as Parameters<typeof action>[0]);
     expect(result).toEqual({ error: "Enter an email address we can send the link to." });
   });
 
@@ -166,7 +166,7 @@ describe("login magic-link action", () => {
     handler.mockResolvedValue(new Response("Too many sign-in links. Wait a minute and try again.", { status: 429 }));
     const result = await action({
       request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }),
-    });
+    } as Parameters<typeof action>[0]);
     expect(result).toEqual({ error: "Too many sign-in links. Wait a minute and try again." });
   });
 });
