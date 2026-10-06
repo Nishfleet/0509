@@ -6,7 +6,7 @@ import { isFeedKind, type DevelopmentItem } from "../developments";
 import { toIsoInstant } from "../iso-instant";
 import type { WeekEvidence } from "../home-standing";
 import { ACT_AT, REJECT_AT, changeActsSql } from "../jev/thresholds";
-import { CHANGE_HAS_STORED_EVIDENCE } from "../site-change";
+import { CHANGE_HAS_STORED_EVIDENCE, changeJudgedSql } from "../site-change";
 import {
   D3_QUESTION_ID,
   D3S_QUESTION_ID,
@@ -365,10 +365,7 @@ WHERE s.kind = 'change' AND s.is_tombstoned = 0
   AND (?1 IS NULL OR s.workspace_id = ?1)
   AND s.observed_at >= ?2 AND s.observed_at < ?3
   AND (e.role <> 'self' OR ${CHANGE_HAS_STORED_EVIDENCE})
-  AND NOT EXISTS (
-    SELECT 1 FROM jev_verdict v
-    WHERE v.signal_id = s.id AND v.question_id IN (?5, ?6)
-  )
+  AND NOT ${changeJudgedSql({ noteworthy: "?5", breakage: "?6" })}
 ORDER BY s.observed_at, s.id
 LIMIT ?4`;
 

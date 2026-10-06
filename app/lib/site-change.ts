@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { httpUrl } from "./http-url";
+import { BREAKAGE_ALERT_AT } from "./jev/thresholds";
 import { shortUtc } from "./short-utc";
 import type { WhyFlagged } from "./why-flagged";
 
@@ -26,6 +27,15 @@ export type SiteChangePayload = z.output<typeof siteChangePayload>;
 export const CHANGE_HAS_STORED_EVIDENCE = `(json_extract(s.payload_json, '$.status') IS NOT NULL
   AND json_extract(s.payload_json, '$.before.textKey') IS NOT NULL
   AND json_extract(s.payload_json, '$.after.textKey') IS NOT NULL)`;
+
+export function changeJudgedSql(verdictQuestions: { noteworthy: string; breakage: string }): string {
+  return `EXISTS (
+    SELECT 1 FROM jev_verdict v
+    WHERE v.signal_id = s.id
+      AND (v.question_id = ${verdictQuestions.noteworthy}
+        OR (v.question_id = ${verdictQuestions.breakage} AND v.p >= ${String(BREAKAGE_ALERT_AT)}))
+  )`;
+}
 
 function parseJson(json: string, what: string): unknown {
   try {

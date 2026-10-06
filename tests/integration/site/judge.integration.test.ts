@@ -569,6 +569,53 @@ describe("judgeChange", () => {
     expect(linked?.signal_id).toBe("sig-linked");
   });
 
+  it("keeps a self change unjudged when only a clear breakage verdict was stored, so it is rejudged later", async () => {
+    await env.SNAPSHOTS.put("snapshot/site/c/before.txt", "Plans from $29 a month for teams with a named manager.");
+    await env.SNAPSHOTS.put("snapshot/site/c/after.txt", "Plans from $39 a month for teams with a named manager.");
+    const payload = {
+      page: { role: "home", url: "https://mine.example/" },
+      before: { snapshotId: "a", textKey: "snapshot/site/c/before.txt", screenshotKey: null },
+      after: { snapshotId: "b", textKey: "snapshot/site/c/after.txt", screenshotKey: null },
+      diffKey: null,
+      wordsAdded: 1,
+      wordsRemoved: 1,
+      status: 200,
+    };
+    await env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, url, payload_json, dedup_key, observed_at)
+       VALUES ('sig-self-clear', 'ws-mine', 'mine', 'src_site_web', 'change', 'home', 'https://mine.example/', ?, 'dedup-self-clear', ?)`,
+    )
+      .bind(JSON.stringify(payload), NOW)
+      .run();
+    for (let index = 0; index < 6; index += 1) {
+      await insertVerdict({
+        workspaceId: "ws-mine",
+        questionId: index % 2 === 0 ? "noteworthy_change" : "change_kind",
+        inputHash: `self-cap-${index}`,
+        signalId: null,
+        entityId: "mine",
+        p: 0.9,
+        choice: null,
+        reason: null,
+        decidedAt: NOW,
+      }).run();
+    }
+    jevAnswers.noul.set("own_site_breakage", 0.05);
+    jevAnswers.noul.set("noteworthy_change", 0.95);
+    jevAnswers.choice.set("change_kind", "copy");
+
+    const first = await rejudgeUnjudgedChanges(todayWindow("ws-mine"));
+    await env.DB.prepare("DELETE FROM jev_verdict WHERE input_hash LIKE 'self-cap-%'").run();
+    const second = await rejudgeUnjudgedChanges(todayWindow("ws-mine"));
+
+    expect(first).toBe(0);
+    expect(second).toBe(1);
+    const noteworthy = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM jev_verdict WHERE signal_id = 'sig-self-clear' AND question_id = 'noteworthy_change'",
+    ).first<{ n: number }>();
+    expect(noteworthy?.n).toBe(1);
+  });
+
   it("does not spend the daily cap on rate-limited calls, so retries cannot exhaust it", async () => {
     jevAnswers.noul.set("noteworthy_change", 0.95);
     jevAnswers.choice.set("change_kind", "copy");
