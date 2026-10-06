@@ -44,18 +44,40 @@ interface PendingRollover {
   now: Date;
 }
 
+function terminateRollover(workflow: Pick<RolloverWorkflow, "get">, id: string): Promise<string | null> {
+  return workflow
+    .get(id)
+    .then((instance) => instance.terminate())
+    .then(
+      () => id,
+      () => null,
+    );
+}
+
 export function cancelRollover(
   workflow: Pick<RolloverWorkflow, "get">,
   { workspaceId, schedule, now }: PendingRollover,
 ): Promise<string | null> {
-  const pending = rolloverInstance(workspaceId, nextBriefAt(schedule, now), "scheduled");
-  return workflow
-    .get(pending.id)
-    .then((instance) => instance.terminate())
-    .then(
-      () => pending.id,
-      () => null,
-    );
+  return terminateRollover(workflow, rolloverInstance(workspaceId, nextBriefAt(schedule, now), "scheduled").id);
+}
+
+export function pendingRolloverIds({ workspaceId, schedule, now }: PendingRollover): string[] {
+  const next = nextBriefAt(schedule, now);
+  const previous = previousBriefAt(schedule, now);
+  return [
+    rolloverInstance(workspaceId, next, "scheduled").id,
+    rolloverInstance(workspaceId, nextBriefAt(schedule, next), "scheduled").id,
+    rolloverInstance(workspaceId, previous, "scheduled").id,
+    rolloverInstance(workspaceId, previous, "catch-up").id,
+  ];
+}
+
+export async function retireRollovers(
+  workflow: Pick<RolloverWorkflow, "get">,
+  pending: PendingRollover,
+): Promise<string[]> {
+  const terminated = await Promise.all(pendingRolloverIds(pending).map((id) => terminateRollover(workflow, id)));
+  return terminated.filter((id): id is string => id !== null);
 }
 
 export async function rescheduleRollover(

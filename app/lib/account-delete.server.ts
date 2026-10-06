@@ -5,7 +5,7 @@ import { createCookie } from "react-router";
 import { deleteSignedInUser } from "./auth.server";
 import { readBriefScheduleForOwner, readWorkspaceR2Prefixes } from "./data/workspace.server";
 import type { OwnedSchedule } from "./data/workspace.server";
-import { retireRollovers } from "./standing/retire";
+import { retireRollovers } from "./standing/reschedule";
 
 const PAGE_SIZE = 1000;
 const DELETE_INSTANCE_COOKIE = "account-delete";
@@ -40,7 +40,7 @@ export async function deleteAccount(
 
 async function retireWorkspaceRollovers(owned: OwnedSchedule): Promise<void> {
   try {
-    const terminated = await retireRollovers(env.STANDING_ROLLOVER, owned, new Date());
+    const terminated = await retireRollovers(env.STANDING_ROLLOVER, { ...owned, now: new Date() });
     console.log(JSON.stringify({ event: "account_delete.rollovers_terminated", terminated: terminated.length }));
   } catch (error) {
     console.error(

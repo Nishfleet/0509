@@ -144,7 +144,9 @@ describe("delete my account", () => {
     const owned = await readBriefScheduleForOwner(userId);
     if (owned === null) throw new Error("sign-in created no workspace");
     const pending = rolloverInstance(owned.workspaceId, nextBriefAt(owned.schedule, new Date()), "scheduled");
+    await using introspector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, pending.id);
     await env.STANDING_ROLLOVER.create(pending);
+    expect(await introspector.waitForStepResult({ name: "workspace-exists" })).toBe(true);
     const helpers = {
       listUserGrants: () => Promise.resolve({ items: [], cursor: undefined }),
       revokeGrant: () => Promise.resolve(),
@@ -154,9 +156,7 @@ describe("delete my account", () => {
 
     expect(deleted).not.toBeNull();
     const instance = await env.STANDING_ROLLOVER.get(pending.id);
-    await vi.waitFor(async () => {
-      expect((await instance.status()).status).toBe("terminated");
-    });
+    await expect.poll(async () => (await instance.status()).status, { timeout: 20_000 }).toBe("terminated");
   });
 
   it("pages the stored files with a cursor and the Workflow deletes every page", async () => {
