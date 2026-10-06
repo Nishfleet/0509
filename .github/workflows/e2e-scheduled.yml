@@ -366,7 +366,7 @@ jobs:
           echo "newest instance $id"
           npx wrangler workflows instances describe feed-sweep "$id" --json > /tmp/d.json || true
           jq -c '{status, success, error}' /tmp/d.json || true
-          jq -c '[.steps[]? | select((tojson | test("vercel.com")))] | map({name, success, start, end, output: .output, error: .error})' /tmp/d.json | head -c 4000
+          jq -c '[.steps[]? | select(.name != "plan-1")] | map({name, success, output: (.output | tostring | .[0:300]), error})' /tmp/d.json | head -c 6000
   suite:
     name: e2e-production
     needs: [production-sha, suite-shard]
