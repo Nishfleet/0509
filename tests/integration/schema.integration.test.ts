@@ -15,8 +15,9 @@ describe("0001_rebuild.sql", () => {
     ).first<{ n: number }>();
     // 36 = 35 on main plus sweep_run (0029, 0509#5755): every finished
     // site sweep records its wall clock, pages and failures; 37 adds
-    // jev_failure (0043), one row per failed judge call.
-    expect(tables?.n).toBe(37);
+    // jev_failure (0043), one row per failed judge call; 38 adds
+    // support_issue (0048, 0509#7223), one row per GitHub issue the inbox opened.
+    expect(tables?.n).toBe(38);
   });
 
   it("carries better-auth's six generated tables", async () => {

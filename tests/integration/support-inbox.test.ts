@@ -26,10 +26,10 @@ const MIME = [
   "https://0509.io/app/pages?ref=mail",
 ].join("\r\n");
 
-const fakeMessage = (forward: () => Promise<void>, mime = MIME): EmailMessage =>
+const fakeMessage = (forward: () => Promise<void>, mime = MIME, from = "jane@customer.example"): EmailMessage =>
   ({
     to: "support+vitest@0509.io",
-    from: "jane@customer.example",
+    from,
     headers: new Headers({ subject: "Refund please", "user-agent": "Thunderbird 128" }),
     raw: new Response(mime).body,
     rawSize: mime.length,
@@ -239,6 +239,120 @@ describe("0509-support-inbox-v2", () => {
     ).first<{ reports: number; issues: number }>();
     expect(stored?.reports).toBe(5);
     expect(stored?.issues).toBe(3);
+  });
+
+  it("opens at most 20 issues a day across sender domains (0509#7084)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 201 }));
+
+    for (let i = 0; i < 21; i += 1) {
+      const from = `jane@d${String(i)}.example`;
+      const mime = MIME.replace("jane@customer.example", from);
+      const ctx = createExecutionContext();
+      await worker.email(
+        fakeMessage(
+          vi.fn(() => Promise.resolve()),
+          mime,
+          from,
+        ),
+        env,
+        ctx,
+      );
+      await waitOnExecutionContext(ctx);
+    }
+
+    expect(fetchSpy).toHaveBeenCalledTimes(20);
+    const stored = await env.DB.prepare(
+      "SELECT (SELECT COUNT(*) FROM support_report) AS reports, (SELECT COUNT(*) FROM support_issue) AS issues",
+    ).first<{ reports: number; issues: number }>();
+    expect(stored?.reports).toBe(21);
+    expect(stored?.issues).toBe(20);
+  });
+
+  it("opens at most 20 issues across sender domains when the last two mails arrive together", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 201 }));
+    const sendOne = async (from: string) => {
+      const mime = MIME.replace("jane@customer.example", from);
+      const ctx = createExecutionContext();
+      await worker.email(
+        fakeMessage(
+          vi.fn(() => Promise.resolve()),
+          mime,
+          from,
+        ),
+        env,
+        ctx,
+      );
+      await waitOnExecutionContext(ctx);
+    };
+
+    for (let i = 0; i < 19; i += 1) {
+      await sendOne(`jane@d${String(i)}.example`);
+    }
+    expect(fetchSpy).toHaveBeenCalledTimes(19);
+
+    const contexts = Array.from({ length: 2 }, (_, i) => ({
+      ctx: createExecutionContext(),
+      from: `jane@d${String(19 + i)}.example`,
+    }));
+    await Promise.all(
+      contexts.map(({ ctx, from }) =>
+        worker.email(
+          fakeMessage(
+            vi.fn(() => Promise.resolve()),
+            MIME.replace("jane@customer.example", from),
+            from,
+          ),
+          env,
+          ctx,
+        ),
+      ),
+    );
+    for (const { ctx } of contexts) {
+      await waitOnExecutionContext(ctx);
+    }
+
+    expect(fetchSpy).toHaveBeenCalledTimes(20);
+    const stored = await env.DB.prepare(
+      "SELECT (SELECT COUNT(*) FROM support_report) AS reports, (SELECT COUNT(*) FROM support_issue) AS issues",
+    ).first<{ reports: number; issues: number }>();
+    expect(stored?.reports).toBe(21);
+    expect(stored?.issues).toBe(20);
+  });
+
+  it("counts opened issues globally, so a failed create leaves the daily slot free", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("{}", { status: 500 }))
+      .mockResolvedValue(new Response("{}", { status: 201 }));
+    const sendOne = async (from: string) => {
+      const mime = MIME.replace("jane@customer.example", from);
+      const ctx = createExecutionContext();
+      await worker.email(
+        fakeMessage(
+          vi.fn(() => Promise.resolve()),
+          mime,
+          from,
+        ),
+        env,
+        ctx,
+      );
+      await waitOnExecutionContext(ctx);
+    };
+
+    await sendOne("jane@d0.example");
+    for (let i = 1; i <= 20; i += 1) {
+      await sendOne(`jane@d${String(i)}.example`);
+    }
+
+    expect(fetchSpy).toHaveBeenCalledTimes(21);
+    const stored = await env.DB.prepare(
+      "SELECT (SELECT COUNT(*) FROM support_report) AS reports, (SELECT COUNT(*) FROM support_issue) AS issues",
+    ).first<{ reports: number; issues: number }>();
+    expect(stored?.reports).toBe(21);
+    expect(stored?.issues).toBe(20);
   });
 
   it("still stores and forwards with no GitHub token, and never calls fetch", async () => {

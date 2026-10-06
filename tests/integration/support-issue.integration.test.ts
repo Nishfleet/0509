@@ -95,4 +95,40 @@ describe("support_issue writer (0509#7223)", () => {
     }>();
     expect(rows.results.map((row) => row.report_id)).toEqual(["sr-edge", "sr-new"]);
   });
+
+  it("(h) refuses the 21st claim across distinct domains", async () => {
+    for (let i = 0; i < 20; i += 1) {
+      expect(
+        await claimIssueSlot(env.DB, {
+          reportId: `sr-${String(i)}`,
+          fromDomain: `d${String(i)}.example`,
+          at: NOW.toISOString(),
+        }),
+      ).toBe(true);
+    }
+
+    expect(
+      await claimIssueSlot(env.DB, {
+        reportId: "sr-20",
+        fromDomain: "d20.example",
+        at: NOW.toISOString(),
+      }),
+    ).toBe(false);
+    expect(await issueCount()).toBe(20);
+  });
+
+  it("(i) concurrent claims across domains open at most 20", async () => {
+    const results = await Promise.all(
+      Array.from({ length: 22 }, (_, i) =>
+        claimIssueSlot(env.DB, {
+          reportId: `sr-${String(i)}`,
+          fromDomain: `d${String(i)}.example`,
+          at: NOW.toISOString(),
+        }),
+      ),
+    );
+
+    expect(results.filter((claimed) => claimed)).toHaveLength(20);
+    expect(await issueCount()).toBe(20);
+  });
 });

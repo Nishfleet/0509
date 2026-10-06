@@ -10,3 +10,4 @@ CREATE TABLE support_issue (
 );
 
 CREATE INDEX idx_support_issue_from_domain_created_at ON support_issue (from_domain, created_at);
+CREATE INDEX idx_support_issue_created_at ON support_issue (created_at);
