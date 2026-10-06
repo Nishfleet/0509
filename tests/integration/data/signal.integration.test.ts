@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { readSeenDedupKeys } from "../../../app/lib/data/signal.server";
+import { readSeenDedupKeys, readSiteChanges } from "../../../app/lib/data/signal.server";
 
 const NOW = "2026-09-24T00:00:00Z";
 
@@ -33,20 +33,28 @@ async function insertSignal(
 }
 
 beforeEach(async () => {
-  for (const table of ["signal", "entity", "source", "workspace", '"user"']) {
+  for (const table of ["signal", "snapshot", "page", "watch", "entity", "source", "workspace", '"user"']) {
     await env.DB.prepare(`DELETE FROM ${table}`).run();
   }
   await seedWorkspace("ws-a");
   await seedWorkspace("ws-b");
+  for (const [id, workspaceId] of [
+    ["ent-self", "ws-a"],
+    ["ent-self-b", "ws-b"],
+  ]) {
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, state, created_at) VALUES (?, ?, 'self', ?, 'on', ?)`,
+    )
+      .bind(id, workspaceId, `${id}.example`, NOW)
+      .run();
+  }
   await env.DB.prepare(
-    `INSERT INTO entity (id, workspace_id, role, domain, state, created_at) VALUES (?, ?, 'self', ?, 'on', ?)`,
-  )
-    .bind("ent-self", "ws-a", "self.example", NOW)
-    .run();
+    `INSERT INTO source (id, key, kind, platform, plugin_key) VALUES ('src_site_web', 'site-web', 'site', 'web', 'site-web')`,
+  ).run();
   await env.DB.prepare(
-    `INSERT INTO entity (id, workspace_id, role, domain, state, created_at) VALUES (?, ?, 'self', ?, 'on', ?)`,
+    `INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES ('ent-rival', 'ws-a', 'competitor', 'rival.example', 'Rival', 'on', ?)`,
   )
-    .bind("ent-self-b", "ws-b", "self.example", NOW)
+    .bind(NOW)
     .run();
 });
 
@@ -82,5 +90,51 @@ describe("readSeenDedupKeys", () => {
     const seen = await readSeenDedupKeys("src-a", []);
 
     expect(seen).toEqual(new Set());
+  });
+});
+
+describe("readSiteChanges", () => {
+  async function insertChange(
+    id: string,
+    input: { url: string | null } = { url: `https://rival.example/${id}` },
+  ): Promise<void> {
+    await env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, dedup_key, observed_at,
+         is_tombstoned, title, url, payload_json)
+       VALUES (?, 'ws-a', 'ent-rival', 'src_site_web', 'change', 'home', ?, '2026-09-24T00:00:00Z', 0, 'Pricing rewrote its hero', ?, '{}')`,
+    )
+      .bind(id, `dedup-${id}`, input.url)
+      .run();
+  }
+
+  it("reads a change row whose url column is NULL", async () => {
+    await insertChange("sig-null-url", { url: null });
+    const rows = await readSiteChanges({
+      workspaceId: "ws-a",
+      entityId: null,
+      since: "2026-09-01T00:00:00Z",
+      limit: 10,
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].url).toBeNull();
+    expect(rows[0].entity_role).toBe("competitor");
+  });
+
+  it("reads a change row that nobody has judged, with no verdict columns", async () => {
+    await insertChange("sig-no-verdict");
+
+    const rows = await readSiteChanges({
+      workspaceId: "ws-a",
+      entityId: null,
+      since: "2026-09-01T00:00:00Z",
+      limit: 10,
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].verdict_id).toBeNull();
+    expect(rows[0].verdict_p).toBeNull();
+    expect(rows[0].before_at).toBeNull();
+    expect(rows[0].after_at).toBeNull();
   });
 });

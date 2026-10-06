@@ -431,7 +431,7 @@ const siteChangeRow = z.object({
   entity_name: z.string().nullable(),
   entity_domain: z.string(),
   entity_role: z.enum(["self", "competitor"]),
-  url: z.string(),
+  url: z.string().nullable(),
   payload_json: z.string(),
   observed_at: z.string(),
   before_at: z.string().nullable(),

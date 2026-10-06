@@ -74,7 +74,7 @@ async function toView(row: SiteChangeRow, payload: SiteChangePayload): Promise<S
       decidedAt: row.verdict_decided_at,
       compared: [
         { label: "Page", value: pageLabel(payload.page.role) },
-        { label: "Link", value: row.url },
+        { label: "Link", value: row.url ?? "—" },
         { label: "Before", value: row.before_at ?? "—" },
         { label: "After", value: row.after_at ?? row.observed_at },
       ],
