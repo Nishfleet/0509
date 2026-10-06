@@ -12,8 +12,8 @@ interface Recorder {
 const recorder = (): Recorder => ({ sent: [] });
 
 const bindingFor = (rec: Recorder): SendEmail => ({
-  send(message: EmailMessageBuilder) {
-    rec.sent.push(message);
+  send(message: EmailMessage | EmailMessageBuilder) {
+    rec.sent.push(message as EmailMessageBuilder);
     return Promise.resolve({} as EmailSendResult);
   },
 });

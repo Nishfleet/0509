@@ -37,8 +37,8 @@ const brief: BriefPayload = {
 
 const sent: EmailMessageBuilder[] = [];
 const recording: SendEmail = {
-  send(message: EmailMessageBuilder) {
-    sent.push(message);
+  send(message: EmailMessage | EmailMessageBuilder) {
+    sent.push(message as EmailMessageBuilder);
     return Promise.resolve({} as EmailSendResult);
   },
 };
