@@ -748,6 +748,7 @@ export async function seedPreviewSession<T = void>(
     const user = db.prepare('SELECT id FROM "user" WHERE email = ?').get(email) as { id: string } | undefined;
     if (user === undefined) throw new Error("magic link created no user");
     const seeded = seed({ db, suffix, userId: user.id });
+    seedLivePlan(db, user.id);
     db.exec("PRAGMA wal_checkpoint(PASSIVE)");
     return { cookie, seeded };
   } finally {
@@ -764,26 +765,21 @@ export function readPreview<T>(read: (db: DatabaseSync) => T): T {
   }
 }
 
+const SEED_LIVE_PLAN = `INSERT INTO plan (id, workspace_id, tier, status, current_period_end, updated_at)
+  SELECT 'plan-' || id, id, 'scout', 'trialing', ?, '2026-01-01T00:00:00.000Z' FROM workspace WHERE owner_user_id = ?
+  ON CONFLICT(workspace_id) DO NOTHING`;
+
+function seedLivePlan(db: DatabaseSync, userId: string): void {
+  run(db, SEED_LIVE_PLAN, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), userId);
+}
+
 export function seedLivePlanForEmail(email: string): void {
   const db = new DatabaseSync(previewDatabasePath(), { timeout: 15_000 });
   db.exec("PRAGMA busy_timeout = 15000");
   try {
     const user = db.prepare('SELECT id FROM "user" WHERE email = ?').get(email) as { id: string } | undefined;
     if (user === undefined) throw new Error(`no user for ${email}`);
-    const workspace = db.prepare("SELECT id FROM workspace WHERE owner_user_id = ?").get(user.id) as
-      { id: string } | undefined;
-    if (workspace === undefined) throw new Error(`no workspace for ${email}`);
-    const now = new Date().toISOString();
-    run(
-      db,
-      `INSERT INTO plan (id, workspace_id, tier, status, current_period_end, updated_at)
-       VALUES (?, ?, 'scout', 'trialing', ?, ?)
-       ON CONFLICT(workspace_id) DO UPDATE SET status = 'trialing', current_period_end = excluded.current_period_end, updated_at = excluded.updated_at`,
-      `plan-${workspace.id}`,
-      workspace.id,
-      new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      now,
-    );
+    seedLivePlan(db, user.id);
     db.exec("PRAGMA wal_checkpoint(PASSIVE)");
   } finally {
     db.close();
