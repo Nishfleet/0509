@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { insertSelfEntity, readWorkspaceSelfId } from "../../../app/lib/data/entity.server";
-import { readJudgedPricingUrl, upsertJudgedPages } from "../../../app/lib/data/page.server";
+import { insertPages, readJudgedPricingUrl, upsertJudgedPages } from "../../../app/lib/data/page.server";
+import { insertWatches } from "../../../app/lib/data/watch.server";
 import { confirmCard, confirmCardLater } from "../../../app/lib/identity/confirm.server";
 import { extractIdentity } from "../../../app/lib/identity/extract";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
@@ -531,5 +532,77 @@ describe("IdentityTailWorkflow", () => {
     if (instance === undefined) throw new Error("tail instance was not started");
     await instance.waitForStatus("errored");
     expect((await instance.getError()).message).toContain("a step threw an NonRetryableError and it was not handled");
+  });
+
+  it("does not raise a foreign-key error when seeding pages for an entity that was deleted", async () => {
+    await seed();
+    await expect(
+      insertPages([
+        {
+          id: crypto.randomUUID(),
+          entityId: `gone-page-${String(runs)}`,
+          url: "https://gymshark.com/",
+          role: "home",
+          discoveredAt: "2026-09-25T08:00:00Z",
+        },
+      ]),
+    ).resolves.toBeUndefined();
+  });
+
+  it("does not raise a foreign-key error when judging pages for an entity that was deleted", async () => {
+    await seed();
+    await expect(
+      upsertJudgedPages([
+        {
+          id: crypto.randomUUID(),
+          entityId: `gone-judged-${String(runs)}`,
+          url: "https://gymshark.com/plans",
+          title: "Plans",
+          role: "pricing",
+          roleDecidedForHash: "h",
+          discoveredAt: "2026-09-25T08:00:00Z",
+        },
+      ]),
+    ).resolves.toBeUndefined();
+  });
+
+  it("does not raise a foreign-key error when seeding watches for an entity that was deleted", async () => {
+    await seed();
+    await expect(
+      insertWatches([
+        {
+          id: crypto.randomUUID(),
+          entityId: `gone-watch-${String(runs)}`,
+          sourceId: "src_site_web",
+          targetKey: "https://gymshark.com/",
+        },
+      ]),
+    ).resolves.toBeUndefined();
+  });
+
+  it("stops seeding watches without a foreign-key crash when the entity was deleted mid-run", async () => {
+    await seed();
+    const entityId = `entity-deleted-${String(runs)}`;
+    await insertSelfEntity({
+      id: entityId,
+      workspaceId,
+      domain: DOMAIN,
+      name: "Gymshark",
+      identityJson: "{}",
+      now: "2026-09-25T08:00:00Z",
+    });
+    await env.DB.prepare("DELETE FROM entity WHERE id = ?1").bind(entityId).run();
+    await expect(
+      seedTailWatches(
+        {
+          workspaceId,
+          entityId,
+          name: "Gymshark",
+          domain: DOMAIN,
+          homepageUrl: "https://gymshark.com/",
+        },
+        "2026-09-25T08:00:00Z",
+      ),
+    ).rejects.toBeInstanceOf(NonRetryableError);
   });
 });

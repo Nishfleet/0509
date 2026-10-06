@@ -45,29 +45,18 @@ describe("deployed wrangler configs", () => {
     expect(bucket?.bucket_name).toBe(SNAPSHOT_BUCKET);
   });
 
-  // 0509#7124. The production origin is written in three places, and this
-  // config's BETTER_AUTH_URL is the one that deploys: app/lib/site-url.ts
-  // holds SITE_URL, which feeds canonical tags, og:url and the MCP URL, and
-  // env.server.ts's env gate holds the same origin. Before this, nothing tied
-  // SITE_URL to the deployed value, so a marketing-site origin that drifted
-  // changed every canonical URL the site emits with no red test anywhere.
-  //
-  // The literal lives in site-url.ts rather than here because it is a leaf on
-  // purpose. env.server.ts cannot import structured-data.ts to read SITE_URL:
-  // that module imports app/components/footer, which would drag the React
-  // tree into the Worker's boot path. A separate import-free module lets both
-  // sides read one literal, which is the whole point of the pin below.
-  //
-  // This does not replace either #7087 pin. That PR adds PRODUCTION_ORIGIN to
-  // env.server.ts and asserts the same config value against it; when it lands,
-  // this test and that one are two assertions of the same fact from two
-  // import paths, and this is the stronger one (an origin change in either
-  // module is red here), which is the reason to keep both.
+  // 0509#7124 and #7087. The production origin is one literal in
+  // app/lib/site-url.ts. wrangler.jsonc deploys it as BETTER_AUTH_URL, and
+  // env.server.ts's placeholder-secret gate compares against the same import.
+  // env.server.ts cannot import structured-data.ts: that module imports
+  // app/components/footer, which would drag the React tree into the Worker's
+  // boot path. site-url.ts is the import-free leaf both sides read.
   it("pins the deployed BETTER_AUTH_URL to the site origin every node builds on", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
     expect(rawConfig.vars?.BETTER_AUTH_URL, "wrangler.jsonc no longer deploys BETTER_AUTH_URL to SITE_URL").toBe(
       SITE_URL,
     );
+    expect(readFileSync("app/lib/env.server.ts", "utf8")).toContain('import { SITE_URL } from "./site-url"');
   });
 
   // 0509#5758. Without these the paid defaults apply: 30,000 ms of CPU and
@@ -106,6 +95,12 @@ describe("deployed wrangler configs", () => {
   // rate at the top of `observability`, and wrangler normalises
   // `logs.head_sampling_rate` to the same 1, so a change to either alone is
   // visible in this assertion.
+  it("binds Worker version metadata so Sentry events carry a release (0509#7079)", () => {
+    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    expect(rawConfig.version_metadata).toEqual({ binding: "CF_VERSION_METADATA" });
+    expect(rawConfig.upload_source_maps).toBe(true);
+  });
+
   it("declares the Workers Logs policy (0509#5758)", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
     expect(rawConfig.observability?.enabled).toBe(true);
@@ -130,6 +125,14 @@ describe("deployed wrangler configs", () => {
     expect(consumer?.retry_delay).toBe(60);
     const dlq = (rawConfig.queues?.consumers ?? []).find((queue) => queue.queue === "fetch-sweep-dlq");
     expect(dlq).toBeDefined();
+  });
+
+  it("sets nodejs_compat explicitly so tests cannot hide a missing production flag (0509#7078)", () => {
+    for (const config of ["wrangler.jsonc", "tests/integration/wrangler.test.jsonc"]) {
+      const { rawConfig } = experimental_readRawConfig({ config });
+      expect(rawConfig.compatibility_flags, config).toContain("nodejs_compat");
+      expect(rawConfig.compatibility_flags, config).toContain("global_fetch_strictly_public");
+    }
   });
 
   it("routes every consumer queue in wrangler.jsonc to its own branch in queue()", () => {

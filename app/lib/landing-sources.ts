@@ -1,4 +1,4 @@
-import { sourcePillStatus } from "../components/source-pill";
+import { sourcePillStatus } from "./source-pill-status";
 import type { WatchedSource } from "../components/landing/what-we-watch";
 
 export function landingSources(entries: readonly WatchedSource[], now: number): readonly WatchedSource[] {

@@ -222,4 +222,10 @@ describe("quietWeekSentence", () => {
       "Nothing worth scoring for this competitor in the last 7 days. We watch its website; our first read is tonight at 02:00 UTC.",
     );
   });
+
+  it("uses the workspace sweep clock instead of a UTC-only label", () => {
+    expect(quietWeekSentence([], null, "07:30 GMT+5:30")).toBe(
+      "Nothing worth scoring for this competitor in the last 7 days. We watch its website; our first read is tonight at 07:30 GMT+5:30.",
+    );
+  });
 });

@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore, type ReactElement } from "react";
 import { useFetcher } from "react-router";
 
 import { HOURS, WEEKDAYS, hourLabel } from "../lib/brief-settings";
+import { sameTimezone } from "../lib/timezone";
 import { BriefPauseSetting } from "./brief-pause-setting";
 import { Toaster, toastSaved } from "./toaster";
 import { Button } from "./ui/button";
@@ -124,7 +125,7 @@ export function BriefScheduleSettings({ schedule }: { schedule: ScheduleView }):
         Time zone: <span className="[overflow-wrap:anywhere] text-ink">{form.timezone.replaceAll("_", " ")}</span>. Next
         brief: {schedule.nextLine}.
       </p>
-      {deviceZone !== null && deviceZone !== form.timezone ? (
+      {deviceZone !== null && !sameTimezone(deviceZone, form.timezone) ? (
         <Button
           type="button"
           variant="tertiary"
