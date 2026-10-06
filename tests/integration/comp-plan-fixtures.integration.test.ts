@@ -19,6 +19,8 @@ const CREATED_BY_MIGRATION: readonly string[] = [
 const ALREADY_IN_PRODUCTION = FIXTURE_EMAILS.filter((email) => !CREATED_BY_MIGRATION.includes(email));
 const NOT_FIXTURES = ["someone@gymshark.com", "e2e+j3-0123456789ab@0509.io", "e2e+j8-hard@0509.io"];
 
+const OWNER_WORKSPACE_ID = "ws_8Cy70xhxaDezyg0UCi3DkHeKXk1FTs94";
+
 const COMP_MIGRATION: D1Migration | undefined = env.TEST_MIGRATIONS.find((migration) =>
   migration.name.endsWith("_comp_plan_fixture_workspaces.sql"),
 );
@@ -82,7 +84,7 @@ async function workspaceIdOf(email: string): Promise<string> {
 
 describe("the comp plan migration for kept fixture workspaces", () => {
   beforeEach(async () => {
-    const emails = [...FIXTURE_EMAILS, ...NOT_FIXTURES];
+    const emails = [...FIXTURE_EMAILS, ...NOT_FIXTURES, "owner-workspace@example.com"];
     await env.DB.prepare(`DELETE FROM "user" WHERE email IN (${emails.map(() => "?").join(", ")})`)
       .bind(...emails)
       .run();
@@ -168,6 +170,40 @@ describe("the comp plan migration for kept fixture workspaces", () => {
     expect(live).toContain(soak);
     expect(live).toContain(j8);
     expect(live).not.toContain(customer);
+  });
+
+  it("gives the owner's workspace, named by id, a live comp Agency plan for a year", async () => {
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO \"user\" (id, name, email, emailVerified, createdAt, updatedAt) VALUES ('user-comp-owner', 'Owner', 'owner-workspace@example.com', 1, ?1, ?1)",
+      ).bind(NOW),
+      env.DB.prepare(
+        "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Owner', 'user-comp-owner', 'UTC', 1, 8, ?2)",
+      ).bind(OWNER_WORKSPACE_ID, NOW),
+    ]);
+
+    await applyComp();
+    await applyComp();
+
+    expect((await planRows()).filter((row) => row.workspace_id === OWNER_WORKSPACE_ID)).toEqual([
+      {
+        email: "owner-workspace@example.com",
+        workspace_id: OWNER_WORKSPACE_ID,
+        id: `comp-${OWNER_WORKSPACE_ID}`,
+        tier: "agency",
+        status: "active",
+        provider: "comp",
+        provider_subscription_id: null,
+        updated_at: "2026-10-06T00:00:00.000Z",
+      },
+    ]);
+    expect(await readPlanSummary(OWNER_WORKSPACE_ID)).toEqual({
+      tier: "agency",
+      status: "active",
+      currentPeriodEnd: "2027-10-06T00:00:00.000Z",
+      trialing: false,
+      billed: false,
+    });
   });
 
   it("is a no-op when run again", async () => {

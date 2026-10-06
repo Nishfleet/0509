@@ -56,3 +56,14 @@ WHERE u.email IN (
   'e2e+j11@0509.io'
 )
 ON CONFLICT(workspace_id) DO NOTHING;
+
+-- Step 3: the product owner's own workspace, named by id only (Nish, 2026-10-06: the top plan, annual).
+-- agency is the top tier in app/lib/billing/plans.ts. plan has no billing-interval column (the
+-- interval lives only in the Dodo product id), so annual is current_period_end one year after this
+-- migration. limits_json stays '{}' like the fixture rows, so resolveEntitlements reads the agency
+-- limits from the tier. Same DO NOTHING rule as step 2.
+INSERT INTO plan (id, workspace_id, tier, status, provider, current_period_end, trialing, limits_json, updated_at)
+SELECT 'comp-' || w.id, w.id, 'agency', 'active', 'comp', '2027-10-06T00:00:00.000Z', 0, '{}', '2026-10-06T00:00:00.000Z'
+FROM workspace w
+WHERE w.id = 'ws_8Cy70xhxaDezyg0UCi3DkHeKXk1FTs94'
+ON CONFLICT(workspace_id) DO NOTHING;
