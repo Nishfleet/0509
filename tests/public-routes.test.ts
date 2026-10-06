@@ -59,18 +59,11 @@ function isSessionExempt(urlPath: string) {
   );
 }
 
-function unguardedDisallowed(
-  entries: RouteConfigEntry[],
-  layouts: readonly string[] = [],
-  parentPath = "",
-): string[] {
+function unguardedDisallowed(entries: RouteConfigEntry[], layouts: readonly string[] = [], parentPath = ""): string[] {
   const missing: string[] = [];
   for (const entry of entries) {
     const isPathlessLayout =
-      entry.path === undefined &&
-      entry.index !== true &&
-      entry.file !== undefined &&
-      entry.children !== undefined;
+      entry.path === undefined && entry.index !== true && entry.file !== undefined && entry.children !== undefined;
     const nextLayouts = isPathlessLayout ? [...layouts, entry.file] : layouts;
     const ownPath = entry.path ?? parentPath;
     if (entry.children !== undefined) {
