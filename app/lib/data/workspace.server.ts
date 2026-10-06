@@ -5,7 +5,7 @@ import { canonicalTimezone } from "../timezone";
 
 const SELECT_WORKSPACE_TIMEZONE = "SELECT timezone FROM workspace WHERE id = ?";
 
-const readWorkspaceTimezoneRow = z.object({ timezone: z.string() });
+const readWorkspaceTimezoneRow = z.object({ timezone: z.string().nullable() });
 
 export async function readWorkspaceTimezone(workspaceId: string): Promise<string> {
   const row = readWorkspaceTimezoneRow
@@ -165,7 +165,7 @@ const SELECT_OWN_SITE_ALERTS = "SELECT own_site_alerts FROM workspace WHERE id =
 
 const UPDATE_OWN_SITE_ALERTS = "UPDATE workspace SET own_site_alerts = ? WHERE id = ?";
 
-const readOwnSiteAlertsRow = z.object({ own_site_alerts: z.number() });
+const readOwnSiteAlertsRow = z.object({ own_site_alerts: z.number().nullable() });
 
 export async function readOwnSiteAlerts(workspaceId: string): Promise<boolean> {
   const row = readOwnSiteAlertsRow
@@ -184,7 +184,7 @@ const SELECT_CHANGE_ALERTS = "SELECT change_alerts FROM workspace WHERE id = ?";
 
 const UPDATE_CHANGE_ALERTS = "UPDATE workspace SET change_alerts = ? WHERE id = ?";
 
-const readChangeAlertsRow = z.object({ change_alerts: z.number() });
+const readChangeAlertsRow = z.object({ change_alerts: z.number().nullable() });
 
 export async function readChangeAlerts(workspaceId: string): Promise<boolean> {
   const row = readChangeAlertsRow
