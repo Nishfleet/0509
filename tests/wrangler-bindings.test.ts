@@ -6,6 +6,44 @@ import { describe, expect, it } from "vitest";
 import { D1_DATABASE_ID, SNAPSHOT_BUCKET } from "../app/lib/observability/cost-analytics.server";
 import { SITE_URL } from "../app/lib/site-url";
 
+// wrangler's raw-config reader is untyped at this end, so the fields this gate
+// reads are named here. Each one a config stops carrying then fails to compile
+// instead of reading as `undefined`, which is the failure that let a KV binding
+// ship without an id (#4631).
+type KvNamespace = { binding: string; id?: string };
+type WorkflowBinding = { name: string; schedules?: unknown };
+type D1Database = { binding: string; database_id?: string };
+type R2Bucket = { binding: string; bucket_name?: string };
+type QueueConsumer = {
+  queue: string;
+  dead_letter_queue?: string;
+  max_concurrency?: number;
+  max_retries?: number;
+  retry_delay?: number;
+};
+type DeployedConfig = {
+  kv_namespaces?: KvNamespace[];
+  workflows?: WorkflowBinding[];
+  d1_databases?: D1Database[];
+  r2_buckets?: R2Bucket[];
+  queues?: { consumers?: QueueConsumer[] };
+  triggers?: { crons?: string[] };
+  vars?: Record<string, string>;
+  limits?: { cpu_ms?: number; subrequests?: number };
+  version_metadata?: unknown;
+  upload_source_maps?: boolean;
+  observability?: {
+    enabled?: boolean;
+    head_sampling_rate?: number;
+    logs?: { head_sampling_rate?: number; invocation_logs?: boolean; persist?: boolean };
+  };
+  compatibility_flags?: string[];
+};
+
+const readConfig = (config: string): { rawConfig: DeployedConfig } =>
+  experimental_readRawConfig({ config }) as unknown as { rawConfig: DeployedConfig };
+
+
 // #4631, and 225c3eb before it: the production CLOUDFLARE_API_TOKEN cannot reach
 // the KV namespaces endpoint, so a KV binding without an id sends wrangler to
 // deploy-time provisioning and the deploy fails with auth error 10000. Pin the
@@ -19,7 +57,7 @@ const CONFIGS = [
 
 describe("deployed wrangler configs", () => {
   it.each(CONFIGS)("%s pins an id on every KV namespace", (config) => {
-    const { rawConfig } = experimental_readRawConfig({ config });
+    const { rawConfig } = readConfig(config);
     const unpinned = (rawConfig.kv_namespaces ?? [])
       .filter((namespace) => !namespace.id)
       .map((namespace) => namespace.binding);
@@ -27,7 +65,7 @@ describe("deployed wrangler configs", () => {
   });
 
   it("starts the snapshot-backup Workflow every night at 05:00 UTC from a Worker cron", () => {
-    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    const { rawConfig } = readConfig("wrangler.jsonc");
     const snapshotBackup = (rawConfig.workflows ?? []).find((workflow) => workflow.name === "snapshot-backup");
     expect(snapshotBackup).toBeDefined();
     expect(snapshotBackup?.schedules).toBeUndefined();
@@ -38,7 +76,7 @@ describe("deployed wrangler configs", () => {
   // wrangler deploys; the constants in cost-analytics.server.ts must not drift
   // from the config or the guard silently reads a different resource.
   it("keeps the cost-guard constants equal to the deployed DB and bucket", () => {
-    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    const { rawConfig } = readConfig("wrangler.jsonc");
     const db = (rawConfig.d1_databases ?? []).find((database) => database.binding === "DB");
     const bucket = (rawConfig.r2_buckets ?? []).find((b) => b.binding === "SNAPSHOTS");
     expect(db?.database_id).toBe(D1_DATABASE_ID);
@@ -52,7 +90,7 @@ describe("deployed wrangler configs", () => {
   // app/components/footer, which would drag the React tree into the Worker's
   // boot path. site-url.ts is the import-free leaf both sides read.
   it("pins the deployed BETTER_AUTH_URL to the site origin every node builds on", () => {
-    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    const { rawConfig } = readConfig("wrangler.jsonc");
     expect(rawConfig.vars?.BETTER_AUTH_URL, "wrangler.jsonc no longer deploys BETTER_AUTH_URL to SITE_URL").toBe(
       SITE_URL,
     );
@@ -68,8 +106,7 @@ describe("deployed wrangler configs", () => {
   // the block turns this red, and the floor is the slowest observation, so a
   // cap below any invocation seen here cannot pass.
   it("caps CPU and subrequests below the paid defaults (0509#5758)", () => {
-    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
-    const limits = rawConfig.limits;
+    const limits = readConfig("wrangler.jsonc").rawConfig.limits;
     expect(limits).toBeDefined();
     // Above the measured p99.9 and above the slowest invocation in the window
     // (3,637 ms), so the observed tail stays inside the cap while the paid
@@ -96,13 +133,13 @@ describe("deployed wrangler configs", () => {
   // `logs.head_sampling_rate` to the same 1, so a change to either alone is
   // visible in this assertion.
   it("binds Worker version metadata so Sentry events carry a release (0509#7079)", () => {
-    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    const { rawConfig } = readConfig("wrangler.jsonc");
     expect(rawConfig.version_metadata).toEqual({ binding: "CF_VERSION_METADATA" });
     expect(rawConfig.upload_source_maps).toBe(true);
   });
 
   it("declares the Workers Logs policy (0509#5758)", () => {
-    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    const { rawConfig } = readConfig("wrangler.jsonc");
     expect(rawConfig.observability?.enabled).toBe(true);
     expect(rawConfig.observability?.head_sampling_rate).toBe(1);
     expect(rawConfig.observability?.logs?.head_sampling_rate).toBe(1);
@@ -115,7 +152,7 @@ describe("deployed wrangler configs", () => {
   // dead_letter_queue a message that exhausts its retries is deleted rather
   // than parked. Both shapes are pinned here so removing either turns red.
   it("consumes fetch-sweep and dead-letters it (0509#5261)", () => {
-    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    const { rawConfig } = readConfig("wrangler.jsonc");
     const consumer = (rawConfig.queues?.consumers ?? []).find((queue) => queue.queue === "fetch-sweep");
     expect(consumer).toBeDefined();
     expect(consumer?.dead_letter_queue).toBe("fetch-sweep-dlq");
@@ -129,14 +166,14 @@ describe("deployed wrangler configs", () => {
 
   it("sets nodejs_compat explicitly so tests cannot hide a missing production flag (0509#7078)", () => {
     for (const config of ["wrangler.jsonc", "tests/integration/wrangler.test.jsonc"]) {
-      const { rawConfig } = experimental_readRawConfig({ config });
+      const { rawConfig } = readConfig(config);
       expect(rawConfig.compatibility_flags, config).toContain("nodejs_compat");
       expect(rawConfig.compatibility_flags, config).toContain("global_fetch_strictly_public");
     }
   });
 
   it("routes every consumer queue in wrangler.jsonc to its own branch in queue()", () => {
-    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    const { rawConfig } = readConfig("wrangler.jsonc");
     const consumers = (rawConfig.queues?.consumers ?? []).map((queue) => queue.queue);
     const constants = Object.fromEntries(
       [
