@@ -257,9 +257,10 @@ Service daily quota (Nish 2026-09-28).
 `docs/REBUILD-TRUST.md` (verification, the ladder, the gardener) ·
 `docs/dependencies.md` (every dependency, the allowlist) ·
 `docs/REBUILD-DONE.md` (the definition of complete) ·
-`docs/REBUILD-SCHEMA.md`, `REBUILD-DELIVERY.md`, `REBUILD-ONBOARDING.md`,
-`REBUILD-STANDING.md`, `REBUILD-STANDING-CARD.md`, `REBUILD-COST.md`,
-`REBUILD-JEV.md`, `REBUILD-CREATORS.md`, `REBUILD-MENTIONS.md`,
-`REBUILD-GUARDRAILS.md`, `REBUILD-KEEPLIST.md` (old-app findings, so its paths
-are the old tree) · `docs/USER-REPORTS.md` · `docs/ga-metrics.md` ·
+`docs/REBUILD-SCHEMA.md`, `REBUILD-DELIVERY.md`, `REBUILD-STANDING.md`,
+`REBUILD-COST.md`, `REBUILD-JEV.md`, `REBUILD-GUARDRAILS.md` ·
+`docs/USER-REPORTS.md` · `docs/ga-metrics.md` ·
 `docs/engines/` (design packets, history only) · `docs/design-directions/`.
+
+Deleted design history (0509#7018) stays in git:
+`git log --diff-filter=D --name-only -- docs/` lists it.
