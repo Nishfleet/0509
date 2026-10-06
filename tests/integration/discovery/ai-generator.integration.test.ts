@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
 import { aiGenerator, warmProposals } from "../../../app/lib/discovery/generators/ai.server";
 import type { FetchedText, Subject } from "../../../app/lib/discovery/types";
@@ -19,8 +19,10 @@ function proposes(response: unknown): ReturnType<typeof vi.fn> {
   return run;
 }
 
-function answering(answers: Record<string, Response>): ReturnType<typeof vi.spyOn> {
-  return vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+function answering(
+  answers: Record<string, Response>,
+): MockInstance<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>> {
+  return vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL, _init?: RequestInit) => {
     const host = new URL(input instanceof Request ? input.url : String(input)).hostname;
     const answer = answers[host];
     return answer === undefined ? Promise.reject(new TypeError("dns")) : Promise.resolve(answer);
