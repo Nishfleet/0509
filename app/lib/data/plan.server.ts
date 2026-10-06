@@ -32,7 +32,7 @@ WHERE ? = 1 OR excluded.updated_at >= plan.updated_at`;
 
 async function readPlan(workspaceId: string): Promise<{ tier: string; row: PlanRow | null }> {
   const row = await env.DB.prepare(SELECT_PLAN).bind(workspaceId).first<PlanRow>();
-  if (row === null) return { tier: "none", row };
+  if (row === null) return { tier: "scout", row };
   const tier = entitledTier(
     { tier: row.tier, status: row.status, currentPeriodEnd: row.current_period_end },
     new Date(),

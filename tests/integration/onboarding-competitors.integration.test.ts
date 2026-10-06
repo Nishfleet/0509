@@ -25,11 +25,6 @@ async function seedWorkspace(id: string, ownerUserId: string, name: string): Pro
   )
     .bind(id, name, ownerUserId, "2026-09-23T12:00:00.000Z")
     .run();
-  await env.DB.prepare(
-    "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
-  )
-    .bind(`plan-${id}`, id, "2026-09-23T12:00:00.000Z")
-    .run();
 }
 
 async function seedEntity(input: {

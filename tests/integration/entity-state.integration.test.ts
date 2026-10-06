@@ -13,11 +13,6 @@ async function seedWorkspace(userId: string, email: string): Promise<string> {
     .bind(userId, email, email, NOW, NOW)
     .run();
   const workspace = await ensureWorkspace(env.DB, { userId, email, timezone: "UTC", now: NOW });
-  await env.DB.prepare(
-    "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
-  )
-    .bind(`plan-${workspace.id}`, workspace.id, NOW)
-    .run();
   return workspace.id;
 }
 

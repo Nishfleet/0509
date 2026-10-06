@@ -39,11 +39,6 @@ async function seedWorkspace(id: string, ownerUserId: string, name: string): Pro
   )
     .bind(id, name, ownerUserId, "2026-09-23T12:00:00.000Z")
     .run();
-  await env.DB.prepare(
-    "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
-  )
-    .bind(`plan-${id}`, id, "2026-09-23T12:00:00.000Z")
-    .run();
 }
 
 function intentForm(fields: Record<string, string>): FormData {
@@ -146,8 +141,11 @@ describe("addManualCompetitor cap (0509#4891)", () => {
     const workspaceId = `ws-cap-plan-${n}`;
     await seedUser(userId, `cap-plan-${n}@example.com`);
     await seedWorkspace(workspaceId, userId, "Cap Plan");
-    await env.DB.prepare("UPDATE plan SET limits_json = ? WHERE workspace_id = ?")
-      .bind(JSON.stringify({ competitors: 2 }), workspaceId)
+    await env.DB.prepare(
+      `INSERT INTO plan (id, workspace_id, tier, updated_at, limits_json)
+       VALUES (?, ?, 'scout', ?, ?)`,
+    )
+      .bind(`plan-${n}`, workspaceId, "2026-09-23T12:00:00.000Z", JSON.stringify({ competitors: 2 }))
       .run();
 
     const first = await handleCompetitorIntent(workspaceId, intentForm({ intent: "add", competitor: "b1.com" }));
@@ -222,8 +220,10 @@ async function seedAtCap(label: string, tier?: { tier: "starter"; status: "activ
   await seedUser(userId, `${label}-${n}@example.com`);
   await seedWorkspace(workspaceId, userId, label);
   if (tier !== undefined) {
-    await env.DB.prepare("UPDATE plan SET tier = ?, status = ? WHERE workspace_id = ?")
-      .bind(tier.tier, tier.status, workspaceId)
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, ?, ?, '2026-09-23T12:00:00.000Z')",
+    )
+      .bind(`plan-${label}-${n}`, workspaceId, tier.tier, tier.status)
       .run();
   }
   return workspaceId;

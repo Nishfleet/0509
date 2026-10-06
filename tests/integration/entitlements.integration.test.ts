@@ -49,7 +49,7 @@ describe("readEntitlements (0509#5293)", () => {
     expect(after.site_pages_scope).toBe("all");
   });
 
-  it("returns the most restrictive limits, and logs nothing, for a workspace with no plan row", async () => {
+  it("returns scout defaults, and logs nothing, for a workspace with no plan row", async () => {
     seededRuns += 1;
     const n = String(seededRuns);
     const userId = `user-ent-none-${n}`;
@@ -60,7 +60,7 @@ describe("readEntitlements (0509#5293)", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
       const entitlements = await readEntitlements(workspaceId);
-      expect(entitlements.competitors).toBe(0);
+      expect(entitlements.competitors).toBe(5);
       expect(entitlements.site_pages_scope).toBe("home_pricing");
       expect(errorSpy).not.toHaveBeenCalled();
     } finally {
