@@ -1,8 +1,6 @@
 import { RouterContextProvider } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("cloudflare:workers", () => ({ env: {} }));
-
 import { onboardedContext, requireOnboarded } from "../app/lib/require-onboarded.server";
 import routes from "../app/routes";
 import AppLayout, { middleware } from "../app/routes/app-layout";

@@ -4,38 +4,11 @@ The direction metric `signups/week` is defined by source [0509#4518](https://git
 
 The read below is **self-detecting**: beside the filtered signup counts it returns a per-class breakdown of the table — what it excluded (`e2e+%`, `%@0509.internal`) and what it kept (`other`). The breakdown is the detector: every row the read sees lands in a declared class or in `other`, so a fixture class nobody has declared yet is visible as an `other` row to inspect instead of being silently folded into `signups_7d` ([0509#5552](https://github.com/Nishfleet/0509/issues/5552)).
 
-## The live truth: the raw count is the mixture
+## Recorded reads
 
-A live read of production D1 (database `0509`, binding `DB`, database id `746c6e3d-782e-443a-82d6-28ca93a16294`) on **2026-09-29T17:31Z** returned:
-
-| Read                                                                                      | Result                                                                                                                                |
-| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `SELECT COUNT(*) FROM "user"`                                                             | **6**                                                                                                                                 |
-| trailing 7d on `createdAt`                                                                | 6 (every row is inside 30 days)                                                                                                       |
-| trailing 30d on `createdAt`                                                               | 6                                                                                                                                     |
-| `email LIKE 'e2e+%'`                                                                      | **6** — one fixed journey account plus five per-run mints (`e2e+onboarded-desktop-*`, `e2e+<uuid>`) still in the table                |
-| `email LIKE '%@0509.internal'`                                                            | **0** — the internal-account shape; `billing-canary@0509.internal` was the row that made this read report signups that never happened |
-| real signups (`email NOT LIKE 'e2e+%' AND email NOT LIKE '%@0509.internal'`), trailing 7d | **0**                                                                                                                                 |
-| real signups (same exclusions), trailing 30d                                              | **0**                                                                                                                                 |
-
-The same table read on **2026-09-23T19:06Z and 2026-09-23T19:12Z**, before the purge, returned:
-
-| Read                                                             | Result                                                                          |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `SELECT COUNT(*) FROM "user"`                                    | **310** (308 at 19:06Z, 310 at 19:12Z — e2e runs mint rows while the read runs) |
-| trailing 7d on `createdAt`                                       | 310 (every row is inside 30 days)                                               |
-| trailing 30d on `createdAt`                                      | 310                                                                             |
-| `email LIKE 'e2e+%'`                                             | **308**                                                                         |
-| real signups with the internal canary **counted**, trailing 7d   | **2**                                                                           |
-| real signups with the internal canary **excluded**, trailing 7d  | **1**                                                                           |
-| real signups with the internal canary **counted**, trailing 30d  | **2**                                                                           |
-| real signups with the internal canary **excluded**, trailing 30d | **1**                                                                           |
-
-The 2026-09-23 pair is the defect this doc was amended for: the **2** is the one human signup alive then plus the `billing-canary@0509.internal` machine row, which the then-`e2e+`-only rule counted as a signup ([0509#5552](https://github.com/Nishfleet/0509/issues/5552), [0509#6002](https://github.com/Nishfleet/0509/issues/6002)). The 2026-09-29 read returns **0** — the honest number for a table with no external signup in the window.
+The dated production reads (2026-09-23 and 2026-09-29) that showed the raw count was the mixture are in https://github.com/Nishfleet/0509/issues/5552#issuecomment-5998972479.
 
 `PRAGMA table_info("user")` shows the better-auth column is **`createdAt`** (camelCase). The A.8 shorthand `created_at` fails live with `no such column: created_at at offset 40: SQLITE_ERROR [code: 7500]`. Use `createdAt`.
-
-[Open #4439](https://github.com/Nishfleet/0509/issues/4439) quotes `signups_7d=227` from the same table; the live reads above show that number was the mixture, not the real count.
 
 ## One command for the direction metric
 
@@ -82,18 +55,6 @@ A real reader signs up on the production login flow; no product surface mints `e
 - `signups_7d` — real signups (`email NOT LIKE 'e2e+%' AND email NOT LIKE '%@0509.internal'`) in the trailing 7 days, the **real** signups/week direction metric from [0509#4518](https://github.com/Nishfleet/0509/issues/4518).
 - `signups_30d` — the same read over 30 days, for trend.
 - `excluded_e2e_*` / `excluded_internal_*` / `other_*` — the per-class breakdown of what the two metrics saw. Not metrics; they exist so the read can detect a class this doc has not declared.
-
-The one command, run against production D1 (database `0509`, id `746c6e3d-782e-443a-82d6-28ca93a16294`) on **2026-09-29T17:59Z**:
-
-| Column                                           | Value         |
-| ------------------------------------------------ | ------------- |
-| `signups_7d`                                     | **0**         |
-| `signups_30d`                                    | **0**         |
-| `excluded_e2e_7d` / `excluded_e2e_30d`           | **6** / **6** |
-| `excluded_internal_7d` / `excluded_internal_30d` | **0** / **0** |
-| `other_7d` / `other_30d`                         | **0** / **0** |
-
-The recorded live read above returned `signups_7d = 0`, `signups_30d = 0`, total `6`, `6` `e2e+%` rows and `0` `@0509.internal` rows, read 2026-09-29T17:31Z. The previously recorded read (2026-09-23, `signups_30d=2`) counted `billing-canary@0509.internal` and the operator's own account — internal rows, neither of them signups.
 
 ## Boundary
 

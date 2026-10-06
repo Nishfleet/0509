@@ -271,6 +271,20 @@ const DOC_READING_TEST_BAN = {
     "A test never reads a .md file. A doc-vs-code check is review's: a doc edit that fails the suite teaches the next writer to change the test instead of the doc. Put the copy in the product's public surface and assert that. docs/REBUILD-DONE.md D. Source: 0509#6953.",
 };
 
+const EMPTY_WORKERS_ENV_MOCK = {
+  selector:
+    "CallExpression[callee.object.name='vi'][callee.property.name=/^(mock|doMock)$/][arguments.0.value='cloudflare:workers'] ObjectExpression[properties.length=1] > Property[key.name='env'] > ObjectExpression[properties.length=0]",
+  message:
+    "The node project already aliases cloudflare:workers to tests/workers-env-empty-stub.ts. An empty vi.mock({ env: {} }) is dead duplication; a test that needs values still mocks real bindings. Evals keep the throwing Proxy in tests/evals/workers-env-stub.ts. Source: 0509#7026.",
+};
+
+const ESLINT_DISK_PROBE_BAN = {
+  selector:
+    "CallExpression[callee.name=/^(writeFile|mkdir)(Sync)?$/], CallExpression[callee.property.name=/^(writeFile|mkdir)(Sync)?$/]",
+  message:
+    "ESLint rule tests lint in memory with lintText against a real filePath. Disk probes under app/ and workers/ collide when vitest runs files in parallel and leave stray files on a crash. Cross-file rules (import-x/no-cycle, boundaries) stay in tests/architecture-boundaries.test.ts. Source: 0509#7026.",
+};
+
 const BARE_TOAST = {
   selector: "CallExpression[callee.name='toast'], MemberExpression[object.name='toast']",
   message:
@@ -1140,6 +1154,14 @@ export default tseslint.config(
       // `assert` stays from the stock default.
       "vitest/expect-expect": ["error", { assertFunctionNames: ["expect", "expectNoHtmlInjection", "assert"] }],
       "vitest/valid-expect": ["error", { maxArgs: 2 }],
+      "no-restricted-syntax": ["error", EMPTY_WORKERS_ENV_MOCK],
+    },
+  },
+
+  {
+    files: ["tests/eslint-*.test.ts"],
+    rules: {
+      "no-restricted-syntax": ["error", EMPTY_WORKERS_ENV_MOCK, ESLINT_DISK_PROBE_BAN],
     },
   },
 
@@ -1159,12 +1181,13 @@ export default tseslint.config(
     // .agents/skills/verify/feature-map.md to prove every mapped screen was
     // actually visited, and theme.test.ts reads DESIGN.md §3 and §4 to keep the
     // tokens in step with the doc. A third is a new rule here, in review, not
-    // an `ignores` entry. The block is the only matching one that sets
-    // no-restricted-syntax for tests/unit/.
+    // an `ignores` entry. no-restricted-syntax is replaced, not merged, by the
+    // last matching block, so this one repeats EMPTY_WORKERS_ENV_MOCK from the
+    // tests/**/*.ts block above.
     files: ["tests/unit/**/*.ts"],
     ignores: ["tests/unit/feature-map-proof.test.ts", "tests/unit/theme.test.ts"],
     rules: {
-      "no-restricted-syntax": ["error", DOC_READING_TEST_BAN],
+      "no-restricted-syntax": ["error", DOC_READING_TEST_BAN, EMPTY_WORKERS_ENV_MOCK],
     },
   },
 

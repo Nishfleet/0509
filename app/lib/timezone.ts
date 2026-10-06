@@ -27,3 +27,15 @@ export function canonicalTimezone(value: string | null | undefined): string {
     return "UTC";
   }
 }
+
+export function sameTimezone(left: string, right: string): boolean {
+  const leftZone = left.trim();
+  const rightZone = right.trim();
+  if (leftZone.length === 0 || rightZone.length === 0) return false;
+  if (canonicalTimezone(leftZone) === "UTC" && leftZone !== "UTC") return false;
+  if (canonicalTimezone(rightZone) === "UTC" && rightZone !== "UTC") return false;
+  return (
+    new Intl.DateTimeFormat("en-US", { timeZone: leftZone }).resolvedOptions().timeZone ===
+    new Intl.DateTimeFormat("en-US", { timeZone: rightZone }).resolvedOptions().timeZone
+  );
+}
