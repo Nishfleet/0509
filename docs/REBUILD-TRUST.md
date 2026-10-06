@@ -106,8 +106,10 @@ grep -q '"status":"ok"' /tmp/health.json
 That is a hand-rolled server-readiness poller, a hand-rolled retry and a
 hand-rolled assertion — three things Playwright ships. The check name
 `preview-assert` is byte-identical before and after; only the body changed. The
-`main-merge-queue` ruleset (id 21391031, empty bypass) still sees
-`Gitleaks`, `codex-node-checks`, `semgrep`, `preview-assert`.
+`main-merge-queue` ruleset (id 21391031, empty bypass) now requires one check,
+`ci-ok`, which needs `codex-node-checks`, `vitest-shard`, `Gitleaks`,
+`semgrep` and `preview-assert` and fails unless every one succeeded
+(0509#7013, 0509#7163).
 
 ### A2. The smoke suite
 
