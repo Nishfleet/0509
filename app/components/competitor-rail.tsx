@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import { dayMonthLabel } from "./competitor-header";
 import { EmptyState } from "./empty-state";
 import { SourcePill } from "./source-pill";
-import type { SourceRow, SourceSnapshot } from "./source-pill";
+import type { SourceRow, SourceSnapshot } from "../lib/source-pill-status";
 import { SITE_SWEEP_UTC_LABEL } from "../lib/cadence";
 
 const HEADING = "mb-3 font-mono text-eyebrow text-ink-soft uppercase";

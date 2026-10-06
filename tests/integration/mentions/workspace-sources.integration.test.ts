@@ -8,7 +8,7 @@ import {
   readRegistrySources,
   readWorkspaceMentionSources,
 } from "../../../app/lib/data/source.server";
-import { sourcePillStatus } from "../../../app/components/source-pill";
+import { sourcePillStatus } from "../../../app/lib/source-pill-status";
 import { NO_CHANNEL_REASON } from "../../../app/lib/mentions/youtube-channel";
 
 const WS = "ws-mention-sources";
