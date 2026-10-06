@@ -45,6 +45,19 @@ describe("rival change email", () => {
   });
 });
 
+describe("a rival name that holds a link", () => {
+  it("is broken in the subject, text and html so the email cannot autolink it (0509#7084)", () => {
+    const { subject, text, html } = renderChange({
+      ...CTX,
+      headline: "www.evil.example changed its pricing page",
+      mark: { removed: "see www.evil.example", added: null },
+    });
+    expect(subject).toBe("www[.]evil.example changed its pricing page");
+    expect(text).not.toMatch(/www\.evil/);
+    expect(html).not.toMatch(/www\.evil/);
+  });
+});
+
 describe("the alert footer (RFC 8058)", () => {
   it("links the alert settings and a one-click unsubscribe in text and html", () => {
     const { text, html } = renderChange(CTX);

@@ -14,7 +14,8 @@ import { canonicalTimezone } from "../../app/lib/timezone";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
 import { nextHour } from "../../app/lib/home-standing";
-import { neutralizeBareUrls, slackEscape } from "../../app/lib/slack-webhook";
+import { neutralizeBareUrls } from "../../app/lib/neutralize-urls";
+import { slackEscape } from "../../app/lib/slack-webhook";
 import { postToSlack } from "../../app/lib/slack.server";
 import {
   changeHeadline,

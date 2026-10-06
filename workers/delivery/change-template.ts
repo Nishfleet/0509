@@ -1,7 +1,7 @@
 import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
+import { neutralizeBareUrls } from "../../app/lib/neutralize-urls";
 import type { ChangeMark } from "../../app/lib/site-change";
-import { neutralizeBareUrls } from "../../app/lib/slack-webhook";
 import { renderAlertFooter, type AlertFooterContext } from "./alert-footer";
 import { formatDate } from "./brief-template";
 import { EYEBROW, FONT, emailDocument } from "./email-shell";
@@ -59,18 +59,19 @@ export function renderChangeOverflow(ctx: ChangeOverflowContext): RenderedBrief 
 }
 
 export function renderChange(ctx: ChangeContext): RenderedBrief {
+  const headline = neutralizeBareUrls(ctx.headline);
   const seen = `Seen at ${formatDate(ctx.observed_at, ctx.timezone, true)}.`;
   const lines = [seen, ...markLines(ctx.mark)];
   const href = escapeHtml(ctx.link);
   const footer = renderAlertFooter(ctx);
   return {
-    subject: ctx.headline,
-    text: [ctx.headline, ...lines, `See the before and after in Five to Nine: ${ctx.link}`, footer.text].join("\n"),
+    subject: headline,
+    text: [headline, ...lines, `See the before and after in Five to Nine: ${ctx.link}`, footer.text].join("\n"),
     html: emailDocument(
-      ctx.headline,
+      headline,
       [
         `<p class="brief-muted" style="${EYEBROW}">Price or plan change</p>`,
-        `<p style="${HEADLINE}">${escapeHtml(ctx.headline)}</p>`,
+        `<p style="${HEADLINE}">${escapeHtml(headline)}</p>`,
         paragraphs(lines),
         `<p style="${BODY}">See the before and after in Five to Nine: <a class="brief-ink" href="${href}">${href}</a></p>`,
         footer.html,

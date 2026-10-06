@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { neutralizeBareUrls, parseSlackWebhook, slackEscape } from "../../app/lib/slack-webhook";
+import { neutralizeBareUrls } from "../../app/lib/neutralize-urls";
+import { parseSlackWebhook, slackEscape } from "../../app/lib/slack-webhook";
 
 describe("Slack webhook address", () => {
   it("accepts a Slack incoming webhook and trims it", () => {

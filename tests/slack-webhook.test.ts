@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { neutralizeBareUrls, parseSlackWebhook, slackEscape } from "../app/lib/slack-webhook";
+import { parseSlackWebhook, slackEscape } from "../app/lib/slack-webhook";
 
 describe("parseSlackWebhook", () => {
   it("returns a valid hooks.slack.com service URL unchanged", () => {
@@ -59,9 +59,5 @@ describe("slackEscape", () => {
 
   it("returns an empty string unchanged", () => {
     expect(slackEscape("")).toBe("");
-  });
-
-  it("breaks a bare URL so Slack cannot autolink third-party text (0509#7084)", () => {
-    expect(neutralizeBareUrls("see https://evil.example/x")).toBe("see https[:]//evil.example/x");
   });
 });

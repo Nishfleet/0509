@@ -5,10 +5,6 @@ export function parseSlackWebhook(value: string): string | null {
   return SLACK_WEBHOOK.test(trimmed) ? trimmed : null;
 }
 
-export function neutralizeBareUrls(text: string): string {
-  return text.replaceAll("://", "[:]//");
-}
-
 export function slackEscape(text: string): string {
   return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
