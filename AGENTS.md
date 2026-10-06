@@ -184,8 +184,10 @@ bypass list**:
 Gitleaks   codex-node-checks   semgrep   preview-assert
 ```
 
-`ci-ok` in `ci.yml` needs all four and fails if any failed or was cancelled,
-so the ruleset can require it alone (0509#7013). Until the ruleset swaps the
+`ci-ok` in `ci.yml` needs all four and fails unless every one succeeded,
+so the ruleset can require it alone (0509#7013). It checks for `success`, never
+for a list of bad results: a job no runner picked up matched neither `failure`
+nor `cancelled` and passed it once (2026-10-05). Until the ruleset swaps the
 four for `ci-ok`, the rule below still holds.
 
 Renaming one of these is not cosmetic. A required check that never reports fails
