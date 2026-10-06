@@ -39,7 +39,7 @@ const sent: EmailMessageBuilder[] = [];
 const recording: SendEmail = {
   send(message: EmailMessage | EmailMessageBuilder) {
     sent.push(message as EmailMessageBuilder);
-    return Promise.resolve({} as EmailSendResult);
+    return Promise.resolve({ messageId: "unused" });
   },
 };
 
