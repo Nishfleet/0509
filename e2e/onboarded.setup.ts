@@ -19,6 +19,14 @@ const LANES = ["desktop", "phone"] as const;
 
 setup.setTimeout(480_000);
 
+async function waitForCompetitorsPost(page: Page): Promise<void> {
+  const response = await page.waitForResponse(
+    (candidate) =>
+      candidate.request().method() === "POST" && new URL(candidate.url()).pathname.startsWith("/app/competitors"),
+  );
+  expect(response.ok()).toBe(true);
+}
+
 async function addCompetitor(page: Page, domain: string): Promise<void> {
   const row = page
     .getByRole("list", { name: "Competitors", exact: true })
@@ -30,10 +38,21 @@ async function addCompetitor(page: Page, domain: string): Promise<void> {
   if ((await row.count()) === 0) {
     const other = page.getByRole("switch", { name: /^(?!Nike|Adidas).* tracking/, checked: true });
     const before = await other.count();
+    // The switch flips optimistically, so the count drops before the server
+    // has turned the rival off. Adding before that write lands races the plan
+    // cap check and the add is refused (0509 run 37431944962). Wait for the
+    // switch's own POST, then the add's, and surface any refusal message.
+    const switchedOff = waitForCompetitorsPost(page);
     await other.first().click();
     await expect(other).toHaveCount(before - 1);
+    await switchedOff;
     await page.locator("#add-competitor").fill(domain);
-    await page.getByRole("button", { name: "Add" }).click();
+    const added = waitForCompetitorsPost(page);
+    const add = page.getByRole("button", { name: "Add", exact: true });
+    await add.click();
+    await added;
+    await expect(add).toBeEnabled();
+    await expect(page.locator("#add-competitor-error")).toHaveCount(0);
   }
   await expect(row.getByRole("switch")).toBeChecked({ timeout: 30_000 });
 }

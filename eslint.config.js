@@ -609,6 +609,8 @@ export default tseslint.config(
       // run. Same class as .react-router/** and worker-configuration.d.ts.
       // Source: #3944.
       ".wrangler/**",
+      // Composite project-reference emit for tsconfig.test.json (0509#7073).
+      ".tsbuild/**",
       "node_modules/**",
       "worker-configuration.d.ts",
       "docs/design-directions/**",
@@ -1236,8 +1238,45 @@ export default tseslint.config(
     },
   },
 
+  // 0509#7073: e2e is type-aware so no-floating-promises is on. The rest of
+  // strictTypeChecked on Playwright evaluate callbacks and poll messages is a
+  // follow-up (restrict-template-expressions on timeout numbers, no-unsafe-*
+  // on JSON.parse of fixture pages).
   {
-    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "*.config.ts", "e2e/**/*.ts", "tests/**/*.ts", "public/index.html"],
+    files: ["e2e/**/*.ts"],
+    rules: {
+      "@typescript-eslint/restrict-template-expressions": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-return": "off",
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/no-confusing-void-expression": "off",
+      "@typescript-eslint/dot-notation": "off",
+      "@typescript-eslint/no-unnecessary-type-assertion": "off",
+      "@typescript-eslint/restrict-plus-operands": "off",
+      "@typescript-eslint/prefer-includes": "off",
+      "@typescript-eslint/prefer-string-starts-ends-with": "off",
+      "@typescript-eslint/no-base-to-string": "off",
+    },
+  },
+
+  // 0509#7073: type-aware lint is on for e2e and *.config.ts. The comment
+  // exemption used to live on the disableTypeChecked block that also listed
+  // those globs; keep it here so inline comments in specs and configs stay
+  // allowed (AGENTS.md: config files and tests are exempt).
+  {
+    files: ["e2e/**/*.ts", "*.config.ts"],
+    rules: {
+      "no-inline-comments": "off",
+      "no-warning-comments": "off",
+    },
+  },
+
+  // 0509#7073: tests/** stay untyped until the excluded files in
+  // tsconfig.test.json typecheck. e2e/** and *.config.ts are off this list.
+  {
+    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "tests/**/*.ts", "public/index.html"],
     extends: [tseslint.configs.disableTypeChecked],
     rules: {
       "no-inline-comments": "off",

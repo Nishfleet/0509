@@ -33,10 +33,12 @@ describe("fixture workspaces and the nightly plan (0509#5774)", () => {
     const kept = await onboard("u-kept", "e2e+j12-rollovers@0509.io");
     const fixture = await onboard("u-fix", "e2e+abc123@0509.io");
 
-    const marks = await env.DB.prepare("SELECT id, fixture FROM workspace ORDER BY id").all<{
-      id: string;
-      fixture: number;
-    }>();
+    const marks = await env.DB.prepare("SELECT id, fixture FROM workspace WHERE id IN (?, ?, ?) ORDER BY id")
+      .bind(real, kept, fixture)
+      .all<{
+        id: string;
+        fixture: number;
+      }>();
     expect(Object.fromEntries(marks.results.map((row) => [row.id, row.fixture]))).toEqual({
       [real]: 0,
       [kept]: 0,
