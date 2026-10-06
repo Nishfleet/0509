@@ -12,6 +12,7 @@ import {
   SITE_SWEEP_UTC_HOUR,
   SNAPSHOT_BACKUP_CRON,
   SITE_SWEEP_UTC_LABEL,
+  siteSweepLabel,
   WEEKLY_REFRESH_CRON,
 } from "../app/lib/cadence";
 
@@ -54,6 +55,13 @@ describe("cadence", () => {
   it("pins the site-sweep cron and label to the UTC hour the sweep runs at", () => {
     expect(SITE_SWEEP_CRON).toBe(`0 ${SITE_SWEEP_UTC_HOUR} * * *`);
     expect(SITE_SWEEP_UTC_LABEL).toBe(`${String(SITE_SWEEP_UTC_HOUR).padStart(2, "0")}:00 UTC`);
+  });
+
+  it("names the sweep clock in the workspace zone, not as a UTC-only label", () => {
+    const now = new Date("2026-10-05T12:00:00.000Z");
+    expect(siteSweepLabel("UTC", now)).toBe(SITE_SWEEP_UTC_LABEL);
+    expect(siteSweepLabel("Asia/Kolkata", now)).toMatch(/^07:30 /);
+    expect(siteSweepLabel("Asia/Kolkata", now)).not.toContain("UTC");
   });
 });
 

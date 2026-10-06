@@ -1,10 +1,11 @@
-import type { ReactElement } from "react";
+import { lazy, Suspense, type ReactElement } from "react";
 import { useSyncExternalStore } from "react";
 import { useSearchParams } from "react-router";
 
-import { RowEvidence } from "./row-evidence";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
 import type { WeekEvidence } from "../lib/home-standing";
+
+const RowEvidence = lazy(() => import("./row-evidence").then((module) => ({ default: module.RowEvidence })));
 
 const NARROW = "(max-width: 859px)";
 
@@ -51,7 +52,9 @@ export function RowSheet({ title, evidence }: { title: string; evidence: readonl
         className="top-auto bottom-0 left-0 h-[85dvh] w-full max-w-none translate-x-0 translate-y-0 overflow-y-auto rounded-none border-t-[1.5px] border-ink bg-card text-ink min-[860px]:hidden"
       >
         <DialogTitle>{title}</DialogTitle>
-        <RowEvidence evidence={evidence} />
+        <Suspense fallback={null}>
+          <RowEvidence evidence={evidence} />
+        </Suspense>
       </DialogContent>
     </Dialog>
   );

@@ -26,6 +26,7 @@ import {
 } from "../../app/lib/data/watch.server";
 import type { NoulVerdict } from "../../app/lib/jev/client.server";
 import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
+import { withMentionCall } from "../../app/lib/mentions/call-budget.server";
 import { lookupYoutubeChannel } from "../../app/lib/identity/youtube-channel.server";
 import { noulAction } from "../../app/lib/jev/thresholds";
 import { mentionReasonLine } from "../../app/lib/mentions/reason-customer";
@@ -104,23 +105,18 @@ async function judge(
   item: JudgedItem,
 ): Promise<{ about: NoulVerdict; matters: NoulVerdict | null }> {
   const subject = subjectOf(watch);
-  const about = await askNoul(
-    watch.workspace_id,
-    ABOUT_BRAND,
-    aboutBrandState({ subject, item, reliability: watch.reliability }),
+  const about = await withMentionCall(watch.entity_id, () =>
+    askNoul(watch.workspace_id, ABOUT_BRAND, aboutBrandState({ subject, item, reliability: watch.reliability })),
   );
   if (noulAction(about.p) === "reject") return { about, matters: null };
-  const matters = await askNoul(
-    watch.workspace_id,
-    MATTERS,
-    mentionMattersState({
-      self: { name: context.self.name, domain: context.self.domain, description: context.self.description },
-      subject,
-      competitors: context.competitors,
-      item,
-      reliability: watch.reliability,
-    }),
-  );
+  const mattersState = mentionMattersState({
+    self: { name: context.self.name, domain: context.self.domain, description: context.self.description },
+    subject,
+    competitors: context.competitors,
+    item,
+    reliability: watch.reliability,
+  });
+  const matters = await withMentionCall(watch.entity_id, () => askNoul(watch.workspace_id, MATTERS, mattersState));
   return { about, matters };
 }
 
@@ -262,7 +258,7 @@ async function judgeDuplicate(input: {
     second: candidate,
   });
   try {
-    const verdict = await askNoul(watch.workspace_id, DUPLICATE_SIGNAL, state);
+    const verdict = await withMentionCall(watch.entity_id, () => askNoul(watch.workspace_id, DUPLICATE_SIGNAL, state));
     const statements = duplicateStatements({ watch, signalId, candidateId: candidate.id, verdict, now });
     return { statements, asked: true, jevDown: false, collapsed: noulAction(verdict.p) === "act" };
   } catch (error) {

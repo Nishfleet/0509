@@ -180,4 +180,11 @@ describe("0509-support-inbox-v2", () => {
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM support_report").first<{ n: number }>();
     expect(count?.n).toBe(21);
   });
+
+  it("answers 404 to a web request instead of throwing", async () => {
+    const ctx = createExecutionContext();
+    const response = await worker.fetch(new Request("https://inbox.example/"), env, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(response.status).toBe(404);
+  });
 });

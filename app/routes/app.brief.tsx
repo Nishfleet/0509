@@ -24,8 +24,8 @@ export function meta() {
   return [{ title: "Your brief · Five to Nine" }];
 }
 
-function briefWeekLabel(periodStart: string): string {
-  const day = dayMonthLabel(periodStart);
+function briefWeekLabel(periodStart: string, timeZone: string): string {
+  const day = dayMonthLabel(periodStart, timeZone);
   return day === null ? "An earlier week" : `Week of ${day}`;
 }
 
@@ -46,7 +46,7 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     firstBriefAt: formatBriefAt(nextBriefAt(schedule, now), schedule.timezone),
     weeks: weeks.map((w) => ({
       id: w.id,
-      weekLabel: briefWeekLabel(w.period_start),
+      weekLabel: briefWeekLabel(w.period_start, schedule.timezone),
       line: briefSendLine(w),
     })),
     selected:
@@ -54,7 +54,7 @@ export async function loader({ params, context }: Route.LoaderArgs) {
         ? null
         : {
             id: brief.id,
-            weekLabel: briefWeekLabel(brief.period_start),
+            weekLabel: briefWeekLabel(brief.period_start, schedule.timezone),
             status: brief.status,
             line: briefSendLine(brief),
             payload: readBriefPayload(brief.payload_json),

@@ -83,6 +83,10 @@ async function maybeOpenIssue(
 }
 
 export default {
+  fetch() {
+    return new Response(null, { status: 404 });
+  },
+
   async email(message, env) {
     const raw = await new Response(message.raw).text();
     const id = crypto.randomUUID();

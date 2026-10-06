@@ -2,6 +2,11 @@ import { expect, test } from "@playwright/test";
 
 import { consoleFailures, watchConsole } from "./inbox";
 
+// The end-of-test screenshot is report evidence, not an assertion. Playwright's
+// recorder attaches it and drops a capture that fails instead of failing the
+// test; e2e/reduced-motion.spec.ts has the why.
+test.use({ screenshot: { mode: "on", fullPage: true } });
+
 test("the API reference is generated from the OpenAPI document @smoke", async ({ page, request }, testInfo) => {
   const watched = watchConsole(page);
   const spec = await request.get("/api/v1/openapi.json");
@@ -26,10 +31,6 @@ test("the API reference is generated from the OpenAPI document @smoke", async ({
   await expect(page.getByRole("link", { name: "Settings" }).first()).toHaveAttribute("href", "/app/settings/agents");
 
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
-  await testInfo.attach(`api-docs-${testInfo.project.name}`, {
-    body: await page.screenshot({ fullPage: true }),
-    contentType: "image/png",
-  });
 });
 
 test("the API reference does not scroll sideways at 390 @smoke", async ({ page }, testInfo) => {
