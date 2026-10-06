@@ -260,6 +260,15 @@ export async function readWorkspaceSelfId(workspaceId: string): Promise<string |
   return row === null ? null : row.id;
 }
 
+const SELECT_WORKSPACE_ENTITY_IDS = "SELECT id FROM entity WHERE workspace_id = ?1 ORDER BY id";
+
+const workspaceEntityIds = z.array(z.object({ id: z.string() }));
+
+export async function readWorkspaceEntityIds(workspaceId: string): Promise<string[]> {
+  const rows = await env.DB.prepare(SELECT_WORKSPACE_ENTITY_IDS).bind(workspaceId).all();
+  return workspaceEntityIds.parse(rows.results).map((row) => row.id);
+}
+
 export async function readSelfEntityId(workspaceId: string, entityId: string): Promise<string | null> {
   const row = idRow.nullable().parse(await env.DB.prepare(SELECT_SELF_BY_ID).bind(entityId, workspaceId).first());
   return row === null ? null : row.id;
