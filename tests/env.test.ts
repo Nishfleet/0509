@@ -99,7 +99,6 @@ describe("worker env", () => {
     expect(_droppedDb).toBeDefined();
     expect(_droppedSecret).toBeDefined();
     useEnv(missing);
-    useEnv(values);
     const error = namesOf(createWorkerEnvCheck());
     expect(error.names).toEqual(["DB", "BETTER_AUTH_SECRET"]);
     expect(error.message).toBe(
