@@ -1267,8 +1267,9 @@ export default tseslint.config(
   // typecheck alone cannot fix — 5,285 no-unsafe-member-access, 4,509
   // no-unsafe-call, 2,487 no-deprecated and 793 no-unsafe-assignment, almost
   // all vi.fn() mocks and JSON.parse results. This comment is the named "why
-  // not": tests stay on disableTypeChecked until that migration has its own
-  // issue. **/*.js, **/*.mjs, **/*.cjs and public/index.html stay untyped.
+  // not": tests stay on disableTypeChecked until that migration lands as
+  // #7233, the follow-up #7183's finish line allows. **/*.js, **/*.mjs,
+  // **/*.cjs and public/index.html stay untyped.
   {
     files: ["**/*.js", "**/*.mjs", "**/*.cjs", "tests/**/*.ts", "public/index.html"],
     extends: [tseslint.configs.disableTypeChecked],
