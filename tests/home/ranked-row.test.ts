@@ -226,10 +226,13 @@ const KINDRED_EVIDENCE: readonly WeekEvidence[] = [
   },
 ];
 
+// prerender waits for the lazy RowEvidence chunk; once it has resolved, a
+// static render paints the evidence in place, with no hydration comments or
+// streamed segments to strip. If the chunk had not loaded, the Suspense
+// fallback (null) would render and the evidence assertions would fail.
 async function renderSettled(element: ReactElement): Promise<string> {
-  const { prelude } = await prerender(element);
-  const html = await new Response(prelude).text();
-  return html.replaceAll(/<!--.*?-->/g, "");
+  await prerender(element);
+  return renderToStaticMarkup(element);
 }
 
 describe("a ranked row expands in place to the week's evidence", () => {
