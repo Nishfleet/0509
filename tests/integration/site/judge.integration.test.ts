@@ -12,17 +12,14 @@ const jevAnswers = {
   states: [] as unknown[],
 };
 
-const jevFailures = { next: 0 };
+const jevFailures: { on: string | null } = { on: null };
 
 function installJev(): void {
   Reflect.set(env, "AI", {
     async run(_model: string, request: { state: unknown; questions: Record<string, { type: string }> }) {
       jevAnswers.states.push(request.state);
       jevAnswers.calls += 1;
-      if (jevFailures.next > 0) {
-        jevFailures.next -= 1;
-        throw new Error("gateway down");
-      }
+      if (jevFailures.on !== null && jevFailures.on in request.questions) throw new Error("gateway down");
       const answers: Record<string, { type: "noul"; noul: number } | { type: "choice"; choice: string }> = {};
       for (const [id, question] of Object.entries(request.questions)) {
         if (question.type === "noul") {
@@ -123,7 +120,7 @@ describe("judgeChange", () => {
     jevAnswers.choice.clear();
     jevAnswers.calls = 0;
     jevAnswers.states.length = 0;
-    jevFailures.next = 0;
+    jevFailures.on = null;
     installJev();
     await seedWorkspace("ws-mine");
     await seedWorkspace("ws-history");
@@ -429,7 +426,7 @@ describe("judgeChange", () => {
   it("case h: Jev unavailable defers without writing verdicts", async () => {
     jevAnswers.noul.set("noteworthy_change", 0.95);
     jevAnswers.choice.set("change_kind", "pricing");
-    jevFailures.next = 1;
+    jevFailures.on = "noteworthy_change";
 
     const judgment = await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
 
@@ -441,7 +438,7 @@ describe("judgeChange", () => {
   it("case h2: a Jev outage during a site judgment is logged", async () => {
     jevAnswers.noul.set("noteworthy_change", 0.95);
     jevAnswers.choice.set("change_kind", "pricing");
-    jevFailures.next = 1;
+    jevFailures.on = "noteworthy_change";
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
@@ -453,7 +450,7 @@ describe("judgeChange", () => {
 
   it("case i: Jev unavailable for the self breakage question defers too", async () => {
     jevAnswers.noul.set("own_site_breakage", 0.7);
-    jevFailures.next = 1;
+    jevFailures.on = "own_site_breakage";
 
     const judgment = await judgeChange(judgeInput({ entity: "mine", isSelf: true }));
 
