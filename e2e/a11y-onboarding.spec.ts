@@ -20,6 +20,11 @@ test.skip(
   "the onboarding screens need a signed-in session; the preview lane cannot read the magic-link inbox",
 );
 
+// The end-of-test screenshot is report evidence, not an assertion. Playwright's
+// recorder attaches it and drops a capture that fails instead of failing the
+// test; e2e/reduced-motion.spec.ts has the why.
+test.use({ screenshot: "on" });
+
 test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at both widths (#4149) @own-signin", async ({
   page,
 }, testInfo) => {
@@ -86,7 +91,7 @@ test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at
   }
 });
 
-test("screen 1 is operable by keyboard in order (#4149) @own-signin", async ({ page }, testInfo) => {
+test("screen 1 is operable by keyboard in order (#4149) @own-signin", async ({ page }) => {
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   createdEmail = email;
@@ -105,10 +110,6 @@ test("screen 1 is operable by keyboard in order (#4149) @own-signin", async ({ p
   await page.keyboard.press("Tab");
   const support = page.getByRole("link", { name: "support@0509.io" });
   await expect(support).toBeFocused();
-  await testInfo.attach("focus-support", {
-    body: await page.screenshot(),
-    contentType: "image/png",
-  });
 });
 
 test("screen 2 is operable by keyboard in order, with one polite live region (#4149) @own-signin", async ({
