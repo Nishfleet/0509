@@ -14,13 +14,12 @@ interface Timings {
 type Normalised = ReturnType<typeof normaliseSubject>;
 type AcceptedSubject = Extract<Normalised, { ok: true }>["subject"];
 
-interface OnboardingSubjectReply {
-  message: string | null;
-  confirm: { subject: string; raw: string } | null;
-}
-
 export type OnboardingSubjectOutcome =
-  { status: "reply"; reply: OnboardingSubjectReply } | { status: "next"; path: string } | { status: "home" };
+  | { status: "reply"; reply: { message: string | null; confirm: { subject: string; raw: string } | null } }
+  | { status: "next"; path: string }
+  | { status: "home" };
+
+type OnboardingSubjectReply = Extract<OnboardingSubjectOutcome, { status: "reply" }>["reply"];
 
 const subjectForm = z.object({
   subject: z.string().optional(),
