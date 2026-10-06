@@ -1,9 +1,4 @@
-import {
-  sourcePillStatus,
-  type SourcePillStatus,
-  type SourceRow,
-  type SourceSnapshot,
-} from "../components/source-pill";
+import { sourcePillStatus, type SourcePillStatus, type SourceRow, type SourceSnapshot } from "./source-pill-status";
 import { registeredToolDescriptors } from "./agent/mcp-tools";
 import { TRIAL_DAYS, TRIAL_TERMS } from "./billing/plans";
 import { LIVE_COVERAGE, PLAN_NOTE } from "./coverage";

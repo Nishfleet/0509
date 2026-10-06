@@ -142,7 +142,7 @@ jobs:
           persist-credentials: false
       # `semgrep ci` is the hosted mode and needs SEMGREP_APP_TOKEN, exiting 2
       # without one. `semgrep scan` is the local mode and needs nothing.
-      - run: semgrep scan --config p/typescript --config p/security-audit --config .semgrep/rollover-catch-up.yml --config https://raw.githubusercontent.com/Nishfleet/fleet-ops/main/.semgrep/no-glue.yml --error
+      - run: semgrep scan --config p/typescript --config p/security-audit --config .semgrep/rollover-catch-up.yml --config https://raw.githubusercontent.com/Nishfleet/fleet-ops/59f43b2bdc2a07ae1a5909117c4bad17a3666abe/.semgrep/no-glue.yml --error
       # Keep the local rule's fixture honest: --test fails if ruleid:/ok:
       # annotations in .semgrep/<rule>.ts stop matching what the rule fires on.
       - run: semgrep scan --test --config .semgrep/rollover-catch-up.yml .semgrep/rollover-catch-up.ts
@@ -210,7 +210,7 @@ jobs:
         # / is a static asset, so it never enters the Worker. /design/landing does,
         # and the Worker answers 503 until BETTER_AUTH_SECRET is present (run
         # 36060236500). Same --env-file as playwright.config.ts.
-        run: P=$((18000 + $$ % 1000)); npx --yes @lhci/cli@0.15.1 collect --url=http://127.0.0.1:$P/ --url=http://127.0.0.1:$P/design/landing --start-server-command="npx wrangler dev --env-file .dev.vars.example --port $P --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
+        run: P=$((18000 + $$ % 1000)); npx lhci collect --url=http://127.0.0.1:$P/ --url=http://127.0.0.1:$P/design/landing --start-server-command="npx wrangler dev --env-file .dev.vars.example --port $P --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
 
       - name: Assert the Lighthouse budgets
         if: steps.scope.outputs.skip != 'true'
@@ -219,7 +219,7 @@ jobs:
         # job: on a shared runner the unchanged page measured LCP 1657 one run and under
         # 1500 the run before (35748475565 vs 35746328688), and a required check that
         # flips on runner load is not a gate. Production still enforces every row.
-        run: npx --yes @lhci/cli@0.15.1 assert --budgets-file=lighthouse-budget.pr.json
+        run: npx lhci assert --budgets-file=lighthouse-budget.pr.json
 
       - name: Keep the trace when it fails
         if: failure() || cancelled()
@@ -241,8 +241,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Fail when a gate job failed or was cancelled
-        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
-        run: exit 1
-      - name: Every gate job passed or skipped
-        run: "true"
+      - name: Fail unless every gate job succeeded
+        # An allowlist, not a denylist: a gate job that no hosted runner picked
+        # up shows as cancelled in the checks UI, yet its needs result matched
+        # neither 'failure' nor 'cancelled', and the old denylist passed ci-ok
+        # with no gate run (runs 37366376265, 37368606363;
+        # docs/incidents/2026-10-05-ci-ok-passed-with-gates-cancelled.md).
+        # The step's own always() makes it run, and fail, in a cancelled run
+        # too, so ci-ok never reports without this step having run.
+        if: always()
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$NEEDS"
+          jq -e 'all(.[]; .result == "success")' <<< "$NEEDS" > /dev/null

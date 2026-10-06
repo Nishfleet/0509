@@ -14,11 +14,13 @@ import { readLastStillCompetitor } from "./data/jev_verdict.server";
 import type { SiteWatchSummary } from "./data/watch.server";
 import { readSiteWatchSummary } from "./data/watch.server";
 import type { SiteChangeView } from "./site-change";
+import { captureLabel } from "./site-change";
 import { daysBefore, readSiteChangeViews } from "./site-changes.server";
-import { historyAnchor } from "./competitor-history";
 import type { BiggestMoveView } from "./biggest-move";
 import { biggestMoveView, pickBiggestMove, quietWeekSentence } from "./biggest-move";
-import { captureLabel } from "./site-change";
+import { siteSweepLabel } from "./cadence";
+import { historyAnchor } from "./competitor-history";
+import { readWorkspaceTimezone } from "./data/workspace.server";
 import { weightsAsOf } from "./standing-score";
 import { ALL_WEIGHTS, weightRows } from "./standing-score.server";
 
@@ -30,6 +32,8 @@ export interface CompetitorPage {
   weekCount: number;
   biggestMove: BiggestMoveView | null;
   quiet: string;
+  sweepClock: string;
+  timezone: string;
   youtubeUrl: string | null;
   rail: {
     peers: readonly PeerRow[];
@@ -53,7 +57,7 @@ export async function readCompetitorPage(
   if (competitor === null) return null;
   const anchor = historyAnchor(competitor.state, competitor.stateChangedAt, now);
   const weekStart = daysBefore(anchor, 7);
-  const [watch, changes, developments, peers, facts, sources, verdict, scored, weightResult, socials] =
+  const [watch, changes, developments, peers, facts, sources, verdict, scored, weightResult, socials, timezone] =
     await Promise.all([
       readSiteWatchSummary(workspaceId, entityId),
       readSiteChangeViews({ workspaceId, entityId, since: daysBefore(anchor, HISTORY_DAYS), limit: HISTORY_LIMIT }),
@@ -65,9 +69,11 @@ export async function readCompetitorPage(
       readScoredSignals({ workspaceId, entityId, since: weekStart, until: anchor.toISOString() }),
       env.DB.prepare(ALL_WEIGHTS).all(),
       readCompetitorSocials(workspaceId, entityId),
+      readWorkspaceTimezone(workspaceId),
     ]);
   const weights = weightsAsOf(weightRows.parse(weightResult.results), weekStart);
   const move = pickBiggestMove(scored, weights);
+  const sweepClock = siteSweepLabel(timezone, now);
   return {
     competitor,
     watch,
@@ -78,7 +84,10 @@ export async function readCompetitorPage(
     quiet: quietWeekSentence(
       [...new Set(sources.map((row) => row.source.platform))],
       watch.lastPolledAt === null ? null : captureLabel(watch.lastPolledAt),
+      sweepClock,
     ),
+    sweepClock,
+    timezone,
     youtubeUrl: socials?.find((social) => social.platform === "youtube")?.url ?? null,
     rail: { peers, facts, sources, verdict },
   };

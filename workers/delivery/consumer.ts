@@ -1,4 +1,5 @@
 import { markDigestSentStatement } from "../../app/lib/data/digest.server";
+import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
 import { claimIncidentNotice } from "../../app/lib/data/incident_notice.server";
 import {
   claimChangeSlot,
@@ -8,6 +9,8 @@ import {
 } from "../../app/lib/data/send_attempt.server";
 import { readSlackTarget, writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
 import { insertSignalDeliveries } from "../../app/lib/data/signal_delivery.server";
+import { localDay, startOfLocalDay } from "../../app/lib/alert-day";
+import { canonicalTimezone } from "../../app/lib/timezone";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
 import { nextHour } from "../../app/lib/home-standing";
@@ -171,13 +174,6 @@ async function noTarget(
   return { outcome: "no_target", attempt_id: null, idempotency_key: null };
 }
 
-async function isSuppressed(env: Env, address: string): Promise<boolean> {
-  const row = await env.DB.prepare(`SELECT address FROM email_suppression WHERE address = ?`)
-    .bind(address)
-    .first<{ address: string }>();
-  return row !== null;
-}
-
 function newUnsubscribeToken(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
@@ -259,7 +255,7 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
     return noTarget(env, digest.workspace_id, { digest_id: digest.id });
   }
 
-  if (await isSuppressed(env, target.target_value)) {
+  if (await isAddressSuppressed(target.target_value, env.DB)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
 
@@ -373,7 +369,7 @@ export async function deliverIncident(env: Env, message: IncidentMessage): Promi
     return noTarget(env, incident.workspace_id, { incident_id: incident.id });
   }
 
-  if (await isSuppressed(env, target.target_value)) {
+  if (await isAddressSuppressed(target.target_value, env.DB)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
 
@@ -461,13 +457,15 @@ async function claimChange(
   input: { change: ChangeRow; target: TargetRow },
 ): Promise<{ claim: { id: string } | null; capped: boolean; idempotencyKey: string }> {
   const { change, target } = input;
-  const day = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const timeZone = canonicalTimezone(change.timezone);
+  const day = localDay(now, timeZone);
   const idempotencyKey = `change:${change.id}:${target.id}`;
   const slot = await claimChangeSlot(env.DB, {
     idempotencyKey,
     workspaceId: change.workspace_id,
     targetId: target.id,
-    since: `${day}T00:00:00.000Z`,
+    since: startOfLocalDay(now, timeZone).toISOString(),
     cap: CHANGE_DAILY_CAP,
   });
   if (slot.kind === "claimed") return { claim: { id: slot.id }, capped: false, idempotencyKey };
@@ -557,7 +555,7 @@ async function emailChange(
   if (!target) {
     return noTarget(env, change.workspace_id, { signal_id: change.id });
   }
-  if (await isSuppressed(env, target.target_value)) {
+  if (await isAddressSuppressed(target.target_value, env.DB)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
   return sendChange(env, { change, payload, target });

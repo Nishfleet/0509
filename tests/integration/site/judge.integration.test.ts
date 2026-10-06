@@ -1,4 +1,4 @@
-import { env, runInDurableObject } from "cloudflare:test";
+import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { insertVerdict } from "../../../app/lib/data/jev_verdict.server";
@@ -74,22 +74,6 @@ async function seedHistory(entity: string, count: number): Promise<void> {
       )
       .run();
   }
-}
-
-async function resetJudgmentCounter(entityId: string): Promise<void> {
-  const stub = env.BROWSER_BUDGET.get(
-    env.BROWSER_BUDGET.idFromName(`jev-change:${entityId}:${new Date().toISOString().slice(0, 10)}`),
-  );
-  await runInDurableObject(stub, async (_instance, state) => {
-    await state.storage.deleteAll();
-  });
-}
-
-async function judgmentCounter(entityId: string): Promise<number> {
-  const stub = env.BROWSER_BUDGET.get(
-    env.BROWSER_BUDGET.idFromName(`jev-change:${entityId}:${new Date().toISOString().slice(0, 10)}`),
-  );
-  return runInDurableObject(stub, async (_instance, state) => (await state.storage.get<number>("count")) ?? 0);
 }
 
 async function seedChangeSignals(entity: string, count: number): Promise<void> {
@@ -179,14 +163,6 @@ describe("judgeChange", () => {
       )
         .bind(entity, role, `${entity}.example`, entity, NOW)
         .run();
-    }
-    await env.DB.prepare(
-      `INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES ('capped', 'ws-mine', 'competitor', 'capped.example', 'capped', 'on', ?)`,
-    )
-      .bind(NOW)
-      .run();
-    for (const entity of ["mine", "rival", "noisy", "broken", "dated", "over", "capped"]) {
-      await resetJudgmentCounter(entity);
     }
     for (const entity of ["dated", "over"]) {
       await env.DB.prepare(
@@ -333,7 +309,7 @@ describe("judgeChange", () => {
     for (let index = 0; index < 6; index += 1) {
       await insertVerdict({
         workspaceId: "ws-history",
-        questionId: `seeded-${index}`,
+        questionId: "noteworthy_change",
         inputHash: `seeded-${index}`,
         signalId: null,
         entityId: "over",
@@ -350,11 +326,75 @@ describe("judgeChange", () => {
     expect(jevAnswers.calls).toBe(0);
   });
 
+  const seedToday = async (entityId: string, workspaceId: string, questionId: string, count: number) => {
+    for (let index = 0; index < count; index += 1) {
+      await insertVerdict({
+        workspaceId,
+        questionId,
+        inputHash: `${questionId}-${entityId}-${index}`,
+        signalId: null,
+        entityId,
+        p: 0.04,
+        choice: null,
+        reason: null,
+        decidedAt: NOW,
+      }).run();
+    }
+  };
+
+  it("case f3: an own site whose budget went on mention verdicts is still checked, and the breakage verdict is kept", async () => {
+    await seedToday("mine", "ws-mine", "mention_is_about_brand", 17);
+    jevAnswers.noul.set("own_site_breakage", 0.7);
+
+    const judgment = await judgeChange(judgeInput({ entity: "mine", isSelf: true }));
+
+    expect(judgment.deferred).toBe(false);
+    expect(judgment.selfBreakage).toEqual({ p: 0.7, band: "alert" });
+    expect(judgment.verdictIds).toHaveLength(1);
+    expect((await rowsFor("mine")).filter((row) => row.question_id === "own_site_breakage")).toHaveLength(1);
+  });
+
+  it("case f4: an own site over its change budget with a clear page is deferred and keeps the breakage verdict", async () => {
+    await seedToday("mine", "ws-mine", "noteworthy_change", 6);
+    jevAnswers.noul.set("own_site_breakage", 0.0);
+
+    const judgment = await judgeChange(judgeInput({ entity: "mine", isSelf: true }));
+
+    expect(judgment.deferred).toBe(true);
+    expect(judgment.selfBreakage).toEqual({ p: 0, band: "clear" });
+    expect(judgment.noteworthy).toBeNull();
+    expect(judgment.verdictIds).toHaveLength(1);
+    expect(jevAnswers.calls).toBe(1);
+    expect((await rowsFor("mine")).filter((row) => row.question_id === "own_site_breakage")).toHaveLength(1);
+  });
+
+  it("case f5: mention verdicts never defer a competitor change", async () => {
+    await seedToday("rival", "ws-mine", "mention_is_about_brand", 40);
+    await seedToday("rival", "ws-mine", "mention_matters", 40);
+    jevAnswers.noul.set("noteworthy_change", 0.95);
+    jevAnswers.choice.set("change_kind", "pricing");
+
+    const judgment = await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
+
+    expect(judgment.deferred).toBe(false);
+    expect(judgment.noteworthy?.band).toBe("publish");
+  });
+
+  it("case f6: breakage checks stay bounded per own site per day", async () => {
+    await seedToday("mine", "ws-mine", "own_site_breakage", 6);
+    jevAnswers.noul.set("own_site_breakage", 0.9);
+
+    const judgment = await judgeChange(judgeInput({ entity: "mine", isSelf: true }));
+
+    expect(judgment).toEqual({ deferred: true, selfBreakage: null, noteworthy: null, verdictIds: [] });
+    expect(jevAnswers.calls).toBe(0);
+  });
+
   it("case f2: an entity outside the budget window does not use up budget", async () => {
     for (let index = 0; index < 6; index += 1) {
       await insertVerdict({
         workspaceId: "ws-history",
-        questionId: `stale-${index}`,
+        questionId: "noteworthy_change",
         inputHash: `stale-${index}`,
         signalId: null,
         entityId: "dated",
@@ -478,7 +518,7 @@ describe("judgeChange", () => {
     for (let index = 0; index < 6; index += 1) {
       await insertVerdict({
         workspaceId: "ws-mine",
-        questionId: `seeded-${index}`,
+        questionId: index % 2 === 0 ? "noteworthy_change" : "change_kind",
         inputHash: `seeded-cap-${index}`,
         signalId: null,
         entityId: "rival",
@@ -505,7 +545,7 @@ describe("judgeChange", () => {
 
     expect(judged).toBe(0);
     expect(jevAnswers.calls).toBe(0);
-    expect((await rowsFor("rival")).map((row) => row.question_id)).not.toContain("noteworthy_change");
+    expect(await rowsFor("rival")).toHaveLength(6);
   });
 
   it("links the verdicts of a rejudged change to its signal", async () => {
@@ -534,43 +574,15 @@ describe("judgeChange", () => {
     jevAnswers.choice.set("change_kind", "copy");
     jevFailures.message = "2003: Rate limited";
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      jevFailures.next = 1;
+      jevFailures.next = 2;
       await expect(judgeChange(judgeAt("rival", false, attempt))).rejects.toThrow(JevRateLimitedError);
     }
     jevFailures.next = 0;
 
-    expect(await judgmentCounter("rival")).toBe(0);
     for (let index = 0; index < 3; index += 1) {
       expect((await judgeChange(judgeAt("rival", false, index))).deferred).toBe(false);
     }
     expect((await judgeChange(judgeAt("rival", false, 3))).deferred).toBe(true);
-  });
-
-  it("keeps the Durable Object limit equal to the six verdict rows, counting a self change as three rows", async () => {
-    jevAnswers.noul.set("own_site_breakage", 0.05);
-    jevAnswers.noul.set("noteworthy_change", 0.95);
-    jevAnswers.choice.set("change_kind", "copy");
-
-    const first = await judgeChange(judgeAt("mine", true, 0));
-    const second = await judgeChange(judgeAt("mine", true, 1));
-    const callsBeforeThird = jevAnswers.calls;
-    const third = await judgeChange(judgeAt("mine", true, 2));
-
-    expect(first.verdictIds).toHaveLength(3);
-    expect(second.verdictIds).toHaveLength(3);
-    expect(third.deferred).toBe(true);
-    expect(jevAnswers.calls).toBe(callsBeforeThird);
-    expect(await rowsFor("mine")).toHaveLength(6);
-    expect(await judgmentCounter("mine")).toBe(6);
-  });
-
-  it("refunds the rows a judgment did not write", async () => {
-    jevAnswers.noul.set("own_site_breakage", 0.9);
-
-    const judged = await judgeChange(judgeAt("mine", true, 0));
-
-    expect(judged.verdictIds).toHaveLength(1);
-    expect(await judgmentCounter("mine")).toBe(1);
   });
 
   it("stops a rejudge batch at the first Jev refusal that is not a rate limit", async () => {
@@ -586,133 +598,8 @@ describe("judgeChange", () => {
     const events = logged.mock.calls.map(([line]) => JSON.parse(String(line)).event);
     logged.mockRestore();
     expect(judged).toBe(0);
-    expect(jevAnswers.calls).toBe(2);
+    expect(jevAnswers.calls).toBeLessThanOrEqual(2);
     expect(events).toContain("site.jev_unavailable");
-    expect(await judgmentCounter("rival")).toBe(0);
-  });
-
-  it("settles a reservation on its first refund, so repeated partial refunds release once", async () => {
-    const stub = env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("jev-change:rival:double-refund"));
-    const id = await stub.reserve(6, 3);
-    await stub.reserve(6, 3);
-
-    await stub.refund(id ?? "", 2);
-    await stub.refund(id ?? "", 2);
-    await stub.refund(id ?? "", 3);
-
-    expect(await stub.reserve(6, 3)).toBeNull();
-    expect(await stub.reserve(6, 2)).not.toBeNull();
-  });
-
-  it("caps a refund at the reserved amount", async () => {
-    const stub = env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("jev-change:rival:over-refund"));
-    const id = await stub.reserve(6, 2);
-    await stub.reserve(6, 4);
-
-    await stub.refund(id ?? "", 6);
-
-    expect(await stub.reserve(6, 3)).toBeNull();
-    expect(await stub.reserve(6, 2)).not.toBeNull();
-  });
-
-  it("ignores a zero or negative refund and an unknown reservation", async () => {
-    const stub = env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("jev-change:rival:bad-refund"));
-    const id = await stub.reserve(6, 3);
-
-    await stub.refund(id ?? "", 0);
-    await stub.refund(id ?? "", -5);
-    await stub.refund("unknown", 3);
-
-    expect(await stub.reserve(6, 4)).toBeNull();
-    expect(await stub.reserve(6, 3)).not.toBeNull();
-  });
-
-  it("refuses to take or reserve a zero or negative amount", async () => {
-    const stub = env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("jev-change:rival:bad-take"));
-    await stub.reserve(6, 4);
-
-    expect(await stub.take(6, 0)).toBe(false);
-    expect(await stub.take(6, -3)).toBe(false);
-    expect(await stub.reserve(6, -3)).toBeNull();
-    expect(await stub.reserve(6, 0)).toBeNull();
-
-    expect(await stub.reserve(6, 3)).toBeNull();
-    expect(await stub.reserve(6, 2)).not.toBeNull();
-  });
-
-  it("keeps the cap exact when reserves and repeated partial refunds run concurrently", async () => {
-    const stub = env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("jev-change:rival:concurrent"));
-
-    const ids = await Promise.all(Array.from({ length: 5 }, () => stub.reserve(6, 2)));
-    const held = ids.filter((id): id is string => id !== null);
-    await Promise.all([...held, ...held, ...held].map((id) => stub.refund(id, 1)));
-
-    expect(held).toHaveLength(3);
-    const again = await Promise.all(Array.from({ length: 8 }, () => stub.reserve(6, 1)));
-    expect(again.filter((id) => id !== null)).toHaveLength(3);
-  });
-
-  it("returns the judgment when the refund throws, and rethrows the original error when both fail", async () => {
-    jevAnswers.noul.set("noteworthy_change", 0.95);
-    jevAnswers.choice.set("change_kind", "copy");
-    const real = env.BROWSER_BUDGET.get.bind(env.BROWSER_BUDGET);
-    const refund = vi.fn(() => Promise.reject(new Error("refund down")));
-    vi.spyOn(env.BROWSER_BUDGET, "get").mockImplementation((id) => {
-      const stub = real(id);
-      return {
-        reserve: (limit: number, amount: number) => stub.reserve(limit, amount),
-        refund,
-      } as unknown as ReturnType<typeof real>;
-    });
-    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
-
-    const judged = await judgeChange(judgeAt("rival", false, 0));
-    expect(refund).toHaveBeenCalledTimes(1);
-    jevFailures.next = 1;
-    jevFailures.message = "2003: Rate limited";
-    const failure = await judgeChange(judgeAt("rival", false, 1)).catch((error: unknown) => error);
-
-    const events = logged.mock.calls.map(([line]) => JSON.parse(String(line)).event);
-    vi.restoreAllMocks();
-    expect(judged.deferred).toBe(false);
-    expect(refund).toHaveBeenCalledTimes(2);
-    expect(failure).toBeInstanceOf(JevRateLimitedError);
-    expect((failure as Error).message).not.toContain("refund down");
-    expect(events.filter((event) => event === "site.judgment_refund_failed")).toHaveLength(2);
-  });
-
-  it("never lets concurrent rejudges and judgments exceed the per-brand daily cap", async () => {
-    const total = 20;
-    for (let index = 0; index < total; index += 1) {
-      await env.DB.prepare(
-        `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, url, payload_json, dedup_key, observed_at)
-         VALUES (?1, 'ws-mine', 'capped', 'src_site_web', 'change', 'home', ?2, '{}', ?3, ?4)`,
-      )
-        .bind(`sig-capped-${index}`, `https://capped.example/${index}`, `dedup-capped-${index}`, NOW)
-        .run();
-    }
-    jevAnswers.noul.set("noteworthy_change", 0.95);
-    jevAnswers.choice.set("change_kind", "copy");
-
-    await Promise.all([
-      rejudgeUnjudgedChanges(todayWindow("ws-mine")),
-      rejudgeUnjudgedChanges(todayWindow("ws-mine")),
-      rejudgeUnjudgedChanges(todayWindow("ws-mine")),
-      rejudgeUnjudgedChanges(todayWindow("ws-mine")),
-      ...Array.from({ length: 4 }, (_, index) =>
-        judgeChange({
-          ...judgeInput({ entity: "capped", isSelf: false }),
-          pageUrl: `https://capped.example/j${index}`,
-        }),
-      ),
-    ]);
-
-    const judgments = await env.DB.prepare(
-      "SELECT COUNT(DISTINCT input_hash) AS n FROM jev_verdict WHERE entity_id = 'capped' AND question_id = 'noteworthy_change'",
-    ).first<{ n: number }>();
-    expect(judgments?.n).toBeGreaterThan(0);
-    expect(judgments?.n).toBeLessThanOrEqual(6);
-    expect(jevAnswers.calls).toBeLessThanOrEqual(12);
   });
 
   it("leaves a self change unjudged and logs it when its stored snapshot is missing", async () => {

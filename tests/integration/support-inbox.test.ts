@@ -156,4 +156,11 @@ describe("0509-support-inbox-v2", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalledWith("support-inbox: SUPPORT_INBOX_GITHUB_TOKEN is not set", row?.id);
   });
+
+  it("answers 404 to a web request instead of throwing", async () => {
+    const ctx = createExecutionContext();
+    const response = await worker.fetch(new Request("https://inbox.example/"), env, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(response.status).toBe(404);
+  });
 });

@@ -1,0 +1,1 @@
+ALTER TABLE send_target ADD COLUMN seal_attempts INTEGER NOT NULL DEFAULT 0;

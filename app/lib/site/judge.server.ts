@@ -21,14 +21,11 @@ import {
 import { ACT_AT, CHANGE_KIND_QUESTION_ID, PRICING_ACT_AT, REJECT_AT } from "../jev/thresholds";
 import { parseDiffHunks, parseSiteChangePayload, type SiteChangePayload } from "../site-change";
 import { daysBefore } from "../site-changes.server";
-import { D3_QUESTION_ID, D3S_QUESTION_ID } from "../standing-score";
 import { computeBreakageEvidence, type BreakageEvidence } from "./breakage-evidence";
 
 const CHANGE_VERDICT_ROWS_PER_BRAND_PER_DAY = 6;
 
-const SELF_CHANGE_MAX_ROWS = 3;
-
-const CHANGE_MAX_ROWS = 2;
+const JEV_BREAKAGE_PER_BRAND_PER_DAY = 6;
 
 const HISTORY_DAYS = 30;
 
@@ -42,17 +39,23 @@ const PUBLISH_P = ACT_AT;
 
 const DISCARD_P = REJECT_AT;
 
+const D3S_BREAKAGE_QID = "own_site_breakage";
+
+const D3_NOTEWORTHY_QID = "noteworthy_change";
+
 const D3_KIND_QID = CHANGE_KIND_QUESTION_ID;
 
+const CHANGE_QUESTIONS = [D3_NOTEWORTHY_QID, D3_KIND_QID];
+
 export const D3S_BREAKAGE: NoulQuestion = {
-  id: D3S_QUESTION_ID,
+  id: D3S_BREAKAGE_QID,
   instructions: "Does this change make the brand own website look broken or unintentionally degraded for a visitor?",
   whenTrue: "The page looks broken or degraded for a visitor working normally.",
   whenFalse: "The change looks deliberate and the page looks fine for a visitor working normally.",
 };
 
 export const D3_NOTEWORTHY: NoulQuestion = {
-  id: D3_QUESTION_ID,
+  id: D3_NOTEWORTHY_QID,
   instructions: "Is this change to the brand website worth telling a customer who tracks this brand?",
   whenTrue: "A customer tracking this brand would want to know about this change.",
   whenFalse: "Nothing here would matter to a customer tracking this brand.",
@@ -187,13 +190,6 @@ function logJevUnavailable(error: JevUnavailableError): null {
   return null;
 }
 
-function degradeUnlessRateLimited(error: unknown, stopOnUnavailable: boolean | undefined): null {
-  if (error instanceof JevRateLimitedError) throw error;
-  if (error instanceof JevUnavailableError && stopOnUnavailable === true) throw error;
-  if (error instanceof JevUnavailableError) return logJevUnavailable(error);
-  throw error;
-}
-
 async function storeVerdicts(rows: readonly VerdictRow[]): Promise<readonly string[]> {
   await insertVerdicts(rows);
   return readVerdictIds(rows);
@@ -201,8 +197,19 @@ async function storeVerdicts(rows: readonly VerdictRow[]): Promise<readonly stri
 
 type ChangeStateValue = ChangeState;
 
-function deferredResult(selfBreakage: BreakageBand | null): JudgedChange {
-  return { deferred: true, selfBreakage, noteworthy: null, verdictIds: [] };
+function degradeUnlessRateLimited(error: unknown, stopOnUnavailable: boolean | undefined): null {
+  if (error instanceof JevRateLimitedError) throw error;
+  if (error instanceof JevUnavailableError && stopOnUnavailable === true) throw error;
+  if (error instanceof JevUnavailableError) return logJevUnavailable(error);
+  throw error;
+}
+
+function deferredResult(selfBreakage: BreakageBand | null, verdictIds: readonly string[] = []): JudgedChange {
+  return { deferred: true, selfBreakage, noteworthy: null, verdictIds };
+}
+
+async function usedBudget(entityId: string, now: Date, questionIds: readonly string[]): Promise<number> {
+  return countVerdictsSince(entityId, todayStartIso(now), questionIds);
 }
 
 async function judgeSelfBreakage(
@@ -221,7 +228,7 @@ async function judgeSelfBreakage(
     workspaceId: input.workspaceId,
     entityId: input.entityId,
     signalId: input.signalId,
-    questionId: D3S_QUESTION_ID,
+    questionId: D3S_BREAKAGE_QID,
     inputHash: breakage.inputHash,
     p,
     choice: null,
@@ -251,65 +258,51 @@ async function judgeNoteworthy(
   return {
     noteworthy: { p, kind, band: noteworthyBandOf(p, kind) },
     rows: [
-      verdictRow({ ...base, questionId: D3_QUESTION_ID, inputHash: noul.inputHash, p, choice: null }),
+      verdictRow({ ...base, questionId: D3_NOTEWORTHY_QID, inputHash: noul.inputHash, p, choice: null }),
       verdictRow({ ...base, questionId: D3_KIND_QID, inputHash: choice.inputHash, p: null, choice: kind }),
     ],
   };
 }
 
-async function judgeChangeBody(input: JudgeInput, now: Date): Promise<JudgedChange> {
-  const decidedAt = now.toISOString();
-  const history30d = await readHistory30d(input.entityId, daysBefore(now, HISTORY_DAYS));
-  const state = changeState(input, history30d);
-  const self = input.isSelf ? await judgeSelfBreakage(input, state, decidedAt) : undefined;
-  if (self === null) return deferredResult(null);
-  if (self !== undefined && self.selfBreakage.band !== "clear") {
-    return {
-      deferred: false,
-      selfBreakage: self.selfBreakage,
-      noteworthy: null,
-      verdictIds: await storeVerdicts([self.row]),
-    };
+type SelfStage = Awaited<ReturnType<typeof judgeSelfBreakage>>;
+
+async function breakageBudgetUsed(input: JudgeInput, now: Date): Promise<boolean> {
+  if (!input.isSelf) return false;
+  return (await usedBudget(input.entityId, now, [D3S_BREAKAGE_QID])) >= JEV_BREAKAGE_PER_BRAND_PER_DAY;
+}
+
+async function breakageAlert(self: NonNullable<SelfStage> | undefined): Promise<JudgedChange | null> {
+  if (self === undefined || self.selfBreakage.band === "clear") return null;
+  const verdictIds = await storeVerdicts([self.row]);
+  return { deferred: false, selfBreakage: self.selfBreakage, noteworthy: null, verdictIds };
+}
+
+async function judgeNoteworthyStage(
+  stage: { input: JudgeInput; state: ChangeStateValue; self: NonNullable<SelfStage> | undefined },
+  now: Date,
+): Promise<JudgedChange> {
+  const { input, state, self } = stage;
+  const selfBreakage = self?.selfBreakage ?? null;
+  const selfRows = self === undefined ? [] : [self.row];
+  if ((await usedBudget(input.entityId, now, CHANGE_QUESTIONS)) >= CHANGE_VERDICT_ROWS_PER_BRAND_PER_DAY) {
+    return deferredResult(selfBreakage, await storeVerdicts(selfRows));
   }
-  const selfBreakage = self === undefined ? null : self.selfBreakage;
-  const judged = await judgeNoteworthy(input, state, decidedAt);
-  if (judged === null) return deferredResult(selfBreakage);
-  const rows = self === undefined ? judged.rows : [self.row, ...judged.rows];
-  return { deferred: false, selfBreakage, noteworthy: judged.noteworthy, verdictIds: await storeVerdicts(rows) };
-}
-
-function budgetCounter(entityId: string, now: Date) {
-  const id = env.BROWSER_BUDGET.idFromName(`jev-change:${entityId}:${now.toISOString().slice(0, 10)}`);
-  return env.BROWSER_BUDGET.get(id);
-}
-
-async function reserveRows(entityId: string, now: Date, rows: number): Promise<string | null> {
-  const usedToday = await countVerdictsSince(entityId, todayStartIso(now));
-  if (usedToday + rows > CHANGE_VERDICT_ROWS_PER_BRAND_PER_DAY) return null;
-  return budgetCounter(entityId, now).reserve(CHANGE_VERDICT_ROWS_PER_BRAND_PER_DAY, rows);
-}
-
-async function releaseRows(entityId: string, now: Date, release: { id: string; rows: number }): Promise<void> {
-  try {
-    await budgetCounter(entityId, now).refund(release.id, release.rows);
-  } catch {
-    console.error(JSON.stringify({ event: "site.judgment_refund_failed" }));
-  }
+  const judged = await judgeNoteworthy(input, state, now.toISOString());
+  if (judged === null) return deferredResult(selfBreakage, await storeVerdicts(selfRows));
+  const verdictIds = await storeVerdicts([...selfRows, ...judged.rows]);
+  return { deferred: false, selfBreakage, noteworthy: judged.noteworthy, verdictIds };
 }
 
 export async function judgeChange(input: JudgeInput): Promise<JudgedChange> {
   const now = new Date();
-  const reserved = input.isSelf ? SELF_CHANGE_MAX_ROWS : CHANGE_MAX_ROWS;
-  const reservation = await reserveRows(input.entityId, now, reserved);
-  if (reservation === null) return deferredResult(null);
-  let unused = reserved;
-  try {
-    const judged = await judgeChangeBody(input, now);
-    unused = reserved - judged.verdictIds.length;
-    return judged;
-  } finally {
-    await releaseRows(input.entityId, now, { id: reservation, rows: unused });
-  }
+  if (await breakageBudgetUsed(input, now)) return deferredResult(null);
+
+  const history30d = await readHistory30d(input.entityId, daysBefore(now, HISTORY_DAYS));
+  const state = changeState(input, history30d);
+  const self = input.isSelf ? await judgeSelfBreakage(input, state, now.toISOString()) : undefined;
+  if (self === null) return deferredResult(null);
+
+  return (await breakageAlert(self)) ?? judgeNoteworthyStage({ input, state, self }, now);
 }
 
 const REJUDGE_LIMIT = 50;
@@ -373,13 +366,14 @@ async function rejudgeStoredChange(row: UnjudgedChange): Promise<boolean> {
   const input = await judgeInputFromStored(row);
   if (input === null) return false;
   const judged = await judgeChange(input);
-  if (judged.verdictIds.length === 0) return false;
-  await linkVerdictsStatement({
-    signalId: row.id,
-    workspaceId: row.workspaceId,
-    verdictIds: judged.verdictIds,
-  }).run();
-  return true;
+  if (judged.verdictIds.length > 0) {
+    await linkVerdictsStatement({
+      signalId: row.id,
+      workspaceId: row.workspaceId,
+      verdictIds: judged.verdictIds,
+    }).run();
+  }
+  return !judged.deferred;
 }
 
 export async function rejudgeUnjudgedChanges(input: {

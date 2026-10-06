@@ -25,20 +25,20 @@ const MARK_SOURCE_BLIND = `UPDATE source SET degraded_reason = ?2 WHERE id = ?1 
 
 const CLEAR_SOURCE_BLIND = `UPDATE source SET degraded_reason = NULL WHERE degraded_reason = ?1 AND id NOT IN (SELECT value FROM json_each(?2))`;
 
-interface SourceTickRow {
-  source_id: string;
-  source_key: string;
-  kind: string;
-  platform: string;
-  watch_id: string;
-  fetched_at: string;
-  item_count: number;
-}
+const sourceTickRow = z.object({
+  source_id: z.string(),
+  source_key: z.string(),
+  kind: z.string(),
+  platform: z.string(),
+  watch_id: z.string(),
+  fetched_at: z.string(),
+  item_count: z.number(),
+});
 
-interface SourceLastGoodRow {
-  source_id: string;
-  at: string;
-}
+const sourceLastGoodRow = z.object({
+  source_id: z.string(),
+  at: z.string(),
+});
 
 export interface EntitySource {
   source: {
@@ -55,33 +55,35 @@ export interface EntitySource {
   } | null;
 }
 
-interface EntitySourceRow {
-  key: string;
-  platform: string;
-  kind: string;
-  is_enabled: number;
-  config_json: string;
-  fetched_at: string | null;
-  item_count: number | null;
-  watch_config_json: string | null;
-}
+const entitySourceRow = z.object({
+  key: z.string(),
+  platform: z.string(),
+  kind: z.string(),
+  is_enabled: z.number(),
+  config_json: z.string(),
+  fetched_at: z.string().nullable(),
+  item_count: z.number().nullable(),
+  watch_config_json: z.string().nullable(),
+});
 
-interface WorkspaceMentionSourceRow {
-  key: string;
-  platform: string;
-  kind: string;
-  is_enabled: number;
-  config_json: string;
-  degraded_reason: string | null;
-  last_good_at: string | null;
-  fetched_at: string | null;
-  item_count: number | null;
-  canary_count: number | null;
-  watch_config_json: string | null;
-}
+const workspaceMentionSourceRow = z.object({
+  key: z.string(),
+  platform: z.string(),
+  kind: z.string(),
+  is_enabled: z.number(),
+  config_json: z.string(),
+  degraded_reason: z.string().nullable(),
+  last_good_at: z.string().nullable(),
+  fetched_at: z.string().nullable(),
+  item_count: z.number().nullable(),
+  canary_count: z.number().nullable(),
+  watch_config_json: z.string().nullable(),
+});
+
+const readEnabledSourceIdRow = z.object({ id: z.string() });
 
 export async function readEnabledSourceId(key: string): Promise<string | null> {
-  const row = await env.DB.prepare(ENABLED_SOURCE_ID).bind(key).first<{ id: string }>();
+  const row = readEnabledSourceIdRow.nullable().parse(await env.DB.prepare(ENABLED_SOURCE_ID).bind(key).first());
   return row?.id ?? null;
 }
 
@@ -121,19 +123,24 @@ export interface CanarySource {
   minIntervalSeconds: number;
 }
 
+const readCanarySourcesRow = z.object({
+  id: z.string(),
+  plugin_key: z.string(),
+  canary_query: z.string(),
+  min_interval_seconds: z.number(),
+});
+
 export async function readCanarySources(): Promise<CanarySource[]> {
-  const { results } = await env.DB.prepare(CANARY_SOURCES).all<{
-    id: string;
-    plugin_key: string;
-    canary_query: string;
-    min_interval_seconds: number;
-  }>();
-  return results.map((row) => ({
-    id: row.id,
-    pluginKey: row.plugin_key,
-    canaryQuery: row.canary_query,
-    minIntervalSeconds: row.min_interval_seconds,
-  }));
+  const { results } = await env.DB.prepare(CANARY_SOURCES).all();
+  return z
+    .array(readCanarySourcesRow)
+    .parse(results)
+    .map((row) => ({
+      id: row.id,
+      pluginKey: row.plugin_key,
+      canaryQuery: row.canary_query,
+      minIntervalSeconds: row.min_interval_seconds,
+    }));
 }
 
 export async function recordSourceCanary(sourceId: string, canaryCount: number, now: string): Promise<void> {
@@ -152,29 +159,40 @@ export async function markSourceBlocked(sourceId: string, status: number): Promi
 
 const SELECT_WORKSPACES_WATCHING_SOURCE = `SELECT DISTINCT e.workspace_id AS workspace_id FROM watch w JOIN entity e ON e.id = w.entity_id WHERE w.source_id = ?1 AND w.is_active = 1 ORDER BY e.workspace_id`;
 
+const readWorkspacesWatchingSourceRow = z.object({ workspace_id: z.string() });
+
 export async function readWorkspacesWatchingSource(sourceId: string): Promise<string[]> {
-  const { results } = await env.DB.prepare(SELECT_WORKSPACES_WATCHING_SOURCE)
-    .bind(sourceId)
-    .all<{ workspace_id: string }>();
-  return results.map((row) => row.workspace_id);
+  const { results } = await env.DB.prepare(SELECT_WORKSPACES_WATCHING_SOURCE).bind(sourceId).all();
+  return z
+    .array(readWorkspacesWatchingSourceRow)
+    .parse(results)
+    .map((row) => row.workspace_id);
 }
 
 export async function readSourceTicks(): Promise<SourceTick[]> {
-  const { results } = await env.DB.prepare(SELECT_SOURCE_TICKS).all<SourceTickRow>();
-  return results.map((row) => ({
-    sourceId: row.source_id,
-    sourceKey: row.source_key,
-    kind: row.kind,
-    platform: row.platform,
-    watchId: row.watch_id,
-    fetchedAt: row.fetched_at,
-    itemCount: row.item_count,
-  }));
+  const { results } = await env.DB.prepare(SELECT_SOURCE_TICKS).all();
+  return z
+    .array(sourceTickRow)
+    .parse(results)
+    .map((row) => ({
+      sourceId: row.source_id,
+      sourceKey: row.source_key,
+      kind: row.kind,
+      platform: row.platform,
+      watchId: row.watch_id,
+      fetchedAt: row.fetched_at,
+      itemCount: row.item_count,
+    }));
 }
 
 export async function readSourceLastGood(): Promise<ReadonlyMap<string, string>> {
-  const { results } = await env.DB.prepare(SELECT_SOURCE_LAST_GOOD).all<SourceLastGoodRow>();
-  return new Map(results.map((row) => [row.source_id, row.at]));
+  const { results } = await env.DB.prepare(SELECT_SOURCE_LAST_GOOD).all();
+  return new Map(
+    z
+      .array(sourceLastGoodRow)
+      .parse(results)
+      .map((row) => [row.source_id, row.at]),
+  );
 }
 
 export async function markSourceBlind(sourceId: string): Promise<void> {
@@ -190,83 +208,80 @@ export async function markSourceTimedOut(sourceId: string): Promise<void> {
 }
 
 export async function readEntitySources(workspaceId: string, entityId: string): Promise<readonly EntitySource[]> {
-  const { results } = await env.DB.prepare(SELECT_ENTITY_SOURCES).bind(workspaceId, entityId).all<EntitySourceRow>();
-  return results.map((row) => ({
-    source: {
-      key: row.key,
-      platform: row.platform,
-      kind: row.kind,
-      is_enabled: row.is_enabled,
-      config_json: row.config_json,
-      watch_config_json: row.watch_config_json,
-    },
-    snapshot: row.fetched_at === null ? null : { item_count: row.item_count ?? 0, fetched_at: row.fetched_at },
-  }));
+  const { results } = await env.DB.prepare(SELECT_ENTITY_SOURCES).bind(workspaceId, entityId).all();
+  return z
+    .array(entitySourceRow)
+    .parse(results)
+    .map((row) => ({
+      source: {
+        key: row.key,
+        platform: row.platform,
+        kind: row.kind,
+        is_enabled: row.is_enabled,
+        config_json: row.config_json,
+        watch_config_json: row.watch_config_json,
+      },
+      snapshot: row.fetched_at === null ? null : { item_count: row.item_count ?? 0, fetched_at: row.fetched_at },
+    }));
 }
 
 export async function readWorkspaceMentionSources(workspaceId: string): Promise<readonly FreshnessSource[]> {
-  const { results } = await env.DB.prepare(SELECT_WORKSPACE_MENTION_SOURCES)
-    .bind(workspaceId)
-    .all<WorkspaceMentionSourceRow>();
-  return results.map((row) => ({
-    kind: row.kind,
-    source: {
-      key: row.key,
-      platform: row.platform,
-      is_enabled: row.is_enabled,
-      config_json: row.config_json,
-      degraded_reason: row.degraded_reason,
-      last_good_at: row.last_good_at,
-      watch_config_json: row.watch_config_json,
-    },
-    snapshot:
-      row.fetched_at === null
-        ? null
-        : {
-            fetched_at: row.fetched_at,
-            item_count: row.item_count ?? 0,
-            canary_count: row.canary_count ?? null,
-          },
-  }));
+  const { results } = await env.DB.prepare(SELECT_WORKSPACE_MENTION_SOURCES).bind(workspaceId).all();
+  return z
+    .array(workspaceMentionSourceRow)
+    .parse(results)
+    .map((row) => ({
+      kind: row.kind,
+      source: {
+        key: row.key,
+        platform: row.platform,
+        is_enabled: row.is_enabled,
+        config_json: row.config_json,
+        degraded_reason: row.degraded_reason,
+        last_good_at: row.last_good_at,
+        watch_config_json: row.watch_config_json,
+      },
+      snapshot:
+        row.fetched_at === null
+          ? null
+          : {
+              fetched_at: row.fetched_at,
+              item_count: row.item_count ?? 0,
+              canary_count: row.canary_count ?? null,
+            },
+    }));
 }
 
 export const SELECT_REGISTRY_SOURCES = `SELECT s.key, s.plugin_key, s.platform, ${SOURCE_KIND} AS kind, s.is_enabled, s.config_json, s.degraded_reason, s.last_good_at, s.latest_fetched_at AS fetched_at, s.latest_item_count AS item_count, s.latest_canary_count AS canary_count FROM source s ORDER BY s.kind, s.key`;
 
-interface RegistrySourceRow {
-  key: string;
-  plugin_key: string;
-  platform: string;
-  kind: string;
-  is_enabled: number;
-  config_json: string;
-  degraded_reason: string | null;
-  last_good_at: string | null;
-  fetched_at: string | null;
-  item_count: number | null;
-  canary_count: number | null;
-}
+const registrySourceRow = workspaceMentionSourceRow
+  .omit({ watch_config_json: true })
+  .extend({ plugin_key: z.string() });
 
 export async function readRegistrySources(): Promise<readonly FreshnessSource[]> {
-  const { results } = await env.DB.prepare(SELECT_REGISTRY_SOURCES).all<RegistrySourceRow>();
-  return results.map((row) => ({
-    kind: row.kind,
-    source: {
-      key: row.key,
-      platform: row.platform,
-      name: row.plugin_key,
-      is_enabled: row.is_enabled,
-      config_json: row.config_json,
-      degraded_reason: row.degraded_reason,
-      last_good_at: row.last_good_at,
-      watch_config_json: null,
-    },
-    snapshot:
-      row.fetched_at === null
-        ? null
-        : {
-            fetched_at: row.fetched_at,
-            item_count: row.item_count ?? 0,
-            canary_count: row.canary_count ?? null,
-          },
-  }));
+  const { results } = await env.DB.prepare(SELECT_REGISTRY_SOURCES).all();
+  return z
+    .array(registrySourceRow)
+    .parse(results)
+    .map((row) => ({
+      kind: row.kind,
+      source: {
+        key: row.key,
+        platform: row.platform,
+        name: row.plugin_key,
+        is_enabled: row.is_enabled,
+        config_json: row.config_json,
+        degraded_reason: row.degraded_reason,
+        last_good_at: row.last_good_at,
+        watch_config_json: null,
+      },
+      snapshot:
+        row.fetched_at === null
+          ? null
+          : {
+              fetched_at: row.fetched_at,
+              item_count: row.item_count ?? 0,
+              canary_count: row.canary_count ?? null,
+            },
+    }));
 }

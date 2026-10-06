@@ -1,8 +1,9 @@
 import { SUPPORT_ADDRESS } from "../components/footer";
 import { PLANS } from "./billing/plans";
 import type { FaqEntry } from "./faq";
+import { SITE_URL } from "./site-url";
 
-export const SITE_URL = "https://0509.io";
+export { SITE_URL };
 
 const ORGANIZATION_ID = `${SITE_URL}/#organization`;
 

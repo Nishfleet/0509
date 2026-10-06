@@ -11,7 +11,7 @@ and the app sit behind Cloudflare Access.
 
 React Router 8 (framework mode) on Cloudflare Workers, D1, R2, KV and
 Queues, better-auth, Tailwind 4, vitest and Playwright. Every dependency and
-its version is justified in [`docs/REBUILD-STACK.md`](docs/REBUILD-STACK.md).
+its version is justified in [`docs/dependencies.md`](docs/dependencies.md).
 
 ## Commands
 
