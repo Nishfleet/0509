@@ -41,7 +41,8 @@ const SESSION_GATE_ALLOWLIST: Readonly<Record<string, string>> = {
   "/onboarding/competitors": "first-run flow after sign-in, not under /app layouts",
   "/onboarding/identity": "first-run flow after sign-in, not under /app layouts",
   "/oauth/authorize": "MCP OAuth consent; the route calls requireFreshSession itself",
-  "/app/changes/:signalId/:side": "signed-out landing screenshot must still load",
+  "/app/changes/:signalId/:side":
+    "published landing shots load signed out; the route calls requireSession for the rest",
 };
 
 function isSessionExempt(urlPath: string) {
