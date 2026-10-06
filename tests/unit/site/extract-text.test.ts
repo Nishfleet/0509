@@ -67,6 +67,26 @@ describe("extractPageText", () => {
     expect(nestedExtracted.text).toBe("kept");
   });
 
+  it("keeps the visible text after a hidden element whose end tag is implied (0509#7084)", async () => {
+    const nextParagraph = await extractPageText("<p style='display:none'>x<p>visible");
+    const parentCloses = await extractPageText("<div><p hidden>x</div><p>after</p>");
+    const nextItem = await extractPageText("<ul><li hidden>a<li>b</ul><p>c</p>");
+    const nextCell = await extractPageText("<table><tr><td hidden>a<td>b<tr><td>c</table>");
+
+    expect(nextParagraph.text).toBe("visible");
+    expect(parentCloses.text).toBe("after");
+    expect(nextItem.text).toBe("b c");
+    expect(nextCell.text).toBe("b c");
+  });
+
+  it("keeps the visible text after a hidden void element (0509#7084)", async () => {
+    const extracted = await extractPageText(
+      "<p>a</p><input hidden><br style='display:none'><p>b</p><hr hidden><p>c</p>",
+    );
+
+    expect(extracted.text).toBe("a b c");
+  });
+
   it("does not split a text node that arrives in more than one chunk", async () => {
     const body = "a".repeat(70_000);
     const extracted = await extractPageText(`<p>${body}</p>`);
