@@ -20,7 +20,7 @@ on:
       journey:
         description: Journey to run now
         type: choice
-        options: [none, j12, suite, signin, j8-hard, j8-soft, soak-report, backup-proof, jev-failures]
+        options: [none, j12, suite, signin, j8-hard, j8-soft, soak-report, backup-proof, jev-failures, feed-diag]
         default: none
       spec:
         description: 'One spec or a filter to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts (0509 sign-up verdict, 2026-09-28)'
@@ -336,6 +336,30 @@ jobs:
           PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+  feed-diag:
+    name: feed-diag
+    if: inputs.journey == 'feed-diag'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -s -m 60 -A 'FiveToNineBot/1.0 (+https://0509.io)' -o /tmp/atom.xml https://vercel.com/atom
+          python3 - <<'PY'
+          import re
+          raw = open('/tmp/atom.xml','rb').read()
+          cap = 2*1024*1024
+          print('total bytes', len(raw))
+          text = raw.decode('utf-8','replace')
+          ents = [(m.start(), m.end()) for m in re.finditer(r'<entry[\s>].*?</entry>', text, re.S)]
+          print('entries', len(ents))
+          sizes = [e-s for s,e in ents]
+          print('first 25 entry sizes', sizes[:25])
+          print('max entry size', max(sizes), 'entries over 20000', sum(1 for x in sizes if x > 20000))
+          head = raw[:cap]
+          print('entries fully inside first 2MiB', sum(1 for s,e in ents if len(text[:e].encode()) <= cap))
+          dates = re.findall(r'<(?:published|updated)>([^<]+)<', text)
+          print('first 6 dates', dates[:6], 'last 2', dates[-2:])
+          print('first entry head', text[ents[0][0]:ents[0][0]+700].replace('\n',' '))
+          PY
   suite:
     name: e2e-production
     needs: [production-sha, suite-shard]
