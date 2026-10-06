@@ -42,7 +42,7 @@ describe("findFeed", () => {
     readThrough.mockResolvedValue({ feedUrl: null });
     await expect(findFeed({ id: "e1", domain: "rival.com" })).resolves.toEqual(NONE);
     expect(readThrough).toHaveBeenCalledTimes(1);
-    expect(readThrough).toHaveBeenCalledWith(expect.objectContaining({ key: "feed:rival.com:url" }));
+    expect(readThrough).toHaveBeenCalledWith(expect.objectContaining({ key: "feed:v2:rival.com:url" }));
     expect(readEnabledSourceId).not.toHaveBeenCalled();
   });
 });

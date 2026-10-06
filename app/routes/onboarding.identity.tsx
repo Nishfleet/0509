@@ -3,11 +3,11 @@ import type { Route } from "./+types/onboarding.identity";
 
 import { captureException } from "@sentry/cloudflare";
 import { data, redirect } from "react-router";
+import { z } from "zod";
 
 import { IdentityCard } from "../components/identity-card";
 import { OnboardingFrame } from "../components/onboarding-frame";
 import { OneInput } from "../components/one-input";
-import { startOnboardingRun } from "../lib/data/onboarding_run.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { executionContext } from "../lib/agent/context.server";
 import { creatorRows, editedFields, isDraftSave } from "../lib/identity/card-fields";
@@ -23,12 +23,14 @@ import { createTimings } from "../lib/server-timing.server";
 import { readSubjectAccess } from "../lib/onboarding/subject-access.server";
 
 export function headers({ loaderHeaders }: Route.HeadersArgs) {
-  return loaderHeaders;
+  return { ...Object.fromEntries(loaderHeaders), "cache-control": "private, no-store" };
 }
 
 export function meta() {
   return [{ title: "Check your details · Five to Nine" }];
 }
+
+const identityActionForm = z.object({ subject: z.string().optional() });
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const timings = createTimings();
@@ -36,18 +38,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   if (!landing) throw redirect("/app");
   if (subject === null) return { card: null, limited: false };
   if (taken || workspaceId === null) throw redirect("/onboarding");
-  const now = new Date().toISOString();
-  const screened = await timings.measure(
-    "screen",
-    screenOnboardingSubject({ workspaceId, userId: userId, subject, raw, answer: null, now }),
-  );
-  if (screened.kind !== "proceed") throw redirect("/onboarding");
-  const [, withinLimit, draft] = await Promise.all([
-    timings.measure("run", startOnboardingRun({ workspaceId, userId: userId, inputRaw: raw, startedAt: now })),
-    withinProbeLimit(userId),
-    readDraft(workspaceId, subject.registrable),
-  ]);
-  if (!withinLimit) return { card: null, limited: true };
+  if (!(await timings.measure("limit", withinProbeLimit(userId)))) return { card: null, limited: true };
+  const draft = await readDraft(workspaceId, subject.registrable);
   const shown = subject.kind === "domain" ? subject.registrable : (subject.url ?? `@${subject.registrable}`);
   const started = startCard(workspaceId, subject, editedFields(draft));
   context.get(executionContext).waitUntil(
@@ -77,10 +69,14 @@ export async function action({ request, context }: Route.ActionArgs) {
   if (workspaceId === null) throw redirect("/onboarding");
   const form = await request.formData();
   if (await applyDraftIntent(workspaceId, form)) return null;
-  const rawSubject = form.get("subject");
-  if (typeof rawSubject === "string") {
+  const parsedSubject = identityActionForm.safeParse(Object.fromEntries(form));
+  const rawSubject = parsedSubject.success ? parsedSubject.data.subject : undefined;
+  if (rawSubject !== undefined) {
     const normalised = normaliseSubject(rawSubject);
     if (normalised.ok) {
+      if (!(await timings.measure("limit", withinProbeLimit(session.user.id)))) {
+        return { message: "You've tried a lot of addresses in the last minute. Wait a minute, then try again." };
+      }
       const screened = await timings.measure(
         "screen",
         screenOnboardingSubject({

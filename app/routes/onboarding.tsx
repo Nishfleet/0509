@@ -1,8 +1,9 @@
 import type { Route } from "./+types/onboarding";
 
 import { redirect } from "react-router";
+import { z } from "zod";
 
-import { requireFreshSession, requireSession } from "../lib/require-session.server";
+import { requireFreshSession, requireSession, signOutToLogin } from "../lib/require-session.server";
 import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 import { OneInput } from "../components/one-input";
 import { OnboardingFrame } from "../components/onboarding-frame";
@@ -13,6 +14,7 @@ import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { normaliseSubject } from "../lib/identity/normalise";
 import { screenOnboardingSubject } from "../lib/onboarding-screen.server";
 import { startOnboardingRun } from "../lib/data/onboarding_run.server";
+import { withinProbeLimit } from "../lib/identity/card.server";
 import { createTimings } from "../lib/server-timing.server";
 import { useTimezoneCookie } from "../lib/use-timezone-cookie";
 
@@ -20,9 +22,14 @@ export function meta() {
   return [{ title: "Your website or social username · Five to Nine" }];
 }
 
+export function headers() {
+  return { "cache-control": "private, no-store" };
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
-  const landing = await workspaceLandingForRequest(request, session.user);
+  const { landing, workspaceId } = await workspaceLandingForRequest(request, session.user);
+  if (workspaceId === null) return await signOutToLogin(request);
   if (landing === null || landing === ONBOARDING_COMPETITORS) throw redirect(landing ?? "/app");
   return { email: session.user.email };
 }
@@ -31,14 +38,18 @@ type Timings = ReturnType<typeof createTimings>;
 type Normalised = ReturnType<typeof normaliseSubject>;
 type AcceptedSubject = Extract<Normalised, { ok: true }>["subject"];
 
+const subjectForm = z.object({
+  subject: z.string().optional(),
+  answer: z.string().optional(),
+});
+
 function readSubjectForm(formData: FormData) {
-  const raw = formData.get("subject");
-  const answer = formData.get("answer");
-  const rawSubject = typeof raw === "string" ? raw : null;
+  const parsed = subjectForm.safeParse(Object.fromEntries(formData));
+  const rawSubject = parsed.success ? (parsed.data.subject ?? null) : null;
   return {
-    raw,
+    raw: rawSubject,
     rawSubject,
-    answer: typeof answer === "string" ? answer : null,
+    answer: parsed.success ? (parsed.data.answer ?? null) : null,
     normalised: rawSubject === null ? null : normaliseSubject(rawSubject),
   };
 }
@@ -62,6 +73,12 @@ interface ScreenInput {
 }
 
 async function screenAndStart({ timings, userId, workspaceId, subject, rawSubject, answer }: ScreenInput) {
+  if (!(await timings.measure("limit", withinProbeLimit(userId)))) {
+    return {
+      message: "You've tried a lot of addresses in the last minute. Wait a minute, then try again.",
+      confirm: null,
+    };
+  }
   const now = new Date().toISOString();
   const result = await timings.measure(
     "screen",

@@ -4,6 +4,7 @@ import { experimental_readRawConfig } from "wrangler";
 import { describe, expect, it } from "vitest";
 
 import { D1_DATABASE_ID, SNAPSHOT_BUCKET } from "../app/lib/observability/cost-analytics.server";
+import { SITE_URL } from "../app/lib/site-url";
 
 // #4631, and 225c3eb before it: the production CLOUDFLARE_API_TOKEN cannot reach
 // the KV namespaces endpoint, so a KV binding without an id sends wrangler to
@@ -42,6 +43,31 @@ describe("deployed wrangler configs", () => {
     const bucket = (rawConfig.r2_buckets ?? []).find((b) => b.binding === "SNAPSHOTS");
     expect(db?.database_id).toBe(D1_DATABASE_ID);
     expect(bucket?.bucket_name).toBe(SNAPSHOT_BUCKET);
+  });
+
+  // 0509#7124. The production origin is written in three places, and this
+  // config's BETTER_AUTH_URL is the one that deploys: app/lib/site-url.ts
+  // holds SITE_URL, which feeds canonical tags, og:url and the MCP URL, and
+  // env.server.ts's env gate holds the same origin. Before this, nothing tied
+  // SITE_URL to the deployed value, so a marketing-site origin that drifted
+  // changed every canonical URL the site emits with no red test anywhere.
+  //
+  // The literal lives in site-url.ts rather than here because it is a leaf on
+  // purpose. env.server.ts cannot import structured-data.ts to read SITE_URL:
+  // that module imports app/components/footer, which would drag the React
+  // tree into the Worker's boot path. A separate import-free module lets both
+  // sides read one literal, which is the whole point of the pin below.
+  //
+  // This does not replace either #7087 pin. That PR adds PRODUCTION_ORIGIN to
+  // env.server.ts and asserts the same config value against it; when it lands,
+  // this test and that one are two assertions of the same fact from two
+  // import paths, and this is the stronger one (an origin change in either
+  // module is red here), which is the reason to keep both.
+  it("pins the deployed BETTER_AUTH_URL to the site origin every node builds on", () => {
+    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    expect(rawConfig.vars?.BETTER_AUTH_URL, "wrangler.jsonc no longer deploys BETTER_AUTH_URL to SITE_URL").toBe(
+      SITE_URL,
+    );
   });
 
   // 0509#5758. Without these the paid defaults apply: 30,000 ms of CPU and
@@ -101,6 +127,7 @@ describe("deployed wrangler configs", () => {
     // docs/engines/README.md "What the four share": no browser on this lane.
     expect(consumer?.max_concurrency).toBe(20);
     expect(consumer?.max_retries).toBe(3);
+    expect(consumer?.retry_delay).toBe(60);
     const dlq = (rawConfig.queues?.consumers ?? []).find((queue) => queue.queue === "fetch-sweep-dlq");
     expect(dlq).toBeDefined();
   });

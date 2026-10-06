@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { redirect } from "react-router";
 
-import { createAuth } from "./auth.server";
+import { createAuth, signOut } from "./auth.server";
 
 async function readSession(request: Request, returnTo: string | undefined, disableCookieCache: boolean) {
   const auth = createAuth(env);
@@ -21,4 +21,8 @@ export function requireFreshSession(request: Request, returnTo?: string) {
 export async function hasSession(request: Request): Promise<boolean> {
   const auth = createAuth(env);
   return (await auth.api.getSession({ headers: request.headers })) !== null;
+}
+
+export async function signOutToLogin(request: Request): Promise<never> {
+  throw redirect("/login", { headers: await signOut(env, request) });
 }

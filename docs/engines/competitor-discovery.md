@@ -142,7 +142,7 @@ DiscoveryWorkflow(mode: 'create' | 'refresh', workspaceId, entityId)
 ```
 
 - **`create`** is started by `IdentityTailWorkflow` the moment the card is confirmed, so discovery has already been running while the user reads the card — that is how the 60-second promise is kept.
-- **`refresh`** is started by cron **`0 4 * * 1`** (weekly, Monday 04:00 UTC), one instance per workspace, and runs D2 over existing competitors plus a `create`-shaped pass for new entrants.
+- **`refresh`** is started by cron **`0 4 * * MON`** (weekly, Monday 04:00 UTC), one instance per workspace, and runs D2 over existing competitors plus a `create`-shaped pass for new entrants.
 - **Queues:** discovery uses **`fetch-sweep`** (`max_concurrency: 20`, no browser) for its own generators. The one generator that needs a browser — Meta Ad Library by keyword — is enqueued on **`page-sweep`** (`max_concurrency: 8`) and its result lands asynchronously; discovery does not block on it, and a late arrival is folded in as extra evidence on the next refresh. Both queues have a dead-letter queue and `max_retries: 3`; shipping a queue without a DLQ deletes messages permanently (`REBUILD-STACK.md` §4.2).
 - Step count: 6 per instance. At 100 workspaces weekly plus onboardings, ~2,700 steps a month against **500,000 included**.
 
@@ -261,7 +261,7 @@ The number to watch is not money, it is the browser leg: if the ad-library gener
 
 **GOAL.** `DiscoveryWorkflow` with the six steps above in both modes, the weekly cron, and the Competitors page: accepted brands ON, maybes as a short second list, per-brand on/off/dismiss, "add a competitor" as one input.
 
-**STOCK FEATURE OR LIBRARY.** Cloudflare Workflows (`step.do` with `{ retries: { limit: 3, backoff: "exponential" } }`), Cron Triggers `"0 4 * * 1"`, Queues `fetch-sweep` / `page-sweep` with DLQs, React Router **8.4.0** routes, `shadcn` **4.21.0**.
+**STOCK FEATURE OR LIBRARY.** Cloudflare Workflows (`step.do` with `{ retries: { limit: 3, backoff: "exponential" } }`), Cron Triggers `"0 4 * * MON"`, Queues `fetch-sweep` / `page-sweep` with DLQs, React Router **8.4.0** routes, `shadcn` **4.21.0**.
 
 **FILES IN SCOPE.** `workers/discovery-workflow.ts`, `workers/schedule.ts`, `wrangler.jsonc`, `app/routes/competitors.tsx`, `e2e/competitors.spec.ts`.
 

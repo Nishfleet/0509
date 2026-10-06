@@ -3,46 +3,41 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
+import { parse } from "yaml";
 
 // 0509#5738: on GitHub a SKIPPED required check counts as a pass (#4664 merged
 // with a required check SKIPPED). So no required job may carry a job-level
 // `if:`; its steps decide instead and the job always reports. The names below
 // are the required_status_checks of ruleset 21391031 that are jobs in this repo.
 // A rename fails the first test instead of silently checking nothing.
+// 0509#7013: `ci-ok` aggregates them so the ruleset can require it alone.
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const WORKFLOWS = path.join(REPO_ROOT, ".github/workflows");
 const REQUIRED = ["Gitleaks", "codex-node-checks", "semgrep", "preview-assert"];
 
+interface WorkflowStep {
+  if?: unknown;
+  run?: string;
+}
+
+interface WorkflowJob {
+  name?: string;
+  if?: unknown;
+  needs?: string | string[];
+  steps?: WorkflowStep[];
+}
+
 interface Job {
   file: string;
   key: string;
   reported: string;
-  body: readonly string[];
+  job: WorkflowJob;
 }
 
-// No YAML parser is in the stack (docs/REBUILD-STACK.md), so jobs are read by
-// indentation, by reading each job block in turn.
-function readJobs(file: string, yaml: string): Job[] {
-  const lines = yaml.split("\n");
-  const jobsAt = lines.indexOf("jobs:");
-  if (jobsAt === -1) return [];
-  const headers = lines
-    .map((line, index) => ({ line, index }))
-    .filter(({ line, index }) => index > jobsAt && /^ {2}[A-Za-z_][A-Za-z0-9_-]*:\s*$/.test(line));
-  return headers.map(({ line, index }, n) => {
-    const end = n + 1 < headers.length ? headers[n + 1].index : lines.length;
-    const body = lines.slice(index + 1, end);
-    const key = line.trim().slice(0, -1);
-    const named = body.find((l) => /^ {4}name:\s*/.test(l));
-    const reported = named
-      ? named
-          .replace(/^ {4}name:\s*/, "")
-          .replace(/^["']|["']$/g, "")
-          .trim()
-      : key;
-    return { file, key, reported, body };
-  });
+function readJobs(file: string, source: string): Job[] {
+  const jobs = (parse(source) as { jobs?: Record<string, WorkflowJob> }).jobs ?? {};
+  return Object.entries(jobs).map(([key, job]) => ({ file, key, reported: job.name ?? key, job }));
 }
 
 async function allJobs(): Promise<Job[]> {
@@ -61,9 +56,9 @@ describe("required checks always report (0509#5738)", () => {
 
   it("gives no required job a job-level if:", async () => {
     const offenders = (await allJobs())
-      .filter((job) => REQUIRED.includes(job.reported))
-      .filter((job) => job.body.some((l) => /^ {4}if:/.test(l)))
-      .map((job) => `${job.file}: ${job.key}`);
+      .filter(({ reported }) => REQUIRED.includes(reported))
+      .filter(({ job }) => job.if !== undefined)
+      .map(({ file, key }) => `${file}: ${key}`);
     expect(offenders).toEqual([]);
   });
 
@@ -74,10 +69,36 @@ describe("required checks always report (0509#5738)", () => {
       "  semgrep:",
       "    if: github.event_name != 'x'",
       "    runs-on: ubuntu-latest",
-      "",
     ].join("\n");
     const [job] = readJobs("fixture.yml", yaml);
     expect(job.reported).toBe("semgrep");
-    expect(job.body.some((l) => /^ {4}if:/.test(l))).toBe(true);
+    expect(job.job.if).toBe("github.event_name != 'x'");
+  });
+});
+
+describe("ci-ok aggregates every required check (0509#7013)", () => {
+  it("needs every required job and runs even when one of them fails", async () => {
+    const ciOk = (await allJobs()).find(({ file, reported }) => file === "ci.yml" && reported === "ci-ok");
+    expect(ciOk?.job.if).toBe("always()");
+    expect([ciOk?.job.needs ?? []].flat().sort()).toEqual([...REQUIRED].sort());
+  });
+
+  it("passes only when every needed job succeeded, never on a denylist of results", async () => {
+    const ciOk = (await allJobs()).find(({ file, reported }) => file === "ci.yml" && reported === "ci-ok");
+    const steps = ciOk?.job.steps ?? [];
+    expect(steps.map((step) => step.if)).toEqual(["always()"]);
+    expect(steps[0]?.run).toContain('all(.[]; .result == "success")');
+  });
+});
+
+describe("lighthouse runs after the deploy, not on deployment_status (0509#7013)", () => {
+  it("keeps ci.yml off deployment_status and chains lighthouse to the deploy job", async () => {
+    const ci = parse(await readFile(path.join(WORKFLOWS, "ci.yml"), "utf8")) as { on: Record<string, unknown> };
+    expect(Object.keys(ci.on)).not.toContain("deployment_status");
+    const deploy = readJobs(
+      "deploy-production.yml",
+      await readFile(path.join(WORKFLOWS, "deploy-production.yml"), "utf8"),
+    );
+    expect(deploy.find(({ key }) => key === "lighthouse")?.job.needs).toEqual(["deploy"]);
   });
 });

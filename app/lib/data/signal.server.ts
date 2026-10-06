@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import type { ScoredSignal } from "../biggest-move";
 import { isFeedKind, type DevelopmentItem } from "../developments";
+import { toIsoInstant } from "../iso-instant";
 import type { WeekEvidence } from "../home-standing";
 import { ACT_AT, REJECT_AT, changeActsSql } from "../jev/thresholds";
 import { D3_QUESTION_ID, D6_QUESTION_ID, reliabilitySchema, scoreBucketSchema } from "../standing-score";
@@ -93,7 +94,7 @@ export async function insertHiringSignals(rows: readonly NewHiringSignal[]): Pro
           row.url,
           JSON.stringify({ platform: row.platform, location: row.location, team: row.team }),
           dedupKey,
-          row.publishedAt,
+          toIsoInstant(row.publishedAt),
           row.observedAt,
         );
       }),
@@ -139,7 +140,7 @@ export async function insertContentSignals(rows: readonly NewContentSignal[]): P
           row.excerpt,
           row.url,
           `${row.watchId}:${row.itemKey}`,
-          row.publishedAt,
+          toIsoInstant(row.publishedAt),
           row.observedAt,
         ),
       ),
@@ -243,7 +244,7 @@ export function insertMention(signal: MentionSignal): D1PreparedStatement {
     signal.engagementJson,
     signal.payloadJson,
     signal.dedupKey,
-    signal.publishedAt,
+    toIsoInstant(signal.publishedAt),
     signal.observedAt,
     signal.isNotAboutBrand ? 1 : 0,
     signal.state,

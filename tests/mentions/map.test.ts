@@ -142,7 +142,7 @@ describe("toSignalRow", () => {
     const row = await toSignalRow(item, CTX);
     expect(row.dedup_key).toBe("49807834");
     expect(row.canonical_url).toBe(item.url);
-    expect(row.published_at).toBe("2026-09-22T20:46:13Z");
+    expect(row.published_at).toBe("2026-09-22T20:46:13.000Z");
     expect(JSON.parse(row.payload_json)).toEqual({});
     expect(storedDedupKey("ent_hn", row.dedup_key)).toBe("ent_hn:49807834");
   });
@@ -178,5 +178,17 @@ describe("toSignalRow", () => {
     expect(a.url_hash).not.toBe(b.url_hash);
     expect(c.title_hash).not.toBe(a.title_hash);
     expect(c.norm_url_hash).not.toBe(a.norm_url_hash);
+  });
+});
+
+describe("toSignalRow published_at", () => {
+  it("stores an RFC822 date as an ISO instant", async () => {
+    const row = await toSignalRow({ ...ITEM, publishedAt: "Mon, 04 Mar 2021 10:00:00 GMT" }, CTX);
+    expect(row.published_at).toBe("2021-03-04T10:00:00.000Z");
+  });
+
+  it("stores an unparseable date as null", async () => {
+    const row = await toSignalRow({ ...ITEM, publishedAt: "not a date" }, CTX);
+    expect(row.published_at).toBeNull();
   });
 });
