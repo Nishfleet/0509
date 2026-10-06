@@ -19,6 +19,8 @@ const SELECT_UNSUBSCRIBE_TOKEN = `SELECT 1 AS present FROM send_target WHERE uns
 
 const DELETE_SUPPRESSION = `DELETE FROM email_suppression WHERE lower(trim(address)) = lower(trim(?))`;
 
+const DELETE_WORKSPACE_DELETED_SUPPRESSION = `DELETE FROM email_suppression WHERE lower(trim(address)) = lower(trim(?)) AND reason = 'workspace_deleted'`;
+
 export async function suppressByUnsubscribeToken(token: string): Promise<void> {
   await env.DB.prepare(SUPPRESS_BY_UNSUBSCRIBE_TOKEN).bind(new Date().toISOString(), token).run();
 }
@@ -42,9 +44,5 @@ export async function clearSuppression(address: string): Promise<void> {
 }
 
 export async function clearWorkspaceDeletedSuppression(address: string): Promise<void> {
-  await env.DB.prepare(
-    `DELETE FROM email_suppression WHERE lower(trim(address)) = lower(trim(?)) AND reason = 'workspace_deleted'`,
-  )
-    .bind(address)
-    .run();
+  await env.DB.prepare(DELETE_WORKSPACE_DELETED_SUPPRESSION).bind(address).run();
 }
