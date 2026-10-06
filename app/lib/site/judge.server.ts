@@ -18,7 +18,14 @@ import {
   type NoulQuestion,
   type NoulVerdict,
 } from "../jev/client.server";
-import { ACT_AT, BREAKAGE_ALERT_AT, CHANGE_KIND_QUESTION_ID, PRICING_ACT_AT, REJECT_AT } from "../jev/thresholds";
+import {
+  ACT_AT,
+  BREAKAGE_ALERT_AT,
+  BREAKAGE_CLEAR_AT,
+  CHANGE_KIND_QUESTION_ID,
+  PRICING_ACT_AT,
+  REJECT_AT,
+} from "../jev/thresholds";
 import { parseDiffHunks, parseSiteChangePayload, type SiteChangePayload } from "../site-change";
 import { daysBefore } from "../site-changes.server";
 import { computeBreakageEvidence, type BreakageEvidence } from "./breakage-evidence";
@@ -30,8 +37,6 @@ const JEV_BREAKAGE_PER_BRAND_PER_DAY = 6;
 const HISTORY_DAYS = 30;
 
 const HISTORY_LIMIT = 20;
-
-const BREAKAGE_CLEAR_P = 0.1;
 
 const PUBLISH_P = ACT_AT;
 
@@ -136,7 +141,7 @@ export function changeState<H>(input: ChangeStateInput, history30d: readonly H[]
 
 function breakageBandOf(p: number): BreakageBand["band"] {
   if (p >= BREAKAGE_ALERT_AT) return "alert";
-  if (p <= BREAKAGE_CLEAR_P) return "clear";
+  if (p <= BREAKAGE_CLEAR_AT) return "clear";
   return "check";
 }
 

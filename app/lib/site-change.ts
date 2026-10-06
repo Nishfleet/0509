@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { httpUrl } from "./http-url";
-import { BREAKAGE_ALERT_AT } from "./jev/thresholds";
+import { BREAKAGE_CLEAR_AT } from "./jev/thresholds";
 import { shortUtc } from "./short-utc";
 import type { WhyFlagged } from "./why-flagged";
 
@@ -33,7 +33,7 @@ export function changeJudgedSql(verdictQuestions: { noteworthy: string; breakage
     SELECT 1 FROM jev_verdict v
     WHERE v.signal_id = s.id
       AND (v.question_id = ${verdictQuestions.noteworthy}
-        OR (v.question_id = ${verdictQuestions.breakage} AND v.p >= ${String(BREAKAGE_ALERT_AT)}))
+        OR (v.question_id = ${verdictQuestions.breakage} AND v.p > ${String(BREAKAGE_CLEAR_AT)}))
   )`;
 }
 

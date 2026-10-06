@@ -5,6 +5,7 @@ import { insertVerdict } from "../../../app/lib/data/jev_verdict.server";
 import { JevRateLimitedError } from "../../../app/lib/jev/client.server";
 import { computeBreakageEvidence } from "../../../app/lib/site/breakage-evidence";
 import { judgeChange, rejudgeUnjudgedChanges } from "../../../app/lib/site/judge.server";
+import { countUnjudgedInputs } from "../../../app/lib/standing-score.server";
 
 const jevAnswers = {
   noul: new Map<string, number>(),
@@ -614,6 +615,36 @@ describe("judgeChange", () => {
       "SELECT COUNT(*) AS n FROM jev_verdict WHERE signal_id = 'sig-self-clear' AND question_id = 'noteworthy_change'",
     ).first<{ n: number }>();
     expect(noteworthy?.n).toBe(1);
+  });
+
+  it("counts a self change in the breakage check band as judged, so rejudging stops and the week can rank", async () => {
+    await env.SNAPSHOTS.put("snapshot/site/k/before.txt", "Plans from $29 a month for teams with a named manager.");
+    await env.SNAPSHOTS.put("snapshot/site/k/after.txt", "Plans from $39 a month for teams with a named manager.");
+    const payload = {
+      page: { role: "home", url: "https://mine.example/" },
+      before: { snapshotId: "a", textKey: "snapshot/site/k/before.txt", screenshotKey: null },
+      after: { snapshotId: "b", textKey: "snapshot/site/k/after.txt", screenshotKey: null },
+      diffKey: null,
+      wordsAdded: 1,
+      wordsRemoved: 1,
+      status: 200,
+    };
+    await env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, url, payload_json, dedup_key, observed_at)
+       VALUES ('sig-self-check', 'ws-mine', 'mine', 'src_site_web', 'change', 'home', 'https://mine.example/', ?, 'dedup-self-check', ?)`,
+    )
+      .bind(JSON.stringify(payload), NOW)
+      .run();
+    jevAnswers.noul.set("own_site_breakage", 0.3);
+
+    const first = await rejudgeUnjudgedChanges(todayWindow("ws-mine"));
+    const second = await rejudgeUnjudgedChanges(todayWindow("ws-mine"));
+    const unjudged = await countUnjudgedInputs(env.DB, todayWindow("ws-mine"));
+
+    expect(first).toBe(1);
+    expect(second).toBe(0);
+    expect(unjudged).toBe(0);
+    expect(await rowsFor("mine")).toHaveLength(1);
   });
 
   it("does not spend the daily cap on rate-limited calls, so retries cannot exhaust it", async () => {
