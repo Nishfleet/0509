@@ -7,6 +7,7 @@ import { requestContext } from "../app/lib/agent/context.server";
 import { createOAuthProvider } from "../app/lib/agent/oauth.server";
 import { deleteExpiredAuthRows } from "../app/lib/data/auth_expiry.server";
 import { deleteExpiredJevFailures } from "../app/lib/data/jev_failure.server";
+import { runNightlySlackBackfill } from "../app/lib/data/send_target.server";
 import { stampFirstSignals } from "../app/lib/data/onboarding_run.server";
 import { startNightlyDiscovery, startWeeklyRefresh } from "../app/lib/discovery/start.server";
 import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
@@ -75,6 +76,7 @@ const handler = {
           deleteExpiredAuthRows(env.DB, now),
           deleteExpiredJevFailures(env.DB, now),
           stampFirstSignals(),
+          runNightlySlackBackfill(env.DB),
           runNightlyCostGuard(env.DB, env.CLOUDFLARE_API_TOKEN, controller.scheduledTime),
         ]);
         reportNightlyResults(results);
