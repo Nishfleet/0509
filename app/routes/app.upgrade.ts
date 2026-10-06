@@ -12,7 +12,7 @@ import { requireFreshSession } from "../lib/require-session.server";
 
 const UNAVAILABLE = { message: "Upgrading isn't available right now. Try again in a few minutes." };
 
-const HAS_PLAN = { message: "This workspace already has a plan. Change it from Billing." };
+const HAS_PLAN = { message: "This workspace already has a plan. Change it from Settings." };
 
 const upgradeForm = z.object({
   plan: z.string(),

@@ -110,7 +110,7 @@ describe("upgrade checkout when the workspace already has a plan (#7228)", () =>
 
     const result = await action(upgradeRequest("starter"));
 
-    expect(result).toEqual({ message: "This workspace already has a plan. Change it from Billing." });
+    expect(result).toEqual({ message: "This workspace already has a plan. Change it from Settings." });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
