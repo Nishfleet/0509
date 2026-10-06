@@ -3,8 +3,7 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { createAuth } from "../auth.server";
-import { readEntitlements } from "../data/plan.server";
-import { readWorkspaceIdForOwner } from "../data/workspace.server";
+import { readOwnerWorkspaceApiAccess } from "../data/plan.server";
 import type { AgentKey, ConnectedApp, CreateKeyResult } from "./access";
 
 const FRESH = { disableCookieCache: true };
@@ -54,11 +53,6 @@ async function submissionMinted(request: Request, submission: string): Promise<b
   return listed.apiKeys.some((key) => Reflect.get(key.metadata ?? {}, "submission") === submission);
 }
 
-async function apiAccessAllowed(userId: string): Promise<boolean> {
-  const workspaceId = await readWorkspaceIdForOwner(userId);
-  return workspaceId !== null && (await readEntitlements(workspaceId)).api_access;
-}
-
 function keyFields(form: FormData): { name: string; submission: string } {
   const parsed = createKeyForm.safeParse(Object.fromEntries(form));
   const submitted = parsed.success ? (parsed.data.name === undefined ? "" : parsed.data.name.trim()) : "";
@@ -70,7 +64,9 @@ function keyFields(form: FormData): { name: string; submission: string } {
 
 async function apiAccessDenied(request: Request): Promise<boolean> {
   const session = await createAuth(env).api.getSession({ headers: request.headers, query: FRESH });
-  return session !== null && !(await apiAccessAllowed(session.user.id));
+  if (session === null) return false;
+  const access = await readOwnerWorkspaceApiAccess(session.user.id);
+  return access?.apiAccess !== true;
 }
 
 export async function createAgentKey(request: Request, form: FormData): Promise<CreateKeyResult> {

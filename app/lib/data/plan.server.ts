@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 
 import { entitledTier, resolveEntitlements, type Entitlements } from "../billing/entitlements";
 import { isPlanId, type PlanId, type PlanSummary } from "../billing/plans";
+import { readWorkspaceIdForOwner } from "./workspace.server";
 
 interface PlanRow {
   tier: string;
@@ -43,6 +44,14 @@ async function readPlan(workspaceId: string): Promise<{ tier: string; row: PlanR
 export async function readEntitlements(workspaceId: string): Promise<Entitlements> {
   const { tier, row } = await readPlan(workspaceId);
   return resolveEntitlements(tier, row === null ? "{}" : row.limits_json);
+}
+
+export async function readOwnerWorkspaceApiAccess(
+  userId: string,
+): Promise<{ workspaceId: string; apiAccess: boolean } | null> {
+  const workspaceId = await readWorkspaceIdForOwner(userId);
+  if (workspaceId === null) return null;
+  return { workspaceId, apiAccess: (await readEntitlements(workspaceId)).api_access };
 }
 
 export async function readWorkspaceEntitlements(

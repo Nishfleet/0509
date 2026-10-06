@@ -140,6 +140,22 @@ describe("ensureWorkspace against migrations/0001_rebuild.sql", () => {
     expect(await workspaceCount("user-agency-cap")).toBe(2);
   });
 
+  it("a second insert of the same id is not a cap error", async () => {
+    await seedUser("user-same-id", "same-id@example.com");
+    const now = "2026-09-22T12:00:00.000Z";
+    const input = {
+      id: "ws-same-id",
+      name: "one",
+      ownerUserId: "user-same-id",
+      timezone: "UTC",
+      createdAt: now,
+      fixture: false,
+    };
+    await insertWorkspace(env.DB, input);
+    await insertWorkspace(env.DB, { ...input, createdAt: "2026-09-23T12:00:00.000Z" });
+    expect(await workspaceCount("user-same-id")).toBe(1);
+  });
+
   it("uses the widest live plan when an older workspace is still Scout", async () => {
     await seedUser("user-wide-cap", "wide-cap@example.com");
     const now = "2026-09-22T12:00:00.000Z";

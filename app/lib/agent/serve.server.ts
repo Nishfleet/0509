@@ -1,7 +1,6 @@
 import { env } from "cloudflare:workers";
 
-import { readEntitlements } from "../data/plan.server";
-import { readWorkspaceIdForOwner } from "../data/workspace.server";
+import { readOwnerWorkspaceApiAccess } from "../data/plan.server";
 import { clientIp, withinLimit } from "./client-limit.server";
 import type { AgentProps } from "./context.server";
 import { RATE_LIMITED, bearerToken, propsForApiKey } from "./keys.server";
@@ -29,13 +28,13 @@ const RATE_LIMITED_PROBLEM: Problem = {
 async function workspaceFor(props: AgentProps): Promise<string | Response> {
   const { success } = await env.AGENT_LIMIT.limit({ key: props.userId });
   if (!success) return problem(429, RATE_LIMITED_PROBLEM, { "retry-after": "60" });
-  const workspaceId = await readWorkspaceIdForOwner(props.userId);
-  if (workspaceId === null)
+  const access = await readOwnerWorkspaceApiAccess(props.userId);
+  if (access === null)
     return problem(403, { error: "no_workspace", description: "Finish signing up at 0509.io first." });
-  if (!(await readEntitlements(workspaceId)).api_access) {
+  if (!access.apiAccess) {
     return problem(403, { error: "plan", description: "This plan does not include API access." });
   }
-  return workspaceId;
+  return access.workspaceId;
 }
 
 export async function mcpResponse(request: Request, props: AgentProps): Promise<Response> {

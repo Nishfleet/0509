@@ -78,27 +78,33 @@ function entityFrom(row: z.infer<typeof homeRow>): HomeEntity | null {
   return { id: row.entity_id, role: row.role, domain: row.domain, name: row.name, state: row.state };
 }
 
+async function readHistoryBatch(db: D1Database, workspaceId: string, weeks: number) {
+  return db.batch([
+    db.prepare(SELECT_HISTORY).bind(workspaceId, weeks),
+    db.prepare(SELECT_HOME_SOURCES).bind(workspaceId),
+    db.prepare(SELECT_HOME_COUNTS).bind(workspaceId),
+  ]);
+}
+
 async function readStandingBatch(db: D1Database, ownerUserId: string, knownWorkspaceId: string | undefined) {
   const standing = db.prepare(SELECT_HOME_STANDING).bind(ownerUserId);
   if (knownWorkspaceId !== undefined) {
-    const weeks = (await readEntitlements(knownWorkspaceId)).standing_history_weeks;
-    const [standingResult, historyResult, sourcesResult, countsResult] = await db.batch([
-      standing,
-      db.prepare(SELECT_HISTORY).bind(knownWorkspaceId, weeks),
-      db.prepare(SELECT_HOME_SOURCES).bind(knownWorkspaceId),
-      db.prepare(SELECT_HOME_COUNTS).bind(knownWorkspaceId),
-    ]);
-    return { rows: homeRows.parse(standingResult?.results), historyResult, sourcesResult, countsResult };
+    const [entitlements, standingResult] = await Promise.all([readEntitlements(knownWorkspaceId), standing.all()]);
+    const [historyResult, sourcesResult, countsResult] = await readHistoryBatch(
+      db,
+      knownWorkspaceId,
+      entitlements.standing_history_weeks,
+    );
+    return { rows: homeRows.parse(standingResult.results), historyResult, sourcesResult, countsResult };
   }
   const rows = homeRows.parse((await standing.all()).results);
   const first = rows[0];
   if (first === undefined) return { rows, historyResult: undefined, sourcesResult: undefined, countsResult: undefined };
-  const weeks = (await readEntitlements(first.workspace_id)).standing_history_weeks;
-  const [historyResult, sourcesResult, countsResult] = await db.batch([
-    db.prepare(SELECT_HISTORY).bind(first.workspace_id, weeks),
-    db.prepare(SELECT_HOME_SOURCES).bind(first.workspace_id),
-    db.prepare(SELECT_HOME_COUNTS).bind(first.workspace_id),
-  ]);
+  const [historyResult, sourcesResult, countsResult] = await readHistoryBatch(
+    db,
+    first.workspace_id,
+    (await readEntitlements(first.workspace_id)).standing_history_weeks,
+  );
   return { rows, historyResult, sourcesResult, countsResult };
 }
 

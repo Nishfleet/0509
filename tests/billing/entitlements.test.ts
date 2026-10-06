@@ -113,7 +113,7 @@ describe("every entitlement key has a reader (0509#7062)", () => {
   it.each([...ENTITLEMENT_KEYS])("%s is read outside billing", (key) => {
     const hits = texts.filter(({ text }) => {
       if (!/readEntitlements|resolveEntitlements|readWorkspaceEntitlements/.test(text)) return false;
-      return text.includes(`.${key}`);
+      return new RegExp(`\\.${key}\\b`).test(text);
     });
     expect(
       hits.map(({ file }) => file),
@@ -126,7 +126,7 @@ describe("every entitlement key has a reader (0509#7062)", () => {
   });
 });
 
-describe("pageRoleInScope", () => {
+describe("pageRoleInScope (0509#7062)", () => {
   it("keeps home and pricing on Scout and lets Starter take the rest", () => {
     expect(pageRoleInScope("home", "home_pricing")).toBe(true);
     expect(pageRoleInScope("pricing", "home_pricing")).toBe(true);
@@ -135,7 +135,7 @@ describe("pageRoleInScope", () => {
   });
 });
 
-describe("paidSourceAllowed", () => {
+describe("paidSourceAllowed (0509#7062)", () => {
   it("denies scraper.paid unless the workspace is entitled", () => {
     expect(paidSourceAllowed("scraper.paid", false)).toBe(false);
     expect(paidSourceAllowed("scraper.paid", true)).toBe(true);

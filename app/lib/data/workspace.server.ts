@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 
 import { entitledTier, resolveEntitlements } from "../billing/entitlements";
 import { canonicalTimezone } from "../timezone";
@@ -49,12 +50,14 @@ export async function readWorkspaceLanding(db: WorkspaceDb, userId: string): Pro
   return db.prepare(SELECT_WORKSPACE_LANDING).bind(userId).first<WorkspaceLandingRow>();
 }
 
-interface OwnerPlanRow {
-  tier: string;
-  status: string;
-  current_period_end: string | null;
-  limits_json: string;
-}
+const ownerPlanRow = z.object({
+  tier: z.string(),
+  status: z.string(),
+  current_period_end: z.string().nullable(),
+  limits_json: z.string(),
+});
+
+type OwnerPlanRow = z.infer<typeof ownerPlanRow>;
 
 interface BoundStatement {
   first<T>(): Promise<T | null>;
@@ -77,10 +80,7 @@ export class WorkspaceCapError extends Error {
 
 const INSERT_WORKSPACE = `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at, fixture)
 SELECT ?, ?, ?, ?, 1, 8, ?, ?
-WHERE (
-  SELECT count(*) FROM workspace WHERE owner_user_id = ?
-) = 0
-OR ? = 1
+WHERE ? = 1
 OR (
   SELECT count(*) FROM workspace WHERE owner_user_id = ?
 ) < ?
@@ -102,9 +102,10 @@ function widerWorkspacesMax(left: number | null, right: number | null): number |
 
 async function ownerWorkspacesMax(db: WorkspaceDb, ownerUserId: string): Promise<number | null> {
   const { results } = await db.prepare(SELECT_OWNER_PLANS).bind(ownerUserId).all();
-  if (results.length === 0) return resolveEntitlements("scout", "{}").workspaces_max;
+  const plans = z.array(ownerPlanRow).parse(results);
+  if (plans.length === 0) return resolveEntitlements("scout", "{}").workspaces_max;
   const now = new Date();
-  return results
+  return plans
     .map(
       (row) =>
         resolveEntitlements(
@@ -129,7 +130,6 @@ export async function insertWorkspace(
       input.timezone,
       input.createdAt,
       input.fixture ? 1 : 0,
-      input.ownerUserId,
       cap === null ? 1 : 0,
       input.ownerUserId,
       cap ?? 0,
