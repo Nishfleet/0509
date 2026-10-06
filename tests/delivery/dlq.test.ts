@@ -235,6 +235,7 @@ describe("handleDlqBatch", () => {
     expect(inserts[0]?.args[3]).toBe("high");
     expect(inserts[0]?.args[4]).toBe(CHANGE_UNDELIVERED_TITLE);
     expect(inserts[0]?.args[5]).toBe(CHANGE_UNDELIVERED_BODY);
+    expect(recorded.some((row) => row.sql.includes("SET status = 'dropped'"))).toBe(true);
     expect(ack).toHaveBeenCalledOnce();
     expect(retry).not.toHaveBeenCalled();
     expect(ids).toEqual([`${DLQ_CHANGE_PREFIX}sig_1`]);

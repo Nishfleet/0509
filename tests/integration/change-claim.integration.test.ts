@@ -1,7 +1,11 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { claimChangeSlot } from "../../app/lib/data/send_attempt.server";
+import {
+  CHANGE_DEAD_LETTER_STATUS,
+  claimChangeSlot,
+  dropDeadLetteredChange,
+} from "../../app/lib/data/send_attempt.server";
 
 const WS = "ws-change-claim";
 const CHANNEL = "chan-change-claim";
@@ -77,5 +81,31 @@ describe("claimChangeSlot (0509#7084)", () => {
     });
 
     expect(slot).toEqual({ kind: "duplicate" });
+  });
+
+  it("does not reclaim a change send the dead-letter queue already dropped (0509#7084)", async () => {
+    const key = "change:sig-dropped:tgt-change-claim";
+    await env.DB.prepare(
+      `INSERT INTO send_attempt (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at)
+       VALUES ('att-dropped', ?, ?, NULL, ?, 'failed', ?)`,
+    )
+      .bind(WS, TARGET_ID, key, NOW)
+      .run();
+
+    await dropDeadLetteredChange(env.DB, "sig-dropped");
+
+    const slot = await claimChangeSlot(env.DB, {
+      idempotencyKey: key,
+      workspaceId: WS,
+      targetId: TARGET_ID,
+      since: "2026-10-05T00:00:00.000Z",
+      cap: 5,
+    });
+
+    expect(slot).toEqual({ kind: "duplicate" });
+    const row = await env.DB.prepare(`SELECT status FROM send_attempt WHERE id = 'att-dropped'`).first<{
+      status: string;
+    }>();
+    expect(row?.status).toBe(CHANGE_DEAD_LETTER_STATUS);
   });
 });

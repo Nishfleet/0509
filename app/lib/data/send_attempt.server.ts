@@ -62,6 +62,16 @@ RETURNING id`;
 
 const SELECT_ATTEMPT_KEY = `SELECT 1 AS found FROM send_attempt WHERE idempotency_key = ?`;
 
+export const CHANGE_DEAD_LETTER_STATUS = "dropped";
+
+const DROP_DEAD_LETTERED_CHANGE = `UPDATE send_attempt
+  SET status = 'dropped'
+  WHERE idempotency_key LIKE ? AND status IN ('pending', 'failed')`;
+
+export async function dropDeadLetteredChange(db: D1Database, signalId: string): Promise<void> {
+  await db.prepare(DROP_DEAD_LETTERED_CHANGE).bind(`change:${signalId}:%`).run();
+}
+
 export type ChangeSlot = { kind: "claimed"; id: string } | { kind: "duplicate" } | { kind: "capped" };
 
 export async function claimChangeSlot(

@@ -2,6 +2,7 @@ import { captureException } from "@sentry/cloudflare";
 
 import { insertDeliveryFailedAlert, type DeliveryFailedAlert } from "../../app/lib/data/alert.server";
 import { markDigestFailed } from "../../app/lib/data/digest.server";
+import { dropDeadLetteredChange } from "../../app/lib/data/send_attempt.server";
 import { parseMessage } from "./consumer";
 
 export const DELIVERY_FAILED_KIND = "delivery_failed";
@@ -202,6 +203,7 @@ function changeDeadLetterError(input: { message_id: string; signal_id: string; r
 }
 
 async function deadLetteredChange(env: Env, messageId: string, signalId: string): Promise<string | null> {
+  await dropDeadLetteredChange(env.DB, signalId);
   const signal = await env.DB.prepare(`SELECT workspace_id FROM signal WHERE id = ?`)
     .bind(signalId)
     .first<{ workspace_id: string }>();
