@@ -57,7 +57,9 @@ describe("resolveBrandName", () => {
   });
 
   it("an empty manifest-style name is skipped", async () => {
-    const fetchMock = vi.fn(async (_input: unknown) => Response.json({ search: [{ id: "Q56246099", label: "Gymshark" }] }));
+    const fetchMock = vi.fn(async (_input: unknown) =>
+      Response.json({ search: [{ id: "Q56246099", label: "Gymshark" }] }),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await resolveBrandName(sources({ ldOrganizationName: "", ogSiteName: "", title: "" }), "Gymshark");

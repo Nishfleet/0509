@@ -14,7 +14,7 @@ const recorder = (): Recorder => ({ sent: [] });
 const bindingFor = (rec: Recorder): SendEmail => ({
   send(message: EmailMessage | EmailMessageBuilder) {
     rec.sent.push(message as EmailMessageBuilder);
-    return Promise.resolve({} as EmailSendResult);
+    return Promise.resolve({ messageId: "unused" });
   },
 });
 

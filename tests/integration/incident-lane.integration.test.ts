@@ -14,7 +14,7 @@ const bindingFor = (rec: Recorder): SendEmail => ({
   send(message: EmailMessage | EmailMessageBuilder) {
     if (rec.fail) throw rec.fail;
     rec.sent.push(message as EmailMessageBuilder);
-    return Promise.resolve({} as EmailSendResult);
+    return Promise.resolve({ messageId: "unused" });
   },
 });
 
