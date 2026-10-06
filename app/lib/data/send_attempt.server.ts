@@ -1,5 +1,7 @@
 const STALE_CLAIM_MS = 60 * 60 * 1000;
 
+export const CHANGE_STALE_CLAIM_MS = 2 * 60 * 1000;
+
 const CLAIM_ATTEMPT = `INSERT INTO send_attempt
   (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at)
 VALUES (?, ?, ?, ?, ?, 'pending', ?)
@@ -60,26 +62,31 @@ ON CONFLICT(idempotency_key) DO UPDATE
   WHERE send_attempt.status = 'failed' OR (send_attempt.status = 'pending' AND send_attempt.attempted_at < ?)
 RETURNING id`;
 
-const SELECT_ATTEMPT_KEY = `SELECT 1 AS found FROM send_attempt WHERE idempotency_key = ?`;
+const SELECT_ATTEMPT_STATUS = `SELECT status FROM send_attempt WHERE idempotency_key = ?`;
 
 export const CHANGE_DEAD_LETTER_STATUS = "dropped";
 
 const DROP_DEAD_LETTERED_CHANGE = `UPDATE send_attempt
   SET status = 'dropped'
-  WHERE idempotency_key LIKE ? AND status IN ('pending', 'failed')`;
+  WHERE substr(idempotency_key, 1, length(?1)) = ?1 AND status IN ('pending', 'failed')`;
 
-export async function dropDeadLetteredChange(db: D1Database, signalId: string): Promise<void> {
-  await db.prepare(DROP_DEAD_LETTERED_CHANGE).bind(`change:${signalId}:%`).run();
+export function changeKeyPrefix(signalId: string): string {
+  return `change:${signalId}:`;
 }
 
-export type ChangeSlot = { kind: "claimed"; id: string } | { kind: "duplicate" } | { kind: "capped" };
+export async function dropDeadLetteredChange(db: D1Database, signalId: string): Promise<void> {
+  await db.prepare(DROP_DEAD_LETTERED_CHANGE).bind(changeKeyPrefix(signalId)).run();
+}
+
+export type ChangeSlot =
+  { kind: "claimed"; id: string } | { kind: "duplicate" } | { kind: "in_flight" } | { kind: "capped" };
 
 export async function claimChangeSlot(
   db: D1Database,
   input: { idempotencyKey: string; workspaceId: string; targetId: string; since: string; cap: number },
 ): Promise<ChangeSlot> {
   const now = new Date().toISOString();
-  const staleBefore = new Date(Date.now() - STALE_CLAIM_MS).toISOString();
+  const staleBefore = new Date(Date.now() - CHANGE_STALE_CLAIM_MS).toISOString();
   const claimed = await db
     .prepare(CLAIM_CHANGE_SLOT)
     .bind(
@@ -95,6 +102,7 @@ export async function claimChangeSlot(
     )
     .first<{ id: string }>();
   if (claimed !== null) return { kind: "claimed", id: claimed.id };
-  const existing = await db.prepare(SELECT_ATTEMPT_KEY).bind(input.idempotencyKey).first<{ found: number }>();
-  return existing === null ? { kind: "capped" } : { kind: "duplicate" };
+  const existing = await db.prepare(SELECT_ATTEMPT_STATUS).bind(input.idempotencyKey).first<{ status: string }>();
+  if (existing === null) return { kind: "capped" };
+  return existing.status === "pending" ? { kind: "in_flight" } : { kind: "duplicate" };
 }

@@ -79,6 +79,7 @@ type DeliveryOutcome =
   | "not_self"
   | "muted"
   | "no_signal"
+  | "in_flight"
   | "capped";
 
 interface DeliveryResult {
@@ -455,7 +456,7 @@ async function renderChangeEmail(
 async function claimChange(
   env: Env,
   input: { change: ChangeRow; target: TargetRow },
-): Promise<{ claim: { id: string } | null; capped: boolean; idempotencyKey: string }> {
+): Promise<{ claim: { id: string } | null; capped: boolean; inFlight: boolean; idempotencyKey: string }> {
   const { change, target } = input;
   const now = new Date();
   const timeZone = canonicalTimezone(change.timezone);
@@ -468,8 +469,9 @@ async function claimChange(
     since: startOfLocalDay(now, timeZone).toISOString(),
     cap: CHANGE_DAILY_CAP,
   });
-  if (slot.kind === "claimed") return { claim: { id: slot.id }, capped: false, idempotencyKey };
-  if (slot.kind === "duplicate") return { claim: null, capped: false, idempotencyKey };
+  if (slot.kind === "claimed") return { claim: { id: slot.id }, capped: false, inFlight: false, idempotencyKey };
+  if (slot.kind === "duplicate") return { claim: null, capped: false, inFlight: false, idempotencyKey };
+  if (slot.kind === "in_flight") return { claim: null, capped: false, inFlight: true, idempotencyKey };
   const overflowKey = `change-overflow:${change.workspace_id}:${day}`;
   const overflow = await claimSendAttempt(env.DB, {
     idempotencyKey: overflowKey,
@@ -477,7 +479,7 @@ async function claimChange(
     targetId: target.id,
     digestId: null,
   });
-  return { claim: overflow, capped: true, idempotencyKey: overflowKey };
+  return { claim: overflow, capped: true, inFlight: false, idempotencyKey: overflowKey };
 }
 
 async function sendChange(
@@ -485,9 +487,10 @@ async function sendChange(
   input: { change: ChangeRow; payload: SiteChangePayload; target: TargetRow },
 ): Promise<DeliveryResult> {
   const { change, payload, target } = input;
-  const { claim, capped, idempotencyKey } = await claimChange(env, { change, target });
+  const { claim, capped, inFlight, idempotencyKey } = await claimChange(env, { change, target });
   if (claim === null) {
-    return { outcome: capped ? "capped" : "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
+    const outcome = capped ? "capped" : inFlight ? "in_flight" : "duplicate";
+    return { outcome, attempt_id: null, idempotency_key: idempotencyKey };
   }
 
   const result = await sendAndResolve(env, {
@@ -591,7 +594,7 @@ export async function handleBatch(env: Env, batch: MessageBatch): Promise<Delive
       continue;
     }
     const result = await route(env, parsed);
-    if (result.outcome === "failed") {
+    if (result.outcome === "failed" || result.outcome === "in_flight") {
       item.retry();
     } else {
       item.ack();

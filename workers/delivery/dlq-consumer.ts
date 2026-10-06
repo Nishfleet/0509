@@ -2,7 +2,7 @@ import { captureException } from "@sentry/cloudflare";
 
 import { insertDeliveryFailedAlert, type DeliveryFailedAlert } from "../../app/lib/data/alert.server";
 import { markDigestFailed } from "../../app/lib/data/digest.server";
-import { dropDeadLetteredChange } from "../../app/lib/data/send_attempt.server";
+import { changeKeyPrefix, dropDeadLetteredChange } from "../../app/lib/data/send_attempt.server";
 import { parseMessage } from "./consumer";
 
 export const DELIVERY_FAILED_KIND = "delivery_failed";
@@ -217,9 +217,9 @@ async function deadLetteredChange(env: Env, messageId: string, signalId: string)
   }
 
   const attempt = await env.DB.prepare(
-    `SELECT error FROM send_attempt WHERE idempotency_key LIKE ? ORDER BY attempted_at DESC LIMIT 1`,
+    `SELECT error FROM send_attempt WHERE substr(idempotency_key, 1, length(?1)) = ?1 ORDER BY attempted_at DESC LIMIT 1`,
   )
-    .bind(`change:${signalId}:%`)
+    .bind(changeKeyPrefix(signalId))
     .first<{ error: string | null }>();
   const reason = attempt?.error ?? "no send attempt recorded";
   captureException(changeDeadLetterError({ message_id: messageId, signal_id: signalId, reason }), {

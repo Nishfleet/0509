@@ -312,4 +312,14 @@ describe("handleBatch", () => {
     expect(failing.items[0]?.retry).toHaveBeenCalled();
     expect(failing.items[0]?.ack).not.toHaveBeenCalled();
   });
+
+  it("retries a change whose earlier send is still in flight instead of acking it", async () => {
+    slots.claimChangeSlot.mockResolvedValue({ kind: "in_flight" });
+    const { items, batch } = batchOf({ signal_id: "sig-1" });
+    const results = await handleBatch(fakeEnv(), batch);
+    expect(results.map((r) => r.outcome)).toEqual(["in_flight"]);
+    expect(items[0]?.retry).toHaveBeenCalled();
+    expect(items[0]?.ack).not.toHaveBeenCalled();
+    expect(sent).toHaveLength(0);
+  });
 });
