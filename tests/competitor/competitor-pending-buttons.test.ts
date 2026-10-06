@@ -1,6 +1,6 @@
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createRoutesStub, NavigationType } from "react-router";
+import { createRoutesStub } from "react-router";
 import type { Navigation } from "react-router";
 import type * as ReactRouterModule from "react-router";
 import { describe, expect, it, vi, beforeEach } from "vitest";

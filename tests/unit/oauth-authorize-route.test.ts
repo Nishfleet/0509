@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createMemoryRouter, NavigationType, RouterProvider } from "react-router";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import type { Navigation } from "react-router";
 import type * as ReactRouterModule from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";

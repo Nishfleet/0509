@@ -10,18 +10,35 @@ import { SITE_URL } from "../app/lib/site-url";
 // reads are named here. Each one a config stops carrying then fails to compile
 // instead of reading as `undefined`, which is the failure that let a KV binding
 // ship without an id (#4631).
-type KvNamespace = { binding: string; id?: string };
-type WorkflowBinding = { name: string; schedules?: unknown };
-type D1Database = { binding: string; database_id?: string };
-type R2Bucket = { binding: string; bucket_name?: string };
-type QueueConsumer = {
+interface KvNamespace {
+  binding: string;
+  id?: string;
+}
+
+interface WorkflowBinding {
+  name: string;
+  schedules?: unknown;
+}
+
+interface D1Database {
+  binding: string;
+  database_id?: string;
+}
+
+interface R2Bucket {
+  binding: string;
+  bucket_name?: string;
+}
+
+interface QueueConsumer {
   queue: string;
   dead_letter_queue?: string;
   max_concurrency?: number;
   max_retries?: number;
   retry_delay?: number;
-};
-type DeployedConfig = {
+}
+
+interface DeployedConfig {
   kv_namespaces?: KvNamespace[];
   workflows?: WorkflowBinding[];
   d1_databases?: D1Database[];
@@ -38,7 +55,7 @@ type DeployedConfig = {
     logs?: { head_sampling_rate?: number; invocation_logs?: boolean; persist?: boolean };
   };
   compatibility_flags?: string[];
-};
+}
 
 const readConfig = (config: string): { rawConfig: DeployedConfig } =>
   experimental_readRawConfig({ config }) as unknown as { rawConfig: DeployedConfig };
