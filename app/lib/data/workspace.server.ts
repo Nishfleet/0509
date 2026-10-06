@@ -5,7 +5,7 @@ import { canonicalTimezone } from "../timezone";
 
 const SELECT_WORKSPACE_TIMEZONE = "SELECT timezone FROM workspace WHERE id = ?";
 
-const readWorkspaceTimezoneRow = z.object({ timezone: z.string().nullable() });
+const readWorkspaceTimezoneRow = z.object({ timezone: z.string() });
 
 export async function readWorkspaceTimezone(workspaceId: string): Promise<string> {
   const row = readWorkspaceTimezoneRow
@@ -98,13 +98,13 @@ export async function revertWorkspaceTimezone(db: WorkspaceDb, id: string, timez
 }
 
 const readWorkspaceR2PrefixesRow = z.object({ id: z.string() });
+const readWorkspaceR2PrefixesRows = z.array(readWorkspaceR2PrefixesRow);
 
 export async function readWorkspaceR2Prefixes(workspaceId: string): Promise<string[]> {
   const { results } = await env.DB.prepare(SELECT_WORKSPACE_WATCHES).bind(workspaceId).all();
   return [
     `card/${workspaceId}/`,
-    ...z
-      .array(readWorkspaceR2PrefixesRow)
+    ...readWorkspaceR2PrefixesRows
       .parse(results)
       .flatMap((row) => [`snapshot/site/${row.id}/`, `snapshot/hiring/${row.id}/`, `snapshot/feed/${row.id}/`]),
   ];
@@ -165,7 +165,7 @@ const SELECT_OWN_SITE_ALERTS = "SELECT own_site_alerts FROM workspace WHERE id =
 
 const UPDATE_OWN_SITE_ALERTS = "UPDATE workspace SET own_site_alerts = ? WHERE id = ?";
 
-const readOwnSiteAlertsRow = z.object({ own_site_alerts: z.number().nullable() });
+const readOwnSiteAlertsRow = z.object({ own_site_alerts: z.number() });
 
 export async function readOwnSiteAlerts(workspaceId: string): Promise<boolean> {
   const row = readOwnSiteAlertsRow
@@ -184,7 +184,7 @@ const SELECT_CHANGE_ALERTS = "SELECT change_alerts FROM workspace WHERE id = ?";
 
 const UPDATE_CHANGE_ALERTS = "UPDATE workspace SET change_alerts = ? WHERE id = ?";
 
-const readChangeAlertsRow = z.object({ change_alerts: z.number().nullable() });
+const readChangeAlertsRow = z.object({ change_alerts: z.number() });
 
 export async function readChangeAlerts(workspaceId: string): Promise<boolean> {
   const row = readChangeAlertsRow
