@@ -25,7 +25,8 @@ function jsonError(status: number, body: { error: string; error_description: str
 
 function withCanonicalMcp(request: Request): Request {
   const url = new URL(request.url);
-  if (url.pathname === MCP_PATH || url.pathname.toLowerCase() !== MCP_PATH) return request;
+  const bare = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
+  if (url.pathname === MCP_PATH || bare.toLowerCase() !== MCP_PATH) return request;
   url.pathname = MCP_PATH;
   return new Request(url, request);
 }

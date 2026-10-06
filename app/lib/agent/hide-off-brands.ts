@@ -1,4 +1,5 @@
 import type { BriefPayload } from "../brief-payload";
+import { quietWeekLine } from "../quiet-week";
 import { UNJUDGED_WEEK_LINE, readThisFirstLine } from "../read-this-first";
 
 type BrandLine = BriefPayload["brands"][number];
@@ -42,9 +43,11 @@ function whyLine(input: {
   if (!hiddenNames.some((name) => lineNamesBrand(payload.why_line, name))) return payload.why_line;
   if (payload.is_unjudged) return UNJUDGED_WEEK_LINE;
   const lead = marks[0];
-  if (lead !== undefined) return readThisFirstLine(marks.length, marks.length, lead.entity_name);
+  if (lead !== undefined) {
+    return readThisFirstLine(marks.length, Math.max(payload.judged_count ?? 0, marks.length), lead.entity_name);
+  }
   const counts = signalCounts(remaining);
-  return `Quiet week: ${String(counts.mention_count)} mentions, ${String(counts.site_change_count)} site changes, ${String(counts.new_ad_count)} new ads.`;
+  return quietWeekLine(counts.mention_count, counts.site_change_count, counts.new_ad_count);
 }
 
 export function hideOffBrands(payload: BriefPayload, hidden: Set<string>): BriefPayload {

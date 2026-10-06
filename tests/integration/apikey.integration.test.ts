@@ -154,7 +154,7 @@ describe("apikey plugin against the shipped schema", () => {
       body: { userId: "u_apikey_backfill", name: "backfill" },
     });
     await env.DB.prepare('UPDATE apikey SET "expiresAt" = NULL WHERE id = ?').bind(created.id).run();
-    await env.DB.prepare(expiresAtBackfill()).run();
+    await env.DB.prepare(apikeyBackfill("expiresAt")).run();
 
     const iso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
     const rows = await env.DB.prepare('SELECT id, "expiresAt" FROM apikey WHERE id IN (?, ?)')
@@ -176,16 +176,44 @@ describe("apikey plugin against the shipped schema", () => {
       .run();
     expect((await auth.api.verifyApiKey({ body: { key: created.key } })).valid).toBe(false);
   });
+
+  it("stamps the read scope on keys with no permissions and leaves scoped keys alone", async () => {
+    await seedUser("u_apikey_perm_backfill");
+    const unscoped = await auth.api.createApiKey({
+      body: { userId: "u_apikey_perm_backfill", name: "unscoped" },
+    });
+    const writer = await auth.api.createApiKey({
+      body: { userId: "u_apikey_perm_backfill", name: "writer" },
+    });
+    await env.DB.prepare("UPDATE apikey SET permissions = NULL WHERE id = ?").bind(unscoped.id).run();
+    await env.DB.prepare("UPDATE apikey SET permissions = ? WHERE id = ?").bind('{"write":["*"]}', writer.id).run();
+
+    const { propsForApiKey } = await import("../../app/lib/agent/keys.server");
+    expect(await propsForApiKey(unscoped.key)).toBeNull();
+
+    await env.DB.prepare(apikeyBackfill("permissions")).run();
+
+    const rows = await env.DB.prepare("SELECT id, permissions FROM apikey WHERE id IN (?, ?)")
+      .bind(unscoped.id, writer.id)
+      .all<{ id: string; permissions: string | null }>();
+    const byId = new Map((rows.results ?? []).map((row) => [row.id, row.permissions]));
+    expect(byId.get(unscoped.id)).toBe('{"read":["*"]}');
+    expect(byId.get(writer.id)).toBe('{"write":["*"]}');
+    expect(await propsForApiKey(unscoped.key)).toMatchObject({ userId: "u_apikey_perm_backfill" });
+    expect(await propsForApiKey(writer.key)).toBeNull();
+  });
 });
 
-function expiresAtBackfill(): string {
+function apikeyBackfill(column: "expiresAt" | "permissions"): string {
   const found: D1Migration | undefined = env.TEST_MIGRATIONS.find((migration) =>
     migration.name.endsWith("_apikey_read_expiry.sql"),
   );
   if (found === undefined) throw new Error("0047_apikey_read_expiry.sql is missing from TEST_MIGRATIONS");
-  const updates = found.queries.filter((query) => /update\s+"apikey"\s+set\s+"expiresAt"/i.test(query));
+  const updates = found.queries.filter((query) =>
+    new RegExp(`update\\s+"apikey"\\s+set\\s+"${column}"`, "i").test(query),
+  );
   if (updates.length !== 1) {
-    throw new Error(`0047_apikey_read_expiry.sql holds ${updates.length} UPDATEs over apikey.expiresAt`);
+    throw new Error(`0047_apikey_read_expiry.sql holds ${updates.length} UPDATEs over apikey.${column}`);
   }
   return updates[0] as string;
 }

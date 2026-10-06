@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { hideOffBrands } from "../../app/lib/agent/hide-off-brands";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
+import { required } from "../../app/lib/required";
 
 const ON = "ent_on";
 const OFF = "ent_off";
@@ -86,6 +87,33 @@ describe("hideOffBrands", () => {
     expect(hidden.checked.new_ad_count).toBe(2);
     expect(hidden.why_line).not.toContain("Rival Off");
     expect(hidden.read_this_first).toEqual([]);
+  });
+
+  it("rewrites a quiet week with singular nouns for counts of one", () => {
+    const template = payload("Rival Off paused, so every brand below it moved up.");
+    const brief = {
+      ...template,
+      brands: template.brands.map((line) =>
+        line.entity_id === ON ? { ...line, ad_delta: 1, mention_delta: 1, site_change_count: 1 } : line,
+      ),
+    };
+    expect(hideOffBrands(brief, new Set([OFF])).why_line).toBe("Quiet week: 1 mention, 1 site change, 1 new ad.");
+  });
+
+  it("rewrites a led-by line with the judged count the brief was composed with, not the picked count", () => {
+    const template = payload("2 of 7 changes worth reading this week, led by Rival Off.");
+    const onMark = {
+      ...required(template.read_this_first[0], "test.off-mark"),
+      signal_id: "sig_on",
+      entity_id: ON,
+      entity_name: "Rival On",
+    };
+    const brief = parseBriefPayload(
+      JSON.stringify({ ...template, judged_count: 7, read_this_first: [...template.read_this_first, onMark] }),
+    );
+    const hidden = hideOffBrands(brief, new Set([OFF]));
+    expect(hidden.read_this_first.map((mark) => mark.entity_id)).toEqual([ON]);
+    expect(hidden.why_line).toBe("1 of 7 changes worth reading this week, led by Rival On.");
   });
 
   it("keeps a why line that does not name the OFF brand", () => {

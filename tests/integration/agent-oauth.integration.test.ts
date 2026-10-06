@@ -281,6 +281,14 @@ describe("an AI app signing in to 0509", () => {
     expect(response.status).toBe(401);
   });
 
+  it.each(["/mcp/", "/MCP/", "/Mcp/", "/mCP/", "/Mcp"])(
+    "treats GET %s as /mcp so a missing token is 401",
+    async (path) => {
+      const response = await send(new Request(`${ORIGIN}${path}`));
+      expect(response.status).toBe(401);
+    },
+  );
+
   it("refuses a foreign-origin MCP preflight and allows the product origin", async () => {
     const foreign = await send(
       new Request(`${ORIGIN}/mcp`, {
