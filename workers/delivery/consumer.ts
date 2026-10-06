@@ -1,3 +1,4 @@
+import { isWorkspacePaid } from "../../app/lib/billing/entitlements";
 import { markDigestSentStatement } from "../../app/lib/data/digest.server";
 import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
 import { claimIncidentNotice } from "../../app/lib/data/incident_notice.server";
@@ -174,6 +175,16 @@ async function noTarget(
   return { outcome: "no_target", attempt_id: null, idempotency_key: null };
 }
 
+async function isUnpaidWorkspace(env: Env, workspaceId: string): Promise<boolean> {
+  const row = await env.DB.prepare("SELECT status, current_period_end FROM plan WHERE workspace_id = ?")
+    .bind(workspaceId)
+    .first<{ status: string; current_period_end: string | null }>();
+  return !isWorkspacePaid(
+    row === null ? null : { status: row.status, currentPeriodEnd: row.current_period_end },
+    new Date(),
+  );
+}
+
 function newUnsubscribeToken(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
@@ -248,6 +259,9 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
   const digest = await readDigest(env, message.digest_id);
   if (!digest) {
     return { outcome: "no_digest", attempt_id: null, idempotency_key: null };
+  }
+  if (await isUnpaidWorkspace(env, digest.workspace_id)) {
+    return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
 
   const target = await readTarget(env, digest.workspace_id);
@@ -351,18 +365,22 @@ function renderIncidentEmail(incident: IncidentRow, to: string, token: string) {
   };
 }
 
+async function incidentBlocked(env: Env, incident: IncidentRow): Promise<DeliveryResult | null> {
+  if (incident.role !== "self") return { outcome: "not_self", attempt_id: null, idempotency_key: null };
+  if (incident.own_site_alerts === 0) return { outcome: "muted", attempt_id: null, idempotency_key: null };
+  if (await isUnpaidWorkspace(env, incident.workspace_id)) {
+    return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
+  }
+  return null;
+}
+
 export async function deliverIncident(env: Env, message: IncidentMessage): Promise<DeliveryResult> {
   const incident = await readIncident(env, message.incident_id);
   if (!incident) {
     return { outcome: "no_incident", attempt_id: null, idempotency_key: null };
   }
-  if (incident.role !== "self") {
-    return { outcome: "not_self", attempt_id: null, idempotency_key: null };
-  }
-
-  if (incident.own_site_alerts === 0) {
-    return { outcome: "muted", attempt_id: null, idempotency_key: null };
-  }
+  const blocked = await incidentBlocked(env, incident);
+  if (blocked) return blocked;
 
   const target = await readTarget(env, incident.workspace_id);
   if (!target) {
@@ -569,6 +587,9 @@ export async function deliverChange(env: Env, message: ChangeMessage): Promise<D
   }
   if (change.change_alerts === 0) {
     return { outcome: "muted", attempt_id: null, idempotency_key: null };
+  }
+  if (await isUnpaidWorkspace(env, change.workspace_id)) {
+    return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
   const slack = await postChangeToSlack(env, { change, payload });
   const email = await emailChange(env, { change, payload });

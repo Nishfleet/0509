@@ -8,6 +8,7 @@ import {
   readOpenBreakageBaselines,
   readOpenIncidents,
 } from "../data/incident.server";
+import { readPaidWorkspaceIds } from "../data/plan.server";
 import type { OwnSitePage } from "../data/page.server";
 import { readOwnSitePages } from "../data/page.server";
 import { BlockedRedirectError, cappedText, fetchOutbound } from "../fetch/outbound.server";
@@ -113,7 +114,8 @@ export async function breakageRepaired(url: string, beforeKey: string | null): P
 
 export async function planOwnSiteCheck(now: string): Promise<OwnSitePlan> {
   await ensureHomePages(now);
-  const pages = await readOwnSitePages();
+  const paid = await readPaidWorkspaceIds(new Date(now));
+  const pages = (await readOwnSitePages()).filter((page) => paid.has(page.workspaceId));
   await closeIncidentsOutside(
     pages.map((page) => page.pageId),
     now,

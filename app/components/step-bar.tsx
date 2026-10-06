@@ -2,9 +2,11 @@ import type { ReactElement } from "react";
 
 import { cn } from "../lib/utils";
 
-export const ONBOARDING_STEPS = ["Your site", "Check details", "Competitors"] as const;
+export const ONBOARDING_STEPS = ["Your site", "Check details", "Competitors", "Plan"] as const;
 
-export function StepBar({ current }: { current: 1 | 2 | 3 }): ReactElement {
+export type OnboardingStep = 1 | 2 | 3 | 4;
+
+export function StepBar({ current }: { current: OnboardingStep }): ReactElement {
   return (
     <nav aria-label="Onboarding progress" className="border-b border-line pb-3">
       <ol className="flex flex-wrap gap-x-5 gap-y-2 font-mono text-eyebrow uppercase">

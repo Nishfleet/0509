@@ -22,7 +22,7 @@ vi.mock("../app/lib/workspace.server", () => ({
 }));
 
 describe("requireOnboarded", () => {
-  it.each(["/onboarding", "/onboarding/identity?subject=acme.example", "/onboarding/competitors"])(
+  it.each(["/onboarding", "/onboarding/identity?subject=acme.example", "/onboarding/competitors", "/onboarding/plan"])(
     "redirects an unfinished workspace to its resume point %s",
     async (resumePoint) => {
       landing.missing = false;

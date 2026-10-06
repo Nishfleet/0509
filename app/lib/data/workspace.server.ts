@@ -24,7 +24,8 @@ export async function readWorkspaceIdForOwner(userId: string): Promise<string | 
   return row?.id ?? null;
 }
 
-const SELECT_WORKSPACE_LANDING = `SELECT w.id, w.timezone, e.id AS self_id, r.input_raw, r.watching_started_at
+const SELECT_WORKSPACE_LANDING = `SELECT w.id, w.timezone, e.id AS self_id, r.input_raw, r.watching_started_at,
+       p.status AS plan_status, p.current_period_end AS plan_current_period_end
 FROM workspace w
 LEFT JOIN entity e ON e.id = (
   SELECT id FROM entity WHERE workspace_id = w.id AND role = 'self' LIMIT 1
@@ -32,6 +33,7 @@ LEFT JOIN entity e ON e.id = (
 LEFT JOIN onboarding_run r ON r.id = (
   SELECT id FROM onboarding_run WHERE workspace_id = w.id ORDER BY started_at ASC LIMIT 1
 )
+LEFT JOIN plan p ON p.workspace_id = w.id
 WHERE w.owner_user_id = ?
 ORDER BY w.created_at ASC
 LIMIT 1`;
@@ -42,6 +44,8 @@ export interface WorkspaceLandingRow {
   self_id: string | null;
   input_raw: string | null;
   watching_started_at: string | null;
+  plan_status: string | null;
+  plan_current_period_end: string | null;
 }
 
 export async function readWorkspaceLanding(db: WorkspaceDb, userId: string): Promise<WorkspaceLandingRow | null> {

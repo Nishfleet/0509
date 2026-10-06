@@ -49,6 +49,11 @@ const seedUserAndWorkspace = async () => {
   )
     .bind(WS, USER)
     .run();
+  await env.DB.prepare(
+    "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', '2026-09-23T00:00:00Z')",
+  )
+    .bind(`plan-${WS}`, WS)
+    .run();
   await env.DB.prepare(`INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?, 'email', 1, '{}')`)
     .bind(CHANNEL)
     .run();

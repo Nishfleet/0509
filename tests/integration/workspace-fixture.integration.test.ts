@@ -19,6 +19,11 @@ async function onboard(id: string, email: string) {
   )
     .bind(`ent_${id}`, workspace.id, `${id}.example.com`, at)
     .run();
+  await env.DB.prepare(
+    "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
+  )
+    .bind(`plan_${id}`, workspace.id, at)
+    .run();
   return workspace.id;
 }
 

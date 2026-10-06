@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 
-import { entitledTier, resolveEntitlements, type Entitlements } from "../billing/entitlements";
+import { entitledTier, isWorkspacePaid, resolveEntitlements, type Entitlements } from "../billing/entitlements";
 import { isPlanId, type PlanId, type PlanSummary } from "../billing/plans";
 
 interface PlanRow {
@@ -32,7 +32,7 @@ WHERE ? = 1 OR excluded.updated_at >= plan.updated_at`;
 
 async function readPlan(workspaceId: string): Promise<{ tier: string; row: PlanRow | null }> {
   const row = await env.DB.prepare(SELECT_PLAN).bind(workspaceId).first<PlanRow>();
-  if (row === null) return { tier: "scout", row };
+  if (row === null) return { tier: "none", row };
   const tier = entitledTier(
     { tier: row.tier, status: row.status, currentPeriodEnd: row.current_period_end },
     new Date(),
@@ -115,6 +115,19 @@ export interface SubscriptionPlan {
   currentPeriodEnd: string | null;
   trialing: boolean;
   updatedAt: string;
+}
+
+export async function readPaidWorkspaceIds(now: Date): Promise<ReadonlySet<string>> {
+  const rows = await env.DB.prepare("SELECT workspace_id, status, current_period_end FROM plan").all<{
+    workspace_id: string;
+    status: string;
+    current_period_end: string | null;
+  }>();
+  return new Set(
+    rows.results
+      .filter((row) => isWorkspacePaid({ status: row.status, currentPeriodEnd: row.current_period_end }, now))
+      .map((row) => row.workspace_id),
+  );
 }
 
 export async function upsertSubscriptionPlan(input: SubscriptionPlan): Promise<void> {

@@ -189,6 +189,11 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
     )
       .bind(WS, USER, NOW)
       .run();
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
+    )
+      .bind(`plan-${WS}`, WS, NOW)
+      .run();
     await env.DB.prepare(`INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?, 'email', 1, '{}')`)
       .bind(CHANNEL)
       .run();
