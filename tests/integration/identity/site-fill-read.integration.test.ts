@@ -1,5 +1,6 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { ZodError } from "zod";
 
 import {
   fillSelfSiteFields,
@@ -94,6 +95,34 @@ describe("readSelfSiteFill", () => {
 
     expect(await markSelfSiteFill(workspaceId, selfId, "gave_up")).toBe(true);
     expect(await readSelfSiteFill(workspaceId)).toBe("gave_up");
+  });
+
+  it("throws when $.siteFill holds a string no writer produces", async () => {
+    await seed();
+    await env.DB.prepare(
+      `UPDATE entity SET identity_json = json_set(identity_json, '$.siteFill', 'bogus') WHERE id = ?1`,
+    )
+      .bind(selfId)
+      .run();
+
+    await expect(readSelfSiteFill(workspaceId)).rejects.toThrow(ZodError);
+  });
+
+  it("throws when $.siteFill holds an object or array that SQLite reports as text", async () => {
+    await seed();
+    await env.DB.prepare(
+      `UPDATE entity SET identity_json = json_set(identity_json, '$.siteFill', json('{"a":1}')) WHERE id = ?1`,
+    )
+      .bind(selfId)
+      .run();
+    await expect(readSelfSiteFill(workspaceId)).rejects.toThrow(ZodError);
+
+    await env.DB.prepare(
+      `UPDATE entity SET identity_json = json_set(identity_json, '$.siteFill', json('[1,2]')) WHERE id = ?1`,
+    )
+      .bind(selfId)
+      .run();
+    await expect(readSelfSiteFill(workspaceId)).rejects.toThrow(ZodError);
   });
 
   it("returns null for a workspace with no self entity", async () => {
