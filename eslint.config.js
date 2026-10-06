@@ -56,6 +56,12 @@ const FOUR_WEEK_PLOT_STATIC_IMPORT = {
     'Load four-week-plot with React.lazy(() => import("./four-week-plot")), never a static import: a static import puts uPlot back in the /app entry. Source: 0509#5289.',
 };
 
+const ROW_EVIDENCE_STATIC_IMPORT = {
+  name: "./row-evidence",
+  message:
+    'Load row-evidence with React.lazy(() => import("./row-evidence")), never a static import: a static import puts @base-ui/react/tabs in the /app entry (docs/REBUILD-DONE.md §B, 150 KB). Source: 0509#7014.',
+};
+
 const CHART_IMPORTS = [UPLOT_IMPORT, UPLOT_REACT_IMPORT, FOUR_WEEK_PLOT_STATIC_IMPORT];
 
 const FAST_XML_PARSER_IMPORT = {
@@ -291,7 +297,15 @@ const BARE_TOAST = {
     "toast() is called in exactly one module, app/components/toaster.tsx, behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo'. The sonner import ban does not catch a toast reached another way, so the call shape is banned too. Source: 0509#4116, 0509#7007.",
 };
 
+const HAND_ROLLED_ARIA_TAB = {
+  selector:
+    "JSXAttribute[name.name='role'] Literal[value=/^(tab|tablist|tabpanel)$/], JSXAttribute[name.name='role'] TemplateElement[value.raw=/^(tab|tablist|tabpanel)$/]",
+  message:
+    "Tabs come from app/components/ui/tabs.tsx (shadcn on @base-ui/react/tabs). A hand-rolled role=tab/tablist/tabpanel has no arrow keys and no roving tabIndex. Source: 0509#7014.",
+};
+
 const BANNED_SYNTAX = [
+  HAND_ROLLED_ARIA_TAB,
   BARE_TOAST,
   SUPPORT_ADDRESS_BAN,
   GOOGLE_FONTS_BAN,
@@ -511,8 +525,9 @@ const TAILWIND_DEFAULT_PALETTE = {
     "The Tailwind default palette is banned: every colour is a @theme token in app/app.css (bg-green is the one accent, DESIGN.md rule 8). Source: 0509#5871.",
 };
 
+// outline- covers the stock tabs trigger's focus-visible:outline-ring (0509#7014).
 const SHADCN_STOCK_TOKEN_CLASSES =
-  "(?:^|:)(?:bg|text|border|ring|fill|stroke)-(?:background|foreground|muted|muted-foreground|primary|primary-foreground|secondary|secondary-foreground|destructive|border|input|ring|popover|popover-foreground)(?:/[0-9]+)?$";
+  "(?:^|:)(?:bg|text|border|ring|fill|stroke|outline)-(?:background|foreground|muted|muted-foreground|primary|primary-foreground|secondary|secondary-foreground|destructive|border|input|ring|popover|popover-foreground)(?:/[0-9]+)?$";
 
 const TW_ANIMATE_STOCK_CLASSES =
   "(?:^|:)(?:animate-in|animate-out|fade-in-0|fade-out-0|zoom-in-95|zoom-out-95|slide-in-from-(?:top|bottom|left|right)-2)$";
@@ -883,7 +898,13 @@ export default tseslint.config(
       "no-restricted-imports": [
         "error",
         {
-          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT, FULL_ZOD_IMPORT, ...CHART_IMPORTS],
+          paths: [
+            ...ONE_PAVED_PATH_IMPORTS,
+            CLOUDFLARE_WORKERS_IMPORT,
+            FULL_ZOD_IMPORT,
+            ...CHART_IMPORTS,
+            ROW_EVIDENCE_STATIC_IMPORT,
+          ],
           patterns: PAVED_PATH_PATTERNS,
         },
       ],
