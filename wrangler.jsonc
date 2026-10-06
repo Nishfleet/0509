@@ -5,20 +5,22 @@
  * name, so renaming it would orphan DODO_API_KEY, BETTER_AUTH_* and the rest,
  * and the first deploy would come up unconfigured.
  *
- * Declares only what this app uses. The pre-rebuild Worker carried Workflow and
- * Durable Object classes, eight rate-limit bindings and eight cron triggers;
- * none are here, because nothing in this app reads them. Bindings come back one
- * at a time, with the engine packet that needs them.
+ * Bindings and triggers live here: Workflows, Durable Objects, Queues,
+ * rate-limit bindings and the cron list under triggers.crons. A new engine
+ * adds the binding it reads, in the same PR as the reader.
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "0509",
-  // >= 2026-08-04, so nodejs_compat is on by default and needs no flag.
+  // >= 2026-08-04 turns nodejs_compat on by default; still set it so a
+  // Vitest inject cannot hide a missing production flag
+  // (https://developers.cloudflare.com/workers/configuration/compatibility-flags/).
   "compatibility_date": "2026-09-16",
   // Agent sign-in (@cloudflare/workers-oauth-provider) fetches a client's
-  // Client ID Metadata Document by URL; this flag keeps that fetch on the
-  // public internet so a client_id can never reach this zone's own origin.
-  "compatibility_flags": ["global_fetch_strictly_public"],
+  // Client ID Metadata Document by URL; global_fetch_strictly_public keeps
+  // that fetch on the public internet so a client_id can never reach this
+  // zone's own origin.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "main": "./workers/app.ts",
   "placement": { "mode": "smart" },
   "observability": {
