@@ -49,9 +49,16 @@ export async function readWorkspaceLanding(db: WorkspaceDb, userId: string): Pro
   return db.prepare(SELECT_WORKSPACE_LANDING).bind(userId).first<WorkspaceLandingRow>();
 }
 
+interface OwnerPlanRow {
+  tier: string;
+  status: string;
+  current_period_end: string | null;
+  limits_json: string;
+}
+
 interface BoundStatement {
   first<T>(): Promise<T | null>;
-  all<T>(): Promise<{ results: T[] }>;
+  all(): Promise<{ results: OwnerPlanRow[] }>;
   run(): Promise<{ meta: { changes: number } }>;
 }
 
@@ -88,28 +95,22 @@ FROM workspace w
 JOIN plan p ON p.workspace_id = w.id
 WHERE w.owner_user_id = ?`;
 
-interface OwnerPlanRow {
-  tier: string;
-  status: string;
-  current_period_end: string | null;
-  limits_json: string;
-}
-
 function widerWorkspacesMax(left: number | null, right: number | null): number | null {
   if (left === null || right === null) return null;
   return left > right ? left : right;
 }
 
 async function ownerWorkspacesMax(db: WorkspaceDb, ownerUserId: string): Promise<number | null> {
-  const { results } = await db.prepare(SELECT_OWNER_PLANS).bind(ownerUserId).all<OwnerPlanRow>();
+  const { results } = await db.prepare(SELECT_OWNER_PLANS).bind(ownerUserId).all();
   if (results.length === 0) return resolveEntitlements("scout", "{}").workspaces_max;
   const now = new Date();
   return results
-    .map((row) =>
-      resolveEntitlements(
-        entitledTier({ tier: row.tier, status: row.status, currentPeriodEnd: row.current_period_end }, now),
-        row.limits_json,
-      ).workspaces_max,
+    .map(
+      (row) =>
+        resolveEntitlements(
+          entitledTier({ tier: row.tier, status: row.status, currentPeriodEnd: row.current_period_end }, now),
+          row.limits_json,
+        ).workspaces_max,
     )
     .reduce(widerWorkspacesMax);
 }
