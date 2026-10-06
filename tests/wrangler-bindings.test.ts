@@ -17,10 +17,24 @@ const CONFIGS = [
     .map((name) => `workers/${name}`),
 ];
 
+// 0509#7232. The gate below reads `(rawConfig.kv_namespaces ?? [])`, so a rename
+// or a removal of the key leaves the list empty and every per-namespace
+// assertion passes vacuously. The configs that deploy KV are named here, and the
+// gate asserts the key exists and holds at least one namespace for them before it
+// checks any id.
+const KV_CONFIGS = ["wrangler.jsonc"];
+
 describe("deployed wrangler configs", () => {
   it.each(CONFIGS)("%s pins an id on every KV namespace", (config) => {
     const { rawConfig } = experimental_readRawConfig({ config });
-    const unpinned = (rawConfig.kv_namespaces ?? [])
+    const namespaces = rawConfig.kv_namespaces ?? [];
+    if (KV_CONFIGS.includes(config)) {
+      expect(
+        namespaces,
+        `${config} declares no kv_namespaces key or an empty list, so the per-namespace id check below is vacuous`,
+      ).not.toHaveLength(0);
+    }
+    const unpinned = namespaces
       .filter((namespace) => !namespace.id)
       .map((namespace) => namespace.binding);
     expect(unpinned).toEqual([]);
