@@ -5,7 +5,10 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { parse } from "yaml";
 
-import { classifySettingsDeleteRedirect } from "../../e2e/inbox";
+import type { APIRequestContext } from "@playwright/test";
+
+import { FIXTURE_ACCOUNTS } from "../../app/lib/fixture-accounts";
+import { classifySettingsDeleteRedirect, deleteAccountViaRequest, isKeptAccount } from "../../e2e/inbox";
 
 // #5985: an e2e spec that mints an `e2e+` address creates a real user row in
 // production, and deleteCreatedAccount in e2e/inbox.ts is the only path that
@@ -42,7 +45,7 @@ const KEPT_JOURNEY_ACCOUNTS = [
 const SETUP_TEARDOWN_ELSEWHERE = new Set(["e2e/lhci-session.setup.ts"]);
 
 const WORKFLOW = ".github/workflows/e2e-scheduled.yml";
-const TEARDOWN_RERUN = "--project=session-teardown --project=onboarded-teardown";
+const TEARDOWN_RERUN = "--project=session-teardown";
 
 interface WorkflowJob {
   concurrency?: unknown;
@@ -137,6 +140,35 @@ describe("e2e fixture teardown detector", () => {
     const source = await readFile(path.join(REPO_ROOT, "e2e/j5-onboard-blocked.spec.ts"), "utf8");
     expect(source).toContain("/__wall?state=on");
     expect(source).not.toContain("/__wall?state=off");
+  });
+
+  it("treats every FIXTURE_ACCOUNTS address and the legacy kept accounts as kept, and a per-run one as not", () => {
+    for (const account of Object.values(FIXTURE_ACCOUNTS)) {
+      expect(isKeptAccount(account.email)).toBe(true);
+      expect(isKeptAccount(account.email.toUpperCase())).toBe(true);
+    }
+    for (const email of KEPT_JOURNEY_ACCOUNTS) expect(isKeptAccount(email)).toBe(true);
+    expect(isKeptAccount("e2e+abc123@0509.io")).toBe(false);
+  });
+
+  it("refuses to delete a FIXTURE_ACCOUNTS session through the request path, and deletes a per-run one", async () => {
+    const posted: string[] = [];
+    const requestFor = (email: string) =>
+      ({
+        get: () => Promise.resolve({ status: () => 200, json: () => Promise.resolve({ user: { email } }) }),
+        post: (url: string) => {
+          posted.push(url);
+          return Promise.resolve({ status: () => 302, headers: () => ({ location: "/login?deleted=1" }) });
+        },
+      }) as unknown as APIRequestContext;
+
+    for (const account of Object.values(FIXTURE_ACCOUNTS)) {
+      await deleteAccountViaRequest(requestFor(account.email), "https://0509.io");
+    }
+    expect(posted).toEqual([]);
+
+    await deleteAccountViaRequest(requestFor("e2e+abc123@0509.io"), "https://0509.io");
+    expect(posted).toEqual(["/app/settings"]);
   });
 
   it("classifies a settings delete redirect as deleted, already gone, or unexpected", () => {

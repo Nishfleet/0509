@@ -5,6 +5,7 @@ name: e2e-scheduled
 # production suite, `journey=suite` (the `e2e-production` job below): it runs
 # everything except @scheduled, on demand, off the deploy path because its
 # sign-ins send real emails against the daily quota (0509#6033, 0509#6034).
+# The weekly `j12` job also runs J11, whose kept account needs a 6-day gap.
 # `signin` is the one real sign-in smoke a day (0509#6093): the only production
 # run that sends a real email besides the suite, once, at 04:17 UTC.
 # `soak-report` posts one comment a day on #4730 while the 7-day soak runs
@@ -62,25 +63,27 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Run J12 against production
+      - name: Run J12 and J11 against production
+        # J11 rides the weekly clock too (#7061): its kept account gets a
+        # catch-up brief only when the last one is 6 or more days old.
         id: e2e
         timeout-minutes: 65
-        run: npm run e2e -- e2e/j12-rollovers.spec.ts --project=desktop-1440 --retries=0 --reporter=github,list
+        run: npm run e2e -- e2e/j12-rollovers.spec.ts e2e/j11-weekly-brief.spec.ts --project=desktop-1440 --retries=0 --reporter=github,list
         env:
           PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
       - name: Delete the setup accounts if the run was cut short
-        # The session and onboarded setups mint real accounts and their teardown
-        # projects delete them, but a cancel, a timeout or a killed runner ends
-        # the Playwright process first and the rows stay in production
-        # (0509#6968). The teardowns read the state files the setups wrote, so
-        # running them again here deletes what is left; an account already
-        # deleted is skipped.
+        # The session setup mints a real account and its teardown project
+        # deletes it, but a cancel, a timeout or a killed runner ends the
+        # Playwright process first and the row stays in production (0509#6968).
+        # The teardown reads the state file the setup wrote, so running it again
+        # here deletes what is left; an account already deleted is skipped. The
+        # onboarded setup signs in kept accounts (#7061), so it has no teardown.
         if: always() && steps.e2e.outcome != 'skipped'
         timeout-minutes: 5
-        run: npm run e2e -- --project=session-teardown --project=onboarded-teardown --retries=0 --reporter=github,list
+        run: npm run e2e -- --project=session-teardown --retries=0 --reporter=github,list
         env:
           PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
@@ -123,15 +126,15 @@ jobs:
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
           FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
       - name: Delete the setup accounts if the run was cut short
-        # The session and onboarded setups mint real accounts and their teardown
-        # projects delete them, but a cancel, a timeout or a killed runner ends
-        # the Playwright process first and the rows stay in production
-        # (0509#6968). The teardowns read the state files the setups wrote, so
-        # running them again here deletes what is left; an account already
-        # deleted is skipped.
+        # The session setup mints a real account and its teardown project
+        # deletes it, but a cancel, a timeout or a killed runner ends the
+        # Playwright process first and the row stays in production (0509#6968).
+        # The teardown reads the state file the setup wrote, so running it again
+        # here deletes what is left; an account already deleted is skipped. The
+        # onboarded setup signs in kept accounts (#7061), so it has no teardown.
         if: always() && steps.e2e.outcome != 'skipped'
         timeout-minutes: 5
-        run: npm run e2e -- --project=session-teardown --project=onboarded-teardown --retries=0 --reporter=github,list
+        run: npm run e2e -- --project=session-teardown --retries=0 --reporter=github,list
         env:
           PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
@@ -323,15 +326,15 @@ jobs:
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
           FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
       - name: Delete the setup accounts if the run was cut short
-        # The session and onboarded setups mint real accounts and their teardown
-        # projects delete them, but a cancel, a timeout or a killed runner ends
-        # the Playwright process first and the rows stay in production
-        # (0509#6968). The teardowns read the state files the setups wrote, so
-        # running them again here deletes what is left; an account already
-        # deleted is skipped.
+        # The session setup mints a real account and its teardown project
+        # deletes it, but a cancel, a timeout or a killed runner ends the
+        # Playwright process first and the row stays in production (0509#6968).
+        # The teardown reads the state file the setup wrote, so running it again
+        # here deletes what is left; an account already deleted is skipped. The
+        # onboarded setup signs in kept accounts (#7061), so it has no teardown.
         if: always() && steps.e2e.outcome != 'skipped'
         timeout-minutes: 5
-        run: npm run e2e -- --project=session-teardown --project=onboarded-teardown --retries=0 --reporter=github,list
+        run: npm run e2e -- --project=session-teardown --retries=0 --reporter=github,list
         env:
           PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}

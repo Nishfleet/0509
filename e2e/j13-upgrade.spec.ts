@@ -159,9 +159,11 @@ test("J13: the plan gate upgrades a workspace and the page flips without a reloa
   if (!isLocalLane()) {
     await watchOneCompetitor(page);
     await expect(page.getByRole("heading", { name: "Start your trial" })).toBeVisible();
-    await expect(page.getByRole("button", { name: /^Upgrade to Starter\s*€46\/mo$/ })).toBeVisible();
-    console.log("J13 stopped at the plan step: a live-mode checkout needs a decision (#7061)");
-    expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
+    await page.getByRole("button", { name: /^Upgrade to Starter\s*€46\/mo$/ }).click();
+    await page.waitForURL(/checkout\.dodopayments\.com/, { timeout: 30_000 });
+    console.log(
+      `J13 stopped at Dodo hosted checkout from /onboarding/plan, no payment made: ${new URL(page.url()).origin}`,
+    );
     return;
   }
 

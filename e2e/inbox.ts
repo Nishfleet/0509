@@ -7,6 +7,8 @@ import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { expect, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
 
+import { isFixtureAccount } from "../app/lib/fixture-accounts";
+
 // The J1 mail path, per the amended decision on 0509#3927: Email Routing's
 // e2e@0509.io rule delivers e2e+<run-id>@0509.io (zone subaddressing on, RFC
 // 5233) to the 0509-e2e-inbox Worker, which stores the raw message in a
@@ -596,6 +598,13 @@ const KEPT_JOURNEY_ACCOUNTS: readonly string[] = [
   "e2e+soak@0509.io",
 ];
 
+// Every FIXTURE_ACCOUNTS address is kept too: those workspaces hold a
+// complimentary plan row (migration 0048, #7225) that nothing recreates once
+// the account is deleted, so neither delete helper may ever remove one.
+export function isKeptAccount(email: string): boolean {
+  return KEPT_JOURNEY_ACCOUNTS.includes(email.toLowerCase()) || isFixtureAccount(email);
+}
+
 export function classifySettingsDeleteRedirect(
   status: number,
   location: string,
@@ -625,6 +634,10 @@ export async function deleteAccountViaRequest(request: APIRequestContext, origin
     }
   }
   if (!email) return;
+  if (isKeptAccount(email)) {
+    console.log(`deleteAccountViaRequest: ${email} is a kept journey account; refusing to delete it`);
+    return;
+  }
 
   const deleted = await request.post("/app/settings", {
     headers: { origin },
@@ -639,7 +652,7 @@ export async function deleteAccountViaRequest(request: APIRequestContext, origin
 }
 
 export async function deleteCreatedAccount(page: Page, email: string): Promise<void> {
-  if (KEPT_JOURNEY_ACCOUNTS.includes(email)) {
+  if (isKeptAccount(email)) {
     console.log(`deleteCreatedAccount: ${email} is a kept journey account; skipping`);
     return;
   }
@@ -772,17 +785,4 @@ const SEED_LIVE_PLAN = `INSERT INTO plan (id, workspace_id, tier, status, curren
 
 function seedLivePlan(db: DatabaseSync, userId: string): void {
   run(db, SEED_LIVE_PLAN, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), userId);
-}
-
-export function seedLivePlanForEmail(email: string): void {
-  const db = new DatabaseSync(previewDatabasePath(), { timeout: 15_000 });
-  db.exec("PRAGMA busy_timeout = 15000");
-  try {
-    const user = db.prepare('SELECT id FROM "user" WHERE email = ?').get(email) as { id: string } | undefined;
-    if (user === undefined) throw new Error(`no user for ${email}`);
-    seedLivePlan(db, user.id);
-    db.exec("PRAGMA wal_checkpoint(PASSIVE)");
-  } finally {
-    db.close();
-  }
 }

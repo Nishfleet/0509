@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { onboardedStatePath } from "../playwright.config";
 import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink } from "./inbox";
 
 let createdEmail = "";
@@ -115,3 +116,25 @@ for (const { width, height } of [
     test.info().annotations.push({ type: "domain", description: "gymshark.com" });
   });
 }
+
+// J3's "Home not empty" (docs/REBUILD-DONE.md §A) on a kept account with a
+// complimentary plan (migration 0048, #7225): the onboarded-setup session for
+// this lane is gymshark.com with nike.com and adidas.com ON, the same subject
+// the per-run journey above onboards before it stops at the plan step.
+test.describe("J3 Home after onboarding", () => {
+  test.use({
+    storageState: async ({}, use, testInfo) => {
+      await use(onboardedStatePath(testInfo.project.name === "phone-390" ? "phone" : "desktop"));
+    },
+  });
+
+  test("an onboarded gymshark.com workspace opens a Home that is not empty", async ({ page }) => {
+    const response = await page.goto("/app");
+    expect(response?.status()).toBe(200);
+    await expect(page).toHaveURL(/\/app$/);
+    const standing = page.locator('[data-home="standing"]');
+    await expect(standing).toBeVisible();
+    await expect(standing.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(standing.getByText("Add a competitor to see where you stand.")).toHaveCount(0);
+  });
+});
