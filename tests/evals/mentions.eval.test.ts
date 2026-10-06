@@ -34,9 +34,12 @@ interface MentionCase extends NoulEvalRow {
   competitors: { name: string; domain: string }[];
   item: MentionItemInput;
   reliability: string;
+  today: string;
 }
 
 const MENTION_FIELDS = ["self", "subject", "competitors", "item", "reliability"] as const;
+
+const MATTERS_FIELDS = [...MENTION_FIELDS, "today"] as const;
 
 describe("mention question state builders", () => {
   it("aboutBrandState packs exactly the state the sweep sends Jev", () => {
@@ -76,8 +79,10 @@ describe("mention question state builders", () => {
           publisher: "gq.com",
         },
         reliability: "rss",
+        today: "2026-09-30",
       }),
     ).toEqual({
+      today: "2026-09-30",
       self: { name: "Nike", domain: "nike.com", description: "sportswear" },
       subject: { name: "Adidas", domain: "adidas.com", role: "competitor" },
       competitor_set: [{ name: "Puma", domain: "puma.com" }],
@@ -104,7 +109,7 @@ describe.skipIf(!jevKeyPresent())("eval: mention questions against Jev", () => {
   });
 
   it("mention_matters: scores the shipped MATTERS text on both splits", async () => {
-    const rows = await loadCases<MentionCase>("mention_matters", MENTION_FIELDS);
+    const rows = await loadCases<MentionCase>("mention_matters", MATTERS_FIELDS);
     const askOne = makeNoulAsk(MATTERS);
     const ask: Ask<MentionCase> = (row) =>
       askOne(
@@ -114,6 +119,7 @@ describe.skipIf(!jevKeyPresent())("eval: mention questions against Jev", () => {
           competitors: row.competitors,
           item: row.item,
           reliability: row.reliability,
+          today: row.today,
         }),
       );
     const report = await runEval("mention_matters", rows, ask, noulScore);

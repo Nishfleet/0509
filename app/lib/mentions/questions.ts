@@ -12,7 +12,7 @@ export const ABOUT_BRAND: NoulQuestion = {
 export const MATTERS: NoulQuestion = {
   id: "mention_matters",
   instructions:
-    "Would the owner of `self` want to know about this mention of `subject` this week? Use `item.published_at` when it is set: a story whose date is missing, or older than this week, is old news, not a new alert. It matters when it shows a move this week: a launch, a price or offer change, funding, a deal, a hire or exit at the top, an expansion, a campaign, a controversy or a big review.",
+    "Would the owner of `self` want to know about this mention of `subject` this week? `today` is the current date. When `item.published_at` is set and is more than 7 days before `today`, it is old news, not a new alert. When `item.published_at` is missing, judge from the item content. It matters when it shows a move this week: a launch, a price or offer change, funding, a deal, a hire or exit at the top, an expansion, a campaign, a controversy or a big review.",
   whenTrue: MENTION_MATTERS_WHEN_TRUE,
   whenFalse: MENTION_MATTERS_WHEN_FALSE,
 };
@@ -66,8 +66,10 @@ export function mentionMattersState(input: {
   competitors: { name: string; domain: string }[];
   item: MentionItemInput;
   reliability: string;
+  today: string;
 }): unknown {
   return {
+    today: input.today,
     self: { name: input.self.name, domain: input.self.domain, description: input.self.description },
     subject: { name: input.subject.name, domain: input.subject.domain, role: input.subject.role },
     competitor_set: input.competitors,
