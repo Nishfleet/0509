@@ -148,6 +148,36 @@ describe("0509-support-inbox-v2", () => {
     expect(afterCreates?.issues).toBe(3);
   });
 
+  it("frees the slot when the create throws instead of answering a status", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValue(new Response("{}", { status: 201 }));
+    const sendOne = async (mime = MIME) => {
+      const ctx = createExecutionContext();
+      await worker.email(
+        fakeMessage(
+          vi.fn(() => Promise.resolve()),
+          mime,
+        ),
+        env,
+        ctx,
+      );
+      await waitOnExecutionContext(ctx);
+    };
+
+    await sendOne();
+    await sendOne(MIME.replace("Refund please", "Refund please again"));
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const stored = await env.DB.prepare(
+      "SELECT (SELECT COUNT(*) FROM support_report) AS reports, (SELECT COUNT(*) FROM support_issue) AS issues",
+    ).first<{ reports: number; issues: number }>();
+    expect(stored?.reports).toBe(2);
+    expect(stored?.issues).toBe(1);
+  });
+
   it("opens at most 3 issues per sender domain per day and still stores every mail", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 201 }));

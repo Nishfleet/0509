@@ -20,7 +20,7 @@ interface SupportInboxEnv {
   SUPPORT_INBOX_GITHUB_TOKEN?: string;
 }
 
-interface IssueInput {
+interface ReportMail {
   id: string;
   receivedAt: string;
   raw: string;
@@ -44,17 +44,17 @@ function sitePaths(text: string): string[] {
   return [...paths].slice(0, MAX_PATHS);
 }
 
-function issueBody(input: IssueInput): string {
-  const paths = sitePaths(input.raw);
+function issueBody(report: ReportMail): string {
+  const paths = sitePaths(report.raw);
   return [
-    `report: ${input.id}`,
-    `received: ${input.receivedAt}`,
+    `report: ${report.id}`,
+    `received: ${report.receivedAt}`,
     `paths: ${paths.length > 0 ? paths.join(", ") : "none"}`,
-    `user agent: ${input.userAgent.slice(0, MAX_UA)}`,
+    `user agent: ${report.userAgent.slice(0, MAX_UA)}`,
   ].join("\n");
 }
 
-async function openIssue(token: string, input: IssueInput): Promise<Response> {
+async function openIssue(token: string, report: ReportMail): Promise<Response> {
   return fetchOutbound(ISSUES_URL, {
     method: "POST",
     headers: {
@@ -65,11 +65,25 @@ async function openIssue(token: string, input: IssueInput): Promise<Response> {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      title: `user report ${input.id}`,
-      body: issueBody(input),
+      title: `user report ${report.id}`,
+      body: issueBody(report),
       labels: ["user-report", "machine-reported"],
     }),
   });
+}
+
+async function createIssue(db: D1Database, token: string, report: ReportMail): Promise<void> {
+  let response: Response;
+  try {
+    response = await openIssue(token, report);
+  } catch (error) {
+    await releaseIssueSlot(db, report.id);
+    console.error("support-inbox: issue create threw", String(error), report.id);
+    return;
+  }
+  if (response.ok) return;
+  await releaseIssueSlot(db, report.id);
+  console.error("support-inbox: issue create failed", response.status, report.id);
 }
 
 async function sweep(db: D1Database, now: Date): Promise<void> {
@@ -110,11 +124,7 @@ export default {
       return;
     }
     const userAgent = message.headers.get("user-agent") ?? message.headers.get("x-mailer") ?? "none";
-    const response = await openIssue(token, { id, receivedAt, raw, userAgent });
-    if (!response.ok) {
-      await releaseIssueSlot(env.DB, id);
-      console.error("support-inbox: issue create failed", response.status, id);
-    }
+    await createIssue(env.DB, token, { id, receivedAt, raw, userAgent });
   },
 
   scheduled(controller, env, ctx) {
