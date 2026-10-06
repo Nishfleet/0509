@@ -229,8 +229,9 @@ Service daily quota (Nish 2026-09-28).
   never auto-armed. An orchestrator PR (author nish3451) carries no second
   review either way; the orchestrator-path decision is tracked at
   fleet-ops#9231. Every merge, worker or orchestrator, rides the merge queue's
-  four required checks. The reviewer checks the SQL, re-checks `main` for the
-  next free number, and relies on D1 Time Travel to undo a drop or delete.
+  one required check, `ci-ok`, which needs every gate job to succeed. The
+  reviewer checks the SQL, re-checks `main` for the next free number, and
+  relies on D1 Time Travel to undo a drop or delete.
   Data left from the old app may be dropped outright ("meh, delete, the old
   app had no users").
 - Deploys go through CI. Every push to `main` deploys via
