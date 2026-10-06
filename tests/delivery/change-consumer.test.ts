@@ -214,6 +214,21 @@ describe("deliverChange", () => {
     expect(sent).toHaveLength(1);
   });
 
+  it("counts the daily cap from the workspace midnight, not UTC", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-05T19:00:00.000Z"));
+    world.change = { ...CHANGE, timezone: "Asia/Kolkata" };
+    try {
+      await deliverChange(fakeEnv(), { signal_id: "sig-1" });
+      expect(slots.claimChangeSlot.mock.calls[0]?.[1].since).toBe("2026-10-05T18:30:00.000Z");
+      slots.claimChangeSlot.mockResolvedValue({ kind: "capped" });
+      await deliverChange(fakeEnv(), { signal_id: "sig-2" });
+      expect(slots.claimSendAttempt.mock.calls.at(-1)?.[1].idempotencyKey).toBe("change-overflow:ws-1:2026-10-06");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("records a failed send so it can be retried", async () => {
     world.sendFails = true;
     const result = await deliverChange(fakeEnv(), { signal_id: "sig-1" });

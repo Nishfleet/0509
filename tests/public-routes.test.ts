@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import routes from "../app/routes";
 import { PLANS, TRIAL_DAYS } from "../app/lib/billing/plans";
 import { LEGAL_UPDATED } from "../app/lib/legal/document";
-import type { SourceRow, SourceSnapshot } from "../app/components/source-pill";
+import type { SourceRow, SourceSnapshot } from "../app/lib/source-pill-status";
 import {
   AGENT_PATHS,
   DISALLOWED_PREFIXES,

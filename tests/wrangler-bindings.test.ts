@@ -45,9 +45,9 @@ describe("deployed wrangler configs", () => {
     expect(bucket?.bucket_name).toBe(SNAPSHOT_BUCKET);
   });
 
-  // 0509#7124 and #7170. The production origin is one literal in
+  // 0509#7124, #7087 and #7170. The production origin is one literal in
   // app/lib/site-url.ts. wrangler.jsonc deploys it as BETTER_AUTH_URL, and
-  // env.server.ts's dummy-turnstile gate compares against the same import.
+  // env.server.ts's placeholder-secret gate compares against the same import.
   // env.server.ts cannot import structured-data.ts: that module imports
   // app/components/footer, which would drag the React tree into the Worker's
   // boot path. site-url.ts is the import-free leaf both sides read.
@@ -95,6 +95,12 @@ describe("deployed wrangler configs", () => {
   // rate at the top of `observability`, and wrangler normalises
   // `logs.head_sampling_rate` to the same 1, so a change to either alone is
   // visible in this assertion.
+  it("binds Worker version metadata so Sentry events carry a release (0509#7079)", () => {
+    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    expect(rawConfig.version_metadata).toEqual({ binding: "CF_VERSION_METADATA" });
+    expect(rawConfig.upload_source_maps).toBe(true);
+  });
+
   it("declares the Workers Logs policy (0509#5758)", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
     expect(rawConfig.observability?.enabled).toBe(true);
@@ -119,6 +125,14 @@ describe("deployed wrangler configs", () => {
     expect(consumer?.retry_delay).toBe(60);
     const dlq = (rawConfig.queues?.consumers ?? []).find((queue) => queue.queue === "fetch-sweep-dlq");
     expect(dlq).toBeDefined();
+  });
+
+  it("sets nodejs_compat explicitly so tests cannot hide a missing production flag (0509#7078)", () => {
+    for (const config of ["wrangler.jsonc", "tests/integration/wrangler.test.jsonc"]) {
+      const { rawConfig } = experimental_readRawConfig({ config });
+      expect(rawConfig.compatibility_flags, config).toContain("nodejs_compat");
+      expect(rawConfig.compatibility_flags, config).toContain("global_fetch_strictly_public");
+    }
   });
 
   it("routes every consumer queue in wrangler.jsonc to its own branch in queue()", () => {

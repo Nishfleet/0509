@@ -8,6 +8,37 @@ type SentryEvent = Parameters<BeforeSend>[0];
 
 const options = sentryOptions({});
 
+describe("Sentry release and environment", () => {
+  it("is unset without version metadata, so local events are not tagged production", () => {
+    expect(options.release).toBeUndefined();
+    expect(options.environment).toBeUndefined();
+  });
+
+  it("uses the Worker version id as the release on a deployed Worker", () => {
+    const deployed = sentryOptions({
+      CF_VERSION_METADATA: { id: "version-abc", tag: "production", timestamp: "2026-10-05T00:00:00.000Z" },
+    });
+    expect(deployed.release).toBe("version-abc");
+    expect(deployed.environment).toBe("production");
+  });
+
+  it("uses production when the version tag is empty", () => {
+    const deployed = sentryOptions({
+      CF_VERSION_METADATA: { id: "version-abc", tag: "", timestamp: "2026-10-05T00:00:00.000Z" },
+    });
+    expect(deployed.release).toBe("version-abc");
+    expect(deployed.environment).toBe("production");
+  });
+
+  it("uses the version tag as the environment when it is not empty", () => {
+    const preview = sentryOptions({
+      CF_VERSION_METADATA: { id: "version-abc", tag: "preview", timestamp: "2026-10-05T00:00:00.000Z" },
+    });
+    expect(preview.release).toBe("version-abc");
+    expect(preview.environment).toBe("preview");
+  });
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
 });

@@ -2,7 +2,8 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { SourcePill, sourcePillStatus, type SourceRow, type SourceSnapshot } from "../../app/components/source-pill";
+import { SourcePill } from "../../app/components/source-pill";
+import { sourcePillStatus, type SourceRow, type SourceSnapshot } from "../../app/lib/source-pill-status";
 
 const NOW = Date.parse("2026-09-22T12:00:00.000Z");
 

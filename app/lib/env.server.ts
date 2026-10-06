@@ -9,6 +9,7 @@ const BINDING_NAMES = [
   "BETTER_AUTH_SECRET",
   "TURNSTILE_SECRET_KEY",
   "TURNSTILE_SITE_KEY",
+  "DODO_WEBHOOK_SECRET",
   "EMAIL",
   "SEND_EMAIL",
   "SNAPSHOTS",
@@ -28,6 +29,7 @@ const NOTES = {
   BETTER_AUTH_SECRET: "sign-in cannot be trusted",
   TURNSTILE_SECRET_KEY: "a botnet can spray sign-in links",
   TURNSTILE_SITE_KEY: "the sign-in form has no Turnstile widget",
+  DODO_WEBHOOK_SECRET: "a payment webhook signed with a secret anyone can read is accepted as real",
   EMAIL: "magic links and briefs cannot send",
   SEND_EMAIL: "briefs sit unsent",
   SNAPSHOTS: "site snapshots cannot be read or stored",
@@ -52,15 +54,19 @@ const NAMES = [
 type EnvName = (typeof NAMES)[number];
 type Snapshot = Record<(typeof NAMES)[number], unknown>;
 
-export const PUBLIC_TURNSTILE_DUMMY_NAMES = [
+export const PUBLIC_PLACEHOLDER_NAMES = [
+  "BETTER_AUTH_SECRET",
+  "DODO_WEBHOOK_SECRET",
   "TURNSTILE_SITE_KEY",
   "TURNSTILE_SECRET_KEY",
 ] as const satisfies readonly EnvName[];
 
-export const PUBLIC_TURNSTILE_DUMMY_VALUES = {
+export const PUBLIC_PLACEHOLDER_VALUES = {
+  BETTER_AUTH_SECRET: "local-only-not-a-production-secret",
+  DODO_WEBHOOK_SECRET: "whsec_bG9jYWwtb25seS1ub3QtYS13ZWJob29rLXNlY3JldA==",
   TURNSTILE_SITE_KEY: "1x00000000000000000000BB",
   TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
-} as const satisfies Record<(typeof PUBLIC_TURNSTILE_DUMMY_NAMES)[number], string>;
+} as const satisfies Record<(typeof PUBLIC_PLACEHOLDER_NAMES)[number], string>;
 
 const NAME_SET: ReadonlySet<string> = new Set(NAMES);
 
@@ -101,14 +107,15 @@ const workerEnvSchema = z
     AGENT_REGISTER_LIMIT: binding("limit"),
     PROBE_LIMIT: binding("limit"),
     CHANGE_EMAIL_LIMIT: binding("limit"),
+    DODO_WEBHOOK_SECRET: z.string().min(1).optional(),
     LIVENESS_PING_URL: httpUrl.optional(),
     SITE_SWEEP_PING_URL: httpUrl.optional(),
   })
   .check((ctx) => {
     if (urlOrigin(ctx.value.BETTER_AUTH_URL) !== urlOrigin(SITE_URL)) return;
-    for (const name of PUBLIC_TURNSTILE_DUMMY_NAMES) {
-      if (ctx.value[name] !== PUBLIC_TURNSTILE_DUMMY_VALUES[name]) continue;
-      ctx.issues.push({ code: "custom", input: ctx.value[name], path: [name], message: "public dummy value" });
+    for (const name of PUBLIC_PLACEHOLDER_NAMES) {
+      if (ctx.value[name] !== PUBLIC_PLACEHOLDER_VALUES[name]) continue;
+      ctx.issues.push({ code: "custom", input: ctx.value[name], path: [name], message: "public placeholder value" });
     }
   });
 
@@ -154,6 +161,7 @@ function snapshot(): Snapshot {
     AGENT_REGISTER_LIMIT: env.AGENT_REGISTER_LIMIT,
     PROBE_LIMIT: env.PROBE_LIMIT,
     CHANGE_EMAIL_LIMIT: env.CHANGE_EMAIL_LIMIT,
+    DODO_WEBHOOK_SECRET: blank(env.DODO_WEBHOOK_SECRET),
     LIVENESS_PING_URL: pingUrl("LIVENESS_PING_URL"),
     SITE_SWEEP_PING_URL: pingUrl("SITE_SWEEP_PING_URL"),
   };

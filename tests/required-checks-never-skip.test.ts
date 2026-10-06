@@ -16,10 +16,16 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const WORKFLOWS = path.join(REPO_ROOT, ".github/workflows");
 const REQUIRED = ["Gitleaks", "codex-node-checks", "semgrep", "preview-assert"];
 
+interface WorkflowStep {
+  if?: unknown;
+  run?: string;
+}
+
 interface WorkflowJob {
   name?: string;
   if?: unknown;
   needs?: string | string[];
+  steps?: WorkflowStep[];
 }
 
 interface Job {
@@ -75,6 +81,13 @@ describe("ci-ok aggregates every required check (0509#7013)", () => {
     const ciOk = (await allJobs()).find(({ file, reported }) => file === "ci.yml" && reported === "ci-ok");
     expect(ciOk?.job.if).toBe("always()");
     expect([ciOk?.job.needs ?? []].flat().sort()).toEqual([...REQUIRED].sort());
+  });
+
+  it("passes only when every needed job succeeded, never on a denylist of results", async () => {
+    const ciOk = (await allJobs()).find(({ file, reported }) => file === "ci.yml" && reported === "ci-ok");
+    const steps = ciOk?.job.steps ?? [];
+    expect(steps.map((step) => step.if)).toEqual(["always()"]);
+    expect(steps[0]?.run).toContain('all(.[]; .result == "success")');
   });
 });
 
