@@ -4,6 +4,8 @@ import { RouterContextProvider } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAuth, deleteSignedInUser } from "../../app/lib/auth.server";
+import { nextBriefAt, rolloverInstance } from "../../app/lib/brief-schedule";
+import { readBriefScheduleForOwner } from "../../app/lib/data/workspace.server";
 import { firstWorkspaceId } from "../../app/lib/workspace.server";
 import {
   deleteAccount,
@@ -35,8 +37,8 @@ const authEnv = {
 
 const auth = createAuth(authEnv);
 
-async function signIn(): Promise<{ cookie: string; userId: string }> {
-  await auth.api.signInMagicLink({ body: { email: ADDRESS }, headers: new Headers() });
+async function signIn(address = ADDRESS): Promise<{ cookie: string; userId: string }> {
+  await auth.api.signInMagicLink({ body: { email: address }, headers: new Headers() });
   const link = links.at(-1);
   if (link === undefined) throw new Error("no magic link was sent");
   const response = await auth.handler(new Request(link, { redirect: "manual" }));
@@ -44,7 +46,7 @@ async function signIn(): Promise<{ cookie: string; userId: string }> {
     .getSetCookie()
     .map((header) => header.split(";")[0])
     .join("; ");
-  const user = await env.DB.prepare('SELECT id FROM "user" WHERE email = ?').bind(ADDRESS).first<{ id: string }>();
+  const user = await env.DB.prepare('SELECT id FROM "user" WHERE email = ?').bind(address).first<{ id: string }>();
   if (user === null) throw new Error("sign-in created no user");
   return { cookie, userId: user.id };
 }
@@ -135,6 +137,26 @@ describe("delete my account", () => {
     expect(await count("SELECT COUNT(*) AS n FROM email_suppression WHERE address = 'to@0509.io'")).toBe(1);
     expect(await count("SELECT COUNT(*) AS n FROM email_suppression WHERE address LIKE 'https://%'")).toBe(0);
     expect(await count("SELECT COUNT(*) AS n FROM email_suppression WHERE address = ?", ADDRESS)).toBe(1);
+  });
+
+  it("terminates the workspace's sleeping weekly rollover so it does not outlive the account (0509#7191)", async () => {
+    const { cookie, userId } = await signIn("rollover-leaving@0509.io");
+    const owned = await readBriefScheduleForOwner(userId);
+    if (owned === null) throw new Error("sign-in created no workspace");
+    const pending = rolloverInstance(owned.workspaceId, nextBriefAt(owned.schedule, new Date()), "scheduled");
+    await env.STANDING_ROLLOVER.create(pending);
+    const helpers = {
+      listUserGrants: () => Promise.resolve({ items: [], cursor: undefined }),
+      revokeGrant: () => Promise.resolve(),
+    } as unknown as Pick<OAuthHelpers, "listUserGrants" | "revokeGrant">;
+
+    const deleted = await deleteAccount(helpers, settingsRequest(cookie), userId);
+
+    expect(deleted).not.toBeNull();
+    const instance = await env.STANDING_ROLLOVER.get(pending.id);
+    await vi.waitFor(async () => {
+      expect((await instance.status()).status).toBe("terminated");
+    });
   });
 
   it("pages the stored files with a cursor and the Workflow deletes every page", async () => {

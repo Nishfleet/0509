@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { BriefSchedule, RolloverInstance } from "../../app/lib/brief-schedule";
 import { nextBriefAt, previousBriefAt, rolloverInstance } from "../../app/lib/brief-schedule";
-import { rescheduleRollover } from "../../app/lib/standing/reschedule";
+import { cancelRollover, rescheduleRollover } from "../../app/lib/standing/reschedule";
 
 const WS = "ws_reschedule";
 const NOW = new Date("2026-09-22T12:00:00Z");
@@ -281,5 +281,24 @@ describe("rescheduling the standing rollover (0509#5156)", () => {
         expect(closes).toEqual(["2026-03-15T12:00:00.000Z", "2026-03-08T12:00:00.000Z"]);
       });
     });
+  });
+});
+
+describe("cancelling the pending rollover when the workspace goes (0509#7191)", () => {
+  it("terminates the instance for the next brief slot", async () => {
+    const terminate = vi.fn(() => Promise.resolve());
+    const workflow = fakeWorkflow(() => Promise.resolve({ terminate }));
+
+    const cancelled = await cancelRollover(workflow, { workspaceId: WS, schedule: PREVIOUS, now: NOW });
+
+    expect(workflow.get).toHaveBeenCalledWith(STALE.id);
+    expect(terminate).toHaveBeenCalledTimes(1);
+    expect(cancelled).toBe(STALE.id);
+  });
+
+  it("answers null when there is no instance to terminate", async () => {
+    const workflow = fakeWorkflow(() => Promise.reject(new Error("instance.not_found")));
+
+    expect(await cancelRollover(workflow, { workspaceId: WS, schedule: PREVIOUS, now: NOW })).toBeNull();
   });
 });

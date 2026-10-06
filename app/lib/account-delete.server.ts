@@ -3,7 +3,8 @@ import { env } from "cloudflare:workers";
 import { createCookie } from "react-router";
 
 import { deleteSignedInUser } from "./auth.server";
-import { readWorkspaceIdForOwner, readWorkspaceR2Prefixes } from "./data/workspace.server";
+import { readBriefScheduleForOwner, readWorkspaceIdForOwner, readWorkspaceR2Prefixes } from "./data/workspace.server";
+import { cancelRollover } from "./standing/reschedule";
 
 const PAGE_SIZE = 1000;
 const DELETE_INSTANCE_COOKIE = "account-delete";
@@ -27,8 +28,11 @@ export async function deleteAccount(
   const cookie = deleteInstanceCookie();
   const workspaceId = await readWorkspaceIdForOwner(userId);
   const prefixes = workspaceId === null ? [] : await readWorkspaceR2Prefixes(workspaceId);
-  const headers = await deleteSignedInUser(env, request, new Date());
+  const owned = await readBriefScheduleForOwner(userId);
+  const now = new Date();
+  const headers = await deleteSignedInUser(env, request, now);
   if (headers === null) return null;
+  if (owned !== null) await cancelRollover(env.STANDING_ROLLOVER, { ...owned, now });
   const instance = await env.ACCOUNT_DELETE.create({ params: { prefixes } satisfies AccountDeleteParams });
   headers.append("set-cookie", await cookie.serialize(instance.id));
   await revokeGrants(helpers, userId);
