@@ -5,15 +5,35 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule:
+      # The scan time was unknown: npm ran Monday 09-14 and 09-21 at
+      # about 03:54Z, then nothing on 09-28 (0509#7074).
       interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Kolkata
     open-pull-requests-limit: 5
     cooldown:
       default-days: 7
     groups:
+      # Majors need their own group (0509#7074). In runs 36721784366
+      # (2026-09-30T13:27Z) and 36727409669 (14:12Z), while the
+      # npm-minor-patch group PR was open, the log read "Detected
+      # existing pull request # for the dependency group
+      # 'npm-minor-patch'. Deferring creation...", then put
+      # @cloudflare/workers-oauth-provider and @sentry/cloudflare in
+      # "Adding dependencies as handled" and ended with "Found no
+      # dependencies to update after filtering allowed updates". A run
+      # that defers therefore left majors with no PR. The day, time and
+      # timezone are also explicit now: the npm scans ran Monday 09-14
+      # and 09-21 at about 03:54Z, then none on 09-28, and the run time
+      # was not known (0509#7074).
+      npm-major:
+        update-types: [major]
       npm-minor-patch:
         update-types: [minor, patch]
-    # Majors flow through Dependabot behind the merge-queue live e2e
-    # (0509#5762). typescript and vitest stay ignored because
+    # Majors flow through Dependabot in their own group (0509#7074).
+    # preview-assert is the merge-queue e2e (built Worker, not production).
+    # typescript and vitest stay ignored because
     # typescript-eslint 8.70.0 peers typescript <6.1.0 and
     # @cloudflare/vitest-plugin 1.1.13 peers vitest ^4.1.0 (verified
     # 2026-09-30; 0509#4913, 0509#4915).
@@ -26,6 +46,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Kolkata
     cooldown:
       default-days: 7
     groups:

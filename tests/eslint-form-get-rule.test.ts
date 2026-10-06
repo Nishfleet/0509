@@ -1,0 +1,132 @@
+import { describe, expect, it } from "vitest";
+
+import { lintExisting, lintTextAt } from "./eslint-lint-text";
+
+// #7027 / #7033: 16 of 17 action modules read form fields with formData.get
+// instead of a zod parse. #7111: the gate was selector-based on the receiver
+// NAME (form or formData), so a receiver called anything else read fields by
+// hand with the gate green. It is now form-rules/form-data-get in
+// eslint.config.js, which reads the receiver's TypeScript type. Identifier
+// form.get / formData.get is the action-input shape; navigation.formData?.get
+// (pending UI) is FormData | undefined and stays allowed. These probes boot the
+// real eslint.config.js (same rig as tests/eslint-catch-null-rule.test.ts).
+
+const FORM_GET_MESSAGE = "formData.get by hand";
+
+const HAND_GET = `export function readField(formData: FormData): unknown {
+  return formData.get("email");
+}
+`;
+
+const FORM_GET = `export function readField(form: FormData): unknown {
+  return form.get("intent");
+}
+`;
+
+const ZOD_PARSE = `import { z } from "zod";
+export function readField(formData: FormData): unknown {
+  return z.object({ email: z.string() }).safeParse(Object.fromEntries(formData));
+}
+`;
+
+const PENDING_UI = `export function pendingIntent(navigation: { formData?: FormData }): boolean {
+  return navigation.formData?.get("intent") === "allow";
+}
+`;
+
+const OTHER_NAME = `export function readField(fd: FormData): unknown {
+  return fd.get("intent");
+}
+`;
+
+const OTHER_LOCAL = `export async function readField(request: Request): Promise<unknown> {
+  const body = await request.formData();
+  return body.get("intent");
+}
+`;
+
+const COMPUTED_GET = `export function readField(form: FormData): unknown {
+  return form["get"]("intent");
+}
+`;
+
+const MAP_GET = `export function readField(): string | undefined {
+  const attrs = new Map<string, string>();
+  return attrs.get("intent");
+}
+`;
+
+const HEADERS_GET = `export function readField(): string | null {
+  return new Headers().get("content-type");
+}
+`;
+
+const SUBCLASS_GET = `class DraftForm extends FormData {}
+
+export function readField(form: DraftForm): unknown {
+  return form.get("intent");
+}
+`;
+
+describe("eslint formData.get rule (#7027)", () => {
+  it("rejects formData.get in an action route", { timeout: 60_000 }, async () => {
+    const result = await lintTextAt("app/routes/login.tsx", HAND_GET);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(true);
+  });
+
+  it("rejects form.get in a server action module", { timeout: 60_000 }, async () => {
+    const result = await lintTextAt("app/lib/require-session.server.ts", FORM_GET);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(true);
+  });
+
+  it("allows a zod parse of Object.fromEntries(formData) in a route", { timeout: 60_000 }, async () => {
+    const result = await lintTextAt("app/routes/login.tsx", ZOD_PARSE);
+    expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(false);
+  });
+
+  it("leaves navigation.formData.get for pending UI unblocked", { timeout: 60_000 }, async () => {
+    const result = await lintTextAt("app/routes/login.tsx", PENDING_UI);
+    expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(false);
+  });
+
+  it("leaves isDraftSave on card-fields.ts unblocked", { timeout: 60_000 }, async () => {
+    const messages = await lintExisting("app/lib/identity/card-fields.ts");
+    expect(messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(false);
+  });
+
+  it("rejects a FormData receiver under any other name", { timeout: 60_000 }, async () => {
+    const result = await lintTextAt("app/routes/login.tsx", OTHER_NAME);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(true);
+  });
+
+  it("rejects a FormData local under any other name", { timeout: 60_000 }, async () => {
+    const result = await lintTextAt("app/routes/login.tsx", OTHER_LOCAL);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(true);
+  });
+
+  it('rejects a computed form["get"] read', { timeout: 60_000 }, async () => {
+    const result = await lintTextAt("app/routes/login.tsx", COMPUTED_GET);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(true);
+  });
+
+  it("leaves a Map.get unblocked", { timeout: 60_000 }, async () => {
+    const result = await lintTextAt("app/routes/login.tsx", MAP_GET);
+    expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(false);
+  });
+
+  it("leaves a Headers.get unblocked", { timeout: 60_000 }, async () => {
+    const result = await lintTextAt("app/routes/login.tsx", HEADERS_GET);
+    expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(false);
+  });
+
+  it("rejects a FormData subclass", { timeout: 60_000 }, async () => {
+    const result = await lintTextAt("app/routes/login.tsx", SUBCLASS_GET);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(true);
+  });
+});

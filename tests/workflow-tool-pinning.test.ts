@@ -1,4 +1,4 @@
-import { globSync, readFileSync } from "node:fs";
+import { globSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -15,7 +15,8 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const WORKFLOW_DIR = path.join(ROOT, ".github/workflows");
-const workflows = globSync("*.yml", { cwd: WORKFLOW_DIR }).sort();
+// GitHub runs both extensions, so a .yaml workflow must not slip past the scan.
+const workflows = globSync(["*.yml", "*.yaml"], { cwd: WORKFLOW_DIR }).sort();
 
 function lines(file: string): string[] {
   return readFileSync(path.join(WORKFLOW_DIR, file), "utf8").split("\n");
@@ -47,6 +48,14 @@ function unpinnedRemoteRuleFiles(): string[] {
 }
 
 describe("workflow tools come from the lockfile (0509#7025)", () => {
+  it("scans every workflow file, .yml and .yaml", () => {
+    const onDisk = readdirSync(WORKFLOW_DIR)
+      .filter((file) => /\.ya?ml$/.test(file))
+      .sort();
+    expect(workflows).toEqual(onDisk);
+    expect(workflows).toContain("ci.yml");
+  });
+
   it("pins no tool inside a workflow", () => {
     expect(inlineToolPins()).toEqual([]);
   });
@@ -62,8 +71,13 @@ describe("workflow tools come from the lockfile (0509#7025)", () => {
     expect(pkg.devDependencies ?? {}).toHaveProperty("@lhci/cli");
   });
 
-  it("resolves @lhci/cli from the lockfile", () => {
-    expect(readFileSync(path.join(ROOT, "package-lock.json"), "utf8")).toContain('"node_modules/@lhci/cli"');
+  // The exact version, not only an entry: an entry at another version would
+  // still pass a presence check while CI ran a different lhci.
+  it("resolves @lhci/cli 0.15.1 from the lockfile", () => {
+    const lock = JSON.parse(readFileSync(path.join(ROOT, "package-lock.json"), "utf8")) as {
+      packages?: Record<string, { version?: string }>;
+    };
+    expect(lock.packages?.["node_modules/@lhci/cli"]?.version).toBe("0.15.1");
   });
 
   it("calls lhci by name in ci.yml", () => {

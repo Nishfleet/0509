@@ -1,9 +1,6 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
+
+import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
 // #5786 (privacy rule from #5776): logs and Sentry never carry customer data
 // or prompt input. NO_USER_DATA_IN_LOGS is a set of `no-restricted-syntax`
@@ -15,11 +12,9 @@ import { describe, expect, it } from "vitest";
 // expression and each Sentry receiver form; the ids an operator needs,
 // `workspaceId` and a capped error message, stay clean.
 
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-
 const USER_DATA_MESSAGE = "never carry customer data or prompt input";
 
-const PROBE = "app/lib/probe-user-data-logs-tmp.ts";
+const PROBE = "app/lib/cadence.ts";
 
 const HEADER = `declare const email: string;
 declare const subject: { registrable: string };
@@ -42,23 +37,9 @@ declare const scope: { setUser(value: { id: string }): void };
 `;
 
 async function lintProbe(code: string): Promise<string[]> {
-  const file = path.join(REPO_ROOT, PROBE);
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, `${HEADER}${code}`);
-  try {
-    const eslint = new ESLint({ cwd: REPO_ROOT });
-    if (await eslint.isPathIgnored(file)) throw new Error(`${PROBE} is ignored; the rule would never run`);
-    const results = await eslint.lintFiles([file]);
-    return results.flatMap((result) => result.messages.map((message) => message.message));
-  } finally {
-    await rm(file, { force: true });
-  }
-}
-
-async function lintExisting(rel: string): Promise<string[]> {
-  const eslint = new ESLint({ cwd: REPO_ROOT });
-  const results = await eslint.lintFiles([path.join(REPO_ROOT, rel)]);
-  return results.flatMap((result) => result.messages.map((message) => message.message));
+  const result = await lintTextAt(PROBE, `${HEADER}${code}`);
+  if (result.ignored) throw new Error(`${PROBE} is ignored; the rule would never run`);
+  return result.messages;
 }
 
 function flagged(messages: string[]): boolean {

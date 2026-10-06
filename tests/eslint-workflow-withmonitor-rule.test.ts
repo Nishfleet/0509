@@ -5,14 +5,9 @@
 // and hold the pass/fail pair: a fresh withMonitor import fails, captureCheckIn
 // and the scheduled handler stay clean.
 
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
 
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
 const WITHMONITOR_MESSAGE = "withMonitor around it opens Sentry check-ins that never close";
 
@@ -30,40 +25,15 @@ export function probe(): string {
 }
 `;
 
-async function lintProbe(rel: string, code: string): Promise<{ ignored: boolean; messages: string[] }> {
-  const file = path.join(REPO_ROOT, rel);
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, code);
-  try {
-    const eslint = new ESLint({ cwd: REPO_ROOT });
-    if (await eslint.isPathIgnored(file)) {
-      return { ignored: true, messages: [] };
-    }
-    const results = await eslint.lintFiles([file]);
-    return {
-      ignored: false,
-      messages: results.flatMap((result) => result.messages.map((m) => m.message)),
-    };
-  } finally {
-    await rm(file, { force: true });
-  }
-}
-
-async function lintExisting(rel: string): Promise<string[]> {
-  const eslint = new ESLint({ cwd: REPO_ROOT });
-  const results = await eslint.lintFiles([path.join(REPO_ROOT, rel)]);
-  return results.flatMap((result) => result.messages.map((m) => m.message));
-}
-
 describe("eslint workflow withMonitor ban (#7001)", () => {
   it("rejects withMonitor in a Workflow module", { timeout: 60_000 }, async () => {
-    const result = await lintProbe("workers/workflows/probe-withmonitor-tmp.ts", WITHMONITOR_PROBE);
+    const result = await lintTextAt("workers/workflows/feed-sweep.ts", WITHMONITOR_PROBE);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(WITHMONITOR_MESSAGE))).toBe(true);
   });
 
   it("allows captureCheckIn in a Workflow module", { timeout: 60_000 }, async () => {
-    const result = await lintProbe("workers/workflows/probe-checkin-tmp.ts", CHECKIN_PROBE);
+    const result = await lintTextAt("workers/workflows/feed-sweep.ts", CHECKIN_PROBE);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(WITHMONITOR_MESSAGE))).toBe(false);
   });

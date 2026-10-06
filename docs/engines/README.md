@@ -33,7 +33,7 @@ These decisions are made once here and repeated in each file so a packet is read
 
 Everything that needs a browser goes through `page-sweep`; nothing else may open one. Two of the ten browsers are reserved for interactive onboarding so a customer's first screen never queues behind a sweep, and a test asserts `8 + 2 === BROWSER_CONCURRENCY_CAP`. Raising the cap costs $2.00 per additional concurrent browser per month and needs Nish's recorded yes (`REBUILD-COST.md`; his standing rule, 2026-09-21).
 
-**Cron → Workflow → Queue, never work inline in `scheduled()`.** Each engine's Workflow runs the same five steps: `select` → `enqueue` (`sendBatch`) → `sleep` → `assert coverage` → `escalate`. The `assert` step counts `snapshot` rows for the tick, because `REBUILD-KEEPLIST.md` finding 3 is that a health check watching the cron heartbeat reported `ok` while one run covered 22 watchlists, and finding 2 is a source that reported active and captured nothing for 8 days. Coverage is asserted on outcomes.
+**Cron → Workflow → Queue, never work inline in `scheduled()`.** Each engine's Workflow runs the same five steps: `select` → `enqueue` (`sendBatch`) → `sleep` → `assert coverage` → `escalate`. The `assert` step counts `snapshot` rows for the tick, because `REBUILD-KEEPLIST.md (deleted, in git history)` finding 3 is that a health check watching the cron heartbeat reported `ok` while one run covered 22 watchlists, and finding 2 is a source that reported active and captured nothing for 8 days. Coverage is asserted on outcomes.
 
 **The Jev wire contract, probed live 2026-09-21 12:18:48Z and 12:19:10Z:**
 

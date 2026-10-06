@@ -172,5 +172,10 @@ describe("the competitor rail", () => {
     expect(empty).toContain("Nothing new from them in the last 30 days.");
     expect(empty).toContain("We check this every week. The first answer arrives after a week of watching.");
     expect(empty).toContain("First read tonight at 02:00 UTC.");
+    expect(
+      text(
+        render({ peers: [], facts: [], sources: [], verdict: null, lastChecked: null, sweepClock: "07:30 GMT+5:30" }),
+      ),
+    ).toContain("First read tonight at 07:30 GMT+5:30.");
   });
 });

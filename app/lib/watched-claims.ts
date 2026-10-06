@@ -1,4 +1,4 @@
-import { sourcePillStatus, type SourceRow, type SourceSnapshot } from "../components/source-pill";
+import { sourcePillStatus, type SourceRow, type SourceSnapshot } from "./source-pill-status";
 import { joinList, LIVE_COVERAGE } from "./coverage";
 
 export interface ClaimSource {

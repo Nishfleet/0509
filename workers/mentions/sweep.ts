@@ -18,6 +18,7 @@ import { insertWatchSnapshot } from "../../app/lib/data/snapshot.server";
 import { markSourceTimedOut } from "../../app/lib/data/source.server";
 import type { WatchRow } from "../../app/lib/data/watch.server";
 import {
+  advanceHnCursor,
   markWatchPolled,
   readActiveWatches,
   readWatchConfigJson,
@@ -25,6 +26,7 @@ import {
 } from "../../app/lib/data/watch.server";
 import type { NoulVerdict } from "../../app/lib/jev/client.server";
 import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
+import { withMentionCall } from "../../app/lib/mentions/call-budget.server";
 import { lookupYoutubeChannel } from "../../app/lib/identity/youtube-channel.server";
 import { noulAction } from "../../app/lib/jev/thresholds";
 import { mentionReasonLine } from "../../app/lib/mentions/reason-customer";
@@ -46,6 +48,7 @@ import {
   withResolvedChannel,
   withoutPendingChannel,
 } from "../../app/lib/mentions/youtube-channel";
+import { isHnPlugin, newestEpoch, predatesWatch, startCursor } from "../../app/lib/mentions/hn-window";
 import { sha256Hex } from "../../app/lib/sha256";
 import { storedDedupKey, toSignalRow, type MentionItem, type SignalRow } from "./map";
 import { recordUpstreamBlock, writeSourcePoint } from "./canary";
@@ -102,23 +105,18 @@ async function judge(
   item: JudgedItem,
 ): Promise<{ about: NoulVerdict; matters: NoulVerdict | null }> {
   const subject = subjectOf(watch);
-  const about = await askNoul(
-    watch.workspace_id,
-    ABOUT_BRAND,
-    aboutBrandState({ subject, item, reliability: watch.reliability }),
+  const about = await withMentionCall(watch.entity_id, () =>
+    askNoul(watch.workspace_id, ABOUT_BRAND, aboutBrandState({ subject, item, reliability: watch.reliability })),
   );
   if (noulAction(about.p) === "reject") return { about, matters: null };
-  const matters = await askNoul(
-    watch.workspace_id,
-    MATTERS,
-    mentionMattersState({
-      self: { name: context.self.name, domain: context.self.domain, description: context.self.description },
-      subject,
-      competitors: context.competitors,
-      item,
-      reliability: watch.reliability,
-    }),
-  );
+  const mattersState = mentionMattersState({
+    self: { name: context.self.name, domain: context.self.domain, description: context.self.description },
+    subject,
+    competitors: context.competitors,
+    item,
+    reliability: watch.reliability,
+  });
+  const matters = await withMentionCall(watch.entity_id, () => askNoul(watch.workspace_id, MATTERS, mattersState));
   return { about, matters };
 }
 
@@ -252,7 +250,7 @@ async function judgeDuplicate(input: {
     second: candidate,
   });
   try {
-    const verdict = await askNoul(watch.workspace_id, DUPLICATE_SIGNAL, state);
+    const verdict = await withMentionCall(watch.entity_id, () => askNoul(watch.workspace_id, DUPLICATE_SIGNAL, state));
     const statements = duplicateStatements({ watch, signalId, candidateId: candidate.id, verdict, now });
     return { statements, asked: true, jevDown: false };
   } catch (error) {
@@ -422,7 +420,7 @@ async function statementsForWatch(input: {
   watch: WatchRow;
   context: DiscoveryContext;
   items: readonly MentionItem[];
-  snapshot: { r2Key: string; hash: string };
+  snapshot: { r2Key: null; hash: string };
   canaryCount: number | null;
   now: string;
 }): Promise<{ statements: D1PreparedStatement[]; stored: number; unjudged: number }> {
@@ -469,23 +467,27 @@ async function statementsForWatch(input: {
   return { statements, stored, unjudged };
 }
 
-async function putMentionBody(pluginKey: string, rawBody: string): Promise<{ r2Key: string; hash: string }> {
-  const hash = await sha256Hex(rawBody);
-  const r2Key = `snapshot/mentions/${pluginKey}/${hash}`;
-  await env.SNAPSHOTS.put(r2Key, rawBody, { httpMetadata: { contentType: "application/octet-stream" } });
-  return { r2Key, hash };
+async function advanceCursor(pluginKey: string, watchId: string, items: readonly MentionItem[]): Promise<void> {
+  const cursor = newestEpoch(items);
+  if (isHnPlugin(pluginKey) && cursor !== null) await advanceHnCursor(watchId, cursor);
+}
+
+async function hashMentionBody(rawBody: string): Promise<{ r2Key: null; hash: string }> {
+  return { r2Key: null, hash: await sha256Hex(rawBody) };
 }
 
 async function commitMentionWatch(input: {
   watch: WatchRow;
   context: DiscoveryContext;
   items: readonly MentionItem[];
-  snapshot: { r2Key: string; hash: string };
+  snapshot: { r2Key: null; hash: string };
   canaryCount: number | null;
   now: string;
 }): Promise<{ stored: number; unjudged: number }> {
   const { watch, context, items, snapshot, canaryCount, now } = input;
-  const titled = items.filter((item) => item.title.trim() !== "");
+  const titled = items.filter(
+    (item) => item.title.trim() !== "" && !predatesWatch(watch.plugin_key, watch.watch_created_at, item.publishedAt),
+  );
   const written = await statementsForWatch({
     watch,
     context,
@@ -524,7 +526,6 @@ async function flagNoChannel(watchId: string, now: string): Promise<void> {
 }
 
 interface YoutubeRun {
-  pluginKey: string;
   now: string;
   canaryCount: number | null;
 }
@@ -536,7 +537,7 @@ async function commitYoutubeFeed(input: {
   channelId: string;
 }): Promise<TargetOutcome> {
   const { watch, feed, run, channelId } = input;
-  const { pluginKey, now, canaryCount } = run;
+  const { now, canaryCount } = run;
   const current = await requireWatchConfigJson(watch.watch_id);
   const currentConfig = readWatchConfig(current);
   if (
@@ -548,7 +549,7 @@ async function commitYoutubeFeed(input: {
   ) {
     await writeWatchConfigJson(watch.watch_id, withResolvedChannel(current, channelId));
   }
-  const snapshot = await putMentionBody(pluginKey, feed.rawBody);
+  const snapshot = await hashMentionBody(feed.rawBody);
   const context = await readDiscoveryContext(watch.workspace_id);
   if (context === null) return { items: feed.items.length, stored: 0, unjudged: 0, skipped: 0 };
   const committed = await commitMentionWatch({
@@ -635,7 +636,7 @@ async function sweepYoutubeTarget(
   let skipped = 0;
   for (const [index, watch] of target.watches.entries()) {
     try {
-      const outcome = await sweepOneYoutube(watch, { pluginKey: target.pluginKey, now, canaryCount });
+      const outcome = await sweepOneYoutube(watch, { now, canaryCount });
       items += outcome.items;
       stored += outcome.stored;
       unjudged += outcome.unjudged;
@@ -664,9 +665,9 @@ export async function sweepTarget(
     if (target.pluginKey === "youtube.channel_rss") return await sweepYoutubeTarget(target, now, canaryCount);
     const adapter = adapterFor(target.pluginKey);
     if (adapter === undefined) throw new Error(`no mentions adapter for ${target.pluginKey}`);
-    const result = await adapter({ query: target.query }, null);
+    const result = await adapter({ query: target.query }, startCursor(target.pluginKey, target.watches));
     writeSourcePoint(target.pluginKey, result.items.length, canaryCount);
-    const snapshot = await putMentionBody(target.pluginKey, result.rawBody);
+    const snapshot = await hashMentionBody(result.rawBody);
     const contexts = new Map<string, DiscoveryContext | null>();
     let stored = 0;
     let unjudged = 0;
@@ -684,6 +685,7 @@ export async function sweepTarget(
         canaryCount,
         now,
       });
+      await advanceCursor(target.pluginKey, watch.watch_id, result.items);
       stored += committed.stored;
       unjudged += committed.unjudged;
     }

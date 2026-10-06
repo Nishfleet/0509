@@ -56,6 +56,12 @@ const FOUR_WEEK_PLOT_STATIC_IMPORT = {
     'Load four-week-plot with React.lazy(() => import("./four-week-plot")), never a static import: a static import puts uPlot back in the /app entry. Source: 0509#5289.',
 };
 
+const ROW_EVIDENCE_STATIC_IMPORT = {
+  name: "./row-evidence",
+  message:
+    'Load row-evidence with React.lazy(() => import("./row-evidence")), never a static import: a static import puts @base-ui/react/tabs in the /app entry (docs/REBUILD-DONE.md §B, 150 KB). Source: 0509#7014.',
+};
+
 const CHART_IMPORTS = [UPLOT_IMPORT, UPLOT_REACT_IMPORT, FOUR_WEEK_PLOT_STATIC_IMPORT];
 
 const FAST_XML_PARSER_IMPORT = {
@@ -271,13 +277,35 @@ const DOC_READING_TEST_BAN = {
     "A test never reads a .md file. A doc-vs-code check is review's: a doc edit that fails the suite teaches the next writer to change the test instead of the doc. Put the copy in the product's public surface and assert that. docs/REBUILD-DONE.md D. Source: 0509#6953.",
 };
 
+const EMPTY_WORKERS_ENV_MOCK = {
+  selector:
+    "CallExpression[callee.object.name='vi'][callee.property.name=/^(mock|doMock)$/][arguments.0.value='cloudflare:workers'] ObjectExpression[properties.length=1] > Property[key.name='env'] > ObjectExpression[properties.length=0]",
+  message:
+    "The node project already aliases cloudflare:workers to tests/workers-env-empty-stub.ts. An empty vi.mock({ env: {} }) is dead duplication; a test that needs values still mocks real bindings. Evals keep the throwing Proxy in tests/evals/workers-env-stub.ts. Source: 0509#7026.",
+};
+
+const ESLINT_DISK_PROBE_BAN = {
+  selector:
+    "CallExpression[callee.name=/^(writeFile|mkdir)(Sync)?$/], CallExpression[callee.property.name=/^(writeFile|mkdir)(Sync)?$/]",
+  message:
+    "ESLint rule tests lint in memory with lintText against a real filePath. Disk probes under app/ and workers/ collide when vitest runs files in parallel and leave stray files on a crash. Cross-file rules (import-x/no-cycle, boundaries) stay in tests/architecture-boundaries.test.ts. Source: 0509#7026.",
+};
+
 const BARE_TOAST = {
   selector: "CallExpression[callee.name='toast'], MemberExpression[object.name='toast']",
   message:
     "toast() is called in exactly one module, app/components/toaster.tsx, behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo'. The sonner import ban does not catch a toast reached another way, so the call shape is banned too. Source: 0509#4116, 0509#7007.",
 };
 
+const HAND_ROLLED_ARIA_TAB = {
+  selector:
+    "JSXAttribute[name.name='role'] Literal[value=/^(tab|tablist|tabpanel)$/], JSXAttribute[name.name='role'] TemplateElement[value.raw=/^(tab|tablist|tabpanel)$/]",
+  message:
+    "Tabs come from app/components/ui/tabs.tsx (shadcn on @base-ui/react/tabs). A hand-rolled role=tab/tablist/tabpanel has no arrow keys and no roving tabIndex. Source: 0509#7014.",
+};
+
 const BANNED_SYNTAX = [
+  HAND_ROLLED_ARIA_TAB,
   BARE_TOAST,
   SUPPORT_ADDRESS_BAN,
   GOOGLE_FONTS_BAN,
@@ -340,6 +368,78 @@ const RAW_DML_WRITER = {
 const ENV_DB_IN_ROUTES = {
   selector: "CallExpression[callee.object.name='env'][callee.property.name='DB']",
   message: "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
+};
+
+const FORM_DATA_GET_BAN = {
+  meta: {
+    type: "problem",
+    schema: [],
+    messages: {
+      formDataGet:
+        "Parse form input with a zod schema next to the action; do not read formData.get by hand. The receiver is matched on its TypeScript type, so every FormData parameter or local is covered whatever it is called. Source: 0509#7027, 0509#7111.",
+    },
+  },
+  create(context) {
+    const services = context.sourceCode.parserServices;
+    if (services?.getTypeAtLocation === undefined) {
+      // A gate that silently passes every file it was armed for is the old
+      // defect in a new costume, so a missing program is an error, not a
+      // no-op. Nothing in this config can reach it: the rule is armed only on
+      // app/** and workers/**, and every one of those files has type
+      // information. 0509#7111.
+      return {
+        Program(node) {
+          context.report({
+            node,
+            message: "form-rules/form-data-get needs TypeScript type information to match the receiver type.",
+          });
+        },
+      };
+    }
+    return {
+      MemberExpression(node) {
+        if (node.optional) return;
+        const name =
+          node.property.type === "Identifier"
+            ? node.property.name
+            : node.property.type === "Literal" && typeof node.property.value === "string"
+              ? node.property.value
+              : null;
+        // form["get"](...) is the only computed shape worth covering: any other
+        // computed key is a dynamic read, not a field name.
+        if (node.computed && node.property.type !== "Literal") return;
+        if (name !== "get") return;
+        if (!isFormData(services.getTypeAtLocation(node.object))) return;
+        context.report({ node, messageId: "formDataGet" });
+      },
+    };
+  },
+};
+
+function isFormData(type) {
+  // FormData | undefined is pending UI (navigation.formData?.get) and
+  // shouldRevalidate, not action input, so a union or an intersection is never
+  // a hit.
+  if (type.isUnion() || type.isIntersection()) return false;
+  const seen = new Set();
+  let current = type;
+  while (current !== undefined && !seen.has(current)) {
+    seen.add(current);
+    if ((current.getSymbol() ?? current.aliasSymbol)?.getName() === "FormData") return true;
+    // A hand-written FormData subclass still reads form input.
+    const bases = current.getBaseTypes?.() ?? [];
+    if (bases.length !== 1) return false;
+    current = bases[0];
+  }
+  return false;
+}
+
+const FORM_RULES_PLUGIN = {
+  "form-rules": {
+    rules: {
+      "form-data-get": FORM_DATA_GET_BAN,
+    },
+  },
 };
 
 const STATIC_HOME_HTML_PARSER = {
@@ -425,8 +525,9 @@ const TAILWIND_DEFAULT_PALETTE = {
     "The Tailwind default palette is banned: every colour is a @theme token in app/app.css (bg-green is the one accent, DESIGN.md rule 8). Source: 0509#5871.",
 };
 
+// outline- covers the stock tabs trigger's focus-visible:outline-ring (0509#7014).
 const SHADCN_STOCK_TOKEN_CLASSES =
-  "(?:^|:)(?:bg|text|border|ring|fill|stroke)-(?:background|foreground|muted|muted-foreground|primary|primary-foreground|secondary|secondary-foreground|destructive|border|input|ring|popover|popover-foreground)(?:/[0-9]+)?$";
+  "(?:^|:)(?:bg|text|border|ring|fill|stroke|outline)-(?:background|foreground|muted|muted-foreground|primary|primary-foreground|secondary|secondary-foreground|destructive|border|input|ring|popover|popover-foreground)(?:/[0-9]+)?$";
 
 const TW_ANIMATE_STOCK_CLASSES =
   "(?:^|:)(?:animate-in|animate-out|fade-in-0|fade-out-0|zoom-in-95|zoom-out-95|slide-in-from-(?:top|bottom|left|right)-2)$";
@@ -577,8 +678,10 @@ export default tseslint.config(
     // appending.
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
     ignores: ["app/lib/data/**", "workers/e2e-inbox.ts", "workers/fixture-site.ts"],
+    plugins: FORM_RULES_PLUGIN,
     rules: {
       "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, RAW_DML_WRITER, FEED_STATE_LITERAL],
+      "form-rules/form-data-get": "error",
     },
   },
 
@@ -624,6 +727,26 @@ export default tseslint.config(
         RAW_DML_WRITER,
         FEED_STATE_LITERAL,
       ],
+    },
+  },
+
+  {
+    // Identity *.server.ts still exempts DOMAIN_HOSTNAME_BAN (the engine lives
+    // here) and bans form-rules/form-data-get so confirm/card-draft cannot read
+    // a FormData receiver by hand. card-fields.ts stays on the block above:
+    // isDraftSave reads pending formData (FormData | undefined) for
+    // shouldRevalidate, not action input. 0509#7027, 0509#7033, 0509#7111.
+    files: ["app/lib/identity/**/*.server.ts"],
+    plugins: FORM_RULES_PLUGIN,
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== DOMAIN_HOSTNAME_BAN),
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+      ],
+      "form-rules/form-data-get": "error",
     },
   },
 
@@ -775,7 +898,13 @@ export default tseslint.config(
       "no-restricted-imports": [
         "error",
         {
-          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT, FULL_ZOD_IMPORT, ...CHART_IMPORTS],
+          paths: [
+            ...ONE_PAVED_PATH_IMPORTS,
+            CLOUDFLARE_WORKERS_IMPORT,
+            FULL_ZOD_IMPORT,
+            ...CHART_IMPORTS,
+            ROW_EVIDENCE_STATIC_IMPORT,
+          ],
           patterns: PAVED_PATH_PATTERNS,
         },
       ],
@@ -1004,6 +1133,7 @@ export default tseslint.config(
 
   {
     files: ["app/routes/**/*.{ts,tsx}"],
+    plugins: FORM_RULES_PLUGIN,
     rules: {
       "max-lines": ["error", { max: 150, skipBlankLines: false, skipComments: false }],
       "no-restricted-syntax": [
@@ -1014,6 +1144,7 @@ export default tseslint.config(
         ENV_DB_IN_ROUTES,
         FEED_STATE_LITERAL,
       ],
+      "form-rules/form-data-get": "error",
     },
   },
 
@@ -1044,6 +1175,14 @@ export default tseslint.config(
       // `assert` stays from the stock default.
       "vitest/expect-expect": ["error", { assertFunctionNames: ["expect", "expectNoHtmlInjection", "assert"] }],
       "vitest/valid-expect": ["error", { maxArgs: 2 }],
+      "no-restricted-syntax": ["error", EMPTY_WORKERS_ENV_MOCK],
+    },
+  },
+
+  {
+    files: ["tests/eslint-*.test.ts"],
+    rules: {
+      "no-restricted-syntax": ["error", EMPTY_WORKERS_ENV_MOCK, ESLINT_DISK_PROBE_BAN],
     },
   },
 
@@ -1054,7 +1193,8 @@ export default tseslint.config(
     // tests/docs-paths.test.ts also read .md files, but they are repo-hygiene
     // gates on the agent's own entry docs rather than copy-versus-code checks
     // about the product, and CLAUDE.md makes the first a rejection rule ("a
-    // dependency with no row in docs/REBUILD-STACK.md is a rejection"). Both
+    // dependency with no row in docs/dependencies.md is a rejection", moved out
+    // of docs/REBUILD-STACK.md §9 by 0509#7017). Both
     // are follow-up work to migrate, not exemptions to add here.
     //
     // Two files hold a named exception and only these two, because Nish has not
@@ -1062,12 +1202,13 @@ export default tseslint.config(
     // .agents/skills/verify/feature-map.md to prove every mapped screen was
     // actually visited, and theme.test.ts reads DESIGN.md §3 and §4 to keep the
     // tokens in step with the doc. A third is a new rule here, in review, not
-    // an `ignores` entry. The block is the only matching one that sets
-    // no-restricted-syntax for tests/unit/.
+    // an `ignores` entry. no-restricted-syntax is replaced, not merged, by the
+    // last matching block, so this one repeats EMPTY_WORKERS_ENV_MOCK from the
+    // tests/**/*.ts block above.
     files: ["tests/unit/**/*.ts"],
     ignores: ["tests/unit/feature-map-proof.test.ts", "tests/unit/theme.test.ts"],
     rules: {
-      "no-restricted-syntax": ["error", DOC_READING_TEST_BAN],
+      "no-restricted-syntax": ["error", DOC_READING_TEST_BAN, EMPTY_WORKERS_ENV_MOCK],
     },
   },
 

@@ -13,7 +13,9 @@ import { ACT_AT, CHANGE_KIND_QUESTION_ID, PRICING_ACT_AT, REJECT_AT } from "../j
 import { daysBefore } from "../site-changes.server";
 import type { BreakageEvidence } from "./breakage-evidence";
 
-const JEV_JUDGMENTS_PER_BRAND_PER_DAY = 6;
+const CHANGE_VERDICT_ROWS_PER_BRAND_PER_DAY = 6;
+
+const JEV_BREAKAGE_PER_BRAND_PER_DAY = 6;
 
 const HISTORY_DAYS = 30;
 
@@ -32,6 +34,8 @@ const D3S_BREAKAGE_QID = "own_site_breakage";
 const D3_NOTEWORTHY_QID = "noteworthy_change";
 
 const D3_KIND_QID = CHANGE_KIND_QUESTION_ID;
+
+const CHANGE_QUESTIONS = [D3_NOTEWORTHY_QID, D3_KIND_QID];
 
 export const D3S_BREAKAGE: NoulQuestion = {
   id: D3S_BREAKAGE_QID,
@@ -182,8 +186,12 @@ async function storeVerdicts(rows: readonly VerdictRow[]): Promise<readonly stri
 
 type ChangeStateValue = ChangeState;
 
-function deferredResult(selfBreakage: BreakageBand | null): JudgedChange {
-  return { deferred: true, selfBreakage, noteworthy: null, verdictIds: [] };
+function deferredResult(selfBreakage: BreakageBand | null, verdictIds: readonly string[] = []): JudgedChange {
+  return { deferred: true, selfBreakage, noteworthy: null, verdictIds };
+}
+
+async function usedBudget(entityId: string, now: Date, questionIds: readonly string[]): Promise<number> {
+  return countVerdictsSince(entityId, todayStartIso(now), questionIds);
 }
 
 async function judgeSelfBreakage(
@@ -240,31 +248,43 @@ async function judgeNoteworthy(
   };
 }
 
+type SelfStage = Awaited<ReturnType<typeof judgeSelfBreakage>>;
+
+async function breakageBudgetUsed(input: JudgeInput, now: Date): Promise<boolean> {
+  if (!input.isSelf) return false;
+  return (await usedBudget(input.entityId, now, [D3S_BREAKAGE_QID])) >= JEV_BREAKAGE_PER_BRAND_PER_DAY;
+}
+
+async function breakageAlert(self: NonNullable<SelfStage> | undefined): Promise<JudgedChange | null> {
+  if (self === undefined || self.selfBreakage.band === "clear") return null;
+  const verdictIds = await storeVerdicts([self.row]);
+  return { deferred: false, selfBreakage: self.selfBreakage, noteworthy: null, verdictIds };
+}
+
+async function judgeNoteworthyStage(
+  stage: { input: JudgeInput; state: ChangeStateValue; self: NonNullable<SelfStage> | undefined },
+  now: Date,
+): Promise<JudgedChange> {
+  const { input, state, self } = stage;
+  const selfBreakage = self?.selfBreakage ?? null;
+  const selfRows = self === undefined ? [] : [self.row];
+  if ((await usedBudget(input.entityId, now, CHANGE_QUESTIONS)) >= CHANGE_VERDICT_ROWS_PER_BRAND_PER_DAY) {
+    return deferredResult(selfBreakage, await storeVerdicts(selfRows));
+  }
+  const judged = await judgeNoteworthy(input, state, now.toISOString());
+  if (judged === null) return deferredResult(selfBreakage, await storeVerdicts(selfRows));
+  const verdictIds = await storeVerdicts([...selfRows, ...judged.rows]);
+  return { deferred: false, selfBreakage, noteworthy: judged.noteworthy, verdictIds };
+}
+
 export async function judgeChange(input: JudgeInput): Promise<JudgedChange> {
   const now = new Date();
-  const decidedAt = now.toISOString();
-
-  const usedToday = await countVerdictsSince(input.entityId, todayStartIso(now));
-  if (usedToday >= JEV_JUDGMENTS_PER_BRAND_PER_DAY) return deferredResult(null);
+  if (await breakageBudgetUsed(input, now)) return deferredResult(null);
 
   const history30d = await readHistory30d(input.entityId, daysBefore(now, HISTORY_DAYS));
   const state = changeState(input, history30d);
-
-  const self = input.isSelf ? await judgeSelfBreakage(input, state, decidedAt) : undefined;
+  const self = input.isSelf ? await judgeSelfBreakage(input, state, now.toISOString()) : undefined;
   if (self === null) return deferredResult(null);
-  if (self !== undefined && self.selfBreakage.band !== "clear") {
-    return {
-      deferred: false,
-      selfBreakage: self.selfBreakage,
-      noteworthy: null,
-      verdictIds: await storeVerdicts([self.row]),
-    };
-  }
-  const selfBreakage = self?.selfBreakage ?? null;
 
-  const judged = await judgeNoteworthy(input, state, decidedAt);
-  if (judged === null) return deferredResult(selfBreakage);
-
-  const rows = self === undefined ? judged.rows : [self.row, ...judged.rows];
-  return { deferred: false, selfBreakage, noteworthy: judged.noteworthy, verdictIds: await storeVerdicts(rows) };
+  return (await breakageAlert(self)) ?? judgeNoteworthyStage({ input, state, self }, now);
 }
