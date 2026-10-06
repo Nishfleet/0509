@@ -38,7 +38,7 @@ afterEach(() => {
 describe("askChoice", () => {
   it("asks Jev once, sends a choice question with the options as criteria, and returns the uncached choice", async () => {
     const workspaceId = await seedWorkspace();
-    const run = vi.fn(() => Promise.resolve({ answers: { activity: { type: "choice", choice: "dormant" } } }));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.resolve({ answers: { activity: { type: "choice", choice: "dormant" } } }));
     Reflect.set(env, "AI", { run });
 
     const verdict = await askChoice(workspaceId, question, state);
@@ -54,7 +54,7 @@ describe("askChoice", () => {
 
   it("reuses a stored verdict for the same input and does not ask again", async () => {
     const workspaceId = await seedWorkspace();
-    const run = vi.fn(() => Promise.resolve({ answers: { activity: { type: "choice", choice: "dormant" } } }));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.resolve({ answers: { activity: { type: "choice", choice: "dormant" } } }));
     Reflect.set(env, "AI", { run });
 
     const first = await askChoice(workspaceId, question, state);
@@ -85,7 +85,7 @@ describe("askChoice", () => {
 
   it("throws JevUnavailableError when the answer's choice is not one of the options", async () => {
     const workspaceId = await seedWorkspace();
-    const run = vi.fn(() => Promise.resolve({ answers: { activity: { type: "choice", choice: "exploded" } } }));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.resolve({ answers: { activity: { type: "choice", choice: "exploded" } } }));
     Reflect.set(env, "AI", { run });
 
     await expect(askChoice(workspaceId, question, state)).rejects.toThrow(JevUnavailableError);
@@ -93,7 +93,7 @@ describe("askChoice", () => {
 
   it("throws JevUnavailableError when Jev refuses", async () => {
     const workspaceId = await seedWorkspace();
-    const run = vi.fn(() => Promise.reject(new Error("Insufficient balance; add money to your gateway")));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.reject(new Error("Insufficient balance; add money to your gateway")));
     Reflect.set(env, "AI", { run });
 
     await expect(askChoice(workspaceId, question, state)).rejects.toThrow(JevUnavailableError);

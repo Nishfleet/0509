@@ -41,7 +41,7 @@ afterEach(() => {
 describe("screenPublicSubject", () => {
   it("returns proceed when Jev p is at or above 0.9", async () => {
     const workspaceId = await seedWorkspace();
-    const run = vi.fn(() => Promise.resolve({ answers: { public_subject: { type: "noul", noul: 0.95 } } }));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.resolve({ answers: { public_subject: { type: "noul", noul: 0.95 } } }));
     Reflect.set(env, "AI", { run });
 
     const { outcome, verdict } = await screenPublicSubject({
@@ -67,7 +67,7 @@ describe("screenPublicSubject", () => {
 
   it("returns ask when Jev p is in the ambiguous middle band", async () => {
     const workspaceId = await seedWorkspace();
-    const run = vi.fn(() => Promise.resolve({ answers: { public_subject: { type: "noul", noul: 0.5 } } }));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.resolve({ answers: { public_subject: { type: "noul", noul: 0.5 } } }));
     Reflect.set(env, "AI", { run });
 
     const { outcome, verdict } = await screenPublicSubject({
@@ -83,7 +83,7 @@ describe("screenPublicSubject", () => {
 
   it("returns refuse when Jev p is at or below 0.1", async () => {
     const workspaceId = await seedWorkspace();
-    const run = vi.fn(() => Promise.resolve({ answers: { public_subject: { type: "noul", noul: 0.05 } } }));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.resolve({ answers: { public_subject: { type: "noul", noul: 0.05 } } }));
     Reflect.set(env, "AI", { run });
 
     const { outcome, verdict } = await screenPublicSubject({
@@ -99,7 +99,7 @@ describe("screenPublicSubject", () => {
 
   it("persists a jev_verdict row on the first call and reuses the cached verdict on the second", async () => {
     const workspaceId = await seedWorkspace();
-    const run = vi.fn(() => Promise.resolve({ answers: { public_subject: { type: "noul", noul: 0.95 } } }));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.resolve({ answers: { public_subject: { type: "noul", noul: 0.95 } } }));
     Reflect.set(env, "AI", { run });
 
     const first = await screenPublicSubject({
@@ -130,7 +130,7 @@ describe("screenPublicSubject", () => {
 
   it("throws JevUnavailableError when Jev refuses", async () => {
     const workspaceId = await seedWorkspace();
-    const run = vi.fn(() => Promise.reject(new Error("Insufficient balance; add money to your gateway")));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.reject(new Error("Insufficient balance; add money to your gateway")));
     Reflect.set(env, "AI", { run });
 
     await expect(

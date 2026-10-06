@@ -15,7 +15,7 @@ describe("resolveDomain", () => {
   it("resolves Gymshark through the Wikidata P856 claim and caches it", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn((input: RequestInfo | URL) => {
+      vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
         const url = String(input);
         if (url.includes("wbsearchentities")) {
           return Promise.resolve(Response.json({ search: [{ id: "Q123" }] }));
@@ -56,7 +56,7 @@ describe("resolveDomain", () => {
   it("accepts a slug guess only on an exact og:site_name match", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn((input: RequestInfo | URL) => {
+      vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
         const url = String(input);
         if (url.includes("wbsearchentities")) {
           return Promise.resolve(Response.json({ search: [] }));
@@ -82,7 +82,7 @@ describe("resolveDomain", () => {
   it("rejects a parked slug that returns 200 without the name match", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn((input: RequestInfo | URL) => {
+      vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
         const url = String(input);
         if (url.includes("wbsearchentities")) {
           return Promise.resolve(Response.json({ search: [] }));
@@ -108,7 +108,7 @@ describe("resolveDomain", () => {
   it("returns and caches unresolved when every step fails", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn((input: RequestInfo | URL) => {
+      vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
         const url = String(input);
         if (url.includes("wbsearchentities")) {
           return Promise.resolve(Response.json({ search: [] }));
@@ -168,7 +168,7 @@ describe("resolveDomain", () => {
   });
 
   it("identifies both of resolve-domain's outbound fetches as the one crawler User-Agent (0509#5883)", async () => {
-    const fetchMock = vi.fn(() => Promise.resolve(Response.json({ search: [] })));
+    const fetchMock = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => Promise.resolve(Response.json({ search: [] })));
     vi.stubGlobal("fetch", fetchMock);
 
     await resolveDomain("Fresh Identity 0509");
@@ -184,7 +184,7 @@ describe("resolveDomain", () => {
     ["the metadata IP", "http://169.254.169.254/latest/meta-data", "metadatabrand"],
     ["an .internal host", "http://metadata.internal/latest", "internalbrand"],
   ])("refuses a slug guess that redirects to %s and never fetches the target", async (_label, target, name) => {
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
       const url = String(input);
       if (url.includes("wbsearchentities")) return Promise.resolve(Response.json({ search: [] }));
       return Promise.resolve(new Response(null, { status: 302, headers: { location: target } }));
@@ -202,7 +202,7 @@ describe("resolveDomain", () => {
   });
 
   it("refuses a Wikidata answer that redirects to an internal host", async () => {
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
       const url = String(input);
       if (new URL(url).hostname === "www.wikidata.org") {
         return Promise.resolve(new Response(null, { status: 302, headers: { location: "http://169.254.169.254/" } }));
@@ -221,7 +221,7 @@ describe("resolveDomain", () => {
   it("follows a slug guess that redirects to a public host", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn((input: RequestInfo | URL) => {
+      vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
         const url = String(input);
         if (url.includes("wbsearchentities")) return Promise.resolve(Response.json({ search: [] }));
         if (new URL(url).hostname === "www.publicbrand0509.com") {
