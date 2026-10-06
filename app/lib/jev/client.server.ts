@@ -2,6 +2,7 @@ import { captureException } from "@sentry/cloudflare";
 import { env, waitUntil } from "cloudflare:workers";
 import { z } from "zod";
 
+import { JEV_CALLS_PER_DAY, takeAiCall } from "../ai/daily-cap.server";
 import { insertJevFailure } from "../data/jev_failure.server";
 import { readCachedChoice, readCachedNoul } from "../data/jev_verdict.server";
 import { sha256Hex } from "../sha256";
@@ -145,7 +146,8 @@ function noulAsk(question: NoulQuestion): NoulAsk {
   };
 }
 
-function decide(state: unknown, questions: Record<string, unknown>, retries?: AttemptPolicy): Promise<unknown> {
+async function decide(state: unknown, questions: Record<string, unknown>, retries?: AttemptPolicy): Promise<unknown> {
+  await takeAiCall("jev", JEV_CALLS_PER_DAY);
   const gateway = retries === undefined ? { id: GATEWAY_ID } : { id: GATEWAY_ID, retries };
   return env.AI.run(MODEL, { model: MODEL_SELECTOR, state, questions }, { gateway });
 }
