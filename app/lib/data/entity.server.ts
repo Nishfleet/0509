@@ -578,7 +578,7 @@ export async function markSelfSiteFill(workspaceId: string, entityId: string, st
 const READ_SELF_SITE_FILL =
   "SELECT json_extract(identity_json, '$.siteFill') AS site_fill FROM entity WHERE workspace_id = ?1 AND role = 'self'";
 
-const siteFillRow = z.object({ site_fill: z.string().nullable().catch(null) });
+const siteFillRow = z.object({ site_fill: z.string().nullable() });
 
 export async function readSelfSiteFill(workspaceId: string): Promise<SiteFillState | null> {
   const row = siteFillRow.nullable().parse(await env.DB.prepare(READ_SELF_SITE_FILL).bind(workspaceId).first());
