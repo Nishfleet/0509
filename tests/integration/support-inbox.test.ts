@@ -38,9 +38,9 @@ const fakeMessage = (forward: () => Promise<void>, mime = MIME): EmailMessage =>
     reply: () => Promise.resolve(),
   }) as unknown as EmailMessage;
 
-const deliver = async (inboxEnv: InboxEnv = env, mime = MIME) => {
+const deliver = async (inboxEnv: InboxEnv = env, mime = MIME, status = 201) => {
   const forward = vi.fn(() => Promise.resolve());
-  const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 201 }));
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status }));
   const ctx = createExecutionContext();
   await worker.email(fakeMessage(forward, mime), inboxEnv, ctx);
   await waitOnExecutionContext(ctx);
@@ -55,6 +55,7 @@ const issueBody = (fetchSpy: ReturnType<typeof vi.spyOn>) => {
 describe("0509-support-inbox-v2", () => {
   beforeEach(async () => {
     await env.DB.exec("DELETE FROM support_report");
+    await env.DB.exec("DELETE FROM support_issue");
   });
 
   afterEach(() => {
@@ -126,6 +127,27 @@ describe("0509-support-inbox-v2", () => {
     expect(issue.body).toContain("/app/pages");
   });
 
+  it("counts the issues it opened, so a failed create leaves the slot free", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await deliver(env, MIME, 500);
+
+    const afterFailure = await env.DB.prepare(
+      "SELECT (SELECT COUNT(*) FROM support_report) AS reports, (SELECT COUNT(*) FROM support_issue) AS issues",
+    ).first<{ reports: number; issues: number }>();
+    expect(afterFailure?.reports).toBe(1);
+    expect(afterFailure?.issues).toBe(0);
+
+    for (let i = 0; i < 3; i += 1) {
+      await deliver(env, MIME.replace("Refund please", `Refund please ${i}`));
+    }
+
+    const afterCreates = await env.DB.prepare(
+      "SELECT (SELECT COUNT(*) FROM support_report) AS reports, (SELECT COUNT(*) FROM support_issue) AS issues",
+    ).first<{ reports: number; issues: number }>();
+    expect(afterCreates?.reports).toBe(4);
+    expect(afterCreates?.issues).toBe(3);
+  });
+
   it("opens at most 3 issues per sender domain per day and still stores every mail", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 201 }));
@@ -141,6 +163,52 @@ describe("0509-support-inbox-v2", () => {
       n: number;
     }>();
     expect(count?.n).toBe(5);
+  });
+
+  it("opens at most 3 issues when 5 mails arrive at once", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 201 }));
+
+    const contexts = Array.from({ length: 5 }, () => createExecutionContext());
+    await Promise.all(contexts.map((ctx) => worker.email(fakeMessage(vi.fn(() => Promise.resolve())), env, ctx)));
+    for (const ctx of contexts) {
+      await waitOnExecutionContext(ctx);
+    }
+
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    const stored = await env.DB.prepare(
+      "SELECT (SELECT COUNT(*) FROM support_report) AS reports, (SELECT COUNT(*) FROM support_issue) AS issues",
+    ).first<{ reports: number; issues: number }>();
+    expect(stored?.reports).toBe(5);
+    expect(stored?.issues).toBe(3);
+  });
+
+  it("opens at most 3 issues per sender domain per day when the last two mails arrive together", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 201 }));
+    const sendOne = async () => {
+      const ctx = createExecutionContext();
+      await worker.email(fakeMessage(vi.fn(() => Promise.resolve())), env, ctx);
+      await waitOnExecutionContext(ctx);
+    };
+
+    for (let i = 0; i < 3; i += 1) {
+      await sendOne();
+    }
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+
+    const contexts = Array.from({ length: 2 }, () => createExecutionContext());
+    await Promise.all(contexts.map((ctx) => worker.email(fakeMessage(vi.fn(() => Promise.resolve())), env, ctx)));
+    for (const ctx of contexts) {
+      await waitOnExecutionContext(ctx);
+    }
+
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    const stored = await env.DB.prepare(
+      "SELECT (SELECT COUNT(*) FROM support_report) AS reports, (SELECT COUNT(*) FROM support_issue) AS issues",
+    ).first<{ reports: number; issues: number }>();
+    expect(stored?.reports).toBe(5);
+    expect(stored?.issues).toBe(3);
   });
 
   it("still stores and forwards with no GitHub token, and never calls fetch", async () => {
