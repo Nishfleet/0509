@@ -13,7 +13,7 @@ import { ACT_AT, CHANGE_KIND_QUESTION_ID, PRICING_ACT_AT, REJECT_AT } from "../j
 import { daysBefore } from "../site-changes.server";
 import type { BreakageEvidence } from "./breakage-evidence";
 
-const JEV_JUDGMENTS_PER_BRAND_PER_DAY = 6;
+const CHANGE_VERDICT_ROWS_PER_BRAND_PER_DAY = 6;
 
 const JEV_BREAKAGE_PER_BRAND_PER_DAY = 6;
 
@@ -268,7 +268,7 @@ async function judgeNoteworthyStage(
   const { input, state, self } = stage;
   const selfBreakage = self?.selfBreakage ?? null;
   const selfRows = self === undefined ? [] : [self.row];
-  if ((await usedBudget(input.entityId, now, CHANGE_QUESTIONS)) >= JEV_JUDGMENTS_PER_BRAND_PER_DAY) {
+  if ((await usedBudget(input.entityId, now, CHANGE_QUESTIONS)) >= CHANGE_VERDICT_ROWS_PER_BRAND_PER_DAY) {
     return deferredResult(selfBreakage, await storeVerdicts(selfRows));
   }
   const judged = await judgeNoteworthy(input, state, now.toISOString());
