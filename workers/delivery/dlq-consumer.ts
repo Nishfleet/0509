@@ -128,9 +128,7 @@ async function deadLetteredDigest(env: Env, digestId: string): Promise<string | 
     return null;
   }
 
-  const attempt = await env.DB.prepare(SELECT_LATEST_ATTEMPT_ERROR)
-    .bind(digestId)
-    .first<{ error: string | null }>();
+  const attempt = await env.DB.prepare(SELECT_LATEST_ATTEMPT_ERROR).bind(digestId).first<{ error: string | null }>();
   console.error(
     JSON.stringify({
       event: "delivery.dead_lettered",
