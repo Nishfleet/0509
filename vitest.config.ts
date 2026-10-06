@@ -28,6 +28,9 @@ export default defineConfig({
       "**/tsconfig*.json",
       "**/migrations/**",
       "**/wrangler*.jsonc",
+      // tests/dependabot-config.test.ts reads this from disk (0509#7078);
+      // without the trigger a dependabot.yml-only PR reruns nothing.
+      "**/.github/dependabot.yml",
       "**/tests/integration/apply-migrations.ts",
       // tests/agents-md-canonical.test.ts and tests/migration-gate-docs.test.ts
       // read these from disk (0509#7005, 0509#7003); without the trigger a

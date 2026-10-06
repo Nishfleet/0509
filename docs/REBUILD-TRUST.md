@@ -116,7 +116,7 @@ the two widths `docs/REBUILD-DONE.md` §A names):
 
 1. the landing page renders its `h1` and its `support@0509.io` link
 2. the landing page does not scroll horizontally (§B's mobile gate)
-3. `/api/health` returns 200 with `status: "ok"` and a parseable timestamp
+3. `/api/health` returns 200 with `status: "ok"`, `d1: "ok"` and a parseable timestamp
 4. the login page renders the one input that signs you in
 5. the page reaches load with zero console errors (§B's error gate)
 
