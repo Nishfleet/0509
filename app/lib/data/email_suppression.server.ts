@@ -45,9 +45,6 @@ export async function clearSuppression(address: string): Promise<void> {
   await env.DB.prepare(DELETE_SUPPRESSION).bind(address).run();
 }
 
-export async function clearWorkspaceDeletedSuppression(
-  address: string,
-  db: WorkspaceDb = env.DB,
-): Promise<void> {
+export async function clearWorkspaceDeletedSuppression(address: string, db: WorkspaceDb = env.DB): Promise<void> {
   await db.prepare(DELETE_WORKSPACE_DELETED_SUPPRESSION).bind(address).run();
 }

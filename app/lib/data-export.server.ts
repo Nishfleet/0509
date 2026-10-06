@@ -65,7 +65,7 @@ export async function readWorkspaceExport(
       allRows(db, SELECT_CHOICES, workspaceId),
       allRows(db, SELECT_DECISIONS, workspaceId),
       allRows(db, SELECT_INCIDENTS, workspaceId),
-      readPlanSummary(workspaceId),
+      readPlanSummary(workspaceId, db),
     ]);
   return {
     exportedAt: input.now.toISOString(),
