@@ -1,5 +1,7 @@
 import { env } from "cloudflare:workers";
 
+import type { WorkspaceDb } from "./workspace.server";
+
 const SUPPRESS_BY_UNSUBSCRIBE_TOKEN = `INSERT INTO email_suppression (address, reason, created_at)
 SELECT lower(trim(target_value)), 'unsubscribed', ?
   FROM send_target
@@ -43,6 +45,9 @@ export async function clearSuppression(address: string): Promise<void> {
   await env.DB.prepare(DELETE_SUPPRESSION).bind(address).run();
 }
 
-export async function clearWorkspaceDeletedSuppression(address: string): Promise<void> {
-  await env.DB.prepare(DELETE_WORKSPACE_DELETED_SUPPRESSION).bind(address).run();
+export async function clearWorkspaceDeletedSuppression(
+  address: string,
+  db: WorkspaceDb = env.DB,
+): Promise<void> {
+  await db.prepare(DELETE_WORKSPACE_DELETED_SUPPRESSION).bind(address).run();
 }

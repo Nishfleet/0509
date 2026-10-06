@@ -192,6 +192,7 @@ describe("D8 duplicate_signal", () => {
     const run = jev(0.96);
     Reflect.set(env, "AI", { run });
     await sweep(brand, [article(url)], NIGHT_TWO);
+    expect(await rows(otherId)).toHaveLength(1);
     expect(await rows(competitorId)).toHaveLength(1);
     expect(duplicateAsks(run)).toBe(0);
   });

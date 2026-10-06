@@ -91,7 +91,7 @@ export async function ensureWorkspace(
       createdAt,
       fixture: isPerRunFixtureEmail(input.email),
     });
-    await clearWorkspaceDeletedSuppression(input.email);
+    await clearWorkspaceDeletedSuppression(input.email, db);
   } catch (error) {
     const raced = await readWorkspace(db, input.userId);
     if (raced) return withCapturedTimezone(db, raced, timezone);
