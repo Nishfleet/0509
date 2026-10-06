@@ -97,7 +97,7 @@ export async function readEnabledSources(
   return enabledSourceRows.parse(rows.results);
 }
 
-export const CANARY_STRIKES_BEFORE_DEGRADED = 2;
+const CANARY_STRIKES_BEFORE_DEGRADED = 2;
 
 const CANARY_SOURCES = `SELECT id, plugin_key, canary_query,
 COALESCE(json_extract(CASE WHEN json_valid(config_json) THEN config_json ELSE '{}' END, '$.min_interval_seconds'), 0) AS min_interval_seconds FROM source

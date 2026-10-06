@@ -161,19 +161,28 @@ describe("per-source canary in the mentions sweep (#4003 slice 2/6)", () => {
   it("a good night between two empty ones clears the strikes, so a blip costs nothing (0509#7191)", async () => {
     const source = await seedCanarySource("b3");
     try {
-      vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ articles: [] }))));
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response(JSON.stringify({ articles: [] }))),
+      );
       expect(await runCanary(source, NOW)).toBe(0);
       expect(await runCanary(source, "2026-09-25T03:00:00.000Z")).toBe(0);
       expect((await readSource(source.id))?.degraded_reason).toBe("not answering");
 
-      vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(ONE_ARTICLE))));
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response(JSON.stringify(ONE_ARTICLE))),
+      );
       expect(await runCanary(source, "2026-09-26T03:00:00.000Z")).toBe(1);
       const healed = await readSource(source.id);
       expect(healed?.canary_strikes).toBeNull();
       expect(healed?.degraded_reason).toBeNull();
       expect(healed?.last_good_at).toBe("2026-09-26T03:00:00.000Z");
 
-      vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ articles: [] }))));
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response(JSON.stringify({ articles: [] }))),
+      );
       expect(await runCanary(source, "2026-09-27T03:00:00.000Z")).toBe(0);
       const again = await readSource(source.id);
       expect(again?.canary_strikes).toBe(1);

@@ -61,11 +61,7 @@ interface SweepExecution {
   failures: SweepStepFailure[];
 }
 
-function checkTargets(
-  step: WorkflowStep,
-  targets: SweepTargets,
-  run: SweepExecution,
-): Promise<readonly PageOutcome[]> {
+function checkTargets(step: WorkflowStep, targets: SweepTargets, run: SweepExecution): Promise<readonly PageOutcome[]> {
   return targets.reduce<Promise<readonly PageOutcome[]>>(async (done, target) => {
     const previous = await done;
     const checkLabel = `check ${target.pageId}`;
@@ -90,7 +86,11 @@ function checkTargets(
   }, Promise.resolve([]));
 }
 
-function recheckMissing(step: WorkflowStep, missing: SweepTargets, run: SweepExecution): Promise<readonly PageOutcome[]> {
+function recheckMissing(
+  step: WorkflowStep,
+  missing: SweepTargets,
+  run: SweepExecution,
+): Promise<readonly PageOutcome[]> {
   const recheckChunks = Array.from({ length: Math.ceil(missing.length / CHUNK_SIZE) }, (_, index) =>
     missing.slice(index * CHUNK_SIZE, (index + 1) * CHUNK_SIZE),
   );

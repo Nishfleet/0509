@@ -96,19 +96,30 @@ describe("startScheduledWorkflow", () => {
   it("leaves a daily slot that equals the current tick to its own cron trigger, so the catch-up never starts it first", async () => {
     const { createBatch, env } = fakeEnv();
     await startMissedDailyWorkflows(env, Date.UTC(2026, 9, 2, 1, 0, 0));
-    const ids = createBatch.mock.calls.flat().flat().map((entry) => entry.id);
+    const ids = createBatch.mock.calls
+      .flat()
+      .flat()
+      .map((entry) => entry.id);
     expect(ids).not.toContain("feed-sweep-2026-10-02");
   });
 
   it("never starts a sweep whose refresh has already gone out, so a late catch-up cannot become the overrun", async () => {
     const { createBatch, env } = fakeEnv();
     await startMissedDailyWorkflows(env, Date.UTC(2026, 9, 2, 3, 5, 0));
-    const ids = createBatch.mock.calls.flat().flat().map((entry) => entry.id);
+    const ids = createBatch.mock.calls
+      .flat()
+      .flat()
+      .map((entry) => entry.id);
     expect(ids).toEqual([]);
     // The same minute, a tick before the refresh, still covers the evening.
     const { createBatch: after, env: envAfter } = fakeEnv();
     await startMissedDailyWorkflows(envAfter, Date.UTC(2026, 9, 2, 2, 55, 0));
-    expect(after.mock.calls.flat().flat().map((entry) => entry.id)).toContain("site-sweep-2026-10-01");
+    expect(
+      after.mock.calls
+        .flat()
+        .flat()
+        .map((entry) => entry.id),
+    ).toContain("site-sweep-2026-10-01");
     expect(NIGHTLY_CRON).toBe("0 3 * * *");
   });
 

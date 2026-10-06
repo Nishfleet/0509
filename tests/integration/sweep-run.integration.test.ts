@@ -26,9 +26,7 @@ interface SweepRunRow {
 }
 
 const readRun = async (id: string): Promise<SweepRunRow | null> =>
-  env.DB.prepare(
-    `SELECT id, kind, planned_at, finished_at, wall_ms, pages, failed, reason FROM sweep_run WHERE id = ?`,
-  )
+  env.DB.prepare(`SELECT id, kind, planned_at, finished_at, wall_ms, pages, failed, reason FROM sweep_run WHERE id = ?`)
     .bind(id)
     .first<SweepRunRow>();
 
