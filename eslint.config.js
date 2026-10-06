@@ -1238,26 +1238,14 @@ export default tseslint.config(
     },
   },
 
-  // 0509#7073: e2e is type-aware so no-floating-promises is on. The rest of
-  // strictTypeChecked on Playwright evaluate callbacks and poll messages is a
-  // follow-up (restrict-template-expressions on timeout numbers, no-unsafe-*
-  // on JSON.parse of fixture pages).
+  // 0509#7229: e2e gets full strictTypeChecked. Number interpolation is the
+  // one relaxation: a report label like `step ${i}` is safe and the #7183
+  // comment named timeout numbers as the reason this rule was off. Every
+  // other strictTypeChecked check applies to e2e specs.
   {
     files: ["e2e/**/*.ts"],
     rules: {
-      "@typescript-eslint/restrict-template-expressions": "off",
-      "@typescript-eslint/no-unsafe-assignment": "off",
-      "@typescript-eslint/no-unsafe-call": "off",
-      "@typescript-eslint/no-unsafe-member-access": "off",
-      "@typescript-eslint/no-unsafe-return": "off",
-      "@typescript-eslint/no-unsafe-argument": "off",
-      "@typescript-eslint/no-confusing-void-expression": "off",
-      "@typescript-eslint/dot-notation": "off",
-      "@typescript-eslint/no-unnecessary-type-assertion": "off",
-      "@typescript-eslint/restrict-plus-operands": "off",
-      "@typescript-eslint/prefer-includes": "off",
-      "@typescript-eslint/prefer-string-starts-ends-with": "off",
-      "@typescript-eslint/no-base-to-string": "off",
+      "@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true }],
     },
   },
 
@@ -1273,8 +1261,14 @@ export default tseslint.config(
     },
   },
 
-  // 0509#7073: tests/** stay untyped until the excluded files in
-  // tsconfig.test.json typecheck. e2e/** and *.config.ts are off this list.
+  // 0509#7229: typechecking tests/** is done (tsconfig.test.json no longer
+  // excludes any tests/ path). Typed lint on the suite is a separate slice:
+  // removing tests/** from this block surfaces about 14,000 findings the
+  // typecheck alone cannot fix — 5,285 no-unsafe-member-access, 4,509
+  // no-unsafe-call, 2,487 no-deprecated and 793 no-unsafe-assignment, almost
+  // all vi.fn() mocks and JSON.parse results. This comment is the named "why
+  // not": tests stay on disableTypeChecked until that migration has its own
+  // issue. **/*.js, **/*.mjs, **/*.cjs and public/index.html stay untyped.
   {
     files: ["**/*.js", "**/*.mjs", "**/*.cjs", "tests/**/*.ts", "public/index.html"],
     extends: [tseslint.configs.disableTypeChecked],

@@ -41,7 +41,7 @@ test("a passkey registered on first sign-in signs in on its own @own-signin", as
 
   const cdp = await context.newCDPSession(page);
   await cdp.send("WebAuthn.enable");
-  const { authenticatorId } = (await cdp.send("WebAuthn.addVirtualAuthenticator", {
+  const { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", {
     options: {
       protocol: "ctap2",
       transport: "internal",
@@ -50,7 +50,7 @@ test("a passkey registered on first sign-in signs in on its own @own-signin", as
       isUserVerified: true,
       automaticPresenceSimulation: true,
     },
-  })) as { authenticatorId: string };
+  });
 
   try {
     // Register through the real button. The status region is the contract;
@@ -105,7 +105,7 @@ test("a registered passkey is listed in Settings and can be removed @own-signin"
 
   const cdp = await context.newCDPSession(page);
   await cdp.send("WebAuthn.enable");
-  const { authenticatorId } = (await cdp.send("WebAuthn.addVirtualAuthenticator", {
+  const { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", {
     options: {
       protocol: "ctap2",
       transport: "internal",
@@ -114,7 +114,7 @@ test("a registered passkey is listed in Settings and can be removed @own-signin"
       isUserVerified: true,
       automaticPresenceSimulation: true,
     },
-  })) as { authenticatorId: string };
+  });
 
   try {
     const registered = page.waitForResponse((response) =>

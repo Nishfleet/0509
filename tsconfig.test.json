@@ -1,9 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "include": ["tests/**/*.ts", "tests/**/*.json", "e2e/**/*.ts", "*.config.ts", "worker-configuration.d.ts"],
-  "exclude": [
-    "vite.config.ts"
-  ],
+  "exclude": ["vite.config.ts"],
   "compilerOptions": {
     "composite": true,
     "strict": true,

@@ -299,13 +299,18 @@ export async function waitForMagicLink(to: string, token: string | null, exclude
       // one, and a poll-callback error would read as "no email" — the thrown
       // error names the sink's state and carries the poll failure as cause.
       if (pollError !== undefined) {
-        throw new Error(`Reading the local email sink failed while waiting for ${to}: ${pollError}`, { cause });
+        throw new Error(`Reading the local email sink failed while waiting for ${to}: ${JSON.stringify(pollError)}`, {
+          cause,
+        });
       }
       const sinkMissing = await stat(join(process.cwd(), LOCAL_EMAIL_SINK)).then(
         () => false,
         (error: unknown) => {
           if (isNotFound(error)) return true;
-          throw new Error(`Reading the local email sink failed while waiting for ${to}: ${error}`, { cause });
+          throw new Error(
+            `Reading the local email sink failed while waiting for ${to}: ${error instanceof Error ? error.message : JSON.stringify(error)}`,
+            { cause },
+          );
         },
       );
       throw new Error(

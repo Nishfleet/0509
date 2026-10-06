@@ -33,7 +33,7 @@ test.describe.configure({ retries: 1 });
 
 const TOKEN_TTL_MS = 305_000;
 const DEADLINE_SLACK_MS = 30_000;
-const SESSION_COOKIE = /better-auth\.session_token/;
+const SESSION_COOKIE = "better-auth.session_token";
 const VERIFY_ERROR = "error=INVALID_TOKEN";
 
 function freshAddress(tag: string): string {
@@ -59,10 +59,10 @@ async function followOnce(context: BrowserContext, link: string) {
     .map((h) => h.value);
   return {
     status: response.status(),
-    location: response.headers()["location"] ?? "",
+    location: response.headers().location ?? "",
     setsSession: cookies.some(
       (c) =>
-        SESSION_COOKIE.test(c) &&
+        c.includes(SESSION_COOKIE) &&
         !/;\s*max-age=0(;|$)/i.test(c) &&
         (c.split(";")[0] ?? "").split("=").slice(1).join("=").trim() !== "",
     ),
