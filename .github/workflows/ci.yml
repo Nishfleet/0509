@@ -124,6 +124,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: DEMO count the selection (reverted before review)
+        if: github.event_name == 'pull_request'
+        run: |
+          ALL=$(npx vitest list --changed HEAD^1 --filesOnly --passWithNoTests | grep -c '\.test\.ts' || true)
+          MINE=$(npx vitest list --changed HEAD^1 --filesOnly --passWithNoTests --shard "$SHARD" | grep -c '\.test\.ts' || true)
+          WRK=$(npx vitest list --changed HEAD^1 --filesOnly --passWithNoTests --shard "$SHARD" | grep -vc '^\[node\]' || true)
+          echo "::notice title=shard $SHARD::selected=$ALL thisShard=$MINE nonNodeLines=$WRK"
       - name: Test only what the pull request can affect
         # vitest's own --changed: the test files that import a changed file,
         # through the module graph. A change to package.json or a vitest/vite
