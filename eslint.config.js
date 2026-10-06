@@ -137,6 +137,15 @@ const CATCH_RETURNS_NULL = {
     "A catch whose only statement is `return null` swallows the error, so a thrown fetch or a bug fails as silently as a real 'not found'. Give the clause an error binding and a logged failure path (or rethrow). Source: 0509#4462.",
 };
 
+const EMAIL_SUPPRESSION_TABLE = '\\b(FROM|INTO|UPDATE|JOIN|TABLE)\\s+"?email_suppression\\b';
+
+const EMAIL_SUPPRESSION_SQL = {
+  selector:
+    `Literal[value=/${EMAIL_SUPPRESSION_TABLE}/i], ` + `TemplateElement[value.raw=/${EMAIL_SUPPRESSION_TABLE}/i]`,
+  message:
+    "email_suppression SQL lives only in app/lib/data/email_suppression.server.ts. Call isAddressSuppressed, clearSuppression or the suppress* writers instead. A second, exact-case copy of the lookup in workers/delivery/consumer.ts let an unsubscribed address with different capitals receive mail. Source: 0509#7128.",
+};
+
 const MIN_H_11_ANCHOR = {
   selector:
     "JSXOpeningElement[name.name=/^(a|Link)$/] > JSXAttribute[name.name='className'] > Literal[value!=/min-h-11/]",
@@ -300,6 +309,7 @@ const BANNED_SYNTAX = [
   XML_PARSER_CONSTRUCTOR,
   DOMAIN_HOSTNAME_BAN,
   BARE_FETCH,
+  EMAIL_SUPPRESSION_SQL,
   {
     selector:
       "NewExpression[callee.name='RegExp'] > Literal.arguments, NewExpression[callee.name='RegExp'] > TemplateLiteral",
@@ -667,6 +677,23 @@ export default tseslint.config(
     rules: {
       "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, RAW_DML_WRITER, FEED_STATE_LITERAL],
       "form-rules/form-data-get": "error",
+    },
+  },
+
+  {
+    // The one module that may hold email_suppression SQL. app/lib/data/** is
+    // outside the writer block above, so the base app block is its last match;
+    // this restates that block's list without EMAIL_SUPPRESSION_SQL because a
+    // later block's no-restricted-syntax replaces the earlier one wholesale.
+    // 0509#7128.
+    files: ["app/lib/data/email_suppression.server.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== EMAIL_SUPPRESSION_SQL),
+        ...NO_USER_DATA_IN_LOGS,
+        FEED_STATE_LITERAL,
+      ],
     },
   },
 

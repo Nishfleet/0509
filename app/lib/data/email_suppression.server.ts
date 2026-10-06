@@ -1,5 +1,7 @@
 import { env } from "cloudflare:workers";
 
+import { normalizeEmailAddress } from "../email-address";
+
 const SUPPRESS_BY_UNSUBSCRIBE_TOKEN = `INSERT INTO email_suppression (address, reason, created_at)
 SELECT lower(trim(target_value)), 'unsubscribed', ?
   FROM send_target
@@ -13,11 +15,11 @@ SELECT lower(trim(t.target_value)), 'workspace_deleted', ?
  WHERE t.workspace_id = ? AND c.key = 'email'
 ON CONFLICT(address) DO NOTHING`;
 
-const SELECT_SUPPRESSION = `SELECT address FROM email_suppression WHERE lower(trim(address)) = lower(trim(?)) LIMIT 1`;
+const SELECT_SUPPRESSION = `SELECT address FROM email_suppression WHERE address = ?`;
 
 const SELECT_UNSUBSCRIBE_TOKEN = `SELECT 1 AS present FROM send_target WHERE unsubscribe_token = ?`;
 
-const DELETE_SUPPRESSION = `DELETE FROM email_suppression WHERE lower(trim(address)) = lower(trim(?))`;
+const DELETE_SUPPRESSION = `DELETE FROM email_suppression WHERE address = ?`;
 
 export async function suppressByUnsubscribeToken(token: string): Promise<void> {
   await env.DB.prepare(SUPPRESS_BY_UNSUBSCRIBE_TOKEN).bind(new Date().toISOString(), token).run();
@@ -33,10 +35,10 @@ export async function suppressWorkspaceTargets(workspaceId: string): Promise<voi
 }
 
 export async function isAddressSuppressed(address: string, db: D1Database = env.DB): Promise<boolean> {
-  const row = await db.prepare(SELECT_SUPPRESSION).bind(address).first<{ address: string }>();
+  const row = await db.prepare(SELECT_SUPPRESSION).bind(normalizeEmailAddress(address)).first<{ address: string }>();
   return row !== null;
 }
 
 export async function clearSuppression(address: string): Promise<void> {
-  await env.DB.prepare(DELETE_SUPPRESSION).bind(address).run();
+  await env.DB.prepare(DELETE_SUPPRESSION).bind(normalizeEmailAddress(address)).run();
 }

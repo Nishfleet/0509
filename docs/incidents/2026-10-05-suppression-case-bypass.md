@@ -43,12 +43,17 @@ Code reading, not an alert or a customer. No monitor compares sends against supp
 
 - `app/lib/email-address.ts` adds `normalizeEmailAddress` (trim plus lowercase).
 - `send_target` (`app/lib/data/send_target.server.ts`) stores the email target normalized when an owner changes it or a workspace is created, and compares `lower(trim())` on both sides when deciding whether the address changed.
-- `email_suppression` (`app/lib/data/email_suppression.server.ts`) stores `lower(trim(target_value))` on unsubscribe and on workspace deletion, and compares `lower(trim())` on both sides on every read and on clearing. Old mixed-case rows are matched where they are, so no migration is needed and no row is changed or deleted.
+- `email_suppression` (`app/lib/data/email_suppression.server.ts`) stores `lower(trim(target_value))` on unsubscribe and on workspace deletion. In #7128 every read and clear compared `lower(trim())` on both sides. Review found that this keeps the primary-key index from being used, so every send-lane check scanned the table.
 - The send lane no longer has its own suppression query. It calls `isAddressSuppressed`, so there is one suppression reader.
 - Both signed-in-address checks compare normalized values.
+
+The follow-up PR, stacked on #7128:
+
+- `migrations/0047_email_suppression_normalize.sql` rewrites stored addresses to `lower(trim(address))`. Rows that differ only by case or spaces collapse to one suppression, keeping the earliest `created_at` and its reason, so no address loses its suppression. `send_target` is not rewritten: its email reads are scoped to one workspace through the `(workspace_id, channel_id, target_value)` unique index, so they do not scan the table.
+- Reads and clears match the normalized address exactly again. `normalizeEmailAddress` lowercases ASCII only, as SQLite's `lower()` does, so the address the app looks up is the address the SQL writers store.
 
 ## What stops a repeat
 
 1. **Codebase.** There is now one suppression read path, and both writers normalize. The send lane cannot drift from the settings page because it uses the same function.
-2. **Static analysis.** Not yet done. Follow-up: a `no-restricted-syntax` rule that flags the string `email_suppression` in any file other than `app/lib/data/email_suppression.server.ts`, so a second exact-case reader cannot be added again.
-3. **Tests.** The tests named under Root cause stay in the integration project and run on every PR.
+2. **Static analysis.** `EMAIL_SUPPRESSION_SQL` in `eslint.config.js` rejects `email_suppression` SQL anywhere in `app/` or `workers/` except `app/lib/data/email_suppression.server.ts`, so a second exact-case reader cannot be added again. `tests/eslint-email-suppression-rule.test.ts` probes it.
+3. **Tests.** The tests named under Root cause, and `tests/integration/migration-0047.integration.test.ts`, stay in the integration project and run on every PR.
