@@ -1,6 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("cloudflare:workers", () => ({ env: {} }));
+import { describe, expect, it } from "vitest";
 
 import { withBacklog } from "../../../app/lib/discovery/run.server";
 import { nameKey } from "../../../app/lib/discovery/shortlist";

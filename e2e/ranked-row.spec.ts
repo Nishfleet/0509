@@ -36,6 +36,9 @@ test("a ranked row expands in place and the open param survives a reload @smoke"
   await expect(evidence.getByRole("tab", { name: "Mentions 1" })).toBeVisible();
   await expect(evidence.getByRole("tab", { name: "Ads 0" })).toBeVisible();
   await expect(evidence.getByRole("tab", { name: "Hiring 0" })).toBeVisible();
+  await evidence.getByRole("tab", { name: "Site changes 2" }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(evidence.getByRole("tab", { name: "Ads 0" })).toHaveAttribute("aria-selected", "true");
 
   const stayed = await page.evaluate(() => (window as unknown as { __stay: number }).__stay);
   expect(stayed).toBe(1);

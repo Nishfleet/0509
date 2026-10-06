@@ -120,6 +120,23 @@ describe("the row evidence tabs", () => {
     expect(selectedLabels(html)).toEqual(["Site changes 0"]);
     expect(text(panel(html))).toBe("Nothing this week.");
   });
+
+  it("renders through the stock tabs primitive, not a hand-rolled role=tab", () => {
+    const html = render(WEEK);
+    expect(html).toContain('data-slot="tabs"');
+    expect(html).toContain('data-slot="tabs-list"');
+    expect(html.match(/data-slot="tabs-trigger"/g)).toHaveLength(5);
+    expect(html).toContain('data-slot="tabs-content"');
+  });
+
+  it("marks the selected tab data-active so the green wash can paint", () => {
+    const selected = [...render(WEEK).matchAll(/<button\b[^>]*role="tab"[^>]*>/g)].find((match) =>
+      match[0].includes('aria-selected="true"'),
+    )?.[0];
+    expect(selected).toBeDefined();
+    expect(selected).toContain("data-active");
+    expect(selected).toContain("data-active:bg-green-wash");
+  });
 });
 
 describe("the row evidence panel", () => {

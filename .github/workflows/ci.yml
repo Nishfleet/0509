@@ -241,8 +241,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Fail when a gate job failed or was cancelled
-        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
-        run: exit 1
-      - name: Every gate job passed or skipped
-        run: "true"
+      - name: Fail unless every gate job succeeded
+        # An allowlist, not a denylist: a gate job that no hosted runner picked
+        # up shows as cancelled in the checks UI, yet its needs result matched
+        # neither 'failure' nor 'cancelled', and the old denylist passed ci-ok
+        # with no gate run (runs 37366376265, 37368606363;
+        # docs/incidents/2026-10-05-ci-ok-passed-with-gates-cancelled.md).
+        # The step's own always() makes it run, and fail, in a cancelled run
+        # too, so ci-ok never reports without this step having run.
+        if: always()
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$NEEDS"
+          jq -e 'all(.[]; .result == "success")' <<< "$NEEDS" > /dev/null

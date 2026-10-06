@@ -23,7 +23,7 @@ export interface SiteSweepTarget {
 }
 
 const INSERT_WATCH = `INSERT INTO watch (id, entity_id, source_id, target_key, created_at)
-VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+SELECT ?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
 ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
 
 const UNWATCHED_ENTITIES = `SELECT e.id AS id, e.domain AS domain, CASE WHEN json_valid(e.identity_json) THEN json_extract(e.identity_json, '$.url') END AS url,

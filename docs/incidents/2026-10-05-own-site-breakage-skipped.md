@@ -20,12 +20,12 @@ The J8 soft journey, by the missing email. No alert fired on the product itself,
 
 ## The fix
 
-Each kind of judgment now has its own hard daily allowance per brand, counted by question: own-site breakage (6) and noteworthy-change (6). Mention verdicts count against neither. The own-site breakage question is asked before the change allowance is checked, and its verdict row is always stored, even when the page is clear and the change judgment is deferred, so every breakage call is counted and cached. A site over its breakage allowance defers without calling Jev. `countVerdictsSince` takes the question ids to count.
+Each kind of judgment now has its own hard daily allowance per brand, counted by question: own-site breakage (6 calls, one verdict row each) and noteworthy-change (6 verdict rows, two per judgment, so 3 judgments). Mention verdicts count against neither. The own-site breakage question is asked before the change allowance is checked, and its verdict row is always stored, even when the page is clear and the change judgment is deferred, so every breakage call is counted and cached. A site over its breakage allowance defers without calling Jev. `countVerdictsSince` takes the question ids to count.
 
 Tests: cases f3 to f6 in `tests/integration/site/judge.integration.test.ts` (mentions never defer a competitor change or an own-site breakage check, the breakage verdict is kept, breakage calls are bounded per site per day) and a sweep test in `tests/integration/site/sweep.integration.test.ts` that opens the incident and queues the email with 17 mention verdicts already stored.
 
 ## What stops a repeat
 
 1. Code: the tests above.
-2. Not done yet: the mentions sweep has no daily allowance of its own; it is bounded only by the feed sizes. A hard per-brand cap there needs a change under `workers/`.
+2. Code: every paid mention call (about, matters, duplicate) takes one of 72 per brand per UTC day from a Durable Object counter before it runs; a spent brand asks the AI nothing and its items stay unjudged until the next day (the stacked PR after #6997).
 3. Not done yet: a deferred own-site judgment should be visible (a log line, or a retry on the next sweep).

@@ -22,13 +22,14 @@ export interface CompetitorFrameProps {
   pausedOn: string | null;
   unreadable: boolean;
   rail: Omit<CompetitorRailProps, "lastChecked">;
+  sweepClock?: string;
 }
 
-export function developmentsEmpty(lastChecked: string | null): string {
+export function developmentsEmpty(lastChecked: string | null, sweepClock: string = SITE_SWEEP_UTC_LABEL): string {
   if (lastChecked === null) {
-    return `Watching from today. We read the homepage every night at ${SITE_SWEEP_UTC_LABEL}, and the first change shows here after the second read.`;
+    return `Watching from today. We read the homepage every night at ${sweepClock}, and the first change shows here after the second read.`;
   }
-  return `No changes to the homepage since we started watching. We read it again every night at ${SITE_SWEEP_UTC_LABEL}.`;
+  return `No changes to the homepage since we started watching. We read it again every night at ${sweepClock}.`;
 }
 
 function Cell({ label, value }: { label: string; value: string }): ReactElement {
@@ -79,7 +80,7 @@ function BiggestMoveSection({ biggestMove, quiet, changes }: BiggestMoveSectionP
 
 type DevelopmentsSectionProps = Pick<
   CompetitorFrameProps,
-  "changes" | "developments" | "lastChecked" | "pausedOn" | "unreadable"
+  "changes" | "developments" | "lastChecked" | "pausedOn" | "unreadable" | "sweepClock"
 >;
 
 function DevelopmentsSection({
@@ -88,6 +89,7 @@ function DevelopmentsSection({
   lastChecked,
   pausedOn,
   unreadable,
+  sweepClock,
 }: DevelopmentsSectionProps): ReactElement {
   return (
     <section data-section="developments" aria-labelledby="competitor-developments" className="min-w-0">
@@ -106,7 +108,7 @@ function DevelopmentsSection({
         </p>
       ) : null}
       {developments.length === 0 ? (
-        <EmptyState sentence={developmentsEmpty(lastChecked)} />
+        <EmptyState sentence={developmentsEmpty(lastChecked, sweepClock)} />
       ) : (
         <DevelopmentsFeed items={developments} changes={changes} />
       )}
@@ -125,6 +127,7 @@ export function CompetitorFrame({
   pausedOn,
   unreadable,
   rail,
+  sweepClock = SITE_SWEEP_UTC_LABEL,
 }: CompetitorFrameProps): ReactElement {
   return (
     <div data-slot="competitor-frame" className="grid min-w-0 gap-10 min-[1080px]:grid-cols-[minmax(0,1fr)_20rem]">
@@ -137,9 +140,10 @@ export function CompetitorFrame({
           lastChecked={lastChecked}
           pausedOn={pausedOn}
           unreadable={unreadable}
+          sweepClock={sweepClock}
         />
       </div>
-      <CompetitorRail {...rail} lastChecked={lastChecked} />
+      <CompetitorRail {...rail} lastChecked={lastChecked} sweepClock={sweepClock} />
     </div>
   );
 }

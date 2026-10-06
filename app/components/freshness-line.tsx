@@ -2,14 +2,7 @@ import type { ReactElement } from "react";
 
 import { shortUtc } from "../lib/short-utc";
 import { plainSourceReason } from "../lib/source-status-words";
-
-export interface FreshnessEntry {
-  key: string;
-  name: string;
-  state: "live" | "none" | "degraded";
-  lastLandedAt: string | null;
-  reason: string | null;
-}
+import type { FreshnessEntry } from "../lib/freshness-entry";
 
 export function freshnessText(entry: FreshnessEntry): string {
   if (entry.state === "degraded") {
