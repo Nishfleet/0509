@@ -32,17 +32,17 @@ const SESSION_LAYOUT_FILES = new Set([
   "routes/app-session-layout.tsx",
 ]);
 
-const SESSION_GATE_ALLOWLIST = new Set([
-  "/login",
-  "/api/health",
-  "/api/docs",
-  "/design/landing",
-  "/onboarding",
-  "/onboarding/competitors",
-  "/onboarding/identity",
-  "/oauth/authorize",
-  "/app/changes/:signalId/:side",
-]);
+const SESSION_GATE_ALLOWLIST: Readonly<Record<string, string>> = {
+  "/login": "sign-in must load without a session",
+  "/api/health": "liveness probe has no cookie",
+  "/api/docs": "public OpenAPI explorer",
+  "/design/landing": "public marketing page",
+  "/onboarding": "first-run flow after sign-in, not under /app layouts",
+  "/onboarding/competitors": "first-run flow after sign-in, not under /app layouts",
+  "/onboarding/identity": "first-run flow after sign-in, not under /app layouts",
+  "/oauth/authorize": "MCP OAuth consent; the route calls requireFreshSession itself",
+  "/app/changes/:signalId/:side": "signed-out landing screenshot must still load",
+};
 
 function isSessionExempt(urlPath: string) {
   return (
@@ -59,22 +59,36 @@ function isSessionExempt(urlPath: string) {
   );
 }
 
-function unguardedDisallowed(entries: RouteConfigEntry[], layouts: readonly string[] = []): string[] {
+function unguardedDisallowed(
+  entries: RouteConfigEntry[],
+  layouts: readonly string[] = [],
+  parentPath = "",
+): string[] {
   const missing: string[] = [];
   for (const entry of entries) {
-    const nextLayouts =
-      entry.path === undefined && entry.file !== undefined && entry.children !== undefined
-        ? [...layouts, entry.file]
-        : layouts;
+    const isPathlessLayout =
+      entry.path === undefined &&
+      entry.index !== true &&
+      entry.file !== undefined &&
+      entry.children !== undefined;
+    const nextLayouts = isPathlessLayout ? [...layouts, entry.file] : layouts;
+    const ownPath = entry.path ?? parentPath;
     if (entry.children !== undefined) {
-      missing.push(...unguardedDisallowed(entry.children, nextLayouts));
+      missing.push(...unguardedDisallowed(entry.children, nextLayouts, ownPath));
     }
-    if (entry.path === undefined || entry.path === "*") continue;
-    const urlPath = `/${entry.path}`;
-    if (!isDisallowed(urlPath) || isSessionExempt(urlPath) || SESSION_GATE_ALLOWLIST.has(urlPath)) continue;
+    const urlPath =
+      entry.index === true
+        ? parentPath === ""
+          ? "/"
+          : `/${parentPath}`
+        : entry.path !== undefined && entry.path !== "*"
+          ? `/${entry.path}`
+          : null;
+    if (urlPath === null) continue;
+    if (!isDisallowed(urlPath) || isSessionExempt(urlPath) || urlPath in SESSION_GATE_ALLOWLIST) continue;
     if (!nextLayouts.some((file) => SESSION_LAYOUT_FILES.has(file))) missing.push(urlPath);
   }
-  return missing;
+  return [...new Set(missing)];
 }
 
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -137,6 +151,17 @@ describe("public-route manifest", () => {
 
   it("puts every private disallowed route under a session layout or an explicit allowlist", () => {
     expect(unguardedDisallowed(routes)).toEqual([]);
+  });
+
+  it("fails a private index route that is not under a session layout", () => {
+    const tree: RouteConfigEntry[] = [
+      {
+        path: "app/hidden",
+        file: "routes/hidden.tsx",
+        children: [{ index: true, file: "routes/hidden-index.tsx" }],
+      },
+    ];
+    expect(unguardedDisallowed(tree)).toEqual(["/app/hidden"]);
   });
 
   it("sitemap.xml dates the legal pages by their last update and leaves other urls undated", () => {

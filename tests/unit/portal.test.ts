@@ -1,9 +1,9 @@
+import { RouterContextProvider } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   env: { DODO_PAYMENTS_API_KEY: "key", DODO_ENVIRONMENT: "test_mode", BETTER_AUTH_URL: "https://0509.io" },
-  requireFreshSession: vi.fn(),
   readWorkspaceIdForOwner: vi.fn(),
   readPlanCustomerId: vi.fn(),
 }));
@@ -19,19 +19,24 @@ vi.mock("dodopayments", () => {
   }
   return { default: DodoPayments };
 });
-vi.mock("../../app/lib/require-session.server", () => ({ requireFreshSession: mocks.requireFreshSession }));
 vi.mock("../../app/lib/data/workspace.server", () => ({ readWorkspaceIdForOwner: mocks.readWorkspaceIdForOwner }));
 vi.mock("../../app/lib/data/plan.server", () => ({ readPlanCustomerId: mocks.readPlanCustomerId }));
 
 import DodoPayments from "dodopayments";
 
 import { createPortalUrl } from "../../app/lib/billing/portal.server";
+import { sessionContext } from "../../app/lib/require-session.server";
 import { action } from "../../app/routes/settings.billing";
 
 const UNAVAILABLE = { message: "We couldn't open your billing page. Try again in a few minutes." };
 
 function runAction() {
-  return action({ request: new Request("https://0509.io/app/settings/billing", { method: "POST" }) } as never);
+  const context = new RouterContextProvider();
+  context.set(sessionContext, { user: { id: "user-1" } } as never);
+  return action({
+    request: new Request("https://0509.io/app/settings/billing", { method: "POST" }),
+    context,
+  } as never);
 }
 
 beforeEach(() => {
@@ -74,7 +79,6 @@ describe("createPortalUrl", () => {
 
 describe("billing action", () => {
   beforeEach(() => {
-    mocks.requireFreshSession.mockResolvedValue({ user: { id: "user-1" } });
     mocks.readWorkspaceIdForOwner.mockResolvedValue("ws-1");
     mocks.readPlanCustomerId.mockResolvedValue("cus_1");
   });
