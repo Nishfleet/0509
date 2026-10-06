@@ -137,6 +137,20 @@ const CATCH_RETURNS_NULL = {
     "A catch whose only statement is `return null` swallows the error, so a thrown fetch or a bug fails as silently as a real 'not found'. Give the clause an error binding and a logged failure path (or rethrow). Source: 0509#4462.",
 };
 
+const SCORE_NAME = "/^(points|weight|multiplier|score|total)$/";
+
+const RAW_SCORE_STRING = {
+  selector: [
+    `CallExpression[callee.name='String'][arguments.0.name=${SCORE_NAME}]`,
+    `CallExpression[callee.name='String'][arguments.0.property.name=${SCORE_NAME}]`,
+    "CallExpression[callee.name='String'] > BinaryExpression.arguments[operator='*']",
+    `CallExpression[callee.property.name='toString'][callee.object.name=${SCORE_NAME}]`,
+    `CallExpression[callee.property.name='toString'][callee.object.property.name=${SCORE_NAME}]`,
+  ].join(", "),
+  message:
+    "String() on a score, weight, multiplier or computed product prints binary floating point to people: 3 × 0.6 showed as '1.7999999999999998 points' on the brand page. Format it with formatScore from app/lib/score-format.ts. Source: docs/incidents/2026-10-06-raw-float-in-biggest-move.md.",
+};
+
 const MIN_H_11_ANCHOR = {
   selector:
     "JSXOpeningElement[name.name=/^(a|Link)$/] > JSXAttribute[name.name='className'] > Literal[value!=/min-h-11/]",
@@ -297,6 +311,7 @@ const BANNED_SYNTAX = [
   GOOGLE_FONTS_BAN,
   CRAWLER_USER_AGENT_BAN,
   CATCH_RETURNS_NULL,
+  RAW_SCORE_STRING,
   XML_PARSER_CONSTRUCTOR,
   DOMAIN_HOSTNAME_BAN,
   BARE_FETCH,
