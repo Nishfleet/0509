@@ -713,6 +713,7 @@ export function run(db: DatabaseSync, sql: string, ...values: (string | number |
 export async function seedPreviewSession<T = void>(
   prefix: string,
   seed: (context: { db: DatabaseSync; suffix: string; userId: string }) => T,
+  options: { livePlan: boolean } = { livePlan: true },
 ): Promise<{ cookie: string; seeded: T }> {
   const suffix = crypto.randomUUID().slice(0, 8);
   const email = `${prefix}-${suffix}@0509.io`;
@@ -748,7 +749,7 @@ export async function seedPreviewSession<T = void>(
     const user = db.prepare('SELECT id FROM "user" WHERE email = ?').get(email) as { id: string } | undefined;
     if (user === undefined) throw new Error("magic link created no user");
     const seeded = seed({ db, suffix, userId: user.id });
-    seedLivePlan(db, user.id);
+    if (options.livePlan) seedLivePlan(db, user.id);
     db.exec("PRAGMA wal_checkpoint(PASSIVE)");
     return { cookie, seeded };
   } finally {

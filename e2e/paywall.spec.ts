@@ -1,6 +1,13 @@
 import { expect, test } from "@playwright/test";
 
-import { deleteCreatedAccount, isLocalLane, requireInboxToken, signInWithMagicLink } from "./inbox";
+import {
+  deleteCreatedAccount,
+  isLocalLane,
+  requireInboxToken,
+  run,
+  seedPreviewSession,
+  signInWithMagicLink,
+} from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -13,11 +20,45 @@ test.afterEach(async ({ page }, testInfo) => {
   }
 });
 
+test("an onboarded workspace with no plan row lands on the plan step, not Home", async ({ page }) => {
+  test.skip(!isLocalLane(), "preview seeds the workspace in local D1; production walks the real onboarding below");
+  const { cookie } = await seedPreviewSession(
+    "paywall",
+    ({ db, suffix, userId }) => {
+      const stamp = "2026-10-06T00:00:00.000Z";
+      run(
+        db,
+        "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?, ?, ?, 'UTC', 1, 8, ?)",
+        `ws-${suffix}`,
+        "Paywall",
+        userId,
+        stamp,
+      );
+      run(
+        db,
+        "INSERT INTO entity (id, workspace_id, role, domain, name, created_at) VALUES (?, ?, 'self', ?, 'Self Brand', ?)",
+        `ent-self-${suffix}`,
+        `ws-${suffix}`,
+        `self-${suffix}.example`,
+        stamp,
+      );
+    },
+    { livePlan: false },
+  );
+  await page.setExtraHTTPHeaders({ cookie });
+
+  await page.goto("/app");
+  await expect(page).toHaveURL(/\/onboarding\/plan$/);
+  await expect(page.getByRole("heading", { name: "Start your trial" })).toBeVisible();
+  await expect(page.locator('[data-home="standing"]')).toHaveCount(0);
+});
+
 test("an onboarded user with no plan row cannot reach Home @own-signin", async ({ page }) => {
+  test.skip(isLocalLane(), "the preview lane cannot resolve a real identity card; the seeded test above covers it");
   test.setTimeout(180_000);
   const email = `e2e+paywall-${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   createdEmail = email;
-  await signInWithMagicLink(page, email, isLocalLane() ? null : requireInboxToken());
+  await signInWithMagicLink(page, email, requireInboxToken());
 
   await page.goto("/onboarding");
   const input = page.getByRole("textbox", { name: /your website address or social username/i });
