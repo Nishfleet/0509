@@ -245,6 +245,7 @@ describe("runCostGuard (0509#4432)", () => {
       d1RowsWritten: 4677,
       r2ClassAOps: 13,
       browserMs: 0,
+      aiCalls: 0,
     });
   });
 });
@@ -275,7 +276,7 @@ describe("runNightlyCostGuard", () => {
     expect(await countAlerts("2026-09-28")).toBe(1);
   });
 
-  it("without a token evaluates the browser line only and never calls the analytics API", async () => {
+  it("without a token evaluates the local lines only and never calls the analytics API", async () => {
     await seedBrands();
     await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-09-28")).addMs(150_000);
     const fetchSpy = vi.fn(async () => new Response("{}", { status: 500 }));
