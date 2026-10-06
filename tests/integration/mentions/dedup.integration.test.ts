@@ -219,7 +219,7 @@ describe("D8 duplicate_signal", () => {
     );
     expect(duplicateAsks(down)).toBe(1);
     expect(down).toHaveBeenCalledTimes(3);
-    expect(outcome.unjudged).toBe(1);
+    expect(outcome.unjudged).toBe(2);
     const all = await rows(competitorId);
     expect(all).toHaveLength(3);
     expect(all.map((row) => row.duplicate_of)).toEqual([null, null, null]);

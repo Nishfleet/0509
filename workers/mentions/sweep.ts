@@ -12,6 +12,7 @@ import {
   type MentionSignal,
   readSeenDedupKeys,
   readUnjudgedMentions,
+  type UnjudgedMention,
   resolveUnjudgedMention,
 } from "../../app/lib/data/signal.server";
 import { insertWatchSnapshot } from "../../app/lib/data/snapshot.server";
@@ -99,9 +100,14 @@ function subjectOf(watch: WatchRow) {
 
 type JudgedItem = Pick<MentionItem, "title" | "url" | "publishedAt" | "publisher">;
 
+interface JudgeScope {
+  context: DiscoveryContext;
+  now: string;
+}
+
 async function judge(
   watch: WatchRow,
-  context: DiscoveryContext,
+  scope: JudgeScope,
   item: JudgedItem,
 ): Promise<{ about: NoulVerdict; matters: NoulVerdict | null }> {
   const subject = subjectOf(watch);
@@ -109,12 +115,14 @@ async function judge(
     askNoul(watch.workspace_id, ABOUT_BRAND, aboutBrandState({ subject, item, reliability: watch.reliability })),
   );
   if (noulAction(about.p) === "reject") return { about, matters: null };
+  const { context } = scope;
   const mattersState = mentionMattersState({
     self: { name: context.self.name, domain: context.self.domain, description: context.self.description },
     subject,
     competitors: context.competitors,
     item,
     reliability: watch.reliability,
+    today: scope.now.slice(0, 10),
   });
   const matters = await withMentionCall(watch.entity_id, () => askNoul(watch.workspace_id, MATTERS, mattersState));
   return { about, matters };
@@ -122,11 +130,11 @@ async function judge(
 
 async function judgeOrNull(
   watch: WatchRow,
-  context: DiscoveryContext,
+  scope: JudgeScope,
   item: JudgedItem,
 ): Promise<{ about: NoulVerdict; matters: NoulVerdict | null } | null> {
   try {
-    return await judge(watch, context, item);
+    return await judge(watch, scope, item);
   } catch (error) {
     if (!(error instanceof JevUnavailableError)) throw error;
     console.error(JSON.stringify({ event: "mentions.jev_unavailable", message: error.message }));
@@ -157,9 +165,8 @@ function judgedStatements(input: {
   item: JudgedItem;
   verdicts: { about: NoulVerdict; matters: NoulVerdict | null };
   now: string;
-  alert: boolean;
 }): D1PreparedStatement[] {
-  const { watch, signalId, item, verdicts, now } = input;
+  const { watch, signalId, verdicts, now } = input;
   const verdictRow = (verdict: NoulVerdict, reason: string | null) =>
     insertVerdict({
       workspaceId: watch.workspace_id,
@@ -175,10 +182,20 @@ function judgedStatements(input: {
   const statements = [verdictRow(verdicts.about, null)];
   if (verdicts.matters === null) return statements;
   statements.push(verdictRow(verdicts.matters, mentionReasonLine(noulAction(verdicts.matters.p))));
-  if (input.alert && noulAction(verdicts.matters.p) === "act") {
-    statements.push(mentionAlert({ watch, signalId, item, now }));
-  }
   return statements;
+}
+
+function alertStatements(input: {
+  watch: WatchRow;
+  signalId: string;
+  item: JudgedItem;
+  verdicts: { matters: NoulVerdict | null };
+  collapsed: boolean;
+  now: string;
+}): D1PreparedStatement[] {
+  const { watch, signalId, item, verdicts, now } = input;
+  if (input.collapsed || verdicts.matters === null || noulAction(verdicts.matters.p) !== "act") return [];
+  return [mentionAlert({ watch, signalId, item, now })];
 }
 
 function duplicateStatements(input: {
@@ -211,7 +228,7 @@ interface SweepPeer {
 
 type DuplicateHashes = Pick<SweepPeer, "titleHash" | "normUrlHash">;
 
-function asCandidate(watch: WatchRow, signalId: string, item: MentionItem): DuplicateCandidate {
+function asCandidate(watch: WatchRow, signalId: string, item: JudgedItem): DuplicateCandidate {
   return {
     id: signalId,
     title: item.title,
@@ -224,6 +241,7 @@ function asCandidate(watch: WatchRow, signalId: string, item: MentionItem): Dupl
 
 async function pickCandidate(input: {
   watch: WatchRow;
+  signalId: string;
   hashes: DuplicateHashes;
   peers: readonly SweepPeer[];
   now: string;
@@ -232,6 +250,7 @@ async function pickCandidate(input: {
   const stored = await findDuplicateCandidate({
     workspaceId: watch.workspace_id,
     entityId: watch.entity_id,
+    excludeId: input.signalId,
     since: new Date(Date.parse(now) - DUPLICATE_WINDOW_MS).toISOString(),
     ...hashes,
   });
@@ -240,18 +259,35 @@ async function pickCandidate(input: {
   return peer?.candidate ?? null;
 }
 
+interface DuplicateOutcome {
+  statements: D1PreparedStatement[];
+  asked: boolean;
+  jevDown: boolean;
+  collapsed: boolean;
+  blocked: boolean;
+}
+
+const NO_DUPLICATE_CHECK: DuplicateOutcome = {
+  statements: [],
+  asked: false,
+  jevDown: false,
+  collapsed: false,
+  blocked: false,
+};
+
 async function judgeDuplicate(input: {
   watch: WatchRow;
   signalId: string;
-  item: MentionItem;
+  item: JudgedItem;
   hashes: DuplicateHashes;
   peers: readonly SweepPeer[];
   now: string;
   canAsk: () => boolean;
-}): Promise<{ statements: D1PreparedStatement[]; asked: boolean; jevDown: boolean; collapsed: boolean }> {
+}): Promise<DuplicateOutcome> {
   const { watch, signalId, item, now } = input;
-  const candidate = await pickCandidate({ watch, hashes: input.hashes, peers: input.peers, now });
-  if (candidate === null || !input.canAsk()) return { statements: [], asked: false, jevDown: false, collapsed: false };
+  const candidate = await pickCandidate({ watch, signalId, hashes: input.hashes, peers: input.peers, now });
+  if (candidate === null) return { ...NO_DUPLICATE_CHECK };
+  if (!input.canAsk()) return { ...NO_DUPLICATE_CHECK, blocked: true };
   const state = duplicateSignalState({
     subject: { name: watch.name, domain: watch.domain },
     first: asCandidate(watch, signalId, item),
@@ -260,33 +296,74 @@ async function judgeDuplicate(input: {
   try {
     const verdict = await withMentionCall(watch.entity_id, () => askNoul(watch.workspace_id, DUPLICATE_SIGNAL, state));
     const statements = duplicateStatements({ watch, signalId, candidateId: candidate.id, verdict, now });
-    return { statements, asked: true, jevDown: false, collapsed: noulAction(verdict.p) === "act" };
+    return { ...NO_DUPLICATE_CHECK, statements, asked: true, collapsed: noulAction(verdict.p) === "act" };
   } catch (error) {
     if (!(error instanceof JevUnavailableError)) throw error;
     console.error(JSON.stringify({ event: "mentions.jev_unavailable", message: error.message }));
-    return { statements: [], asked: true, jevDown: true, collapsed: false };
+    return { ...NO_DUPLICATE_CHECK, asked: true, jevDown: true, blocked: true };
   }
 }
 
-async function rejudgeUnjudged(
-  watch: WatchRow,
-  context: DiscoveryContext,
-  now: string,
-): Promise<{ statements: D1PreparedStatement[]; stored: number; attempted: number; jevDown: boolean }> {
+interface Rejudged {
+  statements: D1PreparedStatement[];
+  stored: number;
+  attempted: number;
+  jevDown: boolean;
+  peers: readonly SweepPeer[];
+}
+
+function acceptedStatements(input: {
+  watch: WatchRow;
+  row: UnjudgedMention;
+  verdicts: { about: NoulVerdict; matters: NoulVerdict | null };
+  duplicate: DuplicateOutcome;
+  now: string;
+}): D1PreparedStatement[] {
+  const { watch, row, verdicts, duplicate, now } = input;
+  return [
+    resolveUnjudgedMention(row.id, false),
+    ...judgedStatements({ watch, signalId: row.id, item: row, verdicts, now }),
+    ...alertStatements({ watch, signalId: row.id, item: row, verdicts, collapsed: duplicate.collapsed, now }),
+    ...duplicate.statements,
+  ];
+}
+
+async function rejudgeUnjudged(watch: WatchRow, scope: JudgeScope): Promise<Rejudged> {
+  const { now } = scope;
   const pending = await readUnjudgedMentions(watch.watch_id, JUDGED_PER_WATCH);
   const statements: D1PreparedStatement[] = [];
+  let peers: readonly SweepPeer[] = [];
   let stored = 0;
+  let asks = JUDGED_PER_WATCH;
+  const result = (jevDown: boolean): Rejudged => ({ statements, stored, attempted: pending.length, jevDown, peers });
   for (const row of pending) {
-    const verdicts = await judgeOrNull(watch, context, row);
-    if (verdicts === null) return { statements, stored, attempted: pending.length, jevDown: true };
-    const rejected = noulAction(verdicts.about.p) === "reject";
-    statements.push(
-      resolveUnjudgedMention(row.id, rejected),
-      ...judgedStatements({ watch, signalId: row.id, item: row, verdicts, now, alert: !rejected }),
-    );
-    if (!rejected) stored += 1;
+    const verdicts = await judgeOrNull(watch, scope, row);
+    if (verdicts === null) return result(true);
+    if (noulAction(verdicts.about.p) === "reject") {
+      statements.push(
+        resolveUnjudgedMention(row.id, true),
+        ...judgedStatements({ watch, signalId: row.id, item: row, verdicts, now }),
+      );
+      continue;
+    }
+    const hashes = { titleHash: row.titleHash, normUrlHash: row.normUrlHash };
+    const duplicate = await judgeDuplicate({
+      watch,
+      signalId: row.id,
+      item: row,
+      hashes,
+      peers,
+      now,
+      canAsk: () => asks > 0,
+    });
+    if (duplicate.asked) asks -= 1;
+    if (duplicate.jevDown) return result(true);
+    if (duplicate.blocked) continue;
+    statements.push(...acceptedStatements({ watch, row, verdicts, duplicate, now }));
+    peers = [...peers, { ...hashes, candidate: asCandidate(watch, row.id, row) }];
+    stored += 1;
   }
-  return { statements, stored, attempted: pending.length, jevDown: false };
+  return result(false);
 }
 
 function mentionSignal(input: {
@@ -357,17 +434,20 @@ interface FreshMentionResult {
   jevDown: boolean;
 }
 
+function deferredMention(insert: D1PreparedStatement, outcome: { asked: boolean; jevDown: boolean }) {
+  return { statements: [insert], peer: null, stored: 0, unjudged: 1, ...outcome };
+}
+
 async function freshMentionStatements(input: FreshMentionInput): Promise<FreshMentionResult> {
-  const { watch, context, item, snapshotId, now } = input;
-  const verdicts = input.jevDown ? null : await judgeOrNull(watch, context, item);
+  const { watch, item, snapshotId, now } = input;
+  const verdicts = input.jevDown ? null : await judgeOrNull(watch, { context: input.context, now }, item);
   const { mapped, dedupKey, signalId } = await mapFresh({ watch, item, snapshotId, now });
   const rejected = verdicts !== null && noulAction(verdicts.about.p) === "reject";
-  const insert = insertMention(
-    mentionSignal({ mapped, watch, snapshotId, signalId, dedupKey, rejected, judged: verdicts !== null }),
-  );
-  if (verdicts === null)
-    return { statements: [insert], peer: null, stored: 0, unjudged: 1, asked: false, jevDown: true };
-  const judged = [insert, ...judgedStatements({ watch, signalId, item, verdicts, now, alert: false })];
+  const signal = { mapped, watch, snapshotId, signalId, dedupKey, rejected };
+  const unjudgedInsert = insertMention(mentionSignal({ ...signal, judged: false }));
+  if (verdicts === null) return deferredMention(unjudgedInsert, { asked: false, jevDown: true });
+  const insert = insertMention(mentionSignal({ ...signal, judged: true }));
+  const judged = [insert, ...judgedStatements({ watch, signalId, item, verdicts, now })];
   if (rejected) return { statements: judged, peer: null, stored: 0, unjudged: 0, asked: false, jevDown: false };
   const hashes = { titleHash: mapped.title_hash, normUrlHash: mapped.norm_url_hash };
   const duplicate = await judgeDuplicate({
@@ -379,10 +459,8 @@ async function freshMentionStatements(input: FreshMentionInput): Promise<FreshMe
     now,
     canAsk: input.canAsk,
   });
-  const alert =
-    duplicate.collapsed || verdicts.matters === null || noulAction(verdicts.matters.p) !== "act"
-      ? []
-      : [mentionAlert({ watch, signalId, item, now })];
+  if (duplicate.blocked) return deferredMention(unjudgedInsert, { asked: duplicate.asked, jevDown: duplicate.jevDown });
+  const alert = alertStatements({ watch, signalId, item, verdicts, collapsed: duplicate.collapsed, now });
   return {
     statements: [...judged, ...alert, ...duplicate.statements],
     peer: { ...hashes, candidate: asCandidate(watch, signalId, item) },
@@ -401,6 +479,7 @@ interface JudgeFreshInput {
   now: string;
   jevDown: boolean;
   budget: number;
+  peers: readonly SweepPeer[];
 }
 
 async function judgeFreshItems(
@@ -412,7 +491,7 @@ async function judgeFreshItems(
   let unjudged = 0;
   let jevDown = input.jevDown;
   let budget = input.budget;
-  let peers: readonly SweepPeer[] = [];
+  let peers = input.peers;
   const leftover: MentionItem[] = [];
   for (const item of input.items) {
     if (budget <= 0) {
@@ -507,12 +586,9 @@ async function statementsForWatch(input: {
       canaryCount,
     }),
   ];
-  const rejudged = await rejudgeUnjudged(watch, context, now);
+  const rejudged = await rejudgeUnjudged(watch, { context, now });
   statements.push(...rejudged.statements);
-  let stored = rejudged.stored;
-  let unjudged = 0;
   const { jevDown } = rejudged;
-  const freshBudget = jevDown ? JUDGED_PER_WATCH : JUDGED_PER_WATCH - rejudged.attempted;
   const freshJudged = await judgeFreshItems({
     watch,
     context,
@@ -520,12 +596,11 @@ async function statementsForWatch(input: {
     snapshotId,
     now,
     jevDown,
-    budget: freshBudget,
+    budget: jevDown ? JUDGED_PER_WATCH : JUDGED_PER_WATCH - rejudged.attempted,
+    peers: rejudged.peers,
   });
   statements.push(...freshJudged.statements);
-  stored += freshJudged.stored;
-  unjudged += freshJudged.unjudged;
-  return { statements, stored, unjudged };
+  return { statements, stored: rejudged.stored + freshJudged.stored, unjudged: freshJudged.unjudged };
 }
 
 async function advanceCursor(pluginKey: string, watchId: string, items: readonly MentionItem[]): Promise<void> {

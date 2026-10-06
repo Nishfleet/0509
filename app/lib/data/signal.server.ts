@@ -257,6 +257,7 @@ const SELECT_DUPLICATE_CANDIDATE = `SELECT s.id, s.title, s.canonical_url, s.pub
 FROM signal s JOIN source src ON src.id = s.source_id
 WHERE s.workspace_id = ?1 AND s.entity_id = ?2 AND s.kind = 'mention'
   AND s.duplicate_of IS NULL AND s.is_tombstoned = 0 AND s.observed_at >= ?3
+  AND (s.state IS NULL OR s.state <> 'unjudged') AND s.id <> ?6
   AND (s.title_hash = ?4 OR s.norm_url_hash = ?5)
 ORDER BY s.observed_at DESC, s.id DESC LIMIT 1`;
 
@@ -287,9 +288,10 @@ export async function findDuplicateCandidate(input: {
   since: string;
   titleHash: string;
   normUrlHash: string;
+  excludeId: string;
 }): Promise<DuplicateCandidate | null> {
   const row = await env.DB.prepare(SELECT_DUPLICATE_CANDIDATE)
-    .bind(input.workspaceId, input.entityId, input.since, input.titleHash, input.normUrlHash)
+    .bind(input.workspaceId, input.entityId, input.since, input.titleHash, input.normUrlHash, input.excludeId)
     .first();
   if (row === null) return null;
   const parsed = duplicateCandidateRow.parse(row);
@@ -307,7 +309,7 @@ export function markDuplicateOf(signalId: string, survivorId: string): D1Prepare
   return env.DB.prepare(SET_DUPLICATE_OF).bind(signalId, survivorId);
 }
 
-const SELECT_UNJUDGED_MENTIONS = `SELECT id, title, canonical_url, published_at, payload_json FROM signal
+const SELECT_UNJUDGED_MENTIONS = `SELECT id, title, canonical_url, published_at, payload_json, title_hash, norm_url_hash FROM signal
 WHERE watch_id = ?1 AND kind = 'mention' AND state = 'unjudged'
 ORDER BY observed_at, id LIMIT ?2`;
 
@@ -321,6 +323,8 @@ const unjudgedMentionRows = z.array(
     canonical_url: z.string(),
     published_at: z.string().nullable(),
     payload_json: z.string(),
+    title_hash: z.string().nullable(),
+    norm_url_hash: z.string().nullable(),
   }),
 );
 
@@ -332,6 +336,8 @@ export interface UnjudgedMention {
   url: string;
   publishedAt: string | null;
   publisher: string | null;
+  titleHash: string;
+  normUrlHash: string;
 }
 
 export async function readUnjudgedMentions(watchId: string, limit: number): Promise<UnjudgedMention[]> {
@@ -342,6 +348,8 @@ export async function readUnjudgedMentions(watchId: string, limit: number): Prom
     url: row.canonical_url,
     publishedAt: row.published_at,
     publisher: mentionPayload.parse(JSON.parse(row.payload_json)).publisher ?? null,
+    titleHash: row.title_hash ?? "",
+    normUrlHash: row.norm_url_hash ?? "",
   }));
 }
 
