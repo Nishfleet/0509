@@ -3,6 +3,11 @@ import { expect, test } from "@playwright/test";
 import { onboardedStatePath } from "../playwright.config";
 import { consoleFailures, watchConsole } from "./inbox";
 
+// The end-of-test screenshot is report evidence, not an assertion. Playwright's
+// recorder attaches it and drops a capture that fails instead of failing the
+// test; e2e/reduced-motion.spec.ts has the why.
+test.use({ screenshot: { mode: "on", fullPage: true } });
+
 test("a competitor page sends a signed-out visitor to the login page @smoke", async ({ request }) => {
   const response = await request.get("/app/competitors/ent-anything", { maxRedirects: 0 });
   expect(response.status()).toBeGreaterThanOrEqual(300);
@@ -73,11 +78,6 @@ test.describe("a watched competitor page leads with the switch and its consequen
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(overflow).toBe(0);
-
-    await testInfo.attach("app-competitor", {
-      body: await page.screenshot({ fullPage: true }),
-      contentType: "image/png",
-    });
 
     expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
   });
