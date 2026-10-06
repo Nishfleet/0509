@@ -112,37 +112,41 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
       continue;
     }
 
-    const digest = await env.DB.prepare(`SELECT workspace_id FROM digest WHERE id = ?`)
-      .bind(parsed.digest_id)
-      .first<{ workspace_id: string }>();
-    if (!digest) {
-      console.error("send-email-dlq: digest not found", parsed.digest_id);
-      item.ack();
-      continue;
-    }
-
-    const attempt = await env.DB.prepare(SELECT_LATEST_ATTEMPT_ERROR)
-      .bind(parsed.digest_id)
-      .first<{ error: string | null }>();
-    console.error(
-      JSON.stringify({
-        event: "delivery.dead_lettered",
-        digest_id: parsed.digest_id,
-        reason: attempt?.error ?? null,
-      }),
-    );
-
-    const alert = deliveryFailedAlert({
-      digest_id: parsed.digest_id,
-      workspace_id: digest.workspace_id,
-      now: new Date().toISOString(),
-    });
-    await markDigestFailed(env.DB, parsed.digest_id);
-    await insertDeliveryFailedAlert(env.DB, alert);
+    const deadLettered = await deadLetteredDigest(env, parsed.digest_id);
     item.ack();
-    ids = [...ids, alert.id];
+    if (deadLettered !== null) ids = [...ids, deadLettered];
   }
   return ids;
+}
+
+async function deadLetteredDigest(env: Env, digestId: string): Promise<string | null> {
+  const digest = await env.DB.prepare(`SELECT workspace_id FROM digest WHERE id = ?`)
+    .bind(digestId)
+    .first<{ workspace_id: string }>();
+  if (!digest) {
+    console.error("send-email-dlq: digest not found", digestId);
+    return null;
+  }
+
+  const attempt = await env.DB.prepare(SELECT_LATEST_ATTEMPT_ERROR)
+    .bind(digestId)
+    .first<{ error: string | null }>();
+  console.error(
+    JSON.stringify({
+      event: "delivery.dead_lettered",
+      digest_id: digestId,
+      reason: attempt?.error ?? null,
+    }),
+  );
+
+  const alert = deliveryFailedAlert({
+    digest_id: digestId,
+    workspace_id: digest.workspace_id,
+    now: new Date().toISOString(),
+  });
+  await markDigestFailed(env.DB, digestId);
+  await insertDeliveryFailedAlert(env.DB, alert);
+  return alert.id;
 }
 
 async function deadLetteredIncident(env: Env, messageId: string, incidentId: string): Promise<string | null> {
