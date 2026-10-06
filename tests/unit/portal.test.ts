@@ -66,7 +66,7 @@ describe("createPortalUrl", () => {
   });
 
   it("returns null and logs only the status when the provider errors", async () => {
-    mocks.create.mockRejectedValue(new DodoPayments.APIError());
+    mocks.create.mockRejectedValue(new DodoPayments.APIError(500, { message: "portal boom" }, undefined, undefined));
     expect(await createPortalUrl("cus_secret")).toBeNull();
     expect(console.error).toHaveBeenCalledWith(JSON.stringify({ event: "billing.portal_failed", status: "500" }));
   });
@@ -106,7 +106,7 @@ describe("billing action", () => {
   });
 
   it("stays on the page when the provider errors", async () => {
-    mocks.create.mockRejectedValue(new DodoPayments.APIError());
+    mocks.create.mockRejectedValue(new DodoPayments.APIError(500, { message: "portal boom" }, undefined, undefined));
     expect(await runAction()).toEqual(UNAVAILABLE);
   });
 });

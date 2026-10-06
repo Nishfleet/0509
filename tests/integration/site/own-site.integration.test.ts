@@ -190,7 +190,9 @@ describe("own-site check", () => {
     )
       .bind(WS, NOW)
       .run();
-    const send = vi.spyOn(workerEnv.SEND_EMAIL, "send").mockResolvedValue(undefined);
+    const send = vi.spyOn(workerEnv.SEND_EMAIL, "send").mockResolvedValue({
+      metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
+    });
 
     site.html = SOFT_BROKEN_HTML;
     expect(await runCheck("own-soft-broken")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });

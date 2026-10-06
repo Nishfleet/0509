@@ -1,6 +1,6 @@
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createRoutesStub } from "react-router";
+import { createRoutesStub, NavigationType } from "react-router";
 import type { Navigation } from "react-router";
 import type * as ReactRouterModule from "react-router";
 import { describe, expect, it, vi, beforeEach } from "vitest";
@@ -29,21 +29,10 @@ const harness = vi.hoisted(() => ({
 }));
 
 vi.mock("react-router", async (importOriginal) => {
-  const actual = await importOriginal<ReactRouterModule>();
+  const actual = await importOriginal<typeof ReactRouterModule>();
   return {
     ...actual,
-    useNavigation: (): Navigation => ({
-      state: harness.state,
-      location: { pathname: "/app/competitors/ent-1", search: "", hash: "", state: null, key: "k" },
-      matches: [],
-      historyAction: "POP",
-      formMethod: harness.state === "submitting" ? "post" : undefined,
-      formAction: harness.state === "submitting" ? "/app/competitors/ent-1" : undefined,
-      formEncType: undefined,
-      formData: harness.formFor(harness.intent),
-      json: undefined,
-      text: undefined,
-    }),
+    useNavigation: () => ({ state: harness.state, formData: harness.formFor(harness.intent) }),
   };
 });
 

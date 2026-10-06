@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createMemoryRouter, RouterProvider } from "react-router";
+import { createMemoryRouter, NavigationType, RouterProvider } from "react-router";
 import type { Navigation } from "react-router";
 import type * as ReactRouterModule from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -43,27 +43,15 @@ const harness = vi.hoisted(() => ({
 }));
 
 vi.mock("react-router", async (importOriginal) => {
-  const actual = await importOriginal<ReactRouterModule>();
+  const actual = await importOriginal<typeof ReactRouterModule>();
   return {
     ...actual,
     // The real hook is called on every render and its result is overridden, so
     // the hook count never changes between an idle and a pending render.
-    useNavigation: (...args: Parameters<typeof actual.useNavigation>): Navigation => {
+    useNavigation: (...args: Parameters<typeof actual.useNavigation>) => {
       const real = actual.useNavigation(...args);
       if (harness.state === "idle") return real;
-      return {
-        ...real,
-        state: harness.state,
-        location: { pathname: "/oauth/authorize", search: "", hash: "", state: null, key: "k" },
-        matches: [],
-        historyAction: "POP",
-        formMethod: "post",
-        formAction: "/oauth/authorize",
-        formEncType: "application/x-www-form-urlencoded",
-        formData: harness.formData(),
-        json: undefined,
-        text: undefined,
-      } as Navigation;
+      return { state: harness.state, formData: harness.formData() };
     },
   };
 });
@@ -81,7 +69,7 @@ function renderPage(submission: { decision: string } | null, loaderData: Consent
       {
         id: "oauth.authorize",
         path: "/oauth/authorize",
-        Component: () => createElement(Page, { loaderData, actionData: undefined }),
+        Component: () => createElement(Page, { loaderData, actionData: undefined } as never),
         action: NEVER,
       },
     ],
