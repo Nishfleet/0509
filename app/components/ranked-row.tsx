@@ -1,14 +1,15 @@
-import type { ReactElement } from "react";
+import { lazy, Suspense, type ReactElement } from "react";
 import { useSearchParams } from "react-router";
 
 import { BrandSwitch } from "./brand-switch";
 import { brandMonogram } from "./brand-chip";
 import { CapturePlate } from "./capture-plate";
 import { Mark } from "./mark";
-import { RowEvidence } from "./row-evidence";
 import type { HomePill, HomeRow, WeekEvidence } from "../lib/home-standing";
 import type { SiteChangeView } from "../lib/site-change";
 import { cn } from "../lib/utils";
+
+const RowEvidence = lazy(() => import("./row-evidence").then((module) => ({ default: module.RowEvidence })));
 
 const PILL = "border border-line px-2 py-1 font-mono text-eyebrow uppercase";
 
@@ -119,7 +120,7 @@ export function RankedRow({ row, onSwitch, openId, evidence }: RankedRowProps): 
       <RowPills pills={row.pills} />
       {isOpen ? (
         <div id={`evidence-${row.entityId}`} data-slot="row-evidence" className="col-span-full max-[859px]:hidden">
-          {evidence === null ? null : <RowEvidence evidence={evidence} />}
+          <Suspense fallback={null}>{evidence === null ? null : <RowEvidence evidence={evidence} />}</Suspense>
         </div>
       ) : null}
     </li>
