@@ -41,7 +41,7 @@ describe("reddit.search_rss mentions adapter", () => {
   });
 
   it("adapterFor returns the Reddit and HN adapters and the reddit adapter fetches the search URL once", async () => {
-    const fetchMock = vi.fn(async () => new Response(fixture));
+    const fetchMock = vi.fn(async (_input: unknown) => new Response(fixture));
     vi.stubGlobal("fetch", fetchMock);
     try {
       const adapter = adapterFor("reddit.search_rss");
