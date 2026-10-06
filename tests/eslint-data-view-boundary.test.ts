@@ -22,6 +22,13 @@ const BOUNDARY_MESSAGE = "0509#7031";
 const VIEW_PROBE = 'import { SourcePill } from "../../components/source-pill";\n\nexport const leaked = SourcePill;\n';
 const ROUTE_PROBE = 'import { loader } from "../../routes/app.home";\n\nexport const leaked = loader;\n';
 
+// The two probe specifiers, resolved from app/lib/data/. boundaries/dependencies
+// classifies the resolved target, so a missing or renamed target resolves to
+// nothing: the probe reports no boundary hit and both assertions below fail
+// for the wrong reason. The targets are therefore checked for existence.
+const VIEW_TARGET = path.join(REPO_ROOT, "app/components/source-pill.tsx");
+const ROUTE_TARGET = path.join(REPO_ROOT, "app/routes/app.home.tsx");
+
 // Every disallow entry of the policy carries this message, so the probe
 // that matches on it is matching the policy and not a plugin-boundaries
 // `no-resolved` report about an import that never resolved.
@@ -39,6 +46,8 @@ describe("data/view lint boundary (#7031)", () => {
     // below vacuous, so it fails here instead.
     await access(DATA_WRITER_PATH);
     expect(await eslint.isPathIgnored(DATA_WRITER_PATH)).toBe(false);
+    await access(VIEW_TARGET);
+    await access(ROUTE_TARGET);
   });
 
   it("rejects app/lib/data importing a component", { timeout: 180_000 }, async () => {
