@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 
 import { entitledTier, resolveEntitlements, type Entitlements } from "../billing/entitlements";
 import { isPlanId, type PlanId, type PlanSummary } from "../billing/plans";
+import { readWorkspaceIdForOwner } from "./workspace.server";
 
 interface PlanRow {
   tier: string;
@@ -14,6 +15,9 @@ interface PlanRow {
 
 const SELECT_PLAN =
   "SELECT tier, status, current_period_end, trialing, limits_json, provider_customer_id FROM plan WHERE workspace_id = ?";
+
+const SELECT_WORKSPACE_PLANS =
+  "SELECT workspace_id, tier, status, current_period_end, limits_json FROM plan WHERE workspace_id IN (SELECT value FROM json_each(?1))";
 
 const SELECT_WORKSPACE_BY_SUBSCRIPTION = "SELECT workspace_id FROM plan WHERE provider_subscription_id = ?";
 
@@ -43,6 +47,44 @@ async function readPlan(workspaceId: string): Promise<{ tier: string; row: PlanR
 export async function readEntitlements(workspaceId: string): Promise<Entitlements> {
   const { tier, row } = await readPlan(workspaceId);
   return resolveEntitlements(tier, row === null ? "{}" : row.limits_json);
+}
+
+export async function readOwnerWorkspaceApiAccess(
+  userId: string,
+): Promise<{ workspaceId: string; apiAccess: boolean } | null> {
+  const workspaceId = await readWorkspaceIdForOwner(userId);
+  if (workspaceId === null) return null;
+  return { workspaceId, apiAccess: (await readEntitlements(workspaceId)).api_access };
+}
+
+export async function readWorkspaceEntitlements(
+  workspaceIds: readonly string[],
+): Promise<ReadonlyMap<string, Entitlements>> {
+  const unique = [...new Set(workspaceIds)];
+  const entitlements = new Map<string, Entitlements>();
+  if (unique.length === 0) return entitlements;
+  const { results } = await env.DB.prepare(SELECT_WORKSPACE_PLANS).bind(JSON.stringify(unique)).all<{
+    workspace_id: string;
+    tier: string;
+    status: string;
+    current_period_end: string | null;
+    limits_json: string;
+  }>();
+  const now = new Date();
+  const found = new Map(results.map((row) => [row.workspace_id, row] as const));
+  for (const id of unique) {
+    const row = found.get(id);
+    entitlements.set(
+      id,
+      row === undefined
+        ? resolveEntitlements("scout", "{}")
+        : resolveEntitlements(
+            entitledTier({ tier: row.tier, status: row.status, currentPeriodEnd: row.current_period_end }, now),
+            row.limits_json,
+          ),
+    );
+  }
+  return entitlements;
 }
 
 export async function readPlanTier(workspaceId: string): Promise<PlanId> {
