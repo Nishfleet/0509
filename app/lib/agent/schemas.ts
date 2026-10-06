@@ -109,7 +109,7 @@ export const competitorResultSchema = z.object({
           id: z.string(),
           headline: z.string(),
           page: z.string(),
-          url: z.string().nullable(),
+          url: z.string(),
           observedAt: isoTime,
           summary: z.string(),
         }),

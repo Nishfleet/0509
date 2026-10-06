@@ -119,7 +119,7 @@ export interface SiteChangeView {
   isSelf: boolean;
   headline: string;
   page: string;
-  url: string | null;
+  url: string;
   observedAt: string;
   capturedAt: string;
   wordsChanged: number;
@@ -142,7 +142,7 @@ function isLandingPair(view: SiteChangeView): view is PairedSiteChange {
   const added = view.mark?.added;
   if (typeof removed !== "string" || typeof added !== "string") return false;
   if (removed.trim() === "" || added.trim() === "") return false;
-  if (view.url === null || httpUrl(view.url) === null) return false;
+  if (httpUrl(view.url) === null) return false;
   return !Number.isNaN(Date.parse(view.capturedAt.trim()));
 }
 

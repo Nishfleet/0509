@@ -17,7 +17,7 @@ export type MarkSize = (typeof markSizes)[number];
 export interface MarkProps {
   before: string;
   after: string;
-  sourceUrl: string | null;
+  sourceUrl: string;
   capturedAt: string;
   size: MarkSize;
   screenshotUrl?: string;
@@ -49,7 +49,7 @@ interface Resolved {
 }
 
 function resolveMark({ before, after, sourceUrl, capturedAt }: MarkProps): Resolved | null {
-  const source = sourceUrl === null ? null : httpUrl(sourceUrl);
+  const source = httpUrl(sourceUrl);
   const captured = capturedInstant(capturedAt);
   if (before.trim() === "" || after.trim() === "" || source === null || captured === null) return null;
   return { source, captured };

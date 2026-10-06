@@ -310,7 +310,7 @@ describe("agent access, scoped to one workspace", () => {
     expect(call.structuredContent.competitor?.id).toBe("ent_agent_a");
   });
 
-  it("serves a change with no url instead of rejecting the whole competitor", async () => {
+  it("serves a change with no url by falling back to the page url instead of rejecting the whole competitor", async () => {
     const { workspaceId } = await seedWorkspace("urlless");
     const payload = JSON.stringify({
       page: { role: "pricing", url: SITE_CHANGE_URL },
@@ -333,7 +333,9 @@ describe("agent access, scoped to one workspace", () => {
       await readAgentCompetitor(workspaceId, "ent_agent_urlless", new Date(NOW)),
     );
 
-    expect(result.competitor?.changes).toEqual([expect.objectContaining({ id: "sig_agent_urlless", url: null })]);
+    expect(result.competitor?.changes).toEqual([
+      expect.objectContaining({ id: "sig_agent_urlless", url: SITE_CHANGE_URL }),
+    ]);
   });
 
   it("answers a failing MCP tool with a fixed error and never the thrown text", async () => {
