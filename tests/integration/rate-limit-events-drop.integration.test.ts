@@ -2,7 +2,7 @@ import { env, type D1Migration } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 /**
- * 0047_drop_rate_limit_events.sql (#7194, parent audit #7080), proven in real
+ * 0048_drop_rate_limit_events.sql (#7194, parent audit #7080), proven in real
  * workerd against real D1 once the whole chain has applied.
  *
  * The issue asks for one thing: the table is gone after the chain applies. The
@@ -28,7 +28,7 @@ const TABLE = "rate_limit_events";
 
 function dropMigration(): D1Migration {
   const found = env.TEST_MIGRATIONS.find((migration) => migration.name.endsWith("_drop_rate_limit_events.sql"));
-  if (found === undefined) throw new Error("0047_drop_rate_limit_events.sql is missing from TEST_MIGRATIONS");
+  if (found === undefined) throw new Error("0048_drop_rate_limit_events.sql is missing from TEST_MIGRATIONS");
   return found;
 }
 
@@ -49,7 +49,7 @@ function namesTable(text: string): boolean {
   return new RegExp(`\\b${TABLE}\\b`, "i").test(text);
 }
 
-describe("0047_drop_rate_limit_events.sql", () => {
+describe("0048_drop_rate_limit_events.sql", () => {
   it("is the one statement the issue asks for, and creates nothing", () => {
     const statements = statementsOf(dropMigration());
     expect(statements).toHaveLength(1);
@@ -63,7 +63,7 @@ describe("0047_drop_rate_limit_events.sql", () => {
     );
     // 0001 creates the table; this file drops it. A third name means a
     // resurrection, or a second drop folded into an in-flight packet.
-    expect(naming).toEqual(["0001_rebuild.sql", "0047_drop_rate_limit_events.sql"]);
+    expect(naming).toEqual(["0001_rebuild.sql", "0048_drop_rate_limit_events.sql"]);
   });
 
   it("leaves the table out of the schema the chain builds", async () => {
