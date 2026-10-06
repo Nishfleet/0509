@@ -54,8 +54,7 @@ describe("a Jev call the AI credits refuse", () => {
     await askNoul("ws-1", QUESTION, {});
 
     expect(ai.run).toHaveBeenCalledWith("@cf/cloudflare/clef", expect.objectContaining({ model: "clef" }), {
-      gateway: { id: "default" },
-      extraHeaders: { "cf-aig-timeout": "20000" },
+      gateway: { id: "default", requestTimeoutMs: 20000 },
     });
   });
 

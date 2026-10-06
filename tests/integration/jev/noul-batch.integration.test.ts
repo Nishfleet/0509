@@ -82,8 +82,7 @@ describe("askNouls", () => {
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0]?.[0]).toBe("@cf/cloudflare/clef");
     expect(run.mock.calls[0]?.[2]).toEqual({
-      gateway: { id: "default" },
-      extraHeaders: { "cf-aig-timeout": "20000" },
+      gateway: { id: "default", requestTimeoutMs: 20000 },
     });
     const request = run.mock.calls[0]?.[1] as {
       questions: Record<string, { type: string; instructions: string; criteria: unknown }>;

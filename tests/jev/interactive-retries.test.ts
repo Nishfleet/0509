@@ -30,29 +30,32 @@ beforeEach(() => {
   });
 });
 
-const TIMEOUT_HEADERS = { "cf-aig-timeout": String(JEV_TIMEOUT_MS) };
-
 describe("the gateway retry policy of a Jev question", () => {
   it("is sent with the call when the question names one", async () => {
     const retries = { maxAttempts: 2, retryDelayMs: 300, backoff: "constant" } as const;
 
     await askNoul("ws-1", { ...PLAIN, retries }, {});
 
-    expect(ai.run.mock.calls[0]?.[2]).toEqual({ gateway: { id: "default", retries }, extraHeaders: TIMEOUT_HEADERS });
+    expect(ai.run.mock.calls[0]?.[2]).toEqual({
+      gateway: { id: "default", requestTimeoutMs: JEV_TIMEOUT_MS, retries },
+    });
   });
 
   it("is left out of the call when the question names none", async () => {
     await askNoul("ws-1", PLAIN, {});
 
-    expect(ai.run.mock.calls[0]?.[2]).toEqual({ gateway: { id: "default" }, extraHeaders: TIMEOUT_HEADERS });
+    expect(ai.run.mock.calls[0]?.[2]).toEqual({ gateway: { id: "default", requestTimeoutMs: JEV_TIMEOUT_MS } });
   });
 
   it("is set on the question that screens a brand at sign-up, bounded to three attempts", async () => {
     await askNoul("ws-1", PUBLIC_SUBJECT, {});
 
     expect(ai.run.mock.calls[0]?.[2]).toEqual({
-      gateway: { id: "default", retries: { maxAttempts: 3, retryDelayMs: 500, backoff: "exponential" } },
-      extraHeaders: TIMEOUT_HEADERS,
+      gateway: {
+        id: "default",
+        requestTimeoutMs: JEV_TIMEOUT_MS,
+        retries: { maxAttempts: 3, retryDelayMs: 500, backoff: "exponential" },
+      },
     });
   });
 
@@ -65,7 +68,7 @@ describe("the gateway retry policy of a Jev question", () => {
 
     expect(IS_COMPETITOR.retries).toBeUndefined();
     expect(SAME_CATEGORY.retries).toBeUndefined();
-    expect(ai.run.mock.calls[0]?.[2]).toEqual({ gateway: { id: "default" }, extraHeaders: TIMEOUT_HEADERS });
+    expect(ai.run.mock.calls[0]?.[2]).toEqual({ gateway: { id: "default", requestTimeoutMs: JEV_TIMEOUT_MS } });
   });
 
   it("retries a choice call through the gateway and always sets a timeout (0509#7084)", async () => {
@@ -82,8 +85,7 @@ describe("the gateway retry policy of a Jev question", () => {
     );
 
     expect(ai.run.mock.calls[0]?.[2]).toEqual({
-      gateway: { id: "default", retries: CHOICE_RETRIES },
-      extraHeaders: TIMEOUT_HEADERS,
+      gateway: { id: "default", requestTimeoutMs: JEV_TIMEOUT_MS, retries: CHOICE_RETRIES },
     });
   });
 });

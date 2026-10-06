@@ -315,8 +315,7 @@ describe("nightly mentions sweep", () => {
 
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0]?.[2]).toEqual({
-      gateway: { id: "default" },
-      extraHeaders: { "cf-aig-timeout": String(JEV_TIMEOUT_MS) },
+      gateway: { id: "default", requestTimeoutMs: JEV_TIMEOUT_MS },
     });
     expect(outcome).toEqual({ items: 3, stored: 0, unjudged: 3, skipped: 0 });
   });

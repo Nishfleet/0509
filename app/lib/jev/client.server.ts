@@ -151,12 +151,9 @@ function noulAsk(question: NoulQuestion): NoulAsk {
 }
 
 function decide(state: unknown, questions: Record<string, unknown>, retries?: AttemptPolicy): Promise<unknown> {
-  const gateway = retries === undefined ? { id: GATEWAY_ID } : { id: GATEWAY_ID, retries };
-  return env.AI.run(
-    MODEL,
-    { model: MODEL_SELECTOR, state, questions },
-    { gateway, extraHeaders: { "cf-aig-timeout": String(JEV_TIMEOUT_MS) } },
-  );
+  const base = { id: GATEWAY_ID, requestTimeoutMs: JEV_TIMEOUT_MS };
+  const gateway = retries === undefined ? base : { ...base, retries };
+  return env.AI.run(MODEL, { model: MODEL_SELECTOR, state, questions }, { gateway });
 }
 
 async function run(question: NoulQuestion, state: unknown): Promise<number> {
