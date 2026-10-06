@@ -61,7 +61,7 @@ describe("nightly snapshot backup", () => {
     await introspector.waitForStatus("complete");
 
     const copied = await env.SNAPSHOTS_BACKUP.head("snapshot/site/watch-1/1.png");
-    expect(copied?.httpMetadata.contentType).toBe("image/png");
+    expect(copied?.httpMetadata?.contentType).toBe("image/png");
   });
 
   it("reports an empty source", async () => {
