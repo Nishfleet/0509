@@ -42,7 +42,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const wanted = isPlanId(wantedRaw) ? wantedRaw : null;
   const [tier, subscription] = await Promise.all([readPlanTier(workspaceId), readPlanSubscription(workspaceId)]);
   if (isWorkspacePaid(subscription, new Date())) throw redirect("/app");
-  return data({ tier, wanted });
+  return data({ tier, wanted, checkoutPath: ONBOARDING_PLAN });
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -67,7 +67,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       <p className="mt-3 max-w-prose leading-[1.55] text-ink-soft">{TRIAL_TERMS}</p>
       <div className="mt-8">
         {PLANS.map((plan) => (
-          <PlanGate key={plan.id} planId={plan.id} action={ONBOARDING_PLAN} />
+          <PlanGate key={plan.id} planId={plan.id} action={loaderData.checkoutPath} />
         ))}
       </div>
       <UpgradeStatus tier={loaderData.tier} wanted={loaderData.wanted} />

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink } from "./inbox";
+import { deleteCreatedAccount, isLocalLane, requireInboxToken, signInWithMagicLink } from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -17,7 +17,7 @@ test("an onboarded user with no plan row cannot reach Home @own-signin", async (
   test.setTimeout(180_000);
   const email = `e2e+paywall-${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   createdEmail = email;
-  await signInWithMagicLink(page, email, requireInboxToken());
+  await signInWithMagicLink(page, email, isLocalLane() ? null : requireInboxToken());
 
   await page.goto("/onboarding");
   const input = page.getByRole("textbox", { name: /your website address or social username/i });
