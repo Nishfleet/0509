@@ -9,7 +9,7 @@ export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url
 const PROJECT_SERVICE_MISS = "was not found by the project service";
 
 function underTypedTree(rel: string): boolean {
-  return rel.startsWith("app/") || rel.startsWith("workers/");
+  return rel.startsWith("app/") || rel.startsWith("workers/") || rel.startsWith("e2e/");
 }
 
 export async function lintTextAt(rel: string, code: string): Promise<{ ignored: boolean; messages: string[] }> {

@@ -307,7 +307,9 @@ describe("nightly mentions sweep", () => {
   it("stops at a billing refusal and never asks the AI again in that run", async () => {
     const { brand } = await seedWorkspace();
     stubGdelt();
-    const run = vi.fn(() => Promise.reject(new Error("3036: account has used its daily free allocation")));
+    const run = vi.fn((_model: string, _input: unknown, _options?: unknown) =>
+      Promise.reject(new Error("3036: account has used its daily free allocation")),
+    );
     Reflect.set(env, "AI", { run });
 
     const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
