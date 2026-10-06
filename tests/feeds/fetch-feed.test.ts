@@ -18,9 +18,7 @@ const HOME_URL = "https://rival.com/";
 const ETAG = '"etag-v1"';
 const LAST_MODIFIED = "Wed, 21 Oct 2015 07:28:00 GMT";
 
-// One declared byte over MAX_FEED_BYTES, so the real cappedText sees a
-// content-length that declares over the cap and returns null.
-const OVER_CAP_CONTENT_LENGTH = String(2 * 1024 * 1024 + 1);
+const FEED_CAP_BYTES = 2 * 1024 * 1024;
 
 const { fetchOutboundMock, robotsAllowsMock } = vi.hoisted(() => ({
   fetchOutboundMock: vi.fn<(url: string, init: OutboundInit) => Promise<Response>>(),
@@ -124,9 +122,12 @@ describe("classify maps the response to a FeedFetch outcome", () => {
     await expect(fetchFeed(FEED_URL, null)).resolves.toEqual({ outcome: "unreadable" });
   });
 
-  it("reads a 200 that declares more than the 2 MiB cap as unreadable", async () => {
-    fetchOutboundMock.mockResolvedValue(feedResponse(200, { "content-length": OVER_CAP_CONTENT_LENGTH }));
-    await expect(fetchFeed(FEED_URL, null)).resolves.toEqual({ outcome: "unreadable" });
+  it("keeps the first 2 MiB of a feed larger than the cap, newest entries first", async () => {
+    const huge = `<feed>${"a".repeat(FEED_CAP_BYTES + 1_000)}</feed>`;
+    fetchOutboundMock.mockResolvedValue(feedResponse(200, { "content-length": String(huge.length) }, huge));
+    const result = await fetchFeed(FEED_URL, null);
+    expect(result).toMatchObject({ outcome: "ok" });
+    expect(result.outcome === "ok" ? result.body : "").toBe(huge.slice(0, FEED_CAP_BYTES));
   });
 
   it("reads a 200 as ok, copies the etag and last-modified headers as validators, and keeps the body", async () => {

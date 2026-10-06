@@ -128,6 +128,22 @@ export async function cappedText(res: Response, capBytes: number): Promise<strin
   return bytes === null ? null : new TextDecoder().decode(bytes);
 }
 
+export async function leadingText(res: Response, maxBytes: number): Promise<string> {
+  if (res.body === null) return "";
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let seen = 0;
+  while (seen < maxBytes) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const kept = value.byteLength > maxBytes - seen ? value.subarray(0, maxBytes - seen) : value;
+    chunks.push(kept);
+    seen += kept.byteLength;
+  }
+  await reader.cancel();
+  return new TextDecoder().decode(await new Blob(chunks).arrayBuffer());
+}
+
 export async function cappedJson(res: Response, capBytes: number): Promise<unknown> {
   const text = await cappedText(res, capBytes);
   return text === null ? null : (JSON.parse(text) as unknown);
