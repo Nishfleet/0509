@@ -56,7 +56,7 @@ test.describe("signed in", () => {
     await page.goto("/onboarding");
     await expect(page).toHaveURL(/\/onboarding\/competitors$/);
     await page.getByRole("button", { name: "Start watching" }).click();
-    await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
+    await expect(page).toHaveURL(/\/onboarding\/plan$/, { timeout: 30_000 });
     expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
   });
 
