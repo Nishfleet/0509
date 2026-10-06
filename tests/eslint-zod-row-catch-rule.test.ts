@@ -38,6 +38,11 @@ const schema = z.object({ site_fill: z.string().nullable() });
 export const parsed = schema["catch"](null);
 `;
 
+const OPTIONAL_CATCH = `import { z } from "zod";
+const schema = z.object({ site_fill: z.string().nullable() });
+export const parsed = schema?.catch(null);
+`;
+
 const PLAIN_PARSE = `import { z } from "zod";
 const row = z.object({ site_fill: z.string().nullable() });
 export const parsed = row.nullable().parse({ site_fill: "filled" });
@@ -74,21 +79,31 @@ describe("eslint zod row .catch() rule (#7173)", () => {
 
   it('rejects a computed schema["catch"] call', { timeout: 60_000 }, async () => {
     const result = await lintProbe(DATA_MODULE, COMPUTED_CATCH);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((m) => m.includes(ZOD_ROW_CATCH_MESSAGE))).toBe(true);
+  });
+
+  it("rejects `.catch(...)` behind optional chaining", { timeout: 60_000 }, async () => {
+    const result = await lintProbe(DATA_MODULE, OPTIONAL_CATCH);
+    expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(ZOD_ROW_CATCH_MESSAGE))).toBe(true);
   });
 
   it("leaves the plain parse that replaced the fallback alone", { timeout: 60_000 }, async () => {
     const result = await lintProbe(DATA_MODULE, PLAIN_PARSE);
+    expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(ZOD_ROW_CATCH_MESSAGE))).toBe(false);
   });
 
   it("leaves a Promise `.catch()` unblocked", { timeout: 60_000 }, async () => {
     const result = await lintProbe(DATA_MODULE, PROMISE_CATCH);
+    expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(ZOD_ROW_CATCH_MESSAGE))).toBe(false);
   });
 
   it("stays armed only on app/lib/data/**, so a schema elsewhere is unblocked", { timeout: 60_000 }, async () => {
     const result = await lintProbe(OUTSIDE_DATA_LAYER, NOT_ARMED_OUTSIDE_DATA_LAYER);
+    expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(ZOD_ROW_CATCH_MESSAGE))).toBe(false);
   });
 
