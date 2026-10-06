@@ -164,7 +164,12 @@ describe("apikey plugin against the shipped schema", () => {
     expect(byId.get(minted.id)).toMatch(iso);
     expect(byId.get(created.id)).toMatch(iso);
 
-    expect((await auth.api.verifyApiKey({ body: { key: created.key } })).valid).toBe(true);
+    const verified = await auth.api.verifyApiKey({ body: { key: created.key } });
+    expect(verified.valid).toBe(true);
+    const parsed = verified.key?.expiresAt;
+    expect(parsed, "better-auth must read the backfilled expiry as a Date").toBeInstanceOf(Date);
+    const inNinetyDays = Date.now() + 90 * 24 * 60 * 60 * 1000;
+    expect(Math.abs((parsed as Date).getTime() - inNinetyDays)).toBeLessThan(24 * 60 * 60 * 1000);
 
     await env.DB.prepare('UPDATE apikey SET "expiresAt" = ? WHERE id = ?')
       .bind("2000-01-01T00:00:00.000Z", created.id)
