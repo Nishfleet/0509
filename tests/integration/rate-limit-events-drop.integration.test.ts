@@ -57,7 +57,7 @@ describe("0047_drop_rate_limit_events.sql", () => {
     expect(statements[0]).not.toMatch(/CREATE/i);
   });
 
-  it("is the only file after 0001 that names the table", () => {
+  it("is named by 0001, which creates the table, and by no file but this drop", () => {
     const naming = env.TEST_MIGRATIONS.filter((migration) => statementsOf(migration).some(namesTable)).map(
       (migration) => migration.name,
     );
