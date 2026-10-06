@@ -41,7 +41,6 @@ type StillReasonCase = ChoiceEvalRow & StillFields;
 
 const STILL_FIELDS = ["kind", "self", "competitors", "subject", "history"] as const;
 
-vi.mock("cloudflare:workers", () => ({ env: {} }));
 vi.mock("../../app/lib/jev/client.server", () => ({
   askNoul: () => Promise.resolve(null),
   askChoice: () => Promise.resolve(null),

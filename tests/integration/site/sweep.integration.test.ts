@@ -536,6 +536,25 @@ describe("nightly site sweep", () => {
       expect(unlinked?.n).toBe(0);
     });
 
+    it("still opens the incident and queues the email when the brand's budget went on mention verdicts", async () => {
+      installJev(0.8);
+      for (let index = 0; index < 17; index += 1) {
+        await env.DB.prepare(
+          `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, choice, reason, decided_at)
+           SELECT ?1, workspace_id, 'mention_is_about_brand', ?2, NULL, 'ent-self', 0.04, NULL, NULL, ?3 FROM entity WHERE id = 'ent-self'`,
+        )
+          .bind(`mention-${index}`, `mention-hash-${index}`, new Date().toISOString())
+          .run();
+      }
+      await baseline("ent-self", SELF_BEFORE_HTML);
+      await changeOnce("ent-self", SELF_BROKEN_HTML, "self-broken");
+
+      const filed = await rows();
+      expect(filed.signals).toEqual([{ aspect: "breakage", summary: null }]);
+      expect(filed.incidents).toEqual([{ id: expect.any(String), kind: "breakage", closed_at: null }]);
+      expect(send).toHaveBeenCalledTimes(1);
+    });
+
     it("opens the incident and a normal alert, and sends nothing, when D3s says check", async () => {
       installJev(0.3);
       await baseline("ent-self", SELF_BEFORE_HTML);

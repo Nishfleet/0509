@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   waitUntil: vi.fn(),
 }));
 
-vi.mock("cloudflare:workers", () => ({ env: {} }));
 vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn() }));
 vi.mock("../../app/lib/onboarding/subject-access.server", () => ({
   readSubjectAccess: mocks.readSubjectAccess,

@@ -6,8 +6,6 @@ const gate = vi.hoisted(() => ({
   sessionReads: 0,
 }));
 
-vi.mock("cloudflare:workers", () => ({ env: {} }));
-
 vi.mock("../../app/lib/env.server", () => ({
   landingWorkspaceId: () => gate.workspaceId,
 }));
