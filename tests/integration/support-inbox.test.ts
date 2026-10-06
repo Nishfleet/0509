@@ -18,7 +18,11 @@ type InboxEnv = Parameters<typeof worker.email>[1];
  * export type keeps each handler at the parameters it declares, so these
  * aliases carry the third argument the runtime passes and the handler ignores.
  */
-const callFetch = worker.fetch as unknown as (request: Request, env: InboxEnv, ctx: ExecutionContext) => Promise<Response>;
+const callFetch = worker.fetch as unknown as (
+  request: Request,
+  env: InboxEnv,
+  ctx: ExecutionContext,
+) => Promise<Response>;
 const callEmail = worker.email as (message: EmailMessage, env: InboxEnv, ctx: ExecutionContext) => Promise<void>;
 
 const ISSUES_URL = "https://api.github.com/repos/Nishfleet/0509/issues";

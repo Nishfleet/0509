@@ -608,7 +608,11 @@ describe("copying a new API key", () => {
   // place CopyKey is rendered.
   it("puts the key on screen above the copy button in the new-key notice", () => {
     const Stub = createRoutesStub([
-      { path: "/", Component: () => createElement(AgentKeys, { keys: [], newKey: NEW_KEY }) },
+      {
+        path: "/",
+        Component: () =>
+          createElement(AgentKeys, { keys: [], newKey: NEW_KEY, duplicate: false, submission: "test-submission" }),
+      },
     ]);
     const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
     const key = html.indexOf(`>${NEW_KEY}<`);

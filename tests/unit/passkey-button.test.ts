@@ -22,7 +22,7 @@ vi.mock("../../app/components/ui/button", async (importOriginal) => {
   const actual = await importOriginal<typeof ButtonModule>();
   return {
     ...actual,
-    Button: ({ onClick, children, ...rest }: { onClick?: () => void; children?: ReactNode }) => {
+    Button: ({ onClick, children, ...rest }: { onClick?: () => void; children?: ReactNode; disabled?: boolean }) => {
       button.onClick = onClick ?? null;
       button.disabled = rest.disabled;
       return createElement("button", { type: "button", onClick, ...rest }, children);

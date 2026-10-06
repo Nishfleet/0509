@@ -31,7 +31,7 @@ interface StillFields {
     summary: string;
     url: string;
     aspect: string | null;
-    observed_at: string;
+    observedAt: string;
   }[];
 }
 

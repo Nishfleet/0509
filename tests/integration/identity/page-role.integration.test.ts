@@ -53,7 +53,9 @@ describe("classifyNavPages", () => {
   beforeEach(seed);
 
   it("asks Jev once per page and writes the judged page with its decision hash", async () => {
-    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) =>
+      Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }),
+    );
     Reflect.set(env, "AI", { run });
 
     const rows = await classifyNavPages({ workspaceId, entity: ENTITY, pages: [PAGE], now: NOW });
@@ -86,7 +88,9 @@ describe("classifyNavPages", () => {
   });
 
   it("leaves an unchanged page alone and asks Jev nothing more", async () => {
-    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) =>
+      Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }),
+    );
     Reflect.set(env, "AI", { run });
 
     await classifyNavPages({ workspaceId, entity: ENTITY, pages: [PAGE], now: NOW });
@@ -105,13 +109,17 @@ describe("classifyNavPages", () => {
   });
 
   it("re-judges a page whose title changed and rewrites the one row", async () => {
-    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) =>
+      Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }),
+    );
     Reflect.set(env, "AI", { run });
     await classifyNavPages({ workspaceId, entity: ENTITY, pages: [PAGE], now: NOW });
     const firstHash = (await readPages())[0]?.role_decided_for_hash;
 
     Reflect.deleteProperty(env, "AI");
-    const secondRun = vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.resolve({ answers: { page_role: { type: "choice", choice: "other" } } }));
+    const secondRun = vi.fn((_model: string, _request: unknown, _options?: unknown) =>
+      Promise.resolve({ answers: { page_role: { type: "choice", choice: "other" } } }),
+    );
     Reflect.set(env, "AI", { run: secondRun });
 
     const second = await classifyNavPages({
@@ -158,7 +166,9 @@ describe("classifyNavPages", () => {
   });
 
   it("logs one uncached verdict per judged page and writes the page rows in one batch", async () => {
-    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.resolve({ answers: { page_role: { type: "choice", choice: "blog" } } }));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) =>
+      Promise.resolve({ answers: { page_role: { type: "choice", choice: "blog" } } }),
+    );
     Reflect.set(env, "AI", { run });
 
     await classifyNavPages({

@@ -38,7 +38,9 @@ describe("coverage matches the enabled sources", () => {
   });
 
   it("reflects a live claim's degraded_reason in the llms.txt render", async () => {
-    const news = COVERAGE.flatMap((group: CoverageKind) => group.sources).find((source) => source.id === "mentions.news");
+    const news = COVERAGE.flatMap((group: CoverageKind) => group.sources).find(
+      (source) => source.id === "mentions.news",
+    );
     if (news === undefined || news.sourceKey === undefined) {
       throw new Error("mentions.news must name a sourceKey");
     }

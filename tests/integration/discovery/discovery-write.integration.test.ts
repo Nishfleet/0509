@@ -227,7 +227,11 @@ describe("judgeCandidates", () => {
     const workspaceId = await seedWorkspace();
     const context = await readDiscoveryContext(workspaceId);
     if (context === null) throw new Error("seed failed");
-    Reflect.set(env, "AI", { run: vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.reject(new Error("2003: Rate limited"))) });
+    Reflect.set(env, "AI", {
+      run: vi.fn((_model: string, _request: unknown, _options?: unknown) =>
+        Promise.reject(new Error("2003: Rate limited")),
+      ),
+    });
 
     await expect(judgeCandidates(context, [candidate("Alphalete", "alphaleteathletics.com")])).rejects.toThrow(
       JevRateLimitedError,
@@ -238,7 +242,11 @@ describe("judgeCandidates", () => {
     const workspaceId = await seedWorkspace();
     const context = await readDiscoveryContext(workspaceId);
     if (context === null) throw new Error("seed failed");
-    Reflect.set(env, "AI", { run: vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.reject(new Error("2021: Payment error"))) });
+    Reflect.set(env, "AI", {
+      run: vi.fn((_model: string, _request: unknown, _options?: unknown) =>
+        Promise.reject(new Error("2021: Payment error")),
+      ),
+    });
 
     const results = await judgeCandidates(context, [candidate("Alphalete", "alphaleteathletics.com")]);
 
@@ -282,7 +290,9 @@ describe("judgeCandidates", () => {
     const workspaceId = await seedWorkspace();
     const context = await readDiscoveryContext(workspaceId);
     if (context === null) throw new Error("seed failed");
-    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.resolve({ answers: { is_competitor: { type: "noul", noul: 0.92 } } }));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) =>
+      Promise.resolve({ answers: { is_competitor: { type: "noul", noul: 0.92 } } }),
+    );
     Reflect.set(env, "AI", { run });
     const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
@@ -297,7 +307,9 @@ describe("judgeCandidates", () => {
     const workspaceId = await seedWorkspace();
     const context = await readDiscoveryContext(workspaceId);
     if (context === null) throw new Error("seed failed");
-    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.reject(new Error("Insufficient balance; add money to your gateway")));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) =>
+      Promise.reject(new Error("Insufficient balance; add money to your gateway")),
+    );
     Reflect.set(env, "AI", { run });
     const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
 

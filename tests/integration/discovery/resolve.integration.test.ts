@@ -168,7 +168,9 @@ describe("resolveDomain", () => {
   });
 
   it("identifies both of resolve-domain's outbound fetches as the one crawler User-Agent (0509#5883)", async () => {
-    const fetchMock = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => Promise.resolve(Response.json({ search: [] })));
+    const fetchMock = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
+      Promise.resolve(Response.json({ search: [] })),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     await resolveDomain("Fresh Identity 0509");

@@ -199,7 +199,9 @@ describe("the answer body the AI binding returns", () => {
     ["a result object", { result: documented }],
   ])("reads the noul from %s", async (_label, body) => {
     const workspaceId = await seedWorkspace();
-    Reflect.set(env, "AI", { run: vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.resolve(body)) });
+    Reflect.set(env, "AI", {
+      run: vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.resolve(body)),
+    });
 
     const verdict = await askNoul(workspaceId, NAME_QUESTION, state);
 
@@ -208,7 +210,9 @@ describe("the answer body the AI binding returns", () => {
 
   it("says which keys came back, and no value, when a response string is not json", async () => {
     const workspaceId = await seedWorkspace();
-    Reflect.set(env, "AI", { run: vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.resolve({ response: "not json" })) });
+    Reflect.set(env, "AI", {
+      run: vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.resolve({ response: "not json" })),
+    });
 
     const thrown = await askNoul(workspaceId, NAME_QUESTION, state).catch((error: unknown) => error);
 
@@ -219,7 +223,9 @@ describe("the answer body the AI binding returns", () => {
 
   it("says which keys and issue paths came back, and no value, when the batch answer does not parse", async () => {
     const workspaceId = await seedWorkspace();
-    Reflect.set(env, "AI", { run: vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.resolve({ response: "x" })) });
+    Reflect.set(env, "AI", {
+      run: vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.resolve({ response: "x" })),
+    });
 
     const thrown = await askNouls(workspaceId, questions, state).catch((error: unknown) => error);
 

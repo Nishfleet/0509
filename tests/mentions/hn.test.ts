@@ -70,7 +70,9 @@ describe("hn.algolia mentions adapter", () => {
   });
 
   it("rejects an unsuccessful Algolia response", async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response("", { status: 500 }));
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) => new Response("", { status: 500 }),
+    );
     vi.stubGlobal("fetch", fetchMock);
     try {
       await expect(hnAdapter({ query: "gymshark" }, null)).rejects.toThrow("hn.algolia 500");

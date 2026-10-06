@@ -9,7 +9,7 @@ const SECTION_PROPS = { id: "agents", kicker: "For AI agents", title: "Built for
 
 function section(overrides: { lead?: string } = {}): string {
   return renderToStaticMarkup(
-    createElement(Section, { ...SECTION_PROPS, ...overrides }, createElement("p", null, "child paragraph")),
+    createElement(Section, { ...SECTION_PROPS, ...overrides, children: createElement("p", null, "child paragraph") }),
   );
 }
 

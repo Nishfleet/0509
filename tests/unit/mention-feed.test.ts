@@ -114,7 +114,7 @@ describe("showInFeed", () => {
   });
 
   it("hides a held mention until show all is on", () => {
-    const held = { kind: "mention", mention: { treatment: "held" } };
+    const held = { kind: "mention", mention: { treatment: "held" as const } };
     expect(showInFeed(held, false)).toBe(false);
     expect(showInFeed(held, true)).toBe(true);
   });

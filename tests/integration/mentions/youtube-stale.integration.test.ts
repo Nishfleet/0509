@@ -119,7 +119,13 @@ describe("YouTube sweep stale channel", () => {
     stubFeeds();
 
     const outcome = await sweepTarget(
-      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, minIntervalSeconds: watch.min_interval_seconds, watches: [watch] },
+      {
+        sourceId: watch.source_id,
+        pluginKey: watch.plugin_key,
+        query: watch.target_key,
+        minIntervalSeconds: watch.min_interval_seconds,
+        watches: [watch],
+      },
       NOW,
       null,
     );
@@ -140,7 +146,13 @@ describe("YouTube sweep stale channel", () => {
     });
 
     await sweepTarget(
-      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, minIntervalSeconds: watch.min_interval_seconds, watches: [watch] },
+      {
+        sourceId: watch.source_id,
+        pluginKey: watch.plugin_key,
+        query: watch.target_key,
+        minIntervalSeconds: watch.min_interval_seconds,
+        watches: [watch],
+      },
       NOW,
       null,
     );
@@ -156,7 +168,13 @@ describe("YouTube sweep stale channel", () => {
     stubFeeds();
 
     await sweepTarget(
-      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, minIntervalSeconds: watch.min_interval_seconds, watches: [watch] },
+      {
+        sourceId: watch.source_id,
+        pluginKey: watch.plugin_key,
+        query: watch.target_key,
+        minIntervalSeconds: watch.min_interval_seconds,
+        watches: [watch],
+      },
       NOW,
       null,
     );
@@ -171,7 +189,13 @@ describe("YouTube sweep stale channel", () => {
     stubFeeds();
 
     await sweepTarget(
-      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, minIntervalSeconds: watch.min_interval_seconds, watches: [watch] },
+      {
+        sourceId: watch.source_id,
+        pluginKey: watch.plugin_key,
+        query: watch.target_key,
+        minIntervalSeconds: watch.min_interval_seconds,
+        watches: [watch],
+      },
       NOW,
       null,
     );
@@ -260,7 +284,13 @@ describe("YouTube sweep stale channel", () => {
     });
 
     const outcome = await sweepTarget(
-      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, minIntervalSeconds: watch.min_interval_seconds, watches: [watch] },
+      {
+        sourceId: watch.source_id,
+        pluginKey: watch.plugin_key,
+        query: watch.target_key,
+        minIntervalSeconds: watch.min_interval_seconds,
+        watches: [watch],
+      },
       NOW,
       null,
     );
@@ -279,7 +309,13 @@ describe("YouTube sweep stale channel", () => {
 
     fakeFetch.mockClear();
     const confirmed = await sweepTarget(
-      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, minIntervalSeconds: watch.min_interval_seconds, watches: [watch] },
+      {
+        sourceId: watch.source_id,
+        pluginKey: watch.plugin_key,
+        query: watch.target_key,
+        minIntervalSeconds: watch.min_interval_seconds,
+        watches: [watch],
+      },
       NOW,
       null,
     );
@@ -308,7 +344,13 @@ describe("YouTube sweep stale channel", () => {
     });
 
     await sweepTarget(
-      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, minIntervalSeconds: watch.min_interval_seconds, watches: [watch] },
+      {
+        sourceId: watch.source_id,
+        pluginKey: watch.plugin_key,
+        query: watch.target_key,
+        minIntervalSeconds: watch.min_interval_seconds,
+        watches: [watch],
+      },
       NOW,
       null,
     );
@@ -321,7 +363,13 @@ describe("YouTube sweep stale channel", () => {
     expect(await snapshotCount(watchId)).toBe(0);
 
     await sweepTarget(
-      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, minIntervalSeconds: watch.min_interval_seconds, watches: [watch] },
+      {
+        sourceId: watch.source_id,
+        pluginKey: watch.plugin_key,
+        query: watch.target_key,
+        minIntervalSeconds: watch.min_interval_seconds,
+        watches: [watch],
+      },
       NOW,
       null,
     );
@@ -343,7 +391,13 @@ describe("YouTube sweep stale channel", () => {
     });
 
     const outcome = await sweepTarget(
-      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, minIntervalSeconds: watch.min_interval_seconds, watches: [watch] },
+      {
+        sourceId: watch.source_id,
+        pluginKey: watch.plugin_key,
+        query: watch.target_key,
+        minIntervalSeconds: watch.min_interval_seconds,
+        watches: [watch],
+      },
       NOW,
       4,
     );
@@ -367,7 +421,13 @@ describe("YouTube sweep stale channel", () => {
     });
 
     const outcome = await sweepTarget(
-      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, minIntervalSeconds: watch.min_interval_seconds, watches: [watch] },
+      {
+        sourceId: watch.source_id,
+        pluginKey: watch.plugin_key,
+        query: watch.target_key,
+        minIntervalSeconds: watch.min_interval_seconds,
+        watches: [watch],
+      },
       NOW,
       null,
     );
@@ -384,7 +444,13 @@ describe("YouTube sweep stale channel", () => {
     stubFeeds();
 
     await sweepTarget(
-      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, minIntervalSeconds: watch.min_interval_seconds, watches: [watch] },
+      {
+        sourceId: watch.source_id,
+        pluginKey: watch.plugin_key,
+        query: watch.target_key,
+        minIntervalSeconds: watch.min_interval_seconds,
+        watches: [watch],
+      },
       NOW,
       null,
     );
@@ -431,7 +497,13 @@ describe("YouTube sweep stale channel", () => {
 
     await expect(
       sweepTarget(
-        { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, minIntervalSeconds: watch.min_interval_seconds, watches: [watch] },
+        {
+          sourceId: watch.source_id,
+          pluginKey: watch.plugin_key,
+          query: watch.target_key,
+          minIntervalSeconds: watch.min_interval_seconds,
+          watches: [watch],
+        },
         NOW,
         null,
       ),
@@ -453,7 +525,13 @@ describe("YouTube sweep stale channel", () => {
     );
 
     const outcome = await sweepTarget(
-      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, minIntervalSeconds: watch.min_interval_seconds, watches: [watch] },
+      {
+        sourceId: watch.source_id,
+        pluginKey: watch.plugin_key,
+        query: watch.target_key,
+        minIntervalSeconds: watch.min_interval_seconds,
+        watches: [watch],
+      },
       NOW,
       null,
     );

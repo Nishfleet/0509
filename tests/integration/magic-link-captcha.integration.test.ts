@@ -274,7 +274,9 @@ describe("login form action access pre-clearance", () => {
     const { assertion, iss } = await serviceTokenAssertion();
     const sent: string[] = [];
     actionEnv(sent, iss);
-    const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) } as Parameters<typeof loginAction>[0]);
+    const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) } as Parameters<
+      typeof loginAction
+    >[0]);
     expect(result).toMatchObject({ sent: { email: "cookie-precleared@test.dev" } });
     expect(sent).toHaveLength(1);
   });
@@ -291,7 +293,9 @@ describe("login form action access pre-clearance", () => {
     });
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
-      const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) } as Parameters<typeof loginAction>[0]);
+      const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) } as Parameters<
+        typeof loginAction
+      >[0]);
       expect(result).toEqual(data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 }));
       const text = logged.mock.calls.map((call) => String(call[0])).join("\n");
       expect(text).toContain("account daily sending quota exceeded");
@@ -333,7 +337,9 @@ describe("login form action access pre-clearance", () => {
 
     const sent: string[] = [];
     actionEnv(sent, iss);
-    const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) } as Parameters<typeof loginAction>[0]);
+    const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) } as Parameters<
+      typeof loginAction
+    >[0]);
     expect(result).toEqual({ error: "Confirm you're a person, then we'll send the link." });
     expect(sent).toHaveLength(0);
   });
@@ -364,7 +370,9 @@ describe("login form action access pre-clearance", () => {
 
     const sent: string[] = [];
     actionEnv(sent, iss);
-    const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) } as Parameters<typeof loginAction>[0]);
+    const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) } as Parameters<
+      typeof loginAction
+    >[0]);
     expect(result).toEqual({ error: "Confirm you're a person, then we'll send the link." });
     expect(sent).toHaveLength(0);
   });

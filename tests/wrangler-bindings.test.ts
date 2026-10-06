@@ -43,7 +43,6 @@ type DeployedConfig = {
 const readConfig = (config: string): { rawConfig: DeployedConfig } =>
   experimental_readRawConfig({ config }) as unknown as { rawConfig: DeployedConfig };
 
-
 // #4631, and 225c3eb before it: the production CLOUDFLARE_API_TOKEN cannot reach
 // the KV namespaces endpoint, so a KV binding without an id sends wrangler to
 // deploy-time provisioning and the deploy fails with auth error 10000. Pin the

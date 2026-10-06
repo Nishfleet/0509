@@ -68,7 +68,7 @@ function load() {
   return loader({
     request: new Request("https://0509.io/onboarding/identity?subject=acme.com"),
     context: { get: () => ({ waitUntil: mocks.waitUntil }) },
-  } as Parameters<typeof loader>[0]);
+  } as unknown as Parameters<typeof loader>[0]);
 }
 
 beforeEach(() => {

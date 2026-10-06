@@ -511,8 +511,8 @@ describe("nightly site sweep", () => {
     beforeEach(async () => {
       await env.DB.exec("DELETE FROM jev_verdict");
       send = vi.spyOn(workerEnv.SEND_EMAIL, "send").mockResolvedValue({
-      metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
-    });
+        metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
+      });
     });
 
     afterEach(() => {

@@ -143,7 +143,9 @@ describe("login magic-link action", () => {
       handler.mockResolvedValue(
         new Response("account daily sending quota exceeded for victim@example.com", { status: 500 }),
       );
-      await action({ request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }) } as Parameters<typeof action>[0]);
+      await action({
+        request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }),
+      } as Parameters<typeof action>[0]);
       const text = logged.mock.calls.map((call) => String(call[0])).join("\n");
       expect(text).toContain("login.magic_link_send_failed");
       expect(text).toContain('"status":500');
