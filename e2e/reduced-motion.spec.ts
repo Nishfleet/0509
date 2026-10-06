@@ -31,14 +31,6 @@ function visitPath(path: string): string {
   return `/${path.replace(/:[^/]+/g, "placeholder")}`;
 }
 
-// A route is a URL, so it is full of `/` and `.`; both are path separators or
-// awkward file names once the route becomes a screenshot filename. Collapse
-// everything unsafe into a single dash so the report stays a flat directory
-// instead of a tree that mirrors the route table.
-function slug(target: string): string {
-  return target.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "root";
-}
-
 // `testInfo.attach({ body })` keeps the buffer in memory and never writes a
 // file; only the `path:` form is persisted, which is what makes the
 // screenshots a reviewer can actually open. Writing through
@@ -162,6 +154,20 @@ async function inspectMotion(page: Page): Promise<MotionFinding[]> {
   });
 }
 
+// The per-route screenshot is evidence for a reviewer, not an assertion: the
+// `main` visibility check is what proves the route rendered. Playwright's own
+// `screenshot: "on"` recorder takes it once the test body ends (before any
+// afterEach) and attaches it as `test-finished-1.png`. Viewport-only, not
+// fullPage: 21 routes x 2 projects is a lot of report weight and the first
+// screen is what "did this route render" is asking.
+//
+// It replaces a `page.screenshot()` in the test body because a CDP capture can
+// fail with "Unable to capture screenshot" on a page that is fully rendered,
+// and in the body that failure failed the test (0509 PR #7214, preview-assert
+// run 37416731241). The recorder catches a failed capture and drops the
+// attachment, so a lost screenshot can no longer fail a motion test.
+test.use({ screenshot: "on" });
+
 for (const target of targets) {
   test(`${target} honours prefers-reduced-motion on first paint`, async ({ page }, testInfo) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
@@ -183,14 +189,6 @@ for (const target of targets) {
     await expect(page.locator("main")).toBeVisible();
 
     const findings = await inspectMotion(page);
-
-    // A screenshot proves the route actually rendered rather than returning
-    // a blank shell that happens to have no motion. Viewport-only, not
-    // fullPage: 21 routes x 2 projects is a lot of report weight and the
-    // first screen is what "did this route render" is asking. The full-page
-    // shots live on the two end-state tests below, where the whole point is
-    // the final layout.
-    await saveShot(page, testInfo, `reduced-motion-${slug(target)}`);
 
     expect(
       findings,
