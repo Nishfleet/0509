@@ -91,7 +91,11 @@ test("/api/health answers ok @smoke", async ({ request }) => {
   expect(body.app).toBe("0509");
   expect(body.d1).toBe("ok");
   expect(Number.isNaN(Date.parse(body.timestamp))).toBe(false);
-  expect(typeof body.commit).toBe("string");
+  if (process.env.PLAYWRIGHT_TEST_BASE_URL) {
+    expect(body.commit).toMatch(/^[0-9a-f]{40}$/);
+  } else {
+    expect(typeof body.commit).toBe("string");
+  }
 });
 
 test("the login page renders the one input that signs you in @smoke", async ({ page }) => {
