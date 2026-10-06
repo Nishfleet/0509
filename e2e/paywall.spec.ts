@@ -20,7 +20,7 @@ test.afterEach(async ({ page }, testInfo) => {
   }
 });
 
-test("an onboarded workspace with no plan row lands on the plan step, not Home", async ({ page }) => {
+test("an onboarded workspace with no plan row lands on the plan step, not Home", async ({ page, baseURL }) => {
   test.skip(!isLocalLane(), "preview seeds the workspace in local D1; production walks the real onboarding below");
   const { cookie } = await seedPreviewSession(
     "paywall",
@@ -45,7 +45,12 @@ test("an onboarded workspace with no plan row lands on the plan step, not Home",
     },
     { livePlan: false },
   );
-  await page.setExtraHTTPHeaders({ cookie });
+  await page.context().addCookies(
+    cookie.split("; ").map((pair) => {
+      const [name, ...value] = pair.split("=");
+      return { name, value: value.join("="), url: baseURL };
+    }),
+  );
 
   await page.goto("/app");
   await expect(page).toHaveURL(/\/onboarding\/plan$/);
