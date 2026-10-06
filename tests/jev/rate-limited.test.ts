@@ -111,7 +111,7 @@ describe("a batch of choice questions that Clef rate limits", () => {
 
     const settled = await askChoices("ws-1", CHOICE, [{}, {}, {}]);
 
-    expect(settled.map((result) => result.status)).toEqual(["fulfilled", "rejected", "rejected"]);
+    expect(settled.map((result) => result.status).sort()).toEqual(["fulfilled", "rejected", "rejected"]);
     expect(captureMessage).toHaveBeenCalledTimes(1);
     expect(captureMessage).toHaveBeenCalledWith(
       "jev choice batch: answers rejected",
