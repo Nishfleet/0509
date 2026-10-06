@@ -201,8 +201,6 @@ ON CONFLICT (source_id, dedup_key) DO NOTHING`;
 const SEEN_KEYS =
   "SELECT dedup_key FROM signal WHERE source_id = ?1 AND dedup_key IN (SELECT value FROM json_each(?2))";
 
-const readSeenDedupKeysRow = z.object({ dedup_key: z.string() });
-
 export interface MentionSignal {
   id: string;
   workspaceId: string;
@@ -224,6 +222,8 @@ export interface MentionSignal {
   isNotAboutBrand: boolean;
   state: "judged" | "unjudged";
 }
+
+const readSeenDedupKeysRow = z.object({ dedup_key: z.string() });
 
 export async function readSeenDedupKeys(sourceId: string, keys: readonly string[]): Promise<Set<string>> {
   if (keys.length === 0) return new Set();

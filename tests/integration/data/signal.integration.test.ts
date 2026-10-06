@@ -37,17 +37,11 @@ beforeEach(async () => {
     await env.DB.prepare(`DELETE FROM ${table}`).run();
   }
   await seedWorkspace("ws-a");
-  await seedWorkspace("ws-b");
-  for (const [id, workspaceId] of [
-    ["ent-self", "ws-a"],
-    ["ent-self-b", "ws-b"],
-  ]) {
-    await env.DB.prepare(
-      `INSERT INTO entity (id, workspace_id, role, domain, state, created_at) VALUES (?, ?, 'self', ?, 'on', ?)`,
-    )
-      .bind(id, workspaceId, `${id}.example`, NOW)
-      .run();
-  }
+  await env.DB.prepare(
+    `INSERT INTO entity (id, workspace_id, role, domain, state, created_at) VALUES (?, ?, 'self', ?, 'on', ?)`,
+  )
+    .bind("ent-self", "ws-a", "ent-self.example", NOW)
+    .run();
   await env.DB.prepare(
     `INSERT INTO source (id, key, kind, platform, plugin_key) VALUES ('src_site_web', 'site-web', 'site', 'web', 'site-web')`,
   ).run();
@@ -59,7 +53,7 @@ beforeEach(async () => {
 });
 
 describe("readSeenDedupKeys", () => {
-  it("returns only the dedup keys that exist for the given source and workspace", async () => {
+  it("returns only the dedup keys that exist for the given source", async () => {
     await env.DB.prepare(`INSERT INTO source (id, key, kind, platform, plugin_key) VALUES (?, ?, 'mentions', ?, ?)`)
       .bind("src-a", "key-a", "gdelt", "plugin-a")
       .run();
