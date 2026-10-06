@@ -257,7 +257,7 @@ test.describe("the watched-competitor page's brand switch and its motion @own-si
   // above are vacuous and this file's PR should not merge.
   test("control: the switch thumb has a non-zero transition-duration without reduced motion @own-signin", async ({
     page,
-  }, testInfo) => {
+  }) => {
     test.setTimeout(150_000);
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await openWatchedCompetitor(page);
@@ -275,7 +275,6 @@ test.describe("the watched-competitor page's brand switch and its motion @own-si
     // Tailwind compiles `duration-180` to `180ms`; the browser reports it as
     // `"0.18s"`. Either non-zero form is acceptable; `0s` is the failure.
     const numeric = parseFloat(duration);
-    await saveShot(page, testInfo, "control-switch-thumb-with-motion", { fullPage: true });
     expect(
       numeric,
       `expected switch thumb transition-duration > 0 without reduced motion, got "${duration}"`,
