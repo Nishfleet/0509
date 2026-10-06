@@ -4,7 +4,7 @@ import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import type * as ReactRouterModule from "react-router";
-import type { SetURLSearchParams } from "react-router";
+import type { URLSearchParamsInit } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DevelopmentsFeed } from "../../app/components/developments-feed";
@@ -19,7 +19,7 @@ type ToggleGroupProps = ComponentProps<ToggleGroupPrimitive>;
 const feedFilterHarness = vi.hoisted(() => ({
   params: new URLSearchParams(),
   onValueChange: null as ToggleGroupProps["onValueChange"] | null,
-  setSearchParams: null as ((next: SetURLSearchParams, options?: unknown) => void) | null,
+  setSearchParams: null as ((next: URLSearchParamsInit, options?: unknown) => void) | null,
 }));
 
 vi.mock("react-router", async (importOriginal) => {
@@ -29,7 +29,7 @@ vi.mock("react-router", async (importOriginal) => {
     useSearchParams: () =>
       [
         feedFilterHarness.params,
-        (next: SetURLSearchParams, options?: unknown) => feedFilterHarness.setSearchParams?.(next, options),
+        (next: URLSearchParamsInit, options?: unknown) => feedFilterHarness.setSearchParams?.(next, options),
       ] as const,
   };
 });
@@ -280,7 +280,7 @@ describe("the developments feed", () => {
   });
 
   it("takes the first toggled kind and clears the kind param for all", () => {
-    const updates: SetURLSearchParams[] = [];
+    const updates: URLSearchParamsInit[] = [];
     feedFilterHarness.setSearchParams = (next) => updates.push(next);
     render("/?kind=ad");
     const details = createChangeEventDetails(REASONS.none);

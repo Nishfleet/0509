@@ -6,10 +6,12 @@ import { describe, expect, it } from "vitest";
 import { D1_DATABASE_ID, SNAPSHOT_BUCKET } from "../app/lib/observability/cost-analytics.server";
 import { SITE_URL } from "../app/lib/site-url";
 
-// wrangler's raw-config reader is untyped at this end, so the fields this gate
-// reads are named here. Each one a config stops carrying then fails to compile
-// instead of reading as `undefined`, which is the failure that let a KV binding
-// ship without an id (#4631).
+// wrangler's raw-config reader is untyped at this call site: its bundled
+// cli.d.ts re-exports from @cloudflare/workers-utils, which is not installed,
+// so skipLibCheck leaves the returned value `any`. This interface names the
+// fields the gate reads so those reads are typed. It is not the gate itself:
+// the runtime assertions below are, and a config that drops a field still has
+// to fail one of them.
 interface KvNamespace {
   binding: string;
   id?: string;
