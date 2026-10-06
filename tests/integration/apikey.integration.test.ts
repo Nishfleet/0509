@@ -182,10 +182,10 @@ function expiresAtBackfill(): string {
   const found: D1Migration | undefined = env.TEST_MIGRATIONS.find((migration) =>
     migration.name.endsWith("_apikey_read_expiry.sql"),
   );
-  if (found === undefined) throw new Error("0049_apikey_read_expiry.sql is missing from TEST_MIGRATIONS");
+  if (found === undefined) throw new Error("0047_apikey_read_expiry.sql is missing from TEST_MIGRATIONS");
   const updates = found.queries.filter((query) => /update\s+"apikey"\s+set\s+"expiresAt"/i.test(query));
   if (updates.length !== 1) {
-    throw new Error(`0049_apikey_read_expiry.sql holds ${updates.length} UPDATEs over apikey.expiresAt`);
+    throw new Error(`0047_apikey_read_expiry.sql holds ${updates.length} UPDATEs over apikey.expiresAt`);
   }
   return updates[0] as string;
 }
