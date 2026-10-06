@@ -466,38 +466,3 @@ export async function readEntityR2Prefixes(workspaceId: string, entityId: string
     `snapshot/feed/${row.id}/`,
   ]);
 }
-
-export const RANKED_PRICING_PAGES = `SELECT p.entity_id AS entity_id, p.url AS url,
-       ROW_NUMBER() OVER (PARTITION BY p.entity_id ORDER BY p.rowid) AS position
-FROM page p
-JOIN entity e ON e.id = p.entity_id AND e.state = 'on'
-WHERE p.role = 'pricing' AND p.role_decided_for_hash IS NOT NULL`;
-
-const WANTED_PRICING_WATCH = `EXISTS (
-  SELECT 1 FROM (${RANKED_PRICING_PAGES}) r
-  WHERE r.position <= ?2 AND r.entity_id = watch.entity_id AND r.url = watch.target_key
-)`;
-
-const STOP_UNWANTED_PRICING_WATCHES = `UPDATE watch SET is_active = 0
-WHERE source_id = ?1 AND is_active = 1
-  AND entity_id IN (SELECT id FROM entity WHERE state = 'on' AND role = 'competitor')
-  AND EXISTS (
-    SELECT 1 FROM page p
-    WHERE p.entity_id = watch.entity_id AND p.url = watch.target_key
-      AND p.role IS NOT NULL AND p.role <> 'home' AND p.role_decided_for_hash IS NOT NULL
-      AND EXISTS (SELECT 1 FROM page h WHERE h.entity_id = p.entity_id AND h.role = 'home' AND h.url <> p.url)
-  )
-  AND NOT ${WANTED_PRICING_WATCH}`;
-
-const RESUME_WANTED_PRICING_WATCHES = `UPDATE watch SET is_active = 1
-WHERE source_id = ?1 AND is_active = 0
-  AND entity_id IN (SELECT id FROM entity WHERE role = 'competitor')
-  AND ${WANTED_PRICING_WATCH}`;
-
-export function stopUnwantedPricingWatchesStatement(sourceId: string, pagesWatched: number): D1PreparedStatement {
-  return env.DB.prepare(STOP_UNWANTED_PRICING_WATCHES).bind(sourceId, pagesWatched);
-}
-
-export function resumeWantedPricingWatchesStatement(sourceId: string, pagesWatched: number): D1PreparedStatement {
-  return env.DB.prepare(RESUME_WANTED_PRICING_WATCHES).bind(sourceId, pagesWatched);
-}

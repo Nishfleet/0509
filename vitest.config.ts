@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { configDefaults, defineConfig } from "vitest/config";
 
-// Deliberately a separate config from vite.config.ts. (DEMO full-suite rerun, reverted)
+// Deliberately a separate config from vite.config.ts.
 //
 // vitest picks up vite.config.ts by default, which carries the cloudflare()
 // BUILD plugin. That plugin puts the app's Worker entry inside the test runner
