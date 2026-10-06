@@ -4,6 +4,7 @@ import type * as OutboundServer from "../../app/lib/fetch/outbound.server";
 import type * as RobotsServer from "../../app/lib/fetch/robots.server";
 import type { OutboundInit } from "../../app/lib/fetch/outbound.server";
 import { fetchFeed, fetchHomepage } from "../../app/lib/feeds/fetch-feed.server";
+import { parseFeed } from "../../app/lib/feeds/parse-feed";
 import { CRAWLER_USER_AGENT } from "../../app/lib/fetch/robots.server";
 
 // 0509#6476: fetch-feed.server.ts held about 12 untested branches with no test
@@ -120,6 +121,27 @@ describe("classify maps the response to a FeedFetch outcome", () => {
   it("reads a 500 as unreadable", async () => {
     fetchOutboundMock.mockResolvedValue(feedResponse(500, {}, "boom"));
     await expect(fetchFeed(FEED_URL, null)).resolves.toEqual({ outcome: "unreadable" });
+  });
+
+  it("parses the entries before the cut and drops the entry the cap cuts in half", async () => {
+    const entry = (n: number) =>
+      `<entry><id>post-${n}</id><title>Post ${n}</title><link href="https://rival.com/blog/${n}"/><updated>2026-10-01T00:00:00Z</updated><summary>${"x".repeat(100)}</summary></entry>`;
+    const open = '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Rival</title><subtitle>';
+    const close = "</subtitle>";
+    const padding = FEED_CAP_BYTES - (open + close).length - entry(1).length - Math.floor(entry(2).length / 2);
+    const feed = `${open}${"p".repeat(padding)}${close}${entry(1)}${entry(2)}${entry(3)}</feed>`;
+    fetchOutboundMock.mockResolvedValue(feedResponse(200, {}, feed));
+
+    const result = await fetchFeed(FEED_URL, null);
+    expect(result.outcome).toBe("ok");
+    const body = result.outcome === "ok" ? result.body : "";
+    expect(body).toHaveLength(FEED_CAP_BYTES);
+    expect(body).toContain("<id>post-2</id>");
+    expect(body).not.toContain("<id>post-3</id>");
+    expect(body.endsWith("</entry>")).toBe(false);
+
+    const items = parseFeed(body, FEED_URL, { now: new Date("2026-10-02T03:00:00Z") });
+    expect(items?.map((item) => item.id)).toEqual(["post-1"]);
   });
 
   it("keeps the first 2 MiB of a feed larger than the cap, newest entries first", async () => {
