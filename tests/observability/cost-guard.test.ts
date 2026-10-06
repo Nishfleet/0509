@@ -13,14 +13,15 @@ const AT_FACTOR: DailyUsage = {
   d1RowsWritten: 300,
   r2ClassAOps: 300,
   browserMs: 450_000,
+  aiCalls: 1_200,
 };
 
-const LINES: readonly CostLine[] = ["d1_rows_written", "r2_class_a_ops", "browser_ms_0509"];
+const LINES: readonly CostLine[] = ["d1_rows_written", "r2_class_a_ops", "browser_ms_0509", "ai_calls_0509"];
 
 describe("evaluateCost", () => {
   it("reads the documented per-brand figures and the factor of three", () => {
     expect(COST_GUARD_FACTOR).toBe(3);
-    expect(LINES.map((line) => EXPECTED_PER_BRAND_DAY[line])).toEqual([10, 10, 15_000]);
+    expect(LINES.map((line) => EXPECTED_PER_BRAND_DAY[line])).toEqual([10, 10, 15_000, 40]);
   });
 
   it("returns no breach at exactly three times the documented per-brand figure", () => {
@@ -52,7 +53,9 @@ describe("evaluateCost", () => {
   });
 
   it("divides by one when no brand is ON, so the floor still reports", () => {
-    expect(evaluateCost({ day: "2026-09-21", d1RowsWritten: 223287, r2ClassAOps: 0, browserMs: 0 }, 0)).toEqual([
+    expect(
+      evaluateCost({ day: "2026-09-21", d1RowsWritten: 223287, r2ClassAOps: 0, browserMs: 0, aiCalls: 0 }, 0),
+    ).toEqual([
       {
         day: "2026-09-21",
         line: "d1_rows_written",
@@ -64,7 +67,9 @@ describe("evaluateCost", () => {
   });
 
   it("returns every over line in the fixed order", () => {
-    expect(evaluateCost({ day: "2026-09-21", d1RowsWritten: 301, r2ClassAOps: 301, browserMs: 450_001 }, 10)).toEqual([
+    expect(
+      evaluateCost({ day: "2026-09-21", d1RowsWritten: 301, r2ClassAOps: 301, browserMs: 450_001, aiCalls: 1_201 }, 10),
+    ).toEqual([
       {
         day: "2026-09-21",
         line: "d1_rows_written",
@@ -86,6 +91,25 @@ describe("evaluateCost", () => {
         expectedPerBrand: 15_000,
         onBrands: 10,
       },
+      {
+        day: "2026-09-21",
+        line: "ai_calls_0509",
+        measuredPerBrand: 120.1,
+        expectedPerBrand: 40,
+        onBrands: 10,
+      },
+    ]);
+  });
+
+  it("reports ai_calls_0509 when one extra call puts the line strictly over the factor", () => {
+    expect(evaluateCost({ ...AT_FACTOR, aiCalls: 1_201 }, 10)).toEqual([
+      {
+        day: "2026-09-21",
+        line: "ai_calls_0509",
+        measuredPerBrand: 120.1,
+        expectedPerBrand: 40,
+        onBrands: 10,
+      },
     ]);
   });
 
@@ -96,7 +120,7 @@ describe("evaluateCost", () => {
 
 describe("evaluateCost with a line subset", () => {
   it("evaluates only the requested lines", () => {
-    const usage = { day: "2026-09-21", d1RowsWritten: 301, r2ClassAOps: 301, browserMs: 450_001 };
+    const usage = { day: "2026-09-21", d1RowsWritten: 301, r2ClassAOps: 301, browserMs: 450_001, aiCalls: 1_201 };
     expect(evaluateCost(usage, 10, BROWSER_ONLY_LINES).map((breach) => breach.line)).toEqual(["browser_ms_0509"]);
   });
 });

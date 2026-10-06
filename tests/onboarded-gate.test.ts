@@ -1,8 +1,6 @@
 import { RouterContextProvider } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("cloudflare:workers", () => ({ env: {} }));
-
 const sessionMocks = vi.hoisted(() => ({
   requireSessionMiddleware: () => Promise.resolve(),
 }));

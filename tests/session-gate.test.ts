@@ -1,11 +1,9 @@
 import { RouterContextProvider } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
-// `cloudflare:workers` is a Workers-runtime module and does not resolve under
-// the node project. The gate's logic does not depend on the binding — it asks
-// better-auth for a session — so the binding is stubbed and the auth client
-// mocked below.
-vi.mock("cloudflare:workers", () => ({ env: {} }));
+// `cloudflare:workers` is a Workers-runtime module. The node project aliases
+// it to tests/workers-env-empty-stub.ts. The gate asks better-auth for a
+// session, so only the auth client is mocked below.
 
 import {
   requireSession,

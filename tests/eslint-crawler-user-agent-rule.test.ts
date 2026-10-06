@@ -1,9 +1,6 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
+
+import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
 // 0509#5883: the crawler's User-Agent is one identity, typed once in
 // app/lib/fetch/robots.server.ts as CRAWLER_USER_AGENT and imported by every
@@ -13,30 +10,14 @@ import { describe, expect, it } from "vitest";
 // hold both directions: a re-typed literal fails, the definition site's
 // interpolated template stays clean.
 
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-
 const MESSAGE = "The crawler User-Agent is typed once";
 
-const PROBE = "app/lib/probe-crawler-user-agent-tmp.ts";
+const PROBE = "app/lib/cadence.ts";
 
 async function lintProbe(code: string): Promise<string[]> {
-  const file = path.join(REPO_ROOT, PROBE);
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, code);
-  try {
-    const eslint = new ESLint({ cwd: REPO_ROOT });
-    if (await eslint.isPathIgnored(file)) throw new Error(`${PROBE} is ignored; the rule would never run`);
-    const results = await eslint.lintFiles([file]);
-    return results.flatMap((result) => result.messages.map((message) => message.message));
-  } finally {
-    await rm(file, { force: true });
-  }
-}
-
-async function lintExisting(rel: string): Promise<string[]> {
-  const eslint = new ESLint({ cwd: REPO_ROOT });
-  const results = await eslint.lintFiles([path.join(REPO_ROOT, rel)]);
-  return results.flatMap((result) => result.messages.map((message) => message.message));
+  const result = await lintTextAt(PROBE, code);
+  if (result.ignored) throw new Error(`${PROBE} is ignored; the rule would never run`);
+  return result.messages;
 }
 
 function flagged(messages: string[]): boolean {

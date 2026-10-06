@@ -1,7 +1,7 @@
+import { env } from "cloudflare:workers";
+
+import { healthResponse } from "../lib/observability/health.server";
+
 export function loader() {
-  return Response.json({
-    status: "ok",
-    app: "0509",
-    timestamp: new Date().toISOString(),
-  });
+  return healthResponse(env.DB);
 }

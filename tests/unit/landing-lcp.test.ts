@@ -11,8 +11,6 @@ vi.mock("../../app/lib/auth.server", () => ({
   hasSessionCookie: () => false,
 }));
 
-vi.mock("cloudflare:workers", () => ({ env: {} }));
-
 import { FACES_SCRIPT } from "../../app/lib/faces-script";
 import { contentSecurityPolicy } from "../../app/lib/security-headers";
 import { Layout } from "../../app/root";
