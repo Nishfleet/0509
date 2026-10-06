@@ -48,6 +48,7 @@ const scheduled = (update: Update | undefined) => update?.schedule;
 
 describe(".github/dependabot.yml npm updates", () => {
   it("splits majors into their own group", () => {
+    // 0509#7078: this parsed group is the only major gate in the file.
     expect(npm).toBeDefined();
     const majors = groupsContaining(npm, "major");
     expect(majors).toHaveLength(1);

@@ -3,7 +3,9 @@ import { env } from "cloudflare:workers";
 import { createCookie } from "react-router";
 
 import { deleteSignedInUser } from "./auth.server";
+import { readWorkspaceEntityIds } from "./data/entity.server";
 import { readWorkspaceIdForOwner, readWorkspaceR2Prefixes } from "./data/workspace.server";
+import { terminateIdentityTail } from "./identity/tail-instance.server";
 
 const PAGE_SIZE = 1000;
 const DELETE_INSTANCE_COOKIE = "account-delete";
@@ -27,8 +29,10 @@ export async function deleteAccount(
   const cookie = deleteInstanceCookie();
   const workspaceId = await readWorkspaceIdForOwner(userId);
   const prefixes = workspaceId === null ? [] : await readWorkspaceR2Prefixes(workspaceId);
+  const entityIds = workspaceId === null ? [] : await readWorkspaceEntityIds(workspaceId);
   const headers = await deleteSignedInUser(env, request, new Date());
   if (headers === null) return null;
+  for (const entityId of entityIds) await terminateIdentityTail(entityId);
   const instance = await env.ACCOUNT_DELETE.create({ params: { prefixes } satisfies AccountDeleteParams });
   headers.append("set-cookie", await cookie.serialize(instance.id));
   await revokeGrants(helpers, userId);

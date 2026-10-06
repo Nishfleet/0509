@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { D3S_BREAKAGE, D3_NOTEWORTHY, D3_KIND, changeState } from "../../app/lib/site/judge.server";
 import type { ChangeStateInput } from "../../app/lib/site/judge.server";
@@ -13,8 +13,6 @@ import {
   runEval,
   type SiteRow,
 } from "./harness";
-
-vi.mock("cloudflare:workers", () => ({ env: {} }));
 
 // The shipped production state builder, fed the same fields a site sweep hands
 // judgeChange, so the judged state is the state production judges.

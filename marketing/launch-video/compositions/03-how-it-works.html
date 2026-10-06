@@ -1,0 +1,157 @@
+<template id="act-3-how-template">
+  <div data-composition-id="act-3-how" data-width="1920" data-height="1080" data-start="0" data-duration="18.0">
+    <style>
+      @font-face {
+        font-family: "Bricolage Grotesque";
+        src: url("assets/fonts/bricolage-hero.woff2") format("woff2");
+        font-weight: 700 800;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "Bricolage Grotesque";
+        src: url("assets/fonts/bricolage-grotesque-latin.woff2") format("woff2");
+        font-weight: 200 800;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "Instrument Sans";
+        src: url("assets/fonts/instrument-sans-latin.woff2") format("woff2");
+        font-weight: 400 600;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "IBM Plex Mono";
+        src: url("assets/fonts/ibm-plex-mono-latin-400.woff2") format("woff2");
+        font-weight: 400;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "IBM Plex Mono";
+        src: url("assets/fonts/ibm-plex-mono-latin-500.woff2") format("woff2");
+        font-weight: 500;
+        font-display: block;
+      }
+
+      .a3 {
+        position: absolute;
+        inset: 0;
+        background: var(--bone);
+        font-family: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+        color: var(--ink);
+      }
+      .a3-top {
+        position: absolute;
+        left: 96px;
+        top: 84px;
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 22px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+      }
+      .a3-list {
+        position: absolute;
+        left: 96px;
+        top: 160px;
+        width: 1728px;
+      }
+      .a3-step {
+        position: relative;
+        height: 300px;
+        border-top: 1px solid var(--line);
+        display: grid;
+        grid-template-columns: 190px 1fr;
+        column-gap: 60px;
+        align-items: center;
+      }
+      .a3-step:last-child {
+        border-bottom: 1px solid var(--line);
+      }
+      .a3-num {
+        font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif;
+        font-weight: 800;
+        font-size: 128px;
+        line-height: 1;
+        letter-spacing: -0.05em;
+        color: var(--ink-faint);
+      }
+      .a3-step.on .a3-num {
+        color: var(--green-ink);
+      }
+      .a3-title {
+        font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif;
+        font-weight: 800;
+        font-size: 64px;
+        line-height: 1.02;
+        letter-spacing: -0.035em;
+        margin-bottom: 14px;
+      }
+      .a3-body {
+        font-size: 31px;
+        line-height: 1.34;
+        color: var(--ink-soft);
+        max-width: 1360px;
+      }
+    </style>
+
+    <div class="a3 clip" data-start="0" data-duration="18.0" id="act-3-how-a3-1">
+      <div class="a3-top clip" data-start="0.10" data-duration="17.90" id="act-3-how-a3-top-1">How it works</div>
+
+      <div class="a3-list">
+        <div class="a3-step clip" data-start="0.50" data-duration="5.50" id="a3-s1">
+          <div class="a3-num">01</div>
+          <div>
+            <div class="a3-title">Enter your website or social username</div>
+            <div class="a3-body">
+              We read it and fill in your details while you watch: what you sell, who it is for, the words you use.
+            </div>
+          </div>
+        </div>
+        <div class="a3-step clip" data-start="6.50" data-duration="5.50" id="a3-s2">
+          <div class="a3-num">02</div>
+          <div>
+            <div class="a3-title">Meet who you&rsquo;re up against</div>
+            <div class="a3-body">We find your competitors and switch them on for you. Each one has one switch.</div>
+          </div>
+        </div>
+        <div class="a3-step clip" data-start="12.50" data-duration="5.50" id="a3-s3">
+          <div class="a3-num">03</div>
+          <div>
+            <div class="a3-title">Read one email on Monday</div>
+            <div class="a3-body">
+              Where you stand this week, the three things worth knowing, and the proof behind each.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var ID = "act-3-how";
+        var tl = gsap.timeline({ paused: true });
+        var steps = [".a3-step:nth-child(1)", ".a3-step:nth-child(2)", ".a3-step:nth-child(3)"];
+        var starts = [0.5, 6.5, 12.5];
+        steps.forEach(function (sel, i) {
+          var node = document.querySelector(sel);
+          tl.fromTo(node, { opacity: 0, y: 34 }, { opacity: 1, y: 0, duration: 0.7, ease: "power3.out" }, starts[i]);
+          tl.fromTo(
+            node.querySelector(".a3-title"),
+            { opacity: 0, x: -18 },
+            { opacity: 1, x: 0, duration: 0.6, ease: "power2.out" },
+            starts[i] + 0.12,
+          );
+        });
+        // The step in focus keeps its green number; the others fall back to grey.
+        tl.set(".a3-step", { className: "a3-step clip" }, 0)
+          .set("#a3-s1", { className: "a3-step clip on" }, 0.5)
+          .set(".a3-step", { className: "a3-step clip" }, 6.5)
+          .set("#a3-s2", { className: "a3-step clip on" }, 6.5)
+          .set(".a3-step", { className: "a3-step clip" }, 12.5)
+          .set("#a3-s3", { className: "a3-step clip on" }, 12.5);
+        window.__timelines[ID] = tl;
+        tl.seek(0);
+      })();
+    </script>
+  </div>
+</template>

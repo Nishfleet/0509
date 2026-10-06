@@ -1,9 +1,6 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
+
+import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
 // DESIGN.md rule 8: the accent is one colour, and nothing else is coloured.
 // A colour class that is not a `@theme` token in app/app.css used to be a
@@ -14,10 +11,8 @@ import { describe, expect, it } from "vitest";
 // The negative cases are load-bearing — a gate that fires on every class list
 // is a gate someone turns off.
 
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-
-const PROBE = "app/components/probe-tw-tmp.tsx";
-const UI_PROBE = "app/components/ui/probe-tw-tmp.tsx";
+const PROBE = "app/components/share-button.tsx";
+const UI_PROBE = "app/components/ui/button.tsx";
 
 const ARBITRARY = "Arbitrary colour values are banned";
 const PALETTE = "The Tailwind default palette is banned";
@@ -40,29 +35,8 @@ export function ProbeTwTmp() {
 `;
 }
 
-async function lintProbe(rel: string, code: string): Promise<{ ignored: boolean; messages: string[] }> {
-  const file = path.join(REPO_ROOT, rel);
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, code);
-  try {
-    const eslint = new ESLint({ cwd: REPO_ROOT });
-    if (await eslint.isPathIgnored(file)) {
-      return { ignored: true, messages: [] };
-    }
-    const results = await eslint.lintFiles([file]);
-    return {
-      ignored: false,
-      messages: results.flatMap((result) => result.messages.map((m) => m.message)),
-    };
-  } finally {
-    await rm(file, { force: true });
-  }
-}
-
-async function lintExisting(rel: string): Promise<string[]> {
-  const eslint = new ESLint({ cwd: REPO_ROOT });
-  const results = await eslint.lintFiles([path.join(REPO_ROOT, rel)]);
-  return results.flatMap((result) => result.messages.map((m) => m.message));
+function lintProbe(rel: string, code: string) {
+  return lintTextAt(rel, code);
 }
 
 describe("eslint DESIGN.md colour gate (#5871)", () => {

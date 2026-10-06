@@ -10,6 +10,8 @@ import {
 } from "../../app/lib/data/send_attempt.server";
 import { readSlackTarget, writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
 import { insertSignalDeliveries } from "../../app/lib/data/signal_delivery.server";
+import { localDay, startOfLocalDay } from "../../app/lib/alert-day";
+import { canonicalTimezone } from "../../app/lib/timezone";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
 import { nextHour } from "../../app/lib/home-standing";
@@ -461,13 +463,15 @@ async function claimChange(
   input: { change: ChangeRow; target: TargetRow },
 ): Promise<{ claim: { id: string } | null; capped: boolean; idempotencyKey: string }> {
   const { change, target } = input;
-  const day = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const timeZone = canonicalTimezone(change.timezone);
+  const day = localDay(now, timeZone);
   const idempotencyKey = `change:${change.id}:${target.id}`;
   const slot = await claimChangeSlot(env.DB, {
     idempotencyKey,
     workspaceId: change.workspace_id,
     targetId: target.id,
-    since: `${day}T00:00:00.000Z`,
+    since: startOfLocalDay(now, timeZone).toISOString(),
     cap: CHANGE_DAILY_CAP,
   });
   if (slot.kind === "claimed") return { claim: { id: slot.id }, capped: false, idempotencyKey };

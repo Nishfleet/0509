@@ -20,11 +20,11 @@ export interface JudgedPage {
 }
 
 const INSERT_PAGE = `INSERT INTO page (id, entity_id, url, role, discovered_at)
-VALUES (?1, ?2, ?3, ?4, ?5)
+SELECT ?1, ?2, ?3, ?4, ?5 WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
 ON CONFLICT (entity_id, url) DO NOTHING`;
 
 const UPSERT_JUDGED_PAGE = `INSERT INTO page (id, entity_id, url, title, role, role_decided_for_hash, discovered_at)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
 ON CONFLICT (entity_id, url) DO UPDATE SET
   title = excluded.title,
   role = excluded.role,
@@ -68,8 +68,12 @@ export async function readPageHashes(entityId: string): Promise<ReadonlyMap<stri
 const SELECT_JUDGED_PRICING =
   "SELECT url FROM page WHERE entity_id = ?1 AND role = 'pricing' AND role_decided_for_hash IS NOT NULL ORDER BY url LIMIT 1";
 
+const readJudgedPricingUrlRow = z.object({ url: z.string() });
+
 export async function readJudgedPricingUrl(entityId: string): Promise<string | null> {
-  const row = await env.DB.prepare(SELECT_JUDGED_PRICING).bind(entityId).first<{ url: string }>();
+  const row = readJudgedPricingUrlRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_JUDGED_PRICING).bind(entityId).first());
   return row?.url ?? null;
 }
 
