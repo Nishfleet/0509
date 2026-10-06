@@ -99,9 +99,12 @@ export default {
       subjectSha256: await sha256Hex(message.headers.get("subject") ?? ""),
       raw,
     });
-    await message.forward(FORWARD_TO);
     const userAgent = (message.headers.get("user-agent") ?? message.headers.get("x-mailer") ?? "none").slice(0, MAX_UA);
-    await maybeOpenIssue(env, { id, receivedAt, fromDomain, raw, userAgent });
+    try {
+      await message.forward(FORWARD_TO);
+    } finally {
+      await maybeOpenIssue(env, { id, receivedAt, fromDomain, raw, userAgent });
+    }
   },
 
   scheduled(controller, env, ctx) {

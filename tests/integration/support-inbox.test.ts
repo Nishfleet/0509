@@ -157,6 +157,18 @@ describe("0509-support-inbox-v2", () => {
     expect(errorSpy).toHaveBeenCalledWith("support-inbox: SUPPORT_INBOX_GITHUB_TOKEN is not set", row?.id);
   });
 
+  it("opens the issue even when forwarding the mail fails (0509#7084)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 201 }));
+    const ctx = createExecutionContext();
+
+    await expect(
+      worker.email(fakeMessage(vi.fn(() => Promise.reject(new Error("destination address not verified")))), env, ctx),
+    ).rejects.toThrow("destination address not verified");
+    await waitOnExecutionContext(ctx);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("opens at most 20 issues a day across sender domains (0509#7084)", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 201 }));
