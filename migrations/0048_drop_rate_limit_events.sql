@@ -1,4 +1,4 @@
--- 0047_drop_rate_limit_events.sql — drop the dead rate_limit_events table.
+-- 0048_drop_rate_limit_events.sql — drop the dead rate_limit_events table.
 -- Issue #7194, parent audit #7080.
 --
 -- Why: 0001_rebuild.sql created the table and nothing on origin/main touches it.
@@ -23,7 +23,7 @@
 -- that recreates it. IF EXISTS keeps the file re-runnable against a local or
 -- test D1 built by the same chain.
 --
--- Number: 0047 is the next free number on origin/main, which ends at 0046.
+-- Number: 0048 is the next free number on origin/main, which ends at 0047.
 -- tests/migration-numbers.test.ts and tests/ads/parked-sources.migration.test.ts
 -- require files numbered 1..N with no gap, so a file that skips a number is
 -- red on its own PR. This is the same correction 96208f059 reverted: "take
