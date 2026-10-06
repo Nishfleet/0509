@@ -12,8 +12,8 @@ Impact: **not measured.** No customer reported it. How many brand pages showed i
 
 ## Start and end (UTC)
 
-- Wording written: 2026-09-26, commit 96ccfdf39 (#5452, merged in #5610 at 05:00).
-- Start (customer-visible): 2026-09-30 18:08, when #6332 merged commit 7ea9a3751 ("Lead a competitor's page with the week's highest-weighted judged signal"), which first rendered the line on the brand page. Every push to `main` deploys, so the start is that deploy. The deploy run time was not looked up.
+- Wording written: 2026-09-26, commit 96ccfdf39 (#5452, merged in #5610 at 05:30:33, the PR's `merged_at`).
+- Start (customer-visible): 2026-09-30 18:32:36, the `merged_at` of #6332, when it merged commit 7ea9a3751 ("Lead a competitor's page with the week's highest-weighted judged signal"), which first rendered the line on the brand page. Every push to `main` deploys, so the start is that deploy. The deploy run time was not looked up.
 - Found: 2026-10-06.
 - End: when the fix PR below deploys.
 
@@ -37,10 +37,10 @@ Code reading during the independent review of #7203. No alert, no customer repor
 
 The fix PR (this branch, `fix/raw-float-biggest-move`):
 
-- `app/lib/score-format.ts` adds `formatScore`, one `Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 })` for every score, weight and multiplier shown to people.
+- `app/lib/score-format.ts` adds `formatScore`, one `Intl.NumberFormat("en-GB", { maximumFractionDigits: 2, useGrouping: false })` for every score, weight and multiplier shown to people.
 - `biggestMoveView` formats weight, multiplier and points with it, and picks "point" or "points" from the formatted value, so what is shown and the word agree.
 - `app/components/how-ranked-table.tsx` drops its private `toFixed` helper and the two raw `String()` calls on weights and multipliers, and uses `formatScore` too, so both views share one rule.
-- The two e2e regexes now accept at most two decimals (`\d+(\.\d{1,2})?`). They now pass on a correct fractional read and still fail on a raw float.
+- The two e2e regexes now accept at most two decimals (`: \d+(\.\d{1,2})?`, anchored after the label's colon). They now pass on a correct fractional read and still fail on a raw float.
 
 The weekly brief email (`workers/delivery/brief-template.ts`) and the home standing view were checked: they print only integer ranks and counts, never a score, so they did not need a change.
 

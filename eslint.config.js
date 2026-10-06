@@ -148,7 +148,7 @@ const RAW_SCORE_STRING = {
     `CallExpression[callee.property.name='toString'][callee.object.property.name=${SCORE_NAME}]`,
   ].join(", "),
   message:
-    "String() on a score, weight, multiplier or computed product prints binary floating point to people: 3 × 0.6 showed as '1.7999999999999998 points' on the brand page. Format it with formatScore from app/lib/score-format.ts. Source: docs/incidents/2026-10-06-raw-float-in-biggest-move.md.",
+    "String() on a score, weight, multiplier or computed product prints binary floating point to people: 3 × 0.6 showed as '1.7999999999999998 points' on the brand page. Format it with formatScore from app/lib/score-format.ts. Source: 0509#7206, commit 96ccfdf39 (docs/incidents/2026-10-06-raw-float-in-biggest-move.md).",
 };
 
 const MIN_H_11_ANCHOR = {

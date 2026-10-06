@@ -33,7 +33,7 @@ test("every watched brand's page leads with its biggest move or the quiet-week s
     const kind = (await read.count()) === 1 ? "move" : "quiet";
     if (kind === "move") {
       await expect(read).toContainText(
-        /\d+(\.\d{1,2})? × \d+(\.\d{1,2})? = \d+(\.\d{1,2})? point(s)?, the most of anything this brand did this week\.$/,
+        /: \d+(\.\d{1,2})? × \d+(\.\d{1,2})? = \d+(\.\d{1,2})? point(s)?, the most of anything this brand did this week\.$/,
       );
       await expect(quiet).toHaveCount(0);
     } else {

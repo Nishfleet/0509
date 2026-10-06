@@ -12,6 +12,8 @@ describe("formatScore", () => {
     [0.9, "0.9"],
     [2 * 3 * 0.9, "5.4"],
     [1.005 + 0.001, "1.01"],
+    [1000, "1000"],
+    [1234.5, "1234.5"],
   ])("formats %s as %s", (value, shown) => {
     expect(formatScore(value)).toBe(shown);
   });

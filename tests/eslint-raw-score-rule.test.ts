@@ -6,6 +6,8 @@ const MESSAGE = "prints binary floating point to people";
 
 const PROBE = "app/lib/cadence.ts";
 
+const WORKERS_PROBE = "workers/standing/refresh.ts";
+
 const flagged = {
   "String(points)": `export const shown = (points: number): string => String(points);\n`,
   "String(move.weight)": `export const shown = (move: { weight: number }): string => String(move.weight);\n`,
@@ -23,6 +25,12 @@ const allowed = {
 describe("eslint raw score String() rule (docs/incidents/2026-10-06-raw-float-in-biggest-move.md)", () => {
   it.each(Object.entries(flagged))("rejects %s under app/", { timeout: 60_000 }, async (_, code) => {
     const result = await lintTextAt(PROBE, code);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((m) => m.includes(MESSAGE))).toBe(true);
+  });
+
+  it("rejects String(points) under workers/", { timeout: 60_000 }, async () => {
+    const result = await lintTextAt(WORKERS_PROBE, flagged["String(points)"]);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(MESSAGE))).toBe(true);
   });
