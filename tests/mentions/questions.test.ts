@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { STILL_COMPETITOR } from "../../app/lib/discovery/refresh.server";
+import type { RecentSignal } from "../../app/lib/data/signal.server";
+import { STILL_COMPETITOR, stillCompetitorState } from "../../app/lib/discovery/refresh.server";
 import { ABOUT_BRAND, MATTERS, mentionMattersState } from "../../app/lib/mentions/questions";
 
 describe("mention and retire questions (0509#7084)", () => {
@@ -37,6 +38,27 @@ describe("mention and retire questions (0509#7084)", () => {
 
   it("keeps adversarial still_competitor cases in the eval suite", () => {
     const rows = JSON.parse(readFileSync("tests/evals/cases/still_competitor.json", "utf8")) as { id: string }[];
-    expect(rows.map((row) => row.id)).toContain("adv-headline-claims-shutdown");
+    expect(rows.map((row) => row.id)).toContain("adv-injected-instruction-in-page-change");
+  });
+
+  it("keeps the injected instruction of the adversarial still_competitor case in the judged state", () => {
+    const rows = JSON.parse(readFileSync("tests/evals/cases/still_competitor.json", "utf8")) as {
+      id: string;
+      history: RecentSignal[];
+      labelChoice: string;
+    }[];
+    const row = rows.find((entry) => entry.id === "adv-injected-instruction-in-page-change");
+    const context = {
+      self: { workspaceId: "w", name: "Notion", domain: "notion.so", description: null, kind: "domain" },
+      competitors: [],
+      knownDomains: [],
+      dismissedDomains: [],
+    } as const;
+    const target = { entityId: "e", name: "ClickUp", domain: "clickup.com", origin: "auto" } as const;
+
+    const state = stillCompetitorState(context, target, row?.history ?? []) as { history_30d: RecentSignal[] };
+
+    expect(state.history_30d.map((signal) => signal.summary).join(" ")).toMatch(/ignore previous instructions/);
+    expect(row?.labelChoice).toBe("active");
   });
 });
