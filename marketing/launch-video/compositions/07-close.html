@@ -1,0 +1,124 @@
+<template id="act-7-close-template">
+  <div data-composition-id="act-7-close" data-width="1920" data-height="1080" data-start="0" data-duration="7.0">
+    <style>
+      @font-face {
+        font-family: "Bricolage Grotesque";
+        src: url("assets/fonts/bricolage-hero.woff2") format("woff2");
+        font-weight: 700 800;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "Bricolage Grotesque";
+        src: url("assets/fonts/bricolage-grotesque-latin.woff2") format("woff2");
+        font-weight: 200 800;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "Instrument Sans";
+        src: url("assets/fonts/instrument-sans-latin.woff2") format("woff2");
+        font-weight: 400 600;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "IBM Plex Mono";
+        src: url("assets/fonts/ibm-plex-mono-latin-400.woff2") format("woff2");
+        font-weight: 400;
+        font-display: block;
+      }
+      @font-face {
+        font-family: "IBM Plex Mono";
+        src: url("assets/fonts/ibm-plex-mono-latin-500.woff2") format("woff2");
+        font-weight: 500;
+        font-display: block;
+      }
+
+      .a7 {
+        position: absolute;
+        inset: 0;
+        background: var(--bone);
+        font-family: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+        color: var(--ink);
+      }
+      .a7-rule {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 6px;
+        background: var(--green);
+      }
+      .a7-mark {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 246px;
+        text-align: center;
+        font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif;
+        font-weight: 800;
+        font-size: 220px;
+        line-height: 1;
+        letter-spacing: -0.05em;
+      }
+      .a7-mark em {
+        font-style: normal;
+        color: var(--green-ink);
+      }
+      .a7-url {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 528px;
+        text-align: center;
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 46px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+      .a7-line {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 700px;
+        text-align: center;
+        font-size: 34px;
+        color: var(--ink-soft);
+      }
+      .a7-dash {
+        position: absolute;
+        left: 50%;
+        top: 780px;
+        width: 0;
+        height: 2px;
+        background: var(--line);
+      }
+    </style>
+
+    <div class="a7 clip" data-start="0" data-duration="7.0" id="act-7-close-a7-1">
+      <div class="a7-mark clip" data-start="0" data-duration="7.0" id="act-7-close-a7-mark-1">05<em>09</em></div>
+      <div class="a7-url clip" data-start="0" data-duration="7.0" id="act-7-close-a7-url-1">0509.io</div>
+      <div class="a7-line clip" data-start="2.60" data-duration="4.40" id="act-7-close-a7-line-1">
+        One box to fill in.<br />About a minute to see who&rsquo;s gaining on you.
+      </div>
+      <div class="a7-dash clip" data-start="1.60" data-duration="5.40" id="a7-dash"></div>
+      <div class="a7-rule clip" data-start="0" data-duration="7.0" id="act-7-close-a7-rule-1"></div>
+    </div>
+
+    <script>
+      (function () {
+        var ID = "act-7-close";
+        var tl = gsap.timeline({ paused: true });
+        tl.fromTo(
+          ".a7-mark",
+          { scale: 0.9, opacity: 0 },
+          { scale: 1, opacity: 1, duration: 0.8, ease: "back.out(1.5)" },
+          0.0,
+        )
+          .fromTo(".a7-url", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.35)
+          .fromTo("#a7-dash", { width: 0 }, { width: 180, duration: 1.1, ease: "power2.inOut" }, 1.6)
+          .fromTo(".a7-line", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.7, ease: "power2.out" }, 2.6);
+        window.__timelines[ID] = tl;
+        tl.seek(0);
+      })();
+    </script>
+  </div>
+</template>
