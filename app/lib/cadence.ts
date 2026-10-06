@@ -23,10 +23,20 @@ export const SWEEP_MONITORS: Readonly<Record<string, SweepMonitor>> = {
   [FEED_SWEEP_CRON]: { slug: "feed-sweep", checkinMargin: 60, maxRuntime: 90 },
 };
 
-export function sweepMonitor(cron: string): SweepMonitor & { schedule: { type: "crontab"; value: string } } {
+interface SweepMonitorConfig {
+  schedule: { type: "crontab"; value: string };
+  checkinMargin: number;
+  maxRuntime: number;
+}
+
+export function sweepMonitor(cron: string): SweepMonitorConfig {
   const monitor = SWEEP_MONITORS[cron];
   if (monitor === undefined) throw new Error(`No sweep monitor for cron ${cron}`);
-  return { ...monitor, schedule: { type: "crontab", value: cron } };
+  return {
+    schedule: { type: "crontab", value: cron },
+    checkinMargin: monitor.checkinMargin,
+    maxRuntime: monitor.maxRuntime,
+  };
 }
 
 export function isDiscoveryDay(createdAt: string, now: Date): boolean {

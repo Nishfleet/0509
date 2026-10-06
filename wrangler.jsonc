@@ -141,8 +141,8 @@
     "TESTER_EMAIL_HASHES": "",
     // 0509#7191: the ai spend kill switch. Set AI_SPEND to "off" to make every
     // model call refuse before it reaches the gateway, on the scheduled paths and
-    // the request paths alike. Any value other than "on" stops spend, and leaving
-    // it unset is the deployed behaviour today.
+    // the request paths alike. Any value other than "on" stops spend, and so does
+    // leaving it unset or blank: the switch fails closed.
     "AI_SPEND": "on",
     // 0509#7191, and the operations follow-up on #7079: the named AI Gateway
     // that carries the product's Jev traffic. Creating it is a dashboard step, so
@@ -421,9 +421,9 @@
     //
     // Also the Workflow starts: 19:00 mentions-sweep, 21:00 site-sweep, 23:30
     // hiring-sweep, 01:00 feed-sweep, 05:00 snapshot-backup (0509#6289) and the hourly
-    // own-site-check (0509#4124). The four nightly sweeps moved off 01:00 to
-    // 02:45 UTC because at 40 to 50 workspaces they ran past the 03:00 nightly
-    // refresh (0509#7191); every sweep's runtime budget and the nightly are
+    // own-site-check (0509#4124). The four nightly sweeps moved from 01:00-02:45
+    // UTC to 19:00-01:00 UTC because at 40 to 50 workspaces they ran past the
+    // 03:00 nightly refresh (0509#7191); every sweep's runtime budget and the nightly are
     // held against each other by `tests/cadence.test.ts`, and each Workflow
     // builds its monitor from `SWEEP_MONITORS` in app/lib/cadence.ts rather
     // than repeating the crontab string here. The

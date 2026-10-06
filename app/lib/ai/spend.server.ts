@@ -1,3 +1,4 @@
+import { captureException } from "@sentry/cloudflare";
 import { env } from "cloudflare:workers";
 
 import { blankEnvString } from "../env.server";
@@ -15,11 +16,12 @@ export class AiSpendOffError extends Error {
 }
 
 export function aiSpendEnabled(): boolean {
-  const value = blankEnvString(env[AI_SPEND_VAR]);
-  if (value === null) return true;
-  return value === AI_SPEND_ON;
+  return blankEnvString(env[AI_SPEND_VAR]) === AI_SPEND_ON;
 }
 
 export function refuseWhenAiSpendOff(): void {
-  if (!aiSpendEnabled()) throw new AiSpendOffError(blankEnvString(env[AI_SPEND_VAR]));
+  if (aiSpendEnabled()) return;
+  const refusal = new AiSpendOffError(blankEnvString(env[AI_SPEND_VAR]));
+  captureException(refusal, { level: "error", fingerprint: ["ai-spend-off"] });
+  throw refusal;
 }

@@ -4,6 +4,8 @@ import { RouterContextProvider } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAuth, deleteSignedInUser } from "../../app/lib/auth.server";
+import { nextBriefAt, rolloverInstance } from "../../app/lib/brief-schedule";
+import { readBriefScheduleForOwner } from "../../app/lib/data/workspace.server";
 import { firstWorkspaceId } from "../../app/lib/workspace.server";
 import {
   deleteAccount,
@@ -311,7 +313,7 @@ describe("delete my account", () => {
     expect(owned.setCookie).toMatch(/Path=\/(;|$)/);
   });
 
-  it("seals the Workflow instance id on the headers the deleting browser leaves with", async () => {
+  it("seals the Workflow instance id on the headers the deleting browser leaves with, and terminates the workspace's sleeping standing rollover (0509#7191)", async () => {
     const { cookie, userId } = await signIn();
     const revoked: string[] = [];
     const pages: Record<string, { items: { id: string }[]; cursor?: string }> = {
@@ -326,9 +328,19 @@ describe("delete my account", () => {
       },
     };
 
+    const owned = await readBriefScheduleForOwner(userId);
+    if (owned === null) throw new Error("sign-in created no workspace");
+    const rollover = rolloverInstance(owned.workspaceId, nextBriefAt(owned.schedule, new Date()), "scheduled");
+    await using rolloverIntrospector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, rollover.id);
+    await env.STANDING_ROLLOVER.create(rollover);
+    expect(await rolloverIntrospector.waitForStepResult({ name: "workspace-exists" })).toBe(true);
+    const rolloverStatus = async () => (await (await env.STANDING_ROLLOVER.get(rollover.id)).status()).status;
+    expect(await rolloverStatus()).toBe("running");
+
     const deleted = await deleteAccount(helpers, settingsRequest(cookie), userId);
 
     if (deleted === null) throw new Error("deleteAccount refused a fresh session");
+    await expect.poll(rolloverStatus, { timeout: 20_000 }).toBe("terminated");
     expect(revoked).toEqual(["grant-1", "grant-2"]);
     const baked = deleted.headers.getSetCookie().find((header) => header.startsWith("account-delete="));
     if (baked === undefined) throw new Error("no account-delete cookie on the delete headers");

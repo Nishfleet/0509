@@ -3,7 +3,7 @@ import { env, waitUntil } from "cloudflare:workers";
 import { z } from "zod";
 
 import { aiGatewayId } from "../ai/gateway.server";
-import { refuseWhenAiSpendOff } from "../ai/spend.server";
+import { AiSpendOffError, refuseWhenAiSpendOff } from "../ai/spend.server";
 import { insertJevFailure } from "../data/jev_failure.server";
 import { readCachedChoice, readCachedNoul } from "../data/jev_verdict.server";
 import { sha256Hex } from "../sha256";
@@ -69,6 +69,13 @@ export class JevRateLimitedError extends JevUnavailableError {
   }
 }
 
+export class JevSpendOffError extends JevUnavailableError {
+  constructor(cause: AiSpendOffError) {
+    super(cause);
+    this.name = "JevSpendOffError";
+  }
+}
+
 function unavailable(error: unknown): JevUnavailableError {
   const failure = new JevUnavailableError(error);
   if (isBillingRefusal(failure)) {
@@ -95,6 +102,11 @@ function recorded(questionIds: string, failure: JevUnavailableError): JevUnavail
     return failure;
   }
   return failure;
+}
+
+function failedCall(questionIds: string, error: unknown): JevUnavailableError {
+  if (error instanceof AiSpendOffError) return new JevSpendOffError(error);
+  return recorded(questionIds, unavailable(error));
 }
 
 function jevBody(raw: unknown): unknown {
@@ -158,7 +170,7 @@ async function run(question: NoulQuestion, state: unknown): Promise<number> {
   try {
     raw = await decide(state, { [question.id]: asked }, question.retries);
   } catch (error) {
-    throw recorded(question.id, unavailable(error));
+    throw failedCall(question.id, error);
   }
   const parsed = answerSchema.safeParse(jevBody(raw));
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
@@ -207,7 +219,7 @@ export async function askNouls(
     try {
       raw = await decide(state, asked);
     } catch (error) {
-      throw recorded(questionIds, unavailable(error));
+      throw failedCall(questionIds, error);
     }
     const parsed = answerSchema.safeParse(jevBody(raw));
     if (parsed.success) answers = parsed.data.answers;
@@ -230,7 +242,7 @@ async function runChoice(question: ChoiceQuestion, state: unknown): Promise<stri
       [question.id]: { type: "choice", instructions: question.instructions, criteria: question.options },
     });
   } catch (error) {
-    throw recorded(question.id, unavailable(error));
+    throw failedCall(question.id, error);
   }
   const parsed = choiceAnswerSchema.safeParse(jevBody(raw));
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;

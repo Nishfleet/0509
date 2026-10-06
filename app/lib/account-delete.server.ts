@@ -3,7 +3,9 @@ import { env } from "cloudflare:workers";
 import { createCookie } from "react-router";
 
 import { deleteSignedInUser } from "./auth.server";
-import { readWorkspaceIdForOwner, readWorkspaceR2Prefixes } from "./data/workspace.server";
+import { readBriefScheduleForOwner, readWorkspaceR2Prefixes } from "./data/workspace.server";
+import type { OwnedSchedule } from "./data/workspace.server";
+import { retireRollovers } from "./standing/retire";
 
 const PAGE_SIZE = 1000;
 const DELETE_INSTANCE_COOKIE = "account-delete";
@@ -25,14 +27,29 @@ export async function deleteAccount(
   userId: string,
 ): Promise<{ headers: Headers; instanceId: string } | null> {
   const cookie = deleteInstanceCookie();
-  const workspaceId = await readWorkspaceIdForOwner(userId);
-  const prefixes = workspaceId === null ? [] : await readWorkspaceR2Prefixes(workspaceId);
+  const owned = await readBriefScheduleForOwner(userId);
+  const prefixes = owned === null ? [] : await readWorkspaceR2Prefixes(owned.workspaceId);
   const headers = await deleteSignedInUser(env, request, new Date());
   if (headers === null) return null;
+  if (owned !== null) await retireWorkspaceRollovers(owned);
   const instance = await env.ACCOUNT_DELETE.create({ params: { prefixes } satisfies AccountDeleteParams });
   headers.append("set-cookie", await cookie.serialize(instance.id));
   await revokeGrants(helpers, userId);
   return { headers, instanceId: instance.id };
+}
+
+async function retireWorkspaceRollovers(owned: OwnedSchedule): Promise<void> {
+  try {
+    const terminated = await retireRollovers(env.STANDING_ROLLOVER, owned, new Date());
+    console.log(JSON.stringify({ event: "account_delete.rollovers_terminated", terminated: terminated.length }));
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "account_delete.rollovers_not_terminated",
+        error: error instanceof Error ? error.name : "unknown",
+      }),
+    );
+  }
 }
 
 async function revokeGrants(helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant">, userId: string) {

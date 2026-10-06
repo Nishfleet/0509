@@ -97,8 +97,12 @@ describe("nightly sweeps finish before the nightly refresh", () => {
 
   it("watches each sweep with its own cron, so a monitor cannot drift off the schedule it watches", () => {
     for (const cron of [MENTIONS_SWEEP_CRON, SITE_SWEEP_CRON, HIRING_SWEEP_CRON, FEED_SWEEP_CRON]) {
-      expect(sweepMonitor(cron).schedule.value).toBe(cron);
-      expect(sweepMonitor(cron)).toMatchObject(SWEEP_MONITORS[cron]);
+      const monitor = SWEEP_MONITORS[cron];
+      expect(sweepMonitor(cron)).toEqual({
+        schedule: { type: "crontab", value: cron },
+        checkinMargin: monitor?.checkinMargin,
+        maxRuntime: monitor?.maxRuntime,
+      });
     }
     expect(() => sweepMonitor(NIGHTLY_CRON)).toThrow(/No sweep monitor for cron/);
   });
