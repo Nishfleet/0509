@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { readEntitlements } from "./plan.server";
 import { shouldRetryD1, tryWhile } from "./retries.server";
+import { resetYoutubeWatchStatement } from "./watch.server";
 
 const identitySocials = z.object({
   socials: z.array(z.object({ platform: z.string(), url: z.string() })).optional(),
@@ -126,9 +127,6 @@ const REPLACE_COMPETITOR_YOUTUBE = `UPDATE entity SET identity_json = json_set(i
 WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor' AND json_valid(identity_json)
   AND coalesce(json_type(identity_json, '$.socials'), 'array') = 'array'`;
 
-const RESET_YOUTUBE_WATCH =
-  "UPDATE watch SET config_json = json_remove(CASE WHEN json_valid(config_json) THEN config_json ELSE '{}' END, '$.channelId', '$.pendingChannelId', '$.degraded', '$.noChannel'), last_polled_at = NULL WHERE entity_id = ?1 AND source_id = 'src_mentions_youtube' AND entity_id IN (SELECT id FROM entity WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor' AND json_valid(identity_json) AND coalesce(json_type(identity_json, '$.socials'), 'array') = 'array')";
-
 export async function readCompetitorSocials(
   workspaceId: string,
   entityId: string,
@@ -152,7 +150,7 @@ export async function replaceCompetitorYoutube(input: {
     () =>
       env.DB.batch([
         env.DB.prepare(REPLACE_COMPETITOR_YOUTUBE).bind(entityId, workspaceId, social),
-        env.DB.prepare(RESET_YOUTUBE_WATCH).bind(entityId, workspaceId),
+        resetYoutubeWatchStatement(entityId, workspaceId),
       ]),
     shouldRetryD1,
   );
