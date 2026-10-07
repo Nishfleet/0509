@@ -14,7 +14,7 @@ import { canonicalTimezone } from "../../app/lib/timezone";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
 import { nextHour } from "../../app/lib/home-standing";
-import { slackEscape } from "../../app/lib/slack-webhook";
+import { neutralizeBareUrls, slackEscape } from "../../app/lib/slack-webhook";
 import { postToSlack } from "../../app/lib/slack.server";
 import {
   changeHeadline,
@@ -513,9 +513,9 @@ async function sendChange(
 function slackText(change: ChangeRow, payload: SiteChangePayload, mark: Awaited<ReturnType<typeof readChangeMark>>) {
   const headline = changeHeadline({ name: change.name ?? change.domain, isSelf: false, role: payload.page.role });
   return [
-    `*${slackEscape(headline)}*`,
-    ...(mark?.removed == null ? [] : [`Before: ${slackEscape(mark.removed)}`]),
-    ...(mark?.added == null ? [] : [`After: ${slackEscape(mark.added)}`]),
+    `*${neutralizeBareUrls(slackEscape(headline))}*`,
+    ...(mark?.removed == null ? [] : [`Before: ${neutralizeBareUrls(slackEscape(mark.removed))}`]),
+    ...(mark?.added == null ? [] : [`After: ${neutralizeBareUrls(slackEscape(mark.added))}`]),
     `<${CHANGE_LINK}|See the before and after in Five to Nine>`,
   ].join("\n");
 }

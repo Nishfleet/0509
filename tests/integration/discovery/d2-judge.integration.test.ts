@@ -159,4 +159,51 @@ describe("judgeStillCompetitors", () => {
     const written = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict").first<{ n: number }>();
     expect(written?.n).toBe(0);
   });
+
+  it("does not send a third-party mention headline into still_competitor (0509#7084)", async () => {
+    const workspaceId = await seedWorkspace();
+    const autoEntityId = `${workspaceId}-auto`;
+    await env.DB.prepare(
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, canonical_url, url_hash, dedup_key, observed_at, is_tombstoned) VALUES (?1, ?2, ?3, 'src_site_web', 'mention', ?4, ?5, ?5, ?6, ?7, ?8, 0)",
+    )
+      .bind(
+        `${workspaceId}-sig-mention`,
+        workspaceId,
+        autoEntityId,
+        "Auto Brand shuts down forever",
+        "https://gossip.example/shutdown",
+        `${workspaceId}-mention-url-hash`,
+        `${workspaceId}-sig-mention-key`,
+        RECENT_SIGNAL,
+      )
+      .run();
+    const context = await readDiscoveryContext(workspaceId);
+    if (context === null) throw new Error("seed failed");
+    const run = vi.fn(
+      async (
+        _model: string,
+        request: {
+          questions: Record<string, { type: string }>;
+          state: { history_30d: { kind: string; title: string | null }[]; subject: { domain: string } };
+        },
+      ) => {
+        const { questions } = request;
+        const answers: Record<string, { type: string; noul?: number; choice?: string }> = {};
+        if (questions.still_competitor !== undefined) answers.still_competitor = { type: "noul", noul: 0.95 };
+        if (questions.still_competitor_reason !== undefined) {
+          answers.still_competitor_reason = { type: "choice", choice: "active" };
+        }
+        return { answers };
+      },
+    );
+    Reflect.set(env, "AI", { run });
+
+    await judgeStillCompetitors(context, await readRefreshTargets(workspaceId), NOW);
+
+    const autoState = run.mock.calls
+      .map((call) => call[1])
+      .find((request) => request.state.subject.domain === "auto.example");
+    expect(autoState?.state.history_30d.map((row) => row.kind)).toEqual(["change"]);
+    expect(JSON.stringify(autoState?.state.history_30d)).not.toContain("shuts down");
+  });
 });
