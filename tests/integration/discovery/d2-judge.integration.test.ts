@@ -189,9 +189,9 @@ describe("judgeStillCompetitors", () => {
       ) => {
         const { questions } = request;
         const answers: Record<string, { type: string; noul?: number; choice?: string }> = {};
-        if (questions["still_competitor"] !== undefined) answers["still_competitor"] = { type: "noul", noul: 0.95 };
-        if (questions["still_competitor_reason"] !== undefined) {
-          answers["still_competitor_reason"] = { type: "choice", choice: "active" };
+        if (questions.still_competitor !== undefined) answers.still_competitor = { type: "noul", noul: 0.95 };
+        if (questions.still_competitor_reason !== undefined) {
+          answers.still_competitor_reason = { type: "choice", choice: "active" };
         }
         return { answers };
       },
