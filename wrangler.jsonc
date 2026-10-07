@@ -192,9 +192,8 @@
   ],
 
   // Identity probe cache (engine 1, issue #4419): a read-through cache for
-  // probe results keyed identity:<registrable>:<probe> with a 24-hour TTL
-  // (docs/engines/identity-card.md P1, graft 1). KV only, for the same reason
-  // the doc picks it: the cache is read-mostly, tolerant of the 60-second
+  // probe results keyed identity:<registrable>:<probe> with a 24-hour TTL.
+  // KV only, because the cache is read-mostly, tolerant of the 60-second
   // propagation window and never same-key hot (docs/REBUILD-STACK.md §4.5).
   //
   // The id is pinned (#4631). The production CLOUDFLARE_API_TOKEN cannot
@@ -331,7 +330,7 @@
       "binding": "STANDING_ROLLOVER",
       "class_name": "StandingRolloverWorkflow",
     },
-    // Competitor discovery (docs/engines/competitor-discovery.md): one instance
+    // Competitor discovery: one instance
     // when a workspace confirms its card, then one per workspace per night.
     {
       "name": "competitor-discovery",
@@ -348,7 +347,7 @@
       "binding": "SITE_SWEEP",
       "class_name": "SiteSweepWorkflow",
     },
-    // The nightly hiring sweep (docs/engines/hiring.md): finds each tracked
+    // The nightly hiring sweep: finds each tracked
     // brand's job board, then reads every watched board. 02:30 UTC — after
     // the 02:00 site sweep and before the 03:00 standing refresh counts its
     // new-role signals. One retried step per entity and per board; a step
@@ -358,7 +357,7 @@
       "binding": "HIRING_SWEEP",
       "class_name": "HiringSweepWorkflow",
     },
-    // The nightly blog and changelog feed sweep (docs/engines/content.md):
+    // The nightly blog and changelog feed sweep:
     // finds each tracked brand's RSS or Atom feed, then reads every watched
     // feed with a conditional GET. 02:45 UTC, after the 02:30 hiring sweep and
     // before the 03:00 standing refresh. One retried step per entity and per
