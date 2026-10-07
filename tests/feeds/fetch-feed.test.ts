@@ -9,7 +9,7 @@ import { CRAWLER_USER_AGENT } from "../../app/lib/fetch/robots.server";
 
 // 0509#6476: fetch-feed.server.ts held about 12 untested branches with no test
 // of its own. The only network edge is fetchOutbound and the only policy edge
-// is robotsAllows, so mocking those two (cappedText stays real) makes every
+// is robotsAllows, so mocking those two (windowedText stays real) makes every
 // branch of requestHeaders, classify, fetchFeed and fetchHomepage reachable
 // without a live network.
 
@@ -123,7 +123,7 @@ describe("classify maps the response to a FeedFetch outcome", () => {
     await expect(fetchFeed(FEED_URL, null)).resolves.toEqual({ outcome: "unreadable" });
   });
 
-  it("parses the entries before the cut and drops the entry the cap cuts in half", async () => {
+  it("keeps the entries on each side of the 2 MiB window and drops the one the window cuts", async () => {
     const entry = (n: number) =>
       `<entry><id>post-${n}</id><title>Post ${n}</title><link href="https://rival.com/blog/${n}"/><updated>2026-10-01T00:00:00Z</updated><summary>${"x".repeat(100)}</summary></entry>`;
     const open = '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Rival</title><subtitle>';
@@ -134,29 +134,43 @@ describe("classify maps the response to a FeedFetch outcome", () => {
 
     const result = await fetchFeed(FEED_URL, null);
     expect(result.outcome).toBe("ok");
-    const body = result.outcome === "ok" ? result.body : "";
-    expect(body).toHaveLength(FEED_CAP_BYTES);
-    expect(body).toContain("<id>post-2</id>");
-    expect(body).not.toContain("<id>post-3</id>");
-    expect(body.endsWith("</entry>")).toBe(false);
+    const body = result.outcome === "ok" ? result.body : { head: "", tail: "" };
+    expect(body.head).toHaveLength(FEED_CAP_BYTES);
+    expect(body.head.endsWith("</entry>")).toBe(false);
+    expect(body.tail).not.toContain("<id>post-1</id>");
+    expect(body.tail).toContain("<id>post-3</id>");
 
     const items = parseFeed(body, FEED_URL, { now: new Date("2026-10-02T03:00:00Z") });
-    expect(items?.map((item) => item.id)).toEqual(["post-1"]);
+    expect(items?.map((item) => item.id)).toEqual(["post-1", "post-3"]);
   });
 
-  it("keeps the first 2 MiB of a feed larger than the cap, newest entries first", async () => {
+  it("keeps the first window and the bytes after it when the feed is just over the cap", async () => {
     const huge = `<feed>${"a".repeat(FEED_CAP_BYTES + 1_000)}</feed>`;
     fetchOutboundMock.mockResolvedValue(feedResponse(200, { "content-length": String(huge.length) }, huge));
     const result = await fetchFeed(FEED_URL, null);
     expect(result).toMatchObject({ outcome: "ok" });
-    expect(result.outcome === "ok" ? result.body : "").toBe(huge.slice(0, FEED_CAP_BYTES));
+    const body = result.outcome === "ok" ? result.body : { head: "", tail: "" };
+    expect(body.head).toBe(huge.slice(0, FEED_CAP_BYTES));
+    expect(body.tail).toBe(huge.slice(FEED_CAP_BYTES));
   });
 
-  it("reads a 200 as ok, copies the etag and last-modified headers as validators, and keeps the body", async () => {
+  it("stops the stream at 8 MiB, windows what it read, and logs the cap", async () => {
+    const huge = `<feed>${"a".repeat(8 * FEED_CAP_BYTES + 1_000)}</feed>`;
+    const logSpy = vi.spyOn(console, "log");
+    fetchOutboundMock.mockResolvedValue(feedResponse(200, {}, huge));
+
+    const result = await fetchFeed(FEED_URL, null);
+    const body = result.outcome === "ok" ? result.body : { head: "", tail: "" };
+    expect(body.head).toBe(huge.slice(0, FEED_CAP_BYTES));
+    expect(body.tail).toBe(huge.slice(3 * FEED_CAP_BYTES, 4 * FEED_CAP_BYTES));
+    expect(logSpy.mock.calls.some((call) => String(call[0]).includes("feed.stream_capped"))).toBe(true);
+  });
+
+  it("reads a 200 as ok, copies the etag and last-modified headers as validators, and keeps the windows", async () => {
     fetchOutboundMock.mockResolvedValue(feedResponse(200, { etag: ETAG, "last-modified": LAST_MODIFIED }));
     await expect(fetchFeed(FEED_URL, null)).resolves.toEqual({
       outcome: "ok",
-      body: "<rss/>",
+      body: { head: "<rss/>", tail: "" },
       validators: { etag: ETAG, lastModified: LAST_MODIFIED },
     });
   });

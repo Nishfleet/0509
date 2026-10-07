@@ -4,7 +4,7 @@ import {
   BlockedRedirectError,
   cappedJson,
   cappedText,
-  leadingText,
+  windowedText,
   fetchOutbound,
   targetRefusal,
 } from "../../../app/lib/fetch/outbound.server";
@@ -118,15 +118,28 @@ describe("cappedText and cappedJson", () => {
   });
 });
 
-describe("leadingText", () => {
-  it("returns the whole body when it is within the limit", async () => {
-    expect(await leadingText(new Response("héllo"), 64)).toBe("héllo");
-    expect(await leadingText(new Response(null), 64)).toBe("");
+describe("windowedText", () => {
+  it("returns the whole body as the head window and no tail when it is within the window size", async () => {
+    expect(await windowedText(new Response("héllo"), 64, 128)).toEqual({
+      head: "héllo",
+      tail: "",
+      truncated: false,
+    });
+    expect(await windowedText(new Response(null), 64, 128)).toEqual({ head: "", tail: "", truncated: false });
   });
 
-  it("keeps only the first bytes of a larger body, whether or not a content-length is declared", async () => {
-    expect(await leadingText(streamed(["aaaaaa", "bbbbbb"]), 10)).toBe("aaaaaabbbb");
-    const declared = new Response("abcdefghij", { headers: { "content-length": "1000" } });
-    expect(await leadingText(declared, 4)).toBe("abcd");
+  it("keeps the first window and the bytes after it, so the windows never overlap", async () => {
+    const res = streamed(["aaaaaa", "bbbbbb", "cccccc"]);
+    expect(await windowedText(res, 10, 64)).toEqual({ head: "aaaaaabbbb", tail: "bbcccccc", truncated: false });
+  });
+
+  it("stops at the stream cap and windows what it read", async () => {
+    const res = streamed(["aaaaaa", "bbbbbb", "cccccc", "dddddd"]);
+    expect(await windowedText(res, 6, 18)).toEqual({ head: "aaaaaa", tail: "cccccc", truncated: true });
+  });
+
+  it("ignores an oversized content-length and windows the real stream", async () => {
+    const declared = new Response("abcdefghijklmnopqrst", { headers: { "content-length": "1000" } });
+    expect(await windowedText(declared, 8, 64)).toEqual({ head: "abcdefgh", tail: "mnopqrst", truncated: false });
   });
 });
