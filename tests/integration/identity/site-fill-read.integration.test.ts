@@ -131,6 +131,13 @@ describe("readSelfSiteFill", () => {
       .bind(selfId)
       .run();
 
+    const stored = await env.DB.prepare(
+      `SELECT json_type(identity_json, '$.siteFill') AS site_fill_type FROM entity WHERE id = ?1`,
+    )
+      .bind(selfId)
+      .first<{ site_fill_type: string | null }>();
+    expect(stored?.site_fill_type).toBe("null");
+
     await expect(readSelfSiteFill(workspaceId)).rejects.toThrow();
   });
 
