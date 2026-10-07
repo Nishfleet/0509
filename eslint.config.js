@@ -409,7 +409,7 @@ function foreignTableWriter(file) {
 
 // A later matching block's no-restricted-syntax entry replaces the earlier
 // one wholesale, so each block restates what data files already get.
-const TABLE_WRITER_BLOCKS = readdirSync(new URL("./app/lib/data/", import.meta.url))
+export const TABLE_WRITER_BLOCKS = readdirSync(new URL("./app/lib/data/", import.meta.url))
   .filter((file) => file.endsWith(".server.ts"))
   .map((file) => ({
     files: [`app/lib/data/${file}`],
@@ -824,7 +824,6 @@ export default tseslint.config(
       "form-rules/form-data-get": "error",
     },
   },
-  ...TABLE_WRITER_BLOCKS,
 
   {
     // app/lib/data/** is the only D1 row reader, so it is the only place a row
@@ -1535,4 +1534,12 @@ export default tseslint.config(
       ],
     },
   },
+
+  // 0509#7266: TABLE_WRITER_BLOCKS must be the last entries in this array.
+  // Flat config replaces a rule's options wholesale per matching block — a
+  // later block with no-restricted-syntax on app/lib/data/** would silently
+  // drop the per-file foreign-table-write selector. Spreading here guarantees
+  // no existing block comes after them; a future block placed after this
+  // comment overrides them by design and must restate every entry.
+  ...TABLE_WRITER_BLOCKS,
 );

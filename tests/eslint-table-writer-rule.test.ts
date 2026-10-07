@@ -5,6 +5,10 @@ import { fileURLToPath } from "node:url";
 import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
 
+// #7266 imports the per-file blocks generated in eslint.config.js so the
+// survival test below checks the real ones, not a hand-rolled copy.
+import { TABLE_WRITER_BLOCKS } from "../eslint.config.js";
+
 // 0509#7022: RAW_DML_WRITER only proves DML sits somewhere under
 // app/lib/data/. These probes prove each data file may write only its own
 // table. lintText with a real data-file path needs no probe file on disk,
@@ -84,5 +88,54 @@ describe("eslint one-table-per-data-file rule (#7022)", () => {
       result.messages.filter((m) => m.message.includes(FOREIGN_MESSAGE)).map(() => result.filePath),
     );
     expect(hits).toEqual([]);
+  });
+});
+
+// #7266: flat config replaces a rule's option array wholesale per matching
+// block, so a later block that sets no-restricted-syntax on app/lib/data/**
+// silently drops the per-file foreignTableWriter selector from TABLE_WRITER_BLOCKS.
+// These probes prove that re-placing the exported TABLE_WRITER_BLOCKS after such
+// a block restores the rule — the pattern #7266 enforces by keeping
+// ...TABLE_WRITER_BLOCKS last in eslint.config.js.
+describe("table writer survives a later clobbering block (#7266)", () => {
+  const FOREIGN_DELETE =
+    'const PROBE = "DELETE FROM watch WHERE id = ?1";\nexport function runProbe(): string {\n  return PROBE;\n}\n';
+
+  // A future developer might add a block for app/lib/data/** that sets
+  // no-restricted-syntax — flat config replaces the array, so this drops
+  // every TABLE_WRITER_BLOCKS entry including foreignTableWriter.
+  const CLOBBERING_BLOCK = {
+    files: ["app/lib/data/**"],
+    rules: {
+      "no-restricted-syntax": ["error", { selector: "Literal[value=/^CLOBBERED$/]", message: "CLOBBERED" }],
+    },
+  };
+
+  it("is clobbered when a later app/lib/data/** block sets no-restricted-syntax", { timeout: 60_000 }, async () => {
+    const eslint = new ESLint({
+      cwd: REPO_ROOT,
+      overrideConfig: [CLOBBERING_BLOCK],
+    });
+    const results = await eslint.lintText(FOREIGN_DELETE, {
+      filePath: path.join(DATA_DIR, "page.server.ts"),
+    });
+    const messages = results.flatMap((result) => result.messages.map((m) => m.message));
+    // The clobbering block overrides TABLE_WRITER_BLOCKS from the real config,
+    // so the foreignTableWriter selector is dropped.
+    expect(messages.some((m) => m.includes(FOREIGN_MESSAGE))).toBe(false);
+  });
+
+  it("still flags the foreign write when TABLE_WRITER_BLOCKS follows the clobbering block", { timeout: 60_000 }, async () => {
+    const eslint = new ESLint({
+      cwd: REPO_ROOT,
+      overrideConfig: [CLOBBERING_BLOCK, ...TABLE_WRITER_BLOCKS],
+    });
+    const results = await eslint.lintText(FOREIGN_DELETE, {
+      filePath: path.join(DATA_DIR, "page.server.ts"),
+    });
+    const messages = results.flatMap((result) => result.messages.map((m) => m.message));
+    // TABLE_WRITER_BLOCKS, placed after the clobbering block, restores the
+    // rule — the foreign write is still flagged.
+    expect(messages.some((m) => m.includes(FOREIGN_MESSAGE))).toBe(true);
   });
 });
