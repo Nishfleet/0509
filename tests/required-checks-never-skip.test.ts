@@ -15,7 +15,7 @@ import { parse } from "yaml";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const WORKFLOWS = path.join(REPO_ROOT, ".github/workflows");
-const REQUIRED = ["Gitleaks", "codex-node-checks", "vitest-shard", "semgrep", "preview-assert"];
+const REQUIRED = ["Gitleaks", "codex-node-checks", "vitest-shard", "semgrep", "preview-assert", "base-fresh"];
 
 interface WorkflowStep {
   if?: unknown;
@@ -92,14 +92,22 @@ describe("ci-ok aggregates every required check (0509#7013)", () => {
   });
 });
 
-describe("a pull request is retested against current main before it queues (2026-10-07 incident)", () => {
-  it("reruns ci.yml when a pull request is marked ready or armed for auto-merge", async () => {
-    const ci = parse(await readFile(path.join(WORKFLOWS, "ci.yml"), "utf8")) as {
-      on: { pull_request: { types: string[] } };
+describe("a stale base is caught on the pull request, not in the queue (2026-10-07 incident)", () => {
+  it("rechecks base-fresh whenever a gate file changes on main, over the paths base-fresh reads", async () => {
+    const retest = parse(await readFile(path.join(WORKFLOWS, "stale-base-retest.yml"), "utf8")) as {
+      on: { push: { branches: string[]; paths: string[] } };
     };
-    expect(ci.on.pull_request.types).toEqual(
-      expect.arrayContaining(["opened", "synchronize", "reopened", "ready_for_review", "auto_merge_enabled"]),
-    );
+    const ci = await readFile(path.join(WORKFLOWS, "ci.yml"), "utf8");
+    const line = ci.split("\n").find((l) => l.includes("git log -1 --format=%H origin/main --")) ?? "";
+    const read = line
+      .split("--")
+      .pop()
+      ?.trim()
+      .split(" ")
+      .map((p) => p.replaceAll("'", "").replace(")", ""))
+      .sort();
+    expect(retest.on.push.branches).toEqual(["main"]);
+    expect(read).toEqual([...retest.on.push.paths].sort());
   });
 });
 

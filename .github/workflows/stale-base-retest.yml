@@ -1,0 +1,42 @@
+# When a gate file changes on main, re-decide base-fresh (ci.yml) for every open
+# pull request, so a head that predates the change goes red before anything arms
+# or queues it (docs/incidents/2026-10-07-stale-base-queue-ejections.md).
+# Rerunning only that job also reruns ci-ok, its one dependent. The path list is
+# the one in ci.yml's base-fresh job; tests/required-checks-never-skip.test.ts
+# pins them equal.
+name: Retest stale pull requests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - eslint.config.js
+      - eslint-suppressions.json
+      - knip.jsonc
+      - package.json
+      - package-lock.json
+      - tsconfig*.json
+      - vitest*.config.ts
+      - .github/workflows/ci.yml
+
+permissions: {}
+
+jobs:
+  rerun:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Rerun base-fresh on each open pull request's latest CI run
+        run: |
+          for sha in $(gh pr list --state open --limit 200 --json headRefOid --jq '.[].headRefOid'); do
+            run=$(gh run list --workflow ci.yml --event pull_request --commit "$sha" --limit 1 --json databaseId,status --jq '.[] | select(.status == "completed") | .databaseId')
+            [ -n "$run" ] || continue
+            job=$(gh run view "$run" --json jobs --jq '.jobs[] | select(.name == "base-fresh") | .databaseId')
+            if [ -n "$job" ]; then gh run rerun --job "$job"; fi
+          done

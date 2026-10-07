@@ -1,6 +1,6 @@
 # The main-merge-queue ruleset (id 21391031) requires one check: `ci-ok`.
 # `ci-ok` aggregates the gate jobs below:
-#   Gitleaks   codex-node-checks   vitest-shard   semgrep   preview-assert
+#   Gitleaks   codex-node-checks   vitest-shard   semgrep   preview-assert   base-fresh
 # Bypass actors on that ruleset is empty, so a renamed or dropped `ci-ok` is not
 # a cosmetic change — a required check that never reports fails closed and
 # nothing can merge, including the PR that renamed it.
@@ -15,14 +15,8 @@
 # job, so this workflow has no deployment_status trigger (0509#7013).
 name: CI
 
-# Besides the defaults, a pull request is retested when it is marked ready and
-# when auto-merge is armed. Both run against today's main, so a head whose last
-# run predates a gate change (type-aware lint on tests/**, tests in tsc -b) goes
-# red on the pull request instead of in the merge queue
-# (docs/incidents/2026-10-07-stale-base-queue-ejections.md).
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, auto_merge_enabled]
   merge_group:
 
 concurrency:
@@ -270,12 +264,40 @@ jobs:
             test-results/
           retention-days: 7
 
+  base-fresh:
+    name: base-fresh
+    # A pull request's run tests the merge with main as it was then. When main
+    # later tightens a gate, a head with a green ci-ok is still green and goes
+    # straight into the merge queue, which is the first run on the new gate
+    # (docs/incidents/2026-10-07-stale-base-queue-ejections.md). This job fails
+    # a pull request whose head lacks the newest main commit that touched a gate
+    # file. It reads main today, not the merge ref, so rerunning this one job
+    # re-decides it; stale-base-retest.yml does that on every gate change.
+    # Same path list as that workflow; tests/required-checks-never-skip.test.ts
+    # pins them equal. merge_group tests the real merge, so it passes there.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'pull_request'
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Fail when the head lacks the newest gate change on main
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --quiet origin main
+          gate=$(git log -1 --format=%H origin/main -- eslint.config.js eslint-suppressions.json knip.jsonc package.json package-lock.json 'tsconfig*.json' 'vitest*.config.ts' .github/workflows/ci.yml)
+          git merge-base --is-ancestor "$gate" "$HEAD_SHA" || { echo "::error::main changed a gate in $gate after this head branched; merge main into the branch"; exit 1; }
+
   ci-ok:
     name: ci-ok
     # One verdict over every gate job, so the ruleset can require this check
     # alone and a gate job may skip or shard without passing by skipping
     # (0509#7013). always() makes it report even when a needed job fails.
-    needs: [codex-node-checks, vitest-shard, Gitleaks, semgrep, preview-assert]
+    needs: [codex-node-checks, vitest-shard, Gitleaks, semgrep, preview-assert, base-fresh]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
