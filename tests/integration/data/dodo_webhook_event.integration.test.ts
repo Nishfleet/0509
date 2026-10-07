@@ -53,6 +53,12 @@ describe("dodo_webhook_event row readers (0509#7146)", () => {
     await recordWebhookEvent({ id: EVENT_ID, eventType: "payment.succeeded", payloadJson: "{}", receivedAt: NOW });
     await recordWebhookEvent({ id: EVENT_ID, eventType: "payment.failed", payloadJson: '{"x":1}', receivedAt: NOW });
 
-    expect((await stored())?.event_type).toBe("payment.succeeded");
+    expect(await stored()).toEqual({
+      id: EVENT_ID,
+      event_type: "payment.succeeded",
+      payload_json: "{}",
+      received_at: NOW,
+      processed_at: null,
+    });
   });
 });
