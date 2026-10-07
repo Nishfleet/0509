@@ -1,6 +1,7 @@
 import { env, introspectWorkflowInstance } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { JEV_BATCH_SIZE } from "../../../app/lib/jev/client.server";
 import { judgeBatches, JUDGE_BATCH_SIZE } from "../../../app/lib/discovery/run.server";
 import type { ResolvedCandidate } from "../../../app/lib/discovery/run.server";
 
@@ -8,9 +9,9 @@ const NOW = "2026-09-24T06:00:00.000Z";
 const WORKSPACE_ID = "ws-judge-batches";
 const CANDIDATES = 6;
 
-function generated() {
+function generated(count: number = CANDIDATES) {
   return {
-    shortlisted: Array.from({ length: CANDIDATES }, (_, index) => ({
+    shortlisted: Array.from({ length: count }, (_, index) => ({
       name: `Rival ${String(index)}`,
       domain: `rival${String(index)}.example`,
       evidence: [
@@ -23,17 +24,17 @@ function generated() {
   };
 }
 
-async function seedWorkspace(): Promise<void> {
+async function seedWorkspace(id: string = WORKSPACE_ID): Promise<void> {
   await env.DB.batch([
     env.DB.prepare(
       'INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, ?1, ?2, 1, ?3, ?3)',
-    ).bind("user-judge-batches", "judge-batches@example.com", NOW),
+    ).bind(`user-${id}`, `${id}@example.com`, NOW),
     env.DB.prepare(
-      "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Gymshark', 'user-judge-batches', 'UTC', 1, 8, ?2)",
-    ).bind(WORKSPACE_ID, NOW),
+      "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Gymshark', ?3, 'UTC', 1, 8, ?2)",
+    ).bind(id, NOW, `user-${id}`),
     env.DB.prepare(
-      "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, created_at) VALUES ('ent-judge-batches', ?1, 'self', 'gymshark.com', 'Gymshark', '{\"description\":\"Gym clothing\"}', ?2)",
-    ).bind(WORKSPACE_ID, NOW),
+      "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, created_at) VALUES ('ent-' || ?1, ?1, 'self', 'gymshark.com', 'Gymshark', '{\"description\":\"Gym clothing\"}', ?2)",
+    ).bind(id, NOW),
   ]);
 }
 
@@ -64,7 +65,7 @@ describe("judgeBatches", () => {
 });
 
 describe("Discovery workflow judging", () => {
-  it("judges every batch at once so the first rivals show within one Jev round trip", async () => {
+  it("judges batches in parallel so the first rivals show within one Jev round trip", async () => {
     await seedWorkspace();
     let inFlight = 0;
     let peak = 0;
@@ -90,5 +91,34 @@ describe("Discovery workflow judging", () => {
     expect(run).toHaveBeenCalledTimes(CANDIDATES);
     expect(peak).toBe(CANDIDATES / JUDGE_BATCH_SIZE);
     expect(await suggestionRows()).toBe(CANDIDATES);
+  });
+
+  it("never has more than the shared Jev limit in flight however many batches there are", async () => {
+    await seedWorkspace("ws-judge-bounded");
+    const count = JUDGE_BATCH_SIZE * JEV_BATCH_SIZE * 3;
+    let inFlight = 0;
+    let peak = 0;
+    const run = vi.fn(async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      inFlight -= 1;
+      return {
+        answers: { is_competitor: { type: "noul", noul: 0.5 }, same_product_category: { type: "noul", noul: 0.5 } },
+      };
+    });
+    Reflect.set(env, "AI", { run });
+
+    await using instance = await introspectWorkflowInstance(env.DISCOVERY, "judge-bounded");
+    await instance.modify(async (modifier) => {
+      await modifier.mockStepResult({ name: "jev-ready" }, true);
+      await modifier.mockStepResult({ name: "generate" }, generated(count));
+    });
+    await env.DISCOVERY.create({ id: "judge-bounded", params: { workspaceId: "ws-judge-bounded", mode: "create" } });
+    await instance.waitForStatus("complete");
+
+    expect(run).toHaveBeenCalledTimes(count);
+    expect(peak).toBeLessThanOrEqual(JEV_BATCH_SIZE);
+    expect(peak).toBeGreaterThan(1);
   });
 });

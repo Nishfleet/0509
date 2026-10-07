@@ -1,4 +1,4 @@
-import { captureException } from "@sentry/cloudflare";
+import { captureException, captureMessage } from "@sentry/cloudflare";
 import { env, waitUntil } from "cloudflare:workers";
 import { z } from "zod";
 
@@ -69,16 +69,31 @@ export class JevRateLimitedError extends JevUnavailableError {
   }
 }
 
+class JevBillingRefusedError extends JevUnavailableError {
+  constructor(cause: unknown) {
+    super(cause);
+    this.name = "JevBillingRefusedError";
+  }
+}
+
 function unavailable(error: unknown): JevUnavailableError {
   const failure = new JevUnavailableError(error);
-  if (isBillingRefusal(failure)) {
-    captureException(new Error("jev refused: Workers AI quota, AI Gateway credits or payment"), {
-      level: "error",
-      fingerprint: ["jev-billing-refused"],
-    });
-    return failure;
-  }
+  if (isBillingRefusal(failure)) return new JevBillingRefusedError(error);
   return RATE_LIMITED.test(failure.message) ? new JevRateLimitedError(error) : failure;
+}
+
+function reportBilling(failure: unknown): void {
+  if (!(failure instanceof JevBillingRefusedError)) return;
+  captureException(new Error("jev refused: Workers AI quota, AI Gateway credits or payment"), {
+    level: "error",
+    fingerprint: ["jev-billing-refused"],
+  });
+}
+
+function reportedUnavailable(error: unknown): JevUnavailableError {
+  const failure = unavailable(error);
+  reportBilling(failure);
+  return failure;
 }
 
 function recorded(questionIds: string, failure: JevUnavailableError): JevUnavailableError {
@@ -156,7 +171,7 @@ async function run(question: NoulQuestion, state: unknown): Promise<number> {
   try {
     raw = await decide(state, { [question.id]: asked }, question.retries);
   } catch (error) {
-    throw recorded(question.id, unavailable(error));
+    throw recorded(question.id, reportedUnavailable(error));
   }
   const parsed = answerSchema.safeParse(jevBody(raw));
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
@@ -205,7 +220,7 @@ export async function askNouls(
     try {
       raw = await decide(state, asked);
     } catch (error) {
-      throw recorded(questionIds, unavailable(error));
+      throw recorded(questionIds, reportedUnavailable(error));
     }
     const parsed = answerSchema.safeParse(jevBody(raw));
     if (parsed.success) answers = parsed.data.answers;
@@ -238,7 +253,11 @@ async function runChoice(question: ChoiceQuestion, state: unknown): Promise<stri
   return answer.choice;
 }
 
-export async function askChoice(workspaceId: string, question: ChoiceQuestion, state: unknown): Promise<ChoiceVerdict> {
+async function askChoiceUnreported(
+  workspaceId: string,
+  question: ChoiceQuestion,
+  state: unknown,
+): Promise<ChoiceVerdict> {
   const hash = await sha256Hex(
     JSON.stringify({
       workspace: workspaceId,
@@ -252,4 +271,66 @@ export async function askChoice(workspaceId: string, question: ChoiceQuestion, s
   if (cached !== null) return { questionId: question.id, inputHash: hash, choice: cached, cached: true };
   const choice = await runChoice(question, state);
   return { questionId: question.id, inputHash: hash, choice, cached: false };
+}
+
+export async function askChoice(workspaceId: string, question: ChoiceQuestion, state: unknown): Promise<ChoiceVerdict> {
+  try {
+    return await askChoiceUnreported(workspaceId, question, state);
+  } catch (error) {
+    reportBilling(error);
+    throw error;
+  }
+}
+
+export const JEV_BATCH_SIZE = 4;
+
+function rejections(settled: readonly PromiseSettledResult<unknown>[]): unknown[] {
+  return settled.flatMap((result): unknown[] => (result.status === "rejected" ? [result.reason as unknown] : []));
+}
+
+function reportBatch(settled: readonly PromiseSettledResult<unknown>[]): void {
+  const reasons = rejections(settled);
+  const stopped = reasons.find((reason) => reason instanceof JevUnavailableError);
+  if (stopped !== undefined) {
+    const limited = stopped instanceof JevRateLimitedError;
+    const billing = stopped instanceof JevBillingRefusedError;
+    captureMessage("jev unavailable: a batch was cut short", {
+      level: billing ? "error" : "warning",
+      fingerprint: [billing ? "jev-billing-refused" : limited ? "jev-rate-limited" : "jev-batch-refused"],
+      extra: {
+        reason: billing ? "billing_refused" : limited ? "rate_limited" : "refused",
+        failed: reasons.length,
+        asked: settled.length,
+      },
+    });
+  }
+  const unexpected = reasons.filter((reason) => !(reason instanceof JevUnavailableError));
+  if (unexpected.length === 0 || unexpected.length === settled.length) return;
+  captureMessage("jev choice batch: answers rejected", {
+    level: "warning",
+    fingerprint: ["jev-choice-rejected"],
+    extra: { rejected: unexpected.length, asked: settled.length },
+  });
+}
+
+export async function askChoices(
+  workspaceId: string,
+  question: ChoiceQuestion,
+  states: readonly unknown[],
+): Promise<PromiseSettledResult<ChoiceVerdict>[]> {
+  let settled: PromiseSettledResult<ChoiceVerdict>[] = [];
+  let stop: PromiseRejectedResult | undefined;
+  for (let start = 0; start < states.length && stop === undefined; start += JEV_BATCH_SIZE) {
+    const chunk = await Promise.allSettled(
+      states.slice(start, start + JEV_BATCH_SIZE).map((state) => askChoiceUnreported(workspaceId, question, state)),
+    );
+    settled = [...settled, ...chunk];
+    stop = chunk.find(
+      (result): result is PromiseRejectedResult =>
+        result.status === "rejected" && result.reason instanceof JevUnavailableError,
+    );
+  }
+  reportBatch(settled);
+  const skipped = stop === undefined ? [] : states.slice(settled.length).map(() => stop);
+  return [...settled, ...skipped];
 }
