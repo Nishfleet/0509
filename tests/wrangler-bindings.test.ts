@@ -69,7 +69,7 @@ describe("deployed wrangler configs", () => {
     expect(bucket?.bucket_name).toBe(SNAPSHOT_BUCKET);
   });
 
-  // 0509#7124 and #7087. The production origin is one literal in
+  // 0509#7124, #7087 and #7170. The production origin is one literal in
   // app/lib/site-url.ts. wrangler.jsonc deploys it as BETTER_AUTH_URL, and
   // env.server.ts's placeholder-secret gate compares against the same import.
   // env.server.ts cannot import structured-data.ts: that module imports
