@@ -121,6 +121,16 @@ function scanLastIndexOf(text: string, needle: string, opts: { from: number; sca
   return found;
 }
 
+function tagBoundsAt(
+  lower: string,
+  name: string,
+  opts: { at: number; scan?: FeedScan },
+): { start: number; end: number } | null {
+  const end = scanIndexOf(lower, ">", { from: opts.at + name.length + 1, scan: opts.scan });
+  if (end === -1 || end - opts.at > MAX_TAG_CHARS) return null;
+  return { start: opts.at, end };
+}
+
 function openTagAt(
   lower: string,
   name: string,
@@ -129,11 +139,9 @@ function openTagAt(
   const needle = `<${name}`;
   let at = scanIndexOf(lower, needle, opts);
   while (at !== -1) {
-    const next = lower.charAt(at + needle.length);
-    if (NAME_END.test(next)) {
-      const end = scanIndexOf(lower, ">", { from: at + needle.length, scan: opts.scan });
-      if (end === -1 || end - at > MAX_TAG_CHARS) return null;
-      return { start: at, end };
+    if (NAME_END.test(lower.charAt(at + needle.length))) {
+      const bounds = tagBoundsAt(lower, name, { at, scan: opts.scan });
+      if (bounds !== null) return bounds;
     }
     at = scanIndexOf(lower, needle, { from: at + needle.length, scan: opts.scan });
   }
@@ -148,11 +156,9 @@ function lastOpenTagAt(
   const needle = `<${name}`;
   let at = scanLastIndexOf(lower, needle, { from: opts.before, scan: opts.scan });
   while (at !== -1) {
-    const next = lower.charAt(at + needle.length);
-    if (NAME_END.test(next)) {
-      const end = scanIndexOf(lower, ">", { from: at + needle.length, scan: opts.scan });
-      if (end === -1 || end - at > MAX_TAG_CHARS) return null;
-      return { start: at, end };
+    if (NAME_END.test(lower.charAt(at + needle.length))) {
+      const bounds = tagBoundsAt(lower, name, { at, scan: opts.scan });
+      if (bounds !== null) return bounds;
     }
     at = scanLastIndexOf(lower, needle, { from: at - 1, scan: opts.scan });
   }

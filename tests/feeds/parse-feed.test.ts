@@ -257,7 +257,7 @@ describe("parseFeed on hostile input", () => {
 
     const { items, scan } = scanned(xml);
 
-expect(items ?? []).toHaveLength(MAX_FEED_ITEMS);
+    expect(items ?? []).toHaveLength(MAX_FEED_ITEMS);
     expect((items ?? [])[0]?.title).toBe("Post 0");
     expect(scan.blocksVisited).toBeLessThanOrEqual(400);
     expect(scan.charsScanned).toBeLessThanOrEqual(500 * xml.length);
