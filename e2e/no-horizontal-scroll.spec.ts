@@ -67,7 +67,7 @@ test.fail("a deliberately overflowing element fails the check @smoke", async ({ 
     const d = document.createElement("div");
     d.style.width = "800px";
     d.style.height = "1px";
-    document.body.append(d);
+    document.body.appendChild(d);
   });
   const m = await measure(page);
   expect(m.scrollWidth, JSON.stringify(m)).toBe(m.clientWidth);

@@ -17,12 +17,36 @@ const CONFIGS = [
     .map((name) => `workers/${name}`),
 ];
 
+// 0509#7232. The gate below reads `(rawConfig.kv_namespaces ?? [])`, so a rename
+// or a removal of the key leaves the list empty and every per-namespace
+// assertion passes vacuously. Each config that deploys KV names its bindings here,
+// and the gate asserts the key carries exactly those namespaces (a rename, an
+// emptied key and a drifted entry all fail) before it checks any id. A config that
+// gains a KV namespace is added to this map in the same change.
+const KV_BINDINGS: Record<string, string[]> = {
+  "wrangler.jsonc": ["IDENTITY_CACHE", "OAUTH_KV"],
+};
+
+// A KV_BINDINGS entry that names no deployed config, an entry dropped from
+// KV_BINDINGS, or CONFIGS losing a governed config leaves the gate able to skip
+// itself while still passing, which is the hole 0509#7232 was filed for.
+it("keeps every KV_BINDINGS entry governing a config the gate runs on (0509#7232)", () => {
+  expect(Object.keys(KV_BINDINGS)).not.toHaveLength(0);
+  expect(CONFIGS).toEqual(expect.arrayContaining(Object.keys(KV_BINDINGS)));
+});
+
 describe("deployed wrangler configs", () => {
   it.each(CONFIGS)("%s pins an id on every KV namespace", (config) => {
     const { rawConfig } = experimental_readRawConfig({ config });
-    const unpinned = (rawConfig.kv_namespaces ?? [])
-      .filter((namespace) => !namespace.id)
-      .map((namespace) => namespace.binding);
+    const namespaces = rawConfig.kv_namespaces ?? [];
+    const expectedBindings = KV_BINDINGS[config];
+    if (expectedBindings) {
+      expect(
+        namespaces.map((namespace) => namespace.binding).sort(),
+        `${config} must deploy exactly the KV namespaces the app reads: the kv_namespaces key is missing, emptied or its entries drifted, and the per-namespace id check below would pass vacuously (0509#7232)`,
+      ).toEqual([...expectedBindings].sort());
+    }
+    const unpinned = namespaces.filter((namespace) => !namespace.id).map((namespace) => namespace.binding);
     expect(unpinned).toEqual([]);
   });
 

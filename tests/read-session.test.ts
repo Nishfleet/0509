@@ -22,7 +22,7 @@ describe("hasSessionCookie", () => {
   it("matches the cookie the auth module issues, including the secure prefix", async () => {
     createAuth({
       DB: {} as never,
-      EMAIL: { send: async () => undefined },
+      EMAIL: { send: async () => ({ messageId: "test" }) },
       SIGN_IN_EMAIL_LIMIT: { limit: async () => ({ success: true }) },
       SIGN_IN_IP_LIMIT: { limit: async () => ({ success: true }) },
       TURNSTILE_SECRET_KEY: "present",
