@@ -65,7 +65,7 @@ export async function loader({ params, context }: Route.LoaderArgs) {
 export default function Page({ loaderData }: Route.ComponentProps) {
   const { selected } = loaderData;
   return (
-    <div className={PAGE}>
+    <main className={PAGE}>
       <PageHeading title="Your weekly brief" />
       {selected === null ? (
         <div className="mt-6">
@@ -101,6 +101,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </ul>
         </nav>
       ) : null}
-    </div>
+    </main>
   );
 }

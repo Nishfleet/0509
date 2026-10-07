@@ -71,7 +71,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   const state = pending === "on" || pending === "off" ? pending : competitor.state;
   const pausedAt = competitor.state === "off" ? competitor.stateChangedAt : null;
   return (
-    <div className="mx-auto flex max-w-6xl min-w-0 flex-col gap-10 px-4 py-10">
+    <main className="mx-auto flex max-w-6xl min-w-0 flex-col gap-10 px-4 py-10">
       <CompetitorHeader
         name={competitor.name}
         domain={competitor.domain}
@@ -109,6 +109,6 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         siteUrl={loaderData.watch.customerSite}
         errors={actionData}
       />
-    </div>
+    </main>
   );
 }

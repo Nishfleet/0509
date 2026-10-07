@@ -29,7 +29,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   return (
-    <div className="mx-auto w-full max-w-5xl min-w-0 px-4 py-10 sm:px-8">
+    <main className="mx-auto w-full max-w-5xl min-w-0 px-4 py-10 sm:px-8">
       <PageHeading
         title="Settings"
         lede="Your brief, plan and account. To pause a competitor, use its switch on the Competitors page."
@@ -55,6 +55,6 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         </div>
       </div>
       <Footer />
-    </div>
+    </main>
   );
 }

@@ -82,7 +82,7 @@ function OwnSiteIncident({ incident }: { incident: Route.ComponentProps["loaderD
 
 export default function Page({ loaderData }: Route.ComponentProps) {
   return (
-    <div className={PAGE}>
+    <main className={PAGE}>
       <PageHeading title="Alerts" />
       <p data-testid="alerts-contract" className="mt-2 leading-[1.65] text-ink-soft">
         We only email you right away when your own website breaks. Everything else waits here.
@@ -118,6 +118,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           {loaderData.offLine}
         </p>
       )}
-    </div>
+    </main>
   );
 }

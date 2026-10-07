@@ -106,7 +106,7 @@ export default function Login() {
       <header className="self-start">
         <Wordmark />
       </header>
-      <main id="app-content" tabIndex={-1} className="flex flex-col">
+      <main className="flex flex-col">
         <h1 className={SIGN_IN_TITLE}>Sign in</h1>
         <p className={SIGN_IN_LEDE}>We email you a link. Tap it and you're in. There is no password.</p>
         {deleted.progress === null || deleted.id === null ? null : (

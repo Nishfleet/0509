@@ -31,9 +31,6 @@ test("/login keyboard path, landmarks and the sent-state announcement (#4148) @o
   }
 
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
-
-  await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Five to Nine" })).toBeFocused();
 
   await page.keyboard.press("Tab");

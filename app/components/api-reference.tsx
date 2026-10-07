@@ -193,7 +193,7 @@ export function ApiReference({
       <header>
         <Wordmark />
       </header>
-      <main id="app-content" tabIndex={-1} className="mt-8 min-w-0">
+      <main className="mt-8 min-w-0">
         <h1 className={TITLE}>API reference</h1>
         <AuthBlock document={document} settingsHref={settingsHref} />
         <McpBlock mcpUrl={mcpUrl} settingsHref={settingsHref} />

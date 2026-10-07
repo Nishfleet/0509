@@ -43,7 +43,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     );
   }
   return (
-    <main id="app-content" tabIndex={-1} className="mx-auto max-w-xl px-4 py-16">
+    <main className="mx-auto max-w-xl px-4 py-16">
       <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">{INVALID_LINK}</h1>
       <p className="mt-4 leading-[1.65] text-ink-soft">
         This unsubscribe link has expired or is incorrect, so nothing was changed. Use the link in your most recent
@@ -59,7 +59,7 @@ export default function Unsubscribe({ actionData }: Route.ComponentProps) {
   const unsubscribing = navigation.state !== "idle";
   if (actionData?.unsubscribed) {
     return (
-      <main id="app-content" tabIndex={-1} className="mx-auto max-w-xl px-4 py-16">
+      <main className="mx-auto max-w-xl px-4 py-16">
         <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">You're unsubscribed</h1>
         <p className="mt-4 leading-[1.65] text-ink-soft">
           We won't send the weekly brief or alerts to this address any more. Sign-in links still arrive when you ask for
@@ -78,7 +78,7 @@ export default function Unsubscribe({ actionData }: Route.ComponentProps) {
   }
 
   return (
-    <main id="app-content" tabIndex={-1} className="mx-auto max-w-xl px-4 py-16">
+    <main className="mx-auto max-w-xl px-4 py-16">
       <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">Unsubscribe from Five to Nine emails?</h1>
       <p className="mt-4 leading-[1.65] text-ink-soft">
         You will stop getting the weekly brief and all alerts from Five to Nine at this address. Sign-in links still

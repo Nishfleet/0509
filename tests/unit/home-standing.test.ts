@@ -157,7 +157,7 @@ function render(input: {
 }
 
 describe("Home page frame", () => {
-  it("puts the date in the banner, the standing between, and the footer in contentinfo", () => {
+  it("puts the date in the banner, the standing in main, and the footer in contentinfo", () => {
     const html = renderToStaticMarkup(
       createElement(
         HomePageFrame,
@@ -166,7 +166,7 @@ describe("Home page frame", () => {
       ),
     );
     const header = html.indexOf("<header");
-    const main = html.indexOf("Good morning");
+    const main = html.indexOf("<main>");
     const footer = html.indexOf("<footer");
     expect(header).toBeGreaterThan(-1);
     expect(main).toBeGreaterThan(header);

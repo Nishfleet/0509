@@ -48,7 +48,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
 
   if (view.kind === "error") {
     return (
-      <main id="app-content" tabIndex={-1} className="mx-auto max-w-lg px-4 py-16">
+      <main className="mx-auto max-w-lg px-4 py-16">
         <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">This connection link doesn't work</h1>
         <p className="mt-4 leading-[1.65] text-ink-soft">{view.message}</p>
         <p className="mt-4 leading-[1.65] text-ink-soft">Go back to the app you came from and try connecting again.</p>
@@ -57,7 +57,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   }
 
   return (
-    <main id="app-content" tabIndex={-1} className="mx-auto max-w-lg px-4 py-16">
+    <main className="mx-auto max-w-lg px-4 py-16">
       <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">
         An app at <span className="font-mono text-[0.9em]">{view.host}</span> wants to read your Five to Nine account
       </h1>

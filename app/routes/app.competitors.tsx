@@ -78,7 +78,7 @@ function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   const { competitors, maybes, questions, tier, wanted } = loaderData;
   return (
-    <div className={PAGE}>
+    <main className={PAGE}>
       <PageHeading
         title="Competitors"
         lede="Each competitor has one switch. Turn it off to stop watching and alerts. Your history stays."
@@ -98,6 +98,6 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       <RetireQuestions questions={questions} />
       <CompetitorMaybes maybes={maybes} />
       <AddCompetitor message={actionData?.message} upgradePlanId={actionData?.upgradePlanId} />
-    </div>
+    </main>
   );
 }

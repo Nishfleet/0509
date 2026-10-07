@@ -2,7 +2,6 @@ import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration, 
 
 import type { Route } from "./+types/root";
 import { ErrorPage } from "./components/error-page";
-import { SkipLink } from "./components/skip-link";
 import { hasSessionCookie } from "./lib/auth.server";
 import { FACES_SCRIPT } from "./lib/faces-script";
 import "./app.css";
@@ -46,7 +45,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
-        <SkipLink />
         {children}
         {serverOnly ? null : <ScrollRestoration />}
         {serverOnly ? null : <Scripts />}

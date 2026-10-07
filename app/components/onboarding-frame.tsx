@@ -20,7 +20,7 @@ export function OnboardingFrame({
       <header>
         <StepBar current={step} />
       </header>
-      <main id="app-content" tabIndex={-1}>
+      <main>
         <h1
           className={hideHeading ? "sr-only" : "mt-10 max-w-[18ch] font-display text-display-3 font-bold text-balance"}
         >

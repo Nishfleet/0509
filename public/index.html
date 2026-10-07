@@ -205,19 +205,6 @@
         }
       }
 
-      .skip {
-        position: absolute;
-        left: -9999px;
-      }
-      .skip:focus {
-        left: 0;
-        right: 0;
-        top: 0;
-        padding: 0.75rem 1rem;
-        background: var(--color-bone);
-        color: var(--color-ink);
-        outline: 2px solid var(--color-ink);
-      }
       a:focus-visible {
         outline: 2px solid var(--color-ink);
         outline-offset: 2px;
@@ -234,12 +221,7 @@
     </style>
   </head>
   <body>
-    <a class="skip" href="#app-content">Skip to content</a>
-    <main
-      id="app-content"
-      tabindex="-1"
-      class="mx-auto flex min-h-dvh w-full max-w-[64rem] flex-col justify-between px-6 py-12 sm:px-12 sm:py-16"
-    >
+    <main class="mx-auto flex min-h-dvh w-full max-w-[64rem] flex-col justify-between px-6 py-12 sm:px-12 sm:py-16">
       <header>
         <span class="font-display text-base font-bold tracking-[-0.03em]">
           05<span class="bg-accent text-on-accent px-[5px]">09</span>

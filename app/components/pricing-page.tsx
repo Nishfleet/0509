@@ -18,7 +18,7 @@ export function PricingPage({ source }: { source: StartSource | null }) {
           </a>
         </div>
       </header>
-      <main id="app-content" tabIndex={-1}>
+      <main>
         <div className={`${pageWidth} py-12 sm:py-16`}>
           <h1 className="max-w-[24ch] font-display text-display-2 font-extrabold uppercase">Five to Nine pricing</h1>
         </div>

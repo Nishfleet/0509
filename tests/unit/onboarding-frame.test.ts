@@ -21,7 +21,7 @@ describe("OnboardingFrame", () => {
   it("wraps its children in the banner, main and contentinfo landmarks with one h1", () => {
     const html = markup({});
     expect(html).toContain("<header>");
-    expect(html).toContain("<main ");
+    expect(html).toContain("<main>");
     expect(html).toContain("<footer");
     expect(html.match(/<h1\b/g) ?? []).toHaveLength(1);
     expect(html).toContain('<h1 class="mt-10 max-w-[18ch] font-display text-display-3 font-bold text-balance">H</h1>');
@@ -40,7 +40,7 @@ describe("OnboardingFrame", () => {
       createElement(OnboardingFrame, { step: 3, heading: "Your competitors" }, WATCHING_LIST),
     );
 
-    expect(html).toContain("<main ");
+    expect(html).toContain("<main>");
     expect(html).toContain('aria-current="step"');
     expect(html).toContain('aria-label="Watching"');
     expect(html).toContain('aria-live="polite"');
@@ -51,7 +51,7 @@ describe("OnboardingFrame", () => {
   it("puts the banner before main and main before the footer", () => {
     const html = markup({});
     const header = html.indexOf("<header>");
-    const main = html.indexOf("<main ");
+    const main = html.indexOf("<main>");
     const footer = html.indexOf("<footer");
     expect(header).toBeGreaterThan(-1);
     expect(header).toBeLessThan(main);
