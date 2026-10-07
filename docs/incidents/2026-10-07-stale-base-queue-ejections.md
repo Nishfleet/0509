@@ -35,7 +35,7 @@ The job is a gate in `ci-ok`'s `needs`, so `tests/required-checks-never-skip.tes
 
 1. Code (this fix). Covered: any open pull request whose head lacks the latest gate change, whether it is armed, queued later, or just ready. It is red from the moment the gate lands, and goes green only after `main` is merged into its branch and CI runs there.
 2. Not covered:
-   - Pull requests whose latest run predates `base-fresh` (every open one when this merges). A rerun reuses the old workflow file and cannot add the job, so the workflow lists them as warnings and each is covered from its next push.
+   - Pull requests whose latest run predates `base-fresh` (every open one when this merges). A rerun reuses the old workflow file and cannot add the job, so the workflow lists them as warnings. Planned post-merge step: add `base-fresh` as a required check in ruleset 21391031 next to `ci-ok` (it already reports in `merge_group`). Such a pull request then cannot merge until its next push, and that push is tested against current `main`. Confirm with the ruleset JSON afterwards.
    - The arm race: a pull request armed between a gate landing and the retest finishing can still queue.
    - Pull requests already inside the queue when a gate lands.
    - A run still in progress when the gate lands is skipped. It is not stale, because `base-fresh` reads `main` when it runs, unless it had already passed.
