@@ -45,8 +45,8 @@ function keysScreen(): ReactElement {
 }
 
 const TWO_APPS = [
-  { grantId: "g1", name: "Notion", connectedAt: "2026-09-01T00:00:00.000Z" },
-  { grantId: "g2", name: "Linear", connectedAt: "2026-09-01T00:00:00.000Z" },
+  { grantId: "g1", name: "Notion", host: "notion.so", connectedAt: "2026-09-01T00:00:00.000Z" },
+  { grantId: "g2", name: "Linear", host: "linear.app", connectedAt: "2026-09-01T00:00:00.000Z" },
 ];
 
 function appsScreen(): ReactElement {
@@ -405,7 +405,9 @@ describe("ConnectedApps", () => {
   // reaches the same day() a bad key timestamp does.
   it("says date unknown instead of throwing when an app's connectedAt is unparseable", () => {
     const html = stubbed(
-      createElement(ConnectedApps, { apps: [{ grantId: "g1", name: "Notion", connectedAt: "garbage" }] }),
+      createElement(ConnectedApps, {
+        apps: [{ grantId: "g1", name: "Notion", host: "notion.so", connectedAt: "garbage" }],
+      }),
     );
 
     expect(html).toContain("Connected date unknown");
@@ -418,11 +420,19 @@ describe("ConnectedApps", () => {
   it("still formats the connected day for an app with a valid timestamp", () => {
     const html = stubbed(
       createElement(ConnectedApps, {
-        apps: [{ grantId: "g1", name: "Notion", connectedAt: "2026-09-01T00:00:00.000Z" }],
+        apps: [{ grantId: "g1", name: "Notion", host: "notion.so", connectedAt: "2026-09-01T00:00:00.000Z" }],
       }),
     );
 
     expect(html).toContain("Connected 1 Sept 2026");
+  });
+
+  it("shows the redirect host under a claimed app name", () => {
+    const html = stubbed(createElement(ConnectedApps, { apps: TWO_APPS }));
+    expect(html).toContain("Notion");
+    expect(html).toContain("notion.so");
+    expect(html).toContain("Linear");
+    expect(html).toContain("linear.app");
   });
 });
 

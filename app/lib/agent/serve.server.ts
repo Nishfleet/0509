@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { readWorkspaceIdForOwner } from "../data/workspace.server";
 import { clientIp, withinLimit } from "./client-limit.server";
 import type { AgentProps } from "./context.server";
+import { agentPreflight, forbiddenOrigin, originAllowed } from "./cors.server";
 import { RATE_LIMITED, bearerToken, propsForApiKey } from "./keys.server";
 import { serveMcp } from "./mcp.server";
 
@@ -34,17 +35,24 @@ async function workspaceFor(props: AgentProps): Promise<string | Response> {
   return workspaceId;
 }
 
-export async function mcpResponse(request: Request, props: AgentProps): Promise<Response> {
+function refuseOrigin(request: Request): Response | null {
   const origin = request.headers.get("origin");
-  if (origin !== null && origin !== new URL(env.BETTER_AUTH_URL).origin) {
-    return problem(403, { error: "forbidden_origin", description: "This origin may not call the MCP server." });
-  }
+  return originAllowed(origin) ? null : forbiddenOrigin();
+}
+
+export async function mcpResponse(request: Request, props: AgentProps): Promise<Response> {
+  if (request.method === "OPTIONS") return agentPreflight(request);
+  const blocked = refuseOrigin(request);
+  if (blocked) return blocked;
   const workspace = await workspaceFor(props);
   if (workspace instanceof Response) return workspace;
   return serveMcp(request, workspace);
 }
 
 export async function apiResponse<T>(request: Request, read: (workspaceId: string) => Promise<T>): Promise<Response> {
+  if (request.method === "OPTIONS") return agentPreflight(request);
+  const blocked = refuseOrigin(request);
+  if (blocked) return blocked;
   if (!(await withinLimit(env.AGENT_LIMIT, clientIp(request)))) {
     return problem(429, RATE_LIMITED_PROBLEM, { "retry-after": "60" });
   }
