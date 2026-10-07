@@ -27,7 +27,7 @@ describe("pricingMeta", () => {
   });
 
   it("states every plan price and the trial terms in the description", () => {
-    const description = String((named("name", "description") as { content: string }).content);
+    const description = (named("name", "description") as { content: string }).content;
     for (const plan of PLANS) {
       expect(description).toContain(`${plan.name} €${String(plan.monthlyPriceEur)}/month`);
     }

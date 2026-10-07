@@ -24,7 +24,7 @@ async function e2eSpecFiles(dir: string): Promise<string[]> {
       found.push(...(await e2eSpecFiles(full)));
       continue;
     }
-    if (!/\.spec\.ts$/.test(entry.name)) continue;
+    if (!entry.name.endsWith(".spec.ts")) continue;
     found.push(path.relative(REPO_ROOT, full).split(path.sep).join("/"));
   }
   return found;

@@ -28,7 +28,7 @@ function render(navigation: { state: string; formData?: FormData }): string {
 }
 
 function button(html: string): string {
-  const match = html.match(/<button[^>]*type="submit"[\s\S]*?<\/button>/);
+  const match = /<button[^>]*type="submit"[\s\S]*?<\/button>/.exec(html);
   if (match === null) throw new Error(`no submit button in ${html}`);
   return match[0];
 }

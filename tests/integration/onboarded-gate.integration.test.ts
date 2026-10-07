@@ -42,7 +42,7 @@ function gateRequest(userId: string): Request {
 async function redirectedTo(request: Request): Promise<string | null> {
   const thrown = await requireOnboarded({ request, context: new RouterContextProvider() }).then(
     () => null,
-    (error) => error,
+    (error: unknown) => error,
   );
   if (thrown === null) return null;
   expect(thrown).toBeInstanceOf(Response);

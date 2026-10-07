@@ -68,7 +68,9 @@ function stubSlowGdelt(delayMs: number) {
     vi.fn(
       (_input: unknown, init?: RequestInit) =>
         new Promise<Response>((resolve, reject) => {
-          const timer = setTimeout(() => resolve(new Response(JSON.stringify({ articles: ARTICLES }))), delayMs);
+          const timer = setTimeout(() => {
+            resolve(new Response(JSON.stringify({ articles: ARTICLES })));
+          }, delayMs);
           init?.signal?.addEventListener("abort", () => {
             clearTimeout(timer);
             reject(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
