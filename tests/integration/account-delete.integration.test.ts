@@ -384,13 +384,15 @@ describe("delete my account", () => {
     }) as typeof env.ACCOUNT_DELETE.create;
 
     try {
+      const TIMED_OUT = "__delete_account_timed_out__";
       const settled = await Promise.race([
         deleteAccount(helpers, settingsRequest(cookie), userId),
-        new Promise<"never">((resolve) => setTimeout(() => resolve("never"), 10_000)),
+        new Promise<string>((resolve) => {
+          setTimeout(() => resolve(TIMED_OUT), 10_000);
+        }),
       ]);
-      expect(settled, "the delete waited for the grant pages instead of running alongside them").not.toBe("never");
-      if (settled === "never") throw new Error("the delete never finished");
       if (settled === null) throw new Error("deleteAccount refused a fresh session");
+      expect(settled, "the delete waited for the grant pages instead of running alongside them").not.toBe(TIMED_OUT);
       expect(released).toBe(true);
       expect(cursors).toEqual([undefined, "second"]);
       expect(await count('SELECT COUNT(*) AS n FROM "user" WHERE id = ?', userId)).toBe(0);
