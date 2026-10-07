@@ -192,6 +192,80 @@ const NEURONS_PER_MODEL_CALL = 60;
 
 const NEURON_CEILING = Number(process.env.EVAL_MAX_NEURONS ?? "") || 0;
 
+// Per-day ceiling (0509#7249). A per-run cap alone lets 96 dispatches spend 96 times the cap.
+// Before the first Workers AI call of a run the harness asks Cloudflare's GraphQL
+// aiInferenceAdaptiveGroups for the account's neurons so far this UTC day, and refuses to
+// start when that plus EVAL_MAX_NEURONS would pass EVAL_DAILY_NEURON_CEILING. Any failure of
+// the query refuses too: a guard that cannot read the meter does not guess. Only the
+// Workers AI path is guarded; a run against the /jev route spends no neurons.
+const DAILY_CEILING = Number(process.env.EVAL_DAILY_NEURON_CEILING ?? "") || 9000;
+
+const GRAPHQL_URL = "https://api.cloudflare.com/client/v4/graphql";
+
+const DAILY_QUERY = `query($account: String!, $since: Time!, $until: Time!) {
+  viewer { accounts(filter: { accountTag: $account }) {
+    aiInferenceAdaptiveGroups(limit: 1, filter: { datetime_geq: $since, datetime_leq: $until }) {
+      sum { totalNeurons }
+    }
+  } }
+}`;
+
+interface DailyReply {
+  data?: { viewer?: { accounts?: { aiInferenceAdaptiveGroups?: { sum?: { totalNeurons?: unknown } }[] }[] } };
+  errors?: unknown;
+}
+
+async function neuronsToday(): Promise<number> {
+  const now = new Date();
+  const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const response = await fetch(GRAPHQL_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${CF_TOKEN}` },
+    body: JSON.stringify({
+      query: DAILY_QUERY,
+      variables: { account: CF_ACCOUNT, since: since.toISOString(), until: now.toISOString() },
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) throw new Error(`GraphQL answered ${String(response.status)}`);
+  const reply = (await response.json()) as DailyReply;
+  if (reply.errors !== undefined && reply.errors !== null) throw new Error("GraphQL returned errors");
+  const groups = reply.data?.viewer?.accounts?.[0]?.aiInferenceAdaptiveGroups;
+  if (groups === undefined) throw new Error("GraphQL returned no aiInferenceAdaptiveGroups");
+  const total = groups[0]?.sum?.totalNeurons ?? 0;
+  if (typeof total !== "number" || !Number.isFinite(total)) throw new Error("GraphQL neurons were not a number");
+  return total;
+}
+
+let dailyGuard: Promise<void> | undefined;
+
+async function checkDaily(): Promise<void> {
+  let today: number;
+  try {
+    today = await neuronsToday();
+  } catch (error) {
+    throw new Error(
+      `eval refused: cannot read today's neurons (${String(error)}), so the daily ceiling cannot be checked (0509#7249)`,
+      { cause: error },
+    );
+  }
+  const verdict = today + NEURON_CEILING > DAILY_CEILING ? "refused" : "ok";
+  console.log(
+    `daily neuron guard: ${verdict}; today (UTC) ${String(Math.round(today))} + this run's ceiling ${String(NEURON_CEILING)} vs daily ceiling ${String(DAILY_CEILING)}`,
+  );
+  if (verdict === "refused") {
+    throw new Error(
+      `eval refused: ${String(Math.round(today))} neurons used today (UTC) plus this run's ${String(NEURON_CEILING)} would pass the daily ceiling of ${String(DAILY_CEILING)}; set by EVAL_DAILY_NEURON_CEILING in .github/workflows/evals.yml (0509#7249)`,
+    );
+  }
+}
+
+function guardDaily(): Promise<void> {
+  if (!VIA_GATEWAY) return Promise.resolve();
+  dailyGuard ??= checkDaily();
+  return dailyGuard;
+}
+
 let callBudget = 0;
 
 let callsUsed = 0;
@@ -232,6 +306,7 @@ function spendCall(neurons: number): void {
 }
 
 export async function postWorkersAi(model: string, body: unknown): Promise<unknown> {
+  await guardDaily();
   return withOneRetry(async () => {
     spendCall(NEURONS_PER_MODEL_CALL);
     const ai = await aiBinding();
@@ -240,6 +315,7 @@ export async function postWorkersAi(model: string, body: unknown): Promise<unkno
 }
 
 async function postJev(body: unknown): Promise<JevResponse> {
+  await guardDaily();
   spendCall(NEURONS_PER_CLEF_CALL);
   if (VIA_GATEWAY) {
     const raw = await (

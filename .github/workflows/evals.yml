@@ -56,6 +56,11 @@ jobs:
           # Nothing counts runs per day; only a gateway limit could (needs a token scope).
           # Past it the run fails with "neuron ceiling". To switch it off, delete this line.
           EVAL_MAX_NEURONS: "2000"
+          # Per-day ceiling (0509#7249): before its first call the harness reads today's UTC
+          # neurons from GraphQL with CLOUDFLARE_API_TOKEN (needs Account Analytics read) and
+          # refuses to start when today plus EVAL_MAX_NEURONS would pass this. It also refuses
+          # when that read fails. Deleting this line leaves the default of 9000 in harness.ts.
+          EVAL_DAILY_NEURON_CEILING: "9000"
           FILTER: ${{ inputs.filter }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
