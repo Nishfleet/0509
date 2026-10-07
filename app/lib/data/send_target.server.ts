@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 
 import { normalizeEmailAddress } from "../email-address";
 import {
@@ -76,15 +77,13 @@ export async function ensureOwnerEmailTarget(db: TargetDb, input: { workspaceId:
   await db.prepare(INSERT_OWNER_EMAIL_TARGET).bind(input.now, input.workspaceId).run();
 }
 
+const readEmailTargetRow = z.object({ target_value: z.string(), is_verified: z.number() });
+
 export async function readEmailTarget(
   db: TargetDb,
   workspaceId: string,
 ): Promise<{ target_value: string; is_verified: number } | null> {
-  const row = await db
-    .prepare(SELECT_EMAIL_TARGET)
-    .bind(workspaceId)
-    .first<{ target_value: string; is_verified: number }>();
-  return row ?? null;
+  return readEmailTargetRow.nullable().parse(await db.prepare(SELECT_EMAIL_TARGET).bind(workspaceId).first());
 }
 
 export async function writeVerifyToken(
@@ -104,15 +103,16 @@ export async function changeEmailTarget(db: TargetDb, input: { workspaceId: stri
   await db.prepare(CHANGE_EMAIL_TARGET).bind(address, input.workspaceId, address).run();
 }
 
+const readEmailTargetByTokenRow = z.object({ target_value: z.string() });
+
 export async function readEmailTargetByToken(
   db: TargetDb,
   input: { token: string; now: string },
 ): Promise<string | null> {
   const tokenHash = await sha256Hex(input.token);
-  const row = await db
-    .prepare(SELECT_EMAIL_TARGET_BY_TOKEN)
-    .bind(tokenHash, input.now)
-    .first<{ target_value: string }>();
+  const row = readEmailTargetByTokenRow
+    .nullable()
+    .parse(await db.prepare(SELECT_EMAIL_TARGET_BY_TOKEN).bind(tokenHash, input.now).first());
   return row?.target_value ?? null;
 }
 
@@ -155,11 +155,13 @@ const DEFAULT_BACKFILL_BATCH = 50;
 const NIGHTLY_SLACK_BACKFILL_CAP = 500;
 const MAX_SEAL_ATTEMPTS = 3;
 
-interface SlackTargetRow {
-  id: string;
-  workspace_id: string;
-  target_value: string;
-}
+const slackTargetRow = z.object({
+  id: z.string(),
+  workspace_id: z.string(),
+  target_value: z.string(),
+});
+
+type SlackTargetRow = z.infer<typeof slackTargetRow>;
 
 export interface SlackBackfillResult {
   readonly sealed: number;
@@ -179,11 +181,13 @@ async function slackTargetWriteSecret(): Promise<string> {
   return current;
 }
 
+const readSlackTargetRow = z.object({ id: z.string(), target_value: z.string() });
+
 export async function readSlackTarget(
   db: TargetDb,
   workspaceId: string,
 ): Promise<{ id: string; target_value: string } | null> {
-  const row = await db.prepare(SELECT_SLACK_TARGET).bind(workspaceId).first<{ id: string; target_value: string }>();
+  const row = readSlackTargetRow.nullable().parse(await db.prepare(SELECT_SLACK_TARGET).bind(workspaceId).first());
   if (row === null) return null;
   if (isEncryptedSlackTarget(row.target_value)) {
     const webhook = await decryptSlackWebhookWithKeys(row.target_value, await slackTargetKeys(), workspaceId);
@@ -239,13 +243,15 @@ export async function backfillSlackTargets(
   let cursor = "";
   while (cappedCount(total) < maxRows) {
     const limit = Math.min(batchSize, maxRows - cappedCount(total));
-    const page = await db
-      .prepare(SELECT_UNSEALED_SLACK_TARGETS)
-      .bind(cursor, MAX_SEAL_ATTEMPTS, currentId, limit)
-      .all<SlackTargetRow>();
-    for (const row of page.results) total = addOutcome(total, await sealSlackTargetRow(db, row, keys));
-    const last = page.results.at(-1);
-    if (last === undefined || page.results.length < limit) break;
+    const rows = z
+      .array(slackTargetRow)
+      .parse(
+        (await db.prepare(SELECT_UNSEALED_SLACK_TARGETS).bind(cursor, MAX_SEAL_ATTEMPTS, currentId, limit).all())
+          .results,
+      );
+    for (const row of rows) total = addOutcome(total, await sealSlackTargetRow(db, row, keys));
+    const last = rows.at(-1);
+    if (last === undefined || rows.length < limit) break;
     cursor = last.id;
   }
   return total;
@@ -257,19 +263,27 @@ async function currentKeyId(): Promise<string> {
   return slackTargetKeyId(current);
 }
 
+const countUnsealedSlackTargetsRow = z.object({ remaining: z.number() });
+
 export async function countUnsealedSlackTargets(db: D1Database): Promise<number> {
-  const row = await db
-    .prepare(COUNT_UNSEALED_SLACK_TARGETS)
-    .bind(MAX_SEAL_ATTEMPTS, await currentKeyId())
-    .first<{ remaining: number }>();
+  const row = countUnsealedSlackTargetsRow.nullable().parse(
+    await db
+      .prepare(COUNT_UNSEALED_SLACK_TARGETS)
+      .bind(MAX_SEAL_ATTEMPTS, await currentKeyId())
+      .first(),
+  );
   return row?.remaining ?? 0;
 }
 
+const countStuckSlackTargetsRow = z.object({ stuck: z.number() });
+
 async function countStuckSlackTargets(db: D1Database): Promise<number> {
-  const row = await db
-    .prepare(COUNT_STUCK_SLACK_TARGETS)
-    .bind(MAX_SEAL_ATTEMPTS, await currentKeyId())
-    .first<{ stuck: number }>();
+  const row = countStuckSlackTargetsRow.nullable().parse(
+    await db
+      .prepare(COUNT_STUCK_SLACK_TARGETS)
+      .bind(MAX_SEAL_ATTEMPTS, await currentKeyId())
+      .first(),
+  );
   return row?.stuck ?? 0;
 }
 

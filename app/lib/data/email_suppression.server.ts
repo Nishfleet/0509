@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 
 const SUPPRESS_BY_UNSUBSCRIBE_TOKEN = `INSERT INTO email_suppression (address, reason, created_at)
 SELECT lower(trim(target_value)), 'unsubscribed', ?
@@ -23,8 +24,12 @@ export async function suppressByUnsubscribeToken(token: string): Promise<void> {
   await env.DB.prepare(SUPPRESS_BY_UNSUBSCRIBE_TOKEN).bind(new Date().toISOString(), token).run();
 }
 
+const isUnsubscribeTokenKnownRow = z.object({ present: z.number() });
+
 export async function isUnsubscribeTokenKnown(token: string): Promise<boolean> {
-  const row = await env.DB.prepare(SELECT_UNSUBSCRIBE_TOKEN).bind(token).first<{ present: number }>();
+  const row = isUnsubscribeTokenKnownRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_UNSUBSCRIBE_TOKEN).bind(token).first());
   return row !== null;
 }
 
@@ -32,8 +37,10 @@ export async function suppressWorkspaceTargets(workspaceId: string): Promise<voi
   await env.DB.prepare(SUPPRESS_WORKSPACE_TARGETS).bind(new Date().toISOString(), workspaceId).run();
 }
 
+const isAddressSuppressedRow = z.object({ address: z.string() });
+
 export async function isAddressSuppressed(address: string, db: D1Database = env.DB): Promise<boolean> {
-  const row = await db.prepare(SELECT_SUPPRESSION).bind(address).first<{ address: string }>();
+  const row = isAddressSuppressedRow.nullable().parse(await db.prepare(SELECT_SUPPRESSION).bind(address).first());
   return row !== null;
 }
 
