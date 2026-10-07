@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "react-router build",
+    "check": "tsc --noEmit -p tsconfig.test.json",
     "dev": "react-router dev",
     "deploy": "wrangler deploy",
     "test": "vitest run",
