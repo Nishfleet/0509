@@ -355,7 +355,7 @@ test("the ticker causes no layout shift @smoke", async ({ page }) => {
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
         if (!Reflect.get(entry, "hadRecentInput")) {
-          Reflect.set(window, "__cls", Reflect.get(window, "__cls") + Reflect.get(entry, "value"));
+          Reflect.set(window, "__cls", Number(Reflect.get(window, "__cls")) + Number(Reflect.get(entry, "value")));
         }
       }
     }).observe({ type: "layout-shift", buffered: true });
@@ -365,7 +365,7 @@ test("the ticker causes no layout shift @smoke", async ({ page }) => {
   await expectFaceLoaded(page, "Bricolage Grotesque", 800);
   await expectFaceLoaded(page, "Instrument Sans", 400);
   await expectFaceLoaded(page, "IBM Plex Mono", 400);
-  expect(await page.evaluate(() => Reflect.get(window, "__cls"))).toBeLessThan(0.05);
+  expect(await page.evaluate(() => Number(Reflect.get(window, "__cls")))).toBeLessThan(0.05);
 });
 
 test("the ticker stops under reduced motion @smoke", async ({ page }) => {

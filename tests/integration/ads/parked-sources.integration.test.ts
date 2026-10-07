@@ -86,7 +86,7 @@ describe("parked ad platforms (#4039)", () => {
 
       expect(row.kind).toBe("ads");
       // is_enabled = 0 is the whole mechanism: the sweep select requires 1.
-      expect(Number(row.is_enabled)).toBe(0);
+      expect(row.is_enabled).toBe(0);
       expect(row.id).toBe(expected.id);
       expect(row.key).toBe(expected.key);
 

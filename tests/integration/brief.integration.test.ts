@@ -17,7 +17,7 @@ import { refreshWorkspaceScores } from "../../workers/standing/refresh";
  */
 let seededRuns = 0;
 
-async function seed(): Promise<{ workspaceId: string; weekStart: string }> {
+async function seed(): Promise<{ workspaceId: string; weekStart: string; onEntity: string }> {
   seededRuns += 1;
   const now = "2026-09-21T12:00:00.000Z";
   const weekStart = "2026-09-21T12:00:00.000Z";

@@ -79,7 +79,7 @@ function exampleSecrets(): Record<string, string> {
   const text = readFileSync(new URL("../.dev.vars.example", import.meta.url), "utf8");
   for (const line of text.split("\n")) {
     const match = /^([A-Z0-9_]+)=(.*)$/.exec(line);
-    if (match) secrets[String(match[1])] = String(match[2]);
+    if (match?.[1] !== undefined) secrets[match[1]] = match[2] ?? "";
   }
   return secrets;
 }
@@ -91,14 +91,17 @@ describe("worker env", () => {
 
   it("accepts every required entry and an unset liveness URL", () => {
     useEnv(configured());
-    expect(() => createWorkerEnvCheck()()).not.toThrow();
+    expect(() => {
+      createWorkerEnvCheck()();
+    }).not.toThrow();
   });
 
   it("names every missing entry in one error", () => {
     const values = configured();
-    delete values.DB;
-    delete values.BETTER_AUTH_SECRET;
-    useEnv(values);
+    const { DB: _droppedDb, BETTER_AUTH_SECRET: _droppedSecret, ...missing } = values;
+    expect(_droppedDb).toBeDefined();
+    expect(_droppedSecret).toBeDefined();
+    useEnv(missing);
     const error = namesOf(createWorkerEnvCheck());
     expect(error.names).toEqual(["DB", "BETTER_AUTH_SECRET"]);
     expect(error.message).toBe(
@@ -126,7 +129,9 @@ describe("worker env", () => {
     Reflect.set(globalThis, "LIVENESS_PING_URL", "also-not-a-url");
     Reflect.set(globalThis, "SITE_SWEEP_PING_URL", "sweep-not-a-url");
     try {
-      expect(() => createWorkerEnvCheck()()).not.toThrow();
+      expect(() => {
+        createWorkerEnvCheck()();
+      }).not.toThrow();
     } finally {
       Reflect.deleteProperty(globalThis, "LIVENESS_PING_URL");
       Reflect.deleteProperty(globalThis, "SITE_SWEEP_PING_URL");
@@ -241,12 +246,16 @@ describe("worker env", () => {
       TURNSTILE_SITE_KEY: PUBLIC_PLACEHOLDER_VALUES.TURNSTILE_SITE_KEY,
       TURNSTILE_SECRET_KEY: PUBLIC_PLACEHOLDER_VALUES.TURNSTILE_SECRET_KEY,
     });
-    expect(() => createWorkerEnvCheck()()).not.toThrow();
+    expect(() => {
+      createWorkerEnvCheck()();
+    }).not.toThrow();
   });
 
   it("boots with no DODO_WEBHOOK_SECRET at all", () => {
     useEnv(configured());
-    expect(() => createWorkerEnvCheck()()).not.toThrow();
+    expect(() => {
+      createWorkerEnvCheck()();
+    }).not.toThrow();
   });
 
   it("answers 503 and names a placeholder secret without echoing it", async () => {
@@ -321,9 +330,13 @@ describe("worker env", () => {
   it("checks once per isolate", () => {
     const check = createWorkerEnvCheck();
     useEnv(configured());
-    expect(() => check()).not.toThrow();
+    expect(() => {
+      check();
+    }).not.toThrow();
     useEnv({});
-    expect(() => check()).not.toThrow();
+    expect(() => {
+      check();
+    }).not.toThrow();
 
     const failing = createWorkerEnvCheck();
     useEnv({});

@@ -36,12 +36,23 @@ const FIXTURE_URL = `${FIXTURE_ORIGIN}/`;
 
 type FixtureEnv = Parameters<typeof fixtureWorker.fetch>[1];
 
+/**
+ * The runtime always hands `fetch` an ExecutionContext, which the fixture
+ * Worker ignores. The module's own export type keeps `fetch` at the two
+ * parameters it declares, so this alias carries the third argument.
+ */
+const fixtureFetch = fixtureWorker.fetch as unknown as (
+  request: Request,
+  env: FixtureEnv,
+  ctx: ExecutionContext,
+) => Promise<Response>;
+
 const fixtureEnv = () => env as unknown as FixtureEnv;
 const fixtureState = () => fixtureEnv().STATE.getByName("fixture");
 
 const fixtureCall = async (path: string, init?: RequestInit): Promise<Response> => {
   const ctx = createExecutionContext();
-  const res = await fixtureWorker.fetch(new Request(`${FIXTURE_ORIGIN}${path}`, init), fixtureEnv(), ctx);
+  const res = await fixtureFetch(new Request(`${FIXTURE_ORIGIN}${path}`, init), fixtureEnv(), ctx);
   await waitOnExecutionContext(ctx);
   return res;
 };
@@ -58,7 +69,7 @@ const dispatch = (input: RequestInfo | URL, init?: RequestInit): Promise<Respons
   const request = input instanceof Request ? input : new Request(String(input), init);
   const url = new URL(request.url);
   if (url.hostname === "fixture.0509.in") {
-    return fixtureWorker.fetch(request, fixtureEnv(), createExecutionContext());
+    return fixtureFetch(request, fixtureEnv(), createExecutionContext());
   }
   return Promise.reject(new Error(`unexpected fetch to ${url.toString()}`));
 };
@@ -90,9 +101,9 @@ interface Recorder {
 }
 
 const bindingFor = (rec: Recorder): SendEmail => ({
-  send(message: EmailMessageBuilder) {
-    rec.sent.push(message);
-    return Promise.resolve({} as EmailSendResult);
+  send(message: EmailMessage | EmailMessageBuilder) {
+    rec.sent.push(message as EmailMessageBuilder);
+    return Promise.resolve({ messageId: "stub-send-email" });
   },
 });
 
@@ -105,7 +116,7 @@ const runCheck = async (id: string) => {
   });
   await env.OWN_SITE_CHECK.create({ id });
   await introspector.waitForStatus("complete");
-  return introspector.getOutput();
+  return await introspector.getOutput();
 };
 
 interface IncidentRow {
@@ -212,7 +223,9 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
     jevAnswers.choice.clear();
     jevAnswers.noul.set("own_site_breakage", 0.8);
     installJev();
-    send = vi.spyOn(workerEnv.SEND_EMAIL, "send").mockResolvedValue(undefined);
+    send = vi.spyOn(workerEnv.SEND_EMAIL, "send").mockResolvedValue({
+      metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
+    });
     vi.stubGlobal("fetch", dispatch);
   });
 
@@ -246,7 +259,7 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
     // Soft break, set through the fixture's real token-gated route: a 200 page
     // whose pricing section is gone.
     expect((await flip("soft")).status).toBe(200);
-    const softRead = await fixtureWorker.fetch(new Request(FIXTURE_URL), fixtureEnv(), createExecutionContext());
+    const softRead = await fixtureFetch(new Request(FIXTURE_URL), fixtureEnv(), createExecutionContext());
     expect(softRead.status).toBe(200);
     const softHtml = await softRead.text();
     expect(softHtml).not.toContain('<section id="pricing"');

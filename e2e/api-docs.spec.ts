@@ -11,7 +11,7 @@ test("the API reference is generated from the OpenAPI document @smoke", async ({
   const watched = watchConsole(page);
   const spec = await request.get("/api/v1/openapi.json");
   expect(spec.status()).toBe(200);
-  const body: { paths: Record<string, unknown> } = await spec.json();
+  const body = (await spec.json()) as { paths: Record<string, unknown> };
   const paths = Object.keys(body.paths);
 
   const response = await page.goto("/api/docs");

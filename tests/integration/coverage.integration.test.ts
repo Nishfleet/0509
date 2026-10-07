@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
-import { COVERAGE } from "../../app/lib/coverage";
+import { COVERAGE, type CoverageKind, type CoverageSource } from "../../app/lib/coverage";
 import { readRegistrySources } from "../../app/lib/data/source.server";
 import { llmsTxt } from "../../app/lib/public-routes";
 import { watchedClaims } from "../../app/lib/watched-claims";
@@ -16,10 +16,10 @@ describe("coverage matches the enabled sources", () => {
   it("claims a source as live exactly when its row is enabled", async () => {
     const rows = await env.DB.prepare("SELECT key FROM source WHERE is_enabled = 1").all<{ key: string }>();
     const enabled = new Set(rows.results.map((row) => row.key));
-    const sources = COVERAGE.flatMap((group) => group.sources);
+    const sources: readonly CoverageSource[] = COVERAGE.flatMap((group: CoverageKind) => group.sources);
 
     for (const source of sources) {
-      if (!("sourceKey" in source)) continue;
+      if (source.sourceKey === undefined) continue;
       expect(
         enabled.has(source.sourceKey),
         `${source.id} names source "${source.sourceKey}", which no migration enables`,
@@ -27,7 +27,7 @@ describe("coverage matches the enabled sources", () => {
     }
 
     const claimed = new Set(
-      sources.flatMap((source) => ("sourceKey" in source && source.live ? [source.sourceKey] : [])),
+      sources.flatMap((source) => (source.sourceKey !== undefined && source.live ? [source.sourceKey] : [])),
     );
     for (const key of enabled) {
       expect(
@@ -38,8 +38,10 @@ describe("coverage matches the enabled sources", () => {
   });
 
   it("reflects a live claim's degraded_reason in the llms.txt render", async () => {
-    const news = COVERAGE.flatMap((group) => group.sources).find((source) => source.id === "mentions.news");
-    if (news === undefined || !("sourceKey" in news)) {
+    const news = COVERAGE.flatMap((group: CoverageKind) => group.sources).find(
+      (source) => source.id === "mentions.news",
+    );
+    if (news?.sourceKey === undefined) {
       throw new Error("mentions.news must name a sourceKey");
     }
     await env.DB.prepare("UPDATE source SET degraded_reason = ? WHERE key = ?").bind("timed out", news.sourceKey).run();

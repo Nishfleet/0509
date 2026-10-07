@@ -317,7 +317,8 @@ describe("ensureWorkspace", () => {
                   if (entered === 1) await gate;
                   else release();
                 }
-                await bound.run();
+                const result = await bound.run();
+                return { meta: { changes: result.meta.changes } };
               },
             };
           },

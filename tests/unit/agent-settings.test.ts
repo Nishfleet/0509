@@ -189,7 +189,7 @@ describe("AgentKeys", () => {
     expect(html.match(/up to 120 requests a minute/g)).toHaveLength(1);
     expect(html.match(/42 requests left/g)).toHaveLength(1);
     const openRow = html.match(/<li[^>]*data-testid="api-key"[^>]*>[\s\S]*?<\/li>/g)?.[1] ?? "";
-    const openDetails = openRow.match(/<span class="block text-body-sm text-ink-soft">([^<]*)<\/span>/)?.[1];
+    const openDetails = /<span class="block text-body-sm text-ink-soft">([^<]*)<\/span>/.exec(openRow)?.[1];
     expect(openDetails).toBe("Created 1 Sept 2026 · never used");
     expect(openRow).not.toContain("requests");
   });
@@ -241,7 +241,7 @@ describe("AgentKeys", () => {
     expect(makeKey).toContain("Make a key");
     expect(makeKey).not.toContain("Making…");
     expect(makeKey).not.toContain('disabled=""');
-    const keyName = html.match(/<input\b[^>]*id="key-name"[^>]*>/)?.[0] ?? "";
+    const keyName = /<input\b[^>]*id="key-name"[^>]*>/.exec(html)?.[0] ?? "";
     expect(keyName).toContain('autoComplete="off"');
   });
 
@@ -608,7 +608,11 @@ describe("copying a new API key", () => {
   // place CopyKey is rendered.
   it("puts the key on screen above the copy button in the new-key notice", () => {
     const Stub = createRoutesStub([
-      { path: "/", Component: () => createElement(AgentKeys, { keys: [], newKey: NEW_KEY }) },
+      {
+        path: "/",
+        Component: () =>
+          createElement(AgentKeys, { keys: [], newKey: NEW_KEY, duplicate: false, submission: "test-submission" }),
+      },
     ]);
     const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
     const key = html.indexOf(`>${NEW_KEY}<`);

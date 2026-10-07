@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { readEntitlements } from "./plan.server";
 import { shouldRetryD1, tryWhile } from "./retries.server";
+import { resetYoutubeWatchStatement } from "./watch.server";
 
 const identitySocials = z.object({
   socials: z.array(z.object({ platform: z.string(), url: z.string() })).optional(),
@@ -126,9 +127,6 @@ const REPLACE_COMPETITOR_YOUTUBE = `UPDATE entity SET identity_json = json_set(i
 WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor' AND json_valid(identity_json)
   AND coalesce(json_type(identity_json, '$.socials'), 'array') = 'array'`;
 
-const RESET_YOUTUBE_WATCH =
-  "UPDATE watch SET config_json = json_remove(CASE WHEN json_valid(config_json) THEN config_json ELSE '{}' END, '$.channelId', '$.pendingChannelId', '$.degraded', '$.noChannel'), last_polled_at = NULL WHERE entity_id = ?1 AND source_id = 'src_mentions_youtube' AND entity_id IN (SELECT id FROM entity WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor' AND json_valid(identity_json) AND coalesce(json_type(identity_json, '$.socials'), 'array') = 'array')";
-
 export async function readCompetitorSocials(
   workspaceId: string,
   entityId: string,
@@ -152,7 +150,7 @@ export async function replaceCompetitorYoutube(input: {
     () =>
       env.DB.batch([
         env.DB.prepare(REPLACE_COMPETITOR_YOUTUBE).bind(entityId, workspaceId, social),
-        env.DB.prepare(RESET_YOUTUBE_WATCH).bind(entityId, workspaceId),
+        resetYoutubeWatchStatement(entityId, workspaceId),
       ]),
     shouldRetryD1,
   );
@@ -559,7 +557,9 @@ export async function fillCompetitorSocials(input: {
   return result.meta.changes === 1;
 }
 
-export type SiteFillState = "pending" | "filled" | "gave_up";
+const SITE_FILL_STATES = ["pending", "filled", "gave_up"] as const;
+
+export type SiteFillState = (typeof SITE_FILL_STATES)[number];
 
 const FILL_SELF_SITE_FIELDS =
   "UPDATE entity SET identity_json = json_set(identity_json, '$.description', coalesce(json_extract(identity_json, '$.description'), ?2), '$.socials', CASE WHEN json_array_length(identity_json, '$.socials') > 0 THEN json(json_extract(identity_json, '$.socials')) ELSE json(?3) END, '$.siteFill', 'filled') WHERE id = ?1 AND workspace_id = ?4 AND role = 'self'";
@@ -585,12 +585,14 @@ export async function markSelfSiteFill(workspaceId: string, entityId: string, st
 }
 
 const READ_SELF_SITE_FILL =
-  "SELECT json_extract(identity_json, '$.siteFill') AS site_fill FROM entity WHERE workspace_id = ?1 AND role = 'self'";
+  "SELECT json_extract(identity_json, '$.siteFill') AS site_fill, json_type(identity_json, '$.siteFill') AS site_fill_type FROM entity WHERE workspace_id = ?1 AND role = 'self'";
 
-const siteFillRow = z.object({ site_fill: z.string().nullable() });
+const siteFillRow = z.object({
+  site_fill: z.enum(SITE_FILL_STATES).nullable(),
+  site_fill_type: z.literal("text").nullable(),
+});
 
 export async function readSelfSiteFill(workspaceId: string): Promise<SiteFillState | null> {
   const row = siteFillRow.nullable().parse(await env.DB.prepare(READ_SELF_SITE_FILL).bind(workspaceId).first());
-  const value = row === null ? null : row.site_fill;
-  return value === "pending" || value === "filled" || value === "gave_up" ? value : null;
+  return row === null ? null : row.site_fill;
 }

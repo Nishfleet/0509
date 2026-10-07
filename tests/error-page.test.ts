@@ -70,7 +70,7 @@ describe("error page", () => {
         ],
       },
     ];
-    const handler = createStaticHandler(routes);
+    const handler = createStaticHandler(routes as unknown as Parameters<typeof createStaticHandler>[0]);
     const context = await handler.query(new Request("http://0509.io/blow-up"));
     expect(context).not.toBeInstanceOf(Response);
     if (context instanceof Response) return;
@@ -107,7 +107,7 @@ describe("error page", () => {
         children: [{ id: "index", index: true, Component: () => null }],
       },
     ];
-    const handler = createStaticHandler(routes);
+    const handler = createStaticHandler(routes as unknown as Parameters<typeof createStaticHandler>[0]);
     const context = await handler.query(new Request("http://0509.io/this-page-is-not-here"));
     expect(context).not.toBeInstanceOf(Response);
     if (context instanceof Response) return;

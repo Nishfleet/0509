@@ -52,7 +52,7 @@ function render(chip: AlertChipKey, chipCounts: Record<AlertChipKey, number>, gr
 }
 
 function linkBackToAll(html: string): string {
-  return html.match(/<a\b[^>]*href="\/app\/alerts"[^>]*>/)?.[0] ?? "";
+  return /<a\b[^>]*href="\/app\/alerts"[^>]*>/.exec(html)?.[0] ?? "";
 }
 
 describe("an Alerts chip with no rows of its own (0509#6617)", () => {

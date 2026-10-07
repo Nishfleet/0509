@@ -40,11 +40,14 @@ function fakeTransport() {
 // the dsn, the recording transport, and a stack parser that drops frames
 // because no assertion here reads a stack frame.
 function initProductionOptions(): void {
+  const productionOptions = sentryOptions({} as unknown as Env);
+  const integrations = productionOptions.integrations;
   const client = new CloudflareClient({
-    ...sentryOptions({} as unknown as Env),
+    ...productionOptions,
     dsn: "https://examplePublicKey@o0.ingest.sentry.io/0",
     transport: fakeTransport,
     stackParser: () => [],
+    integrations: typeof integrations === "function" ? integrations([]) : (integrations ?? []),
   });
   setCurrentClient(client);
   client.init();

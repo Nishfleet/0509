@@ -152,7 +152,9 @@ describe("own-site alert in one sweep pass", () => {
     holder.html = BEFORE_HTML;
     installBrowser();
     browserHolder.current = browserStub();
-    send = vi.spyOn(workerEnv.SEND_EMAIL, "send").mockResolvedValue(undefined);
+    send = vi.spyOn(workerEnv.SEND_EMAIL, "send").mockResolvedValue({
+      metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
+    });
     vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
       const url = input instanceof Request ? input.url : String(input);
       return Promise.resolve(

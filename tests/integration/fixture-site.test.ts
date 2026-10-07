@@ -1,4 +1,4 @@
-import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
+import { createExecutionContext, env as workerdEnv, waitOnExecutionContext } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import worker from "../../workers/fixture-site";
@@ -21,12 +21,29 @@ import worker from "../../workers/fixture-site";
  */
 const TOKEN = "integration-token";
 
+/**
+ * The fixture-site project's bindings, from
+ * tests/integration/wrangler.fixture-site.test.jsonc. `env` from cloudflare:test
+ * is typed as the app Worker's Env, which has no STATE namespace, so it is
+ * narrowed here once for the whole file.
+ */
+type FixtureEnv = Parameters<typeof worker.fetch>[1];
+
+const env = workerdEnv as unknown as FixtureEnv;
+
+/**
+ * The runtime always hands `fetch` an ExecutionContext. The module's own export
+ * type keeps `fetch` at the two parameters it declares, so this alias carries
+ * the third argument the runtime passes and the handler ignores.
+ */
+const callFetch = worker.fetch as (request: Request, env: FixtureEnv, ctx: ExecutionContext) => Promise<Response>;
+
 const state = () => env.STATE.getByName("fixture.0509.in");
 
-const get = () => worker.fetch(new Request("https://fixture.0509.in/"), env, createExecutionContext());
+const get = () => callFetch(new Request("https://fixture.0509.in/"), env, createExecutionContext());
 
 const flip = (mode: string, token: string | null = TOKEN, method = "POST") =>
-  worker.fetch(
+  callFetch(
     new Request(`https://fixture.0509.in/__break?mode=${mode}`, {
       method,
       headers: token === null ? {} : { authorization: `Bearer ${token}` },
@@ -36,7 +53,7 @@ const flip = (mode: string, token: string | null = TOKEN, method = "POST") =>
   );
 
 const setPrice = (variant: string, token: string | null = TOKEN, method = "POST") =>
-  worker.fetch(
+  callFetch(
     new Request(`https://fixture.0509.in/__price?variant=${variant}`, {
       method,
       headers: token === null ? {} : { authorization: `Bearer ${token}` },
@@ -46,7 +63,7 @@ const setPrice = (variant: string, token: string | null = TOKEN, method = "POST"
   );
 
 const setWall = (state: string, token: string | null = TOKEN, method = "POST") =>
-  worker.fetch(
+  callFetch(
     new Request(`https://fixture.0509.in/__wall?state=${state}`, {
       method,
       headers: token === null ? {} : { authorization: `Bearer ${token}` },
@@ -86,7 +103,7 @@ describe("0509-fixture-site", () => {
 
   it("flips to a hard break and answers 500", async () => {
     const ctx = createExecutionContext();
-    await worker.fetch(
+    await callFetch(
       new Request("https://fixture.0509.in/__break?mode=hard", {
         method: "POST",
         headers: { authorization: `Bearer ${TOKEN}` },
@@ -109,7 +126,7 @@ describe("0509-fixture-site", () => {
 
   it("flips to a soft break and answers 200 with the pricing section absent", async () => {
     const ctx = createExecutionContext();
-    await worker.fetch(
+    await callFetch(
       new Request("https://fixture.0509.in/__break?mode=soft", {
         method: "POST",
         headers: { authorization: `Bearer ${TOKEN}` },
@@ -130,7 +147,7 @@ describe("0509-fixture-site", () => {
 
   it("repairs back to the healthy page with the pricing section restored", async () => {
     const breakCtx = createExecutionContext();
-    await worker.fetch(
+    await callFetch(
       new Request("https://fixture.0509.in/__break?mode=soft", {
         method: "POST",
         headers: { authorization: `Bearer ${TOKEN}` },
@@ -141,7 +158,7 @@ describe("0509-fixture-site", () => {
     await waitOnExecutionContext(breakCtx);
 
     const repairCtx = createExecutionContext();
-    await worker.fetch(
+    await callFetch(
       new Request("https://fixture.0509.in/__break?mode=off", {
         method: "POST",
         headers: { authorization: `Bearer ${TOKEN}` },
@@ -176,7 +193,7 @@ describe("0509-fixture-site", () => {
   });
 
   it("503s naming the secret when FIXTURE_SITE_TOKEN is unset on the Worker", async () => {
-    const res = await worker.fetch(
+    const res = await callFetch(
       new Request("https://fixture.0509.in/__break?mode=hard", {
         method: "POST",
         headers: { authorization: `Bearer ${TOKEN}` },
@@ -208,7 +225,7 @@ describe("price variant", () => {
 
   it("flips to raised and back to base, stamping the flip time on the page", async () => {
     const raiseCtx = createExecutionContext();
-    const res = await worker.fetch(
+    const res = await callFetch(
       new Request("https://fixture.0509.in/__price?variant=raised", {
         method: "POST",
         headers: { authorization: `Bearer ${TOKEN}` },
@@ -226,7 +243,7 @@ describe("price variant", () => {
     expect(Number.isFinite(Date.parse(at ?? ""))).toBe(true);
 
     const baseCtx = createExecutionContext();
-    const back = await worker.fetch(
+    const back = await callFetch(
       new Request("https://fixture.0509.in/__price?variant=base", {
         method: "POST",
         headers: { authorization: `Bearer ${TOKEN}` },
@@ -250,7 +267,7 @@ describe("price variant", () => {
 
   it("keeps data-variant on a soft break, when the pricing section is gone", async () => {
     const priceCtx = createExecutionContext();
-    await worker.fetch(
+    await callFetch(
       new Request("https://fixture.0509.in/__price?variant=raised", {
         method: "POST",
         headers: { authorization: `Bearer ${TOKEN}` },
@@ -261,7 +278,7 @@ describe("price variant", () => {
     await waitOnExecutionContext(priceCtx);
 
     const breakCtx = createExecutionContext();
-    await worker.fetch(
+    await callFetch(
       new Request("https://fixture.0509.in/__break?mode=soft", {
         method: "POST",
         headers: { authorization: `Bearer ${TOKEN}` },
@@ -332,7 +349,7 @@ describe("per-hostname state", () => {
   const J8 = "j8.fixture.0509.in";
 
   const onJ8 = (path: string, method = "GET") =>
-    worker.fetch(
+    callFetch(
       new Request(`https://${J8}${path}`, {
         method,
         headers: { authorization: `Bearer ${TOKEN}` },

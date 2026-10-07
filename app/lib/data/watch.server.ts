@@ -139,8 +139,10 @@ export async function markWatchPolled(watchId: string, polledAt: string): Promis
 const READ_WATCH_CONFIG = "SELECT config_json FROM watch WHERE id = ?1";
 const WRITE_WATCH_CONFIG = "UPDATE watch SET config_json = ?2 WHERE id = ?1";
 
+const readWatchConfigJsonRow = z.object({ config_json: z.string() });
+
 export async function readWatchConfigJson(watchId: string): Promise<string | null> {
-  const row = await env.DB.prepare(READ_WATCH_CONFIG).bind(watchId).first<{ config_json: string }>();
+  const row = readWatchConfigJsonRow.nullable().parse(await env.DB.prepare(READ_WATCH_CONFIG).bind(watchId).first());
   return row === null ? null : row.config_json;
 }
 
@@ -192,26 +194,30 @@ JOIN source s ON s.id = w.source_id AND s.kind = ?1 AND s.is_enabled = 1
 WHERE w.is_active = 1 AND w.target_key = COALESCE(NULLIF(e.name, ''), e.domain)
 ORDER BY s.plugin_key, w.target_key, w.id`;
 
-export interface WatchRow {
-  watch_id: string;
-  target_key: string;
-  hn_cursor: number;
-  watch_created_at: string | null;
-  entity_id: string;
-  workspace_id: string;
-  role: "self" | "competitor";
-  name: string;
-  domain: string;
-  source_id: string;
-  plugin_key: string;
-  reliability: string;
-  min_interval_seconds: number;
-}
+const watchRow = z.object({
+  watch_id: z.string(),
+  target_key: z.string(),
+  hn_cursor: z.number(),
+  watch_created_at: z.string().nullable(),
+  entity_id: z.string(),
+  workspace_id: z.string(),
+  role: z.enum(["self", "competitor"]),
+  name: z.string(),
+  domain: z.string(),
+  source_id: z.string(),
+  plugin_key: z.string(),
+  reliability: z.string(),
+  min_interval_seconds: z.number(),
+});
+
+export type WatchRow = z.infer<typeof watchRow>;
+
+const watchRows = z.array(watchRow);
 
 export async function readActiveWatches(kind: "mentions" | "ads"): Promise<WatchRow[]> {
   await env.DB.prepare(ENSURE_WATCHES).bind(kind).run();
-  const rows = await env.DB.prepare(SELECT_WATCHES).bind(kind).all<WatchRow>();
-  return rows.results;
+  const rows = await env.DB.prepare(SELECT_WATCHES).bind(kind).all();
+  return watchRows.parse(rows.results);
 }
 
 const ENTITIES_WITHOUT_HIRING_WATCH = `SELECT e.id AS id, e.domain AS domain
@@ -413,13 +419,18 @@ const CUSTOMER_SITE_USAGE = `SELECT COUNT(*) AS rows_used,
 FROM watch w JOIN entity e ON e.id = w.entity_id AND e.workspace_id = ?1
 WHERE w.entity_id = ?2 AND ${CUSTOMER_MARKER("w")}`;
 
+const readCustomerSiteUsageRow = z.object({
+  rows_used: z.number(),
+  last_at: z.string().nullable(),
+});
+
 export async function readCustomerSiteUsage(
   workspaceId: string,
   entityId: string,
 ): Promise<{ rows: number; lastAt: string | null }> {
-  const row = await env.DB.prepare(CUSTOMER_SITE_USAGE)
-    .bind(workspaceId, entityId)
-    .first<{ rows_used: number; last_at: string | null }>();
+  const row = readCustomerSiteUsageRow
+    .nullable()
+    .parse(await env.DB.prepare(CUSTOMER_SITE_USAGE).bind(workspaceId, entityId).first());
   return { rows: row?.rows_used ?? 0, lastAt: row?.last_at ?? null };
 }
 
@@ -440,10 +451,17 @@ export interface SiteWatchSummary {
   customerSite: string | null;
 }
 
+const readSiteWatchSummaryRow = z.object({
+  pages: z.number(),
+  last_polled_at: z.string().nullable(),
+  unreadable: z.number(),
+  customer_site: z.string().nullable(),
+});
+
 export async function readSiteWatchSummary(workspaceId: string, entityId: string): Promise<SiteWatchSummary> {
-  const row = await env.DB.prepare(SITE_WATCH_SUMMARY)
-    .bind(workspaceId, entityId)
-    .first<{ pages: number; last_polled_at: string | null; unreadable: number; customer_site: string | null }>();
+  const row = readSiteWatchSummaryRow
+    .nullable()
+    .parse(await env.DB.prepare(SITE_WATCH_SUMMARY).bind(workspaceId, entityId).first());
   return {
     pages: row?.pages ?? 0,
     lastPolledAt: row?.last_polled_at ?? null,
@@ -458,13 +476,13 @@ JOIN entity e ON e.id = w.entity_id
 WHERE e.id = ?2 AND e.workspace_id = ?1 AND e.role = 'competitor'
 ORDER BY w.id`;
 
+const readEntityR2PrefixesRows = z.array(z.object({ id: z.string() }));
+
 export async function readEntityR2Prefixes(workspaceId: string, entityId: string): Promise<string[]> {
-  const { results } = await env.DB.prepare(ENTITY_R2_PREFIXES).bind(workspaceId, entityId).all<{ id: string }>();
-  return results.flatMap((row) => [
-    `snapshot/site/${row.id}/`,
-    `snapshot/hiring/${row.id}/`,
-    `snapshot/feed/${row.id}/`,
-  ]);
+  const { results } = await env.DB.prepare(ENTITY_R2_PREFIXES).bind(workspaceId, entityId).all();
+  return readEntityR2PrefixesRows
+    .parse(results)
+    .flatMap((row) => [`snapshot/site/${row.id}/`, `snapshot/hiring/${row.id}/`, `snapshot/feed/${row.id}/`]);
 }
 
 export const RANKED_PRICING_PAGES = `SELECT p.entity_id AS entity_id, p.url AS url,
@@ -500,4 +518,11 @@ export function stopUnwantedPricingWatchesStatement(sourceId: string, pagesWatch
 
 export function resumeWantedPricingWatchesStatement(sourceId: string, pagesWatched: number): D1PreparedStatement {
   return env.DB.prepare(RESUME_WANTED_PRICING_WATCHES).bind(sourceId, pagesWatched);
+}
+
+const RESET_YOUTUBE_WATCH =
+  "UPDATE watch SET config_json = json_remove(CASE WHEN json_valid(config_json) THEN config_json ELSE '{}' END, '$.channelId', '$.pendingChannelId', '$.degraded', '$.noChannel'), last_polled_at = NULL WHERE entity_id = ?1 AND source_id = 'src_mentions_youtube' AND entity_id IN (SELECT id FROM entity WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor' AND json_valid(identity_json) AND coalesce(json_type(identity_json, '$.socials'), 'array') = 'array')";
+
+export function resetYoutubeWatchStatement(entityId: string, workspaceId: string): D1PreparedStatement {
+  return env.DB.prepare(RESET_YOUTUBE_WATCH).bind(entityId, workspaceId);
 }
