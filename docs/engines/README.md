@@ -17,9 +17,9 @@ One file per engine, in the P3 build order (umbrella #3842):
 
 Of the four P3 design packets, only [`site-change.md`](site-change.md) remains — the other three were deleted in 0509#7018 (git history keeps them). Each carried two candidate shapes with the screening and the pick, the data flow against `docs/REBUILD-SCHEMA.md` tables by name, the Workflow/Queue/cron layout with concurrency numbers, the exact upstream calls with live probes on Gymshark, the Jev decision ids and their context-pack fields, the cost line, the failure modes with their degraded UI states, and worker packets sized for 45 minutes with no design choice left.
 
-## What the four share
+## What the shared decisions are
 
-These decisions are made once here and repeated in each file so a packet is readable alone.
+These decisions are made once here and were repeated in each packet so one was readable alone. The surviving packets are [`site-change.md`](site-change.md) plus [`delivery.md`](delivery.md), [`guardrails.md`](guardrails.md), [`mentions.md`](mentions.md) and [`standing-home.md`](standing-home.md).
 
 **Two queues, and the browser cap is one number.**
 
