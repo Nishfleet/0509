@@ -16,6 +16,7 @@ import { deadLinkMessage } from "../lib/login-link-error";
 import { formMagicLinkRequest } from "../lib/auth/login-magic-link.server";
 import { createAuthForRequest } from "../lib/auth.server";
 import { hasSession } from "../lib/require-session.server";
+import { MAIN_CONTENT_ID, SkipLink } from "../components/skip-link";
 import {
   clearAccountDeleteInstanceId,
   readAccountDeleteInstanceId,
@@ -103,10 +104,11 @@ export default function Login() {
 
   return (
     <div className={SIGN_IN_SHELL}>
+      <SkipLink />
       <header className="self-start">
         <Wordmark />
       </header>
-      <main className="flex flex-col">
+      <main id={MAIN_CONTENT_ID} tabIndex={-1} className="flex flex-col">
         <h1 className={SIGN_IN_TITLE}>Sign in</h1>
         <p className={SIGN_IN_LEDE}>We email you a link. Tap it and you're in. There is no password.</p>
         {deleted.progress === null || deleted.id === null ? null : (
