@@ -9,7 +9,7 @@ let USER_ID = "user-case";
 const NOW = "2026-10-05T00:00:00Z";
 
 const silentBinding = (sent: unknown[]): SendEmail => ({
-  send(message: EmailMessageBuilder) {
+  send(message: EmailMessage | EmailMessageBuilder) {
     sent.push(message);
     return Promise.resolve({ messageId: "test-message" });
   },

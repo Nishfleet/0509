@@ -58,7 +58,7 @@ async function toView(row: SiteChangeRow, payload: SiteChangePayload): Promise<S
     isSelf,
     headline: changeHeadline({ name: row.entity_name ?? row.entity_domain, isSelf, role: payload.page.role }),
     page: pageLabel(payload.page.role),
-    url: row.url,
+    url: row.url ?? payload.page.url,
     observedAt: row.observed_at,
     capturedAt: captureLabel(row.after_at ?? row.observed_at),
     wordsChanged: payload.wordsAdded + payload.wordsRemoved,
@@ -74,7 +74,7 @@ async function toView(row: SiteChangeRow, payload: SiteChangePayload): Promise<S
       decidedAt: row.verdict_decided_at,
       compared: [
         { label: "Page", value: pageLabel(payload.page.role) },
-        { label: "Link", value: row.url },
+        { label: "Link", value: row.url ?? payload.page.url },
         { label: "Before", value: row.before_at ?? "—" },
         { label: "After", value: row.after_at ?? row.observed_at },
       ],

@@ -113,6 +113,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   Reflect.deleteProperty(env, "ACCOUNT_DELETE");
 });
 
@@ -234,5 +235,43 @@ describe("forgetCompetitor", () => {
     expect(await count("signal", "signal-self-a")).toBe(1);
     expect(await count("snapshot", "snapshot-self-a")).toBe(1);
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it("stops the identity-tail instance for the forgotten competitor", async () => {
+    const create = vi.fn(() => Promise.resolve({ id: "account-delete" }));
+    Reflect.set(env, "ACCOUNT_DELETE", { create });
+    const terminate = vi.fn(() => Promise.resolve());
+    vi.spyOn(env.IDENTITY_TAIL, "get").mockResolvedValue({ terminate } as never);
+
+    await expect(forgetCompetitor("workspace-a", "competitor-a", "Brand")).resolves.toBe("forgotten");
+
+    expect(env.IDENTITY_TAIL.get).toHaveBeenCalledWith("identity-tail-competitor-a");
+    expect(terminate).toHaveBeenCalledTimes(1);
+    expect(terminate.mock.invocationCallOrder[0]).toBeLessThan(create.mock.invocationCallOrder[0]);
+  });
+
+  it("still forgets the competitor when the identity-tail instance is already gone", async () => {
+    const create = vi.fn(() => Promise.resolve({ id: "account-delete" }));
+    Reflect.set(env, "ACCOUNT_DELETE", { create });
+    vi.spyOn(env.IDENTITY_TAIL, "get").mockRejectedValue(new Error("instance.not_found"));
+
+    await expect(forgetCompetitor("workspace-a", "competitor-a", "Brand")).resolves.toBe("forgotten");
+    expect(await count("entity", "competitor-a")).toBe(0);
+  });
+
+  it("still forgets the competitor when stopping the identity-tail instance fails", async () => {
+    const create = vi.fn(() => Promise.resolve({ id: "account-delete" }));
+    Reflect.set(env, "ACCOUNT_DELETE", { create });
+    vi.spyOn(env.IDENTITY_TAIL, "get").mockRejectedValue(new Error("quota exceeded"));
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(forgetCompetitor("workspace-a", "competitor-a", "Brand")).resolves.toBe("forgotten");
+    expect(await count("entity", "competitor-a")).toBe(0);
+    expect(JSON.parse(String(errors.mock.calls[0]?.[0]))).toEqual({
+      event: "identity_tail.terminate_failed",
+      entityId: "competitor-a",
+      message: "Error: quota exceeded",
+    });
+    errors.mockRestore();
   });
 });

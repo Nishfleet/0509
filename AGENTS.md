@@ -101,9 +101,9 @@ npm run verify:stop  # chrome-devtools stop
 ```
 
 **`npm run typecheck` is the only real type gate.** `tsc --noEmit -p
-tsconfig.json` is a no-op here — `tsconfig.json` is `"files": []` plus two
-project references, so without `-b` it checks zero files and exits 0. Never
-cite it as type evidence.
+tsconfig.json` is a no-op here — `tsconfig.json` is `"files": []` plus three
+project references (node, cloudflare, test), so without `-b` it checks zero
+files and exits 0. Never cite it as type evidence.
 
 Signing in locally needs the `--var` overrides in `.agents/skills/verify/SKILL.md` (`BETTER_AUTH_URL` is pinned to production in `wrangler.jsonc`, so the emailed link would point at 0509.io).
 
@@ -177,24 +177,25 @@ rejection**, not a review comment. The row format is asserted by
 
 ## What gates a merge
 
-Four required checks on the `main-merge-queue` ruleset (id 21391031), **empty
-bypass list**:
+One required check on the `main-merge-queue` ruleset (id 21391031), **empty
+bypass list**: `ci-ok`. It is a job in `ci.yml` that needs the five gate jobs
 
 ```
-Gitleaks   codex-node-checks   semgrep   preview-assert
+codex-node-checks   vitest-shard   Gitleaks   semgrep   preview-assert
 ```
 
-`ci-ok` in `ci.yml` needs all four and fails unless every one succeeded,
-so the ruleset can require it alone (0509#7013). It checks for `success`, never
-for a list of bad results: a job no runner picked up matched neither `failure`
-nor `cancelled` and passed it once (2026-10-05). Until the ruleset swaps the
-four for `ci-ok`, the rule below still holds.
+and fails unless every one succeeded (0509#7013). It checks for `success`,
+never for a list of bad results: a job no runner picked up matched neither
+`failure` nor `cancelled` and passed it once (2026-10-05). `vitest-shard` is a
+four-way matrix (`vitest-shard (1)` … `(4)`, vitest's own `--shard`); its
+result in `needs` is `success` only when every shard succeeded (0509#7163).
 
-Renaming one of these is not cosmetic. A required check that never reports fails
+Renaming `ci-ok` is not cosmetic. A required check that never reports fails
 closed and nothing can merge again, including the PR that renamed it. A
-_skipped_ required check counts as passing, so none of these four carries a
-job-level `if:` that can skip it: they report on every event, and on an event
-with nothing to do they pass through one explicit step. The merge queue tests
+_skipped_ job counts as passing, so no gate job carries a job-level `if:` that
+can skip it: they report on every event, and on an event with nothing to do
+they pass through one explicit step. `tests/required-checks-never-skip.test.ts`
+pins the gate list, the `if:` rule and `ci-ok`'s `needs`. The merge queue tests
 the merge result, so a PR that would redden `main` never lands. There is no
 AI grader: CI is the gate, and a PR that touches `.github/`, `migrations/`,
 `app/lib/auth*` or `app/lib/data/` is labelled `needs-coordinator` and the
@@ -228,8 +229,9 @@ Service daily quota (Nish 2026-09-28).
   never auto-armed. An orchestrator PR (author nish3451) carries no second
   review either way; the orchestrator-path decision is tracked at
   fleet-ops#9231. Every merge, worker or orchestrator, rides the merge queue's
-  four required checks. The reviewer checks the SQL, re-checks `main` for the
-  next free number, and relies on D1 Time Travel to undo a drop or delete.
+  one required check, `ci-ok`, which needs every gate job to succeed. The
+  reviewer checks the SQL, re-checks `main` for the next free number, and
+  relies on D1 Time Travel to undo a drop or delete.
   Data left from the old app may be dropped outright ("meh, delete, the old
   app had no users").
 - Deploys go through CI. Every push to `main` deploys via

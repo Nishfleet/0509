@@ -21,7 +21,7 @@ wrangler r2 bucket lifecycle set    <bucket>          # from a JSON file
 
 **So retention is `wrangler` configuration with a prefix — one command per rule, no code.** That is the whole implementation of #3899's _"the R2 lifecycle rule does this, nothing hand-rolled"_, and it is confirmed present in the pinned wrangler rather than assumed from docs.
 
-**Schema, from `migrations/0001_rebuild.sql`:** the tables are `account alert change channel digest dodo_webhook_event email_suppression entity incident incident_notice jev_verdict mention onboarding_run page plan rate_limit_events scoring_weight send_attempt send_target session signal signal_delivery snapshot source standing suggestion user user_decision verification watch workspace`.
+**Schema, from `migrations/0001_rebuild.sql`:** the tables are `account alert change channel digest dodo_webhook_event email_suppression entity incident incident_notice jev_verdict mention onboarding_run page plan scoring_weight send_attempt send_target session signal signal_delivery snapshot source standing suggestion user user_decision verification watch workspace`. `rate_limit_events` is left out of that list because 0001 creates it and `migrations/0048_drop_rate_limit_events.sql` drops it, since nothing on `main` reads or writes it (`change` and `mention` are views, not tables). Later migrations add `support_report` (0005), `takedown` (0009), `discovery_backlog` (0014), `cost_alert` (0027), `sweep_run` (0029) and `jev_failure` (0043), so the count on `main` is larger than this list.
 
 **There is no `takedown` table.** #3899 requires one (_"recorded on a `takedown` row"_). P10.2 adds it. Also absent and owned by engine 8: `apikey`, `passkey`.
 

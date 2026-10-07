@@ -10,6 +10,9 @@ vi.mock("../../app/lib/require-session.server", () => ({
   requireSession: async (request: Request) => ({
     user: { id: request.headers.get("x-test-user"), email: request.headers.get("x-test-email") },
   }),
+  sessionForRequest: async (request: Request) => ({
+    user: { id: request.headers.get("x-test-user"), email: request.headers.get("x-test-email") },
+  }),
   signOutToLogin: async () => {
     throw new Response(null, { status: 302, headers: { Location: "/login" } });
   },

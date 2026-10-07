@@ -5,20 +5,22 @@
  * name, so renaming it would orphan DODO_API_KEY, BETTER_AUTH_* and the rest,
  * and the first deploy would come up unconfigured.
  *
- * Declares only what this app uses. The pre-rebuild Worker carried Workflow and
- * Durable Object classes, eight rate-limit bindings and eight cron triggers;
- * none are here, because nothing in this app reads them. Bindings come back one
- * at a time, with the engine packet that needs them.
+ * Bindings and triggers live here: Workflows, Durable Objects, Queues,
+ * rate-limit bindings and the cron list under triggers.crons. A new engine
+ * adds the binding it reads, in the same PR as the reader.
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "0509",
-  // >= 2026-08-04, so nodejs_compat is on by default and needs no flag.
+  // >= 2026-08-04 turns nodejs_compat on by default; still set it so a
+  // Vitest inject cannot hide a missing production flag
+  // (https://developers.cloudflare.com/workers/configuration/compatibility-flags/).
   "compatibility_date": "2026-09-16",
   // Agent sign-in (@cloudflare/workers-oauth-provider) fetches a client's
-  // Client ID Metadata Document by URL; this flag keeps that fetch on the
-  // public internet so a client_id can never reach this zone's own origin.
-  "compatibility_flags": ["global_fetch_strictly_public"],
+  // Client ID Metadata Document by URL; global_fetch_strictly_public keeps
+  // that fetch on the public internet so a client_id can never reach this
+  // zone's own origin.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "main": "./workers/app.ts",
   "placement": { "mode": "smart" },
   "observability": {
@@ -76,6 +78,8 @@
     "subrequests": 10000,
   },
   "upload_source_maps": true,
+  // Sentry `release` and `environment` read this binding (0509#7079).
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "assets": { "run_worker_first": ["/mcp"] },
 
   "durable_objects": {
@@ -110,7 +114,12 @@
   // it, and a client-supplied value would let a link point anywhere.
   // BETTER_AUTH_SECRET stays a Worker secret.
   // TURNSTILE_SECRET_KEY and TURNSTILE_SITE_KEY are Worker secrets too.
-  // SLACK_TARGET_SECRET is the AES-GCM key for send_target Slack webhook rows.
+  // SLACK_TARGET_SECRET is the AES-GCM key for send_target Slack webhook rows:
+  // a comma-separated list of at most 3 base64 32-byte keys, current first. Rows
+  // name their sealing key in the enc:v2:<key id>: prefix (0509#6983). Reads never
+  // write. The nightly 03:00Z job seals rows with the first key after a key is
+  // added. To rotate, put the new key first in the comma list, deploy, wait until
+  // the job stops logging slack_backfill.remaining, then drop the old key.
   // Listing them under secrets.required makes deploy inherit the values already
   // on the Worker instead of replacing them with a plaintext var.
   // LANDING_WORKSPACE_ID: the public workspace we run ourselves whose changes the landing ticker and mark section show (#4083, #4084). Empty draws no strip and no marks, never filler.
@@ -123,6 +132,12 @@
   "vars": {
     "BETTER_AUTH_URL": "https://0509.io",
     "LANDING_WORKSPACE_ID": "",
+    // #7187: the deployed git commit, named by /api/health. Empty here and in
+    // preview; deploy-production.yml overrides it with the pushed SHA through
+    // `wrangler deploy --var GIT_SHA:<sha>`
+    // (https://developers.cloudflare.com/workers/wrangler/commands/#deploy).
+    // Not CF_VERSION_METADATA.tag: workers/sentry.ts reads that as the Sentry environment.
+    "GIT_SHA": "",
     // Dodo Payments (docs/REBUILD-STACK.md, J13). DODO_ENVIRONMENT selects the SDK's
     // base URL: test_mode is https://test.dodopayments.com, live_mode is
     // https://live.dodopayments.com. The three product ids are the recurring

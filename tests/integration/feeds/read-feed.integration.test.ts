@@ -207,17 +207,14 @@ describe("readFeed", () => {
     expect(await snapshots()).toEqual([]);
   });
 
-  it("treats an HTML page, an oversize body and a server error as unreadable without throwing", async () => {
+  it("treats an HTML page and a server error as unreadable without throwing", async () => {
     const t = await target();
 
     server.body = "<!doctype html><html><body>Not a feed</body></html>";
     expect(await readFeed(t, await nextTick("night-1"))).toEqual({ outcome: "unreadable", newPosts: 0 });
 
-    server.body = rssFeed(NIGHT_ONE) + " ".repeat(2 * 1024 * 1024 + 1);
-    expect(await readFeed(t, await nextTick("night-2"))).toEqual({ outcome: "unreadable", newPosts: 0 });
-
     server.status = 503;
-    expect(await readFeed(t, await nextTick("night-3"))).toEqual({ outcome: "unreadable", newPosts: 0 });
+    expect(await readFeed(t, await nextTick("night-2"))).toEqual({ outcome: "unreadable", newPosts: 0 });
 
     expect(await snapshots()).toEqual([]);
     expect(await signals()).toEqual([]);
@@ -225,6 +222,14 @@ describe("readFeed", () => {
       .bind(WATCH_ID)
       .first<{ is_active: number; last_polled_at: string | null }>();
     expect(row).toEqual({ is_active: 1, last_polled_at: null });
+  });
+
+  it("reads the leading 2 MiB of a feed larger than the cap instead of refusing it", async () => {
+    server.body = rssFeed(NIGHT_ONE) + " ".repeat(2 * 1024 * 1024 + 1);
+    const result = await readFeed(await target(), await nextTick("night-1"));
+
+    expect(result.outcome).toBe("first");
+    expect(await snapshots()).toHaveLength(1);
   });
 
   it("deactivates the watch when the feed is gone", async () => {

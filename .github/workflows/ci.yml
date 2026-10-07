@@ -1,16 +1,15 @@
-# The checks the main-merge-queue ruleset requires, by exactly these names:
-#   Gitleaks   codex-node-checks   semgrep   preview-assert
-# Bypass actors on that ruleset is empty, so a
-# renamed job is not a cosmetic change — a required check that never reports
-# fails closed and nothing can merge, including the PR that renamed it.
-# Verified against the live ruleset (id 21391031) before this file was written.
+# The main-merge-queue ruleset (id 21391031) requires one check: `ci-ok`.
+# `ci-ok` aggregates the gate jobs below:
+#   Gitleaks   codex-node-checks   vitest-shard   semgrep   preview-assert
+# Bypass actors on that ruleset is empty, so a renamed or dropped `ci-ok` is not
+# a cosmetic change — a required check that never reports fails closed and
+# nothing can merge, including the PR that renamed it.
 #
-# Every required job runs on pull_request and merge_group: the queue evaluates
+# Every gate job runs on pull_request and merge_group: the queue evaluates
 # checks on the merge ref, so a job that skips there gives the queue no verdict,
-# and on GitHub a skipped required check counts as passing (#4664): no required
+# and on GitHub a skipped required check counts as passing (#4664): no gate
 # job may carry a job-level `if:` that can skip it;
-# tests/required-checks-never-skip.test.ts pins it. `ci-ok` aggregates the four
-# so the ruleset can require it alone (0509#7013).
+# tests/required-checks-never-skip.test.ts pins it.
 #
 # Lighthouse against production runs in deploy-production.yml after the deploy
 # job, so this workflow has no deployment_status trigger (0509#7013).
@@ -72,15 +71,6 @@ jobs:
         with:
           args: --offline --format plain .github/workflows
 
-      - name: Test only what the pull request can affect
-        # vitest's own --changed: the test files that import a changed file,
-        # through the module graph. A change to package.json or a vitest/vite
-        # config reruns everything (forceRerunTriggers default). The full suite
-        # runs on merge_group below, so nothing merges untested; this only
-        # moves the verdict for unrelated files from the PR to the queue.
-        # 545 s of the 17 min PR run 36432985831 was the full suite (#5849).
-        if: github.event_name == 'pull_request'
-        run: npx vitest run --changed HEAD^1 --passWithNoTests
       - name: Detectors that read repo files from disk
         # `vitest --changed` selects tests through the import graph. These
         # tests read e2e/, .github/workflows/, app/routes/ and the feature map
@@ -97,14 +87,57 @@ jobs:
           tests/unit/route-titles.test.ts
           tests/preview-assert-skip.test.ts
           tests/required-checks-never-skip.test.ts
-      - name: Test
-        if: github.event_name == 'merge_group'
-        run: npx vitest run --project '!node'
       - name: Test coverage floor
         if: github.event_name == 'merge_group'
         run: npx vitest run --project node --coverage
       - name: Build
         run: npm run build
+
+  vitest-shard:
+    # The test files, split four ways by vitest's own --shard (0509#7163).
+    # One job ran them all and hit codex-node-checks' 25 min timeout on PR
+    # #7163 (run 37344289176): touching two app/lib/data writers selected
+    # 54 files, mostly workerd integration tests, and the step was cancelled
+    # at 23m11s. The full non-node suite already took 830-940 s per
+    # merge_group run, so any PR touching a core writer was near the limit.
+    # vitest shards after --changed has filtered, by a hash of the file path,
+    # so each shard runs a quarter of whatever the event selected. The matrix
+    # reports as `vitest-shard (n)`; ci-ok needs `vitest-shard`, whose result
+    # is success only when every shard succeeded.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SHARD: ${{ matrix.shard }}/4
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Two commits so HEAD^1 (the base side of the PR merge ref) exists
+          # for `vitest --changed` below.
+          fetch-depth: 2
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Test only what the pull request can affect
+        # vitest's own --changed: the test files that import a changed file,
+        # through the module graph. A change to package.json or a vitest/vite
+        # config reruns everything (forceRerunTriggers default). The full suite
+        # runs on merge_group below, so nothing merges untested; this only
+        # moves the verdict for unrelated files from the PR to the queue.
+        # 545 s of the 17 min PR run 36432985831 was the full suite (#5849).
+        # --passWithNoTests: a small selection leaves some shards empty.
+        if: github.event_name == 'pull_request'
+        run: npx vitest run --changed HEAD^1 --passWithNoTests --shard "$SHARD"
+      - name: Test
+        # The node project runs once, under coverage, in codex-node-checks.
+        if: github.event_name == 'merge_group'
+        run: npx vitest run --project '!node' --shard "$SHARD"
 
   Gitleaks:
     name: Gitleaks
@@ -151,7 +184,7 @@ jobs:
     name: preview-assert
     # A PR whose lint, typecheck or unit tests are red cannot merge, so it must not hold
     # a hosted slot for the browser suites; the free plan allows 20 org-wide (#5381).
-    needs: [codex-node-checks]
+    needs: [codex-node-checks, vitest-shard]
     # Hosted for every event. Public repo: minutes are free and the hosted pool
     # is wider than the 3 owned runners (fleet-ops#5935 reversed 2026-09-22).
     runs-on: ubuntu-latest
@@ -236,7 +269,7 @@ jobs:
     # One verdict over every gate job, so the ruleset can require this check
     # alone and a gate job may skip or shard without passing by skipping
     # (0509#7013). always() makes it report even when a needed job fails.
-    needs: [codex-node-checks, Gitleaks, semgrep, preview-assert]
+    needs: [codex-node-checks, vitest-shard, Gitleaks, semgrep, preview-assert]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2

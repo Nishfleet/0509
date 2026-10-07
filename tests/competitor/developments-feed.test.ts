@@ -4,6 +4,7 @@ import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import type * as ReactRouterModule from "react-router";
+import type { URLSearchParamsInit } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DevelopmentsFeed } from "../../app/components/developments-feed";
@@ -22,7 +23,7 @@ const feedFilterHarness = vi.hoisted(() => ({
 }));
 
 vi.mock("react-router", async (importOriginal) => {
-  const actual = await importOriginal<ReactRouterModule>();
+  const actual = await importOriginal<typeof ReactRouterModule>();
   return {
     ...actual,
     useSearchParams: () =>
@@ -34,7 +35,7 @@ vi.mock("react-router", async (importOriginal) => {
 });
 
 vi.mock("../../app/components/ui/toggle-group", async (importOriginal) => {
-  const actual = await importOriginal<ToggleGroupModule>();
+  const actual = await importOriginal<typeof ToggleGroupModule>();
   return {
     ...actual,
     ToggleGroup: ({ children, onValueChange, ...props }: ToggleGroupProps) => {

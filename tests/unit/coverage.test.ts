@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   COVERAGE,
+  type CoverageKind,
   FEATURES,
   LIVE_COVERAGE,
   WATCHED_NOUNS,
@@ -18,7 +19,9 @@ import { softwareApplicationJsonLd } from "../../app/lib/structured-data";
 // only once it is marked live there, and tests/integration/coverage.integration.test.ts
 // ties "live" to an enabled source row. Launch checklist §3: claim only what works.
 
-const notLive = COVERAGE.filter((group) => group.sources.every((source) => !source.live));
+const notLive: readonly CoverageKind[] = COVERAGE.filter((group: CoverageKind) =>
+  group.sources.every((source) => !source.live),
+);
 
 function claims(text: string, phrase: string): boolean {
   return new RegExp(`\\b${phrase}\\b`, "i").test(text);

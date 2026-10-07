@@ -9,7 +9,7 @@ const PLACEHOLDER = "yoursite.com or @yourbrand";
 const ACTION = "/onboarding";
 
 function render(props: Record<string, unknown>): string {
-  return renderToStaticMarkup(createElement(OneInput, props));
+  return renderToStaticMarkup(createElement(OneInput, props as unknown as Parameters<typeof OneInput>[0]));
 }
 
 function baseProps(): Record<string, unknown> {

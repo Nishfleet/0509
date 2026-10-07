@@ -9,6 +9,7 @@ import { requireInboxToken, waitForMagicLink } from "./inbox";
 // fixture: no browser, so the job needs no `playwright install`. The cookie
 // lands in GITHUB_ENV and lighthouserc.cjs sends it next to CF_Authorization.
 setup("sign in a fresh e2e address and record the session cookie", async ({ request, baseURL }) => {
+  if (!baseURL) throw new Error("baseURL is not set");
   const token = requireInboxToken();
   const githubEnv = process.env.GITHUB_ENV;
   if (!githubEnv) throw new Error("GITHUB_ENV is not set: the session cookie has nowhere to be recorded");

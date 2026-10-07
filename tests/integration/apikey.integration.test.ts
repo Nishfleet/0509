@@ -14,7 +14,7 @@ import { createAuth } from "../../app/lib/auth.server";
  */
 const auth = createAuth({
   DB: env.DB,
-  EMAIL: { send: async () => ({ ok: true }) },
+  EMAIL: { send: async () => ({ messageId: "m-1" }) },
   SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
   SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
   TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
@@ -57,7 +57,8 @@ describe("apikey plugin against the shipped schema", () => {
     expect(row, "the apikey row must exist").not.toBeNull();
     expect(row?.referenceId).toBe("u_apikey_create");
     expect(row?.enabled).toBe(1);
-    expect(row?.key).toBeUndefined();
+    // This row SELECT never reads the key column, so the shape itself must lack it.
+    expect(row).not.toHaveProperty("key");
     expect(created.key.startsWith(row?.start ?? "")).toBe(true);
   });
 

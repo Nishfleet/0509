@@ -14,15 +14,15 @@ const button = vi.hoisted(() => ({ onClick: null as (() => void) | null, disable
 vi.mock("../../app/lib/auth-client", () => ({ authClient: { passkey: { addPasskey } } }));
 
 vi.mock("react-router", async (importOriginal) => {
-  const actual = await importOriginal<ReactRouterModule>();
+  const actual = await importOriginal<typeof ReactRouterModule>();
   return { ...actual, useRevalidator: () => ({ revalidate, state: "idle" }) };
 });
 
 vi.mock("../../app/components/ui/button", async (importOriginal) => {
-  const actual = await importOriginal<ButtonModule>();
+  const actual = await importOriginal<typeof ButtonModule>();
   return {
     ...actual,
-    Button: ({ onClick, children, ...rest }: { onClick?: () => void; children?: ReactNode }) => {
+    Button: ({ onClick, children, ...rest }: { onClick?: () => void; children?: ReactNode; disabled?: boolean }) => {
       button.onClick = onClick ?? null;
       button.disabled = rest.disabled;
       return createElement("button", { type: "button", onClick, ...rest }, children);

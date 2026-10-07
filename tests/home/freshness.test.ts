@@ -2,7 +2,8 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { FreshnessLine, freshnessText, type FreshnessEntry } from "../../app/components/freshness-line";
+import { FreshnessLine, freshnessText } from "../../app/components/freshness-line";
+import type { FreshnessEntry } from "../../app/lib/freshness-entry";
 import { blindSourceNames, freshnessEntries } from "../../app/lib/freshness.server";
 import type { SourceRow, SourceSnapshot } from "../../app/lib/source-pill-status";
 

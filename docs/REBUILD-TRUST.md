@@ -106,8 +106,10 @@ grep -q '"status":"ok"' /tmp/health.json
 That is a hand-rolled server-readiness poller, a hand-rolled retry and a
 hand-rolled assertion — three things Playwright ships. The check name
 `preview-assert` is byte-identical before and after; only the body changed. The
-`main-merge-queue` ruleset (id 21391031, empty bypass) still sees
-`Gitleaks`, `codex-node-checks`, `semgrep`, `preview-assert`.
+`main-merge-queue` ruleset (id 21391031, empty bypass) now requires one check,
+`ci-ok`, which needs `codex-node-checks`, `vitest-shard`, `Gitleaks`,
+`semgrep` and `preview-assert` and fails unless every one succeeded
+(0509#7013, 0509#7163).
 
 ### A2. The smoke suite
 
@@ -116,7 +118,7 @@ the two widths `docs/REBUILD-DONE.md` §A names):
 
 1. the landing page renders its `h1` and its `support@0509.io` link
 2. the landing page does not scroll horizontally (§B's mobile gate)
-3. `/api/health` returns 200 with `status: "ok"` and a parseable timestamp
+3. `/api/health` returns 200 with `status: "ok"`, `d1: "ok"` and a parseable timestamp
 4. the login page renders the one input that signs you in
 5. the page reaches load with zero console errors (§B's error gate)
 

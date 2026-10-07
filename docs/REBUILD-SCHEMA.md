@@ -94,13 +94,13 @@ The asymmetry between those last two is deliberate. `kind` is CHECKed to `mentio
 
 **`alert`**, **`digest`**, **`send_target`**, **`send_attempt`** — the alerts feed and the weekly brief, plus the email lane through the Cloudflare Email Service binding.
 
-**Platform** — `email_suppression`, `rate_limit_events`, `dodo_webhook_event`.
+**Platform** — `email_suppression`, `dodo_webhook_event`.
 
 ## The DROP prologue
 
 `0001_init.sql` opens by dropping every pre-rebuild table, then creates the new schema. The list was derived by applying the 106 pre-rebuild migrations to a local D1 and reading `sqlite_master`, not by grepping the old files — the old chain contains 200 `CREATE TABLE` and 96 `DROP TABLE` statements because of SQLite's rebuild-and-copy pattern, so parsing overcounts badly.
 
-The list includes the names the new schema reuses — `user`, `session`, `account`, `verification`, `dodo_webhook_event`, `email_suppression`, `rate_limit_events` — because `CREATE TABLE IF NOT EXISTS` silently skips a table that already exists. Without dropping those, the database keeps the old definitions: I measured a live `user` still carrying a `signup_source` CHECK listing dead marketing values while the new file declared a clean seven-column table.
+The list includes the names the new schema reuses — `user`, `session`, `account`, `verification`, `dodo_webhook_event`, `email_suppression` — because `CREATE TABLE IF NOT EXISTS` silently skips a table that already exists. Without dropping those, the database keeps the old definitions: I measured a live `user` still carrying a `signup_source` CHECK listing dead marketing values while the new file declared a clean seven-column table.
 
 `wrangler d1 migrations apply` does not object to the 106 applied migrations having vanished from the folder; tracking is by filename, so `0001_init.sql` is simply a name the migrations table has never seen. I verified that on a local D1 before relying on it.
 

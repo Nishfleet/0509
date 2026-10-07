@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToReadableStream } from "react-dom/server";
-import { createMemoryRouter, type Router as MemoryRouter, RouterProvider } from "react-router";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { IdentityCard } from "../../../app/components/identity-card";
@@ -18,7 +18,7 @@ const fields: SiteFields = {
   unfound: false,
 };
 
-function routerWithCard(action: () => Promise<unknown>): MemoryRouter {
+function routerWithCard(action: () => Promise<unknown>): ReturnType<typeof createMemoryRouter> {
   return createMemoryRouter(
     [
       {
@@ -44,7 +44,7 @@ function routerWithCard(action: () => Promise<unknown>): MemoryRouter {
 // IdentityCard draws its fields through `Await`, so the promise has to resolve
 // before the markup exists: `allReady` is the public render entry that waits
 // for every Suspense boundary instead of only the shell.
-async function renderCard(router: MemoryRouter): Promise<string> {
+async function renderCard(router: ReturnType<typeof createMemoryRouter>): Promise<string> {
   const stream = await renderToReadableStream(createElement(RouterProvider, { router }));
   await stream.allReady;
   const reader = stream.getReader();

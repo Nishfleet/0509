@@ -52,7 +52,9 @@ function contentBody(why: WhyFlagged = WHY): string {
   const content = sheetContent(why);
   // DialogTitle reads Base UI's root context, so the children render inside
   // the root the component already supplies.
-  return renderToStaticMarkup(createElement(Dialog, null, createElement("div", null, content.props.children)));
+  return renderToStaticMarkup(
+    createElement(Dialog, null, createElement("div", null, content.props.children as ReactNode)),
+  );
 }
 
 describe("whyFlagged", () => {

@@ -260,6 +260,15 @@ export async function readWorkspaceSelfId(workspaceId: string): Promise<string |
   return row === null ? null : row.id;
 }
 
+const SELECT_WORKSPACE_ENTITY_IDS = "SELECT id FROM entity WHERE workspace_id = ?1 ORDER BY id";
+
+const workspaceEntityIds = z.array(z.object({ id: z.string() }));
+
+export async function readWorkspaceEntityIds(workspaceId: string): Promise<string[]> {
+  const rows = await env.DB.prepare(SELECT_WORKSPACE_ENTITY_IDS).bind(workspaceId).all();
+  return workspaceEntityIds.parse(rows.results).map((row) => row.id);
+}
+
 export async function readSelfEntityId(workspaceId: string, entityId: string): Promise<string | null> {
   const row = idRow.nullable().parse(await env.DB.prepare(SELECT_SELF_BY_ID).bind(entityId, workspaceId).first());
   return row === null ? null : row.id;
@@ -550,7 +559,9 @@ export async function fillCompetitorSocials(input: {
   return result.meta.changes === 1;
 }
 
-export type SiteFillState = "pending" | "filled" | "gave_up";
+const SITE_FILL_STATES = ["pending", "filled", "gave_up"] as const;
+
+export type SiteFillState = (typeof SITE_FILL_STATES)[number];
 
 const FILL_SELF_SITE_FIELDS =
   "UPDATE entity SET identity_json = json_set(identity_json, '$.description', coalesce(json_extract(identity_json, '$.description'), ?2), '$.socials', CASE WHEN json_array_length(identity_json, '$.socials') > 0 THEN json(json_extract(identity_json, '$.socials')) ELSE json(?3) END, '$.siteFill', 'filled') WHERE id = ?1 AND workspace_id = ?4 AND role = 'self'";
@@ -578,10 +589,9 @@ export async function markSelfSiteFill(workspaceId: string, entityId: string, st
 const READ_SELF_SITE_FILL =
   "SELECT json_extract(identity_json, '$.siteFill') AS site_fill FROM entity WHERE workspace_id = ?1 AND role = 'self'";
 
-const siteFillRow = z.object({ site_fill: z.string().nullable().catch(null) });
+const siteFillRow = z.object({ site_fill: z.enum(SITE_FILL_STATES).nullable() });
 
 export async function readSelfSiteFill(workspaceId: string): Promise<SiteFillState | null> {
   const row = siteFillRow.nullable().parse(await env.DB.prepare(READ_SELF_SITE_FILL).bind(workspaceId).first());
-  const value = row === null ? null : row.site_fill;
-  return value === "pending" || value === "filled" || value === "gave_up" ? value : null;
+  return row === null ? null : row.site_fill;
 }
