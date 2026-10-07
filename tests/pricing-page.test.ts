@@ -21,6 +21,11 @@ describe("pricingMeta", () => {
   const meta = pricingMeta();
   const named = (key: string, value: string) => meta.find((entry) => (entry as Record<string, unknown>)[key] === value);
 
+  it("carries the share image and a large twitter card", () => {
+    expect(named("property", "og:image")).toMatchObject({ content: "https://0509.io/og.png" });
+    expect(named("name", "twitter:card")).toMatchObject({ content: "summary_large_image" });
+  });
+
   it("is indexable with its own canonical", () => {
     expect(named("name", "robots")).toMatchObject({ content: "index, follow" });
     expect(named("rel", "canonical")).toMatchObject({ href: "https://0509.io/pricing" });

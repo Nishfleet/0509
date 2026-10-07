@@ -50,18 +50,22 @@ describe("landing LCP critical path", () => {
     expect(html).not.toContain("modulepreload");
   });
 
-  it.each(["routes/landing", "routes/privacy", "routes/terms"])(
-    "keeps every web font out of the first paint on %s and loads the faces after the load event",
-    (id) => {
-      const html = renderDocument(id);
-      expect(html).not.toContain('rel="preload"');
-      expect(html).not.toContain("/fonts/");
-      expect(html).not.toContain("app-faces.css");
-      expect(html).not.toContain('type="module"');
-      expect(html).not.toContain("modulepreload");
-      expect(html).toContain(`<script>${FACES_SCRIPT}</script>`);
-    },
-  );
+  it.each([
+    "routes/landing",
+    "routes/privacy",
+    "routes/terms",
+    "routes/pricing",
+    "routes/api-docs",
+    "routes/unmatched",
+  ])("keeps every web font out of the first paint on %s and loads the faces after the load event", (id) => {
+    const html = renderDocument(id);
+    expect(html).not.toContain('rel="preload"');
+    expect(html).not.toContain("/fonts/");
+    expect(html).not.toContain("app-faces.css");
+    expect(html).not.toContain('type="module"');
+    expect(html).not.toContain("modulepreload");
+    expect(html).toContain(`<script>${FACES_SCRIPT}</script>`);
+  });
 
   it("shares one faces script with the static home", () => {
     const home = readFileSync(join(REPO_ROOT, "public/index.html"), "utf8");
