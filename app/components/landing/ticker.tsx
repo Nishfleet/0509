@@ -16,8 +16,20 @@ function Strip({ items, hidden }: { items: readonly TickerItem[]; hidden: boolea
   );
 }
 
+function Looping({ items }: { items: readonly TickerItem[] }) {
+  return (
+    <>
+      <input type="checkbox" id="ticker-pause" aria-label="Pause the ticker" className="peer sr-only" />
+      <label htmlFor="ticker-pause" className={toggleClass} />
+      <div className="flex h-full w-max animate-[ticker_60s_linear_infinite] items-center peer-checked:[animation-play-state:paused] motion-reduce:animate-none">
+        <Strip items={items} hidden={false} />
+        <Strip items={items} hidden />
+      </div>
+    </>
+  );
+}
+
 export function Ticker({ items }: { items: readonly TickerItem[] }) {
-  if (items.length === 0) return null;
   return (
     <div
       id="ticker"
@@ -25,12 +37,7 @@ export function Ticker({ items }: { items: readonly TickerItem[] }) {
       aria-label="Changes caught recently"
       className="relative h-9 overflow-hidden bg-ink text-bone"
     >
-      <input type="checkbox" id="ticker-pause" aria-label="Pause the ticker" className="peer sr-only" />
-      <label htmlFor="ticker-pause" className={toggleClass} />
-      <div className="flex h-full w-max animate-[ticker_60s_linear_infinite] items-center peer-checked:[animation-play-state:paused] motion-reduce:animate-none">
-        <Strip items={items} hidden={false} />
-        <Strip items={items} hidden />
-      </div>
+      {items.length > 0 ? <Looping items={items} /> : <div className="flex h-full w-max items-center" />}
     </div>
   );
 }
