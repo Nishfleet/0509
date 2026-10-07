@@ -1,0 +1,66 @@
+# When a gate file changes on main, re-decide base-fresh (ci.yml) for every open
+# pull request, so a head that predates the change goes red before anything arms
+# or queues it (docs/incidents/2026-10-07-stale-base-queue-ejections.md).
+# Rerunning only that job also reruns ci-ok, its one dependent. The path list is
+# the one in ci.yml's base-fresh job; tests/required-checks-never-skip.test.ts
+# pins them equal.
+name: Retest stale pull requests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - eslint.config.js
+      - eslint-suppressions.json
+      - knip.jsonc
+      - .jscpd.json
+      - .prettierrc.json
+      - .prettierignore
+      - package.json
+      - package-lock.json
+      - tsconfig*.json
+      - vitest*.config.ts
+      - vite.config.ts
+      - react-router.config.ts
+      - wrangler.jsonc
+      - .dev.vars.example
+      - .semgrep/**
+      - .github/workflows/ci.yml
+
+concurrency:
+  group: stale-base-retest
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  rerun:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: write
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Re-decide base-fresh on each open pull request's latest CI run
+        # A run with no base-fresh job used the older ci.yml, and a rerun reuses
+        # the workflow file of the original run, so it cannot add the job; it is
+        # reported and is covered from its next push. A run still in progress is
+        # left: it reads main itself. Every failure is a warning so one pull
+        # request cannot stop the rest.
+        run: |
+          limit=1000
+          shas=$(gh pr list --state open --base main --limit "$limit" --json headRefOid --jq '.[].headRefOid')
+          [ "$(wc -w <<< "$shas")" -lt "$limit" ] || echo "::warning::open pull requests reached the $limit limit; the rest were not retested"
+          for sha in $shas; do
+            run=$(gh run list --workflow ci.yml --event pull_request --commit "$sha" --limit 1 --json databaseId,status --jq '.[] | select(.status == "completed") | .databaseId') || { echo "::warning::could not list runs for $sha"; continue; }
+            [ -n "$run" ] || continue
+            job=$(gh run view "$run" --json jobs --jq '.jobs[] | select(.name == "base-fresh") | .databaseId') || { echo "::warning::could not read run $run"; continue; }
+            if [ -n "$job" ]; then
+              gh run rerun --job "$job" || echo "::warning::could not rerun base-fresh in run $run"
+            else
+              echo "::warning::run $run for $sha has no base-fresh job; not protected until its next push"
+            fi
+          done
