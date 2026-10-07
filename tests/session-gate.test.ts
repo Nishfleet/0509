@@ -59,7 +59,7 @@ describe("requireSession", () => {
     const request = new Request("https://0509.io/app/alerts");
     const outcome = await requireSession(request, env).then(
       () => "returned",
-      (thrown) => (thrown instanceof Response ? `redirect ${thrown.status}` : "other"),
+      (thrown: unknown) => (thrown instanceof Response ? `redirect ${thrown.status}` : "other"),
     );
     expect(outcome).toBe("redirect 302");
   });

@@ -100,11 +100,11 @@ describe("judgeStillCompetitors", () => {
     const run = vi.fn(async (_model: string, request: { questions: Record<string, { type: string }> }) => {
       const questions = request.questions;
       const answers: Record<string, { type: string; noul?: number; choice?: string }> = {};
-      if (questions["still_competitor"] !== undefined) {
-        answers["still_competitor"] = { type: "noul", noul: 0.05 };
+      if (questions.still_competitor !== undefined) {
+        answers.still_competitor = { type: "noul", noul: 0.05 };
       }
-      if (questions["still_competitor_reason"] !== undefined) {
-        answers["still_competitor_reason"] = { type: "choice", choice: "shut_down" };
+      if (questions.still_competitor_reason !== undefined) {
+        answers.still_competitor_reason = { type: "choice", choice: "shut_down" };
       }
       return { answers };
     });

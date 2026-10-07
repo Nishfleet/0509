@@ -40,7 +40,9 @@ function render(): string {
 async function clickAndWaitAdded(): Promise<void> {
   render();
   button.onClick?.();
-  await vi.waitFor(() => expect(addPasskey).toHaveBeenCalledTimes(1));
+  await vi.waitFor(() => {
+    expect(addPasskey).toHaveBeenCalledTimes(1);
+  });
 }
 
 describe("AddPasskey", () => {
@@ -60,7 +62,9 @@ describe("AddPasskey", () => {
     addPasskey.mockResolvedValue({ data: null, error: null });
 
     button.onClick?.();
-    await vi.waitFor(() => expect(revalidate).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => {
+      expect(revalidate).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("does not revalidate when better-auth answers with an error", async () => {

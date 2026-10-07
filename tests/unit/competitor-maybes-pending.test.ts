@@ -75,7 +75,7 @@ describe("the Add a competitor field and its error", () => {
 
   it("renders the message as an alert carrying the id the input describes", () => {
     const html = addForm(ERROR);
-    const alert = html.match(/<p\b[^>]*role="alert"[^>]*>/);
+    const alert = /<p\b[^>]*role="alert"[^>]*>/.exec(html);
     if (alert === null) throw new Error("no role=alert paragraph in the rendered form");
     expect(alert[0]).toContain('id="add-competitor-error"');
     expect(html).toContain(`>${ERROR_ESCAPED}</p>`);
