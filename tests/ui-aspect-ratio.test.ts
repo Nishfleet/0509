@@ -9,7 +9,7 @@ function render(props: { ratio: number; className?: string }, children?: ReactNo
 }
 
 function classAttr(html: string): string | null {
-  const match = html.match(/class="([^"]*)"/);
+  const match = /class="([^"]*)"/.exec(html);
   return match ? match[1] : null;
 }
 

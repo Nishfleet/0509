@@ -59,7 +59,7 @@ async function renderCard(router: ReturnType<typeof createMemoryRouter>): Promis
 
 function confirmButton(html: string): string {
   const buttons = html.match(/<button\b[^>]*>[\s\S]*?<\/button>/g) ?? [];
-  return buttons.find((entry) => /submit/.test(entry)) ?? "";
+  return buttons.find((entry) => entry.includes("submit")) ?? "";
 }
 
 const NEVER = () => new Promise<undefined>(() => undefined);

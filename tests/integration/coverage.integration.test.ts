@@ -32,7 +32,7 @@ describe("coverage matches the enabled sources", () => {
     for (const key of enabled) {
       expect(
         claimed.has(key),
-        `source "${key}" is enabled but no live entry in app/lib/coverage.ts names it as its sourceKey`,
+        `source "${String(key)}" is enabled but no live entry in app/lib/coverage.ts names it as its sourceKey`,
       ).toBe(true);
     }
   });
@@ -41,7 +41,7 @@ describe("coverage matches the enabled sources", () => {
     const news = COVERAGE.flatMap((group: CoverageKind) => group.sources).find(
       (source) => source.id === "mentions.news",
     );
-    if (news === undefined || news.sourceKey === undefined) {
+    if (news?.sourceKey === undefined) {
       throw new Error("mentions.news must name a sourceKey");
     }
     await env.DB.prepare("UPDATE source SET degraded_reason = ? WHERE key = ?").bind("timed out", news.sourceKey).run();

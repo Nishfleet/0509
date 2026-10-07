@@ -92,7 +92,7 @@ function render(state: Exclude<Navigation["state"], "idle">, decision: string | 
 // The button's own class list carries `disabled:pointer-events-none`, so the
 // attribute is matched on its own and not as a substring of the class string.
 function isDisabled(button: string): boolean {
-  const tag = button.match(/<button\b[^>]*>/)?.[0] ?? "";
+  const tag = /<button\b[^>]*>/.exec(button)?.[0] ?? "";
   return /(?:^|\s)disabled(?:\s|>|=|$)/.test(tag);
 }
 

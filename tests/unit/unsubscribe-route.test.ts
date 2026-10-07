@@ -105,7 +105,7 @@ function renderFormAt(state: Navigation["state"]): string {
 }
 
 function submitButton(html: string): string {
-  const match = html.match(/<button[^>]*type="submit"[\s\S]*?<\/button>/);
+  const match = /<button[^>]*type="submit"[\s\S]*?<\/button>/.exec(html);
   if (match === null) throw new Error(`no submit button in ${html}`);
   return match[0];
 }
@@ -182,7 +182,7 @@ describe("/u/:token (0509#5761)", () => {
   it("gives the Settings link a 44px-tall tap target", () => {
     const html = renderConfirm(true);
 
-    const link = html.match(/<a\b[^>]*href="\/app\/settings"[^>]*>/)?.[0] ?? "";
+    const link = /<a\b[^>]*href="\/app\/settings"[^>]*>/.exec(html)?.[0] ?? "";
 
     expect(link).toContain("min-h-11");
     expect(link).toContain("inline-flex");
