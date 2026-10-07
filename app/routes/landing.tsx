@@ -18,6 +18,7 @@ import { readRegistrySources } from "../lib/data/source.server";
 import { FAQ } from "../lib/faq";
 import { landingSources } from "../lib/landing-sources";
 import { daysBefore, readLandingMarks } from "../lib/site-changes.server";
+import { MAIN_CONTENT_ID, SkipLink } from "../components/skip-link";
 import {
   SITE_URL,
   faqPageJsonLd,
@@ -83,9 +84,10 @@ export async function loader(_: Route.LoaderArgs) {
 export default function Landing({ loaderData }: Route.ComponentProps) {
   return (
     <div className="bg-bone text-ink">
+      <SkipLink />
       <Ticker items={loaderData.ticker} />
       <Header />
-      <main>
+      <main id={MAIN_CONTENT_ID} tabIndex={-1}>
         <Hero nouns={loaderData.claims.nouns} />
         <Marks marks={loaderData.marks} now={loaderData.now} />
         <HowItWorks />
