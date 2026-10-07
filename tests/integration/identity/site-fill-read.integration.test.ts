@@ -121,6 +121,19 @@ describe("readSelfSiteFill", () => {
     }
   });
 
+  it("throws when $.siteFill is a JSON null, instead of reading it as no answer", async () => {
+    await seed();
+    expect(await readSelfSiteFill(workspaceId)).toBe(null);
+
+    await env.DB.prepare(
+      `UPDATE entity SET identity_json = json_set(identity_json, '$.siteFill', json('null')) WHERE id = ?1`,
+    )
+      .bind(selfId)
+      .run();
+
+    await expect(readSelfSiteFill(workspaceId)).rejects.toThrow();
+  });
+
   it("returns null for a workspace with no self entity", async () => {
     expect(await readSelfSiteFill(`ws-empty-${crypto.randomUUID()}`)).toBe(null);
   });
