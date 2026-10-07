@@ -31,12 +31,6 @@ export function brandSwitchNote(state: BrandSwitchState, pausedOn: Date | null):
   return `Paused ${day}, history kept`;
 }
 
-export function brandRowClass(state: BrandSwitchState): string {
-  if (state === "off") return "text-ink-faint";
-  if (state === "you") return "bg-green-wash";
-  return "";
-}
-
 export function BrandSwitchField({
   state,
   brandName,
