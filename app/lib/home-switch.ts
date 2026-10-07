@@ -1,4 +1,4 @@
-export type RowSwitchState = "on" | "off" | "you";
+type RowSwitchState = "on" | "off" | "you";
 
 export interface RowSwitchView {
   state: RowSwitchState;
