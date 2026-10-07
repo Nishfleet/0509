@@ -160,6 +160,7 @@ function lastOpenTagAt(
       const bounds = tagBoundsAt(lower, name, { at, scan: opts.scan });
       if (bounds !== null) return bounds;
     }
+    if (at === 0) break;
     at = scanLastIndexOf(lower, needle, { from: at - 1, scan: opts.scan });
   }
   return null;

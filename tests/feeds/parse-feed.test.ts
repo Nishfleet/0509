@@ -284,6 +284,13 @@ describe("parseFeed on hostile input", () => {
     expect(parseFeedRaw({ head, tail }, BASE, { now: NOW })?.map((item: FeedItem) => item.title)).toEqual(["Whole"]);
   });
 
+  it("does not loop when a tail window starts with an item tag that never closes its open tag", () => {
+    const head = `<rss version="2.0"><channel>`;
+    const tail = `<item ${"a".repeat(5_000)}`;
+
+    expect(parseFeedRaw({ head, tail }, BASE, { now: NOW })).toEqual([]);
+  });
+
   it("skips an item block over the size cap and still reads the next one", () => {
     const huge = `<item><title>Huge</title><link>https://rival.com/huge</link><description>${"x".repeat(30_000)}</description></item>`;
     const fine = "<item><title>Fine</title><link>https://rival.com/fine</link></item>";
