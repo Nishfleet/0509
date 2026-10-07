@@ -4,6 +4,7 @@ import type * as OutboundServer from "../../app/lib/fetch/outbound.server";
 import type * as RobotsServer from "../../app/lib/fetch/robots.server";
 import type { OutboundInit } from "../../app/lib/fetch/outbound.server";
 import { fetchFeed, fetchHomepage } from "../../app/lib/feeds/fetch-feed.server";
+import { parseFeed } from "../../app/lib/feeds/parse-feed";
 import { CRAWLER_USER_AGENT } from "../../app/lib/fetch/robots.server";
 
 // 0509#6476: fetch-feed.server.ts held about 12 untested branches with no test
@@ -18,9 +19,7 @@ const HOME_URL = "https://rival.com/";
 const ETAG = '"etag-v1"';
 const LAST_MODIFIED = "Wed, 21 Oct 2015 07:28:00 GMT";
 
-// One declared byte over MAX_FEED_BYTES, so the real cappedText sees a
-// content-length that declares over the cap and returns null.
-const OVER_CAP_CONTENT_LENGTH = String(2 * 1024 * 1024 + 1);
+const FEED_CAP_BYTES = 2 * 1024 * 1024;
 
 const { fetchOutboundMock, robotsAllowsMock } = vi.hoisted(() => ({
   fetchOutboundMock: vi.fn<(url: string, init: OutboundInit) => Promise<Response>>(),
@@ -124,9 +123,33 @@ describe("classify maps the response to a FeedFetch outcome", () => {
     await expect(fetchFeed(FEED_URL, null)).resolves.toEqual({ outcome: "unreadable" });
   });
 
-  it("reads a 200 that declares more than the 2 MiB cap as unreadable", async () => {
-    fetchOutboundMock.mockResolvedValue(feedResponse(200, { "content-length": OVER_CAP_CONTENT_LENGTH }));
-    await expect(fetchFeed(FEED_URL, null)).resolves.toEqual({ outcome: "unreadable" });
+  it("parses the entries before the cut and drops the entry the cap cuts in half", async () => {
+    const entry = (n: number) =>
+      `<entry><id>post-${n}</id><title>Post ${n}</title><link href="https://rival.com/blog/${n}"/><updated>2026-10-01T00:00:00Z</updated><summary>${"x".repeat(100)}</summary></entry>`;
+    const open = '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Rival</title><subtitle>';
+    const close = "</subtitle>";
+    const padding = FEED_CAP_BYTES - (open + close).length - entry(1).length - Math.floor(entry(2).length / 2);
+    const feed = `${open}${"p".repeat(padding)}${close}${entry(1)}${entry(2)}${entry(3)}</feed>`;
+    fetchOutboundMock.mockResolvedValue(feedResponse(200, {}, feed));
+
+    const result = await fetchFeed(FEED_URL, null);
+    expect(result.outcome).toBe("ok");
+    const body = result.outcome === "ok" ? result.body : "";
+    expect(body).toHaveLength(FEED_CAP_BYTES);
+    expect(body).toContain("<id>post-2</id>");
+    expect(body).not.toContain("<id>post-3</id>");
+    expect(body.endsWith("</entry>")).toBe(false);
+
+    const items = parseFeed(body, FEED_URL, { now: new Date("2026-10-02T03:00:00Z") });
+    expect(items?.map((item) => item.id)).toEqual(["post-1"]);
+  });
+
+  it("keeps the first 2 MiB of a feed larger than the cap, newest entries first", async () => {
+    const huge = `<feed>${"a".repeat(FEED_CAP_BYTES + 1_000)}</feed>`;
+    fetchOutboundMock.mockResolvedValue(feedResponse(200, { "content-length": String(huge.length) }, huge));
+    const result = await fetchFeed(FEED_URL, null);
+    expect(result).toMatchObject({ outcome: "ok" });
+    expect(result.outcome === "ok" ? result.body : "").toBe(huge.slice(0, FEED_CAP_BYTES));
   });
 
   it("reads a 200 as ok, copies the etag and last-modified headers as validators, and keeps the body", async () => {
