@@ -2,7 +2,7 @@ import { access } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { ESLint, type LintMessage } from "eslint";
+import { ESLint } from "eslint";
 import { beforeAll, describe, expect, it } from "vitest";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -29,10 +29,16 @@ const ROUTE_PROBE = 'import { loader } from "../../routes/app.home";\n\nexport c
 const VIEW_TARGET = path.join(REPO_ROOT, "app/components/source-pill.tsx");
 const ROUTE_TARGET = path.join(REPO_ROOT, "app/routes/app.home.tsx");
 
+// The message list every lint call returns. Taken from the ESLint instance's own
+// return type: eslint exports `LintMessage` only inside the `Linter`
+// namespace, not as a module-level export, so an imported alias does not
+// resolve (#7139's merge-queue typecheck, tsconfig.test.json).
+type Messages = ESLint.LintResult["messages"];
+
 // Every disallow entry of the policy carries this message, so the probe
 // that matches on it is matching the policy and not a plugin-boundaries
 // `no-resolved` report about an import that never resolved.
-function boundaryHits(messages: LintMessage[]): LintMessage[] {
+function boundaryHits(messages: Messages): Messages {
   return messages.filter((message) => message.ruleId === BOUNDARY_RULE && message.message.includes(BOUNDARY_MESSAGE));
 }
 
