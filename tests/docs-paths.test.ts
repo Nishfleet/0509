@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -67,28 +67,45 @@ describe("agent entry docs", () => {
 // the lock has nothing to lock), and every citation outside `docs/` and
 // `migrations/` resolves (otherwise a dangling one survives the deletions).
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
+const MIGRATIONS = `${join(REPO_ROOT, "migrations")}/`;
 // The whole repo root, walked recursively, minus the directories that cannot
 // carry a citation. A named allowlist (app/, workers/, tests/, e2e/,
 // migrations/, .github/, .agents/ plus five root files) left CLAUDE.md, every
 // other root config and any future top-level directory outside the gate, so a
 // dangling citation in one of them passed; the in-run review of #7275 found it.
-const SKIP_DIRS = [".git", "node_modules", "docs", "public"] as const;
+const SKIP_DIRS = [
+  ".git",
+  "node_modules",
+  "docs",
+  "public",
+  "dist",
+  "coverage",
+  "playwright-report",
+  "test-results",
+  ".wrangler",
+] as const;
 const SKIP_EXTENSIONS = [".png", ".jpg", ".webp", ".ico", ".woff2"] as const;
+// The gate runs once per history doc, so the walk is cached: Test A and Test B
+// share one traversal instead of one per doc. Directories are skipped before
+// descending, so node_modules and the build output dirs are never entered.
+let scanCache: string[] | undefined;
 
 function scanSet(): string[] {
+  if (scanCache) return scanCache;
   const scanned: string[] = [];
-  for (const entry of readdirSync(REPO_ROOT, { recursive: true })) {
-    const path = join(REPO_ROOT, String(entry));
-    try {
-      if (!statSync(path).isFile()) continue;
-    } catch {
-      continue;
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (SKIP_DIRS.some((skip) => entry.name === skip)) continue;
+        walk(path);
+      } else if (entry.isFile() && !SKIP_EXTENSIONS.some((extension) => path.endsWith(extension))) {
+        scanned.push(path);
+      }
     }
-    const relative = path.slice(REPO_ROOT.length);
-    if (SKIP_DIRS.some((dir) => relative.startsWith(`${dir}/`))) continue;
-    if (SKIP_EXTENSIONS.some((extension) => path.endsWith(extension))) continue;
-    scanned.push(path);
-  }
+  };
+  walk(REPO_ROOT);
+  scanCache = scanned;
   return scanned;
 }
 
@@ -103,9 +120,10 @@ function readSource(path: string): string {
 }
 
 function historyDocs(): { file: string; token: string }[] {
-  const engines = readdirSync(join(REPO_ROOT, "docs/engines"))
+  const enginesDir = join(REPO_ROOT, "docs/engines");
+  const engines = (existsSync(enginesDir) ? readdirSync(enginesDir) : [])
     .filter((name) => name.endsWith(".md") && name !== "README.md")
-    .map((name) => ({ file: join(REPO_ROOT, "docs/engines", name), token: `engines/${name}` }));
+    .map((name) => ({ file: join(enginesDir, name), token: `engines/${name}` }));
   const rebuilds = readdirSync(join(REPO_ROOT, "docs"))
     .filter((name) => name.startsWith("REBUILD-") && name.endsWith(".md"))
     .map((name) => ({ file: join(REPO_ROOT, "docs", name), token: name }));
@@ -117,7 +135,7 @@ describe("design history docs", () => {
     "%s is cited outside migrations/",
     (token, file) => {
       const cited = scanSet()
-        .filter((path) => !path.startsWith(join(REPO_ROOT, "migrations")))
+        .filter((path) => !path.startsWith(MIGRATIONS))
         .filter((path) => readSource(path).includes(token));
       expect(cited.length).toBeGreaterThan(0);
       expect(existsSync(file)).toBe(true);
@@ -127,7 +145,7 @@ describe("design history docs", () => {
   it("is cited by a file that exists", () => {
     const citation = /(?:docs\/)?(engines\/[\w-]+|REBUILD-[\w-]+)\.md/g;
     const dangling: string[] = [];
-    for (const path of scanSet().filter((candidate) => !candidate.startsWith(join(REPO_ROOT, "migrations")))) {
+    for (const path of scanSet().filter((candidate) => !candidate.startsWith(MIGRATIONS))) {
       for (const match of readFileSync(path, "utf8").matchAll(citation)) {
         const target = join(REPO_ROOT, "docs", `${match[1]}.md`);
         if (!existsSync(target)) dangling.push(`${path.slice(REPO_ROOT.length)}: ${match[0]}`);
