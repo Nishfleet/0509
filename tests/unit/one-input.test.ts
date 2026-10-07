@@ -29,7 +29,7 @@ describe("OneInput", () => {
     expect(html).toMatch(
       /<label for="([^"]+)"[^>]*>your website address or social username \(like @yourbrand\)<\/label>/,
     );
-    const labelFor = html.match(/<label for="([^"]+)"/)?.[1];
+    const labelFor = /<label for="([^"]+)"/.exec(html)?.[1];
     expect(html).toContain(`id="${labelFor}"`);
     expect(html).not.toContain("aria-label=");
     expect(html).not.toContain("required");
