@@ -7,7 +7,7 @@ on:
         description: Which cases to score
         type: choice
         options: [all, train, test]
-        default: all
+        default: test
       filter:
         description: "Only eval files whose name contains this, e.g. discovery"
         type: string
@@ -16,9 +16,11 @@ on:
 permissions:
   contents: read
 
+# Dispatches queue, they do not stack (0509#7249). A run already in progress is never
+# cancelled: its neurons are spent, so cancelling saves nothing and loses the report.
 concurrency:
-  group: evals-${{ github.ref }}
-  cancel-in-progress: true
+  group: evals
+  cancel-in-progress: false
 
 jobs:
   evals:
@@ -29,8 +31,8 @@ jobs:
     # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
     # every workflow in the repo. One run waits per group; a newer waiting run
     # replaces an older one (actionlint 1.7.12 rejects `queue: max`).
-    # Left out: nothing else in this file. The workflow-level group above still
-    # cancels an older run of the same ref when a newer one starts.
+    # Left out: nothing else in this file. The workflow-level group `evals` queues
+    # runs and never cancels one in progress.
     concurrency:
       group: live-ai
       cancel-in-progress: false
@@ -48,7 +50,12 @@ jobs:
         shell: bash
         run: npm run eval -- ${FILTER:+"$FILTER"} 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
         env:
-          EVAL_SPLIT: ${{ inputs.split || 'all' }}
+          EVAL_SPLIT: ${{ inputs.split || 'test' }}
+          # Per-run ceiling on estimated Workers AI neurons (0509#7249). 2,000 is about 117
+          # Clef calls or 33 gpt-oss calls, so each run is at most 2,000 and four runs a day make 8,000.
+          # Nothing counts runs per day; only a gateway limit could (needs a token scope).
+          # Past it the run fails with "neuron ceiling". To switch it off, delete this line.
+          EVAL_MAX_NEURONS: "2000"
           FILTER: ${{ inputs.filter }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
