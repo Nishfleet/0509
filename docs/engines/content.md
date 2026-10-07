@@ -4,7 +4,7 @@ Issue #6377. Mirrors the hiring engine (`hiring.md`); every path below is in the
 
 ## What it does
 
-The `feed-sweep` Workflow runs at 02:45 UTC (after the 02:30 hiring sweep, before the 03:00 standing refresh). It finds each tracked brand's public blog or changelog feed and files each new post as a `signal` with `kind = 'content'`: title, link and a short excerpt, never the post body. Alerts lists them under the Blog posts chip as "<Brand> published <title>", linked out in a new tab. They do not rank: no `scoring_weight` row names `content`, so the 03:00 refresh and the weekly brief ignore them. Ranking them is a separate decision that needs a weight row.
+The `feed-sweep` Workflow runs at 01:00 UTC (after the 23:30 hiring sweep, before the 03:00 standing refresh), so every nightly sweep finishes ahead of that refresh (0509#7191). It finds each tracked brand's public blog or changelog feed and files each new post as a `signal` with `kind = 'content'`: title, link and a short excerpt, never the post body. Alerts lists them under the Blog posts chip as "<Brand> published <title>", linked out in a new tab. They do not rank: no `scoring_weight` row names `content`, so the 03:00 refresh and the weekly brief ignore them. Ranking them is a separate decision that needs a weight row.
 
 ## Source choice
 

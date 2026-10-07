@@ -4,6 +4,7 @@ import {
   FEED_SWEEP_CRON,
   HIRING_SWEEP_CRON,
   MENTIONS_SWEEP_CRON,
+  NIGHTLY_CRON,
   OWN_SITE_CHECK_CRON,
   SITE_SWEEP_CRON,
   SNAPSHOT_BACKUP_CRON,
@@ -79,6 +80,13 @@ export async function startScheduledWorkflow(env: CronEnv, cron: WorkflowCron, s
 }
 
 const HOUR_MS = 3_600_000;
+const MINUTE_MS = 60_000;
+const DAY_MS = 24 * HOUR_MS;
+
+function cronMinuteOfDay(cron: string): number {
+  const [minute = "0", hour = "0"] = cron.split(" ");
+  return Number(hour) * 60 + Number(minute);
+}
 
 export async function startOwnSiteCheckHour(env: Pick<Env, "OWN_SITE_CHECK">, at: number) {
   return createOnce(env.OWN_SITE_CHECK, instanceId(OWN_SITE_CHECK_CRON, Math.floor(at / HOUR_MS) * HOUR_MS));
@@ -95,12 +103,16 @@ function dailyCrons(): WorkflowCron[] {
 }
 
 export function startMissedDailyWorkflows(env: CronEnv, now: number) {
-  const dayStart = Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), new Date(now).getUTCDate());
-  const due = dailyCrons().flatMap((cron) => {
-    const [minute = "0", hour = "0"] = cron.split(" ");
-    const scheduledTime = dayStart + (Number(hour) * 60 + Number(minute)) * 60_000;
-    return scheduledTime < now ? [{ cron, scheduledTime }] : [];
-  });
+  const day = new Date(now);
+  const midnight = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate());
+  const refreshToday = midnight + cronMinuteOfDay(NIGHTLY_CRON) * MINUTE_MS;
+  const windowStart = now < refreshToday ? refreshToday - DAY_MS : refreshToday;
+  const due = dailyCrons().flatMap((cron) =>
+    [midnight, midnight - DAY_MS].flatMap((dayStart) => {
+      const scheduledTime = dayStart + cronMinuteOfDay(cron) * MINUTE_MS;
+      return scheduledTime > windowStart && scheduledTime < now ? [{ cron, scheduledTime }] : [];
+    }),
+  );
   return Promise.allSettled(due.map(({ cron, scheduledTime }) => startMissedInstance(env, cron, scheduledTime)));
 }
 

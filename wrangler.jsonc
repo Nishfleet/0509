@@ -154,6 +154,16 @@
     "DODO_PRODUCT_AGENCY_YEARLY": "",
     "DODO_PRODUCT_TESTER": "",
     "TESTER_EMAIL_HASHES": "",
+    // 0509#7191: the ai spend kill switch. Set AI_SPEND to "off" to make every
+    // model call refuse before it reaches the gateway, on the scheduled paths and
+    // the request paths alike. Any value other than "on" stops spend, and so does
+    // leaving it unset or blank: the switch fails closed.
+    "AI_SPEND": "on",
+    // 0509#7191, and the operations follow-up on #7079: the named AI Gateway
+    // that carries the product's Jev traffic. Creating it is a dashboard step, so
+    // the id stays "default" until it exists and both model call sites read it
+    // from here rather than each pinning their own.
+    "AI_GATEWAY_ID": "default",
     "ACCESS_TEAM_DOMAIN": "https://nish345.cloudflareaccess.com",
     "ACCESS_AUD": "b4fa400a1848c913b92c3212dc0714fcdbd1b1b66eb24659e4a7cc01c790575d",
   },
@@ -335,8 +345,9 @@
       "class_name": "DiscoveryWorkflow",
     },
     // The nightly website sweep (docs/engines/site-change.md). The `scheduled`
-    // handler creates one instance a night (triggers.crons), at 02:00 UTC so the changes
-    // it files land before the 03:00 standing refresh counts them. Each page
+    // handler creates one instance a night (triggers.crons), at 21:00 UTC so it
+    // finishes, and the changes it files land, well before the 03:00 standing
+    // refresh counts them (0509#7191). Each page
     // is its own retried step; a page that cannot be read fails alone.
     // Nothing to provision: deploy creates the Workflow, unlike a queue.
     {
@@ -345,9 +356,9 @@
       "class_name": "SiteSweepWorkflow",
     },
     // The nightly hiring sweep (docs/engines/hiring.md): finds each tracked
-    // brand's job board, then reads every watched board. 02:30 UTC — after
-    // the 02:00 site sweep and before the 03:00 standing refresh counts its
-    // new-role signals. One retried step per entity and per board; a step
+    // brand's job board, then reads every watched board. 23:30 UTC — after
+    // the 21:00 site sweep and before the 03:00 standing refresh counts its
+    // new-role signals (0509#7191). One retried step per entity and per board; a step
     // that cannot be read fails alone.
     {
       "name": "hiring-sweep",
@@ -356,8 +367,8 @@
     },
     // The nightly blog and changelog feed sweep (docs/engines/content.md):
     // finds each tracked brand's RSS or Atom feed, then reads every watched
-    // feed with a conditional GET. 02:45 UTC, after the 02:30 hiring sweep and
-    // before the 03:00 standing refresh. One retried step per entity and per
+    // feed with a conditional GET. 01:00 UTC, after the 23:30 hiring sweep and
+    // before the 03:00 standing refresh (0509#7191). One retried step per entity and per
     // feed; a step that cannot be read fails alone. Inert until the
     // `feed.rss` source row is enabled.
     {
@@ -368,7 +379,7 @@
     // The nightly snapshot backup (0509#5802): copies every object in
     // 0509-snapshots that 0509-snapshots-backup does not yet hold, one
     // retried step per page of up to 200 objects, preserving httpMetadata.
-    // 05:00 UTC: after the 01:00 mentions sweep and the 02:00 site sweep
+    // 05:00 UTC: after the 19:00 mentions sweep and the 21:00 site sweep
     // have written their objects, and clear of the 03:00 standing cron and
     // the Monday 04:00 refresh. No deletes are propagated — an object deleted
     // from the source ages out of the backup by the backup's own lifecycle
@@ -423,9 +434,14 @@
     // pending digests and claims, and the Monday 04:00 UTC D2 competitor
     // refresh.
     //
-    // Also the Workflow starts: 01:00 mentions-sweep, 02:00 site-sweep, 02:30
-    // hiring-sweep, 02:45 feed-sweep, 05:00 snapshot-backup (0509#6289) and the hourly
-    // own-site-check (0509#4124). The
+    // Also the Workflow starts: 19:00 mentions-sweep, 21:00 site-sweep, 23:30
+    // hiring-sweep, 01:00 feed-sweep, 05:00 snapshot-backup (0509#6289) and the hourly
+    // own-site-check (0509#4124). The four nightly sweeps moved from 01:00-02:45
+    // UTC to 19:00-01:00 UTC because at 40 to 50 workspaces they ran past the
+    // 03:00 nightly refresh (0509#7191); every sweep's runtime budget and the nightly are
+    // held against each other by `tests/cadence.test.ts`, and each Workflow
+    // builds its monitor from `SWEEP_MONITORS` in app/lib/cadence.ts rather
+    // than repeating the crontab string here. The
     // Workflow-level `schedules` bind was skipped around redeploys (this Worker
     // deploys 20-90 times a day; snapshot-backup's never fired), so the
     // `scheduled` handler creates each instance with createBatch under the id
@@ -438,10 +454,10 @@
     "crons": [
       "*/5 * * * *",
       "0 * * * *",
+      "0 19 * * *",
+      "0 21 * * *",
+      "30 23 * * *",
       "0 1 * * *",
-      "0 2 * * *",
-      "30 2 * * *",
-      "45 2 * * *",
       "0 3 * * *",
       "0 4 * * MON",
       "0 5 * * *",

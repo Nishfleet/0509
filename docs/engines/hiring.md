@@ -4,7 +4,7 @@ Issue #4725. Built in #4841 (findBoard), #4848 (readBoard) and #4850 (the Workfl
 
 ## What it does
 
-The `hiring-sweep` Workflow runs at 02:30 UTC (after the 02:00 site sweep, before the 03:00 standing refresh). It finds each tracked brand's public job board and files each new job post as a `signal` with `kind = 'hiring'`. The 03:00 refresh counts those as `hiring_new_role` (`workers/standing/refresh.ts` via `app/lib/standing-score.server.ts`), so Home ranks them with no further change.
+The `hiring-sweep` Workflow runs at 23:30 UTC (after the 21:00 site sweep, before the 03:00 standing refresh), so every nightly sweep finishes ahead of that refresh (0509#7191). It finds each tracked brand's public job board and files each new job post as a `signal` with `kind = 'hiring'`. The 03:00 refresh counts those as `hiring_new_role` (`workers/standing/refresh.ts` via `app/lib/standing-score.server.ts`), so Home ranks them with no further change.
 
 ## Source choice
 

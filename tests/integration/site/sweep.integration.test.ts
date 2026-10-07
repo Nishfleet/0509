@@ -450,6 +450,76 @@ describe("nightly site sweep", () => {
     expect(run.wall_ms).toBe(Date.parse(run.finished_at) - Date.parse(run.planned_at));
   });
 
+  it("writes which pages failed and why onto the run row, so a bad night needs no log (0509#7191)", async () => {
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      return Promise.resolve(
+        url === "https://mybrand.com/robots.txt"
+          ? new Response("User-agent: FiveToNineBot\nDisallow: /\n", { status: 200 })
+          : new Response(readHolder.html, { status: 200 }),
+      );
+    });
+    const id = "sweep-failed-reason";
+    await using introspector = await introspectWorkflowInstance(env.SITE_SWEEP, id);
+    await env.SITE_SWEEP.create({ id });
+    await introspector.waitForStatus("complete");
+
+    const run = await env.DB.prepare("SELECT pages, failed, reason FROM sweep_run WHERE id = ?")
+      .bind(id)
+      .first<{ pages: number; failed: number; reason: string | null }>();
+    if (run === null) throw new Error("finished sweep wrote no sweep_run row");
+    const selfPage = await env.DB.prepare("SELECT id FROM page WHERE entity_id = 'ent-self'").first<{ id: string }>();
+    expect(run).toMatchObject({ pages: 2, failed: 1 });
+    expect(run.reason).toBe(
+      `1 of 2 pages failed in 1 step: recheck 0 ${String(selfPage?.id)}: robots: disallowed by robots.txt`,
+    );
+  });
+
+  it("drops a first-pass failure the recheck recovered, so a clean night records no reason (0509#7191)", async () => {
+    const rival = (await planSiteSweep(NOW)).find((target) => target.entityId === "ent-rival");
+    if (rival === undefined) throw new Error("expected the rival homepage");
+    const id = "sweep-recovered-on-recheck";
+    await using introspector = await introspectWorkflowInstance(env.SITE_SWEEP, id);
+    await introspector.modify(async (modifier) => {
+      await modifier.disableRetryDelays();
+      await modifier.mockStepError({ name: `check ${rival.pageId}` }, new Error("browser timed out"));
+    });
+    await env.SITE_SWEEP.create({ id });
+    await introspector.waitForStatus("complete");
+
+    expect(await introspector.getOutput()).toMatchObject({ pages: 2, failed: 0, rechecked: 1 });
+    const run = await env.DB.prepare("SELECT pages, failed, reason FROM sweep_run WHERE id = ?").bind(id).first();
+    expect(run).toEqual({ pages: 2, failed: 0, reason: null });
+  });
+
+  it("records a page that fails only on the recheck, with the recheck's own reason (0509#7191)", async () => {
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      return Promise.resolve(
+        url === "https://mybrand.com/robots.txt"
+          ? new Response("User-agent: FiveToNineBot\nDisallow: /\n", { status: 200 })
+          : new Response(readHolder.html, { status: 200 }),
+      );
+    });
+    const self = (await planSiteSweep(NOW)).find((target) => target.entityId === "ent-self");
+    if (self === undefined) throw new Error("expected the self homepage");
+    const id = "sweep-failed-on-recheck";
+    await using introspector = await introspectWorkflowInstance(env.SITE_SWEEP, id);
+    await introspector.modify(async (modifier) => {
+      await modifier.mockStepResult({ name: `check ${self.pageId}` }, { outcome: "unchanged" });
+    });
+    await env.SITE_SWEEP.create({ id });
+    await introspector.waitForStatus("complete");
+
+    expect(await introspector.getOutput()).toMatchObject({ pages: 2, failed: 1, unchanged: 0, rechecked: 1 });
+    const run = await env.DB.prepare("SELECT pages, failed, reason FROM sweep_run WHERE id = ?").bind(id).first();
+    expect(run).toEqual({
+      pages: 2,
+      failed: 1,
+      reason: `1 of 2 pages failed in 1 step: recheck 0 ${self.pageId}: robots: disallowed by robots.txt`,
+    });
+  });
+
   describe("the customer's own page", () => {
     const installJev = (breakageP: number) => {
       const asked: string[] = [];
