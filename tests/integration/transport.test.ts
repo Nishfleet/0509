@@ -21,6 +21,7 @@ vi.mock("cloudflare:workers", () => ({
 
 interface BrowserStub {
   quickAction(action: "content", options: { url: string }): Promise<Response>;
+  close(): Promise<void>;
 }
 
 /**

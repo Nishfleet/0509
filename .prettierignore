@@ -1,4 +1,5 @@
 build/
+.tsbuild/
 .wrangler/
 .react-router/
 **/+types/
