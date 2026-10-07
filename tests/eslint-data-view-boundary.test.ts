@@ -42,6 +42,21 @@ function boundaryHits(messages: Messages): Messages {
   return messages.filter((message) => message.ruleId === BOUNDARY_RULE && message.message.includes(BOUNDARY_MESSAGE));
 }
 
+// #7031 targets a resolved path, so a probe whose target is missing reports no
+// boundary hit and the assertion below fails for the wrong reason. access()
+// alone would do the job, but a bare ENOENT names a path and not which probe
+// lost its target, so the reason travels with the failure.
+async function requirePath(label: string, target: string): Promise<void> {
+  try {
+    await access(target);
+  } catch (error) {
+    throw new Error(
+      `${label} is missing at ${target}, so the #7031 probe would resolve nothing (${error instanceof Error ? error.message : String(error)})`,
+      { cause: error },
+    );
+  }
+}
+
 describe("data/view lint boundary (#7031)", () => {
   let eslint: ESLint;
 
@@ -50,10 +65,10 @@ describe("data/view lint boundary (#7031)", () => {
     // The probes lint at this path in memory, and the clean-file case reads
     // it for real. A missing or ignored file would make every assertion
     // below vacuous, so it fails here instead.
-    await access(DATA_WRITER_PATH);
+    await requirePath("data writer", DATA_WRITER_PATH);
     expect(await eslint.isPathIgnored(DATA_WRITER_PATH)).toBe(false);
-    await access(VIEW_TARGET);
-    await access(ROUTE_TARGET);
+    await requirePath("component probe target", VIEW_TARGET);
+    await requirePath("route probe target", ROUTE_TARGET);
   });
 
   it("rejects app/lib/data importing a component", { timeout: 180_000 }, async () => {
