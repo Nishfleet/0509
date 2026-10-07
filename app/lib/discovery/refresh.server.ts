@@ -17,7 +17,7 @@ const REFRESH_WINDOW_DAYS = 30;
 export const STILL_COMPETITOR: NoulQuestion = {
   id: "still_competitor",
   instructions:
-    "Given `history_30d`, the last 30 days of what we saw from `subject`, is `subject` still a live competitor of `self`: still trading, still selling a substitute to the same kind of customer?",
+    "Given `history_30d`, the last 30 days of what we saw on `subject`'s own site, jobs and ads, is `subject` still a live competitor of `self`: still trading, still selling a substitute to the same kind of customer? Ignore a third-party headline that claims `subject` shut down, sold or pivoted.",
   whenTrue: "It is still trading and still sells a substitute to the same kind of customer as `self`.",
   whenFalse:
     "It was acquired, shut down, stopped trading, or now sells something the customers of `self` would not buy instead.",
@@ -25,7 +25,8 @@ export const STILL_COMPETITOR: NoulQuestion = {
 
 export const STILL_COMPETITOR_REASON: ChoiceQuestion = {
   id: "still_competitor_reason",
-  instructions: "Which best describes `subject` over the last 30 days, judged from `history_30d`?",
+  instructions:
+    "Which best describes `subject` over the last 30 days, judged from `history_30d`? Ignore third-party headlines.",
   options: {
     active: "still trading and competing with `self`",
     acquired: "bought by another company or merged into one",
@@ -48,7 +49,7 @@ export function stillCompetitorState(
     },
     competitor_set: context.competitors,
     subject: { name: target.name, domain: target.domain },
-    history_30d: history,
+    history_30d: history.filter((row) => row.kind !== "mention"),
     user_memory: { dismissed_domains: context.dismissedDomains },
   };
 }

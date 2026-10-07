@@ -1,6 +1,7 @@
 import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
 import type { ChangeMark } from "../../app/lib/site-change";
+import { neutralizeBareUrls } from "../../app/lib/slack-webhook";
 import { renderAlertFooter, type AlertFooterContext } from "./alert-footer";
 import { formatDate } from "./brief-template";
 import { EYEBROW, FONT, emailDocument } from "./email-shell";
@@ -19,8 +20,8 @@ const BODY = `margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24p
 function markLines(mark: ChangeMark | null): string[] {
   if (mark === null) return [];
   return [
-    ...(mark.removed === null ? [] : [`Before: ${mark.removed}`]),
-    ...(mark.added === null ? [] : [`After: ${mark.added}`]),
+    ...(mark.removed === null ? [] : [`Before: ${neutralizeBareUrls(mark.removed)}`]),
+    ...(mark.added === null ? [] : [`After: ${neutralizeBareUrls(mark.added)}`]),
   ];
 }
 
