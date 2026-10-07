@@ -29,7 +29,7 @@ export async function planFeedSweep(): Promise<{
 async function firstReadableFeed(candidates: readonly string[]): Promise<string | null> {
   for (const candidate of candidates) {
     const result = await fetchFeed(candidate, null);
-    if (result.outcome === "ok" && isFeedDocument(result.body)) return candidate;
+    if (result.outcome === "ok" && isFeedDocument(result.body.head)) return candidate;
   }
   return null;
 }

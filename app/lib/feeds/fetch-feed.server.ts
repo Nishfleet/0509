@@ -1,5 +1,6 @@
-import { cappedText, fetchOutbound, leadingText } from "../fetch/outbound.server";
+import { cappedText, fetchOutbound, windowedText } from "../fetch/outbound.server";
 import { CRAWLER_USER_AGENT, robotsAllows } from "../fetch/robots.server";
+import type { FeedDocument } from "./parse-feed";
 
 export interface FeedValidators {
   etag: string | null;
@@ -7,12 +8,14 @@ export interface FeedValidators {
 }
 
 export type FeedFetch =
-  | { outcome: "ok"; body: string; validators: FeedValidators }
+  | { outcome: "ok"; body: FeedDocument; validators: FeedValidators }
   | { outcome: "not-modified" }
   | { outcome: "gone" }
   | { outcome: "unreadable" };
 
-const MAX_FEED_BYTES = 2 * 1024 * 1024;
+const MAX_FEED_WINDOW_BYTES = 2 * 1024 * 1024;
+
+const MAX_FEED_STREAM_BYTES = 8 * 1024 * 1024;
 
 const FEED_TIMEOUT_MS = 8_000;
 
@@ -33,9 +36,13 @@ async function classify(response: Response): Promise<FeedFetch> {
     await response.body?.cancel();
     return { outcome: response.status === 404 || response.status === 410 ? "gone" : "unreadable" };
   }
+  const body = await windowedText(response, MAX_FEED_WINDOW_BYTES, MAX_FEED_STREAM_BYTES);
+  if (body.truncated) {
+    console.log(JSON.stringify({ event: "feed.stream_capped", bytes: MAX_FEED_STREAM_BYTES }));
+  }
   return {
     outcome: "ok",
-    body: await leadingText(response, MAX_FEED_BYTES),
+    body: { head: body.head, tail: body.tail },
     validators: { etag: response.headers.get("etag"), lastModified: response.headers.get("last-modified") },
   };
 }
@@ -65,7 +72,7 @@ export async function fetchHomepage(url: string): Promise<string | null> {
       await response.body?.cancel();
       return null;
     }
-    return await cappedText(response, MAX_FEED_BYTES);
+    return await cappedText(response, MAX_FEED_WINDOW_BYTES);
   } catch (error) {
     console.log(
       JSON.stringify({ event: "feed.homepage_failed", error: error instanceof Error ? error.name : "unknown" }),

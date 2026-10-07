@@ -128,21 +128,42 @@ export async function cappedText(res: Response, capBytes: number): Promise<strin
   return bytes === null ? null : new TextDecoder().decode(bytes);
 }
 
-export async function leadingText(res: Response, maxBytes: number): Promise<string> {
-  if (res.body === null) return "";
+export interface BodyWindows {
+  head: string;
+  tail: string;
+  truncated: boolean;
+}
+
+export async function windowedText(res: Response, windowBytes: number, maxBytes: number): Promise<BodyWindows> {
+  if (res.body === null) return { head: "", tail: "", truncated: false };
   const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let text = "";
+  const chunks: Uint8Array[] = [];
   let seen = 0;
-  while (seen < maxBytes) {
+  let truncated = false;
+  for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    const kept = value.byteLength > maxBytes - seen ? value.subarray(0, maxBytes - seen) : value;
-    text += decoder.decode(kept, { stream: true });
-    seen += kept.byteLength;
+    const room = maxBytes - seen;
+    if (value.byteLength > room) {
+      if (room > 0) chunks.push(value.subarray(0, room));
+      seen += Math.max(room, 0);
+      truncated = true;
+      break;
+    }
+    chunks.push(value);
+    seen += value.byteLength;
   }
   await reader.cancel();
-  return text + decoder.decode();
+  const bytes = new Uint8Array(seen);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const decoder = new TextDecoder();
+  const head = decoder.decode(bytes.subarray(0, Math.min(windowBytes, bytes.byteLength)));
+  const tail = bytes.byteLength > windowBytes ? decoder.decode(bytes.subarray(bytes.byteLength - windowBytes)) : head;
+  return { head, tail, truncated };
 }
 
 export async function cappedJson(res: Response, capBytes: number): Promise<unknown> {
