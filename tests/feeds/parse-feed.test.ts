@@ -8,6 +8,7 @@ import {
   keyItems,
   parseFeed as parseFeedRaw,
   type FeedDocument,
+  type FeedItem,
   type FeedScan,
 } from "../../app/lib/feeds/parse-feed";
 import { sha256Hex } from "../../app/lib/sha256";
@@ -96,7 +97,7 @@ describe("parseFeed", () => {
       BASE,
       { now: NOW },
     );
-    expect(items?.map((item) => item.title)).toEqual(["Fine"]);
+    expect(items?.map((item: FeedItem) => item.title)).toEqual(["Fine"]);
   });
 
   it("drops items older than 30 days but keeps undated ones", () => {
@@ -107,7 +108,7 @@ describe("parseFeed", () => {
       BASE,
       { now: NOW },
     );
-    expect(items?.map((item) => item.title)).toEqual(["Edge", "Undated"]);
+    expect(items?.map((item: FeedItem) => item.title)).toEqual(["Edge", "Undated"]);
   });
 
   it("sorts newest first and caps the list at the newest 20", () => {
@@ -177,7 +178,7 @@ describe("parseFeed, items it must drop or keep", () => {
       { now: NOW },
     );
 
-    expect(items?.map((item) => item.title)).toEqual(["A", "E"]);
+    expect(items?.map((item: FeedItem) => item.title)).toEqual(["A", "E"]);
     expect(items?.[0]).toMatchObject({ id: "https://rival.com/a", publishedAt: null });
     expect(items?.[1]?.url).toBe("https://rival.com/e");
   });
@@ -256,8 +257,8 @@ describe("parseFeed on hostile input", () => {
 
     const { items, scan } = scanned(xml);
 
-    expect(items).toHaveLength(MAX_FEED_ITEMS);
-    expect(items[0]?.title).toBe("Post 0");
+expect(items ?? []).toHaveLength(MAX_FEED_ITEMS);
+    expect((items ?? [])[0]?.title).toBe("Post 0");
     expect(scan.blocksVisited).toBeLessThanOrEqual(400);
     expect(scan.charsScanned).toBeLessThanOrEqual(500 * xml.length);
   });
@@ -272,7 +273,7 @@ describe("parseFeed on hostile input", () => {
 
     const { items } = scanned(xml);
 
-    expect(items.map((item) => item.title)).toEqual(
+    expect((items ?? []).map((item: FeedItem) => item.title)).toEqual(
       Array.from({ length: MAX_FEED_ITEMS }, (_, i) => `Post ${4999 - i}`),
     );
   });
@@ -286,7 +287,7 @@ describe("parseFeed on hostile input", () => {
 
     const { items } = scanned(xml);
 
-    expect(items.map((item) => item.title)).toEqual(
+    expect((items ?? []).map((item: FeedItem) => item.title)).toEqual(
       Array.from({ length: MAX_FEED_ITEMS }, (_, i) => `Post ${299 - i}`),
     );
   });
@@ -295,14 +296,14 @@ describe("parseFeed on hostile input", () => {
     const head = `<rss version="2.0"><channel><item><title>Cut</title><link>https://rival.com/cut</link><descrip`;
     const tail = `tion>x</description></item><item><title>Whole</title><link>https://rival.com/whole</link></item></channel></rss>`;
 
-    expect(parseFeedRaw({ head, tail }, BASE, { now: NOW })?.map((item) => item.title)).toEqual(["Whole"]);
+    expect(parseFeedRaw({ head, tail }, BASE, { now: NOW })?.map((item: FeedItem) => item.title)).toEqual(["Whole"]);
   });
 
   it("skips an item block over the size cap and still reads the next one", () => {
     const huge = `<item><title>Huge</title><link>https://rival.com/huge</link><description>${"x".repeat(30_000)}</description></item>`;
     const fine = "<item><title>Fine</title><link>https://rival.com/fine</link></item>";
 
-    expect(parseFeed(rss(huge + fine), BASE, { now: NOW })?.map((item) => item.title)).toEqual(["Fine"]);
+    expect(parseFeed(rss(huge + fine), BASE, { now: NOW })?.map((item: FeedItem) => item.title)).toEqual(["Fine"]);
   });
 
   it("never expands entities or reads files: a DOCTYPE entity stays literal text", () => {
@@ -312,7 +313,7 @@ describe("parseFeed on hostile input", () => {
 
     const items = parseFeed(xml, BASE, { now: NOW });
 
-    expect(items).toHaveLength(1);
+    expect(items ?? []).toHaveLength(1);
     expect(items?.[0]?.title).toBe("&xxe; and &lol;");
     expect(items?.[0]?.excerpt).toBe("&xxe;");
     expect(JSON.stringify(items)).not.toContain("root:");
@@ -349,7 +350,7 @@ describe("parseFeed on hostile input", () => {
         `<ITEM><TITLE>Upper case tags</TITLE><LINK>https://rival.com/upper</LINK></ITEM>`,
     );
 
-    expect(parseFeed(xml, BASE, { now: NOW })?.map((item) => item.title)).toEqual([
+    expect(parseFeed(xml, BASE, { now: NOW })?.map((item: FeedItem) => item.title)).toEqual([
       "İİİİİ İstanbul",
       "Upper case tags",
     ]);
