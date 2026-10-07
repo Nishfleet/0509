@@ -1,13 +1,10 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { ESLint } from "eslint";
+import type { Linter } from "eslint";
 import { describe, expect, it } from "vitest";
-
-// #7266 imports the per-file blocks generated in eslint.config.js so the
-// survival test below checks the real ones, not a hand-rolled copy.
-import { TABLE_WRITER_BLOCKS } from "../eslint.config.js";
 
 // 0509#7022: RAW_DML_WRITER only proves DML sits somewhere under
 // app/lib/data/. These probes prove each data file may write only its own
@@ -20,6 +17,22 @@ import { TABLE_WRITER_BLOCKS } from "../eslint.config.js";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_DIR = path.join(REPO_ROOT, "app/lib/data");
 const FOREIGN_MESSAGE = "Foreign-table write";
+
+// #7266 reads the per-file blocks and the assembled config out of the real
+// eslint.config.js at run time, so the survival test checks the real ones and
+// not a hand-rolled copy. The specifier is a run-time value on purpose: a
+// static import puts eslint.config.js into tsconfig.test.json's program, and
+// `checkJs` then rejects the many implicitly-typed plugin callbacks the config
+// has always had (0509#7266 rework).
+interface ConfigModule {
+  default: Linter.Config[];
+  TABLE_WRITER_BLOCKS: Linter.Config[];
+}
+
+async function loadConfig(): Promise<ConfigModule> {
+  const url = pathToFileURL(path.join(REPO_ROOT, "eslint.config.js")).href;
+  return (await import(/* @vite-ignore */ url)) as ConfigModule;
+}
 
 const PROBES: { file: string; statement: string; foreign: boolean }[] = [
   { file: "watch.server.ts", statement: "UPDATE page SET role = 'x' WHERE id = ?1", foreign: true },
@@ -104,7 +117,7 @@ describe("table writer survives a later clobbering block (#7266)", () => {
   // A future developer might add a block for app/lib/data/** that sets
   // no-restricted-syntax — flat config replaces the array, so this drops
   // every TABLE_WRITER_BLOCKS entry including foreignTableWriter.
-  const CLOBBERING_BLOCK = {
+  const CLOBBERING_BLOCK: Linter.Config = {
     files: ["app/lib/data/**"],
     rules: {
       "no-restricted-syntax": ["error", { selector: "Literal[value=/^CLOBBERED$/]", message: "CLOBBERED" }],
@@ -125,17 +138,31 @@ describe("table writer survives a later clobbering block (#7266)", () => {
     expect(messages.some((m) => m.includes(FOREIGN_MESSAGE))).toBe(false);
   });
 
-  it("still flags the foreign write when TABLE_WRITER_BLOCKS follows the clobbering block", { timeout: 60_000 }, async () => {
-    const eslint = new ESLint({
-      cwd: REPO_ROOT,
-      overrideConfig: [CLOBBERING_BLOCK, ...TABLE_WRITER_BLOCKS],
-    });
-    const results = await eslint.lintText(FOREIGN_DELETE, {
-      filePath: path.join(DATA_DIR, "page.server.ts"),
-    });
-    const messages = results.flatMap((result) => result.messages.map((m) => m.message));
-    // TABLE_WRITER_BLOCKS, placed after the clobbering block, restores the
-    // rule — the foreign write is still flagged.
-    expect(messages.some((m) => m.includes(FOREIGN_MESSAGE))).toBe(true);
+  it(
+    "still flags the foreign write when TABLE_WRITER_BLOCKS follows the clobbering block",
+    { timeout: 60_000 },
+    async () => {
+      const { TABLE_WRITER_BLOCKS } = await loadConfig();
+      const eslint = new ESLint({
+        cwd: REPO_ROOT,
+        overrideConfig: [CLOBBERING_BLOCK, ...TABLE_WRITER_BLOCKS],
+      });
+      const results = await eslint.lintText(FOREIGN_DELETE, {
+        filePath: path.join(DATA_DIR, "page.server.ts"),
+      });
+      const messages = results.flatMap((result) => result.messages.map((m) => m.message));
+      // TABLE_WRITER_BLOCKS, placed after the clobbering block, restores the
+      // rule — the foreign write is still flagged.
+      expect(messages.some((m) => m.includes(FOREIGN_MESSAGE))).toBe(true);
+    },
+  );
+
+  it("keeps TABLE_WRITER_BLOCKS as the last entries of the real config", { timeout: 60_000 }, async () => {
+    const { default: config, TABLE_WRITER_BLOCKS } = await loadConfig();
+    // Flat config applies matching blocks in order, so the guard survives a
+    // later app/lib/data/** block only while nothing follows it. This is the
+    // assertion that fails when ...TABLE_WRITER_BLOCKS is moved back into the
+    // body of the array.
+    expect(config.slice(-TABLE_WRITER_BLOCKS.length)).toEqual(TABLE_WRITER_BLOCKS);
   });
 });
