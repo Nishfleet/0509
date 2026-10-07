@@ -7,7 +7,7 @@ import type * as JudgeModule from "../../../app/lib/site/judge.server";
 const judgeFault = vi.hoisted(() => ({ next: false }));
 
 vi.mock("../../../app/lib/site/judge.server", async (importOriginal) => {
-  const original = await importOriginal<JudgeModule>();
+  const original = await importOriginal<typeof JudgeModule>();
   return {
     ...original,
     judgeChange: async (input: Parameters<typeof original.judgeChange>[0]) => {
@@ -510,7 +510,9 @@ describe("nightly site sweep", () => {
 
     beforeEach(async () => {
       await env.DB.exec("DELETE FROM jev_verdict");
-      send = vi.spyOn(workerEnv.SEND_EMAIL, "send").mockResolvedValue(undefined);
+      send = vi.spyOn(workerEnv.SEND_EMAIL, "send").mockResolvedValue({
+        metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
+      });
     });
 
     afterEach(() => {

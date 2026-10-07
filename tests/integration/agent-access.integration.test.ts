@@ -20,7 +20,7 @@ import { createAuth } from "../../app/lib/auth.server";
 
 const auth = createAuth({
   DB: env.DB,
-  EMAIL: { send: async () => ({ ok: true }) },
+  EMAIL: { send: async () => ({ messageId: "m-1" }) },
   SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
   SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
   TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",

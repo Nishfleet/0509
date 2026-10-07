@@ -33,6 +33,15 @@ export function isLocalLane(): boolean {
   return !process.env.PLAYWRIGHT_TEST_BASE_URL;
 }
 
+function unknownToMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  try {
+    return JSON.stringify(error);
+  } catch (_circular) {
+    return Object.prototype.toString.call(error);
+  }
+}
+
 // The lane's origin is the only one a verify link may carry (0509#5841):
 // production and the merge-queue previews mail their own baseURL, and the
 // local lane's `wrangler dev` mails the --var BETTER_AUTH_URL
@@ -299,13 +308,17 @@ export async function waitForMagicLink(to: string, token: string | null, exclude
       // one, and a poll-callback error would read as "no email" — the thrown
       // error names the sink's state and carries the poll failure as cause.
       if (pollError !== undefined) {
-        throw new Error(`Reading the local email sink failed while waiting for ${to}: ${pollError}`, { cause });
+        throw new Error(`Reading the local email sink failed while waiting for ${to}: ${unknownToMessage(pollError)}`, {
+          cause,
+        });
       }
       const sinkMissing = await stat(join(process.cwd(), LOCAL_EMAIL_SINK)).then(
         () => false,
         (error: unknown) => {
           if (isNotFound(error)) return true;
-          throw new Error(`Reading the local email sink failed while waiting for ${to}: ${error}`, { cause });
+          throw new Error(`Reading the local email sink failed while waiting for ${to}: ${unknownToMessage(error)}`, {
+            cause,
+          });
         },
       );
       throw new Error(

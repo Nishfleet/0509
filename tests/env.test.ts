@@ -96,9 +96,10 @@ describe("worker env", () => {
 
   it("names every missing entry in one error", () => {
     const values = configured();
-    delete values.DB;
-    delete values.BETTER_AUTH_SECRET;
-    useEnv(values);
+    const { DB: _droppedDb, BETTER_AUTH_SECRET: _droppedSecret, ...missing } = values;
+    expect(_droppedDb).toBeDefined();
+    expect(_droppedSecret).toBeDefined();
+    useEnv(missing);
     const error = namesOf(createWorkerEnvCheck());
     expect(error.names).toEqual(["DB", "BETTER_AUTH_SECRET"]);
     expect(error.message).toBe(

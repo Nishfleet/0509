@@ -24,7 +24,7 @@ const authEnv = {
 const auth = createAuth(authEnv);
 
 function linkTo(address: string): string {
-  const message = sent.findLast((entry) => entry.to === address);
+  const message = [...sent].reverse().find((entry) => entry.to === address);
   const link = /https?:\/\/\S+/.exec(message?.text ?? "")?.[0];
   if (link === undefined) throw new Error(`no link was sent to ${address}`);
   return link;

@@ -24,9 +24,10 @@ describe("cadence", () => {
   it("leaves the six scheduled Workflows off `schedules` and starts them from triggers.crons", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
     const daily = ["site-sweep", "mentions-sweep", "hiring-sweep", "feed-sweep", "snapshot-backup", "own-site-check"];
-    const workflows = (rawConfig.workflows ?? []).filter((workflow) => daily.includes(workflow.name));
-    expect(workflows).toHaveLength(6);
-    expect(workflows.map((workflow) => workflow.schedules)).toEqual([
+    const workflows = (rawConfig.workflows ?? []) as { name: string; schedules?: unknown }[];
+    const scheduled = workflows.filter((workflow) => daily.includes(workflow.name));
+    expect(scheduled).toHaveLength(6);
+    expect(scheduled.map((workflow) => workflow.schedules)).toEqual([
       undefined,
       undefined,
       undefined,
@@ -105,7 +106,7 @@ describe("cron weekday fields", () => {
 
   it("leaves every wrangler trigger free of a numbered weekday", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
-    const crons = rawConfig.triggers?.crons ?? [];
+    const crons: string[] = rawConfig.triggers?.crons ?? [];
     expect(crons).toEqual(expect.arrayContaining([...Object.values(CRON_CONSTANTS), "*/5 * * * *"]));
     const numbered = crons.filter((cron) => /\d/.test(dayOfWeekField(cron)));
     expect(numbered, `wrangler.jsonc numbers the day of week in: ${numbered.join(", ")}`).toEqual([]);

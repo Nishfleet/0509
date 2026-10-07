@@ -250,7 +250,7 @@ describe("public-route manifest", () => {
         routesByUrl.set(`/${entry.path}`, entry);
       }
     }
-    for (const path of SITEMAP_PATHS) {
+    for (const path of SITEMAP_PATHS as readonly string[]) {
       expect(isDisallowed(path), `sitemap path "${path}" is disallowed by robots.txt`).toBe(false);
       if (path === "/" && existsSync(join(REPO_ROOT, "public/index.html"))) {
         // "/" is the static rebuild notice until the landing ships an index

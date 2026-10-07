@@ -35,7 +35,7 @@ function renderDocument(id: string): string {
               claims: { nouns: "website changes", features: [] },
               now: 0,
             },
-          }),
+          } as unknown as Parameters<typeof Landing>[0]),
         ),
     },
   ]);
