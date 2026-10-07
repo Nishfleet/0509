@@ -350,6 +350,55 @@ describe("delete my account", () => {
     expect(shown.body.progress).toMatchObject({ rows: "removed" });
   });
 
+  it("creates the cleanup instance alongside the grant revocation, not behind it", { timeout: 60_000 }, async () => {
+    const { cookie, userId } = await signIn("leaving-together@0509.io");
+    const cursors: (string | undefined)[] = [];
+    const pages: Record<string, { items: { id: string }[]; cursor?: string }> = {
+      first: { items: [{ id: "grant-1" }], cursor: "second" },
+      second: { items: [{ id: "grant-2" }] },
+    };
+    let firstPageListed!: () => void;
+    const grantListStarted = new Promise<void>((resolve) => {
+      firstPageListed = resolve;
+    });
+    const helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant"> = {
+      listUserGrants: async (_user, options) => {
+        const cursor = options?.cursor;
+        cursors.push(cursor);
+        if (cursors.length === 1) firstPageListed();
+        return pages[cursor ?? "first"] as Awaited<ReturnType<OAuthHelpers["listUserGrants"]>>;
+      },
+      revokeGrant: async () => undefined,
+    };
+
+    // The request answers after this resolves, so holding it until the first
+    // grant page is listed fails a delete that walks the two one behind the
+    // other: #7247 measured 20.5s for one production delete against a 30s
+    // teardown budget, and the grant pages share nothing with the instance.
+    const create = env.ACCOUNT_DELETE.create.bind(env.ACCOUNT_DELETE);
+    let released = false;
+    env.ACCOUNT_DELETE.create = (async (options: never) => {
+      await grantListStarted;
+      released = true;
+      return create(options);
+    }) as typeof env.ACCOUNT_DELETE.create;
+
+    try {
+      const settled = await Promise.race([
+        deleteAccount(helpers, settingsRequest(cookie), userId),
+        new Promise<"never">((resolve) => setTimeout(() => resolve("never"), 10_000)),
+      ]);
+      expect(settled, "the delete waited for the grant pages instead of running alongside them").not.toBe("never");
+      if (settled === "never") throw new Error("the delete never finished");
+      if (settled === null) throw new Error("deleteAccount refused a fresh session");
+      expect(released).toBe(true);
+      expect(cursors).toEqual([undefined, "second"]);
+      expect(await count('SELECT COUNT(*) AS n FROM "user" WHERE id = ?', userId)).toBe(0);
+    } finally {
+      env.ACCOUNT_DELETE.create = create as typeof env.ACCOUNT_DELETE.create;
+    }
+  });
+
   it("rejects a cookie whose signature was tampered with", async () => {
     const id = "account-delete-tampered";
     const page = `${ORIGIN}/login?deleted=${id}`;

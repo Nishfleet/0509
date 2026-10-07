@@ -13,18 +13,28 @@ import { deleteAccountViaRequest } from "./inbox";
 
 const LANES = ["desktop", "phone"] as const;
 
-teardown("delete each onboarded account the setup minted", async ({ playwright, baseURL }) => {
-  if (!baseURL) throw new Error("PLAYWRIGHT_TEST_BASE_URL resolved to no baseURL");
-  const origin = new URL(baseURL).origin;
-  for (const lane of LANES) {
+// One test per lane, not one test that walks both: #7247's failing run needed
+// 20.5s for a single production delete and then timed out at 30s while
+// deleting two accounts one behind the other, so no shared budget covers the
+// pair. The product's delete is synchronous by design — the redirect to
+// /login?deleted only fires once the rows are gone — so the teardown allows
+// the real duration instead of racing it.
+for (const lane of LANES) {
+  teardown(`delete the onboarded ${lane} account the setup minted`, async ({ playwright, baseURL }) => {
+    if (!baseURL) throw new Error("PLAYWRIGHT_TEST_BASE_URL resolved to no baseURL");
     const statePath = onboardedStatePath(lane);
     const emailPath = onboardedEmailPath(lane);
-    if (!existsSync(statePath) || !existsSync(emailPath)) continue;
+    if (!existsSync(statePath) || !existsSync(emailPath)) return;
+    // The longest single delete this lane has logged is 20.5s (run 37580626642's
+    // rerun). 120s leaves six times that for one delete, and each account now
+    // gets its own test budget, so a slow delete cannot spend the other lane's.
+    teardown.setTimeout(120_000);
+    const origin = new URL(baseURL).origin;
     const api = await playwright.request.newContext({ storageState: statePath, baseURL });
     try {
       await deleteAccountViaRequest(api, origin);
     } finally {
       await api.dispose();
     }
-  }
-});
+  });
+}

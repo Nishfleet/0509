@@ -639,6 +639,10 @@ export async function deleteAccountViaRequest(request: APIRequestContext, origin
   }
   if (!email) return;
 
+  // Names the row the run is about to remove, so a teardown that times out
+  // (#7247) leaves a row the soak report's user table can be matched against
+  // instead of an anonymous leftover.
+  console.log(`deleteAccountViaRequest: deleting ${email}`);
   const deleted = await request.post("/app/settings", {
     headers: { origin },
     form: { intent: "delete-account", confirm: email },
