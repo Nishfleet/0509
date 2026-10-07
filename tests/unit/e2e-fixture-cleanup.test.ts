@@ -18,7 +18,6 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 // `e2e+onboarded-${lane}-…` and `e2e+${tag}-…` leaked rows the bare
 // `e2e+${` probe never saw (0509#6968).
 const MINT = /e2e\+[\w-]*\$\{/;
-const HELPER = /deleteCreatedAccount/;
 // J14 drives the delete flow inline and asserts the mid-flow progress, so it
 // cannot call the helper; it is the flow's proof.
 const ALLOWED = new Set(["e2e/j14-delete-workspace.spec.ts"]);
@@ -87,7 +86,7 @@ describe("e2e fixture teardown detector", () => {
     for (const rel of await e2eFiles(path.join(REPO_ROOT, "e2e"), /\.spec\.ts$/)) {
       if (ALLOWED.has(rel)) continue;
       const source = await readFile(path.join(REPO_ROOT, rel), "utf8");
-      if (MINT.test(source) && !HELPER.test(source)) offenders.push(rel);
+      if (MINT.test(source) && !source.includes("deleteCreatedAccount")) offenders.push(rel);
     }
     expect(offenders).toEqual([]);
   });

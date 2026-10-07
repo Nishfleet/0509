@@ -1,7 +1,7 @@
 import type { Route } from "./+types/app.home";
 import { env } from "cloudflare:workers";
 
-import { data, Link, redirect, useFetcher } from "react-router";
+import { data, Link, redirect } from "react-router";
 
 import { FreshnessLine } from "../components/freshness-line";
 import { HomePageFrame, HomeStanding } from "../components/home-standing";
@@ -69,7 +69,6 @@ function HomeFooter({ line }: { line: string }) {
 }
 
 export default function Page({ loaderData }: Route.ComponentProps) {
-  const fetcher = useFetcher();
   useRevalidateOnVisible(loaderData.view.standing.kind !== "ranked");
   return (
     <HomePageFrame eyebrow={loaderData.view.eyebrow} footer={<HomeFooter line={loaderData.view.footer} />}>
@@ -79,12 +78,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         openId={loaderData.open}
         evidence={loaderData.evidence}
         showEyebrow={false}
-        onSwitch={(entityId, checked) =>
-          void fetcher.submit(
-            { intent: checked ? "on" : "off", entityId },
-            { method: "post", action: "/app/competitors" },
-          )
-        }
       />
       {loaderData.siteFill === "pending" || loaderData.siteFill === "gave_up" ? (
         <SiteFillLine state={loaderData.siteFill} />

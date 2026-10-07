@@ -28,7 +28,7 @@ const runSweep = async (id: string) => {
   await using introspector = await introspectWorkflowInstance(env.FEED_SWEEP, id);
   await env.FEED_SWEEP.create({ id });
   await introspector.waitForStatus("complete");
-  return introspector.getOutput();
+  return await introspector.getOutput();
 };
 
 const contentSignals = async () => {

@@ -46,6 +46,15 @@ describe("extractPageText", () => {
     expect(extracted.hash).toBe(await sha256Hex(extracted.text));
   });
 
+  it("drops hidden, template and display:none text so a rival cannot hide a change (0509#7084)", async () => {
+    const extracted = await extractPageText(
+      "<p>visible</p><div hidden>secret-hidden</div><template>secret-template</template><p style='display:none'>secret-none</p><p style='visibility: hidden'>secret-vis</p>",
+    );
+
+    expect(extracted.text).toBe("visible");
+    expect(extracted.text).not.toContain("secret");
+  });
+
   it("keeps reading after a hidden void element and separates text nodes", async () => {
     const html =
       "<p>before</p><img aria-hidden='true'><br aria-hidden='true'><p>after</p><div>Alpha</div><div>Beta</div>";

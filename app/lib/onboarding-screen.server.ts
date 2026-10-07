@@ -1,5 +1,3 @@
-import { captureException } from "@sentry/cloudflare";
-
 import { isLoginWall, type Subject } from "./identity/normalise";
 import { readSubjectDecision, insertSubjectDecision } from "./data/user_decision.server";
 import { JevUnavailableError } from "./jev/client.server";
@@ -30,7 +28,6 @@ const runJevOutcome = (input: {
         error: error.message.slice(0, 300),
       }),
     );
-    captureException(error, { tags: { jev: "public_subject" } });
     return null;
   });
 
@@ -69,16 +66,14 @@ async function settle(input: ScreenInput, outcome: "proceed" | "ask" | "refuse")
 }
 
 export async function screenOnboardingSubject(input: ScreenInput): Promise<ScreenResult> {
-  const ground = isLoginWall(input.raw) ? "login" : null;
-  const screening = ground === null ? runJevOutcome(input) : null;
-  screening?.catch(() => undefined);
   const decided = await readSubjectDecision(input.workspaceId, input.subject.registrable);
   if (decided === "public_subject:confirmed") return { kind: "proceed" };
   if (decided === "public_subject:refused") return { kind: "refuse", message: REFUSAL };
 
+  const ground = isLoginWall(input.raw) ? "login" : null;
   console.log(JSON.stringify({ event: "public_subject.screen", fetched: false, ground }));
-  if (screening === null) return refuse(input);
-  const screened = await screening;
+  if (ground !== null) return refuse(input);
+  const screened = await runJevOutcome(input);
   if (screened === null && input.answer === null) return { kind: "unavailable", message: UNAVAILABLE };
   return settle(input, screened === null ? "ask" : screened.outcome);
 }

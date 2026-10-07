@@ -141,8 +141,8 @@ function chips(html: string): string[] {
     const closeStart = block.lastIndexOf("</button>");
     if (openEnd === -1 || closeStart === -1) continue;
     const inner = block.slice(openEnd + 1, closeStart);
-    const chip = inner.match(/^([^<]+)<span class="font-mono text-meta">(\d+)<\/span>$/);
-    if (chip && chip[1] !== undefined && chip[2] !== undefined) out.push(`${chip[1]}${chip[2]}`);
+    const chip = /^([^<]+)<span class="font-mono text-meta">(\d+)<\/span>$/.exec(inner);
+    if (chip?.[1] !== undefined && chip[2] !== undefined) out.push(`${chip[1]}${chip[2]}`);
   }
   return out;
 }
@@ -157,13 +157,13 @@ function kinds(html: string): string[] {
 }
 
 function sourcePill(html: string): string {
-  const match = html.match(/data-slot="source-pill"[^>]*>([^<]*)</);
-  return match && match[1] !== undefined ? match[1] : "";
+  const match = /data-slot="source-pill"[^>]*>([^<]*)</.exec(html);
+  return match?.[1] ?? "";
 }
 
 function headingAnchor(html: string): string | null {
-  const match = html.match(/<h3[^>]*>([\s\S]*?)<\/h3>/);
-  return match && match[1] !== undefined ? match[1] : null;
+  const match = /<h3[^>]*>([\s\S]*?)<\/h3>/.exec(html);
+  return match?.[1] ?? null;
 }
 
 describe("the developments feed", () => {

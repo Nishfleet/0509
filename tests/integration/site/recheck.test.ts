@@ -116,7 +116,7 @@ const runCheck = async (id: string) => {
   });
   await env.OWN_SITE_CHECK.create({ id });
   await introspector.waitForStatus("complete");
-  return introspector.getOutput();
+  return await introspector.getOutput();
 };
 
 interface IncidentRow {
