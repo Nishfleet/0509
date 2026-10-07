@@ -34,6 +34,15 @@ const PROBES: { file: string; statement: string; foreign: boolean }[] = [
   { file: "auth_expiry.server.ts", statement: 'DELETE FROM "session" WHERE "expiresAt" < ?', foreign: false },
   { file: "auth_expiry.server.ts", statement: "DELETE FROM workspace WHERE id = ?1", foreign: true },
   { file: "signal.server.ts", statement: "INSERT INTO signal_delivery (id) VALUES (?1)", foreign: true },
+  { file: "page.server.ts", statement: "REPLACE INTO watch (id) VALUES (?1)", foreign: true },
+  { file: "page.server.ts", statement: "update page set role = 'x' where id = ?1", foreign: false },
+  { file: "watch.server.ts", statement: "update signal set state = 'x' where id = ?1", foreign: true },
+  { file: "watch.server.ts", statement: "UPDATE OR REPLACE watch SET is_active = 0 WHERE id = ?1", foreign: false },
+  { file: "watch.server.ts", statement: "UPDATE watch AS w SET is_active = 0 WHERE w.id = ?1", foreign: false },
+  { file: "watch.server.ts", statement: "UPDATE OR IGNORE page SET role = 'x' WHERE id = ?1", foreign: true },
+  { file: "page.server.ts", statement: "UPDATE signal AS s SET state = 'x' WHERE s.id = ?1", foreign: true },
+  { file: "watch.server.ts", statement: "UPDATE signal\nSET state = 'x' WHERE id = ?1", foreign: true },
+  { file: "watch.server.ts", statement: "ON CONFLICT(id) DO UPDATE SET x = 1", foreign: false },
 ];
 
 function probeCode(statement: string): string {

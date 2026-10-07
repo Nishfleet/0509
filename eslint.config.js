@@ -393,9 +393,14 @@ function foreignTableWriter(file) {
   const table = file.replace(/\.server\.ts$/, "");
   const allowed = TABLE_WRITER_ALLOWED_TABLES[table] ?? [table];
   const own = `(?:${allowed.join("|")})\\b`;
+  // SQLite accepts `UPDATE OR <action> <table> SET ...` and
+  // `UPDATE <table> AS <alias> SET ...`, so the table name itself — not the
+  // word after UPDATE — is what the lookahead has to see.
+  const UPDATE_HEAD = `\\bUPDATE\\s+(?:OR\\s+\\w+\\s+)?`;
+  const UPDATE_TAIL = `(?:\\s+AS\\s+[\\w".]+)?\\s+SET\\s+[\\w".]+\\s*=`;
   const shape =
     `\\b(INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|DELETE\\s+FROM)\\s+"?(?!${own})\\w` +
-    `|\\bUPDATE\\s+"?(?!${own})[\\w.]+"?\\s+SET\\s+[\\w".]+\\s*=`;
+    `|${UPDATE_HEAD}"?(?!${own})[\\w.]+"?${UPDATE_TAIL}`;
   return {
     selector: `Literal[value=/${shape}/i], TemplateElement[value.raw=/${shape}/i]`,
     message: `Foreign-table write: app/lib/data/${file} may write only ${allowed.join(", ")}. Move this statement to app/lib/data/<its table>.server.ts as an exported function that returns a D1PreparedStatement, and put that in this file's env.DB.batch so the batch stays atomic. Source: 0509#7022.`,
