@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createMemoryRouter, type Router as MemoryRouter, RouterProvider } from "react-router";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { SubjectConfirm } from "../../app/components/onboarding-subject-confirm";
@@ -15,7 +15,7 @@ const CONFIRM = createElement(SubjectConfirm, { subject: "acme.example", raw: "a
 const PERSON = ">No, it&#x27;s a person<";
 const NEVER = () => new Promise(() => undefined);
 
-function routerWith(action: (args: unknown) => Promise<unknown>): MemoryRouter {
+function routerWith(action: (args: unknown) => Promise<unknown>): ReturnType<typeof createMemoryRouter> {
   return createMemoryRouter(
     [
       { path: "/", element: createElement("div", null, "home") },
@@ -25,11 +25,11 @@ function routerWith(action: (args: unknown) => Promise<unknown>): MemoryRouter {
   );
 }
 
-function markup(router: MemoryRouter): string {
+function markup(router: ReturnType<typeof createMemoryRouter>): string {
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
 
-function submit(router: MemoryRouter, answer: string): Promise<unknown> {
+function submit(router: ReturnType<typeof createMemoryRouter>, answer: string): Promise<unknown> {
   const formData = new FormData();
   formData.set("subject", "acme.example");
   formData.set("answer", answer);

@@ -36,7 +36,7 @@ import { loader } from "../../app/routes/app.change-shot";
 
 function load(signalId: string, side: string) {
   const request = new Request(`https://0509.io/app/changes/${signalId}/${side}`);
-  return loader({ request, params: { signalId, side }, context: {} } as Parameters<typeof loader>[0]);
+  return loader({ request, params: { signalId, side }, context: {} } as unknown as Parameters<typeof loader>[0]);
 }
 
 describe("change shot", () => {

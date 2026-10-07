@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { deliver, handleBatch, type DeliveryMessage } from "../../workers/delivery/consumer";
+import { deliver, handleBatch, type DigestMessage } from "../../workers/delivery/consumer";
 import { sendOrThrow } from "../../workers/delivery/send";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 
@@ -13,10 +13,10 @@ interface Recorder {
 const recorder = (): Recorder => ({ sent: [], fail: null });
 
 const bindingFor = (rec: Recorder): SendEmail => ({
-  send(message: EmailMessageBuilder) {
+  send(message: EmailMessage | EmailMessageBuilder) {
     if (rec.fail) throw rec.fail;
-    rec.sent.push(message);
-    return Promise.resolve({} as EmailSendResult);
+    rec.sent.push(message as EmailMessageBuilder);
+    return Promise.resolve({ messageId: "stub-send-email" });
   },
 });
 
@@ -127,7 +127,7 @@ const digestStatus = async (id: string) =>
     sent_at: string | null;
   }>();
 
-const message = (digestId: string): DeliveryMessage => ({ digest_id: digestId });
+const message = (digestId: string): DigestMessage => ({ digest_id: digestId });
 
 const batchFor = (bodies: unknown[]) => {
   const acked: number[] = [];
@@ -150,7 +150,6 @@ const batchFor = (bodies: unknown[]) => {
 };
 
 const envWith = (email: SendEmail): Env => ({ ...env, EMAIL: email }) as Env;
-
 describe("send lane (0509#3979)", () => {
   beforeEach(async () => {
     await env.DB.exec("DELETE FROM send_attempt");

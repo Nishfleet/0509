@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createRoutesStub, UNSAFE_DataRouterNavigationContext, type Navigation } from "react-router";
+import { createRoutesStub, NavigationType, UNSAFE_DataRouterNavigationContext, type Navigation } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
 const holder = vi.hoisted(() => ({ known: false, outcome: "invalid_token" as string }));
@@ -60,15 +60,29 @@ function navigationAt(state: Navigation["state"]): Navigation {
       text: undefined,
     };
   }
+  if (state === "loading") {
+    return {
+      state,
+      location: { pathname: "/u/t", search: "", hash: "", state: null, key: "k" },
+      matches: [],
+      historyAction: NavigationType.Pop,
+      formMethod: undefined,
+      formAction: undefined,
+      formEncType: undefined,
+      formData: undefined,
+      json: undefined,
+      text: undefined,
+    };
+  }
   return {
-    state,
+    state: "submitting",
     location: { pathname: "/u/t", search: "", hash: "", state: null, key: "k" },
     matches: [],
-    historyAction: "POP",
-    formMethod: state === "submitting" ? "post" : undefined,
-    formAction: state === "submitting" ? "/u/t" : undefined,
-    formEncType: state === "submitting" ? "application/x-www-form-urlencoded" : undefined,
-    formData: state === "submitting" ? new FormData() : undefined,
+    historyAction: NavigationType.Pop,
+    formMethod: "POST",
+    formAction: "/u/t",
+    formEncType: "application/x-www-form-urlencoded",
+    formData: new FormData(),
     json: undefined,
     text: undefined,
   };

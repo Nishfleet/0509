@@ -102,7 +102,7 @@ async function liveIndexColumns(name: string): Promise<string[]> {
  * delete cascades through `workspace`, and competitor forget
  * (`app/lib/data/entity.server.ts` deleteCompetitor) deletes `entity` — so
  * deleting a parent still scans them unless a leading-column index exists.
- * 0047_cascade_child_indexes.sql (#7080) indexes the remaining allowlisted
+ * 0049_cascade_child_indexes.sql (#7080) indexes the remaining allowlisted
  * columns, so this list is empty. A new unindexed `*_id` still fails the gate
  * below.
  */

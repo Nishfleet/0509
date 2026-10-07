@@ -92,6 +92,10 @@ describe("dayMonthLabel", () => {
     expect(dayMonthLabel("2026-09-22T12:00:00.000Z")).toBe("22 Sept");
     expect(dayMonthLabel("garbage")).toBeNull();
   });
+
+  it("shifts the calendar day into the workspace zone", () => {
+    expect(dayMonthLabel("2026-09-14T00:00:00.000Z", "America/New_York")).toBe("13 Sept");
+  });
 });
 
 describe("brandRowClass", () => {

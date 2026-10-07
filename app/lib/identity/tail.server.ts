@@ -15,6 +15,9 @@ import { brandBudget, readCachedSiteProof, readSiteCard } from "./card.server";
 import { extractIdentity } from "./extract";
 import { normaliseSubject, type Subject } from "./normalise";
 import { classifyNavPages } from "./page-role.server";
+import { identityTailInstanceId } from "./tail-instance.server";
+
+export { identityTailInstanceId };
 
 export interface IdentityTailParams {
   workspaceId: string;
@@ -37,10 +40,6 @@ export interface IdentityTailOutcome {
 interface AdTarget {
   sourceKey: string;
   targetKey: string;
-}
-
-export function identityTailInstanceId(entityId: string): string {
-  return `identity-tail-${entityId}`;
 }
 
 export async function startIdentityTail(params: IdentityTailParams): Promise<string> {
@@ -170,6 +169,7 @@ function uniqueTargets(targets: readonly WatchTarget[]): WatchTarget[] {
 }
 
 export async function seedTailWatches(params: IdentityTailParams, discoveredAt: string): Promise<EntityWatch[]> {
+  await persistTail(params);
   const subject = subjectFor(params);
   const proof = subject === null ? { adLibraryHints: [], navLinks: [] } : await readCachedSiteProof(subject);
   const pricing = await readJudgedPricingUrl(params.entityId);

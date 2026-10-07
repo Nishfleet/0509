@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   D3_QUESTION_ID,
+  D3S_QUESTION_ID,
   D6_QUESTION_ID,
   rankWeek,
   scoreByEntity,
@@ -97,8 +98,9 @@ describe("scoreByEntity", () => {
 });
 
 describe("public contract", () => {
-  it("names the D3 change question and the D6 mention question", () => {
+  it("names the D3 change question, the D3s breakage question and the D6 mention question", () => {
     expect(D3_QUESTION_ID).toBe("noteworthy_change");
+    expect(D3S_QUESTION_ID).toBe("own_site_breakage");
     expect(D6_QUESTION_ID).toBe("mention_matters");
   });
 

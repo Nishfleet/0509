@@ -35,8 +35,8 @@ const authEnv = {
 
 const auth = createAuth(authEnv);
 
-async function signIn(): Promise<{ cookie: string; userId: string }> {
-  await auth.api.signInMagicLink({ body: { email: ADDRESS }, headers: new Headers() });
+async function signIn(address = ADDRESS): Promise<{ cookie: string; userId: string }> {
+  await auth.api.signInMagicLink({ body: { email: address }, headers: new Headers() });
   const link = links.at(-1);
   if (link === undefined) throw new Error("no magic link was sent");
   const response = await auth.handler(new Request(link, { redirect: "manual" }));
@@ -44,7 +44,7 @@ async function signIn(): Promise<{ cookie: string; userId: string }> {
     .getSetCookie()
     .map((header) => header.split(";")[0])
     .join("; ");
-  const user = await env.DB.prepare('SELECT id FROM "user" WHERE email = ?').bind(ADDRESS).first<{ id: string }>();
+  const user = await env.DB.prepare('SELECT id FROM "user" WHERE email = ?').bind(address).first<{ id: string }>();
   if (user === null) throw new Error("sign-in created no user");
   return { cookie, userId: user.id };
 }
@@ -420,5 +420,35 @@ describe("delete my account", () => {
       failed: 1,
     });
     errors.mockRestore();
+  });
+
+  it("stops in-flight identity-tail instances for every entity before the rows go", async () => {
+    const { cookie, userId } = await signIn("leaving-tails@0509.io");
+    const workspaceId = firstWorkspaceId(userId);
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at)
+       VALUES ('self-leaving', ?, 'self', 'own.example', 'Own', 'on', '2026-09-24T00:00:00Z'),
+              ('comp-leaving', ?, 'competitor', 'rival.example', 'Rival', 'on', '2026-09-24T00:00:00Z')`,
+    )
+      .bind(workspaceId, workspaceId)
+      .run();
+    const terminate = vi.fn(() => Promise.resolve());
+    const get = vi.spyOn(env.IDENTITY_TAIL, "get").mockResolvedValue({ terminate } as never);
+    const helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant"> = {
+      listUserGrants: async () => ({ items: [] }),
+      revokeGrant: async () => undefined,
+    };
+
+    try {
+      const deleted = await deleteAccount(helpers, settingsRequest(cookie), userId);
+      if (deleted === null) throw new Error("deleteAccount refused a fresh session");
+      expect(get.mock.calls.map((call) => call[0]).sort()).toEqual([
+        "identity-tail-comp-leaving",
+        "identity-tail-self-leaving",
+      ]);
+      expect(terminate).toHaveBeenCalledTimes(2);
+    } finally {
+      get.mockRestore();
+    }
   });
 });

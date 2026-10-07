@@ -1,6 +1,6 @@
 import type { PlanId } from "./billing/plans";
 
-interface CoverageSource {
+export interface CoverageSource {
   id: string;
   label: string;
   live: boolean;
@@ -9,7 +9,7 @@ interface CoverageSource {
   instant?: boolean;
 }
 
-interface CoverageKind {
+export interface CoverageKind {
   kind: string;
   noun?: string;
   origin?: string;

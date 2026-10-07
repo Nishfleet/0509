@@ -12,6 +12,7 @@ import {
   SITE_SWEEP_UTC_HOUR,
   SNAPSHOT_BACKUP_CRON,
   SITE_SWEEP_UTC_LABEL,
+  siteSweepLabel,
   WEEKLY_REFRESH_CRON,
 } from "../app/lib/cadence";
 
@@ -23,9 +24,10 @@ describe("cadence", () => {
   it("leaves the six scheduled Workflows off `schedules` and starts them from triggers.crons", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
     const daily = ["site-sweep", "mentions-sweep", "hiring-sweep", "feed-sweep", "snapshot-backup", "own-site-check"];
-    const workflows = (rawConfig.workflows ?? []).filter((workflow) => daily.includes(workflow.name));
-    expect(workflows).toHaveLength(6);
-    expect(workflows.map((workflow) => workflow.schedules)).toEqual([
+    const workflows = (rawConfig.workflows ?? []) as { name: string; schedules?: unknown }[];
+    const scheduled = workflows.filter((workflow) => daily.includes(workflow.name));
+    expect(scheduled).toHaveLength(6);
+    expect(scheduled.map((workflow) => workflow.schedules)).toEqual([
       undefined,
       undefined,
       undefined,
@@ -54,6 +56,13 @@ describe("cadence", () => {
   it("pins the site-sweep cron and label to the UTC hour the sweep runs at", () => {
     expect(SITE_SWEEP_CRON).toBe(`0 ${SITE_SWEEP_UTC_HOUR} * * *`);
     expect(SITE_SWEEP_UTC_LABEL).toBe(`${String(SITE_SWEEP_UTC_HOUR).padStart(2, "0")}:00 UTC`);
+  });
+
+  it("names the sweep clock in the workspace zone, not as a UTC-only label", () => {
+    const now = new Date("2026-10-05T12:00:00.000Z");
+    expect(siteSweepLabel("UTC", now)).toBe(SITE_SWEEP_UTC_LABEL);
+    expect(siteSweepLabel("Asia/Kolkata", now)).toMatch(/^07:30 /);
+    expect(siteSweepLabel("Asia/Kolkata", now)).not.toContain("UTC");
   });
 });
 
@@ -97,7 +106,7 @@ describe("cron weekday fields", () => {
 
   it("leaves every wrangler trigger free of a numbered weekday", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
-    const crons = rawConfig.triggers?.crons ?? [];
+    const crons: string[] = rawConfig.triggers?.crons ?? [];
     expect(crons).toEqual(expect.arrayContaining([...Object.values(CRON_CONSTANTS), "*/5 * * * *"]));
     const numbered = crons.filter((cron) => /\d/.test(dayOfWeekField(cron)));
     expect(numbered, `wrangler.jsonc numbers the day of week in: ${numbered.join(", ")}`).toEqual([]);

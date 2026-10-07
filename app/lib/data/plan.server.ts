@@ -1,16 +1,19 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 
 import { entitledTier, resolveEntitlements, type Entitlements } from "../billing/entitlements";
 import { isPlanId, type PlanId, type PlanSummary } from "../billing/plans";
 
-interface PlanRow {
-  tier: string;
-  status: string;
-  current_period_end: string | null;
-  trialing: number;
-  limits_json: string;
-  provider_customer_id: string | null;
-}
+const planRow = z.object({
+  tier: z.string(),
+  status: z.string(),
+  current_period_end: z.string().nullable(),
+  trialing: z.number(),
+  limits_json: z.string(),
+  provider_customer_id: z.string().nullable(),
+});
+
+type PlanRow = z.infer<typeof planRow>;
 
 const SELECT_PLAN =
   "SELECT tier, status, current_period_end, trialing, limits_json, provider_customer_id FROM plan WHERE workspace_id = ?";
@@ -31,7 +34,7 @@ ON CONFLICT(workspace_id) DO UPDATE SET
 WHERE ? = 1 OR excluded.updated_at >= plan.updated_at`;
 
 async function readPlan(workspaceId: string, db: D1Database = env.DB): Promise<{ tier: string; row: PlanRow | null }> {
-  const row = await db.prepare(SELECT_PLAN).bind(workspaceId).first<PlanRow>();
+  const row = planRow.nullable().parse(await db.prepare(SELECT_PLAN).bind(workspaceId).first());
   if (row === null) return { tier: "scout", row };
   const tier = entitledTier(
     { tier: row.tier, status: row.status, currentPeriodEnd: row.current_period_end },
@@ -61,17 +64,23 @@ export async function readPlanSummary(workspaceId: string, db: D1Database = env.
   };
 }
 
+const readPlanCustomerIdRow = z.object({ provider_customer_id: z.string().nullable() });
+
 export async function readPlanCustomerId(workspaceId: string): Promise<string | null> {
-  const row = await env.DB.prepare("SELECT provider_customer_id FROM plan WHERE workspace_id = ?")
-    .bind(workspaceId)
-    .first<{ provider_customer_id: string | null }>();
+  const row = readPlanCustomerIdRow
+    .nullable()
+    .parse(
+      await env.DB.prepare("SELECT provider_customer_id FROM plan WHERE workspace_id = ?").bind(workspaceId).first(),
+    );
   return row === null ? null : row.provider_customer_id;
 }
 
+const readWorkspaceIdBySubscriptionRow = z.object({ workspace_id: z.string() });
+
 export async function readWorkspaceIdBySubscription(subscriptionId: string): Promise<string | null> {
-  const row = await env.DB.prepare(SELECT_WORKSPACE_BY_SUBSCRIPTION)
-    .bind(subscriptionId)
-    .first<{ workspace_id: string }>();
+  const row = readWorkspaceIdBySubscriptionRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_WORKSPACE_BY_SUBSCRIPTION).bind(subscriptionId).first());
   return row === null ? null : row.workspace_id;
 }
 
@@ -83,18 +92,24 @@ export interface PlanSubscription {
   updatedAt: string;
 }
 
+const readPlanSubscriptionRow = z.object({
+  tier: z.string(),
+  status: z.string(),
+  current_period_end: z.string().nullable(),
+  provider_subscription_id: z.string().nullable(),
+  updated_at: z.string(),
+});
+
 export async function readPlanSubscription(workspaceId: string): Promise<PlanSubscription | null> {
-  const row = await env.DB.prepare(
-    "SELECT tier, status, current_period_end, provider_subscription_id, updated_at FROM plan WHERE workspace_id = ?",
-  )
-    .bind(workspaceId)
-    .first<{
-      tier: string;
-      status: string;
-      current_period_end: string | null;
-      provider_subscription_id: string | null;
-      updated_at: string;
-    }>();
+  const row = readPlanSubscriptionRow
+    .nullable()
+    .parse(
+      await env.DB.prepare(
+        "SELECT tier, status, current_period_end, provider_subscription_id, updated_at FROM plan WHERE workspace_id = ?",
+      )
+        .bind(workspaceId)
+        .first(),
+    );
   if (row === null) return null;
   return {
     tier: row.tier,

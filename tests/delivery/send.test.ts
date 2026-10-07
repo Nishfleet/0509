@@ -24,10 +24,10 @@ const recorder = (): Recorder => ({ sent: [], fail: null });
 const failing = (value: unknown, sync = false): Failure => ({ value, sync });
 
 const bindingFor = (rec: Recorder): SendEmail => ({
-  send(message: EmailMessageBuilder): Promise<EmailSendResult> {
+  send(message: EmailMessage | EmailMessageBuilder): Promise<EmailSendResult> {
     if (rec.fail?.sync) throw rec.fail.value;
     if (rec.fail) return Promise.reject(rec.fail.value);
-    rec.sent.push(message);
+    rec.sent.push(message as EmailMessageBuilder);
     return Promise.resolve({ messageId: "m-1" });
   },
 });

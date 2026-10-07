@@ -34,7 +34,7 @@ describe("playwright failOnFlakyTests", () => {
     } else {
       process.env.CI = ci;
     }
-    return (await import("../playwright.config.ts")).default;
+    return (await import("../playwright.config")).default;
   };
 
   it("fails a pass that only came after a retry in CI", { timeout: 60_000 }, async () => {

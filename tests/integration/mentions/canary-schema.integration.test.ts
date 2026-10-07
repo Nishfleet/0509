@@ -22,6 +22,7 @@ describe("canary columns on source and snapshot (#4003 1/6)", () => {
     const info = await env.DB.prepare("PRAGMA table_info(source)").all<{
       name: string;
       type: string;
+      notnull: number;
     }>();
     const columns = new Map((info.results ?? []).map((c) => [c.name, c]));
 
@@ -43,6 +44,7 @@ describe("canary columns on source and snapshot (#4003 1/6)", () => {
     const info = await env.DB.prepare("PRAGMA table_info(snapshot)").all<{
       name: string;
       type: string;
+      notnull: number;
     }>();
     const column = (info.results ?? []).find((c) => c.name === "canary_count");
     if (!column) throw new Error("snapshot is missing the canary_count column");

@@ -132,7 +132,7 @@ Monthly at 100 brands × 2 live sources × 1 tick × 30 days = **6,000 polls/mon
 
 ### 0.1 Google News links cannot be resolved server-side. The contract's stated method does not work.
 
-`docs/REBUILD-MENTIONS.md` §3 says: _"That is a `fetch(link, { redirect: "manual" })` and reading `Location` — one extra request per new item."_ It is not. Four probes:
+`docs/REBUILD-MENTIONS.md (deleted, in git history)` §3 says: _"That is a `fetch(link, { redirect: "manual" })` and reading `Location` — one extra request per new item."_ It is not. Four probes:
 
 | Probe                                                        | Result                                                                                 |
 | ------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
