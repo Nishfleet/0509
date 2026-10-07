@@ -27,7 +27,7 @@ export function Ticker({ items }: { items: readonly TickerItem[] }) {
     >
       <input type="checkbox" id="ticker-pause" aria-label="Pause the ticker" className="peer sr-only" />
       <label htmlFor="ticker-pause" className={toggleClass} />
-      <div className="flex h-full w-max animate-[ticker_60s_linear_infinite] items-center motion-reduce:animate-none peer-checked:[animation-play-state:paused]">
+      <div className="flex h-full w-max animate-[ticker_60s_linear_infinite] items-center peer-checked:[animation-play-state:paused] motion-reduce:animate-none">
         <Strip items={items} hidden={false} />
         <Strip items={items} hidden />
       </div>
