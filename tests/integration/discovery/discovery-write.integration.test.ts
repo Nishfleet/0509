@@ -169,7 +169,7 @@ describe("resolveShortlist", () => {
       candidate("Kept", "kept.example"),
     ]);
     const takedownQueries = prepare.mock.calls.filter(([query]) =>
-      String(query).includes("FROM takedown WHERE subject IN"),
+      query.includes("FROM takedown WHERE subject IN"),
     ).length;
     prepare.mockRestore();
 

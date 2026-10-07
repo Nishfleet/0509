@@ -193,7 +193,7 @@ describe("the row evidence panel", () => {
   });
 
   it("draws the evidence image with an empty alt and a lazy load", () => {
-    const image = panel(render([SITE_LINKED])).match(/<img\b[^>]*>/)?.[0] ?? "";
+    const image = /<img\b[^>]*>/.exec(panel(render([SITE_LINKED])))?.[0] ?? "";
     expect(image).toContain('src="https://rival.com/pricing.png"');
     expect(image).toContain('alt=""');
     expect(image).toContain('loading="lazy"');

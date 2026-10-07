@@ -20,7 +20,7 @@ describe("landing hero", () => {
     expect(html).toContain(HEADLINE);
     expect(html).toContain(SENTENCE);
     expect(html).toContain('id="hero"');
-    const headline = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)?.[1] ?? "";
+    const headline = /<h1[^>]*>([\s\S]*?)<\/h1>/.exec(html)?.[1] ?? "";
     expect(headline).not.toMatch(/0509|five to nine/i);
   });
 

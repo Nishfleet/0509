@@ -103,7 +103,7 @@ describe("the competitor rail", () => {
       "comp-off",
       "comp-x",
     ]);
-    const offRow = html.match(/<li data-entity-id="comp-off"[^>]*>/)?.[0];
+    const offRow = /<li data-entity-id="comp-off"[^>]*>/.exec(html)?.[0];
     expect(offRow).toContain('data-state="off"');
     expect(offRow).toContain("opacity-60");
     expect(text(html)).toContain("You");

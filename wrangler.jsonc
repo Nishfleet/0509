@@ -132,6 +132,12 @@
   "vars": {
     "BETTER_AUTH_URL": "https://0509.io",
     "LANDING_WORKSPACE_ID": "",
+    // #7187: the deployed git commit, named by /api/health. Empty here and in
+    // preview; deploy-production.yml overrides it with the pushed SHA through
+    // `wrangler deploy --var GIT_SHA:<sha>`
+    // (https://developers.cloudflare.com/workers/wrangler/commands/#deploy).
+    // Not CF_VERSION_METADATA.tag: workers/sentry.ts reads that as the Sentry environment.
+    "GIT_SHA": "",
     // Dodo Payments (docs/REBUILD-STACK.md, J13). DODO_ENVIRONMENT selects the SDK's
     // base URL: test_mode is https://test.dodopayments.com, live_mode is
     // https://live.dodopayments.com. The three product ids are the recurring

@@ -33,7 +33,7 @@ function buttonClasses(html: string): string[] {
 }
 
 function minHeightPx(classNames: string): number {
-  const step = classNames.match(/\bmin-h-(\d+)\b/);
+  const step = /\bmin-h-(\d+)\b/.exec(classNames);
   return step ? Number(step[1]) * SPACING_PX : 0;
 }
 

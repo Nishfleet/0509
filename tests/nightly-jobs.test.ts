@@ -7,12 +7,12 @@ import { reportNightlyResults } from "../workers/nightly-jobs";
 
 describe("reportNightlyResults", () => {
   it("stays quiet when every nightly job fulfilled", () => {
-    expect(() =>
+    expect(() => {
       reportNightlyResults([
         { status: "fulfilled", value: undefined },
         { status: "fulfilled", value: 1 },
-      ]),
-    ).not.toThrow();
+      ]);
+    }).not.toThrow();
     expect(captureException).not.toHaveBeenCalled();
   });
 
@@ -20,13 +20,13 @@ describe("reportNightlyResults", () => {
     const first = new Error("standing");
     const second = new Error("cost");
 
-    expect(() =>
+    expect(() => {
       reportNightlyResults([
         { status: "fulfilled", value: undefined },
         { status: "rejected", reason: first },
         { status: "rejected", reason: second },
-      ]),
-    ).toThrow(AggregateError);
+      ]);
+    }).toThrow(AggregateError);
 
     expect(captureException).toHaveBeenCalledTimes(2);
     expect(captureException).toHaveBeenNthCalledWith(1, first);
@@ -35,7 +35,9 @@ describe("reportNightlyResults", () => {
 
   it("wraps a non-Error rejection so AggregateError still throws", () => {
     vi.mocked(captureException).mockClear();
-    expect(() => reportNightlyResults([{ status: "rejected", reason: "standing-failed" }])).toThrow(AggregateError);
+    expect(() => {
+      reportNightlyResults([{ status: "rejected", reason: "standing-failed" }]);
+    }).toThrow(AggregateError);
     expect(captureException).toHaveBeenCalledWith(expect.any(Error));
   });
 });

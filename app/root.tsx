@@ -6,7 +6,14 @@ import { hasSessionCookie } from "./lib/auth.server";
 import { FACES_SCRIPT } from "./lib/faces-script";
 import "./app.css";
 
-const SERVER_ONLY_ROUTES: ReadonlySet<string> = new Set(["routes/landing", "routes/privacy", "routes/terms"]);
+const SERVER_ONLY_ROUTES: ReadonlySet<string> = new Set([
+  "routes/landing",
+  "routes/privacy",
+  "routes/terms",
+  "routes/pricing",
+  "routes/api-docs",
+  "routes/unmatched",
+]);
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const matches = useMatches();

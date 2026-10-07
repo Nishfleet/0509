@@ -27,7 +27,7 @@ describe("landing section", () => {
     const html = section();
     expect(html).toContain('<section id="agents" aria-labelledby="agents-title"');
     expect(html).toContain("Built for your agents too.");
-    const labelledBy = html.match(/aria-labelledby="([^"]+)"/)?.[1] ?? "";
+    const labelledBy = /aria-labelledby="([^"]+)"/.exec(html)?.[1] ?? "";
     expect(labelledBy).toBe("agents-title");
     expect(html).toContain(`<h2 id="${labelledBy}"`);
   });

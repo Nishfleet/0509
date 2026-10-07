@@ -23,6 +23,7 @@ import {
   faqPageJsonLd,
   jsonLdGraph,
   organizationJsonLd,
+  shareImageMeta,
   softwareApplicationJsonLd,
   websiteJsonLd,
 } from "../lib/structured-data";
@@ -47,11 +48,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
     { property: "og:title", content: PAGE_TITLE },
     { property: "og:description", content: summary },
     { property: "og:url", content: HOME },
-    { property: "og:image", content: `${SITE_URL}/og.png` },
-    { property: "og:image:width", content: "1200" },
-    { property: "og:image:height", content: "630" },
-    { property: "og:image:alt", content: "Know where you stand. And who's gaining on you." },
-    { name: "twitter:card", content: "summary_large_image" },
+    ...shareImageMeta(),
     {
       "script:ld+json": jsonLdGraph([
         organizationJsonLd(),
