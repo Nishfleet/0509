@@ -32,7 +32,7 @@ describe("coverage matches the enabled sources", () => {
     for (const key of enabled) {
       expect(
         claimed.has(key),
-        `source "${String(key)}" is enabled but no live entry in app/lib/coverage.ts names it as its sourceKey`,
+        `source "${key}" is enabled but no live entry in app/lib/coverage.ts names it as its sourceKey`,
       ).toBe(true);
     }
   });

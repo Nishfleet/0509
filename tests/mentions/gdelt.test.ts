@@ -19,7 +19,7 @@ const gdeltBody = JSON.stringify({
 });
 
 function stubFetch(body: string, status = 200) {
-  const fetchMock = vi.fn(async () => new Response(body, { status }));
+  const fetchMock = vi.fn(async (_input: string | URL | Request) => new Response(body, { status }));
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }

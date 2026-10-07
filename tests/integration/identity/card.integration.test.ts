@@ -572,7 +572,7 @@ describe("confirmCard", () => {
 
     const row = await env.DB.prepare(
       "SELECT role, domain, name, identity_json, origin, state, confirmed_at IS NOT NULL AS confirmed, id FROM entity",
-    ).first<Record<string, unknown>>();
+    ).first();
     expect(row).toMatchObject({
       role: "self",
       domain: "gymshark.com",
@@ -738,7 +738,7 @@ describe("confirmCard", () => {
       }),
     );
     expect(saved).toBe(true);
-    const row = await env.DB.prepare("SELECT identity_json FROM entity").first<Record<string, unknown>>();
+    const row = await env.DB.prepare("SELECT identity_json FROM entity").first();
     expect(JSON.parse(String(row?.identity_json)).logoUrl).toBeNull();
     await settledTail();
   });

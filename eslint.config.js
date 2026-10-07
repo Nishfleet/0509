@@ -1380,6 +1380,8 @@ export default tseslint.config(
   // - Workers `EmailMessage` types resolve as error in the test project
   //   (no-redundant-type-constituents).
   // - Tests mark unused bindings with `void x` (no-meaningless-void-operator).
+  // - Handlers are cast off `worker.fetch` and `worker.email`, and `env.X.get`
+  //   is asserted on as a spy (unbound-method).
   // - Send and fetch fixtures reject with the recorded value, including the
   //   non-Error string production `errorText` must stringify
   //   (prefer-promise-reject-errors).
@@ -1400,6 +1402,7 @@ export default tseslint.config(
       "@typescript-eslint/no-redundant-type-constituents": "off",
       "@typescript-eslint/no-meaningless-void-operator": "off",
       "@typescript-eslint/prefer-promise-reject-errors": "off",
+      "@typescript-eslint/unbound-method": "off",
       "@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true, allowAny: true }],
     },
   },
