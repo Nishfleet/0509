@@ -15,8 +15,14 @@
 # job, so this workflow has no deployment_status trigger (0509#7013).
 name: CI
 
+# Besides the defaults, a pull request is retested when it is marked ready and
+# when auto-merge is armed. Both run against today's main, so a head whose last
+# run predates a gate change (type-aware lint on tests/**, tests in tsc -b) goes
+# red on the pull request instead of in the merge queue
+# (docs/incidents/2026-10-07-stale-base-queue-ejections.md).
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, auto_merge_enabled]
   merge_group:
 
 concurrency:

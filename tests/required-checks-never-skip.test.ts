@@ -92,6 +92,17 @@ describe("ci-ok aggregates every required check (0509#7013)", () => {
   });
 });
 
+describe("a pull request is retested against current main before it queues (2026-10-07 incident)", () => {
+  it("reruns ci.yml when a pull request is marked ready or armed for auto-merge", async () => {
+    const ci = parse(await readFile(path.join(WORKFLOWS, "ci.yml"), "utf8")) as {
+      on: { pull_request: { types: string[] } };
+    };
+    expect(ci.on.pull_request.types).toEqual(
+      expect.arrayContaining(["opened", "synchronize", "reopened", "ready_for_review", "auto_merge_enabled"]),
+    );
+  });
+});
+
 describe("lighthouse runs after the deploy, not on deployment_status (0509#7013)", () => {
   it("keeps ci.yml off deployment_status and chains lighthouse to the deploy job", async () => {
     const ci = parse(await readFile(path.join(WORKFLOWS, "ci.yml"), "utf8")) as { on: Record<string, unknown> };
