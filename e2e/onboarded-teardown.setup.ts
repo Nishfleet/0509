@@ -21,14 +21,15 @@ const LANES = ["desktop", "phone"] as const;
 // the real duration instead of racing it.
 for (const lane of LANES) {
   teardown(`delete the onboarded ${lane} account the setup minted`, async ({ playwright, baseURL }) => {
+    // Set before the guards so the budget covers the whole test body. The
+    // longest single delete this lane has logged is 20.5s (run 37580626642's
+    // rerun); 120s leaves six times that, and each account now gets its own
+    // budget, so a slow delete cannot spend the other lane's.
+    teardown.setTimeout(120_000);
     if (!baseURL) throw new Error("PLAYWRIGHT_TEST_BASE_URL resolved to no baseURL");
     const statePath = onboardedStatePath(lane);
     const emailPath = onboardedEmailPath(lane);
     if (!existsSync(statePath) || !existsSync(emailPath)) return;
-    // The longest single delete this lane has logged is 20.5s (run 37580626642's
-    // rerun). 120s leaves six times that for one delete, and each account now
-    // gets its own test budget, so a slow delete cannot spend the other lane's.
-    teardown.setTimeout(120_000);
     const origin = new URL(baseURL).origin;
     const api = await playwright.request.newContext({ storageState: statePath, baseURL });
     try {
