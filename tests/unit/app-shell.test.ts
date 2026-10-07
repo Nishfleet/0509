@@ -46,16 +46,8 @@ describe("the app shell", () => {
     expect(anchor(html, "/app")).not.toContain('aria-current="page"');
   });
 
-  it("puts a skip link before the nav and names the content wrapper", () => {
+  it("names the content wrapper the root skip link points at", () => {
     const html = render("/app");
-    const skipAt = html.indexOf('href="#app-content"');
-    const navAt = html.indexOf("<nav");
-    expect(skipAt).toBeGreaterThan(-1);
-    expect(navAt).toBeGreaterThan(skipAt);
-    expect(html).toContain('id="app-content"');
-    expect(html).toContain('tabindex="-1"');
-    expect(anchor(html, "#app-content")).toContain("min-h-11");
-    expect(anchor(html, "#app-content")).toContain("sr-only");
-    expect(anchor(html, "#app-content")).toContain("focus:not-sr-only");
+    expect(html).toMatch(/<main [^>]*id="app-content" tabindex="-1"/);
   });
 });
