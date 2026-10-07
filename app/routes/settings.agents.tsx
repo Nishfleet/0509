@@ -45,7 +45,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   return (
-    <main className={PAGE}>
+    <div className={PAGE}>
       <nav aria-label="Breadcrumb" className="mb-4 flex items-center font-mono text-meta text-ink-soft uppercase">
         <Link
           to="/app/settings"
@@ -69,6 +69,6 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         duplicate={actionData?.duplicate ?? false}
         submission={loaderData.submission}
       />
-    </main>
+    </div>
   );
 }

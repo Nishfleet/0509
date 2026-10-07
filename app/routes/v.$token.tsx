@@ -22,7 +22,7 @@ export default function VerifyAddress({ actionData }: Route.ComponentProps) {
   const confirming = useNavigation().state !== "idle";
   if (actionData?.confirmed) {
     return (
-      <main className="mx-auto max-w-xl px-4 py-16">
+      <main id="app-content" tabIndex={-1} className="mx-auto max-w-xl px-4 py-16">
         <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">Email address confirmed</h1>
         <p className="mt-4 leading-[1.65] text-ink-soft">
           Your weekly brief and alerts will now go to this email address.
@@ -38,7 +38,7 @@ export default function VerifyAddress({ actionData }: Route.ComponentProps) {
   }
 
   return (
-    <main className="mx-auto max-w-xl px-4 py-16">
+    <main id="app-content" tabIndex={-1} className="mx-auto max-w-xl px-4 py-16">
       <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">Confirm this email address?</h1>
       <p className="mt-4 leading-[1.65] text-ink-soft">
         Your weekly brief and alerts will go to this email address once you confirm. If you did not ask for this, you

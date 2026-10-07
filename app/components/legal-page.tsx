@@ -101,7 +101,7 @@ export function LegalPage({ doc }: { doc: LegalDocument }) {
       <header>
         <LegalLogo />
       </header>
-      <main className="mt-8">
+      <main id="app-content" tabIndex={-1} className="mt-8">
         <h1 className="font-display text-[clamp(1.75rem,3.6vw,2.9rem)] leading-[1.15] font-semibold tracking-[-0.02em]">
           {doc.title}
         </h1>

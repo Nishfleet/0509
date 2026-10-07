@@ -35,7 +35,7 @@ export function SignInSent({
       <header className="self-start">
         <Wordmark />
       </header>
-      <main className="flex flex-col">
+      <main id="app-content" tabIndex={-1} className="flex flex-col">
         <h1 ref={heading} tabIndex={-1} className={cn(SIGN_IN_TITLE, "outline-none")}>
           Check your email
         </h1>

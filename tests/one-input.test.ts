@@ -30,7 +30,8 @@ describe("OneInput (app/components/one-input.tsx)", () => {
     expect(html).toContain(`action="${ACTION}"`);
     expect(html).toContain('name="subject"');
     expect(html).toContain(`placeholder="${PLACEHOLDER}"`);
-    expect(html).toContain(`aria-label="${LABEL}"`);
+    expect(html).toMatch(new RegExp(`<label for="[^"]+"[^>]*>${LABEL}</label>`));
+    expect(html).not.toContain("aria-label=");
     expect(html).not.toContain("one-input-message");
     expect(html).not.toContain("aria-invalid");
   });

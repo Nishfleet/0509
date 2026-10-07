@@ -35,7 +35,7 @@ export function HomePageFrame({
       <header>
         <p className={EYEBROW}>{eyebrow}</p>
       </header>
-      <main>{children}</main>
+      <div>{children}</div>
       <footer className="mt-14 border-t border-line pt-7">{footer}</footer>
     </div>
   );

@@ -85,7 +85,7 @@ export default function Landing({ loaderData }: Route.ComponentProps) {
     <div className="bg-bone text-ink">
       <Ticker items={loaderData.ticker} />
       <Header />
-      <main>
+      <main id="app-content" tabIndex={-1}>
         <Hero nouns={loaderData.claims.nouns} />
         <Marks marks={loaderData.marks} now={loaderData.now} />
         <HowItWorks />
