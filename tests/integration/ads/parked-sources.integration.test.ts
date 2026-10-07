@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
  * The five parked ad platforms (#4039), proven against real D1 with the real
  * migrations applied — not a mocked binding, which cannot see the schema.
  *
- * Why the parked rows exist at all: `docs/engines/ads.md`'s build-order table
+ * Why the parked rows exist at all: the ads engine's build-order table
  * ranks Snap, X, Pinterest, Amazon and Apple 6–10 as "parked — no reachable
  * search surface at the obvious URLs today (404 / NXDOMAIN). Each needs someone
  * to find the URL, which is a research task, not an engineering one." This file
@@ -31,7 +31,7 @@ import { describe, expect, it } from "vitest";
  */
 
 /**
- * The ads engine's eligibility predicate, from `docs/engines/ads.md` P3's select
+ * The ads engine's eligibility predicate, from its P3 select
  * ("`watch JOIN entity WHERE entity.state='on'` and `source.kind='ads'`") as
  * the mentions engine states it for its own kind
  * (`docs/engines/mentions.md` P5.2: "`entity.state = 'on'` AND
@@ -45,7 +45,7 @@ const ADS_ELIGIBILITY_SELECT = `
   WHERE s.kind = 'ads' AND s.is_enabled = 1
 `;
 
-/** Exactly the platforms `docs/engines/ads.md` build order 6–10 parked. */
+/** Exactly the platforms the ads engine's build order 6–10 parked. */
 const PARKED = [
   { platform: "snap", id: "src_ads_snap_parked", key: "ads.snap_parked", probe: 12 },
   { platform: "x", id: "src_ads_x_parked", key: "ads.x_parked", probe: 13 },
@@ -130,7 +130,7 @@ describe("parked ad platforms (#4039)", () => {
   });
 
   it("is not degraded: no watch exists, so no tick can mark one empty", async () => {
-    // Degraded, per docs/engines/ads.md "Failure modes and the degraded state
+    // Degraded, per "Failure modes and the degraded state
     // the UI shows", is what an ELIGIBLE source becomes when it returns nothing
     // across ticks (snapshot.item_count = 0 for 2 consecutive ticks) or is
     // blocked. It is a state of a source that is being swept. This asserts the
