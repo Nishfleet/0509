@@ -119,18 +119,18 @@ describe("cappedText and cappedJson", () => {
 });
 
 describe("windowedText", () => {
-  it("returns the whole body as both windows when it is within the window size", async () => {
+  it("returns the whole body as the head window and no tail when it is within the window size", async () => {
     expect(await windowedText(new Response("héllo"), 64, 128)).toEqual({
       head: "héllo",
-      tail: "héllo",
+      tail: "",
       truncated: false,
     });
     expect(await windowedText(new Response(null), 64, 128)).toEqual({ head: "", tail: "", truncated: false });
   });
 
-  it("keeps the first and the last window of a body larger than one window", async () => {
+  it("keeps the first window and the bytes after it, so the windows never overlap", async () => {
     const res = streamed(["aaaaaa", "bbbbbb", "cccccc"]);
-    expect(await windowedText(res, 10, 64)).toEqual({ head: "aaaaaabbbb", tail: "bbbbcccccc", truncated: false });
+    expect(await windowedText(res, 10, 64)).toEqual({ head: "aaaaaabbbb", tail: "bbcccccc", truncated: false });
   });
 
   it("stops at the stream cap and windows what it read", async () => {

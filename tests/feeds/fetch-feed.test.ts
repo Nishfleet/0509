@@ -123,7 +123,7 @@ describe("classify maps the response to a FeedFetch outcome", () => {
     await expect(fetchFeed(FEED_URL, null)).resolves.toEqual({ outcome: "unreadable" });
   });
 
-  it("collects the complete entries on both sides of the 2 MiB read of an over-cap feed", async () => {
+  it("keeps the entries on each side of the 2 MiB window and drops the one the window cuts", async () => {
     const entry = (n: number) =>
       `<entry><id>post-${n}</id><title>Post ${n}</title><link href="https://rival.com/blog/${n}"/><updated>2026-10-01T00:00:00Z</updated><summary>${"x".repeat(100)}</summary></entry>`;
     const open = '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Rival</title><subtitle>';
@@ -137,21 +137,21 @@ describe("classify maps the response to a FeedFetch outcome", () => {
     const body = result.outcome === "ok" ? result.body : { head: "", tail: "" };
     expect(body.head).toHaveLength(FEED_CAP_BYTES);
     expect(body.head.endsWith("</entry>")).toBe(false);
-    expect(body.tail).toContain("<id>post-1</id>");
+    expect(body.tail).not.toContain("<id>post-1</id>");
     expect(body.tail).toContain("<id>post-3</id>");
 
     const items = parseFeed(body, FEED_URL, { now: new Date("2026-10-02T03:00:00Z") });
-    expect(items?.map((item) => item.id)).toEqual(["post-1", "post-2", "post-3"]);
+    expect(items?.map((item) => item.id)).toEqual(["post-1", "post-3"]);
   });
 
-  it("keeps the first and the last 2 MiB of a feed larger than the cap", async () => {
+  it("keeps the first window and the bytes after it when the feed is just over the cap", async () => {
     const huge = `<feed>${"a".repeat(FEED_CAP_BYTES + 1_000)}</feed>`;
     fetchOutboundMock.mockResolvedValue(feedResponse(200, { "content-length": String(huge.length) }, huge));
     const result = await fetchFeed(FEED_URL, null);
     expect(result).toMatchObject({ outcome: "ok" });
     const body = result.outcome === "ok" ? result.body : { head: "", tail: "" };
     expect(body.head).toBe(huge.slice(0, FEED_CAP_BYTES));
-    expect(body.tail).toBe(huge.slice(huge.length - FEED_CAP_BYTES));
+    expect(body.tail).toBe(huge.slice(FEED_CAP_BYTES));
   });
 
   it("stops the stream at 8 MiB, windows what it read, and logs the cap", async () => {
@@ -170,7 +170,7 @@ describe("classify maps the response to a FeedFetch outcome", () => {
     fetchOutboundMock.mockResolvedValue(feedResponse(200, { etag: ETAG, "last-modified": LAST_MODIFIED }));
     await expect(fetchFeed(FEED_URL, null)).resolves.toEqual({
       outcome: "ok",
-      body: { head: "<rss/>", tail: "<rss/>" },
+      body: { head: "<rss/>", tail: "" },
       validators: { etag: ETAG, lastModified: LAST_MODIFIED },
     });
   });

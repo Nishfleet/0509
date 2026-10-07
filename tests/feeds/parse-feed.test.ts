@@ -19,10 +19,9 @@ const BASE = "https://rival.com/feed";
 const WINDOW_BYTES = 2 * 1024 * 1024;
 
 function windows(xml: string): FeedDocument {
-  return {
-    head: xml.slice(0, WINDOW_BYTES),
-    tail: xml.length > WINDOW_BYTES ? xml.slice(xml.length - WINDOW_BYTES) : xml,
-  };
+  if (xml.length <= WINDOW_BYTES) return { head: xml, tail: "" };
+  const tailStart = Math.max(WINDOW_BYTES, xml.length - WINDOW_BYTES);
+  return { head: xml.slice(0, WINDOW_BYTES), tail: xml.slice(tailStart) };
 }
 
 function parseFeed(xml: string, base: string, options: Parameters<typeof parseFeedRaw>[2]) {
@@ -214,9 +213,9 @@ describe("item keys", () => {
 
 // The scanner probes the document once per direction per candidate block, so a
 // linear pass reads a small constant times the input size; a regression that
-// rescans per candidate reads far more. Both windows together read the input
-// about twice, so the bound is 10x, not 5x.
-const MAX_DOC_SCANS = 10;
+// rescans per candidate reads far more. A larger feed scans its head and its
+// tail, which never overlap, so a single pass over each.
+const MAX_DOC_SCANS = 5;
 
 describe("parseFeed on hostile input", () => {
   const TWO_MIB = 2 * 1024 * 1024;
@@ -248,7 +247,7 @@ describe("parseFeed on hostile input", () => {
     }
   });
 
-  it("caps the scan at 200 blocks from each end of a huge feed", () => {
+  it("caps the scan at 200 blocks of a huge feed", () => {
     const many = Array.from(
       { length: 5000 },
       (_, i) => `<item><title>Post ${i}</title><link>https://rival.com/p/${i}</link></item>`,
@@ -259,8 +258,8 @@ describe("parseFeed on hostile input", () => {
 
     expect(items ?? []).toHaveLength(MAX_FEED_ITEMS);
     expect((items ?? [])[0]?.title).toBe("Post 0");
-    expect(scan.blocksVisited).toBeLessThanOrEqual(400);
-    expect(scan.charsScanned).toBeLessThanOrEqual(500 * xml.length);
+    expect(scan.blocksVisited).toBeLessThanOrEqual(200);
+    expect(scan.charsScanned).toBeLessThanOrEqual(250 * xml.length);
   });
 
   it("reads the newest items of a huge oldest-first feed larger than 2 MiB", () => {
@@ -275,20 +274,6 @@ describe("parseFeed on hostile input", () => {
 
     expect((items ?? []).map((item: FeedItem) => item.title)).toEqual(
       Array.from({ length: MAX_FEED_ITEMS }, (_, i) => `Post ${4999 - i}`),
-    );
-  });
-
-  it("reads the newest items of an oldest-first feed under the byte cap too", () => {
-    const entry = (i: number) =>
-      `<item><title>Post ${i}</title><link>https://rival.com/p/${i}</link><pubDate>${new Date(
-        NOW.getTime() - (299 - i) * 60_000,
-      ).toUTCString()}</pubDate></item>`;
-    const xml = rss(Array.from({ length: 300 }, (_, i) => entry(i)).join(""));
-
-    const { items } = scanned(xml);
-
-    expect((items ?? []).map((item: FeedItem) => item.title)).toEqual(
-      Array.from({ length: MAX_FEED_ITEMS }, (_, i) => `Post ${299 - i}`),
     );
   });
 

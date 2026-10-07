@@ -162,8 +162,9 @@ export async function windowedText(res: Response, windowBytes: number, maxBytes:
   }
   const decoder = new TextDecoder();
   const head = decoder.decode(bytes.subarray(0, Math.min(windowBytes, bytes.byteLength)));
-  const tail = bytes.byteLength > windowBytes ? decoder.decode(bytes.subarray(bytes.byteLength - windowBytes)) : head;
-  return { head, tail, truncated };
+  if (bytes.byteLength <= windowBytes) return { head, tail: "", truncated };
+  const tailStart = Math.max(windowBytes, bytes.byteLength - windowBytes);
+  return { head, tail: decoder.decode(bytes.subarray(tailStart)), truncated };
 }
 
 export async function cappedJson(res: Response, capBytes: number): Promise<unknown> {
