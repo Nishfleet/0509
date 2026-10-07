@@ -286,7 +286,7 @@ describe("parseFeed on hostile input", () => {
 
   it("does not loop when a tail window starts with an item tag that never closes its open tag", () => {
     const head = `<rss version="2.0"><channel>`;
-    const tail = `<item ${"a".repeat(5_000)}`;
+    const tail = `<item ${"a".repeat(5_000)}</item>`;
 
     expect(parseFeedRaw({ head, tail }, BASE, { now: NOW })).toEqual([]);
   });
