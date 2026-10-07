@@ -1209,6 +1209,18 @@ export default tseslint.config(
               message:
                 "The delivery-address save is the second app-side sender after app/lib/auth.server.ts, and it goes through the one paved path (workers/delivery/send.ts) instead of calling env.EMAIL.send a second time. Only that one file reaches the worker; every other server leaf keeps the boundary. Source: 0509#5811.",
             },
+            {
+              from: { element: { type: "data-writer" } },
+              disallow: {
+                to: [
+                  { element: { type: "component" } },
+                  { element: { type: "route" } },
+                  { file: { categories: "route-module" } },
+                ],
+              },
+              message:
+                "The data layer returns rows, never view code: app/lib/data/** may not import app/components/** or app/routes/**. Move shared pure logic into app/lib/. Source: 0509#7027, 0509#7031.",
+            },
           ],
         },
       ],
