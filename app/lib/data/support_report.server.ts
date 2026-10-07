@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 const INSERT_REPORT = `INSERT INTO support_report
   (id, received_at, from_domain, subject_sha256, raw)
 VALUES (?, ?, ?, ?, ?)`;
@@ -21,9 +23,13 @@ export async function insertSupportReport(db: D1Database, row: SupportReportRow)
   await db.prepare(INSERT_REPORT).bind(row.id, row.receivedAt, row.fromDomain, row.subjectSha256, row.raw).run();
 }
 
+const countRecentSupportReportsRow = z.object({ n: z.number() });
+
 export async function countRecentSupportReports(db: D1Database, fromDomain: string, now: Date): Promise<number> {
   const cutoff = new Date(now.getTime() - ISSUE_WINDOW_MS).toISOString();
-  const row = await db.prepare(COUNT_RECENT_BY_DOMAIN).bind(fromDomain, cutoff).first<{ n: number }>();
+  const row = countRecentSupportReportsRow
+    .nullable()
+    .parse(await db.prepare(COUNT_RECENT_BY_DOMAIN).bind(fromDomain, cutoff).first());
   return row?.n ?? 0;
 }
 
