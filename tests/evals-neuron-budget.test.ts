@@ -20,6 +20,11 @@ describe("evals.yml neuron budget", () => {
     expect(workflow).toContain('"$used" -ge "$EVAL_NEURON_BUDGET"');
   });
 
+  it("keeps the token out of curl's argv", () => {
+    expect(workflow).not.toMatch(/-H "Authorization: Bearer \$/);
+    expect(workflow).toContain("--config <(printf");
+  });
+
   it("prints the neuron cost after the run, even when the run fails", () => {
     const after = workflow.slice(workflow.indexOf("Print the neuron cost"));
     expect(after).toContain("if: always()");

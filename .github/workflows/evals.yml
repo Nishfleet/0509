@@ -59,9 +59,9 @@ jobs:
         run: |
           set -euo pipefail
           today=$(date -u +%F)
-          used=$(jq -n --arg a "$CLOUDFLARE_ACCOUNT_ID" --arg s "${today}T00:00:00Z" --arg e "${today}T23:59:59Z" \
+          used=$(jq -n --arg a "$CLOUDFLARE_ACCOUNT_ID" --arg s "${today}T00:00:00Z" --arg e "$(date -u -d "$today +1 day" +%F)T00:00:00Z" \
             '{query: "query($a:String!,$s:Time!,$e:Time!){viewer{accounts(filter:{accountTag:$a}){aiInferenceAdaptiveGroups(limit:1000,filter:{datetime_geq:$s,datetime_lt:$e}){sum{totalNeurons}}}}}", variables: {a: $a, s: $s, e: $e}}' \
-            | curl -sf "$CF_GRAPHQL" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -d @- \
+            | curl -sf "$CF_GRAPHQL" --config <(printf 'header = "Authorization: Bearer %s"\n' "$CLOUDFLARE_API_TOKEN") -d @- \
             | jq -e '[.data.viewer.accounts[0].aiInferenceAdaptiveGroups[].sum.totalNeurons] | add // 0 | floor')
           echo "neurons used so far on $today UTC: $used, budget: $EVAL_NEURON_BUDGET" | tee -a "$GITHUB_STEP_SUMMARY"
           if [ "$used" -ge "$EVAL_NEURON_BUDGET" ]; then
@@ -85,9 +85,9 @@ jobs:
         run: |
           set -euo pipefail
           today=$(date -u +%F)
-          used=$(jq -n --arg a "$CLOUDFLARE_ACCOUNT_ID" --arg s "${today}T00:00:00Z" --arg e "${today}T23:59:59Z" \
+          used=$(jq -n --arg a "$CLOUDFLARE_ACCOUNT_ID" --arg s "${today}T00:00:00Z" --arg e "$(date -u -d "$today +1 day" +%F)T00:00:00Z" \
             '{query: "query($a:String!,$s:Time!,$e:Time!){viewer{accounts(filter:{accountTag:$a}){aiInferenceAdaptiveGroups(limit:1000,filter:{datetime_geq:$s,datetime_lt:$e}){sum{totalNeurons}}}}}", variables: {a: $a, s: $s, e: $e}}' \
-            | curl -sf "$CF_GRAPHQL" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -d @- \
+            | curl -sf "$CF_GRAPHQL" --config <(printf 'header = "Authorization: Bearer %s"\n' "$CLOUDFLARE_API_TOKEN") -d @- \
             | jq -e '[.data.viewer.accounts[0].aiInferenceAdaptiveGroups[].sum.totalNeurons] | add // 0 | floor')
           echo "neurons used on $today UTC after this run (whole account, includes customers): $used of $EVAL_NEURON_BUDGET" | tee -a "$GITHUB_STEP_SUMMARY"
         env:
