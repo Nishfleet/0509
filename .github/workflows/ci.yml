@@ -285,11 +285,12 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+          filter: blob:none
       - name: Fail when the head lacks the newest gate change on main
         if: github.event_name == 'pull_request'
         run: |
           git fetch --quiet origin main
-          gate=$(git log -1 --format=%H origin/main -- eslint.config.js eslint-suppressions.json knip.jsonc package.json package-lock.json 'tsconfig*.json' 'vitest*.config.ts' .github/workflows/ci.yml)
+          gate=$(git log -1 --first-parent --format=%H origin/main -- eslint.config.js eslint-suppressions.json knip.jsonc .jscpd.json .prettierrc.json .prettierignore package.json package-lock.json 'tsconfig*.json' 'vitest*.config.ts' vite.config.ts react-router.config.ts wrangler.jsonc .dev.vars.example .semgrep .github/workflows/ci.yml)
           git merge-base --is-ancestor "$gate" "$HEAD_SHA" || { echo "::error::main changed a gate in $gate after this head branched; merge main into the branch"; exit 1; }
 
   ci-ok:

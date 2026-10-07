@@ -98,16 +98,18 @@ describe("a stale base is caught on the pull request, not in the queue (2026-10-
       on: { push: { branches: string[]; paths: string[] } };
     };
     const ci = await readFile(path.join(WORKFLOWS, "ci.yml"), "utf8");
-    const line = ci.split("\n").find((l) => l.includes("git log -1 --format=%H origin/main --")) ?? "";
+    const line = ci.split("\n").find((l) => l.includes("git log -1 --first-parent")) ?? "";
     const read = line
-      .split("--")
+      .split(" -- ")
       .pop()
-      ?.trim()
+      ?.replace(")", "")
+      .trim()
       .split(" ")
-      .map((p) => p.replaceAll("'", "").replace(")", ""))
+      .map((p) => p.replaceAll("'", ""))
       .sort();
+    const pushed = retest.on.push.paths.map((p) => p.replace("/**", "")).sort();
     expect(retest.on.push.branches).toEqual(["main"]);
-    expect(read).toEqual([...retest.on.push.paths].sort());
+    expect(read).toEqual(pushed);
   });
 });
 
