@@ -17,12 +17,36 @@ const CONFIGS = [
     .map((name) => `workers/${name}`),
 ];
 
+// 0509#7232. The gate below reads `(rawConfig.kv_namespaces ?? [])`, so a rename
+// or a removal of the key leaves the list empty and every per-namespace
+// assertion passes vacuously. Each config that deploys KV names its bindings here,
+// and the gate asserts the key carries exactly those namespaces (a rename, an
+// emptied key and a drifted entry all fail) before it checks any id. A config that
+// gains a KV namespace is added to this map in the same change.
+const KV_BINDINGS: Record<string, string[]> = {
+  "wrangler.jsonc": ["IDENTITY_CACHE", "OAUTH_KV"],
+};
+
+// A KV_BINDINGS entry that names no deployed config, an entry dropped from
+// KV_BINDINGS, or CONFIGS losing a governed config leaves the gate able to skip
+// itself while still passing, which is the hole 0509#7232 was filed for.
+it("keeps every KV_BINDINGS entry governing a config the gate runs on (0509#7232)", () => {
+  expect(Object.keys(KV_BINDINGS)).not.toHaveLength(0);
+  expect(CONFIGS).toEqual(expect.arrayContaining(Object.keys(KV_BINDINGS)));
+});
+
 describe("deployed wrangler configs", () => {
   it.each(CONFIGS)("%s pins an id on every KV namespace", (config) => {
     const { rawConfig } = experimental_readRawConfig({ config });
-    const unpinned = (rawConfig.kv_namespaces ?? [])
-      .filter((namespace) => !namespace.id)
-      .map((namespace) => namespace.binding);
+    const namespaces = rawConfig.kv_namespaces ?? [];
+    const expectedBindings = KV_BINDINGS[config];
+    if (expectedBindings) {
+      expect(
+        namespaces.map((namespace) => namespace.binding).sort(),
+        `${config} must deploy exactly the KV namespaces the app reads: the kv_namespaces key is missing, emptied or its entries drifted, and the per-namespace id check below would pass vacuously (0509#7232)`,
+      ).toEqual([...expectedBindings].sort());
+    }
+    const unpinned = namespaces.filter((namespace) => !namespace.id).map((namespace) => namespace.binding);
     expect(unpinned).toEqual([]);
   });
 
@@ -95,6 +119,12 @@ describe("deployed wrangler configs", () => {
   // rate at the top of `observability`, and wrangler normalises
   // `logs.head_sampling_rate` to the same 1, so a change to either alone is
   // visible in this assertion.
+  it("binds Worker version metadata so Sentry events carry a release (0509#7079)", () => {
+    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    expect(rawConfig.version_metadata).toEqual({ binding: "CF_VERSION_METADATA" });
+    expect(rawConfig.upload_source_maps).toBe(true);
+  });
+
   it("declares the Workers Logs policy (0509#5758)", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
     expect(rawConfig.observability?.enabled).toBe(true);
@@ -119,6 +149,14 @@ describe("deployed wrangler configs", () => {
     expect(consumer?.retry_delay).toBe(60);
     const dlq = (rawConfig.queues?.consumers ?? []).find((queue) => queue.queue === "fetch-sweep-dlq");
     expect(dlq).toBeDefined();
+  });
+
+  it("sets nodejs_compat explicitly so tests cannot hide a missing production flag (0509#7078)", () => {
+    for (const config of ["wrangler.jsonc", "tests/integration/wrangler.test.jsonc"]) {
+      const { rawConfig } = experimental_readRawConfig({ config });
+      expect(rawConfig.compatibility_flags, config).toContain("nodejs_compat");
+      expect(rawConfig.compatibility_flags, config).toContain("global_fetch_strictly_public");
+    }
   });
 
   it("routes every consumer queue in wrangler.jsonc to its own branch in queue()", () => {

@@ -125,6 +125,16 @@ describe("readSelfSiteFill", () => {
     expect(await readSelfSiteFill(`ws-empty-${crypto.randomUUID()}`)).toBe(null);
   });
 
+  it("throws on a non-string $.siteFill row, instead of repairing it", async () => {
+    await seed();
+    await env.DB.prepare(
+      `UPDATE entity SET identity_json = json_set(identity_json, '$.siteFill', json('12345')) WHERE id = ?1`,
+    )
+      .bind(selfId)
+      .run();
+    await expect(readSelfSiteFill(workspaceId)).rejects.toThrow();
+  });
+
   it("returns nothing for another workspace's entity, on every helper", async () => {
     await seed();
     const theirs = JSON.stringify({ description: "Theirs", socials: [] });

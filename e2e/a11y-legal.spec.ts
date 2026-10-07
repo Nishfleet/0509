@@ -56,7 +56,7 @@ for (const path of ["/privacy", "/terms"]) {
         const visited: (string | null)[] = [];
         for (const _ of hrefs) {
           await page.keyboard.press("Tab");
-          visited.push(await page.evaluate(() => document.activeElement?.getAttribute("href")));
+          visited.push((await page.evaluate(() => document.activeElement?.getAttribute("href"))) ?? null);
         }
         expect(visited).toEqual(hrefs);
 

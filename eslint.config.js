@@ -56,6 +56,12 @@ const FOUR_WEEK_PLOT_STATIC_IMPORT = {
     'Load four-week-plot with React.lazy(() => import("./four-week-plot")), never a static import: a static import puts uPlot back in the /app entry. Source: 0509#5289.',
 };
 
+const ROW_EVIDENCE_STATIC_IMPORT = {
+  name: "./row-evidence",
+  message:
+    'Load row-evidence with React.lazy(() => import("./row-evidence")), never a static import: a static import puts @base-ui/react/tabs in the /app entry (docs/REBUILD-DONE.md §B, 150 KB). Source: 0509#7014.',
+};
+
 const CHART_IMPORTS = [UPLOT_IMPORT, UPLOT_REACT_IMPORT, FOUR_WEEK_PLOT_STATIC_IMPORT];
 
 const FAST_XML_PARSER_IMPORT = {
@@ -135,6 +141,20 @@ const CATCH_RETURNS_NULL = {
   selector: "CatchClause > BlockStatement[body.length=1] > ReturnStatement[argument.value=null]",
   message:
     "A catch whose only statement is `return null` swallows the error, so a thrown fetch or a bug fails as silently as a real 'not found'. Give the clause an error binding and a logged failure path (or rethrow). Source: 0509#4462.",
+};
+
+const SCORE_NAME = "/^(points|weight|multiplier|score|total)$/";
+
+const RAW_SCORE_STRING = {
+  selector: [
+    `CallExpression[callee.name='String'][arguments.0.name=${SCORE_NAME}]`,
+    `CallExpression[callee.name='String'][arguments.0.property.name=${SCORE_NAME}]`,
+    "CallExpression[callee.name='String'] > BinaryExpression.arguments[operator='*']",
+    `CallExpression[callee.property.name='toString'][callee.object.name=${SCORE_NAME}]`,
+    `CallExpression[callee.property.name='toString'][callee.object.property.name=${SCORE_NAME}]`,
+  ].join(", "),
+  message:
+    "String() on a score, weight, multiplier or computed product prints binary floating point to people: 3 × 0.6 showed as '1.7999999999999998 points' on the brand page. Format it with formatScore from app/lib/score-format.ts. Source: 0509#7206, commit 96ccfdf39 (docs/incidents/2026-10-06-raw-float-in-biggest-move.md).",
 };
 
 const MIN_H_11_ANCHOR = {
@@ -291,12 +311,21 @@ const BARE_TOAST = {
     "toast() is called in exactly one module, app/components/toaster.tsx, behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo'. The sonner import ban does not catch a toast reached another way, so the call shape is banned too. Source: 0509#4116, 0509#7007.",
 };
 
+const HAND_ROLLED_ARIA_TAB = {
+  selector:
+    "JSXAttribute[name.name='role'] Literal[value=/^(tab|tablist|tabpanel)$/], JSXAttribute[name.name='role'] TemplateElement[value.raw=/^(tab|tablist|tabpanel)$/]",
+  message:
+    "Tabs come from app/components/ui/tabs.tsx (shadcn on @base-ui/react/tabs). A hand-rolled role=tab/tablist/tabpanel has no arrow keys and no roving tabIndex. Source: 0509#7014.",
+};
+
 const BANNED_SYNTAX = [
+  HAND_ROLLED_ARIA_TAB,
   BARE_TOAST,
   SUPPORT_ADDRESS_BAN,
   GOOGLE_FONTS_BAN,
   CRAWLER_USER_AGENT_BAN,
   CATCH_RETURNS_NULL,
+  RAW_SCORE_STRING,
   XML_PARSER_CONSTRUCTOR,
   DOMAIN_HOSTNAME_BAN,
   BARE_FETCH,
@@ -420,10 +449,89 @@ function isFormData(type) {
   return false;
 }
 
+function isZodSchema(type) {
+  const seen = new Set();
+  const pending = [type];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (current === undefined || seen.has(current)) continue;
+    seen.add(current);
+    if (current.isUnion() || current.isIntersection()) {
+      pending.push(...current.types);
+      continue;
+    }
+    if ((current.getSymbol() ?? current.aliasSymbol)?.getName().startsWith("Zod")) return true;
+    pending.push(...(current.getBaseTypes?.() ?? []));
+  }
+  return false;
+}
+
+// #7173: `zod`'s `.catch()` reads like a schema statement ("this row can be
+// malformed") when what it does is "a row that violates the schema is silently
+// repaired with a fallback". In app/lib/data/ — the one place that parses D1
+// rows, and the place a reader of a writer learns what a row must look like —
+// the two are the same characters. A row whose value no writer can produce is
+// drift: it must reach the caller as a ZodError, not as a default. Arming this
+// glob only, because a `.catch()` default on a request body or a feed config
+// outside the data layer is a different contract and the rule cannot tell the
+// two apart. Source: 0509#7173.
+const ZOD_ROW_CATCH_BAN = {
+  meta: {
+    type: "problem",
+    schema: [],
+    messages: {
+      zodRowCatch:
+        "A row schema in app/lib/data/ is the row-parse contract: every row the SQL returns must meet it. `.catch(...)` silently repairs a row that violates it and substitutes a fallback, which hides the drift instead of reporting it. Parse with the true schema and let the ZodError reach the caller. docs/REBUILD-TRUST.md C1. Source: 0509#7173.",
+    },
+  },
+  create(context) {
+    const services = context.sourceCode.parserServices;
+    if (services?.getTypeAtLocation === undefined) {
+      // A gate that silently passes every file it was armed for is the old
+      // defect in a new costume, so a missing program is an error, not a
+      // no-op — the same shape form-rules/form-data-get reports. Nothing in
+      // this config can reach it: the rule is armed on app/lib/data/**, where
+      // every file has type information. 0509#7173.
+      return {
+        Program(node) {
+          context.report({
+            node,
+            message: "row-rules/zod-row-catch needs TypeScript type information to match the receiver type.",
+          });
+        },
+      };
+    }
+    return {
+      CallExpression(node) {
+        const callee = node.callee;
+        if (callee.type !== "MemberExpression") return;
+        const name =
+          callee.property.type === "Identifier"
+            ? callee.property.name
+            : callee.property.type === "Literal" && typeof callee.property.value === "string"
+              ? callee.property.value
+              : null;
+        if (callee.computed && callee.property.type !== "Literal") return;
+        if (name !== "catch") return;
+        if (!isZodSchema(services.getTypeAtLocation(callee.object))) return;
+        context.report({ node, messageId: "zodRowCatch" });
+      },
+    };
+  },
+};
+
 const FORM_RULES_PLUGIN = {
   "form-rules": {
     rules: {
       "form-data-get": FORM_DATA_GET_BAN,
+    },
+  },
+};
+
+const ROW_RULES_PLUGIN = {
+  "row-rules": {
+    rules: {
+      "zod-row-catch": ZOD_ROW_CATCH_BAN,
     },
   },
 };
@@ -511,8 +619,9 @@ const TAILWIND_DEFAULT_PALETTE = {
     "The Tailwind default palette is banned: every colour is a @theme token in app/app.css (bg-green is the one accent, DESIGN.md rule 8). Source: 0509#5871.",
 };
 
+// outline- covers the stock tabs trigger's focus-visible:outline-ring (0509#7014).
 const SHADCN_STOCK_TOKEN_CLASSES =
-  "(?:^|:)(?:bg|text|border|ring|fill|stroke)-(?:background|foreground|muted|muted-foreground|primary|primary-foreground|secondary|secondary-foreground|destructive|border|input|ring|popover|popover-foreground)(?:/[0-9]+)?$";
+  "(?:^|:)(?:bg|text|border|ring|fill|stroke|outline)-(?:background|foreground|muted|muted-foreground|primary|primary-foreground|secondary|secondary-foreground|destructive|border|input|ring|popover|popover-foreground)(?:/[0-9]+)?$";
 
 const TW_ANIMATE_STOCK_CLASSES =
   "(?:^|:)(?:animate-in|animate-out|fade-in-0|fade-out-0|zoom-in-95|zoom-out-95|slide-in-from-(?:top|bottom|left|right)-2)$";
@@ -594,6 +703,8 @@ export default tseslint.config(
       // run. Same class as .react-router/** and worker-configuration.d.ts.
       // Source: #3944.
       ".wrangler/**",
+      // Composite project-reference emit for tsconfig.test.json (0509#7073).
+      ".tsbuild/**",
       "node_modules/**",
       "worker-configuration.d.ts",
       "docs/design-directions/**",
@@ -668,6 +779,17 @@ export default tseslint.config(
       "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, RAW_DML_WRITER, FEED_STATE_LITERAL],
       "form-rules/form-data-get": "error",
     },
+  },
+
+  {
+    // app/lib/data/** is the only D1 row reader, so it is the only place a row
+    // schema lives. `.catch(...)` on one silences the row-parse contract.
+    // Armed on this glob only: a `.catch(...)` on a request body or a feed
+    // config parsed elsewhere is a different contract and the rule cannot
+    // distinguish it from a row read. Source: 0509#7173.
+    files: ["app/lib/data/**/*.ts"],
+    plugins: ROW_RULES_PLUGIN,
+    rules: { "row-rules/zod-row-catch": "error" },
   },
 
   {
@@ -883,7 +1005,13 @@ export default tseslint.config(
       "no-restricted-imports": [
         "error",
         {
-          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT, FULL_ZOD_IMPORT, ...CHART_IMPORTS],
+          paths: [
+            ...ONE_PAVED_PATH_IMPORTS,
+            CLOUDFLARE_WORKERS_IMPORT,
+            FULL_ZOD_IMPORT,
+            ...CHART_IMPORTS,
+            ROW_EVIDENCE_STATIC_IMPORT,
+          ],
           patterns: PAVED_PATH_PATTERNS,
         },
       ],
@@ -1215,8 +1343,45 @@ export default tseslint.config(
     },
   },
 
+  // 0509#7073: e2e is type-aware so no-floating-promises is on. The rest of
+  // strictTypeChecked on Playwright evaluate callbacks and poll messages is a
+  // follow-up (restrict-template-expressions on timeout numbers, no-unsafe-*
+  // on JSON.parse of fixture pages).
   {
-    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "*.config.ts", "e2e/**/*.ts", "tests/**/*.ts", "public/index.html"],
+    files: ["e2e/**/*.ts"],
+    rules: {
+      "@typescript-eslint/restrict-template-expressions": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-return": "off",
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/no-confusing-void-expression": "off",
+      "@typescript-eslint/dot-notation": "off",
+      "@typescript-eslint/no-unnecessary-type-assertion": "off",
+      "@typescript-eslint/restrict-plus-operands": "off",
+      "@typescript-eslint/prefer-includes": "off",
+      "@typescript-eslint/prefer-string-starts-ends-with": "off",
+      "@typescript-eslint/no-base-to-string": "off",
+    },
+  },
+
+  // 0509#7073: type-aware lint is on for e2e and *.config.ts. The comment
+  // exemption used to live on the disableTypeChecked block that also listed
+  // those globs; keep it here so inline comments in specs and configs stay
+  // allowed (AGENTS.md: config files and tests are exempt).
+  {
+    files: ["e2e/**/*.ts", "*.config.ts"],
+    rules: {
+      "no-inline-comments": "off",
+      "no-warning-comments": "off",
+    },
+  },
+
+  // 0509#7073: tests/** stay untyped until the excluded files in
+  // tsconfig.test.json typecheck. e2e/** and *.config.ts are off this list.
+  {
+    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "tests/**/*.ts", "public/index.html"],
     extends: [tseslint.configs.disableTypeChecked],
     rules: {
       "no-inline-comments": "off",

@@ -236,14 +236,14 @@ describe("readHowRankedInputs against real D1", () => {
         `${b.entity_id}\u0000${b.bucket}\u0000${b.reliability}`,
       );
 
-    expect([...counts].sort(byKey)).toEqual(
-      [
-        { entity_id: seeded.entityA, bucket: "hiring_new_role", reliability: "rss", n: 1 },
-        { entity_id: seeded.entityA, bucket: "mention_matters", reliability: "official_api", n: 1 },
-        { entity_id: seeded.entityB, bucket: "ad_new_creative", reliability: "best_effort", n: 1 },
-        { entity_id: seeded.entityB, bucket: "site_change_noteworthy", reliability: "scraped_page", n: 1 },
-      ].sort(byKey),
-    );
+    const expected: BucketCount[] = [
+      { entity_id: seeded.entityA, bucket: "hiring_new_role", reliability: "rss", n: 1 },
+      { entity_id: seeded.entityA, bucket: "mention_matters", reliability: "official_api", n: 1 },
+      { entity_id: seeded.entityB, bucket: "ad_new_creative", reliability: "best_effort", n: 1 },
+      { entity_id: seeded.entityB, bucket: "site_change_noteworthy", reliability: "scraped_page", n: 1 },
+    ];
+
+    expect([...counts].sort(byKey)).toEqual([...expected].sort(byKey));
   });
 
   it("returns every scoring_weight row unfiltered by date", async () => {
