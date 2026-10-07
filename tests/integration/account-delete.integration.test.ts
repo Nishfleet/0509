@@ -357,7 +357,7 @@ describe("delete my account", () => {
       first: { items: [{ id: "grant-1" }], cursor: "second" },
       second: { items: [{ id: "grant-2" }] },
     };
-    let firstPageListed!: () => void;
+    let firstPageListed: (() => void) | undefined;
     const grantListStarted = new Promise<void>((resolve) => {
       firstPageListed = resolve;
     });
@@ -365,7 +365,7 @@ describe("delete my account", () => {
       listUserGrants: async (_user, options) => {
         const cursor = options?.cursor;
         cursors.push(cursor);
-        if (cursors.length === 1) firstPageListed();
+        if (cursors.length === 1) firstPageListed?.();
         return pages[cursor ?? "first"] as Awaited<ReturnType<OAuthHelpers["listUserGrants"]>>;
       },
       revokeGrant: async () => undefined,
@@ -388,7 +388,9 @@ describe("delete my account", () => {
       const settled = await Promise.race([
         deleteAccount(helpers, settingsRequest(cookie), userId),
         new Promise<string>((resolve) => {
-          setTimeout(() => resolve(TIMED_OUT), 10_000);
+          setTimeout(() => {
+            resolve(TIMED_OUT);
+          }, 10_000);
         }),
       ]);
       if (settled === null) throw new Error("deleteAccount refused a fresh session");
