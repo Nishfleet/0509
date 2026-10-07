@@ -639,16 +639,25 @@ export async function deleteAccountViaRequest(request: APIRequestContext, origin
   }
   if (!email) return;
 
+  // Names the row the run is about to remove, so a teardown that times out
+  // (#7247) leaves a row the soak report's user table can be matched against
+  // instead of an anonymous leftover. The elapsed time is the measurement
+  // #7247 asks for: the product call answered in 20-30s, and nothing on this
+  // path recorded how long the answer took.
+  console.log(`deleteAccountViaRequest: deleting ${email}`);
+  const startedAt = Date.now();
   const deleted = await request.post("/app/settings", {
     headers: { origin },
     form: { intent: "delete-account", confirm: email },
     maxRedirects: 0,
   });
+  const elapsedMs = Date.now() - startedAt;
   const location = deleted.headers().location ?? "";
   const outcome = classifySettingsDeleteRedirect(deleted.status(), location);
   if (outcome === "unexpected") {
     throw new Error(`settings delete answered HTTP ${String(deleted.status())} location=${location}`);
   }
+  console.log(`deleteAccountViaRequest: deleted ${email} in ${elapsedMs}ms`);
 }
 
 export async function deleteCreatedAccount(page: Page, email: string): Promise<void> {

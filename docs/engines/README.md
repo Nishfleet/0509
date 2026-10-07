@@ -7,19 +7,19 @@ Find the real code with `ls` or grep.
 
 One file per engine, in the P3 build order (umbrella #3842):
 
-| Order | Engine                              | Issue | File                                                 |
-| ----- | ----------------------------------- | ----- | ---------------------------------------------------- |
-| 1     | Identity card                       | #3885 | [`identity-card.md`](identity-card.md)               |
-| 2     | Competitor discovery                | #3884 | [`competitor-discovery.md`](competitor-discovery.md) |
-| 4     | Site-change tracking incl. own site | #3879 | [`site-change.md`](site-change.md)                   |
-| 5     | Hiring (job boards)                 | #4725 | [`hiring.md`](hiring.md)                             |
-| 6     | Content (blog and changelog feeds)  | #6377 | [`content.md`](content.md)                           |
+| Order | Engine                              | Issue | File                               |
+| ----- | ----------------------------------- | ----- | ---------------------------------- |
+| 1     | Identity card                       | #3885 | deleted (0509#7018)                |
+| 2     | Competitor discovery                | #3884 | deleted (0509#7018)                |
+| 4     | Site-change tracking incl. own site | #3879 | [`site-change.md`](site-change.md) |
+| 5     | Hiring (job boards)                 | #4725 | deleted (0509#7018)                |
+| 6     | Content (blog and changelog feeds)  | #6377 | deleted (0509#7018)                |
 
-The first four are the P3 design packets; each carries two candidate shapes with the screening and the pick, the data flow against `docs/REBUILD-SCHEMA.md` tables by name, the Workflow/Queue/cron layout with concurrency numbers, the exact upstream calls with live probes on Gymshark, the Jev decision ids and their context-pack fields, the cost line, the failure modes with their degraded UI states, and worker packets sized for 45 minutes with no design choice left.
+Of the four P3 design packets, only [`site-change.md`](site-change.md) remains — the other three were deleted in 0509#7018 (git history keeps them). Each carried two candidate shapes with the screening and the pick, the data flow against `docs/REBUILD-SCHEMA.md` tables by name, the Workflow/Queue/cron layout with concurrency numbers, the exact upstream calls with live probes on Gymshark, the Jev decision ids and their context-pack fields, the cost line, the failure modes with their degraded UI states, and worker packets sized for 45 minutes with no design choice left.
 
-## What the four share
+## What the shared decisions are
 
-These decisions are made once here and repeated in each file so a packet is readable alone.
+These decisions are made once here and were repeated in each packet so one was readable alone. The surviving packets are [`site-change.md`](site-change.md) plus [`delivery.md`](delivery.md), [`guardrails.md`](guardrails.md), [`mentions.md`](mentions.md) and [`standing-home.md`](standing-home.md).
 
 **Two queues, and the browser cap is one number.**
 

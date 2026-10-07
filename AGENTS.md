@@ -178,10 +178,10 @@ rejection**, not a review comment. The row format is asserted by
 ## What gates a merge
 
 One required check on the `main-merge-queue` ruleset (id 21391031), **empty
-bypass list**: `ci-ok`. It is a job in `ci.yml` that needs the five gate jobs
+bypass list**: `ci-ok`. It is a job in `ci.yml` that needs the six gate jobs
 
 ```
-codex-node-checks   vitest-shard   Gitleaks   semgrep   preview-assert
+codex-node-checks   vitest-shard   Gitleaks   semgrep   preview-assert   base-fresh
 ```
 
 and fails unless every one succeeded (0509#7013). It checks for `success`,
@@ -189,6 +189,7 @@ never for a list of bad results: a job no runner picked up matched neither
 `failure` nor `cancelled` and passed it once (2026-10-05). `vitest-shard` is a
 four-way matrix (`vitest-shard (1)` … `(4)`, vitest's own `--shard`); its
 result in `needs` is `success` only when every shard succeeded (0509#7163).
+`base-fresh` fails a PR whose head lacks the newest `main` commit that touched a gate file, and `stale-base-retest.yml` reruns it on every open PR when one lands (`docs/incidents/2026-10-07-stale-base-queue-ejections.md`).
 
 Renaming `ci-ok` is not cosmetic. A required check that never reports fails
 closed and nothing can merge again, including the PR that renamed it. A

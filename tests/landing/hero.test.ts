@@ -29,8 +29,9 @@ describe("landing hero", () => {
     expect(html).toContain('method="get"');
     expect(html).toContain('action="/login"');
     expect(html).toContain('name="subject"');
-    expect(html).toContain('placeholder="your website address or social username (like @yourbrand)"');
-    expect(html).toContain('aria-label="your website address or social username (like @yourbrand)"');
+    expect(html).toContain('placeholder="yoursite.com or @yourbrand"');
+    expect(html).toMatch(/<label for="[^"]+"[^>]*>Your website address or social username<\/label>/);
+    expect(html).not.toContain("aria-label=");
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*>/);
     expect(html.match(/<button/g)).toHaveLength(1);
     expect(html).toContain("€10/mo");
