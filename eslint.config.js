@@ -1,3 +1,5 @@
+import { readdirSync } from "node:fs";
+
 import js from "@eslint/js";
 import betterTailwindcss from "eslint-plugin-better-tailwindcss";
 import boundaries from "eslint-plugin-boundaries";
@@ -379,6 +381,48 @@ const RAW_DML_WRITER = {
   message:
     "One writer per table. Raw DML lives in app/lib/data/<table>.server.ts — this matches the statement text itself, so holding it in a module constant still counts. docs/REBUILD-TRUST.md C5. Source: 0509#4313 — the kysely-era insertInto/updateTable/deleteFrom selectors matched nothing after the raw-D1 rebuild, and app/lib/workspace.server.ts grew a second workspace writer while the rule stayed green.",
 };
+
+// 0509#7022: RAW_DML_WRITER only proves DML sits somewhere under
+// app/lib/data/. Inside it, <table>.server.ts may write only <table>.
+// One block per file, generated from the directory, so a new data file is
+// guarded with no edit here. better-auth owns session and verification;
+// auth_expiry is their one writer.
+const TABLE_WRITER_ALLOWED_TABLES = { auth_expiry: ["session", "verification"] };
+
+function foreignTableWriter(file) {
+  const table = file.replace(/\.server\.ts$/, "");
+  const allowed = TABLE_WRITER_ALLOWED_TABLES[table] ?? [table];
+  const own = `(?:${allowed.join("|")})\\b`;
+  // SQLite accepts `UPDATE OR <action> <table> SET ...` and
+  // `UPDATE <table> AS <alias> SET ...`, so the table name itself — not the
+  // word after UPDATE — is what the lookahead has to see.
+  const UPDATE_HEAD = `\\bUPDATE\\s+(?:OR\\s+\\w+\\s+)?`;
+  const UPDATE_TAIL = `(?:\\s+AS\\s+[\\w".]+)?\\s+SET\\s+[\\w".]+\\s*=`;
+  const shape =
+    `\\b(INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|DELETE\\s+FROM)\\s+"?(?!${own})\\w` +
+    `|${UPDATE_HEAD}"?(?!${own})[\\w.]+"?${UPDATE_TAIL}`;
+  return {
+    selector: `Literal[value=/${shape}/i], TemplateElement[value.raw=/${shape}/i]`,
+    message: `Foreign-table write: app/lib/data/${file} may write only ${allowed.join(", ")}. Move this statement to app/lib/data/<its table>.server.ts as an exported function that returns a D1PreparedStatement, and put that in this file's env.DB.batch so the batch stays atomic. Source: 0509#7022.`,
+  };
+}
+
+// A later matching block's no-restricted-syntax entry replaces the earlier
+// one wholesale, so each block restates what data files already get.
+export const TABLE_WRITER_BLOCKS = readdirSync(new URL("./app/lib/data/", import.meta.url))
+  .filter((file) => file.endsWith(".server.ts"))
+  .map((file) => ({
+    files: [`app/lib/data/${file}`],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX,
+        ...NO_USER_DATA_IN_LOGS,
+        FEED_STATE_LITERAL,
+        foreignTableWriter(file),
+      ],
+    },
+  }));
 
 const ENV_DB_IN_ROUTES = {
   selector: "CallExpression[callee.object.name='env'][callee.property.name='DB']",
@@ -1490,4 +1534,12 @@ export default tseslint.config(
       ],
     },
   },
+
+  // 0509#7266: TABLE_WRITER_BLOCKS must be the last entries in this array.
+  // Flat config replaces a rule's options wholesale per matching block — a
+  // later block with no-restricted-syntax on app/lib/data/** would silently
+  // drop the per-file foreign-table-write selector. Spreading here guarantees
+  // no existing block comes after them; a future block placed after this
+  // comment overrides them by design and must restate every entry.
+  ...TABLE_WRITER_BLOCKS,
 );

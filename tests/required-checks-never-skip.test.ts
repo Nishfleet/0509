@@ -15,7 +15,7 @@ import { parse } from "yaml";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const WORKFLOWS = path.join(REPO_ROOT, ".github/workflows");
-const REQUIRED = ["Gitleaks", "codex-node-checks", "vitest-shard", "semgrep", "preview-assert"];
+const REQUIRED = ["Gitleaks", "codex-node-checks", "vitest-shard", "semgrep", "preview-assert", "base-fresh"];
 
 interface WorkflowStep {
   if?: unknown;
@@ -89,6 +89,27 @@ describe("ci-ok aggregates every required check (0509#7013)", () => {
     const steps = ciOk?.job.steps ?? [];
     expect(steps.map((step) => step.if)).toEqual(["always()"]);
     expect(steps[0]?.run).toContain('all(.[]; .result == "success")');
+  });
+});
+
+describe("a stale base is caught on the pull request, not in the queue (2026-10-07 incident)", () => {
+  it("rechecks base-fresh whenever a gate file changes on main, over the paths base-fresh reads", async () => {
+    const retest = parse(await readFile(path.join(WORKFLOWS, "stale-base-retest.yml"), "utf8")) as {
+      on: { push: { branches: string[]; paths: string[] } };
+    };
+    const ci = await readFile(path.join(WORKFLOWS, "ci.yml"), "utf8");
+    const line = ci.split("\n").find((l) => l.includes("git log -1 --first-parent")) ?? "";
+    const read = line
+      .split(" -- ")
+      .pop()
+      ?.replace(")", "")
+      .trim()
+      .split(" ")
+      .map((p) => p.replaceAll("'", ""))
+      .sort();
+    const pushed = retest.on.push.paths.map((p) => p.replace("/**", "")).sort();
+    expect(retest.on.push.branches).toEqual(["main"]);
+    expect(read).toEqual(pushed);
   });
 });
 

@@ -33,6 +33,16 @@ describe("rival change email", () => {
     const { html } = renderChange({ ...CTX, mark: { removed: null, added: "<script>x</script>" } });
     expect(html).not.toContain("<script>x");
   });
+
+  it("breaks a URL in the rival's copy so the email cannot autolink it (0509#7084)", () => {
+    const { text, html } = renderChange({
+      ...CTX,
+      mark: { removed: "was https://evil.example/old", added: "now https://evil.example/new" },
+    });
+    expect(text).toContain("https[:]//evil.example/old");
+    expect(text).not.toMatch(/https:\/\/evil\.example/);
+    expect(html).toContain("https[:]//evil.example/new");
+  });
 });
 
 describe("the alert footer (RFC 8058)", () => {

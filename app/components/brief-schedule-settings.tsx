@@ -8,7 +8,7 @@ import { Toaster, toastSaved } from "./toaster";
 import { Button } from "./ui/button";
 
 const SELECT =
-  "min-h-11 rounded-none border-[1.5px] border-ink bg-card px-3 text-body text-ink outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green";
+  "min-h-11 rounded-none border-[1.5px] border-ink bg-card px-3 text-body text-ink outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink";
 const LABEL = "font-mono text-meta text-ink-soft uppercase";
 
 function subscribeToNothing(): () => void {

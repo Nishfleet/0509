@@ -67,10 +67,20 @@ WHERE (SELECT COUNT(*) FROM send_attempt
         WHERE workspace_id = ? AND idempotency_key LIKE 'change:%' AND status <> 'failed' AND attempted_at >= ?) < ?
 ON CONFLICT(idempotency_key) DO UPDATE
   SET status = 'pending', error = NULL, attempted_at = excluded.attempted_at
-  WHERE send_attempt.status = 'failed'
+  WHERE send_attempt.status = 'failed' OR (send_attempt.status = 'pending' AND send_attempt.attempted_at < ?)
 RETURNING id`;
 
 const SELECT_ATTEMPT_KEY = `SELECT 1 AS found FROM send_attempt WHERE idempotency_key = ?`;
+
+export const CHANGE_DEAD_LETTER_STATUS = "dropped";
+
+const DROP_DEAD_LETTERED_CHANGE = `UPDATE send_attempt
+  SET status = 'dropped'
+  WHERE idempotency_key LIKE ? AND status IN ('pending', 'failed')`;
+
+export async function dropDeadLetteredChange(db: D1Database, signalId: string): Promise<void> {
+  await db.prepare(DROP_DEAD_LETTERED_CHANGE).bind(`change:${signalId}:%`).run();
+}
 
 export type ChangeSlot = { kind: "claimed"; id: string } | { kind: "duplicate" } | { kind: "capped" };
 
@@ -81,6 +91,8 @@ export async function claimChangeSlot(
   db: D1Database,
   input: { idempotencyKey: string; workspaceId: string; targetId: string; since: string; cap: number },
 ): Promise<ChangeSlot> {
+  const now = new Date().toISOString();
+  const staleBefore = new Date(Date.now() - STALE_CLAIM_MS).toISOString();
   const claimed = claimChangeSlotRow
     .nullable()
     .parse(
@@ -91,10 +103,11 @@ export async function claimChangeSlot(
           input.workspaceId,
           input.targetId,
           input.idempotencyKey,
-          new Date().toISOString(),
+          now,
           input.workspaceId,
           input.since,
           input.cap,
+          staleBefore,
         )
         .first(),
     );
