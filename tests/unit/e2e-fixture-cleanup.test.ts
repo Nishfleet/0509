@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { parse } from "yaml";
 
+import { FIXTURE_ACCOUNTS } from "../../app/lib/fixture-accounts";
 import { classifySettingsDeleteRedirect } from "../../e2e/inbox";
 
 // #5985: an e2e spec that mints an `e2e+` address creates a real user row in
@@ -22,7 +23,7 @@ const MINT = /e2e\+[\w-]*\$\{/;
 // cannot call the helper; it is the flow's proof.
 const ALLOWED = new Set(["e2e/j14-delete-workspace.spec.ts"]);
 
-// The five accounts the journey specs keep on purpose (0509#5688,
+// The accounts the journey specs keep on purpose (0509#5688,
 // fleet-manager): exact addresses, never a pattern.
 const KEPT_JOURNEY_ACCOUNTS = [
   "e2e+j7@0509.io",
@@ -33,6 +34,11 @@ const KEPT_JOURNEY_ACCOUNTS = [
   "e2e+j9-mentions@0509.io",
   "e2e+j12-rollovers@0509.io",
   "e2e+soak@0509.io",
+  "e2e+onboarded-desktop@0509.io",
+  "e2e+onboarded-phone@0509.io",
+  "e2e+j6-desktop@0509.io",
+  "e2e+j6-phone@0509.io",
+  "e2e+j11@0509.io",
 ];
 
 // A setup project that mints is cleaned up by its `teardown:` project, not by
@@ -91,9 +97,13 @@ describe("e2e fixture teardown detector", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("keeps the four journey accounts in the helper's guard", async () => {
+  it("keeps the journey accounts in the helper's guard", async () => {
     const source = await readFile(path.join(REPO_ROOT, "e2e/inbox.ts"), "utf8");
     for (const email of KEPT_JOURNEY_ACCOUNTS) expect(source).toContain(email);
+  });
+
+  it("keeps every FIXTURE_ACCOUNTS address in the guard, so the teardown never deletes a comp-plan identity", () => {
+    for (const account of Object.values(FIXTURE_ACCOUNTS)) expect(KEPT_JOURNEY_ACCOUNTS).toContain(account.email);
   });
 
   it("pairs every minting setup project with a teardown project", async () => {
