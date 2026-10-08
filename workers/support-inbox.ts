@@ -1,9 +1,10 @@
 import {
-  countRecentSupportReports,
-  countRecentSupportReportsAll,
-  deleteExpiredSupportReports,
-  insertSupportReport,
-} from "../app/lib/data/support_report.server";
+  claimIssueSlot,
+  countRecentIssues,
+  deleteExpiredIssues,
+  releaseIssueSlot,
+} from "../app/lib/data/support_issue.server";
+import { deleteExpiredSupportReports, insertSupportReport } from "../app/lib/data/support_report.server";
 import { fetchOutbound } from "../app/lib/fetch/outbound.server";
 import { sha256Hex } from "../app/lib/sha256";
 
@@ -13,12 +14,17 @@ const SITE_HOSTS = new Set(["0509.io", "www.0509.io"]);
 const TOKEN_PATH_PREFIXES = ["/u/", "/v/", "/api/auth/"];
 const MAX_PATHS = 10;
 const MAX_UA = 200;
-export const MAX_ISSUES_PER_DOMAIN_PER_DAY = 3;
-export const MAX_ISSUES_PER_DAY = 20;
 
 interface SupportInboxEnv {
   DB: D1Database;
   SUPPORT_INBOX_GITHUB_TOKEN?: string;
+}
+
+interface ReportMail {
+  id: string;
+  receivedAt: string;
+  raw: string;
+  userAgent: string;
 }
 
 function sitePaths(text: string): string[] {
@@ -38,31 +44,18 @@ function sitePaths(text: string): string[] {
   return [...paths].slice(0, MAX_PATHS);
 }
 
-async function maybeOpenIssue(
-  env: SupportInboxEnv,
-  report: { id: string; receivedAt: string; fromDomain: string; raw: string; userAgent: string },
-): Promise<void> {
-  const { id, receivedAt, fromDomain, raw, userAgent } = report;
-  const token = env.SUPPORT_INBOX_GITHUB_TOKEN;
-  if (!token) {
-    console.error("support-inbox: SUPPORT_INBOX_GITHUB_TOKEN is not set", id);
-    return;
-  }
-  const received = new Date(receivedAt);
-  const recent = await countRecentSupportReports(env.DB, fromDomain, received);
-  const recentAll = await countRecentSupportReportsAll(env.DB, received);
-  if (recent > MAX_ISSUES_PER_DOMAIN_PER_DAY || recentAll > MAX_ISSUES_PER_DAY) {
-    console.error("support-inbox: issue cap reached", id);
-    return;
-  }
-  const paths = sitePaths(raw);
-  const body = [
-    `report: ${id}`,
-    `received: ${receivedAt}`,
+function issueBody(report: ReportMail): string {
+  const paths = sitePaths(report.raw);
+  return [
+    `report: ${report.id}`,
+    `received: ${report.receivedAt}`,
     `paths: ${paths.length > 0 ? paths.join(", ") : "none"}`,
-    `user agent: ${userAgent}`,
+    `user agent: ${report.userAgent.slice(0, MAX_UA)}`,
   ].join("\n");
-  const response = await fetchOutbound(ISSUES_URL, {
+}
+
+async function openIssue(token: string, report: ReportMail): Promise<Response> {
+  return fetchOutbound(ISSUES_URL, {
     method: "POST",
     headers: {
       authorization: `Bearer ${token}`,
@@ -72,14 +65,30 @@ async function maybeOpenIssue(
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      title: `user report ${id}`,
-      body,
+      title: `user report ${report.id}`,
+      body: issueBody(report),
       labels: ["user-report", "machine-reported"],
     }),
   });
-  if (!response.ok) {
-    console.error("support-inbox: issue create failed", response.status, id);
+}
+
+async function createIssue(db: D1Database, token: string, report: ReportMail): Promise<void> {
+  let response: Response;
+  try {
+    response = await openIssue(token, report);
+  } catch (error) {
+    await releaseIssueSlot(db, report.id);
+    console.error("support-inbox: issue create threw", String(error), report.id);
+    return;
   }
+  if (response.ok) return;
+  await releaseIssueSlot(db, report.id);
+  console.error("support-inbox: issue create failed", response.status, report.id);
+}
+
+async function sweep(db: D1Database, now: Date): Promise<void> {
+  await deleteExpiredSupportReports(db, now);
+  await deleteExpiredIssues(db, now);
 }
 
 export default {
@@ -100,11 +109,25 @@ export default {
       raw,
     });
     await message.forward(FORWARD_TO);
-    const userAgent = (message.headers.get("user-agent") ?? message.headers.get("x-mailer") ?? "none").slice(0, MAX_UA);
-    await maybeOpenIssue(env, { id, receivedAt, fromDomain, raw, userAgent });
+    const token = env.SUPPORT_INBOX_GITHUB_TOKEN;
+    if (!token) {
+      console.error("support-inbox: SUPPORT_INBOX_GITHUB_TOKEN is not set", id);
+      return;
+    }
+    const claimed = await claimIssueSlot(env.DB, { reportId: id, fromDomain, at: receivedAt });
+    if (!claimed) {
+      console.error(
+        "support-inbox: issue cap reached",
+        id,
+        await countRecentIssues(env.DB, fromDomain, new Date(receivedAt)),
+      );
+      return;
+    }
+    const userAgent = message.headers.get("user-agent") ?? message.headers.get("x-mailer") ?? "none";
+    await createIssue(env.DB, token, { id, receivedAt, raw, userAgent });
   },
 
   scheduled(controller, env, ctx) {
-    ctx.waitUntil(deleteExpiredSupportReports(env.DB, new Date(controller.scheduledTime)));
+    ctx.waitUntil(sweep(env.DB, new Date(controller.scheduledTime)));
   },
 } satisfies ExportedHandler<SupportInboxEnv>;
