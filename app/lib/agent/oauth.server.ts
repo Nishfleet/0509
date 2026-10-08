@@ -28,7 +28,7 @@ function oauthOptions<E>(handlers: Handlers<E>): OAuthProviderOptions<E> {
     },
     accessTokenTTL: HOUR,
     refreshTokenTTL: 30 * DAY,
-    clientRegistrationTTL: 365 * DAY,
+    clientRegistrationTTL: 30 * DAY,
     clientRegistrationCallback: denyInsecureRedirects,
     resolveExternalToken: async ({ token, request }) => {
       if (!(await withinLimit(env.AGENT_LIMIT, clientIp(request)))) {

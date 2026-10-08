@@ -434,6 +434,15 @@ describe("ConnectedApps", () => {
     expect(html).toContain("Linear");
     expect(html).toContain("linear.app");
   });
+
+  it("shows the host line even when it equals the name", () => {
+    const html = stubbed(
+      createElement(ConnectedApps, {
+        apps: [{ grantId: "g3", name: "evil.example", host: "evil.example", connectedAt: "2026-09-01T00:00:00.000Z" }],
+      }),
+    );
+    expect(html).toContain('>evil.example</span><span class="block font-mono');
+  });
 });
 
 describe("the connect block on /app/settings/agents", () => {

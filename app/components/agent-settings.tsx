@@ -135,9 +135,7 @@ export function ConnectedApps({ apps }: { apps: ConnectedApp[] }) {
             <li key={app.grantId} data-testid="connected-app" className={ROW}>
               <p className="min-w-0">
                 <span className="font-display font-bold">{app.name}</span>
-                {app.host === app.name ? null : (
-                  <span className="block font-mono text-body-sm text-ink-soft">{app.host}</span>
-                )}
+                <span className="block font-mono text-body-sm text-ink-soft">{app.host}</span>
                 <span className="block text-body-sm text-ink-soft">Connected {day(app.connectedAt)}</span>
               </p>
               <Form method="post">
