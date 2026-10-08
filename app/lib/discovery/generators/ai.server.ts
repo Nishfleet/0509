@@ -58,6 +58,11 @@ export const RESPONSE_FORMAT = {
   json_schema: { name: "competitors", schema: RESPONSE_SCHEMA },
 } as const;
 
+const REASONING: Readonly<Record<(typeof MODELS)[number], Record<string, unknown>>> = {
+  [MODEL]: {},
+  [SECOND_MODEL]: { chat_template_kwargs: { enable_thinking: true, low_effort: true } },
+};
+
 const proposalItemSchema = z.object({
   name: z.string().max(NAME_MAX),
   domain: z.string().max(DOMAIN_MAX),
@@ -160,6 +165,7 @@ async function propose(model: (typeof MODELS)[number], subject: Subject, site: S
       messages: messagesFor(subject, site),
       max_tokens: MAX_TOKENS,
       response_format: RESPONSE_FORMAT,
+      ...REASONING[model],
     },
     { gateway: { id: aiGatewayId() }, signal: AbortSignal.timeout(AI_TIMEOUT_MS) },
   );
