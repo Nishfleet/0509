@@ -114,7 +114,7 @@ describe("migration file discipline", () => {
   it("states the probe evidence the parked rows rest on", async () => {
     // The dates and URLs that make these rows evidence rather than an opinion.
     // Each platform's (url, status) pairs come straight from
-    // docs/engines/ads.md probes 12-16.
+    // The ads engine's probes 12-16.
     //
     // Each probe is asserted INSIDE its own row's slice, not against the whole
     // file. Two defects in this gate's own lineage are why: (a) a file-wide
