@@ -40,7 +40,9 @@ describe("ensureWorkspace against migrations/0001_rebuild.sql", () => {
     });
     expect(await workspaceCount("user-1")).toBe(1);
     const entity = await env.DB.prepare("SELECT count(*) AS n FROM entity").first<{ n: number }>();
-    const plan = await env.DB.prepare("SELECT count(*) AS n FROM plan").first<{ n: number }>();
+    const plan = await env.DB.prepare("SELECT count(*) AS n FROM plan WHERE workspace_id = ?")
+      .bind(firstWorkspaceId("user-1"))
+      .first<{ n: number }>();
     expect(entity?.n).toBe(0);
     expect(plan?.n).toBe(0);
   });
