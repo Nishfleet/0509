@@ -6,8 +6,12 @@ import { canonicalTimezone } from "../timezone";
 
 const SELECT_WORKSPACE_TIMEZONE = "SELECT timezone FROM workspace WHERE id = ?";
 
+const readWorkspaceTimezoneRow = z.object({ timezone: z.string() });
+
 export async function readWorkspaceTimezone(workspaceId: string): Promise<string> {
-  const row = await env.DB.prepare(SELECT_WORKSPACE_TIMEZONE).bind(workspaceId).first<{ timezone: string | null }>();
+  const row = readWorkspaceTimezoneRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_WORKSPACE_TIMEZONE).bind(workspaceId).first());
   return canonicalTimezone(row?.timezone);
 }
 
@@ -21,8 +25,12 @@ const DELETE_WORKSPACE = "DELETE FROM workspace WHERE id = ?";
 const SELECT_WORKSPACE_BY_OWNER = `SELECT id FROM workspace WHERE owner_user_id = ?
 ORDER BY created_at LIMIT 1`;
 
+const readWorkspaceIdForOwnerRow = z.object({ id: z.string() });
+
 export async function readWorkspaceIdForOwner(userId: string): Promise<string | null> {
-  const row = await env.DB.prepare(SELECT_WORKSPACE_BY_OWNER).bind(userId).first<{ id: string }>();
+  const row = readWorkspaceIdForOwnerRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_WORKSPACE_BY_OWNER).bind(userId).first());
   return row?.id ?? null;
 }
 
@@ -38,16 +46,18 @@ WHERE w.owner_user_id = ?
 ORDER BY w.created_at ASC
 LIMIT 1`;
 
-export interface WorkspaceLandingRow {
-  id: string;
-  timezone: string;
-  self_id: string | null;
-  input_raw: string | null;
-  watching_started_at: string | null;
-}
+const workspaceLandingRow = z.object({
+  id: z.string(),
+  timezone: z.string(),
+  self_id: z.string().nullable(),
+  input_raw: z.string().nullable(),
+  watching_started_at: z.string().nullable(),
+});
+
+export type WorkspaceLandingRow = z.infer<typeof workspaceLandingRow>;
 
 export async function readWorkspaceLanding(db: WorkspaceDb, userId: string): Promise<WorkspaceLandingRow | null> {
-  return db.prepare(SELECT_WORKSPACE_LANDING).bind(userId).first<WorkspaceLandingRow>();
+  return workspaceLandingRow.nullable().parse(await db.prepare(SELECT_WORKSPACE_LANDING).bind(userId).first());
 }
 
 const ownerPlanRow = z.object({
@@ -152,11 +162,16 @@ export async function revertWorkspaceTimezone(db: WorkspaceDb, id: string, timez
   await db.prepare(REVERT_TIMEZONE).bind(id, timezone).run();
 }
 
+const readWorkspaceR2PrefixesRow = z.object({ id: z.string() });
+const readWorkspaceR2PrefixesRows = z.array(readWorkspaceR2PrefixesRow);
+
 export async function readWorkspaceR2Prefixes(workspaceId: string): Promise<string[]> {
-  const { results } = await env.DB.prepare(SELECT_WORKSPACE_WATCHES).bind(workspaceId).all<{ id: string }>();
+  const { results } = await env.DB.prepare(SELECT_WORKSPACE_WATCHES).bind(workspaceId).all();
   return [
     `card/${workspaceId}/`,
-    ...results.flatMap((row) => [`snapshot/site/${row.id}/`, `snapshot/hiring/${row.id}/`, `snapshot/feed/${row.id}/`]),
+    ...readWorkspaceR2PrefixesRows
+      .parse(results)
+      .flatMap((row) => [`snapshot/site/${row.id}/`, `snapshot/hiring/${row.id}/`, `snapshot/feed/${row.id}/`]),
   ];
 }
 
@@ -174,14 +189,18 @@ export interface OwnedSchedule {
   schedule: { timezone: string; weekday: number; hour: number; pausedAt: string | null };
 }
 
+const readBriefScheduleForOwnerRow = z.object({
+  id: z.string(),
+  timezone: z.string(),
+  brief_weekday: z.number(),
+  brief_hour: z.number(),
+  brief_paused_at: z.string().nullable(),
+});
+
 export async function readBriefScheduleForOwner(userId: string): Promise<OwnedSchedule | null> {
-  const row = await env.DB.prepare(SELECT_SCHEDULE_BY_OWNER).bind(userId).first<{
-    id: string;
-    timezone: string;
-    brief_weekday: number;
-    brief_hour: number;
-    brief_paused_at: string | null;
-  }>();
+  const row = readBriefScheduleForOwnerRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_SCHEDULE_BY_OWNER).bind(userId).first());
   if (row === null) return null;
   return {
     workspaceId: row.id,
@@ -211,10 +230,12 @@ const SELECT_OWN_SITE_ALERTS = "SELECT own_site_alerts FROM workspace WHERE id =
 
 const UPDATE_OWN_SITE_ALERTS = "UPDATE workspace SET own_site_alerts = ? WHERE id = ?";
 
+const readOwnSiteAlertsRow = z.object({ own_site_alerts: z.number() });
+
 export async function readOwnSiteAlerts(workspaceId: string): Promise<boolean> {
-  const row = await env.DB.prepare(SELECT_OWN_SITE_ALERTS)
-    .bind(workspaceId)
-    .first<{ own_site_alerts: number | null }>();
+  const row = readOwnSiteAlertsRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_OWN_SITE_ALERTS).bind(workspaceId).first());
   return (row?.own_site_alerts ?? 1) === 1;
 }
 
@@ -228,8 +249,12 @@ const SELECT_CHANGE_ALERTS = "SELECT change_alerts FROM workspace WHERE id = ?";
 
 const UPDATE_CHANGE_ALERTS = "UPDATE workspace SET change_alerts = ? WHERE id = ?";
 
+const readChangeAlertsRow = z.object({ change_alerts: z.number() });
+
 export async function readChangeAlerts(workspaceId: string): Promise<boolean> {
-  const row = await env.DB.prepare(SELECT_CHANGE_ALERTS).bind(workspaceId).first<{ change_alerts: number | null }>();
+  const row = readChangeAlertsRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_CHANGE_ALERTS).bind(workspaceId).first());
   return (row?.change_alerts ?? 1) === 1;
 }
 

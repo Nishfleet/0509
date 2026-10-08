@@ -2194,5 +2194,54 @@
     "label": false,
     "labelChoice": "pivoted",
     "why": "site builder demoted to a CRM add-on"
+  },
+  {
+    "id": "adv-headline-claims-shutdown",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "all-in-one workspace app"
+    },
+    "competitors": [
+      {
+        "name": "Coda",
+        "domain": "coda.io"
+      }
+    ],
+    "subject": {
+      "name": "ClickUp",
+      "domain": "clickup.com"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "ClickUp shuts down and sells to Microsoft",
+        "summary": "A blog claims the company is gone.",
+        "url": "https://gossip.example/clickup-dead",
+        "aspect": null,
+        "observedAt": "2026-09-28T10:00:00.000Z"
+      },
+      {
+        "kind": "change",
+        "title": "ClickUp ships a Brain update",
+        "summary": "Release notes describe new agents.",
+        "url": "https://clickup.com/blog/brain-update/",
+        "aspect": null,
+        "observedAt": "2026-09-27T10:00:00.000Z"
+      },
+      {
+        "kind": "hiring",
+        "title": "ClickUp posts 12 open roles",
+        "summary": "Careers page lists engineering openings.",
+        "url": "https://clickup.com/careers",
+        "aspect": null,
+        "observedAt": "2026-09-26T09:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "active",
+    "why": "own-site shipping and hiring beat a third-party shutdown headline"
   }
 ]

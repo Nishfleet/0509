@@ -68,7 +68,7 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
     url: string,
     publishedAt: string | null,
     observedAt: string,
-  ) =>
+  ) => {
     run(
       db,
       `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, canonical_url, url_hash, payload_json, dedup_key, published_at, observed_at)
@@ -85,7 +85,8 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
       publishedAt,
       observedAt,
     );
-  const verdict = (id: string, signalId: string, entityId: string, p: number, reason: string, decidedAt: string) =>
+  };
+  const verdict = (id: string, signalId: string, entityId: string, p: number, reason: string, decidedAt: string) => {
     run(
       db,
       `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, reason, decided_at)
@@ -99,6 +100,7 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
       reason,
       decidedAt,
     );
+  };
   mention(
     `sig-news-${suffix}`,
     onId,
@@ -232,7 +234,7 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
     `hiring.greenhouse-${suffix}`,
     `hiring.greenhouse-${suffix}`,
   );
-  const role = (id: string, entityId: string, title: string) =>
+  const role = (id: string, entityId: string, title: string) => {
     run(
       db,
       `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, summary, url, payload_json, dedup_key, published_at, observed_at)
@@ -245,6 +247,7 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
       `https://boards.example/${id}`,
       `dedup-${id}`,
     );
+  };
   role(`sig-role-${suffix}`, onId, "Senior Backend Engineer");
   role(`sig-role-off-${suffix}`, offId, "Paused brand role should stay hidden");
   return workspaceId;

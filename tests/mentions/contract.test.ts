@@ -82,7 +82,7 @@ describe("mentions adapter contract", () => {
       (_input: unknown, init?: RequestInit) =>
         new Promise<Response>((_resolve, reject) => {
           init?.signal?.addEventListener("abort", () => {
-            reject(init.signal.reason);
+            reject(init?.signal?.reason);
           });
         }),
     );

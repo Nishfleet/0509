@@ -11,7 +11,7 @@ import { PRIVACY } from "../../app/lib/legal/privacy";
 // class is red here rather than only on a phone.
 describe("the legal page on-this-page list", () => {
   const html = renderToStaticMarkup(createElement(LegalPage, { doc: PRIVACY }));
-  const nav = html.match(/<nav aria-label="On this page"[\s\S]*?<\/nav>/)?.[0] ?? "";
+  const nav = /<nav aria-label="On this page"[\s\S]*?<\/nav>/.exec(html)?.[0] ?? "";
 
   it("gives every on-this-page link a 44px-tall tap target", () => {
     const links = nav.match(/<a\b[^>]*>/g) ?? [];
@@ -20,7 +20,7 @@ describe("the legal page on-this-page list", () => {
   });
 
   it("drops the row gap so the taller targets do not add spacing", () => {
-    const list = nav.match(/<ol\b[^>]*>/)?.[0] ?? "";
+    const list = /<ol\b[^>]*>/.exec(nav)?.[0] ?? "";
     expect(list).toContain("gap-y-0");
     expect(list).not.toContain("gap-y-2");
   });

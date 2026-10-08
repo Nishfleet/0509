@@ -137,7 +137,9 @@ test("the privacy page serves one ld+json graph naming the organization and brea
   const scripts = page.locator('script[type="application/ld+json"]');
   await expect(scripts).toHaveCount(1);
 
-  const parsed = JSON.parse((await scripts.textContent()) ?? "");
-  const types = parsed["@graph"].map((node: { "@type": string }) => node["@type"]);
+  const parsed = JSON.parse((await scripts.textContent()) ?? "") as {
+    "@graph": { "@type": string }[];
+  };
+  const types = parsed["@graph"].map((node) => node["@type"]);
   expect(types).toEqual(["Organization", "BreadcrumbList"]);
 });

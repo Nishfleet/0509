@@ -266,7 +266,7 @@ describe("refreshWorkspaceScores against real D1", () => {
       .bind("refresh-t-ws-plan", WINDOW_START, WINDOW_END, D6_QUESTION_ID, D3_QUESTION_ID)
       .all<{ detail: string }>();
     const details = (plan.results ?? []).map((row) => row.detail);
-    expect(details.some((detail) => /^SEARCH s /.test(detail))).toBe(true);
+    expect(details.some((detail) => detail.startsWith("SEARCH s "))).toBe(true);
     expect(details.every((detail) => !/^SCAN s( |$)/.test(detail))).toBe(true);
   });
 });

@@ -164,14 +164,14 @@ describe("share image render", () => {
 
   it("renders the bytes when the budget allows (0509#5818)", async () => {
     const quickAction = vi.fn(async () => new Response("png", { status: 200 }));
-    env.BROWSER = { quickAction };
+    env.BROWSER = { quickAction } as unknown as typeof env.BROWSER;
     try {
       const bytes = await renderShareImage("<p>hi</p>", async () => true);
       expect(bytes).not.toBeNull();
       expect(new TextDecoder().decode(bytes as ArrayBuffer)).toBe("png");
       expect(quickAction).toHaveBeenCalledWith("screenshot", expect.objectContaining({ html: "<p>hi</p>" }));
     } finally {
-      delete env.BROWSER;
+      delete (env as { BROWSER?: unknown }).BROWSER;
     }
   });
 });

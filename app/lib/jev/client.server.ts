@@ -1,4 +1,4 @@
-import { captureException } from "@sentry/cloudflare";
+import { captureException, captureMessage } from "@sentry/cloudflare";
 import { env, waitUntil } from "cloudflare:workers";
 import { z } from "zod";
 
@@ -17,6 +17,10 @@ const MODEL_SELECTOR = "clef";
 
 export const GATEWAY_ID = "default";
 
+export const JEV_TIMEOUT_MS = 20_000;
+
+export const CHOICE_RETRIES: AttemptPolicy = { maxAttempts: 2, retryDelayMs: 300, backoff: "constant" };
+
 export interface NoulVerdict {
   questionId: string;
   inputHash: string;
@@ -28,6 +32,7 @@ export interface ChoiceQuestion {
   id: string;
   instructions: string;
   options: Readonly<Record<string, string>>;
+  retries?: AttemptPolicy;
 }
 
 export interface ChoiceVerdict {
@@ -55,6 +60,34 @@ const choiceAnswerSchema = z.object({
   answers: z.record(z.string(), z.object({ type: z.literal("choice"), choice: z.string() })),
 });
 
+const mixedAnswerSchema = z.object({
+  answers: z.record(
+    z.string(),
+    z.discriminatedUnion("type", [
+      z.object({ type: noulType, noul: z.number().min(0).max(1) }),
+      z.object({ type: z.literal("choice"), choice: z.string() }),
+    ]),
+  ),
+});
+
+type MixedAnswers = z.infer<typeof mixedAnswerSchema>["answers"];
+
+interface MixedReply {
+  answers: MixedAnswers;
+  raw: unknown;
+  issues: readonly ParseIssue[];
+}
+
+export interface MixedQuestions {
+  noul: NoulQuestion;
+  choice: ChoiceQuestion;
+}
+
+export interface MixedVerdict {
+  noul: NoulVerdict;
+  choice: ChoiceVerdict;
+}
+
 export class JevUnavailableError extends Error {
   constructor(cause: unknown) {
     super(`jev unavailable: ${cause instanceof Error ? cause.message : String(cause)}`);
@@ -69,16 +102,31 @@ export class JevRateLimitedError extends JevUnavailableError {
   }
 }
 
+class JevBillingRefusedError extends JevUnavailableError {
+  constructor(cause: unknown) {
+    super(cause);
+    this.name = "JevBillingRefusedError";
+  }
+}
+
 function unavailable(error: unknown): JevUnavailableError {
   const failure = new JevUnavailableError(error);
-  if (isBillingRefusal(failure)) {
-    captureException(new Error("jev refused: Workers AI quota, AI Gateway credits or payment"), {
-      level: "error",
-      fingerprint: ["jev-billing-refused"],
-    });
-    return failure;
-  }
+  if (isBillingRefusal(failure)) return new JevBillingRefusedError(error);
   return RATE_LIMITED.test(failure.message) ? new JevRateLimitedError(error) : failure;
+}
+
+function reportBilling(failure: unknown): void {
+  if (!(failure instanceof JevBillingRefusedError)) return;
+  captureException(new Error("jev refused: Workers AI quota, AI Gateway credits or payment"), {
+    level: "error",
+    fingerprint: ["jev-billing-refused"],
+  });
+}
+
+function reportedUnavailable(error: unknown): JevUnavailableError {
+  const failure = unavailable(error);
+  reportBilling(failure);
+  return failure;
 }
 
 function recorded(questionIds: string, failure: JevUnavailableError): JevUnavailableError {
@@ -145,9 +193,33 @@ function noulAsk(question: NoulQuestion): NoulAsk {
   };
 }
 
+function choiceAsk(question: ChoiceQuestion): {
+  type: "choice";
+  instructions: string;
+  criteria: ChoiceQuestion["options"];
+} {
+  return { type: "choice", instructions: question.instructions, criteria: question.options };
+}
+
+function choiceHash(workspaceId: string, question: ChoiceQuestion, state: unknown): Promise<string> {
+  return sha256Hex(
+    JSON.stringify({
+      workspace: workspaceId,
+      question: question.id,
+      instructions: question.instructions,
+      options: question.options,
+      state,
+    }),
+  );
+}
+
 function decide(state: unknown, questions: Record<string, unknown>, retries?: AttemptPolicy): Promise<unknown> {
   const gateway = retries === undefined ? { id: GATEWAY_ID } : { id: GATEWAY_ID, retries };
-  return env.AI.run(MODEL, { model: MODEL_SELECTOR, state, questions }, { gateway });
+  return env.AI.run(
+    MODEL,
+    { model: MODEL_SELECTOR, state, questions },
+    { gateway, extraHeaders: { "cf-aig-timeout": String(JEV_TIMEOUT_MS) } },
+  );
 }
 
 async function run(question: NoulQuestion, state: unknown): Promise<number> {
@@ -156,7 +228,7 @@ async function run(question: NoulQuestion, state: unknown): Promise<number> {
   try {
     raw = await decide(state, { [question.id]: asked }, question.retries);
   } catch (error) {
-    throw recorded(question.id, unavailable(error));
+    throw recorded(question.id, reportedUnavailable(error));
   }
   const parsed = answerSchema.safeParse(jevBody(raw));
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
@@ -205,7 +277,7 @@ export async function askNouls(
     try {
       raw = await decide(state, asked);
     } catch (error) {
-      throw recorded(questionIds, unavailable(error));
+      throw recorded(questionIds, reportedUnavailable(error));
     }
     const parsed = answerSchema.safeParse(jevBody(raw));
     if (parsed.success) answers = parsed.data.answers;
@@ -224,9 +296,7 @@ export async function askNouls(
 async function runChoice(question: ChoiceQuestion, state: unknown): Promise<string> {
   let raw: unknown;
   try {
-    raw = await decide(state, {
-      [question.id]: { type: "choice", instructions: question.instructions, criteria: question.options },
-    });
+    raw = await decide(state, { [question.id]: choiceAsk(question) }, question.retries ?? CHOICE_RETRIES);
   } catch (error) {
     throw recorded(question.id, unavailable(error));
   }
@@ -238,18 +308,142 @@ async function runChoice(question: ChoiceQuestion, state: unknown): Promise<stri
   return answer.choice;
 }
 
-export async function askChoice(workspaceId: string, question: ChoiceQuestion, state: unknown): Promise<ChoiceVerdict> {
-  const hash = await sha256Hex(
-    JSON.stringify({
-      workspace: workspaceId,
-      question: question.id,
-      instructions: question.instructions,
-      options: question.options,
-      state,
-    }),
-  );
+async function askChoiceUnreported(
+  workspaceId: string,
+  question: ChoiceQuestion,
+  state: unknown,
+): Promise<ChoiceVerdict> {
+  const hash = await choiceHash(workspaceId, question, state);
   const cached = await readCachedChoice(question.id, hash);
   if (cached !== null) return { questionId: question.id, inputHash: hash, choice: cached, cached: true };
   const choice = await runChoice(question, state);
   return { questionId: question.id, inputHash: hash, choice, cached: false };
+}
+
+export async function askChoice(workspaceId: string, question: ChoiceQuestion, state: unknown): Promise<ChoiceVerdict> {
+  try {
+    return await askChoiceUnreported(workspaceId, question, state);
+  } catch (error) {
+    reportBilling(error);
+    throw error;
+  }
+}
+
+function mixedAsk(questions: MixedQuestions, uncached: { noul: boolean; choice: boolean }): Record<string, unknown> {
+  return {
+    ...(uncached.noul ? { [questions.noul.id]: noulAsk(questions.noul) } : {}),
+    ...(uncached.choice ? { [questions.choice.id]: choiceAsk(questions.choice) } : {}),
+  };
+}
+
+async function answerMixed(
+  asked: Record<string, unknown>,
+  state: unknown,
+  retries: AttemptPolicy | undefined,
+): Promise<MixedReply> {
+  const questionIds = Object.keys(asked).join(",");
+  if (questionIds === "") return { answers: {}, raw: undefined, issues: [] };
+  let raw: unknown;
+  try {
+    raw = await decide(state, asked, retries);
+  } catch (error) {
+    throw recorded(questionIds, reportedUnavailable(error));
+  }
+  const parsed = mixedAnswerSchema.safeParse(jevBody(raw));
+  return parsed.success
+    ? { answers: parsed.data.answers, raw, issues: [] }
+    : { answers: {}, raw, issues: parsed.error.issues };
+}
+
+function noulOf(reply: MixedReply, question: NoulQuestion): number {
+  const answer = reply.answers[question.id];
+  if (answer?.type !== "noul") throw recorded(question.id, missing("noul", reply.raw, reply.issues));
+  return answer.noul;
+}
+
+function choiceOf(reply: MixedReply, question: ChoiceQuestion): string {
+  const answer = reply.answers[question.id];
+  if (answer?.type !== "choice" || !Object.keys(question.options).includes(answer.choice)) {
+    throw recorded(question.id, missing("choice", reply.raw, reply.issues));
+  }
+  return answer.choice;
+}
+
+export async function askMixed(workspaceId: string, questions: MixedQuestions, state: unknown): Promise<MixedVerdict> {
+  const noulInput = await inputHash(workspaceId, questions.noul, state);
+  const choiceInput = await choiceHash(workspaceId, questions.choice, state);
+  const cachedNoul = await readCachedNoul(questions.noul.id, noulInput);
+  const cachedChoice = await readCachedChoice(questions.choice.id, choiceInput);
+  const reply = await answerMixed(
+    mixedAsk(questions, { noul: cachedNoul === null, choice: cachedChoice === null }),
+    state,
+    cachedChoice === null ? (questions.choice.retries ?? CHOICE_RETRIES) : undefined,
+  );
+  return {
+    noul: {
+      questionId: questions.noul.id,
+      inputHash: noulInput,
+      p: cachedNoul ?? noulOf(reply, questions.noul),
+      cached: cachedNoul !== null,
+    },
+    choice: {
+      questionId: questions.choice.id,
+      inputHash: choiceInput,
+      choice: cachedChoice ?? choiceOf(reply, questions.choice),
+      cached: cachedChoice !== null,
+    },
+  };
+}
+
+export const JEV_BATCH_SIZE = 4;
+
+function rejections(settled: readonly PromiseSettledResult<unknown>[]): unknown[] {
+  return settled.flatMap((result): unknown[] => (result.status === "rejected" ? [result.reason as unknown] : []));
+}
+
+function reportBatch(settled: readonly PromiseSettledResult<unknown>[]): void {
+  const reasons = rejections(settled);
+  const stopped = reasons.find((reason) => reason instanceof JevUnavailableError);
+  if (stopped !== undefined) {
+    const limited = stopped instanceof JevRateLimitedError;
+    const billing = stopped instanceof JevBillingRefusedError;
+    captureMessage("jev unavailable: a batch was cut short", {
+      level: billing ? "error" : "warning",
+      fingerprint: [billing ? "jev-billing-refused" : limited ? "jev-rate-limited" : "jev-batch-refused"],
+      extra: {
+        reason: billing ? "billing_refused" : limited ? "rate_limited" : "refused",
+        failed: reasons.length,
+        asked: settled.length,
+      },
+    });
+  }
+  const unexpected = reasons.filter((reason) => !(reason instanceof JevUnavailableError));
+  if (unexpected.length === 0 || unexpected.length === settled.length) return;
+  captureMessage("jev choice batch: answers rejected", {
+    level: "warning",
+    fingerprint: ["jev-choice-rejected"],
+    extra: { rejected: unexpected.length, asked: settled.length },
+  });
+}
+
+export async function askChoices(
+  workspaceId: string,
+  question: ChoiceQuestion,
+  states: readonly unknown[],
+): Promise<PromiseSettledResult<ChoiceVerdict>[]> {
+  let settled: PromiseSettledResult<ChoiceVerdict>[] = [];
+  let stop: PromiseRejectedResult | undefined;
+  for (let start = 0; start < states.length && stop === undefined; start += JEV_BATCH_SIZE) {
+    const chunk = await Promise.allSettled(
+      states.slice(start, start + JEV_BATCH_SIZE).map((state) => askChoiceUnreported(workspaceId, question, state)),
+    );
+    settled = [...settled, ...chunk];
+    stop = chunk.find(
+      (result): result is PromiseRejectedResult =>
+        result.status === "rejected" && result.reason instanceof JevUnavailableError,
+    );
+  }
+  reportBatch(settled);
+  const skipped = stop === undefined ? [] : states.slice(settled.length).map(() => stop);
+  return [...settled, ...skipped];
 }

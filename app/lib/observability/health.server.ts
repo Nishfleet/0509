@@ -20,16 +20,20 @@ function firstOrTimeout<T>(promise: Promise<T>): Promise<T> {
   });
 }
 
-export async function healthResponse(db: D1Database): Promise<Response> {
+function failed(timestamp: string, commit: string): Response {
+  return Response.json({ status: "error", app: "0509", d1: "error", timestamp, commit }, { status: 503 });
+}
+
+export async function healthResponse(db: D1Database, commit: string): Promise<Response> {
   const timestamp = new Date().toISOString();
   try {
     const row = await firstOrTimeout(db.prepare("SELECT 1 AS ok").first<{ ok: number }>());
     if (row?.ok !== 1) {
-      return Response.json({ status: "error", app: "0509", d1: "error", timestamp }, { status: 503 });
+      return failed(timestamp, commit);
     }
   } catch (error) {
     captureException(error);
-    return Response.json({ status: "error", app: "0509", d1: "error", timestamp }, { status: 503 });
+    return failed(timestamp, commit);
   }
-  return Response.json({ status: "ok", app: "0509", d1: "ok", timestamp });
+  return Response.json({ status: "ok", app: "0509", d1: "ok", timestamp, commit });
 }

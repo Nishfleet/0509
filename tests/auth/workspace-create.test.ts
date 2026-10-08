@@ -85,8 +85,8 @@ function asWorkspaceDb(database: DatabaseSync): WorkspaceDb {
               const row = statement.get(...params) as T | undefined;
               return row ?? null;
             },
-            async all<T>() {
-              return { results: statement.all(...params) as T[] };
+            async all() {
+              return { results: statement.all(...params) as never[] };
             },
             async run() {
               const result = statement.run(...params);
@@ -284,7 +284,7 @@ describe("ensureWorkspace", () => {
                   brief_hour: 8,
                   created_at: input.now,
                 }) as T,
-              all: async <T>() => ({ results: [] as T[] }),
+              all: async () => ({ results: [] }),
               run: async () => ({ meta: { changes: 0 } }),
             }),
           };
@@ -330,7 +330,8 @@ describe("ensureWorkspace", () => {
                   if (entered === 1) await gate;
                   else release();
                 }
-                return bound.run();
+                const result = await bound.run();
+                return { meta: { changes: result.meta.changes } };
               },
             };
           },
@@ -436,8 +437,8 @@ describe("ensureWorkspace", () => {
                 reads += 1;
                 return (reads === 1 ? null : row) as T | null;
               },
-              async all<T>() {
-                return { results: [] as T[] };
+              async all() {
+                return { results: [] };
               },
               async run() {
                 throw new Error("busy");
@@ -471,8 +472,8 @@ describe("workspaceLanding", () => {
               async first<T>() {
                 return null as T | null;
               },
-              async all<T>() {
-                return { results: [] as T[] };
+              async all() {
+                return { results: [] };
               },
               async run() {
                 throw new Error("workspaceLanding must not write");

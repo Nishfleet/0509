@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createRoutesStub, UNSAFE_DataRouterNavigationContext } from "react-router";
+import { createRoutesStub, UNSAFE_DataRouterNavigationContext, type RouterState } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { ChangeSignInEmail } from "../../app/components/change-sign-in-email";
@@ -19,7 +19,7 @@ function render(navigation: { state: string; formData?: FormData }): string {
       Component: () =>
         createElement(
           UNSAFE_DataRouterNavigationContext.Provider,
-          { value: { navigation } },
+          { value: { navigation } as unknown as RouterState },
           createElement(ChangeSignInEmail, { sent: false, error: null }),
         ),
     },
@@ -28,7 +28,7 @@ function render(navigation: { state: string; formData?: FormData }): string {
 }
 
 function button(html: string): string {
-  const match = html.match(/<button[^>]*type="submit"[\s\S]*?<\/button>/);
+  const match = /<button[^>]*type="submit"[\s\S]*?<\/button>/.exec(html);
   if (match === null) throw new Error(`no submit button in ${html}`);
   return match[0];
 }

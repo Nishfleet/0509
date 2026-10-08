@@ -48,7 +48,7 @@ function render(options: { linkError?: boolean; actionError?: boolean }): string
 }
 
 function emailInput(html: string): string {
-  return html.match(/<input\b[^>]*id="email"[^>]*>/)?.[0] ?? "";
+  return /<input\b[^>]*id="email"[^>]*>/.exec(html)?.[0] ?? "";
 }
 
 describe("Login sign-in error", () => {

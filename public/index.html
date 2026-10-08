@@ -6,6 +6,8 @@
     <title>Five to Nine</title>
     <meta name="description" content="Quietly, we're rebuilding. You'll see where you stand when it's ready." />
     <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#f4f1e8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#14130f" media="(prefers-color-scheme: dark)" />
     <style>
       :root {
         --color-bone: #f4f1e8;
@@ -203,6 +205,11 @@
         }
       }
 
+      a:focus-visible {
+        outline: 2px solid var(--color-ink);
+        outline-offset: 2px;
+      }
+
       @media (prefers-reduced-motion: reduce) {
         *,
         *::before,
@@ -231,7 +238,7 @@
         </p>
       </div>
 
-      <footer class="border-line text-ink-faint border-t pt-7 font-mono text-[0.72rem] tracking-[0.06em]">
+      <footer class="border-line text-ink-soft border-t pt-7 font-mono text-[0.72rem] tracking-[0.06em]">
         <a
           class="hover:text-ink underline decoration-1 underline-offset-4 transition-colors duration-150"
           href="mailto:support@0509.io"

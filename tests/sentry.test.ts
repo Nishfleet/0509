@@ -5,8 +5,9 @@ import { sentryOptions } from "../workers/sentry";
 
 type BeforeSend = NonNullable<ReturnType<typeof sentryOptions>["beforeSend"]>;
 type SentryEvent = Parameters<BeforeSend>[0];
+type SentryEnvArg = Parameters<typeof sentryOptions>[0];
 
-const options = sentryOptions({});
+const options = sentryOptions({} as SentryEnvArg);
 
 describe("Sentry release and environment", () => {
   it("is unset without version metadata, so local events are not tagged production", () => {
@@ -17,7 +18,7 @@ describe("Sentry release and environment", () => {
   it("uses the Worker version id as the release on a deployed Worker", () => {
     const deployed = sentryOptions({
       CF_VERSION_METADATA: { id: "version-abc", tag: "production", timestamp: "2026-10-05T00:00:00.000Z" },
-    });
+    } as SentryEnvArg);
     expect(deployed.release).toBe("version-abc");
     expect(deployed.environment).toBe("production");
   });
@@ -25,7 +26,7 @@ describe("Sentry release and environment", () => {
   it("uses production when the version tag is empty", () => {
     const deployed = sentryOptions({
       CF_VERSION_METADATA: { id: "version-abc", tag: "", timestamp: "2026-10-05T00:00:00.000Z" },
-    });
+    } as SentryEnvArg);
     expect(deployed.release).toBe("version-abc");
     expect(deployed.environment).toBe("production");
   });
@@ -33,7 +34,7 @@ describe("Sentry release and environment", () => {
   it("uses the version tag as the environment when it is not empty", () => {
     const preview = sentryOptions({
       CF_VERSION_METADATA: { id: "version-abc", tag: "preview", timestamp: "2026-10-05T00:00:00.000Z" },
-    });
+    } as SentryEnvArg);
     expect(preview.release).toBe("version-abc");
     expect(preview.environment).toBe("preview");
   });
@@ -154,7 +155,7 @@ describe("Sentry beforeSend", () => {
       },
     });
 
-    expect(result.exception?.values?.[0]?.value).toBe("GET https://0509.io/u/[redacted] failed for [redacted]");
+    expect(result.exception?.values?.[0]?.value).toBe("GET [redacted] failed for [redacted]");
   });
 
   it("drops extra and keeps only the runtime and os contexts", async () => {
@@ -162,7 +163,11 @@ describe("Sentry beforeSend", () => {
       type: undefined,
       event_id: "e1",
       extra: { brand: "acme" },
-      contexts: { runtime: { name: "workerd" }, os: { name: "linux" }, state: { term: "acme" } },
+      contexts: {
+        runtime: { name: "workerd" },
+        os: { name: "linux" },
+        state: { state: { type: "closed", value: {} }, term: "acme" },
+      },
     });
 
     expect(result.extra).toBeUndefined();
@@ -184,6 +189,8 @@ describe("Sentry beforeSend", () => {
   it("turns Logs on for console warnings and errors only", async () => {
     expect(options.enableLogs).toBe(true);
     const sent: string[] = [];
+    const integrations = options.integrations;
+    const asArray = typeof integrations === "function" ? integrations([]) : (integrations ?? []);
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     vi.spyOn(console, "info").mockImplementation(() => undefined);
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
@@ -192,7 +199,7 @@ describe("Sentry beforeSend", () => {
       ...options,
       dsn: "https://key@o0.ingest.sentry.io/0",
       stackParser: () => [],
-      integrations: options.integrations,
+      integrations: asArray,
       transport: () =>
         createTransport({ recordDroppedEvent: () => undefined }, (request) => {
           sent.push(String(request.body));
@@ -224,7 +231,7 @@ describe("Sentry beforeSend", () => {
       attributes: { url: "https://0509.io/v/abc?x=1", count: 3 },
     });
 
-    expect(result?.message).toBe("failed for [redacted] at https://0509.io/u/[redacted]");
-    expect(result?.attributes).toEqual({ url: "https://0509.io/v/[redacted]", count: 3 });
+    expect(result?.message).toBe("failed for [redacted] at [redacted]");
+    expect(result?.attributes).toEqual({ url: "[redacted]", count: 3 });
   });
 });

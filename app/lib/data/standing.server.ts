@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export interface StandingScore {
   workspace_id: string;
   entity_id: string;
@@ -57,19 +59,24 @@ export interface PeerRow {
 
 const SELECT_LATEST_PEERS = `SELECT s.entity_id, COALESCE(e.name, e.domain) AS name, e.role, e.state, s.rank FROM standing s JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id WHERE s.workspace_id = ?1 AND s.rank IS NOT NULL AND s.week_start_at = (SELECT MAX(week_start_at) FROM standing WHERE workspace_id = ?1 AND rank IS NOT NULL) ORDER BY s.rank ASC, s.entity_id ASC`;
 
+const readLatestPeersRow = z.object({
+  entity_id: z.string(),
+  name: z.string(),
+  role: z.enum(["self", "competitor"]),
+  state: z.string(),
+  rank: z.number(),
+});
+
 export async function readLatestPeers(db: D1Database, workspaceId: string): Promise<readonly PeerRow[]> {
-  const { results } = await db.prepare(SELECT_LATEST_PEERS).bind(workspaceId).all<{
-    entity_id: string;
-    name: string;
-    role: "self" | "competitor";
-    state: string;
-    rank: number;
-  }>();
-  return results.map((row) => ({
-    entityId: row.entity_id,
-    name: row.name,
-    role: row.role,
-    state: row.state,
-    rank: row.rank,
-  }));
+  const { results } = await db.prepare(SELECT_LATEST_PEERS).bind(workspaceId).all();
+  return z
+    .array(readLatestPeersRow)
+    .parse(results)
+    .map((row) => ({
+      entityId: row.entity_id,
+      name: row.name,
+      role: row.role,
+      state: row.state,
+      rank: row.rank,
+    }));
 }

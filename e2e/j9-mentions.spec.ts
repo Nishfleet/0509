@@ -5,6 +5,11 @@ import { expect, test } from "@playwright/test";
 import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
 import { consoleFailures, isLocalLane, run, seedPreviewSession, watchConsole } from "./inbox";
 
+// The end-of-test screenshot is report evidence, not an assertion. Playwright's
+// recorder attaches it and drops a capture that fails instead of failing the
+// test; e2e/reduced-motion.spec.ts has the why.
+test.use({ screenshot: { mode: "on", fullPage: true } });
+
 test.skip(
   !isLocalLane(),
   "the three sources are rows in the local preview database; production signs in through the magic-link inbox and has no fixture workspace",
@@ -138,9 +143,5 @@ test("J9: news, Hacker News and YouTube mentions are listed and the homonym is n
   );
   await expect(page.getByText("Zephyr winds expected this weekend")).toHaveCount(0);
 
-  await testInfo.attach(`j9-${testInfo.project.name}`, {
-    body: await page.screenshot({ fullPage: true }),
-    contentType: "image/png",
-  });
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

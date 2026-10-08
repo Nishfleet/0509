@@ -26,6 +26,11 @@ test.skip(
   "J3 needs a signed-in session; the preview lane cannot read the magic-link inbox",
 );
 
+// The end-of-test screenshot is report evidence, not an assertion. Playwright's
+// recorder attaches it and drops a capture that fails instead of failing the
+// test; e2e/reduced-motion.spec.ts has the why.
+test.use({ screenshot: "on" });
+
 for (const { width, height } of [
   { width: 1440, height: 900 },
   { width: 390, height: 844 },
@@ -125,9 +130,5 @@ for (const { width, height } of [
     expect(noHorizontalScroll).toBe(true);
 
     test.info().annotations.push({ type: "domain", description: "gymshark.com" });
-    await test.info().attach(`j3-home-${width}`, {
-      body: await page.screenshot(),
-      contentType: "image/png",
-    });
   });
 }

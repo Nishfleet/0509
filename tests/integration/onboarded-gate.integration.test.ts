@@ -10,6 +10,9 @@ vi.mock("../../app/lib/require-session.server", () => ({
   requireSession: async (request: Request) => ({
     user: { id: request.headers.get("x-test-user"), email: request.headers.get("x-test-email") },
   }),
+  sessionForRequest: async (request: Request) => ({
+    user: { id: request.headers.get("x-test-user"), email: request.headers.get("x-test-email") },
+  }),
   signOutToLogin: async () => {
     throw new Response(null, { status: 302, headers: { Location: "/login" } });
   },
@@ -39,7 +42,7 @@ function gateRequest(userId: string): Request {
 async function redirectedTo(request: Request): Promise<string | null> {
   const thrown = await requireOnboarded({ request, context: new RouterContextProvider() }).then(
     () => null,
-    (error) => error,
+    (error: unknown) => error,
   );
   if (thrown === null) return null;
   expect(thrown).toBeInstanceOf(Response);

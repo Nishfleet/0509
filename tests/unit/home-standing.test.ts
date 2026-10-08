@@ -159,11 +159,11 @@ function render(input: {
 describe("Home page frame", () => {
   it("puts the date in the banner, the standing in main, and the footer in contentinfo", () => {
     const html = renderToStaticMarkup(
-      createElement(
-        HomePageFrame,
-        { eyebrow: "Thursday 24 September", footer: "Checked today" },
-        createElement("h1", null, "Good morning"),
-      ),
+      createElement(HomePageFrame, {
+        eyebrow: "Thursday 24 September",
+        footer: "Checked today",
+        children: createElement("h1", null, "Good morning"),
+      }),
     );
     const header = html.indexOf("<header");
     const main = html.indexOf("<main>");

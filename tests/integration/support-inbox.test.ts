@@ -13,6 +13,18 @@ import worker from "../../workers/support-inbox";
 type EmailMessage = Parameters<typeof worker.email>[0];
 type InboxEnv = Parameters<typeof worker.email>[1];
 
+/**
+ * The runtime always hands a handler an ExecutionContext. The module's own
+ * export type keeps each handler at the parameters it declares, so these
+ * aliases carry the third argument the runtime passes and the handler ignores.
+ */
+const callFetch = worker.fetch as unknown as (
+  request: Request,
+  env: InboxEnv,
+  ctx: ExecutionContext,
+) => Promise<Response>;
+const callEmail = worker.email as (message: EmailMessage, env: InboxEnv, ctx: ExecutionContext) => Promise<void>;
+
 const ISSUES_URL = "https://api.github.com/repos/Nishfleet/0509/issues";
 
 const MIME = [
@@ -26,10 +38,10 @@ const MIME = [
   "https://0509.io/app/pages?ref=mail",
 ].join("\r\n");
 
-const fakeMessage = (forward: () => Promise<void>, mime = MIME): EmailMessage =>
+const fakeMessage = (forward: () => Promise<void>, mime = MIME, from = "jane@customer.example"): EmailMessage =>
   ({
     to: "support+vitest@0509.io",
-    from: "jane@customer.example",
+    from,
     headers: new Headers({ subject: "Refund please", "user-agent": "Thunderbird 128" }),
     raw: new Response(mime).body,
     rawSize: mime.length,
@@ -42,7 +54,7 @@ const deliver = async (inboxEnv: InboxEnv = env, mime = MIME) => {
   const forward = vi.fn(() => Promise.resolve());
   const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 201 }));
   const ctx = createExecutionContext();
-  await worker.email(fakeMessage(forward, mime), inboxEnv, ctx);
+  await callEmail(fakeMessage(forward, mime), inboxEnv, ctx);
   await waitOnExecutionContext(ctx);
   return { forward, fetchSpy };
 };
@@ -132,7 +144,7 @@ describe("0509-support-inbox-v2", () => {
 
     for (let i = 0; i < 5; i += 1) {
       const ctx = createExecutionContext();
-      await worker.email(fakeMessage(vi.fn(() => Promise.resolve())), env, ctx);
+      await callEmail(fakeMessage(vi.fn(() => Promise.resolve())), env, ctx);
       await waitOnExecutionContext(ctx);
     }
 
@@ -157,9 +169,33 @@ describe("0509-support-inbox-v2", () => {
     expect(errorSpy).toHaveBeenCalledWith("support-inbox: SUPPORT_INBOX_GITHUB_TOKEN is not set", row?.id);
   });
 
+  it("opens at most 20 issues a day across sender domains (0509#7084)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 201 }));
+
+    for (let i = 0; i < 21; i += 1) {
+      const mime = MIME.replace("jane@customer.example", `jane@d${String(i)}.example`);
+      const ctx = createExecutionContext();
+      await callEmail(
+        fakeMessage(
+          vi.fn(() => Promise.resolve()),
+          mime,
+          `jane@d${String(i)}.example`,
+        ),
+        env,
+        ctx,
+      );
+      await waitOnExecutionContext(ctx);
+    }
+
+    expect(fetchSpy).toHaveBeenCalledTimes(20);
+    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM support_report").first<{ n: number }>();
+    expect(count?.n).toBe(21);
+  });
+
   it("answers 404 to a web request instead of throwing", async () => {
     const ctx = createExecutionContext();
-    const response = await worker.fetch(new Request("https://inbox.example/"), env, ctx);
+    const response = await callFetch(new Request("https://inbox.example/"), env, ctx);
     await waitOnExecutionContext(ctx);
     expect(response.status).toBe(404);
   });

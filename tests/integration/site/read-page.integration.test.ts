@@ -8,6 +8,7 @@ interface BrowserStub {
   calls: string[];
   closed: number;
   quickAction(action: "content", options: { url: string }): Promise<Response>;
+  close(): Promise<void>;
 }
 
 const browserHolder = vi.hoisted(() => ({

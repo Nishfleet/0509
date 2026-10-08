@@ -26,7 +26,7 @@ describe("mediumAdapter", () => {
   });
 
   it("calls fetch once with the tag-feed URL", async () => {
-    const fetchMock = vi.fn(async () => rssResponse(FIXTURE));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => rssResponse(FIXTURE));
     vi.stubGlobal("fetch", fetchMock);
 
     await mediumAdapter({ query: "gymshark" }, null);
