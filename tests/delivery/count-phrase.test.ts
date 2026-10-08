@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { countPhrase } from "../../workers/delivery/brief-template";
+import { countPhrase } from "../../app/lib/quiet-week";
 
 describe("countPhrase", () => {
   it("says no for zero, with the plural noun", () => {
