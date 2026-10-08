@@ -304,7 +304,7 @@ describe("an AI app signing in to 0509", () => {
       }),
     );
     expect(own.status).toBe(204);
-    expect(own.headers.get("access-control-allow-methods")).toContain("DELETE");
+    expect(own.headers.get("access-control-allow-methods")).not.toContain("DELETE");
     expect(own.headers.get("access-control-allow-headers")).toContain("mcp-protocol-version");
     const noOrigin = await send(new Request(`${ORIGIN}/mcp`, { method: "OPTIONS" }));
     expect(noOrigin.status).toBe(204);

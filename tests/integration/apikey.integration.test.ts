@@ -146,39 +146,27 @@ describe("apikey plugin against the shipped schema", () => {
     expect(await propsForApiKey(created.key)).toBeNull();
   });
 
-  it("honours ISO expiry stamped by the apikey backfill", async () => {
-    await seedUser("u_apikey_backfill");
-    const minted = await auth.api.createApiKey({
-      body: { userId: "u_apikey_backfill", name: "format-control" },
+  it("leaves existing keys with no expiry and still verifies them", async () => {
+    await seedUser("u_apikey_noexpiry");
+    const legacy = await auth.api.createApiKey({
+      body: { userId: "u_apikey_noexpiry", name: "legacy" },
     });
-    const created = await auth.api.createApiKey({
-      body: { userId: "u_apikey_backfill", name: "backfill" },
-    });
-    await env.DB.prepare('UPDATE apikey SET "expiresAt" = NULL WHERE id = ?').bind(created.id).run();
-    await env.DB.prepare(apikeyBackfill("expiresAt")).run();
+    await env.DB.prepare('UPDATE apikey SET "expiresAt" = NULL WHERE id = ?').bind(legacy.id).run();
+    await env.DB.prepare(apikeyBackfill()).run();
 
-    const iso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
-    const rows = await env.DB.prepare('SELECT id, "expiresAt" FROM apikey WHERE id IN (?, ?)')
-      .bind(minted.id, created.id)
-      .all<{ id: string; expiresAt: string | null }>();
-    const byId = new Map((rows.results ?? []).map((row) => [row.id, row.expiresAt]));
-    expect(byId.get(minted.id)).toMatch(iso);
-    expect(byId.get(created.id)).toMatch(iso);
-
-    const verified = await auth.api.verifyApiKey({ body: { key: created.key } });
-    expect(verified.valid).toBe(true);
-    const parsed = verified.key?.expiresAt;
-    expect(parsed, "better-auth must read the backfilled expiry as a Date").toBeInstanceOf(Date);
-    const inNinetyDays = Date.now() + 90 * 24 * 60 * 60 * 1000;
-    expect(Math.abs((parsed as Date).getTime() - inNinetyDays)).toBeLessThan(24 * 60 * 60 * 1000);
+    const row = await env.DB.prepare('SELECT "expiresAt" FROM apikey WHERE id = ?')
+      .bind(legacy.id)
+      .first<{ expiresAt: string | null }>();
+    expect(row?.expiresAt, "the backfill must not stamp an expiry").toBeNull();
+    expect((await auth.api.verifyApiKey({ body: { key: legacy.key } })).valid).toBe(true);
 
     await env.DB.prepare('UPDATE apikey SET "expiresAt" = ? WHERE id = ?')
-      .bind("2000-01-01T00:00:00.000Z", created.id)
+      .bind("2000-01-01T00:00:00.000Z", legacy.id)
       .run();
-    expect((await auth.api.verifyApiKey({ body: { key: created.key } })).valid).toBe(false);
+    expect((await auth.api.verifyApiKey({ body: { key: legacy.key } })).valid).toBe(false);
   });
 
-  it("stamps the read scope on keys with no permissions and leaves scoped keys alone", async () => {
+  it("stamps the read scope on every key that lacks it and leaves read keys alone", async () => {
     await seedUser("u_apikey_perm_backfill");
     const unscoped = await auth.api.createApiKey({
       body: { userId: "u_apikey_perm_backfill", name: "unscoped" },
@@ -186,35 +174,37 @@ describe("apikey plugin against the shipped schema", () => {
     const writer = await auth.api.createApiKey({
       body: { userId: "u_apikey_perm_backfill", name: "writer" },
     });
+    const reader = await auth.api.createApiKey({
+      body: { userId: "u_apikey_perm_backfill", name: "reader" },
+    });
     await env.DB.prepare("UPDATE apikey SET permissions = NULL WHERE id = ?").bind(unscoped.id).run();
     await env.DB.prepare("UPDATE apikey SET permissions = ? WHERE id = ?").bind('{"write":["*"]}', writer.id).run();
 
     const { propsForApiKey } = await import("../../app/lib/agent/keys.server");
     expect(await propsForApiKey(unscoped.key)).toBeNull();
 
-    await env.DB.prepare(apikeyBackfill("permissions")).run();
+    await env.DB.prepare(apikeyBackfill()).run();
 
-    const rows = await env.DB.prepare("SELECT id, permissions FROM apikey WHERE id IN (?, ?)")
-      .bind(unscoped.id, writer.id)
+    const rows = await env.DB.prepare("SELECT id, permissions FROM apikey WHERE id IN (?, ?, ?)")
+      .bind(unscoped.id, writer.id, reader.id)
       .all<{ id: string; permissions: string | null }>();
     const byId = new Map((rows.results ?? []).map((row) => [row.id, row.permissions]));
     expect(byId.get(unscoped.id)).toBe('{"read":["*"]}');
-    expect(byId.get(writer.id)).toBe('{"write":["*"]}');
+    expect(byId.get(writer.id)).toBe('{"read":["*"]}');
+    expect(byId.get(reader.id)).toBe('{"read":["*"]}');
     expect(await propsForApiKey(unscoped.key)).toMatchObject({ userId: "u_apikey_perm_backfill" });
-    expect(await propsForApiKey(writer.key)).toBeNull();
+    expect(await propsForApiKey(writer.key)).toMatchObject({ userId: "u_apikey_perm_backfill" });
   });
 });
 
-function apikeyBackfill(column: "expiresAt" | "permissions"): string {
+function apikeyBackfill(): string {
   const found: D1Migration | undefined = env.TEST_MIGRATIONS.find((migration) =>
     migration.name.endsWith("_apikey_read_expiry.sql"),
   );
   if (found === undefined) throw new Error("0049_apikey_read_expiry.sql is missing from TEST_MIGRATIONS");
-  const updates = found.queries.filter((query) =>
-    new RegExp(`update\\s+"apikey"\\s+set\\s+"${column}"`, "i").test(query),
-  );
+  const updates = found.queries.filter((query) => /update\s+"apikey"\s+set\s+"permissions"/i.test(query));
   if (updates.length !== 1) {
-    throw new Error(`0049_apikey_read_expiry.sql holds ${updates.length} UPDATEs over apikey.${column}`);
+    throw new Error(`0049_apikey_read_expiry.sql holds ${updates.length} UPDATEs over apikey.permissions`);
   }
   return updates[0] as string;
 }

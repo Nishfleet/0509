@@ -26,11 +26,8 @@ export function agentPreflight(request: Request): Response {
   const headers = new Headers({ "cache-control": "no-store" });
   if (origin !== null) {
     headers.set("access-control-allow-origin", origin);
-    headers.set("access-control-allow-methods", "GET, POST, DELETE, OPTIONS");
-    headers.set(
-      "access-control-allow-headers",
-      "authorization, content-type, accept, mcp-protocol-version, mcp-session-id",
-    );
+    headers.set("access-control-allow-methods", "GET, POST, OPTIONS");
+    headers.set("access-control-allow-headers", "authorization, content-type, accept, mcp-protocol-version");
     headers.set("access-control-max-age", "86400");
   }
   return new Response(null, { status: 204, headers });
