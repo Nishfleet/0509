@@ -241,30 +241,23 @@ for (const { mode, kind, waitMs, account, host } of MODES) {
         // A soft break (200, pricing section gone) is read only by the nightly sweep against
         // the page stored the night before; the hourly check reads a 200 as healthy. So the
         // second break cannot open a second incident before the next sweep, past this run.
-        // Wait the full window and assert the no-second-email rule holds without one opening.
-        let openedSecond = false;
-        try {
-          await expect
-            .poll(
-              async () => {
-                await page.goto("/app/alerts");
-                return openIncidents.count();
-              },
-              {
-                timeout: waitMs,
-                intervals: [POLL_INTERVAL_MS],
-                message: "the open-incident count stayed at zero for the sweep window",
-              },
-            )
-            .toBeGreaterThan(0);
-          openedSecond = true;
-        } catch (softWindowError) {
-          // Swallow only the poll's own predicate timeout (the count never exceeded zero).
-          // Any other error (a failed /app/alerts load, an expired session) must fail red.
-          const detail = softWindowError instanceof Error ? softWindowError.message : String(softWindowError);
-          if (!detail.includes("exceeded while waiting on the predicate")) throw softWindowError;
-        }
-        expect(openedSecond, "the same-day soft re-break must not open a second incident").toBe(false);
+        // A poll that succeeds on a zero count cannot prove nothing opened inside the window
+        // (j11's suppression-window pattern): wait the whole sweep window, then read once.
+        // The slack is one poll interval, so the read cannot fire before the window closes.
+        const sweepWindowEndsAt = Date.now() + waitMs;
+        await expect
+          .poll(() => Date.now(), {
+            timeout: waitMs + POLL_INTERVAL_MS,
+            intervals: [POLL_INTERVAL_MS],
+            message: `the ${waitMs / 1000}s sweep window to fully elapse`,
+          })
+          .toBeGreaterThanOrEqual(sweepWindowEndsAt);
+        await page.goto("/app/alerts");
+        await expect(
+          page.getByTestId("alerts-contract"),
+          "the alerts page rendered, so a zero incident count is a real zero, not a failed load",
+        ).toBeVisible();
+        expect(await openIncidents.count(), "the same-day soft re-break must not open a second incident").toBe(0);
       }
 
       const laterId = await latestMessageId(email, token);
