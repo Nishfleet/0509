@@ -353,7 +353,7 @@ describe("nightly site sweep", () => {
       const changes = await Promise.all(targets.map(async (t, i) => checkSitePage(t, await nextTick(`pair-2-${i}`))));
       const pairs = targets.map((target, i) => {
         const changed = changes[i];
-        if (changed === undefined || changed.outcome !== "changed") throw new Error("expected a change");
+        if (changed?.outcome !== "changed") throw new Error("expected a change");
         return { target, changed };
       });
       await Promise.all(pairs.map(({ target, changed }) => publishSiteChange(target, changed)));

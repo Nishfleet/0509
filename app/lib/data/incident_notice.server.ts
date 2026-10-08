@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 const CLAIM_NOTICE = `INSERT INTO incident_notice
   (id, incident_id, page_id, sent_on, sent_at, is_resolution)
 VALUES (?, ?, ?, ?, ?, ?)
@@ -13,16 +15,22 @@ export interface IncidentNoticeInput {
   isResolution: 0 | 1;
 }
 
+const claimIncidentNoticeRow = z.object({ id: z.string() });
+
 export async function claimIncidentNotice(db: D1Database, input: IncidentNoticeInput): Promise<{ id: string } | null> {
-  return db
-    .prepare(CLAIM_NOTICE)
-    .bind(
-      crypto.randomUUID(),
-      input.incidentId,
-      input.pageId,
-      input.now.toISOString().slice(0, 10),
-      input.now.toISOString(),
-      input.isResolution,
-    )
-    .first<{ id: string }>();
+  return claimIncidentNoticeRow
+    .nullable()
+    .parse(
+      await db
+        .prepare(CLAIM_NOTICE)
+        .bind(
+          crypto.randomUUID(),
+          input.incidentId,
+          input.pageId,
+          input.now.toISOString().slice(0, 10),
+          input.now.toISOString(),
+          input.isResolution,
+        )
+        .first(),
+    );
 }

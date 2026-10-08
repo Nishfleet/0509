@@ -72,7 +72,7 @@ describe("X as a disabled mentions source row (#3977)", () => {
     expect(row.key).toBe("x.search");
 
     // is_enabled = 0 is the whole mechanism: the P5.2 select requires 1.
-    expect(Number(row.is_enabled)).toBe(0);
+    expect(row.is_enabled).toBe(0);
 
     const config = JSON.parse(row.config_json) as {
       disabled_reason?: string;

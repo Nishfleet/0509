@@ -44,6 +44,7 @@ const STILL_FIELDS = ["kind", "self", "competitors", "subject", "history"] as co
 vi.mock("../../app/lib/jev/client.server", () => ({
   askNoul: () => Promise.resolve(null),
   askChoice: () => Promise.resolve(null),
+  askMixed: () => Promise.resolve({ noul: null, choice: null }),
   JevUnavailableError: class JevUnavailableError extends Error {},
 }));
 vi.mock("../../app/lib/data/signal.server", () => ({

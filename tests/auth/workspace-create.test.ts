@@ -318,7 +318,7 @@ describe("ensureWorkspace", () => {
                   else release();
                 }
                 const result = await bound.run();
-                return { meta: { changes: Number(result.meta.changes) } };
+                return { meta: { changes: result.meta.changes } };
               },
             };
           },

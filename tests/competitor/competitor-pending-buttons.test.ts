@@ -43,14 +43,14 @@ function render(element: ReactElement): string {
 }
 
 function openTag(html: string): string {
-  const tag = html.match(/<button\b[^>]*>/);
+  const tag = /<button\b[^>]*>/.exec(html);
   if (tag === null) throw new Error("no button in the rendered form");
   return tag[0];
 }
 
 function label(html: string): string {
-  const block = html.match(/<button\b[^>]*>([\s\S]*?)<\/button>/);
-  if (block === null || block[1] === undefined) throw new Error("no label in the rendered form");
+  const block = /<button\b[^>]*>([\s\S]*?)<\/button>/.exec(html);
+  if (block?.[1] === undefined) throw new Error("no label in the rendered form");
   return block[1];
 }
 

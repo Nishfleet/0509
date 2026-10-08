@@ -109,8 +109,8 @@ describe("Slack target AES-GCM", () => {
 
   it("does not echo key material in any error", async () => {
     const stored = await encryptSlackWebhook(HOOK, SECRET, WS);
-    const failure = await decryptSlackWebhookWithKeys(stored, [OTHER_SECRET], WS).catch(
-      (error: Error) => error.message,
+    const failure = await decryptSlackWebhookWithKeys(stored, [OTHER_SECRET], WS).catch((error: unknown) =>
+      error instanceof Error ? error.message : String(error),
     );
     expect(failure).not.toContain(SECRET);
     expect(failure).not.toContain(OTHER_SECRET);

@@ -39,4 +39,10 @@ describe("tsconfig.test.json (#7073, #7183)", () => {
     expect(result.ignored).toBe(false);
     expect(result.messages.some((message) => message.includes("must be awaited"))).toBe(true);
   });
+
+  it("type-aware lint flags a floating promise in tests", { timeout: 60_000 }, async () => {
+    const result = await lintTextAt("tests/env.test.ts", FLOATING);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((message) => message.includes("must be awaited"))).toBe(true);
+  });
 });

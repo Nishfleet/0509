@@ -415,6 +415,25 @@ describe("agent access, scoped to one workspace", () => {
     expect(own.status).toBe(200);
   });
 
+  it("refuses a foreign-origin API preflight and allows the product origin", async () => {
+    const foreign = await apiResponse(
+      new Request("http://localhost/api/v1/brief", {
+        method: "OPTIONS",
+        headers: { origin: "https://evil.example", "access-control-request-method": "GET" },
+      }),
+      readAgentBrief,
+    );
+    expect(foreign.status).toBe(403);
+    const own = await apiResponse(
+      new Request("http://localhost/api/v1/brief", {
+        method: "OPTIONS",
+        headers: { origin: new URL(env.BETTER_AUTH_URL).origin, "access-control-request-method": "GET" },
+      }),
+      readAgentBrief,
+    );
+    expect(own.status).toBe(204);
+  });
+
   // #5757: no test in this file runs without a cf-connecting-ip header after
   // this one — the loop drains the shared unidentified bucket (AGENT_LIMIT,
   // 120/min), so anything after it sending no IP would 429 with no visible

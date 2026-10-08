@@ -519,3 +519,10 @@ export function stopUnwantedPricingWatchesStatement(sourceId: string, pagesWatch
 export function resumeWantedPricingWatchesStatement(sourceId: string, pagesWatched: number): D1PreparedStatement {
   return env.DB.prepare(RESUME_WANTED_PRICING_WATCHES).bind(sourceId, pagesWatched);
 }
+
+const RESET_YOUTUBE_WATCH =
+  "UPDATE watch SET config_json = json_remove(CASE WHEN json_valid(config_json) THEN config_json ELSE '{}' END, '$.channelId', '$.pendingChannelId', '$.degraded', '$.noChannel'), last_polled_at = NULL WHERE entity_id = ?1 AND source_id = 'src_mentions_youtube' AND entity_id IN (SELECT id FROM entity WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor' AND json_valid(identity_json) AND coalesce(json_type(identity_json, '$.socials'), 'array') = 'array')";
+
+export function resetYoutubeWatchStatement(entityId: string, workspaceId: string): D1PreparedStatement {
+  return env.DB.prepare(RESET_YOUTUBE_WATCH).bind(entityId, workspaceId);
+}

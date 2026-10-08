@@ -1,7 +1,7 @@
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { prerender } from "react-dom/static";
-import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { HomeStanding } from "../../app/components/home-standing";
@@ -239,15 +239,21 @@ describe("a ranked row expands in place to the week's evidence", () => {
   function renderStanding(openId: string | null, evidence: readonly WeekEvidence[] | null): Promise<string> {
     const entries = openId === null ? ["/app"] : [`/app?open=${openId}`];
     return renderSettled(
-      createElement(
-        MemoryRouter,
-        { initialEntries: entries },
-        createElement(
-          "ol",
-          null,
-          rowsFor(PAYLOAD).map((row) => createElement(RankedRow, { key: row.entityId, row, openId, evidence })),
+      createElement(RouterProvider, {
+        router: createMemoryRouter(
+          [
+            {
+              path: "/app",
+              element: createElement(
+                "ol",
+                null,
+                rowsFor(PAYLOAD).map((row) => createElement(RankedRow, { key: row.entityId, row, openId, evidence })),
+              ),
+            },
+          ],
+          { initialEntries: entries },
         ),
-      ),
+      }),
     );
   }
 
@@ -291,14 +297,29 @@ describe("below 860px an open ranked row's evidence is a bottom sheet", () => {
       moves: [],
     });
     const html = await renderSettled(
-      createElement(
-        MemoryRouter,
-        { initialEntries: ["/app?open=ent_kindred"] },
-        createElement(HomeStanding, { view, openId: "ent_kindred", evidence: KINDRED_EVIDENCE }),
-      ),
+      createElement(RouterProvider, {
+        router: createMemoryRouter(
+          [
+            {
+              path: "/app",
+              element: createElement(HomeStanding, { view, openId: "ent_kindred", evidence: KINDRED_EVIDENCE }),
+            },
+          ],
+          { initialEntries: ["/app?open=ent_kindred"] },
+        ),
+      }),
     );
     expect(html.match(/data-slot="row-evidence"/g)).toHaveLength(1);
     expect(html).toContain("Pricing page rewrote its hero");
     expect(html).not.toContain('data-slot="row-sheet"');
+  });
+});
+
+describe("a row's pending expand and switch", () => {
+  it("renders no pending text while idle", () => {
+    const html = render(rowFor("ent_kindred"));
+    expect(html).not.toContain('data-slot="row-pending"');
+    expect(html).not.toContain('data-slot="row-switch-pending"');
+    expect(html).not.toContain("aria-busy");
   });
 });
