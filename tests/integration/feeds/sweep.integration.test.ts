@@ -78,6 +78,24 @@ describe("nightly feed sweep workflow", () => {
     expect(web.calls).toEqual([]);
   });
 
+  it("sweeps the brands of every workspace, not one account's", async () => {
+    await env.DB.prepare(
+      `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES ('user-feed-other', 'Other', 'feed-other@0509.io', 1, ?1, ?1)`,
+    )
+      .bind("2026-10-02T02:00:00Z")
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES ('ws-feed-other', 'Other', 'user-feed-other', 'UTC', 1, 8, ?)`,
+    )
+      .bind("2026-10-02T02:00:00Z")
+      .run();
+    await seedEntity("ws-feed-other", "ent-rival-other", "rival.com");
+
+    const plan = await planFeedSweep();
+
+    expect(plan.entities.map((entity) => entity.id).sort()).toEqual(["ent-rival", "ent-rival-other"]);
+  });
+
   it("discovers the declared feed, baselines it, then files the new post on the next night", async () => {
     const first = await runSweep("feed-night-1");
 
