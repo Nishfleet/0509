@@ -594,7 +594,7 @@ export async function signInWithMagicLink(
 // only on this path.
 
 // 0509#5688 (fleet-manager): the journey specs keep these accounts on
-// purpose (0049 added the five production-lane identities, #7225); the recurring teardown must never delete them. Match these exact
+// purpose (0051 added the five production-lane identities, #7225); the recurring teardown must never delete them. Match these exact
 // addresses, never a pattern. The one-time purge (0509#5730) kept four
 // of them (not e2e+j8-hard, added by J8, 0509#4124); a later purge may still take them — once the kept-account journey
 // specs land (0509#4123, #4124, #4125, #4128) they create them again.

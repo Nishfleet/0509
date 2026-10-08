@@ -26,7 +26,7 @@ const NOW = "2026-09-22T12:00:00.000Z";
 const FIXTURE_EMAILS = Object.values(FIXTURE_ACCOUNTS).map((account) => account.email);
 
 // The six fixed journey accounts 0040 shipped with. FIXTURE_ACCOUNTS grew past
-// them in 0049, whose identities did not exist when 0040 ran; the roster this
+// them in 0051, whose identities did not exist when 0040 ran; the roster this
 // file pins is the one in 0040's NOT IN list, and each of them must still be in
 // FIXTURE_ACCOUNTS.
 const SHIPPED_WITH_0040 = [
