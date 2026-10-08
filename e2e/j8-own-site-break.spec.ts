@@ -217,26 +217,51 @@ for (const { mode, kind, waitMs, account, host } of MODES) {
 
       const openDay = openSentAt.toISOString().slice(0, 10);
       await setMode(host, mode);
-      await expect
-        .poll(
-          async () => {
-            await page.goto("/app/alerts");
-            return openIncidents.count();
-          },
-          {
-            timeout: waitMs,
+      if (mode === "hard") {
+        // A hard 500 opens a same-day incident in the hourly check; the notice keyed on
+        // (page, day, resolution) suppresses its second open email (#4124 step 5).
+        await expect
+          .poll(
+            async () => {
+              await page.goto("/app/alerts");
+              return openIncidents.count();
+            },
+            {
+              timeout: waitMs,
+              intervals: [POLL_INTERVAL_MS],
+              message: "a second incident opens on the alerts page after the second break",
+            },
+          )
+          .toBe(1);
+        expect(
+          new Date().toISOString().slice(0, 10),
+          "the second break opened on the same UTC day as the first email",
+        ).toBe(openDay);
+      } else {
+        // A soft break (200, pricing section gone) is read only by the nightly sweep against
+        // the page stored the night before; the hourly check reads a 200 as healthy. So the
+        // second break cannot open a second incident before the next sweep, past this run.
+        // A poll that succeeds on a zero count cannot prove nothing opened inside the window
+        // (j11's suppression-window pattern): wait the whole sweep window, then read once.
+        // The slack is one poll interval, so the read cannot fire before the window closes.
+        const sweepWindowEndsAt = Date.now() + waitMs;
+        await expect
+          .poll(() => Date.now(), {
+            timeout: waitMs + POLL_INTERVAL_MS,
             intervals: [POLL_INTERVAL_MS],
-            message: "a second incident opens on the alerts page after the second break",
-          },
-        )
-        .toBe(1);
-      expect(
-        new Date().toISOString().slice(0, 10),
-        "the second break opened on the same UTC day as the first email",
-      ).toBe(openDay);
+            message: `the ${waitMs / 1000}s sweep window to fully elapse`,
+          })
+          .toBeGreaterThanOrEqual(sweepWindowEndsAt);
+        await page.goto("/app/alerts");
+        await expect(
+          page.getByTestId("alerts-contract"),
+          "the alerts page rendered, so a zero incident count is a real zero, not a failed load",
+        ).toBeVisible();
+        expect(await openIncidents.count(), "the same-day soft re-break must not open a second incident").toBe(0);
+      }
 
       const laterId = await latestMessageId(email, token);
-      expect([fixedId, null], "the second incident sent no second open email that day").toContain(laterId);
+      expect([fixedId, null], "the same-day second break sent no second open email that day").toContain(laterId);
 
       console.log(
         `j8 mode=${mode} broken-at=${brokenAt.toISOString()} open-message-id=${openId} open-sent-utc=${openSentAt.toISOString()} ` +
