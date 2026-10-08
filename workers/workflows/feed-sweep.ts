@@ -1,6 +1,7 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
+import { FEED_SWEEP_CRON, sweepMonitor } from "../../app/lib/cadence";
 import { readEnabledSourceId } from "../../app/lib/data/source.server";
 import { readFeedTargets } from "../../app/lib/data/watch.server";
 import type { FeedResult } from "../../app/lib/feeds/read-feed.server";
@@ -16,12 +17,7 @@ const RETRY: WorkflowStepConfig = {
   timeout: "5 minutes",
 };
 
-const MONITOR = {
-  schedule: { type: "crontab", value: "45 2 * * *" },
-  checkinMargin: 60,
-  maxRuntime: 90,
-  timezone: "UTC",
-} as const;
+const MONITOR = { ...sweepMonitor(FEED_SWEEP_CRON), timezone: "UTC" } as const;
 
 export interface FeedSweepOutcome {
   discovered: number;
