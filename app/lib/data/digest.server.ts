@@ -1,3 +1,4 @@
+import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 const MARK_SENT = `UPDATE digest SET status = 'sent', sent_at = ? WHERE id = ?`;
@@ -62,6 +63,14 @@ export async function readBrief(
   digestId: string,
 ): Promise<BriefWithPayload | null> {
   return briefWithPayloadRow.nullable().parse(await db.prepare(READ_BRIEF).bind(workspaceId, digestId).first());
+}
+
+export async function listWorkspaceBriefs(workspaceId: string): Promise<BriefRow[]> {
+  return listBriefs(env.DB, workspaceId);
+}
+
+export async function readWorkspaceBrief(workspaceId: string, digestId: string): Promise<BriefWithPayload | null> {
+  return readBrief(env.DB, workspaceId, digestId);
 }
 
 export async function insertWeeklyDigest(db: D1Database, digest: WeeklyDigest): Promise<void> {
