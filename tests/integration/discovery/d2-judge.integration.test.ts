@@ -112,7 +112,7 @@ describe("judgeStillCompetitors", () => {
 
     const results = await judgeStillCompetitors(context, await readRefreshTargets(workspaceId), NOW);
 
-    expect(run).toHaveBeenCalledTimes(4);
+    expect(run).toHaveBeenCalledTimes(2);
     const requests = run.mock.calls.map(
       (call) =>
         call[1] as {
@@ -120,8 +120,9 @@ describe("judgeStillCompetitors", () => {
           state: { history_30d: { observedAt: string }[]; subject: { domain: string } };
         },
     );
-    const asked = new Set(requests.flatMap((request) => Object.keys(request.questions)));
-    expect(asked).toEqual(new Set([STILL_COMPETITOR.id, STILL_COMPETITOR_REASON.id]));
+    for (const request of requests) {
+      expect(Object.keys(request.questions).sort()).toEqual([STILL_COMPETITOR.id, STILL_COMPETITOR_REASON.id].sort());
+    }
     const autoState = requests.map((request) => request.state).find((state) => state.subject.domain === "auto.example");
     expect(autoState).toBeDefined();
     if (autoState === undefined) return;
@@ -151,7 +152,7 @@ describe("judgeStillCompetitors", () => {
     const results = await judgeStillCompetitors(context, await readRefreshTargets(workspaceId), NOW);
 
     errors.mockRestore();
-    expect(run).toHaveBeenCalledTimes(2);
+    expect(run).toHaveBeenCalledTimes(1);
     expect(results.map((result) => [result.verdict, result.reason])).toEqual([
       [null, null],
       [null, null],
