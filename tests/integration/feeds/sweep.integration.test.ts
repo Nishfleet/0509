@@ -91,9 +91,18 @@ describe("nightly feed sweep workflow", () => {
       .run();
     await seedEntity("ws-feed-other", "ent-rival-other", "rival.com");
 
-    const plan = await planFeedSweep();
+    expect((await planFeedSweep()).entities.map((entity) => entity.id).sort()).toEqual([
+      "ent-rival",
+      "ent-rival-other",
+    ]);
 
-    expect(plan.entities.map((entity) => entity.id).sort()).toEqual(["ent-rival", "ent-rival-other"]);
+    await runSweep("feed-two-workspaces");
+
+    expect((await feedWatches()).map((watch) => watch.entity_id).sort()).toEqual(["ent-rival", "ent-rival-other"]);
+    expect((await planFeedSweep()).targets.map((target) => target.entityId).sort()).toEqual([
+      "ent-rival",
+      "ent-rival-other",
+    ]);
   });
 
   it("discovers the declared feed, baselines it, then files the new post on the next night", async () => {
