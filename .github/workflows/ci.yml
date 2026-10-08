@@ -87,6 +87,7 @@ jobs:
           tests/unit/route-titles.test.ts
           tests/preview-assert-skip.test.ts
           tests/required-checks-never-skip.test.ts
+          tests/deploy-production-pipeline.test.ts
       - name: Test coverage floor
         if: github.event_name == 'merge_group'
         run: npx vitest run --project node --coverage
