@@ -29,6 +29,7 @@ interface Step {
   name?: string;
   if?: string;
   run?: string;
+  "timeout-minutes"?: number;
   env?: Record<string, string>;
 }
 
@@ -79,11 +80,16 @@ describe("deploy-production does not repeat the merge queue (0509#7004)", () => 
     expect(job.if ?? "").toContain("github.ref == 'refs/heads/main'");
   });
 
-  it("keeps the job cap at the size of the reduced job", () => {
-    // The 20-minute cap was spent in the test repeat that is now gone; a job
-    // that the queue already tested does not need it.
-    expect(job["timeout-minutes"]).toBeGreaterThan(0);
-    expect(job["timeout-minutes"]).toBeLessThanOrEqual(10);
+  it("keeps the job cap below the old 20 minutes but above 10", () => {
+    // The 20-minute cap was spent in the test repeat that is now gone. 10 left
+    // no headroom: a job timeout cancels the job mid-smoke, so the cap must
+    // clear build, migrate, deploy and the 3-minute smoke with room to spare.
+    expect(job["timeout-minutes"]).toBeGreaterThan(10);
+    expect(job["timeout-minutes"]).toBeLessThan(20);
+  });
+
+  it("bounds the smoke with its own step timeout, so a hang fails the step", () => {
+    expect(step("/api/health")["timeout-minutes"]).toBe(3);
   });
 });
 
@@ -110,8 +116,13 @@ describe("deploy-production rolls back on smoke failure (0509#7004)", () => {
 
   it("rolls back to the recorded version when the smoke test fails", () => {
     const rollback = step("wrangler rollback");
-    expect(rollback.if).toBe("failure() && steps.deploy.outcome == 'success'");
+    // always(), not failure(): a cancelled job (job timeout) mid-smoke has
+    // failure() false, and the rollback would be skipped with the bad Worker live.
+    expect(rollback.if).toBe("always() && steps.deploy.outcome == 'success' && steps.smoke.outcome != 'success'");
     expect(runsOf(rollback)).toContain("npx wrangler rollback");
+    // wrangler 4.144.0 declares --yes/-y on rollback; pass it explicitly. Its
+    // prompts otherwise fall back to yes only because GitHub Actions sets CI=true.
+    expect(runsOf(rollback)).toContain(" --yes ");
     expect(runsOf(rollback)).toContain("--message");
     expect(runsOf(rollback)).toContain("smoke failed");
     // The recorded version reaches the command through the environment, so

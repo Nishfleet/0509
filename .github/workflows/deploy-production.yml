@@ -34,7 +34,9 @@ jobs:
     # 0509#7004: 20 minutes bought a full `npm test` repeat this job does not
     # run, and a run that spent it in `npm test` (37179881263) had no verdict
     # to show for it. The workflow now builds, migrates, deploys and smokes.
-    timeout-minutes: 10
+    # 15, not 10: the job timeout cancels the job, so the headroom keeps a slow
+    # build or rollout from cancelling it before the smoke verdict and rollback.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -119,10 +121,20 @@ jobs:
         # 0509#7004: a red smoke test used to leave the new Worker live. Scoped
         # by steps.deploy.outcome (a failed deploy has nothing to undo) and
         # placed before the fixture Workers, which never roll back a good deploy.
+        # always() so a cancelled job (job timeout, manual cancel) mid-smoke
+        # still rolls back: failure() is false on cancellation and would skip
+        # this step. smoke.outcome != 'success' covers failure, cancelled and
+        # skipped; deploy.outcome == 'success' keeps it off any run whose
+        # deploy never went out.
         # The Worker version is rolled back, the schema is not: migrations are
         # additive, and the D1 Time Travel bookmark above is the path for tables.
-        if: failure() && steps.deploy.outcome == 'success'
-        run: npx wrangler rollback "$ROLLBACK_TARGET" --message "smoke failed $GITHUB_SHA"
+        if: always() && steps.deploy.outcome == 'success' && steps.smoke.outcome != 'success'
+        # --yes is declared by wrangler 4.144.0's rollback command; the prompts
+        # themselves take their fallback (yes) because GitHub Actions sets CI=true.
+        # A Durable Object migration in wrangler.jsonc (new_sqlite_classes) can
+        # make this rollback impossible or unsafe: Cloudflare cannot roll back
+        # across it, so such a deploy needs a manual recovery.
+        run: npx wrangler rollback "$ROLLBACK_TARGET" --yes --message "smoke failed $GITHUB_SHA"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
