@@ -101,7 +101,30 @@ describe("create-key is idempotent per submission", () => {
     expect(await keyRows("My agent")).toBeGreaterThan(0);
   });
 
-  it("rethrows the create error, not the lookup error, when the create fails and the lookup fails too", async () => {
+  it("refuses the create, minting nothing, when the plan does not include API access", async () => {
+    const request = await signedInRequest();
+    const owner = await env.DB.prepare(
+      'SELECT w.id AS id FROM workspace w JOIN "user" u ON u.id = w.owner_user_id WHERE u.email = ?',
+    )
+      .bind(ADDRESS)
+      .first<{ id: string }>();
+    if (owner === null) throw new Error("sign-in created no workspace");
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, limits_json, updated_at) VALUES (?1, ?2, 'scout', 'active', ?3, ?4)",
+    )
+      .bind("plan_create_key_no_api", owner.id, JSON.stringify({ api_access: false }), "2026-10-06T00:00:00.000Z")
+      .run();
+    try {
+      const result = await createAgentKey(request, createForm("refused", crypto.randomUUID()));
+
+      expect(result).toEqual({ newKey: null, duplicate: false });
+      expect(await keyRows("refused")).toBe(0);
+    } finally {
+      await env.DB.prepare("DELETE FROM plan WHERE id = ?").bind("plan_create_key_no_api").run();
+    }
+  });
+
+  it("refuses a signed-out create with an error and mints no key", async () => {
     const signedOut = new Request(`${ORIGIN}/app/settings/agents`, { method: "POST", headers: { origin: ORIGIN } });
 
     const failure = await createAgentKey(signedOut, createForm("nobody", crypto.randomUUID())).catch(

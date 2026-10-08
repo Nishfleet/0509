@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
-import { required } from "../required";
+
+import { pageRoleInScope, paidSourceAllowed } from "../billing/entitlements";
+import { readWorkspaceEntitlements } from "./plan.server";
 
 export interface NewWatch {
   id: string;
@@ -39,6 +41,7 @@ const SITE_SWEEP_TARGET_JOIN = `SELECT e.workspace_id AS workspace_id,
        e.id AS entity_id,
        e.role AS entity_role,
        w.source_id AS source_id,
+       src.plugin_key AS plugin_key,
        w.id AS watch_id,
        p.id AS page_id,
        COALESCE(p.role, 'other') AS page_role,
@@ -73,6 +76,7 @@ const targetRows = z.array(
     entity_id: z.string(),
     entity_role: z.string(),
     source_id: z.string(),
+    plugin_key: z.string(),
     watch_id: z.string(),
     page_id: z.string(),
     page_role: z.string(),
@@ -164,9 +168,28 @@ const toSiteSweepTarget = (row: z.infer<typeof targetRows>[number]): SiteSweepTa
   transportTestedAt: row.transport_tested_at,
 });
 
+async function inSitePageScope(targets: readonly SiteSweepTarget[]): Promise<readonly SiteSweepTarget[]> {
+  if (targets.length === 0) return targets;
+  const entitlements = await readWorkspaceEntitlements(targets.map((row) => row.workspaceId));
+  return targets.filter((row) =>
+    pageRoleInScope(row.pageRole, entitlements.get(row.workspaceId)?.site_pages_scope ?? "home_pricing"),
+  );
+}
+
+async function allowedPaidWatches<T extends { workspace_id: string; plugin_key: string }>(
+  rows: readonly T[],
+): Promise<T[]> {
+  if (rows.length === 0) return [...rows];
+  const entitlements = await readWorkspaceEntitlements(rows.map((row) => row.workspace_id));
+  return rows.filter((row) =>
+    paidSourceAllowed(row.plugin_key, entitlements.get(row.workspace_id)?.paid_scraper_sources === true),
+  );
+}
+
 export async function readSiteSweepTargets(sourceKey: string): Promise<readonly SiteSweepTarget[]> {
   const rows = await env.DB.prepare(SITE_SWEEP_TARGETS).bind(sourceKey).all();
-  return targetRows.parse(rows.results).map(toSiteSweepTarget);
+  const allowed = await allowedPaidWatches(targetRows.parse(rows.results));
+  return inSitePageScope(allowed.map(toSiteSweepTarget));
 }
 
 const SITE_SWEEP_TARGET_BY_WATCH = `${SITE_SWEEP_TARGET_JOIN} AND w.id = ?1
@@ -175,7 +198,10 @@ ORDER BY p.url LIMIT 1`;
 export async function readSiteSweepTarget(watchId: string): Promise<SiteSweepTarget | null> {
   const row = await env.DB.prepare(SITE_SWEEP_TARGET_BY_WATCH).bind(watchId).first();
   if (row === null) return null;
-  return toSiteSweepTarget(required(targetRows.parse([row])[0], "watch.site-sweep-target"));
+  const [allowed] = await allowedPaidWatches(targetRows.parse([row]));
+  if (allowed === undefined) return null;
+  const scoped = await inSitePageScope([toSiteSweepTarget(allowed)]);
+  return scoped[0] ?? null;
 }
 
 const ENSURE_WATCHES = `INSERT INTO watch (id, entity_id, source_id, target_key, created_at)
@@ -217,7 +243,7 @@ const watchRows = z.array(watchRow);
 export async function readActiveWatches(kind: "mentions" | "ads"): Promise<WatchRow[]> {
   await env.DB.prepare(ENSURE_WATCHES).bind(kind).run();
   const rows = await env.DB.prepare(SELECT_WATCHES).bind(kind).all();
-  return watchRows.parse(rows.results);
+  return allowedPaidWatches(watchRows.parse(rows.results));
 }
 
 const ENTITIES_WITHOUT_HIRING_WATCH = `SELECT e.id AS id, e.domain AS domain
@@ -231,7 +257,7 @@ WHERE e.state = 'on'
 ORDER BY e.id`;
 
 const HIRING_TARGETS = `SELECT e.workspace_id AS workspace_id, e.id AS entity_id, w.source_id AS source_id,
-       src.platform AS platform, w.id AS watch_id, w.target_key AS board_url
+       src.plugin_key AS plugin_key, src.platform AS platform, w.id AS watch_id, w.target_key AS board_url
 FROM watch w
 JOIN source src ON src.id = w.source_id AND src.kind = 'hiring' AND src.is_enabled = 1
 JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
@@ -245,6 +271,7 @@ const hiringTargetRows = z.array(
     workspace_id: z.string(),
     entity_id: z.string(),
     source_id: z.string(),
+    plugin_key: z.string(),
     platform: z.string(),
     watch_id: z.string(),
     board_url: z.string(),
@@ -267,7 +294,8 @@ export async function readEntitiesWithoutHiringWatch(): Promise<readonly { id: s
 
 export async function readHiringTargets(): Promise<readonly HiringTarget[]> {
   const rows = await env.DB.prepare(HIRING_TARGETS).all();
-  return hiringTargetRows.parse(rows.results).map((row) => ({
+  const allowed = await allowedPaidWatches(hiringTargetRows.parse(rows.results));
+  return allowed.map((row) => ({
     workspaceId: row.workspace_id,
     entityId: row.entity_id,
     sourceId: row.source_id,

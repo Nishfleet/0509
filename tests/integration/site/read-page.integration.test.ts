@@ -92,6 +92,11 @@ const seed = async (entityId: string, urls: readonly string[]) => {
     .bind(WS, USER, NOW)
     .run();
   await env.DB.prepare(
+    `INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'starter', 'active', ?)`,
+  )
+    .bind("plan-read-page", WS, NOW)
+    .run();
+  await env.DB.prepare(
     `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
      VALUES (?, ?, 'competitor', 'rival.com', '{}', 'manual', 'on', ?)`,
   )
@@ -118,6 +123,7 @@ const cleanup = async () => {
   await env.DB.exec("DELETE FROM watch");
   await env.DB.exec("DELETE FROM page");
   await env.DB.exec("DELETE FROM entity");
+  await env.DB.exec("DELETE FROM plan");
   await env.DB.exec("DELETE FROM workspace");
   await env.DB.exec('DELETE FROM "user"');
 };
@@ -137,6 +143,14 @@ afterEach(() => {
 });
 
 describe("readPage (0509#5299)", () => {
+  it("does not sweep other pages on Scout", async () => {
+    const url = "https://rival.com/other";
+    const onStarter = await seed("ent-read-page-scope", [url]);
+    expect(onStarter).toHaveLength(1);
+    await env.DB.prepare("DELETE FROM plan WHERE workspace_id = ?").bind(WS).run();
+    expect(await readSiteSweepTargets("site.web")).toEqual([]);
+  });
+
   it("records a browser transport and its reason after a thin-text escalation", async () => {
     const url = "https://rival.com/learned";
     fetchState.responses.set(url, THIN_PAGE);
