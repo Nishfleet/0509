@@ -1,5 +1,4 @@
 import type { Route } from "./+types/app.share[.]png";
-import { env } from "cloudflare:workers";
 
 import { readHomeStandingInputs } from "../lib/home-standing.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
@@ -18,7 +17,7 @@ function plain(status: number, message: string, headers: Record<string, string> 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const session = context.get(sessionContext);
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
-  const inputs = await readHomeStandingInputs(env.DB, session.user.id, workspaceId ?? undefined);
+  const inputs = await readHomeStandingInputs(session.user.id, workspaceId ?? undefined);
   const card = inputs === null ? null : shareCard({ ...inputs, now: new Date() });
   if (card === null) return plain(404, "There is no ranking to share yet.");
 

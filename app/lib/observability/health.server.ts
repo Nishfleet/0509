@@ -1,4 +1,5 @@
 import { captureException } from "@sentry/cloudflare";
+import { env } from "cloudflare:workers";
 
 const D1_PING_TIMEOUT_MS = 2_000;
 
@@ -36,4 +37,8 @@ export async function healthResponse(db: D1Database, commit: string): Promise<Re
     return failed(timestamp, commit);
   }
   return Response.json({ status: "ok", app: "0509", d1: "ok", timestamp, commit });
+}
+
+export function currentHealthResponse(): Promise<Response> {
+  return healthResponse(env.DB, env.GIT_SHA);
 }
