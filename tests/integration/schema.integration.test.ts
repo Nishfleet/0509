@@ -17,7 +17,7 @@ describe("0001_rebuild.sql", () => {
     // finished site sweep records its wall clock, pages and failures, plus
     // jev_failure (0043), one row per failed judge call, which made 37.
     // 0048 then dropped the dead rate_limit_events (0509#7194), back to 36;
-    // support_issue (0052, 0509#7223), one row per GitHub issue the inbox
+    // support_issue (0054, 0509#7223), one row per GitHub issue the inbox
     // opened, makes 37.
     expect(tables?.n).toBe(37);
   });

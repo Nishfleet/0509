@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { captureException } from "@sentry/cloudflare";
 
+import { AiSpendOffError } from "../../app/lib/ai/spend.server";
 import { DiscoveryUnavailableError, generateShortlist } from "../../app/lib/discovery/run.server";
 
 vi.mock("../../app/lib/data/takedown.server", () => ({ takenDownAmong: () => Promise.resolve(new Set()) }));
@@ -99,6 +100,38 @@ describe("generateShortlist", () => {
 
     expect(failure).toBeInstanceOf(DiscoveryUnavailableError);
     expect(failure).toHaveProperty("billingRefused", true);
+  });
+
+  it("treats the ai spend kill switch like a billing refusal, so the step is not retried while spend is off", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    hn.run.mockRejectedValue(new Error("hn generator refused: 402 payment required"));
+    ai.run.mockRejectedValue(new AiSpendOffError("off"));
+
+    const failure: unknown = await generateShortlist(SELF, []).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(DiscoveryUnavailableError);
+    expect(failure).toHaveProperty("billingRefused", true);
+  });
+
+  it("stays retryable when the ai spend is off but the other generator had a real outage", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    hn.run.mockRejectedValue(new Error("hn generator fetch failed with status 503"));
+    ai.run.mockRejectedValue(new AiSpendOffError("off"));
+
+    const failure: unknown = await generateShortlist(SELF, []).catch((error: unknown) => error);
+
+    expect(failure).toHaveProperty("billingRefused", false);
+  });
+
+  it("does not report a kill-switch refusal to Sentry per generator, since the switch raised its own alert", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    hn.run.mockResolvedValue([]);
+    ai.run.mockRejectedValue(new AiSpendOffError("off"));
+
+    const result = await generateShortlist(SELF, []);
+
+    expect(result.shortlisted).toEqual([]);
+    expect(captureException).not.toHaveBeenCalled();
   });
 
   it("stays retryable when only one generator was refused and the other had a real outage", async () => {

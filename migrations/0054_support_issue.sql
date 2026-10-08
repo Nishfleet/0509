@@ -1,4 +1,4 @@
--- 0052_support_issue.sql — support inbox issue ledger. Issue #7223.
+-- 0054_support_issue.sql — support inbox issue ledger. Issue #7223.
 -- Expand-only: one row per GitHub issue the inbox actually opened, so the cap
 -- counts opened issues instead of stored support reports. A row is deleted
 -- again when the GitHub create fails or throws (fetchOutbound times out at 8s).

@@ -138,11 +138,19 @@ describe("Ticker", () => {
     expect(html.match(/aria-hidden="true"/g)).toHaveLength(1);
   });
 
-  it("keeps its height and drops every looping element when there is nothing to show", () => {
+  it("keeps its height and drops every looping element and the pause control when there is nothing to show", () => {
     const html = renderToStaticMarkup(createElement(Ticker, { items: [] }));
     expect(html).toContain('id="ticker"');
     expect(html).toContain("h-9");
     expect(html).not.toContain("<li");
     expect(html).not.toContain("animate-");
+    expect(html).not.toContain('type="checkbox"');
+  });
+
+  it("carries a keyboard-operable pause control that needs no script", () => {
+    const html = renderToStaticMarkup(createElement(Ticker, { items }));
+    expect(html).toContain('type="checkbox"');
+    expect(html).toContain('aria-label="Pause the ticker"');
+    expect(html).toContain("peer-checked:[animation-play-state:paused]");
   });
 });

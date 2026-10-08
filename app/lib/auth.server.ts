@@ -5,7 +5,7 @@ import { captcha, magicLink } from "better-auth/plugins";
 import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
 
-import { API_KEY_PREFIX } from "./agent/paths";
+import { API_KEY_PREFIX, READ_SCOPE } from "./agent/paths";
 import { cancelPendingDigests } from "./data/digest.server";
 import { suppressWorkspaceTargets } from "./data/email_suppression.server";
 import { readWorkspaceIdForOwner } from "./data/workspace.server";
@@ -160,6 +160,7 @@ function authPlugins(env: AuthEnv, options?: { captcha?: boolean }) {
       defaultPrefix: API_KEY_PREFIX,
       maximumNameLength: 60,
       enableMetadata: true,
+      permissions: { defaultPermissions: { [READ_SCOPE]: ["*"] } },
       rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 120 },
     }),
   ];

@@ -4,6 +4,7 @@
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "vars": {
     "SITE_SWEEP_PING_URL": "https://hc-ping.example.com/site-sweep",
+    "AI_SPEND": "on",
     "BETTER_AUTH_URL": "https://0509.io",
     "BETTER_AUTH_SECRET": "integration-test-secret",
     "TURNSTILE_SITE_KEY": "integration-test-site-key",

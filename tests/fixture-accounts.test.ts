@@ -11,10 +11,15 @@ const FIXED = [
   "e2e+j9-mentions@0509.io",
   "e2e+j12-rollovers@0509.io",
   "e2e+soak@0509.io",
+  "e2e+onboarded-desktop@0509.io",
+  "e2e+onboarded-phone@0509.io",
+  "e2e+j6-desktop@0509.io",
+  "e2e+j6-phone@0509.io",
+  "e2e+j11@0509.io",
 ];
 
 describe("fixture accounts", () => {
-  it("recognizes each of the six fixed journey accounts", () => {
+  it("recognizes each of the eleven fixed journey accounts", () => {
     for (const email of FIXED) {
       expect(isFixtureAccount(email)).toBe(true);
     }
@@ -30,13 +35,18 @@ describe("fixture accounts", () => {
     expect(isFixtureAccount("")).toBe(false);
   });
 
-  it("has exactly six entries keyed j7, j8Hard, j8Soft, j9Mentions, j12Rollovers, soak", () => {
+  it("has exactly eleven entries, one per fixed journey account", () => {
     expect(Object.keys(FIXTURE_ACCOUNTS).sort()).toEqual([
+      "j11",
       "j12Rollovers",
+      "j6Desktop",
+      "j6Phone",
       "j7",
       "j8Hard",
       "j8Soft",
       "j9Mentions",
+      "onboardedDesktop",
+      "onboardedPhone",
       "soak",
     ]);
   });

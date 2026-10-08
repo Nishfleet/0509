@@ -227,6 +227,7 @@ describe("delivered once across weeks (0509#4063)", () => {
       readThisFirst: judged,
     });
     expect(payload.read_this_first.map((mark) => mark.signal_id)).toEqual([SIG_C]);
+    expect(payload.judged_count).toBe(1);
 
     const weekTwo = await composeAndDeliverWeekTwo(payload);
     expect(weekTwo.outcome).toBe("sent");

@@ -1,4 +1,5 @@
 import { Footer } from "./footer";
+import { MAIN_CONTENT_ID, SkipLink } from "./skip-link";
 import { Wordmark } from "./wordmark";
 import {
   bearerCopy,
@@ -190,10 +191,11 @@ export function ApiReference({
 }) {
   return (
     <div className={SHELL}>
+      <SkipLink />
       <header>
         <Wordmark />
       </header>
-      <main className="mt-8 min-w-0">
+      <main id={MAIN_CONTENT_ID} tabIndex={-1} className="mt-8 min-w-0">
         <h1 className={TITLE}>API reference</h1>
         <AuthBlock document={document} settingsHref={settingsHref} />
         <McpBlock mcpUrl={mcpUrl} settingsHref={settingsHref} />

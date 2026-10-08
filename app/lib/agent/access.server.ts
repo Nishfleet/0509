@@ -1,4 +1,4 @@
-import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+import type { GrantSummary, OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
@@ -6,11 +6,32 @@ import { createAuth } from "../auth.server";
 import type { AgentKey, ConnectedApp, CreateKeyResult } from "./access";
 
 const FRESH = { disableCookieCache: true };
+const GRANT_PAGE = 100;
+const GRANT_PAGES = 50;
 
-function appName(metadata: unknown, fallback: string): string {
-  if (typeof metadata !== "object" || metadata === null) return fallback;
+function appLabel(metadata: unknown, fallback: string): { name: string; host: string } {
+  if (typeof metadata !== "object" || metadata === null) return { name: fallback, host: fallback };
   const name: unknown = Reflect.get(metadata, "appName");
-  return typeof name === "string" && name.length > 0 ? name : fallback;
+  const host: unknown = Reflect.get(metadata, "host");
+  const labelled = typeof name === "string" && name.length > 0 ? name : fallback;
+  const redirectHost = typeof host === "string" && host.length > 0 ? host : labelled;
+  return { name: labelled, host: redirectHost };
+}
+
+export async function listAllGrants(
+  helpers: Pick<OAuthHelpers, "listUserGrants">,
+  userId: string,
+): Promise<GrantSummary[]> {
+  const items: GrantSummary[] = [];
+  let cursor: string | undefined;
+  for (let pages = 0; pages < GRANT_PAGES; pages += 1) {
+    const page = await helpers.listUserGrants(userId, { limit: GRANT_PAGE, cursor });
+    items.push(...page.items);
+    const next = page.cursor;
+    if (next === undefined || next === "" || next === cursor) return items;
+    cursor = next;
+  }
+  return items;
 }
 
 export async function readAgentAccess(
@@ -20,7 +41,7 @@ export async function readAgentAccess(
 ): Promise<{ keys: AgentKey[]; apps: ConnectedApp[] }> {
   const [listed, grants] = await Promise.all([
     createAuth(env).api.listApiKeys({ headers: request.headers }),
-    helpers.listUserGrants(userId, { limit: 100 }),
+    listAllGrants(helpers, userId),
   ]);
   return {
     keys: listed.apiKeys.map((key) => ({
@@ -32,11 +53,15 @@ export async function readAgentAccess(
       rateLimitMax: key.rateLimitMax ?? null,
       remaining: key.remaining ?? null,
     })),
-    apps: grants.items.map((grant) => ({
-      grantId: grant.id,
-      name: appName(grant.metadata, grant.clientId),
-      connectedAt: new Date(grant.createdAt * 1000).toISOString(),
-    })),
+    apps: grants.map((grant) => {
+      const label = appLabel(grant.metadata, grant.clientId);
+      return {
+        grantId: grant.id,
+        name: label.name,
+        host: label.host,
+        connectedAt: new Date(grant.createdAt * 1000).toISOString(),
+      };
+    }),
   };
 }
 

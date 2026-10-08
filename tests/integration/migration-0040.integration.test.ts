@@ -25,6 +25,19 @@ import { FIXTURE_ACCOUNTS, isPerRunFixtureEmail } from "../../app/lib/fixture-ac
 const NOW = "2026-09-22T12:00:00.000Z";
 const FIXTURE_EMAILS = Object.values(FIXTURE_ACCOUNTS).map((account) => account.email);
 
+// The six fixed journey accounts 0040 shipped with. FIXTURE_ACCOUNTS grew past
+// them in 0051, whose identities did not exist when 0040 ran; the roster this
+// file pins is the one in 0040's NOT IN list, and each of them must still be in
+// FIXTURE_ACCOUNTS.
+const SHIPPED_WITH_0040 = [
+  "e2e+j7@0509.io",
+  "e2e+j8-hard-v2@0509.io",
+  "e2e+j8-soft-v2@0509.io",
+  "e2e+j9-mentions@0509.io",
+  "e2e+j12-rollovers@0509.io",
+  "e2e+soak@0509.io",
+];
+
 // One user and one workspace per case, all seeded at fixture = 0 so the
 // assertion below is about what the backfill changes, not about a column
 // default that happens to be 0.
@@ -37,7 +50,7 @@ const OWNERS: Owner[] = [
   // A per-run owner: the shape the backfill exists to mark.
   { owner: "per-run", email: "e2e+abc123@0509.io", marked: 1 },
   // The six fixed journey accounts, the exact addresses the NOT IN list holds.
-  ...FIXTURE_EMAILS.map((email, index) => ({ owner: `fixed-${index}`, email, marked: 0 as const })),
+  ...SHIPPED_WITH_0040.map((email, index) => ({ owner: `fixed-${index}`, email, marked: 0 as const })),
   // A real customer on another domain, and the same local part as the per-run
   // owner but off @0509.io: the LIKE is anchored on that domain, so both stay 0.
   { owner: "customer", email: "ada@example.com", marked: 0 },
@@ -77,7 +90,7 @@ async function seed(): Promise<void> {
 }
 
 async function fixtureMarks(): Promise<Map<string, number>> {
-  const { results } = await env.DB.prepare("SELECT id, fixture FROM workspace ORDER BY id").all<{
+  const { results } = await env.DB.prepare("SELECT id, fixture FROM workspace WHERE id LIKE 'w-%' ORDER BY id").all<{
     id: string;
     fixture: number;
   }>();
@@ -109,7 +122,8 @@ describe("the 0040 backfill UPDATE", () => {
     // A rename in the app, or a seventh fixed account, would drift from the
     // SQL that protects them and start skipping a live account. The six are
     // pinned because the roster is the contract, not because six is the number.
-    expect(FIXTURE_EMAILS).toHaveLength(6);
+    expect(SHIPPED_WITH_0040).toHaveLength(6);
+    for (const email of SHIPPED_WITH_0040) expect(FIXTURE_EMAILS).toContain(email);
     expect(isPerRunFixtureEmail("e2e+abc123@0509.io")).toBe(true);
     for (const email of FIXTURE_EMAILS) expect(isPerRunFixtureEmail(email)).toBe(false);
 
@@ -118,6 +132,6 @@ describe("the 0040 backfill UPDATE", () => {
     const update = backfillUpdate();
     const notIn = /email\s+not\s+in\s*\(([^)]*)\)/i.exec(update)?.[1] ?? "";
     expect(notIn).not.toBe("");
-    expect((notIn.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/g) ?? []).sort()).toEqual([...FIXTURE_EMAILS].sort());
+    expect((notIn.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/g) ?? []).sort()).toEqual([...SHIPPED_WITH_0040].sort());
   });
 });

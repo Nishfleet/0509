@@ -202,6 +202,8 @@ describe("deployed wrangler configs", () => {
     expect(consumer?.max_concurrency).toBe(20);
     expect(consumer?.max_retries).toBe(3);
     expect(consumer?.retry_delay).toBe(60);
+    const sendEmail = (rawConfig.queues?.consumers ?? []).find((queue) => queue.queue === "send-email");
+    expect(sendEmail?.retry_delay).toBe(60);
     const dlq = (rawConfig.queues?.consumers ?? []).find((queue) => queue.queue === "fetch-sweep-dlq");
     expect(dlq).toBeDefined();
   });
