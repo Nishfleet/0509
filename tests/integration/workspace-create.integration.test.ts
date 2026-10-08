@@ -98,6 +98,27 @@ describe("ensureWorkspace against migrations/0001_rebuild.sql", () => {
     expect(await workspaceCount("user-4")).toBe(2);
   });
 
+  it("lets exactly one of two concurrent creates through at cap minus one", async () => {
+    await seedUser("user-race-cap", "race-cap@example.com");
+    const create = (id: string) =>
+      insertWorkspace(env.DB, {
+        id,
+        name: id,
+        ownerUserId: "user-race-cap",
+        timezone: "UTC",
+        createdAt: "2026-09-23T12:00:00.000Z",
+        fixture: false,
+      });
+
+    const outcomes = await Promise.allSettled([create("ws-race-a"), create("ws-race-b")]);
+
+    expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
+    const refused = outcomes.filter((outcome) => outcome.status === "rejected");
+    expect(refused).toHaveLength(1);
+    expect(refused[0]?.reason).toBeInstanceOf(WorkspaceCapError);
+    expect(await workspaceCount("user-race-cap")).toBe(1);
+  });
+
   it("refuses a second workspace on Scout and allows a second on Agency", async () => {
     await seedUser("user-scout-cap", "scout-cap@example.com");
     await seedUser("user-agency-cap", "agency-cap@example.com");
