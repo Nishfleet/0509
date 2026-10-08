@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -26,13 +26,17 @@ export function OneInput({
   required = false,
   maxLength,
 }: OneInputProps) {
+  const inputId = useId();
   return (
     <form method={method} action={action} className="mt-8">
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <label htmlFor={inputId} className="block font-mono text-eyebrow font-medium text-ink-soft uppercase">
+        {label}
+      </label>
+      <div className="mt-3 flex flex-col gap-3 sm:flex-row">
         <Input
+          id={inputId}
           name={name}
           placeholder={placeholder}
-          aria-label={label}
           autoFocus
           autoComplete="off"
           autoCapitalize="none"

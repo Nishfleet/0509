@@ -21,12 +21,11 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 // `e2e+onboarded-${lane}-…` and `e2e+${tag}-…` leaked rows the bare
 // `e2e+${` probe never saw (0509#6968).
 const MINT = /e2e\+[\w-]*\$\{/;
-const HELPER = /deleteCreatedAccount/;
 // J14 drives the delete flow inline and asserts the mid-flow progress, so it
 // cannot call the helper; it is the flow's proof.
 const ALLOWED = new Set(["e2e/j14-delete-workspace.spec.ts"]);
 
-// The five accounts the journey specs keep on purpose (0509#5688,
+// The accounts the journey specs keep on purpose (0509#5688,
 // fleet-manager): exact addresses, never a pattern.
 const KEPT_JOURNEY_ACCOUNTS = [
   "e2e+j7@0509.io",
@@ -37,6 +36,11 @@ const KEPT_JOURNEY_ACCOUNTS = [
   "e2e+j9-mentions@0509.io",
   "e2e+j12-rollovers@0509.io",
   "e2e+soak@0509.io",
+  "e2e+onboarded-desktop@0509.io",
+  "e2e+onboarded-phone@0509.io",
+  "e2e+j6-desktop@0509.io",
+  "e2e+j6-phone@0509.io",
+  "e2e+j11@0509.io",
 ];
 
 // A setup project that mints is cleaned up by its `teardown:` project, not by
@@ -90,14 +94,18 @@ describe("e2e fixture teardown detector", () => {
     for (const rel of await e2eFiles(path.join(REPO_ROOT, "e2e"), /\.spec\.ts$/)) {
       if (ALLOWED.has(rel)) continue;
       const source = await readFile(path.join(REPO_ROOT, rel), "utf8");
-      if (MINT.test(source) && !HELPER.test(source)) offenders.push(rel);
+      if (MINT.test(source) && !source.includes("deleteCreatedAccount")) offenders.push(rel);
     }
     expect(offenders).toEqual([]);
   });
 
-  it("keeps the four journey accounts in the helper's guard", async () => {
+  it("keeps the journey accounts in the helper's guard", async () => {
     const source = await readFile(path.join(REPO_ROOT, "e2e/inbox.ts"), "utf8");
     for (const email of KEPT_JOURNEY_ACCOUNTS) expect(source).toContain(email);
+  });
+
+  it("keeps every FIXTURE_ACCOUNTS address in the guard, so the teardown never deletes a comp-plan identity", () => {
+    for (const account of Object.values(FIXTURE_ACCOUNTS)) expect(KEPT_JOURNEY_ACCOUNTS).toContain(account.email);
   });
 
   it("pairs every minting setup project with a teardown project", async () => {

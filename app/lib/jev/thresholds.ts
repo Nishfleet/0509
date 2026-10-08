@@ -20,6 +20,10 @@ export const REJECT_AT = 0.1;
 
 export const PRICING_ACT_AT = 0.6;
 
+export const BREAKAGE_ALERT_AT = 0.5;
+
+export const BREAKAGE_CLEAR_AT = 0.1;
+
 export const CHANGE_KIND_QUESTION_ID = "change_kind";
 
 export function changeActsSql(signal: string, verdict: string): string {

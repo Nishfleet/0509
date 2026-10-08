@@ -97,7 +97,7 @@ describe("parseUsageResponse", () => {
 
 describe("fetchDailyUsage", () => {
   it("POSTs the usage query with the bearer token and returns the fixture sums", async () => {
-    const fetchSpy = vi.fn(() =>
+    const fetchSpy = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
       Promise.resolve(
         new Response(JSON.stringify(fixture), {
           status: 200,

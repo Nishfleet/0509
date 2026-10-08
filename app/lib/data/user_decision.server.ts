@@ -31,6 +31,12 @@ WHERE workspace_id = ?1 AND entity_id = ?2 AND verdict = ?3`;
 
 const fieldEditNoteSchema = z.object({ field: z.enum(DRAFT_FIELDS) });
 
+const readEditedFieldsRow = z.object({ note: z.string() });
+
+const readSubjectDecisionRow = z.object({
+  verdict: z.enum(["public_subject:confirmed", "public_subject:refused"]),
+});
+
 export async function insertSubjectDecision(row: {
   workspaceId: string;
   userId: string;
@@ -69,10 +75,10 @@ export async function insertFieldEdits(
 }
 
 export async function readEditedFields(workspaceId: string, entityId: string): Promise<DraftField[]> {
-  const rows = await env.DB.prepare(SELECT_FIELD_EDITS)
-    .bind(workspaceId, entityId, FIELD_EDIT_VERDICT)
-    .all<{ note: string }>();
-  const fields = rows.results.flatMap((row) => {
+  const rows = z
+    .array(readEditedFieldsRow)
+    .parse((await env.DB.prepare(SELECT_FIELD_EDITS).bind(workspaceId, entityId, FIELD_EDIT_VERDICT).all()).results);
+  const fields = rows.flatMap((row) => {
     try {
       const result = fieldEditNoteSchema.safeParse(JSON.parse(row.note));
       return result.success ? [result.data.field] : [];
@@ -85,8 +91,8 @@ export async function readEditedFields(workspaceId: string, entityId: string): P
 }
 
 export async function readSubjectDecision(workspaceId: string, subject: string): Promise<SubjectVerdict | null> {
-  const row = await env.DB.prepare(SELECT_SUBJECT_DECISION)
-    .bind(workspaceId, subject)
-    .first<{ verdict: SubjectVerdict }>();
+  const row = readSubjectDecisionRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_SUBJECT_DECISION).bind(workspaceId, subject).first());
   return row?.verdict ?? null;
 }

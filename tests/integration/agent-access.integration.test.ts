@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { clientIp, withinLimit } from "../../app/lib/agent/client-limit.server";
 import { propsForApiKey } from "../../app/lib/agent/keys.server";
 import { createOAuthProvider } from "../../app/lib/agent/oauth.server";
+import { competitorResultSchema } from "../../app/lib/agent/schemas";
 import { toolResult } from "../../app/lib/agent/mcp.server";
 import { registeredToolDescriptors } from "../../app/lib/agent/mcp-tools";
 import {
@@ -19,7 +20,7 @@ import { createAuth } from "../../app/lib/auth.server";
 
 const auth = createAuth({
   DB: env.DB,
-  EMAIL: { send: async () => ({ ok: true }) },
+  EMAIL: { send: async () => ({ messageId: "m-1" }) },
   SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
   SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
   TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
@@ -309,6 +310,34 @@ describe("agent access, scoped to one workspace", () => {
     expect(call.structuredContent.competitor?.id).toBe("ent_agent_a");
   });
 
+  it("serves a change with no url by falling back to the page url instead of rejecting the whole competitor", async () => {
+    const { workspaceId } = await seedWorkspace("urlless");
+    const payload = JSON.stringify({
+      page: { role: "pricing", url: SITE_CHANGE_URL },
+      before: { snapshotId: "snap_urlless_before", screenshotKey: null },
+      after: { snapshotId: "snap_urlless_after", screenshotKey: null },
+      diffKey: null,
+      wordsAdded: 3,
+      wordsRemoved: 2,
+    });
+    await env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, url, evidence_url,
+         payload_json, dedup_key, observed_at, last_seen_at)
+       VALUES ('sig_agent_urlless', ?1, 'ent_agent_urlless', 'src_site_web', 'change', 'pricing', NULL, NULL,
+         ?2, 'dedup_urlless', ?3, ?3)`,
+    )
+      .bind(workspaceId, payload, CHANGE_SEEN_AT)
+      .run();
+
+    const result = competitorResultSchema.parse(
+      await readAgentCompetitor(workspaceId, "ent_agent_urlless", new Date(NOW)),
+    );
+
+    expect(result.competitor?.changes).toEqual([
+      expect.objectContaining({ id: "sig_agent_urlless", url: SITE_CHANGE_URL }),
+    ]);
+  });
+
   it("answers a failing MCP tool with a fixed error and never the thrown text", async () => {
     const failed = await toolResult(() => Promise.reject(new Error("D1_ERROR: no such column secret_internal")));
     expect(failed).toMatchObject({ isError: true });
@@ -384,6 +413,25 @@ describe("agent access, scoped to one workspace", () => {
     expect(foreign.status).toBe(403);
     const own = await mcpResponse(from(new URL(env.BETTER_AUTH_URL).origin), { userId: a.userId, clientId: "test" });
     expect(own.status).toBe(200);
+  });
+
+  it("refuses a foreign-origin API preflight and allows the product origin", async () => {
+    const foreign = await apiResponse(
+      new Request("http://localhost/api/v1/brief", {
+        method: "OPTIONS",
+        headers: { origin: "https://evil.example", "access-control-request-method": "GET" },
+      }),
+      readAgentBrief,
+    );
+    expect(foreign.status).toBe(403);
+    const own = await apiResponse(
+      new Request("http://localhost/api/v1/brief", {
+        method: "OPTIONS",
+        headers: { origin: new URL(env.BETTER_AUTH_URL).origin, "access-control-request-method": "GET" },
+      }),
+      readAgentBrief,
+    );
+    expect(own.status).toBe(204);
   });
 
   // #5757: no test in this file runs without a cf-connecting-ip header after

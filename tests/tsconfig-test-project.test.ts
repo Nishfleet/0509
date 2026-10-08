@@ -23,7 +23,7 @@ const FLOATING = `export async function probe(): Promise<number> {
 probe();
 `;
 
-describe("tsconfig.test.json (#7073)", () => {
+describe("tsconfig.test.json (#7073, #7183)", () => {
   it("is a referenced project so tsc -b typechecks tests, e2e and configs", () => {
     const root = readTsconfig("tsconfig.json");
     const paths = (root.references ?? []).map((reference) => reference.path);
@@ -31,11 +31,17 @@ describe("tsconfig.test.json (#7073)", () => {
     const testProject = readTsconfig("tsconfig.test.json");
     expect(testProject.include).toEqual(expect.arrayContaining(["tests/**/*.ts", "e2e/**/*.ts", "*.config.ts"]));
     const skipped = (testProject.exclude ?? []).filter((entry) => entry.startsWith("tests/"));
-    expect(skipped.length).toBeLessThanOrEqual(89);
+    expect(skipped.length).toBe(0);
   });
 
   it("type-aware lint flags a floating promise in e2e", { timeout: 60_000 }, async () => {
     const result = await lintTextAt("e2e/smoke.spec.ts", FLOATING);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((message) => message.includes("must be awaited"))).toBe(true);
+  });
+
+  it("type-aware lint flags a floating promise in tests", { timeout: 60_000 }, async () => {
+    const result = await lintTextAt("tests/env.test.ts", FLOATING);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((message) => message.includes("must be awaited"))).toBe(true);
   });

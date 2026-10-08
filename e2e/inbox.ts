@@ -35,6 +35,15 @@ export function isLocalLane(): boolean {
   return !process.env.PLAYWRIGHT_TEST_BASE_URL;
 }
 
+function unknownToMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  try {
+    return JSON.stringify(error);
+  } catch (_circular) {
+    return Object.prototype.toString.call(error);
+  }
+}
+
 // The lane's origin is the only one a verify link may carry (0509#5841):
 // production and the merge-queue previews mail their own baseURL, and the
 // local lane's `wrangler dev` mails the --var BETTER_AUTH_URL
@@ -301,13 +310,17 @@ export async function waitForMagicLink(to: string, token: string | null, exclude
       // one, and a poll-callback error would read as "no email" — the thrown
       // error names the sink's state and carries the poll failure as cause.
       if (pollError !== undefined) {
-        throw new Error(`Reading the local email sink failed while waiting for ${to}: ${pollError}`, { cause });
+        throw new Error(`Reading the local email sink failed while waiting for ${to}: ${unknownToMessage(pollError)}`, {
+          cause,
+        });
       }
       const sinkMissing = await stat(join(process.cwd(), LOCAL_EMAIL_SINK)).then(
         () => false,
         (error: unknown) => {
           if (isNotFound(error)) return true;
-          throw new Error(`Reading the local email sink failed while waiting for ${to}: ${error}`, { cause });
+          throw new Error(`Reading the local email sink failed while waiting for ${to}: ${unknownToMessage(error)}`, {
+            cause,
+          });
         },
       );
       throw new Error(
@@ -582,8 +595,8 @@ export async function signInWithMagicLink(
 // unrecorded one is the no-row case. The extra sign-in sends one email, and
 // only on this path.
 
-// 0509#5688 (fleet-manager): the journey specs keep these six accounts on
-// purpose; the recurring teardown must never delete them. Match these exact
+// 0509#5688 (fleet-manager): the journey specs keep these accounts on
+// purpose (0051 added the five production-lane identities, #7225); the recurring teardown must never delete them. Match these exact
 // addresses, never a pattern. The one-time purge (0509#5730) kept four
 // of them (not e2e+j8-hard, added by J8, 0509#4124); a later purge may still take them — once the kept-account journey
 // specs land (0509#4123, #4124, #4125, #4128) they create them again.
@@ -596,6 +609,11 @@ const KEPT_JOURNEY_ACCOUNTS: readonly string[] = [
   "e2e+j9-mentions@0509.io",
   "e2e+j12-rollovers@0509.io",
   "e2e+soak@0509.io",
+  "e2e+onboarded-desktop@0509.io",
+  "e2e+onboarded-phone@0509.io",
+  "e2e+j6-desktop@0509.io",
+  "e2e+j6-phone@0509.io",
+  "e2e+j11@0509.io",
 ];
 
 // Every FIXTURE_ACCOUNTS address is kept too: those workspaces hold a
@@ -639,16 +657,25 @@ export async function deleteAccountViaRequest(request: APIRequestContext, origin
     return;
   }
 
+  // Names the row the run is about to remove, so a teardown that times out
+  // (#7247) leaves a row the soak report's user table can be matched against
+  // instead of an anonymous leftover. The elapsed time is the measurement
+  // #7247 asks for: the product call answered in 20-30s, and nothing on this
+  // path recorded how long the answer took.
+  console.log(`deleteAccountViaRequest: deleting ${email}`);
+  const startedAt = Date.now();
   const deleted = await request.post("/app/settings", {
     headers: { origin },
     form: { intent: "delete-account", confirm: email },
     maxRedirects: 0,
   });
+  const elapsedMs = Date.now() - startedAt;
   const location = deleted.headers().location ?? "";
   const outcome = classifySettingsDeleteRedirect(deleted.status(), location);
   if (outcome === "unexpected") {
     throw new Error(`settings delete answered HTTP ${String(deleted.status())} location=${location}`);
   }
+  console.log(`deleteAccountViaRequest: deleted ${email} in ${elapsedMs}ms`);
 }
 
 export async function deleteCreatedAccount(page: Page, email: string): Promise<void> {

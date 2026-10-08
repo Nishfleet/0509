@@ -1,4 +1,4 @@
-import { createExecutionContext, env, runInDurableObject, waitOnExecutionContext } from "cloudflare:test";
+import { createExecutionContext, env as workerdEnv, runInDurableObject, waitOnExecutionContext } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 import worker from "../../workers/e2e-inbox";
@@ -13,6 +13,24 @@ import type { InboxMailbox } from "../../workers/e2e-inbox";
  * the next read is 200 with no wait.
  */
 type EmailMessage = Parameters<typeof worker.email>[0];
+
+/**
+ * The e2e-inbox project's bindings, from
+ * tests/integration/wrangler.e2e-inbox.test.jsonc. `env` from cloudflare:test
+ * is typed as the app Worker's Env, which has no INBOX namespace, so it is
+ * narrowed here once for the whole file.
+ */
+type InboxEnv = Parameters<typeof worker.email>[1];
+
+const env = workerdEnv as unknown as InboxEnv;
+
+/**
+ * The runtime always hands `fetch` an ExecutionContext. The module's own export
+ * type keeps `fetch` at the two parameters it declares, so this alias carries
+ * the third argument the runtime passes and the handler ignores.
+ */
+const callFetch = worker.fetch as (request: Request, env: InboxEnv, ctx: ExecutionContext) => Promise<Response>;
+const callEmail = worker.email as (message: EmailMessage, env: InboxEnv, ctx: ExecutionContext) => Promise<void>;
 
 const MIME = [
   "From: Five to Nine <hello@0509.io>",
@@ -38,7 +56,7 @@ const fakeMessage = (to: string, raw: string): EmailMessage =>
   }) as unknown as EmailMessage;
 
 const get = (path: string, token = "integration-token") =>
-  worker.fetch(
+  callFetch(
     new Request(`https://e2e-inbox.test${path}`, {
       headers: { authorization: `Bearer ${token}` },
     }),
@@ -52,7 +70,7 @@ describe("0509-e2e-inbox", () => {
   it("stores a delivered email under the full recipient address", async () => {
     const to = "e2e+vitest@0509.io";
     const ctx = createExecutionContext();
-    await worker.email(fakeMessage(to, MIME), env, ctx);
+    await callEmail(fakeMessage(to, MIME), env, ctx);
     await waitOnExecutionContext(ctx);
     expect(await env.INBOX.getByName(to).read()).toBe(MIME);
   });
@@ -62,7 +80,7 @@ describe("0509-e2e-inbox", () => {
     expect((await get(messagePath(to))).status).toBe(404);
 
     const ctx = createExecutionContext();
-    await worker.email(fakeMessage(to, MIME), env, ctx);
+    await callEmail(fakeMessage(to, MIME), env, ctx);
     await waitOnExecutionContext(ctx);
 
     const res = await get(messagePath(to));
@@ -73,7 +91,7 @@ describe("0509-e2e-inbox", () => {
   it("reads a message older than one hour as 404", async () => {
     const to = "e2e+expired@0509.io";
     const ctx = createExecutionContext();
-    await worker.email(fakeMessage(to, MIME), env, ctx);
+    await callEmail(fakeMessage(to, MIME), env, ctx);
     await waitOnExecutionContext(ctx);
     const stub = env.INBOX.getByName(to);
     await runInDurableObject(stub, async (_instance: InboxMailbox, state) => {
@@ -84,8 +102,8 @@ describe("0509-e2e-inbox", () => {
 
   it("serves a stored message to the bearer token", async () => {
     const ctx = createExecutionContext();
-    await worker.email(fakeMessage("e2e+vitest@0509.io", MIME), env, ctx);
-    const res = await worker.fetch(
+    await callEmail(fakeMessage("e2e+vitest@0509.io", MIME), env, ctx);
+    const res = await callFetch(
       new Request("https://e2e-inbox.test/message?to=e2e%2Bvitest%400509.io", {
         headers: { authorization: "Bearer integration-token" },
       }),
@@ -101,7 +119,7 @@ describe("0509-e2e-inbox", () => {
   });
 
   it("403s on no Authorization header", async () => {
-    const res = await worker.fetch(
+    const res = await callFetch(
       new Request("https://e2e-inbox.test/message?to=e2e%2Bvitest%400509.io"),
       env,
       createExecutionContext(),
@@ -118,7 +136,7 @@ describe("0509-e2e-inbox", () => {
   });
 
   it("404s non-/message paths before checking the token", async () => {
-    const res = await worker.fetch(
+    const res = await callFetch(
       new Request("https://e2e-inbox.test/"),
       { ...env, E2E_INBOX_TOKEN: undefined },
       createExecutionContext(),
@@ -127,7 +145,7 @@ describe("0509-e2e-inbox", () => {
   });
 
   it("503s naming the secret when E2E_INBOX_TOKEN is unset on the Worker", async () => {
-    const res = await worker.fetch(
+    const res = await callFetch(
       new Request("https://e2e-inbox.test/message?to=e2e%2Bvitest%400509.io"),
       { ...env, E2E_INBOX_TOKEN: undefined },
       createExecutionContext(),

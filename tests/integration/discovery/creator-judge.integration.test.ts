@@ -65,9 +65,9 @@ describe("judgeCandidates question choice", () => {
 
     expect(run).toHaveBeenCalledTimes(1);
     const questions = run.mock.calls[0]?.[1].questions;
-    expect(questions?.["is_creator_rival"]).toBeDefined();
-    expect(questions?.["is_competitor"]).toBeUndefined();
-    expect(questions?.["same_product_category"]).toBeUndefined();
+    expect(questions?.is_creator_rival).toBeDefined();
+    expect(questions?.is_competitor).toBeUndefined();
+    expect(questions?.same_product_category).toBeUndefined();
     expect(results[0]?.verdict).toMatchObject({ questionId: "is_creator_rival", p: 0.9, cached: false });
   });
 
@@ -83,9 +83,9 @@ describe("judgeCandidates question choice", () => {
 
     expect(run).toHaveBeenCalledTimes(1);
     const questions = run.mock.calls[0]?.[1].questions;
-    expect(questions?.["is_competitor"]).toBeDefined();
-    expect(questions?.["same_product_category"]).toBeDefined();
-    expect(questions?.["is_creator_rival"]).toBeUndefined();
+    expect(questions?.is_competitor).toBeDefined();
+    expect(questions?.same_product_category).toBeDefined();
+    expect(questions?.is_creator_rival).toBeUndefined();
     expect(results[0]?.verdict).toMatchObject({ questionId: "is_competitor", p: 0.98, cached: false });
   });
 });

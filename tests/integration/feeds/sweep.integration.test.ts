@@ -2,7 +2,7 @@ import { env, introspectWorkflowInstance } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { planFeedSweep } from "../../../app/lib/feeds/sweep.server";
-import { resetFeedFixtures, rssFeed, seedEntity } from "./seed";
+import { NOW, resetFeedFixtures, rssFeed, seedEntity } from "./seed";
 
 const PAD =
   "Every plan includes unlimited projects, priority support, single sign-on, audit logs, and a named account manager who answers within one business day, with onboarding help for your whole team.";
@@ -28,7 +28,7 @@ const runSweep = async (id: string) => {
   await using introspector = await introspectWorkflowInstance(env.FEED_SWEEP, id);
   await env.FEED_SWEEP.create({ id });
   await introspector.waitForStatus("complete");
-  return introspector.getOutput();
+  return await introspector.getOutput();
 };
 
 const contentSignals = async () => {
@@ -94,6 +94,33 @@ describe("nightly feed sweep workflow", () => {
     await pilot("feed-sweep@0509.io");
     expect((await planFeedSweep()).entities.map((entity) => entity.id)).toEqual(["ent-rival"]);
     expect(await runSweep("feed-pilot-in")).toMatchObject({ discovered: 1, feeds: 1, first: 1 });
+  });
+
+  it("sweeps the brands of every workspace, not one account's", async () => {
+    await env.DB.prepare(
+      `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES ('user-feed-other', 'Other', 'feed-other@0509.io', 1, ?1, ?1)`,
+    )
+      .bind(NOW)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES ('ws-feed-other', 'Other', 'user-feed-other', 'UTC', 1, 8, ?)`,
+    )
+      .bind(NOW)
+      .run();
+    await seedEntity("ws-feed-other", "ent-rival-other", "rival.com");
+
+    expect((await planFeedSweep()).entities.map((entity) => entity.id).sort()).toEqual([
+      "ent-rival",
+      "ent-rival-other",
+    ]);
+
+    await runSweep("feed-two-workspaces");
+
+    expect((await feedWatches()).map((watch) => watch.entity_id).sort()).toEqual(["ent-rival", "ent-rival-other"]);
+    expect((await planFeedSweep()).targets.map((target) => target.entityId).sort()).toEqual([
+      "ent-rival",
+      "ent-rival-other",
+    ]);
   });
 
   it("discovers the declared feed, baselines it, then files the new post on the next night", async () => {

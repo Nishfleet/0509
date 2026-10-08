@@ -21,6 +21,7 @@ interface BrowserStub {
   calls: string[];
   closed: number;
   quickAction(action: "content", options: { url: string }): Promise<Response>;
+  close(): Promise<void>;
 }
 
 vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn() }));

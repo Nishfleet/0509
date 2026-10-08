@@ -12,7 +12,7 @@ test("a competitor page sends a signed-out visitor to the login page @smoke", as
   const response = await request.get("/app/competitors/ent-anything", { maxRedirects: 0 });
   expect(response.status()).toBeGreaterThanOrEqual(300);
   expect(response.status()).toBeLessThan(400);
-  expect(response.headers()["location"]).toMatch(/\/login/);
+  expect(response.headers().location).toMatch(/\/login/);
 });
 
 test("a change's screenshot is never served to a signed-out visitor @smoke", async ({ request }) => {
@@ -20,7 +20,7 @@ test("a change's screenshot is never served to a signed-out visitor @smoke", asy
     const response = await request.get(`/app/changes/sig-anything/${side}`, { maxRedirects: 0 });
     expect(response.status()).toBeGreaterThanOrEqual(300);
     expect(response.status()).toBeLessThan(400);
-    expect(response.headers()["location"]).toMatch(/\/login/);
+    expect(response.headers().location).toMatch(/\/login/);
     expect(response.headers()["content-type"] ?? "").not.toContain("image/");
   }
 });

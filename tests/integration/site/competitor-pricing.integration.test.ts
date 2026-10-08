@@ -20,7 +20,7 @@ const HOME_HTML = `<html><head><title>Rival</title></head><body>
 function installJev(): void {
   Reflect.set(env, "AI", {
     run(_model: string, request: { questions: Record<string, { type: string }> }) {
-      const asked = request.questions["page_role"] as { type: string; instructions?: string } | undefined;
+      const asked = request.questions.page_role as { type: string; instructions?: string } | undefined;
       const text = JSON.stringify(request);
       const choice = text.includes("/plans") ? "pricing" : "other";
       return Promise.resolve({ answers: { page_role: { type: asked?.type ?? "choice", choice } } });
@@ -139,7 +139,7 @@ describe("a competitor's pricing page", () => {
     });
     const run = vi.fn((_model: string, request: { questions: Record<string, { type: string }> }) =>
       Promise.resolve({
-        answers: { page_role: { type: request.questions["page_role"]?.type ?? "choice", choice: "pricing" } },
+        answers: { page_role: { type: request.questions.page_role?.type ?? "choice", choice: "pricing" } },
       }),
     );
     Reflect.set(env, "AI", { run });
@@ -166,7 +166,7 @@ describe("a competitor's pricing page", () => {
         Promise.resolve({
           answers: {
             page_role: {
-              type: request.questions["page_role"]?.type ?? "choice",
+              type: request.questions.page_role?.type ?? "choice",
               choice: JSON.stringify(request).includes("/pricing") ? "pricing" : "other",
             },
           },

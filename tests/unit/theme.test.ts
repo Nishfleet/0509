@@ -132,7 +132,7 @@ function declarationsIn(css: string, selectorMatches: (selector: string) => bool
 // about the stylesheet as Tailwind emits it rather than about the source text.
 async function compileAppCss(): Promise<string> {
   const css = await readFile(path.join(REPO_ROOT, "app/app.css"), "utf8");
-  const { build } = await compile(css, {
+  const compiledCss = await compile(css, {
     base: REPO_ROOT,
     // `@import "tailwindcss"` resolves through node_modules exactly as the Vite
     // plugin resolves it; no copy of the package is checked in.
@@ -141,7 +141,7 @@ async function compileAppCss(): Promise<string> {
       return { path: resolved, base: path.dirname(resolved), content: await readFile(resolved, "utf8") };
     },
   });
-  return build([
+  return compiledCss.build([
     // Every utility a token declares, so the output carries them all. The list
     // is explicit on purpose: the served bundle tree-shakes any utility no
     // surface uses, which would make an unused token invisible here — a token

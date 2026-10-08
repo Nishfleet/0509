@@ -79,7 +79,7 @@ describe("Login account-delete progress", () => {
   it('gives "Check again" a 44px-tall tap target', () => {
     const html = render({ id: "wf-5", progress: { rows: "removed", files: "removing", deleted: null } });
 
-    const link = html.match(/<a\b[^>]*href="\/login\?deleted=wf-5"[^>]*>/)?.[0] ?? "";
+    const link = /<a\b[^>]*href="\/login\?deleted=wf-5"[^>]*>/.exec(html)?.[0] ?? "";
 
     expect(link).toContain("min-h-11");
     expect(link).toContain("inline-flex");

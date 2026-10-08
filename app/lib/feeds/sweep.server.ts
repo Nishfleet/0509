@@ -49,7 +49,7 @@ export async function findFeed(entity: { id: string; domain: string }): Promise<
 
   const homepage = `https://${entity.domain}/`;
   const found = await readThrough({
-    key: `feed:v2:${registrable}:url`,
+    key: `feed:v3:${registrable}:url`,
     schema: FEED_SCHEMA,
     ttlSeconds: FEED_TTL_SECONDS,
     run: () => loadFeed(homepage),

@@ -141,7 +141,7 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
 
   it("case B: HTTP 429 on the canary returns no count and leaves degraded_reason NULL (0509#6612)", async () => {
     const { sourceId } = await seedBlockedSource("b", { enabled: false });
-    const source: CanarySource = { id: sourceId, pluginKey: "gdelt.doc", canaryQuery: "google" };
+    const source: CanarySource = { id: sourceId, pluginKey: "gdelt.doc", canaryQuery: "google", minIntervalSeconds: 1 };
     const fetchMock = vi.fn(async () => new Response("", { status: 429 }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -218,7 +218,7 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
 
   it("case D: a later good canary clears the blocked reason", async () => {
     const { sourceId } = await seedBlockedSource("d", { enabled: false });
-    const source: CanarySource = { id: sourceId, pluginKey: "gdelt.doc", canaryQuery: "google" };
+    const source: CanarySource = { id: sourceId, pluginKey: "gdelt.doc", canaryQuery: "google", minIntervalSeconds: 1 };
 
     try {
       vi.stubGlobal(

@@ -16,7 +16,7 @@ import {
 } from "../../app/lib/discovery/refresh.server";
 import { stopRetryingWhenRefused } from "../../app/lib/discovery/refused.server";
 import type { DiscoveryParams } from "../../app/lib/discovery/start.server";
-import { JevUnavailableError, probeJev } from "../../app/lib/jev/client.server";
+import { JEV_BATCH_SIZE, JevUnavailableError, probeJev } from "../../app/lib/jev/client.server";
 
 const RETRY: WorkflowStepConfig = {
   retries: { limit: 3, delay: "10 seconds", backoff: "exponential" },
@@ -44,21 +44,37 @@ export interface DiscoveryOutcome {
   judged: number;
 }
 
+interface BatchJob {
+  step: WorkflowStep;
+  context: DiscoveryContext;
+  batch: readonly ResolvedCandidate[];
+  index: number;
+}
+
+async function judgeAndWriteBatch({ step, context, batch, index }: BatchJob): Promise<DiscoveryResult[]> {
+  const judgedBatch = await step.do(`judge-${String(index)}`, RETRY, () => judgeCandidates(context, batch));
+  await step.do(`write-${String(index)}`, RETRY, () =>
+    writeDiscoveryResults(context.self.workspaceId, judgedBatch, new Date().toISOString()),
+  );
+  return judgedBatch;
+}
+
 async function judgeAndWriteBatches(
   step: WorkflowStep,
   context: DiscoveryContext,
   resolved: readonly ResolvedCandidate[],
 ): Promise<DiscoveryResult[]> {
-  const batches = await Promise.all(
-    judgeBatches(resolved).map(async (batch, index) => {
-      const judgedBatch = await step.do(`judge-${String(index)}`, RETRY, () => judgeCandidates(context, batch));
-      await step.do(`write-${String(index)}`, RETRY, () =>
-        writeDiscoveryResults(context.self.workspaceId, judgedBatch, new Date().toISOString()),
-      );
-      return judgedBatch;
-    }),
-  );
-  return batches.flat();
+  const batches = judgeBatches(resolved);
+  let results: DiscoveryResult[] = [];
+  for (let start = 0; start < batches.length; start += JEV_BATCH_SIZE) {
+    const wave = await Promise.all(
+      batches
+        .slice(start, start + JEV_BATCH_SIZE)
+        .map((batch, offset) => judgeAndWriteBatch({ step, context, batch, index: start + offset })),
+    );
+    results = [...results, ...wave.flat()];
+  }
+  return results;
 }
 
 export class Discovery extends WorkflowEntrypoint<Env, DiscoveryParams> {

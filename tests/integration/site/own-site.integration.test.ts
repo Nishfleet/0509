@@ -69,7 +69,7 @@ const runCheck = async (id: string) => {
   });
   await env.OWN_SITE_CHECK.create({ id });
   await introspector.waitForStatus("complete");
-  return introspector.getOutput();
+  return await introspector.getOutput();
 };
 
 const incidents = async () => {
@@ -195,7 +195,9 @@ describe("own-site check", () => {
     )
       .bind(WS, NOW)
       .run();
-    const send = vi.spyOn(workerEnv.SEND_EMAIL, "send").mockResolvedValue(undefined);
+    const send = vi.spyOn(workerEnv.SEND_EMAIL, "send").mockResolvedValue({
+      metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
+    });
 
     site.html = SOFT_BROKEN_HTML;
     expect(await runCheck("own-soft-broken")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });

@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 
 import { readHomeStandingInputs } from "../lib/home-standing.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { requireSession } from "../lib/require-session.server";
+import { sessionContext } from "../lib/require-session.server";
 import { shareCard } from "../lib/share-card";
 import { renderShareImage, shareDocument } from "../lib/share-image.server";
 import { takeBrowserShareImage } from "../lib/site/browser-budget.server";
@@ -15,8 +15,8 @@ function plain(status: number, message: string, headers: Record<string, string> 
   });
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const session = await requireSession(request);
+export async function loader({ request, context }: Route.LoaderArgs) {
+  const session = context.get(sessionContext);
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   const inputs = await readHomeStandingInputs(env.DB, session.user.id, workspaceId ?? undefined);
   const card = inputs === null ? null : shareCard({ ...inputs, now: new Date() });

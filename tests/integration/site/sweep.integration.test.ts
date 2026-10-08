@@ -7,7 +7,7 @@ import type * as JudgeModule from "../../../app/lib/site/judge.server";
 const judgeFault = vi.hoisted(() => ({ next: false }));
 
 vi.mock("../../../app/lib/site/judge.server", async (importOriginal) => {
-  const original = await importOriginal<JudgeModule>();
+  const original = await importOriginal<typeof JudgeModule>();
   return {
     ...original,
     judgeChange: async (input: Parameters<typeof original.judgeChange>[0]) => {
@@ -358,7 +358,7 @@ describe("nightly site sweep", () => {
       const changes = await Promise.all(targets.map(async (t, i) => checkSitePage(t, await nextTick(`pair-2-${i}`))));
       const pairs = targets.map((target, i) => {
         const changed = changes[i];
-        if (changed === undefined || changed.outcome !== "changed") throw new Error("expected a change");
+        if (changed?.outcome !== "changed") throw new Error("expected a change");
         return { target, changed };
       });
       await Promise.all(pairs.map(({ target, changed }) => publishSiteChange(target, changed)));
@@ -515,7 +515,9 @@ describe("nightly site sweep", () => {
 
     beforeEach(async () => {
       await env.DB.exec("DELETE FROM jev_verdict");
-      send = vi.spyOn(workerEnv.SEND_EMAIL, "send").mockResolvedValue(undefined);
+      send = vi.spyOn(workerEnv.SEND_EMAIL, "send").mockResolvedValue({
+        metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
+      });
     });
 
     afterEach(() => {

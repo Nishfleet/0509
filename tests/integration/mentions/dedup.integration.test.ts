@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readMentionFeed } from "../../../app/lib/data/mention.server";
+import { readSignalAlerts } from "../../../app/lib/data/alert.server";
 import { planTargets, sweepTarget } from "../../../workers/mentions/sweep";
 
 const NIGHT_ONE = "2026-09-24T03:00:00.000Z";
@@ -246,9 +247,10 @@ describe("D8 duplicate_signal", () => {
       NIGHT_TWO,
     );
     const all = await rows(competitorId);
-    expect(all).toHaveLength(18);
+    expect(all).toHaveLength(24);
     expect(duplicateAsks(run)).toBe(6);
     expect(all.filter((row) => row.duplicate_of !== null)).toHaveLength(6);
+    expect(all.filter((row) => row.state === "unjudged")).toHaveLength(6);
   });
 
   it("collapses a same-sweep pair at p >= 0.9 and keeps both rows", async () => {
@@ -266,6 +268,7 @@ describe("D8 duplicate_signal", () => {
     expect(later?.duplicate_of).toBe(earlier?.id);
     const feed = await readMentionFeed(workspaceId, new Date(NIGHT_ONE));
     expect(feed.map((row) => row.id)).toEqual([earlier?.id]);
+    expect(await readSignalAlerts(env.DB, workspaceId)).toHaveLength(1);
   });
 
   it("pairs a same-sweep item on the normalized url when the titles differ", async () => {
@@ -339,8 +342,9 @@ describe("D8 duplicate_signal", () => {
     await sweep(brand, interleaved, NIGHT_ONE);
     const all = await rows(competitorId);
     expect(duplicateAsks(run)).toBe(4);
-    expect(all).toHaveLength(8);
+    expect(all).toHaveLength(24);
     expect(all.filter((row) => row.duplicate_of !== null)).toHaveLength(4);
+    expect(all.filter((row) => row.state === "unjudged")).toHaveLength(16);
   });
 
   it("never pairs a mention with another workspace's row", async () => {
