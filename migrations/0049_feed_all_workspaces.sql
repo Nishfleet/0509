@@ -5,7 +5,7 @@
 -- snapshots", the proof 0038 waited for. This removes "pilot" and nothing else: every other key
 -- stays, and is_enabled is not touched, so the off-switch (a data-only migration setting
 -- is_enabled = 0 with content.feed back to live: false in app/lib/coverage.ts) keeps working
--- whatever its number. The readers in app/lib/data/watch.server.ts no longer filter on pilot.
+-- whatever its number. With no pilot key the readers in app/lib/data/watch.server.ts (IN_PILOT) see every workspace; setting pilot again in a data-only migration narrows the sweep back to one account without a code change.
 -- Additive: one UPDATE of one row; nothing dropped.
 
 UPDATE source
