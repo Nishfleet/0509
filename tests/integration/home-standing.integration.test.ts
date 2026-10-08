@@ -209,4 +209,24 @@ describe("readHomeStandingInputs", () => {
     }
     expect([...history].sort((a, b) => a.week_start_at.localeCompare(b.week_start_at))).toEqual(history);
   });
+
+  it("returns more than four ranked weeks on Starter", async () => {
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?1, ?2, 'starter', 'active', ?3)",
+    )
+      .bind(`${WS}_plan`, WS, "2026-08-01T00:00:00.000Z")
+      .run();
+    const weeks = [
+      "2026-08-10T07:00:00.000Z",
+      "2026-08-17T07:00:00.000Z",
+      "2026-08-24T07:00:00.000Z",
+      "2026-08-31T07:00:00.000Z",
+      "2026-09-07T07:00:00.000Z",
+      "2026-09-14T07:00:00.000Z",
+    ];
+    for (const [index, week] of weeks.entries()) await seedStanding(week, week, index + 1);
+
+    const inputs = await readHomeStandingInputs(env.DB, USER);
+    expect([...new Set((inputs?.history ?? []).map((row) => row.week_start_at))]).toEqual(weeks);
+  });
 });

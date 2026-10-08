@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { createAuth } from "../auth.server";
+import { readOwnerWorkspaceApiAccess } from "../data/plan.server";
 import type { AgentKey, ConnectedApp, CreateKeyResult } from "./access";
 
 const FRESH = { disableCookieCache: true };
@@ -77,12 +78,25 @@ async function submissionMinted(request: Request, submission: string): Promise<b
   return listed.apiKeys.some((key) => Reflect.get(key.metadata ?? {}, "submission") === submission);
 }
 
-export async function createAgentKey(request: Request, form: FormData): Promise<CreateKeyResult> {
+function keyFields(form: FormData): { name: string; submission: string } {
   const parsed = createKeyForm.safeParse(Object.fromEntries(form));
   const submitted = parsed.success ? (parsed.data.name === undefined ? "" : parsed.data.name.trim()) : "";
   const name = submitted === "" ? "My agent" : submitted.slice(0, 60);
   const token = parsed.success && parsed.data.submission !== undefined ? parsed.data.submission : null;
   const submission = token !== null && SUBMISSION.test(token) ? token : crypto.randomUUID();
+  return { name, submission };
+}
+
+async function apiAccessDenied(request: Request): Promise<boolean> {
+  const session = await createAuth(env).api.getSession({ headers: request.headers, query: FRESH });
+  if (session === null) throw new Error("Sign in to create an API key.");
+  const access = await readOwnerWorkspaceApiAccess(session.user.id);
+  return access?.apiAccess !== true;
+}
+
+export async function createAgentKey(request: Request, form: FormData): Promise<CreateKeyResult> {
+  const { name, submission } = keyFields(form);
+  if (await apiAccessDenied(request)) return { newKey: null, duplicate: false };
   try {
     const body = { name, metadata: { submission } };
     const created = await createAuth(env).api.createApiKey({ body, headers: request.headers, query: FRESH });
