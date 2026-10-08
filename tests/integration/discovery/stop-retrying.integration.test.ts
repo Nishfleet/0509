@@ -24,6 +24,7 @@ async function seedWorkspace(id: string): Promise<void> {
 
 afterEach(() => {
   Reflect.deleteProperty(env, "AI");
+  Reflect.set(env, "AI_SPEND", "on");
 });
 
 describe("stopRetryingWhenRefused", () => {
@@ -67,6 +68,31 @@ describe("the Discovery workflow when Jev refuses", () => {
 
     expect((await instance.getError()).message).toContain("a step threw an NonRetryableError");
     expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops without retrying and without calling the model when the ai spend kill switch is off (0509#7191)", async () => {
+    await seedWorkspace("ws-spend-off");
+    const probeFailures = env.DB.prepare("SELECT COUNT(*) AS n FROM jev_failure WHERE question = 'jev_probe'");
+    const before = await probeFailures.first("n");
+    const run = vi.fn(() => Promise.resolve({ answers: { jev_probe: { type: "noul", noul: 0.9 } } }));
+    Reflect.set(env, "AI", { run });
+    Reflect.set(env, "AI_SPEND", "off");
+    await using introspector = await introspectWorkflow(env.DISCOVERY);
+    await introspector.modifyAll(async (modifier) => {
+      await modifier.disableRetryDelays();
+    });
+
+    await env.DISCOVERY.create({
+      id: "discovery-ws-spend-off",
+      params: { workspaceId: "ws-spend-off", mode: "create" },
+    });
+    const [instance] = await introspector.get();
+    if (instance === undefined) throw new Error("discovery instance was not started");
+    await instance.waitForStatus("errored");
+
+    expect((await instance.getError()).message).toContain("a step threw an NonRetryableError");
+    expect(run).not.toHaveBeenCalled();
+    expect(await probeFailures.first("n")).toBe(before);
   });
 
   it("goes on to propose rivals when Jev answers", async () => {

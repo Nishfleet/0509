@@ -38,6 +38,48 @@ function catchUpDue(input: RescheduleInput, staleAt: Date): Date | null {
   return unbriefed && age >= 0 && (age < HOUR_MS || staleCoversDue) ? due : null;
 }
 
+interface PendingRollover {
+  workspaceId: string;
+  schedule: BriefSchedule;
+  now: Date;
+}
+
+function terminateRollover(workflow: Pick<RolloverWorkflow, "get">, id: string): Promise<string | null> {
+  return workflow
+    .get(id)
+    .then((instance) => instance.terminate())
+    .then(
+      () => id,
+      () => null,
+    );
+}
+
+export function cancelRollover(
+  workflow: Pick<RolloverWorkflow, "get">,
+  { workspaceId, schedule, now }: PendingRollover,
+): Promise<string | null> {
+  return terminateRollover(workflow, rolloverInstance(workspaceId, nextBriefAt(schedule, now), "scheduled").id);
+}
+
+export function pendingRolloverIds({ workspaceId, schedule, now }: PendingRollover): string[] {
+  const next = nextBriefAt(schedule, now);
+  const previous = previousBriefAt(schedule, now);
+  return [
+    rolloverInstance(workspaceId, next, "scheduled").id,
+    rolloverInstance(workspaceId, nextBriefAt(schedule, next), "scheduled").id,
+    rolloverInstance(workspaceId, previous, "scheduled").id,
+    rolloverInstance(workspaceId, previous, "catch-up").id,
+  ];
+}
+
+export async function retireRollovers(
+  workflow: Pick<RolloverWorkflow, "get">,
+  pending: PendingRollover,
+): Promise<string[]> {
+  const terminated = await Promise.all(pendingRolloverIds(pending).map((id) => terminateRollover(workflow, id)));
+  return terminated.filter((id): id is string => id !== null);
+}
+
 export async function rescheduleRollover(
   workflow: RolloverWorkflow,
   input: RescheduleInput,
@@ -46,13 +88,11 @@ export async function rescheduleRollover(
   const stale = rolloverInstance(input.workspaceId, staleAt, "scheduled");
   const fresh = rolloverInstance(input.workspaceId, freshSlot(input), "scheduled");
   if (stale.id === fresh.id) return { cancelledId: null, createdId: null };
-  const cancelledId = await workflow
-    .get(stale.id)
-    .then((instance) => instance.terminate())
-    .then(
-      () => stale.id,
-      () => null,
-    );
+  const cancelledId = await cancelRollover(workflow, {
+    workspaceId: input.workspaceId,
+    schedule: input.previous,
+    now: input.now,
+  });
   const due = catchUpDue(input, staleAt);
   const catchUp = due === null ? null : rolloverInstance(input.workspaceId, due, "catch-up");
   await workflow.createBatch(catchUp === null ? [fresh] : [fresh, catchUp]);

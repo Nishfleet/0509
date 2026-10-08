@@ -342,6 +342,28 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     expect(brief.why_line).not.toContain("Rival Before");
   });
 
+  it("finishes an orphaned instance instead of waiting out the week for a deleted workspace (0509#7191)", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    const closesAt = nextBriefAt(schedule, new Date());
+    expect(closesAt.getTime()).toBeGreaterThan(Date.now());
+    const gone = `ws-gone-${String(++runs)}`;
+    const instance = rolloverInstance(gone, closesAt, "scheduled");
+
+    await using introspector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, instance.id);
+    await env.STANDING_ROLLOVER.create(instance);
+    await introspector.waitForStatus("complete");
+
+    expect(await introspector.getOutput()).toMatchObject({
+      workspaceId: gone,
+      digestId: null,
+      skipped: "workspace_gone",
+    });
+    const digests = await env.DB.prepare("SELECT COUNT(*) AS n FROM digest WHERE workspace_id = ?1")
+      .bind(gone)
+      .first<{ n: number }>();
+    expect(digests?.n).toBe(0);
+  });
+
   it("stands down when the workspace moved its brief time", async () => {
     const schedule = scheduleOffsetFromToday(3);
     await seedWorkspace({ ...schedule, hour: 9 });

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const ai = vi.hoisted(() => ({ run: vi.fn() }));
 const cache = vi.hoisted(() => ({ readChoice: vi.fn() }));
 
-vi.mock("cloudflare:workers", () => ({ env: { AI: ai } }));
+vi.mock("cloudflare:workers", () => ({ env: { AI: ai, AI_SPEND: "on" } }));
 vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn(), captureMessage: vi.fn() }));
 vi.mock("../../app/lib/data/jev_verdict.server", () => ({
   readCachedNoul: () => Promise.resolve(null),
