@@ -23,22 +23,30 @@ describe("the ai spend kill switch", () => {
     withVar(undefined);
 
     expect(aiSpendEnabled()).toBe(false);
-    expect(() => refuseWhenAiSpendOff()).toThrow(AiSpendOffError);
-    expect(() => refuseWhenAiSpendOff()).toThrow(`${AI_SPEND_VAR}=unset`);
+    expect(() => {
+      refuseWhenAiSpendOff();
+    }).toThrow(AiSpendOffError);
+    expect(() => {
+      refuseWhenAiSpendOff();
+    }).toThrow(`${AI_SPEND_VAR}=unset`);
   });
 
   it("refuses to spend when the var is blank", () => {
     withVar("  ");
 
     expect(aiSpendEnabled()).toBe(false);
-    expect(() => refuseWhenAiSpendOff()).toThrow(AiSpendOffError);
+    expect(() => {
+      refuseWhenAiSpendOff();
+    }).toThrow(AiSpendOffError);
   });
 
   it("spends when the var says on, and raises no alert", () => {
     withVar(AI_SPEND_ON);
 
     expect(aiSpendEnabled()).toBe(true);
-    expect(() => refuseWhenAiSpendOff()).not.toThrow();
+    expect(() => {
+      refuseWhenAiSpendOff();
+    }).not.toThrow();
     expect(captureException).not.toHaveBeenCalled();
   });
 
@@ -63,9 +71,15 @@ describe("the ai spend kill switch", () => {
     withVar(AI_SPEND_OFF);
 
     expect(aiSpendEnabled()).toBe(false);
-    expect(() => refuseWhenAiSpendOff()).toThrow(AiSpendOffError);
-    expect(() => refuseWhenAiSpendOff()).toThrow(`${AI_SPEND_VAR}=off`);
-    expect(() => refuseWhenAiSpendOff()).toThrow(`"${AI_SPEND_ON}"`);
+    expect(() => {
+      refuseWhenAiSpendOff();
+    }).toThrow(AiSpendOffError);
+    expect(() => {
+      refuseWhenAiSpendOff();
+    }).toThrow(`${AI_SPEND_VAR}=off`);
+    expect(() => {
+      refuseWhenAiSpendOff();
+    }).toThrow(`"${AI_SPEND_ON}"`);
   });
 
   it("treats any other value as off, so a mistyped switch stops spend instead of waving it through", () => {

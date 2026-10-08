@@ -40,7 +40,7 @@ describe("landing price", () => {
   it("carries one filled Start watching link with the first plan's price", () => {
     const html = markup();
     expect(html.match(/href="\/login"/g) ?? []).toHaveLength(1);
-    const anchor = html.match(/<a\b[^>]*href="\/login"[^>]*>[\s\S]*?<\/a>/)?.[0] ?? "";
+    const anchor = /<a\b[^>]*href="\/login"[^>]*>[\s\S]*?<\/a>/.exec(html)?.[0] ?? "";
     expect(anchor).toContain("Start watching");
     expect(anchor).toContain(monthlyPrice(PLANS[0].monthlyPriceEur));
     expect(anchor).toContain("bg-ink");

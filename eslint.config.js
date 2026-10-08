@@ -1,3 +1,5 @@
+import { readdirSync } from "node:fs";
+
 import js from "@eslint/js";
 import betterTailwindcss from "eslint-plugin-better-tailwindcss";
 import boundaries from "eslint-plugin-boundaries";
@@ -379,6 +381,48 @@ const RAW_DML_WRITER = {
   message:
     "One writer per table. Raw DML lives in app/lib/data/<table>.server.ts — this matches the statement text itself, so holding it in a module constant still counts. docs/REBUILD-TRUST.md C5. Source: 0509#4313 — the kysely-era insertInto/updateTable/deleteFrom selectors matched nothing after the raw-D1 rebuild, and app/lib/workspace.server.ts grew a second workspace writer while the rule stayed green.",
 };
+
+// 0509#7022: RAW_DML_WRITER only proves DML sits somewhere under
+// app/lib/data/. Inside it, <table>.server.ts may write only <table>.
+// One block per file, generated from the directory, so a new data file is
+// guarded with no edit here. better-auth owns session and verification;
+// auth_expiry is their one writer.
+const TABLE_WRITER_ALLOWED_TABLES = { auth_expiry: ["session", "verification"] };
+
+function foreignTableWriter(file) {
+  const table = file.replace(/\.server\.ts$/, "");
+  const allowed = TABLE_WRITER_ALLOWED_TABLES[table] ?? [table];
+  const own = `(?:${allowed.join("|")})\\b`;
+  // SQLite accepts `UPDATE OR <action> <table> SET ...` and
+  // `UPDATE <table> AS <alias> SET ...`, so the table name itself — not the
+  // word after UPDATE — is what the lookahead has to see.
+  const UPDATE_HEAD = `\\bUPDATE\\s+(?:OR\\s+\\w+\\s+)?`;
+  const UPDATE_TAIL = `(?:\\s+AS\\s+[\\w".]+)?\\s+SET\\s+[\\w".]+\\s*=`;
+  const shape =
+    `\\b(INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|DELETE\\s+FROM)\\s+"?(?!${own})\\w` +
+    `|${UPDATE_HEAD}"?(?!${own})[\\w.]+"?${UPDATE_TAIL}`;
+  return {
+    selector: `Literal[value=/${shape}/i], TemplateElement[value.raw=/${shape}/i]`,
+    message: `Foreign-table write: app/lib/data/${file} may write only ${allowed.join(", ")}. Move this statement to app/lib/data/<its table>.server.ts as an exported function that returns a D1PreparedStatement, and put that in this file's env.DB.batch so the batch stays atomic. Source: 0509#7022.`,
+  };
+}
+
+// A later matching block's no-restricted-syntax entry replaces the earlier
+// one wholesale, so each block restates what data files already get.
+export const TABLE_WRITER_BLOCKS = readdirSync(new URL("./app/lib/data/", import.meta.url))
+  .filter((file) => file.endsWith(".server.ts"))
+  .map((file) => ({
+    files: [`app/lib/data/${file}`],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX,
+        ...NO_USER_DATA_IN_LOGS,
+        FEED_STATE_LITERAL,
+        foreignTableWriter(file),
+      ],
+    },
+  }));
 
 const ENV_DB_IN_ROUTES = {
   selector: "CallExpression[callee.object.name='env'][callee.property.name='DB']",
@@ -813,8 +857,8 @@ export default tseslint.config(
     // for a purpose that is not domain normalisation, so the shared selector is
     // restated without `DOMAIN_HOSTNAME_BAN`: the identity engine itself, a
     // public-host guard in the transport layer, the job-board host match, this
-    // site's www variant and page-host display, and the support worker's
-    // site-host allow. Every
+    // site's www variant and page-host display, the OAuth loopback redirect
+    // allow-list, and the support worker's site-host allow. Every
     // other `.hostname` read in app/ or workers/ keeps the ban. This block
     // restates the list because a later matching block's no-restricted-syntax
     // entry replaces the earlier one wholesale (flat config never merges a rule's
@@ -824,6 +868,7 @@ export default tseslint.config(
       "app/lib/fetch/transport.server.ts",
       "app/lib/hiring/discover-board.server.ts",
       "app/lib/site/own-site.server.ts",
+      "app/lib/agent/redirect-uri.ts",
       "workers/support-inbox.ts",
     ],
     rules: {
@@ -1366,29 +1411,64 @@ export default tseslint.config(
     },
   },
 
-  // 0509#7073: type-aware lint is on for e2e and *.config.ts. The comment
-  // exemption used to live on the disableTypeChecked block that also listed
-  // those globs; keep it here so inline comments in specs and configs stay
-  // allowed (AGENTS.md: config files and tests are exempt).
+  // 0509#7233: tests/** runs under strictTypeChecked. The named offs are the
+  // findings typecheck cannot fix:
+  // - vi.fn() mocks and JSON.parse results are `any`/`error` (no-unsafe-*).
+  // - Test doubles declare `async` to match D1/fetch without awaiting a
+  //   fixture (require-await).
+  // - `cloudflare:test`'s `env` is @deprecated in favour of
+  //   `cloudflare:workers` (2,571 of 2,578 no-deprecated hits).
+  // - Partial loader/action args and mock shapes use `as` because `!` is
+  //   banned (no-unnecessary-type-assertion,
+  //   non-nullable-type-assertion-style).
+  // - fetch spy args are `Request | string` (no-base-to-string).
+  // - Workers `EmailMessage` types resolve as error in the test project
+  //   (no-redundant-type-constituents).
+  // - Tests mark unused bindings with `void x` (no-meaningless-void-operator).
+  // - Handlers are cast off `worker.fetch` and `worker.email`, and `env.X.get`
+  //   is asserted on as a spy (unbound-method).
+  // - Send and fetch fixtures reject with the recorded value, including the
+  //   non-Error string production `errorText` must stringify
+  //   (prefer-promise-reject-errors).
+  // Number and `any` interpolation is the same class as the e2e relaxation.
   {
-    files: ["e2e/**/*.ts", "*.config.ts"],
+    files: ["tests/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-return": "off",
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/require-await": "off",
+      "@typescript-eslint/no-deprecated": "off",
+      "@typescript-eslint/no-unnecessary-type-assertion": "off",
+      "@typescript-eslint/non-nullable-type-assertion-style": "off",
+      "@typescript-eslint/no-base-to-string": "off",
+      "@typescript-eslint/no-redundant-type-constituents": "off",
+      "@typescript-eslint/no-meaningless-void-operator": "off",
+      "@typescript-eslint/prefer-promise-reject-errors": "off",
+      "@typescript-eslint/unbound-method": "off",
+      "@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true, allowAny: true }],
+    },
+  },
+
+  // 0509#7073 / #7233: type-aware lint is on for e2e, tests and *.config.ts.
+  // The comment exemption used to live on the disableTypeChecked block that
+  // also listed those globs; keep it here so inline comments in specs,
+  // configs and tests stay allowed (AGENTS.md: config files and tests are
+  // exempt).
+  {
+    files: ["e2e/**/*.ts", "tests/**/*.ts", "*.config.ts"],
     rules: {
       "no-inline-comments": "off",
       "no-warning-comments": "off",
     },
   },
 
-  // 0509#7229: typechecking tests/** is done (tsconfig.test.json no longer
-  // excludes any tests/ path). Typed lint on the suite is a separate slice:
-  // removing tests/** from this block surfaces about 14,000 findings the
-  // typecheck alone cannot fix — 5,285 no-unsafe-member-access, 4,509
-  // no-unsafe-call, 2,487 no-deprecated and 793 no-unsafe-assignment, almost
-  // all vi.fn() mocks and JSON.parse results. This comment is the named "why
-  // not": tests stay on disableTypeChecked until that migration lands as
-  // #7233, the follow-up #7183's finish line allows. **/*.js, **/*.mjs,
+  // 0509#7233: tests/** is off disableTypeChecked. **/*.js, **/*.mjs,
   // **/*.cjs and public/index.html stay untyped.
   {
-    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "tests/**/*.ts", "public/index.html"],
+    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "public/index.html"],
     extends: [tseslint.configs.disableTypeChecked],
     rules: {
       "no-inline-comments": "off",
@@ -1455,4 +1535,12 @@ export default tseslint.config(
       ],
     },
   },
+
+  // 0509#7266: TABLE_WRITER_BLOCKS must be the last entries in this array.
+  // Flat config replaces a rule's options wholesale per matching block — a
+  // later block with no-restricted-syntax on app/lib/data/** would silently
+  // drop the per-file foreign-table-write selector. Spreading here guarantees
+  // no existing block comes after them; a future block placed after this
+  // comment overrides them by design and must restate every entry.
+  ...TABLE_WRITER_BLOCKS,
 );

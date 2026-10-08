@@ -17,11 +17,11 @@ function render(props: { busy: boolean; error: string }): string {
 }
 
 function emailInput(html: string): string {
-  return html.match(/<input\b[^>]*id="email"[^>]*>/)?.[0] ?? "";
+  return /<input\b[^>]*id="email"[^>]*>/.exec(html)?.[0] ?? "";
 }
 
 function submitButton(html: string): string {
-  return html.match(/<button[^>]*type="submit"[^>]*>[\s\S]*?<\/button>/)?.[0] ?? "";
+  return /<button[^>]*type="submit"[^>]*>[\s\S]*?<\/button>/.exec(html)?.[0] ?? "";
 }
 
 // The disabled control renders the bare attribute, but the button class list

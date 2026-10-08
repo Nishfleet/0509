@@ -14,7 +14,7 @@ const sources = (dir: string): string[] =>
     return extname(entry.name) === ".ts" ? [path] : [];
   });
 
-const aiCallSites = ROOTS.flatMap(sources).filter((path) => /\.AI\.run\(/.test(readFileSync(path, "utf8")));
+const aiCallSites = ROOTS.flatMap(sources).filter((path) => readFileSync(path, "utf8").includes(".AI.run("));
 
 describe("the ai spend kill switch (0509#7191)", () => {
   it("has both call sites to guard: the jev judge and the discovery proposer", () => {

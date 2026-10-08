@@ -30,15 +30,18 @@ export async function deleteAccount(
 ): Promise<{ headers: Headers; instanceId: string } | null> {
   const cookie = deleteInstanceCookie();
   const owned = await readBriefScheduleForOwner(userId);
-  const prefixes = owned === null ? [] : await readWorkspaceR2Prefixes(owned.workspaceId);
-  const entityIds = owned === null ? [] : await readWorkspaceEntityIds(owned.workspaceId);
+  const [prefixes, entityIds]: [string[], string[]] =
+    owned === null
+      ? [[], []]
+      : await Promise.all([readWorkspaceR2Prefixes(owned.workspaceId), readWorkspaceEntityIds(owned.workspaceId)]);
   const headers = await deleteSignedInUser(env, request, new Date());
   if (headers === null) return null;
-  for (const entityId of entityIds) await terminateIdentityTail(entityId);
+  await Promise.all(entityIds.map((entityId) => terminateIdentityTail(entityId)));
   if (owned !== null) await retireWorkspaceRollovers(owned);
+  const grants = revokeGrants(helpers, userId);
   const instance = await env.ACCOUNT_DELETE.create({ params: { prefixes } satisfies AccountDeleteParams });
   headers.append("set-cookie", await cookie.serialize(instance.id));
-  await revokeGrants(helpers, userId);
+  await grants;
   return { headers, instanceId: instance.id };
 }
 
