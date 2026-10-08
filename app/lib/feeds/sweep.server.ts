@@ -26,7 +26,8 @@ export async function planFeedSweep(): Promise<{
 }> {
   const paid = await readPaidWorkspaceIds(new Date());
   const targets = (await readFeedTargets()).filter((target) => paid.has(target.workspaceId));
-  return { entities: await readEntitiesWithoutFeedWatch(), targets };
+  const entities = (await readEntitiesWithoutFeedWatch()).filter((entity) => paid.has(entity.workspaceId));
+  return { entities: entities.map(({ id, domain }) => ({ id, domain })), targets };
 }
 
 async function firstReadableFeed(candidates: readonly string[]): Promise<string | null> {

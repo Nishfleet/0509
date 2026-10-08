@@ -54,7 +54,17 @@ WHERE w.is_active = 1`;
 const SITE_SWEEP_TARGETS = `${SITE_SWEEP_TARGET_JOIN} AND src.key = ?1
 ORDER BY e.workspace_id, e.id, p.url`;
 
-const entityRows = z.array(z.object({ id: z.string(), domain: z.string() }));
+const entityRows = z.array(z.object({ id: z.string(), domain: z.string(), workspace_id: z.string() }));
+
+export interface WatchlessEntity {
+  id: string;
+  domain: string;
+  workspaceId: string;
+}
+
+function toWatchlessEntities(results: unknown): readonly WatchlessEntity[] {
+  return entityRows.parse(results).map((row) => ({ id: row.id, domain: row.domain, workspaceId: row.workspace_id }));
+}
 
 const unwatchedEntityRows = z.array(
   z.object({
@@ -220,7 +230,7 @@ export async function readActiveWatches(kind: "mentions" | "ads"): Promise<Watch
   return watchRows.parse(rows.results);
 }
 
-const ENTITIES_WITHOUT_HIRING_WATCH = `SELECT e.id AS id, e.domain AS domain
+const ENTITIES_WITHOUT_HIRING_WATCH = `SELECT e.id AS id, e.domain AS domain, e.workspace_id AS workspace_id
 FROM entity e
 WHERE e.state = 'on'
   AND NOT EXISTS (
@@ -260,9 +270,9 @@ export interface HiringTarget {
   boardUrl: string;
 }
 
-export async function readEntitiesWithoutHiringWatch(): Promise<readonly { id: string; domain: string }[]> {
+export async function readEntitiesWithoutHiringWatch(): Promise<readonly WatchlessEntity[]> {
   const rows = await env.DB.prepare(ENTITIES_WITHOUT_HIRING_WATCH).all();
-  return entityRows.parse(rows.results);
+  return toWatchlessEntities(rows.results);
 }
 
 export async function readHiringTargets(): Promise<readonly HiringTarget[]> {
@@ -281,7 +291,7 @@ const IN_PILOT = `(json_extract(CASE WHEN json_valid(src.config_json) THEN src.c
   OR e.workspace_id IN (SELECT ws.id FROM workspace ws JOIN user u ON u.id = ws.owner_user_id
     WHERE u.email = json_extract(CASE WHEN json_valid(src.config_json) THEN src.config_json ELSE '{}' END, '$.pilot')))`;
 
-const ENTITIES_WITHOUT_FEED_WATCH = `SELECT e.id AS id, e.domain AS domain
+const ENTITIES_WITHOUT_FEED_WATCH = `SELECT e.id AS id, e.domain AS domain, e.workspace_id AS workspace_id
 FROM entity e
 JOIN source src ON src.key = 'feed.rss' AND src.is_enabled = 1
 WHERE e.state = 'on' AND ${IN_PILOT}
@@ -314,9 +324,9 @@ export interface FeedTarget {
   feedUrl: string;
 }
 
-export async function readEntitiesWithoutFeedWatch(): Promise<readonly { id: string; domain: string }[]> {
+export async function readEntitiesWithoutFeedWatch(): Promise<readonly WatchlessEntity[]> {
   const rows = await env.DB.prepare(ENTITIES_WITHOUT_FEED_WATCH).all();
-  return entityRows.parse(rows.results);
+  return toWatchlessEntities(rows.results);
 }
 
 export async function readFeedTargets(): Promise<readonly FeedTarget[]> {

@@ -96,18 +96,25 @@ describe("nightly feed sweep workflow", () => {
     expect(await runSweep("feed-pilot-in")).toMatchObject({ discovered: 1, feeds: 1, first: 1 });
   });
 
-  it("sweeps the brands of every workspace, not one account's", async () => {
+  it("sweeps the brands of every paid workspace and none of an unpaid one", async () => {
+    for (const suffix of ["other", "unpaid"]) {
+      await env.DB.prepare(
+        `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, 'Other', ?2, 1, ?3, ?3)`,
+      )
+        .bind(`user-feed-${suffix}`, `feed-${suffix}@0509.io`, NOW)
+        .run();
+      await env.DB.prepare(
+        `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Other', ?2, 'UTC', 1, 8, ?3)`,
+      )
+        .bind(`ws-feed-${suffix}`, `user-feed-${suffix}`, NOW)
+        .run();
+      await seedEntity(`ws-feed-${suffix}`, `ent-rival-${suffix}`, "rival.com");
+    }
     await env.DB.prepare(
-      `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES ('user-feed-other', 'Other', 'feed-other@0509.io', 1, ?1, ?1)`,
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES ('plan-ws-feed-other', 'ws-feed-other', 'scout', 'trialing', ?)",
     )
       .bind(NOW)
       .run();
-    await env.DB.prepare(
-      `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES ('ws-feed-other', 'Other', 'user-feed-other', 'UTC', 1, 8, ?)`,
-    )
-      .bind(NOW)
-      .run();
-    await seedEntity("ws-feed-other", "ent-rival-other", "rival.com");
 
     expect((await planFeedSweep()).entities.map((entity) => entity.id).sort()).toEqual([
       "ent-rival",

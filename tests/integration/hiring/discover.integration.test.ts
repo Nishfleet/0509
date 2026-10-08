@@ -103,6 +103,28 @@ describe("nightly hiring sweep", () => {
     vi.unstubAllGlobals();
   });
 
+  it("plans no lookup for a brand of a workspace without a live plan", async () => {
+    await env.DB.prepare(
+      `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES ('user-hiring-unpaid', 'Unpaid', 'hiring-unpaid@0509.io', 1, ?1, ?1)`,
+    )
+      .bind(NOW)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
+       VALUES ('ws-hiring-unpaid', 'Unpaid', 'user-hiring-unpaid', 'UTC', 1, 8, ?)`,
+    )
+      .bind(NOW)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
+       VALUES ('ent-unpaid', 'ws-hiring-unpaid', 'competitor', 'unpaid.example', '{}', 'manual', 'on', ?)`,
+    )
+      .bind(NOW)
+      .run();
+
+    expect((await planHiringSweep()).entities.map((row) => row.id)).toEqual(["ent-rival"]);
+  });
+
   it("plans only the on entity and lists its new watch as a target", async () => {
     const before = await planHiringSweep();
     expect(before.entities.map((row) => row.id)).toEqual(["ent-rival"]);

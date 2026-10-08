@@ -53,7 +53,8 @@ export async function planHiringSweep(): Promise<{
 }> {
   const paid = await readPaidWorkspaceIds(new Date());
   const targets = (await readHiringTargets()).filter((target) => paid.has(target.workspaceId));
-  return { entities: await readEntitiesWithoutHiringWatch(), targets };
+  const entities = (await readEntitiesWithoutHiringWatch()).filter((entity) => paid.has(entity.workspaceId));
+  return { entities: entities.map(({ id, domain }) => ({ id, domain })), targets };
 }
 
 async function loadBoard(domain: string, homepage: string): Promise<z.infer<typeof BOARD_SCHEMA>> {
