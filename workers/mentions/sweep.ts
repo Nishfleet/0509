@@ -11,6 +11,7 @@ import {
   markDuplicateOf,
   type MentionSignal,
   readSeenDedupKeys,
+  readSeenNormUrlHashes,
   readUnjudgedMentions,
   resolveUnjudgedMention,
 } from "../../app/lib/data/signal.server";
@@ -49,6 +50,7 @@ import {
   withoutPendingChannel,
 } from "../../app/lib/mentions/youtube-channel";
 import { isHnPlugin, newestEpoch, predatesWatch, startCursor } from "../../app/lib/mentions/hn-window";
+import { normUrlHash } from "../../app/lib/mentions/normalize";
 import { sha256Hex } from "../../app/lib/sha256";
 import { storedDedupKey, toSignalRow, type MentionItem, type SignalRow } from "./map";
 import { recordUpstreamBlock, writeSourcePoint } from "./canary";
@@ -477,6 +479,30 @@ async function unjudgedRemainder(input: {
   return { statements, unjudged };
 }
 
+async function unseenMentionItems(watch: WatchRow, items: readonly MentionItem[]): Promise<MentionItem[]> {
+  const keyed = await Promise.all(
+    items.map(async (item) => ({
+      item,
+      dedupKey: storedDedupKey(watch.entity_id, item.dedupKey),
+      urlHash: await normUrlHash(item.url),
+    })),
+  );
+  const seen = await readSeenDedupKeys(
+    watch.source_id,
+    keyed.map((entry) => entry.dedupKey),
+  );
+  const seenUrls = await readSeenNormUrlHashes(
+    watch.entity_id,
+    keyed.map((entry) => entry.urlHash),
+  );
+  const batchUrls = new Set<string>();
+  return keyed.flatMap((entry) => {
+    if (seen.has(entry.dedupKey) || seenUrls.has(entry.urlHash) || batchUrls.has(entry.urlHash)) return [];
+    batchUrls.add(entry.urlHash);
+    return [entry.item];
+  });
+}
+
 async function statementsForWatch(input: {
   watch: WatchRow;
   context: DiscoveryContext;
@@ -485,17 +511,9 @@ async function statementsForWatch(input: {
   canaryCount: number | null;
   now: string;
 }): Promise<{ statements: D1PreparedStatement[]; stored: number; unjudged: number }> {
-  const { watch, context, items, snapshot, canaryCount, now } = input;
+  const { watch, context, snapshot, canaryCount, now } = input;
   const snapshotId = crypto.randomUUID();
-  const keyed = items.map((item) => ({
-    item,
-    dedupKey: storedDedupKey(watch.entity_id, item.dedupKey),
-  }));
-  const seen = await readSeenDedupKeys(
-    watch.source_id,
-    keyed.map((entry) => entry.dedupKey),
-  );
-  const fresh = keyed.filter((entry) => !seen.has(entry.dedupKey));
+  const fresh = await unseenMentionItems(watch, input.items);
   const statements: D1PreparedStatement[] = [
     ...insertWatchSnapshot({
       id: snapshotId,
@@ -503,7 +521,7 @@ async function statementsForWatch(input: {
       fetchedAt: now,
       r2Key: snapshot.r2Key,
       hash: snapshot.hash,
-      itemCount: items.length,
+      itemCount: input.items.length,
       canaryCount,
     }),
   ];
@@ -516,7 +534,7 @@ async function statementsForWatch(input: {
   const freshJudged = await judgeFreshItems({
     watch,
     context,
-    items: fresh.map((entry) => entry.item),
+    items: fresh,
     snapshotId,
     now,
     jevDown,

@@ -37,8 +37,8 @@ ON CONFLICT(workspace_id) DO UPDATE SET
   updated_at = excluded.updated_at
 WHERE ? = 1 OR excluded.updated_at >= plan.updated_at`;
 
-async function readPlan(workspaceId: string): Promise<{ tier: string; row: PlanRow | null }> {
-  const row = planRow.nullable().parse(await env.DB.prepare(SELECT_PLAN).bind(workspaceId).first());
+async function readPlan(workspaceId: string, db: D1Database = env.DB): Promise<{ tier: string; row: PlanRow | null }> {
+  const row = planRow.nullable().parse(await db.prepare(SELECT_PLAN).bind(workspaceId).first());
   if (row === null) return { tier: "scout", row };
   const tier = entitledTier(
     { tier: row.tier, status: row.status, currentPeriodEnd: row.current_period_end },
@@ -95,8 +95,8 @@ export async function readPlanTier(workspaceId: string): Promise<PlanId> {
   return isPlanId(tier) ? tier : "scout";
 }
 
-export async function readPlanSummary(workspaceId: string): Promise<PlanSummary> {
-  const { tier, row } = await readPlan(workspaceId);
+export async function readPlanSummary(workspaceId: string, db: D1Database = env.DB): Promise<PlanSummary> {
+  const { tier, row } = await readPlan(workspaceId, db);
   return {
     tier: isPlanId(tier) ? tier : "scout",
     status: row === null ? "none" : row.status,

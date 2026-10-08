@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 
+import { clearWorkspaceDeletedSuppression } from "./data/email_suppression.server";
 import { ensureOwnerEmailTarget } from "./data/send_target.server";
 import { isPerRunFixtureEmail } from "./fixture-accounts";
 import {
@@ -90,6 +91,7 @@ export async function ensureWorkspace(
       createdAt,
       fixture: isPerRunFixtureEmail(input.email),
     });
+    await clearWorkspaceDeletedSuppression(input.email, db);
   } catch (error) {
     const raced = await readWorkspace(db, input.userId);
     if (raced) return withCapturedTimezone(db, raced, timezone);
