@@ -234,7 +234,7 @@ function weekLabel(timezone: string, weekStartAt: string): string {
 }
 
 function weekKeys(history: readonly HomeHistoryRow[]): readonly string[] {
-  return [...new Set(history.map((row) => row.week_start_at))].sort().slice(-4);
+  return [...new Set(history.map((row) => row.week_start_at))].sort();
 }
 
 interface FourWeekChartInput {

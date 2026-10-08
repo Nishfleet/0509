@@ -1,6 +1,5 @@
 import type { Route } from "./+types/app.alerts";
 
-import { env } from "cloudflare:workers";
 import { Link } from "react-router";
 import { z } from "zod";
 
@@ -12,7 +11,7 @@ import { PAGE, PageHeading } from "../components/page-heading";
 import { SourcePill } from "../components/source-pill";
 import { acknowledgeOwnSiteIncident, loadAlertsPage } from "../lib/alerts-page.server";
 import { parseAlertChip } from "../lib/alert-chips";
-import { listBriefs } from "../lib/data/digest.server";
+import { listWorkspaceBriefs } from "../lib/data/digest.server";
 import { onboardedContext } from "../lib/require-onboarded.server";
 import { requireFreshSession } from "../lib/require-session.server";
 
@@ -28,7 +27,7 @@ const acknowledgeForm = z.object({
 });
 
 async function readLatestBrief(workspaceId: string | null) {
-  return workspaceId === null ? undefined : (await listBriefs(env.DB, workspaceId))[0];
+  return workspaceId === null ? undefined : (await listWorkspaceBriefs(workspaceId))[0];
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {

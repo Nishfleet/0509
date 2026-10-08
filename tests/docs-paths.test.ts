@@ -18,6 +18,11 @@ const PATH = /`((?:app|docs|workers|tests|e2e|migrations|\.agents)\/[\w./-]+[\w-
 // This is a wording gate, not a mechanism check: it catches the return of those
 // exact claims. It fails on the old text and passes once the claims are gone. The
 // live rules the section carried stay, so the deletion cannot take them with it.
+// 0509#6999: "Conventions, enforced not described" listed Immutability as
+// enforced, but eslint.config.js has no mutation rule — 0509#5783 parked
+// eslint-plugin-functional until the violation count is measured. The bullet
+// stays out of the enforced list until that mechanism exists. The rule itself
+// stays in the file, stated as reviewer-only.
 const RETIRED = [
   /\bhash-checked\b/,
   /\bFable\b/,
@@ -25,6 +30,7 @@ const RETIRED = [
   /Two orchestrator sessions/,
   /#3842/,
   /about \d+ KB/,
+  /- \*\*Immutability\.\*\*/,
 ] as const;
 
 // The four live rules move from "Rebuild rules" into "Conventions", the
@@ -36,6 +42,7 @@ const LIVE = [
   /Browser Rendering capped at 10/,
   /Guardrails/,
   /Nothing from the pre-wipe code is reused/,
+  /new objects,\s+never mutation/,
   /site is gated until the audit passes/,
 ] as const;
 

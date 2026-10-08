@@ -69,7 +69,7 @@ const CHART_IMPORTS = [UPLOT_IMPORT, UPLOT_REACT_IMPORT, FOUR_WEEK_PLOT_STATIC_I
 const FAST_XML_PARSER_IMPORT = {
   name: "fast-xml-parser",
   message:
-    "Feed XML is parsed only by @extractus/feed-extractor in workers/sources/mentions/feed.ts. A direct fast-xml-parser import is a second parser. Source: 0509#4051.",
+    "Feed XML is parsed only by @extractus/feed-extractor. A direct fast-xml-parser import is a second parser. Source: 0509#4051.",
 };
 
 const UNSCOPED_WRITER_MESSAGE =
@@ -175,7 +175,42 @@ const FEED_STATE_LITERAL = {
 const XML_PARSER_CONSTRUCTOR = {
   selector: "NewExpression[callee.name='XMLParser']",
   message:
-    "Feed XML is parsed only by @extractus/feed-extractor in workers/sources/mentions/feed.ts. A second XMLParser is a second feed path. Source: 0509#4051.",
+    "Feed XML is parsed only by @extractus/feed-extractor. A second XMLParser is a second feed path. Source: 0509#4051.",
+};
+
+// The other half of the same gate, and the half that catches #7000.
+// FAST_XML_PARSER_IMPORT and XML_PARSER_CONSTRUCTOR only catch a parser someone
+// imported. The parser that actually sat beside the extractor until #7000
+// imported nothing: it read tags with openTagAt()/elementAt() over indexOf and
+// slices, and fed `item`, `entry` and `guid` to them as arguments. That is the
+// shape a second feed parser has to have — you cannot read XML without naming a
+// tag — so the ban is on naming a feed tag for a tag lookup at all, whether the
+// name is a literal or a template. HTMLRewriter takes a CSS selector string, and
+// the feed body goes through the extractor, so neither path needs to look a tag
+// up by name.
+//
+// A literal spelling a feed tag is banned under app/lib/feeds/, which is where
+// a second feed parser can only live. A bare "title" or "link" elsewhere in the
+// repo is a DOM property, a JSON key or a column name, so the ban is scoped to
+// the feed module and not applied repo-wide. The close-tag template covers the
+// form that hides the name in a variable, which is how the deleted scanner
+// found a close tag.
+const HAND_ROLLED_FEED_TAG_SCAN = {
+  selector:
+    "Literal[value=/^(item|entry|items|channel|rss|feed|guid|pubdate)$/i], TemplateLiteral[quasis.0.value.raw=/^<\\//]",
+  message:
+    "Feed XML is read by @extractus/feed-extractor (app/lib/feeds/parse-feed.ts maps extractFromXml onto FeedItem) and a homepage <link> by one HTMLRewriter selector (app/lib/feeds/discover-feed.ts). Looking a feed tag up by name is a hand-rolled parser: one that imports nothing, so the fast-xml-parser import and XMLParser bans cannot see it, and one that must be re-audited against CDATA, entities, namespaces, case and hostile input forever. That is the parser #7000 deleted. The one tag name allowed here is dc:date, which the extractor does not surface; reach it through getExtraEntryFields as this file does, and add any other to the extractor instead. Source: 0509#7000.",
+};
+
+// The tag-reader helpers themselves. A function whose body slices a string at a
+// tag offset is the scanner; banning the two shapes it was built from (a
+// close-tag template, a lower-cased copy of a document) catches the same code
+// before it is finished.
+const HAND_ROLLED_TAG_READER = {
+  selector:
+    "CallExpression[callee.name=/^(openTagAt|elementAt|firstTag|findTag|parseTag|readTag|matchTag|unwrapCdata|stripTags|attributes)$/]",
+  message:
+    "A tag-reading helper is a hand-rolled parser. Feed XML is read by @extractus/feed-extractor and a homepage <link> by one HTMLRewriter selector (app/lib/feeds/discover-feed.ts). A local openTagAt/elementAt/stripTags/attributes has to re-derive CDATA, entities, namespaces and case, and the copy that sat beside the extractor for a year could not read RDF or dc:date. Source: 0509#7000.",
 };
 
 // The one domain normaliser. The identity engine — app/lib/identity/normalise.ts
@@ -425,8 +460,15 @@ export const TABLE_WRITER_BLOCKS = readdirSync(new URL("./app/lib/data/", import
   }));
 
 const ENV_DB_IN_ROUTES = {
-  selector: "CallExpression[callee.object.name='env'][callee.property.name='DB']",
-  message: "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
+  selector: "MemberExpression[object.name='env'][property.name='DB']",
+  message:
+    "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4. Source: 0509#6999 — the old CallExpression[callee...] selector matched only a direct env.DB(...) call, so the five routes passing env.DB as an argument linted green.",
+};
+
+const ENV_DB_DESTRUCTURE_IN_ROUTES = {
+  selector: "VariableDeclarator[init.name='env'] > ObjectPattern > Property[key.name='DB']",
+  message:
+    "Routes do not touch env.DB, destructured or not. Go through the one data layer in app/lib/data/. Source: 0509#6999.",
 };
 
 const FORM_DATA_GET_BAN = {
@@ -857,8 +899,8 @@ export default tseslint.config(
     // for a purpose that is not domain normalisation, so the shared selector is
     // restated without `DOMAIN_HOSTNAME_BAN`: the identity engine itself, a
     // public-host guard in the transport layer, the job-board host match, this
-    // site's www variant and page-host display, and the support worker's
-    // site-host allow. Every
+    // site's www variant and page-host display, the OAuth loopback redirect
+    // allow-list, and the support worker's site-host allow. Every
     // other `.hostname` read in app/ or workers/ keeps the ban. This block
     // restates the list because a later matching block's no-restricted-syntax
     // entry replaces the earlier one wholesale (flat config never merges a rule's
@@ -868,6 +910,7 @@ export default tseslint.config(
       "app/lib/fetch/transport.server.ts",
       "app/lib/hiring/discover-board.server.ts",
       "app/lib/site/own-site.server.ts",
+      "app/lib/agent/redirect-uri.ts",
       "workers/support-inbox.ts",
     ],
     rules: {
@@ -976,6 +1019,27 @@ export default tseslint.config(
         ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  {
+    // The feed read itself. A second parser in here cannot be reached by the
+    // import ban (it needs no import) or the whole-repo tag ban (a "title"
+    // elsewhere is a DOM property), so the tag ban is scoped to the module a
+    // feed parser can only live in. dc:date is the one name parse-feed.ts
+    // reaches for through getExtraEntryFields, and it is excluded above; the
+    // extractor does not surface it.
+    files: ["app/lib/feeds/**"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX,
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+        HAND_ROLLED_FEED_TAG_SCAN,
+        HAND_ROLLED_TAG_READER,
       ],
     },
   },
@@ -1305,6 +1369,7 @@ export default tseslint.config(
         ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         ENV_DB_IN_ROUTES,
+        ENV_DB_DESTRUCTURE_IN_ROUTES,
         FEED_STATE_LITERAL,
       ],
       "form-rules/form-data-get": "error",

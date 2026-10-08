@@ -593,8 +593,8 @@ export async function signInWithMagicLink(
 // unrecorded one is the no-row case. The extra sign-in sends one email, and
 // only on this path.
 
-// 0509#5688 (fleet-manager): the journey specs keep these six accounts on
-// purpose; the recurring teardown must never delete them. Match these exact
+// 0509#5688 (fleet-manager): the journey specs keep these accounts on
+// purpose (0051 added the five production-lane identities, #7225); the recurring teardown must never delete them. Match these exact
 // addresses, never a pattern. The one-time purge (0509#5730) kept four
 // of them (not e2e+j8-hard, added by J8, 0509#4124); a later purge may still take them — once the kept-account journey
 // specs land (0509#4123, #4124, #4125, #4128) they create them again.
@@ -607,6 +607,11 @@ const KEPT_JOURNEY_ACCOUNTS: readonly string[] = [
   "e2e+j9-mentions@0509.io",
   "e2e+j12-rollovers@0509.io",
   "e2e+soak@0509.io",
+  "e2e+onboarded-desktop@0509.io",
+  "e2e+onboarded-phone@0509.io",
+  "e2e+j6-desktop@0509.io",
+  "e2e+j6-phone@0509.io",
+  "e2e+j11@0509.io",
 ];
 
 export function classifySettingsDeleteRedirect(

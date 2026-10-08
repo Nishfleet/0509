@@ -8,7 +8,7 @@ import { insertVerdict } from "../data/jev_verdict.server";
 import { readRecentSignals, type RecentSignal } from "../data/signal.server";
 import { askRetireSuggestion } from "../data/suggestion.server";
 import type { ChoiceQuestion, ChoiceVerdict, NoulQuestion, NoulVerdict } from "../jev/client.server";
-import { askChoice, askNoul, JevUnavailableError } from "../jev/client.server";
+import { askMixed, JevUnavailableError } from "../jev/client.server";
 import { noulAction } from "../jev/thresholds";
 import { daysBefore } from "../site-changes.server";
 
@@ -190,11 +190,12 @@ async function askStillCompetitor(
   state: unknown,
 ): Promise<{ verdict: NoulVerdict; reason: ChoiceVerdict } | null> {
   try {
-    const [verdict, reason] = await Promise.all([
-      askNoul(context.self.workspaceId, STILL_COMPETITOR, state),
-      askChoice(context.self.workspaceId, STILL_COMPETITOR_REASON, state),
-    ]);
-    return { verdict, reason };
+    const mixed = await askMixed(
+      context.self.workspaceId,
+      { noul: STILL_COMPETITOR, choice: STILL_COMPETITOR_REASON },
+      state,
+    );
+    return { verdict: mixed.noul, reason: mixed.choice };
   } catch (error) {
     if (!(error instanceof JevUnavailableError)) throw error;
     console.error(JSON.stringify({ event: "refresh.jev_unavailable", message: error.message }));

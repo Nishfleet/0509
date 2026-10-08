@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it, vi } from "vitest";
 
-import { readEntitlements } from "../../app/lib/data/plan.server";
+import { readEntitlements, readWorkspaceEntitlements } from "../../app/lib/data/plan.server";
 
 let seededRuns = 0;
 
@@ -39,6 +39,9 @@ describe("readEntitlements (0509#5293)", () => {
     const before = await readEntitlements(workspaceId);
     expect(before.competitors).toBe(15);
     expect(before.site_pages_scope).toBe("all");
+    expect(before.own_site_alerts).toBe(true);
+    expect(before.marks_history_days).toBe(365);
+    expect(before.standing_history_weeks).toBe(52);
 
     await env.DB.prepare("UPDATE plan SET limits_json = ? WHERE workspace_id = ?")
       .bind(JSON.stringify({ competitors: 7 }), workspaceId)
@@ -62,9 +65,41 @@ describe("readEntitlements (0509#5293)", () => {
       const entitlements = await readEntitlements(workspaceId);
       expect(entitlements.competitors).toBe(5);
       expect(entitlements.site_pages_scope).toBe("home_pricing");
+      expect(entitlements.own_site_alerts).toBe(false);
+      expect(entitlements.marks_history_days).toBe(90);
+      expect(entitlements.standing_history_weeks).toBe(4);
+      expect(entitlements.workspaces_max).toBe(1);
       expect(errorSpy).not.toHaveBeenCalled();
     } finally {
       errorSpy.mockRestore();
     }
+  });
+
+  it("reads entitlements for more than 100 workspaces in one call, past D1's bound-parameter cap", async () => {
+    seededRuns += 1;
+    const n = String(seededRuns);
+    const userId = `user-ent-many-${n}`;
+    await seedUser(userId, `ent-many-${n}@example.com`);
+    const ids = Array.from({ length: 150 }, (_, index) => `ws-ent-many-${n}-${String(index)}`);
+    await env.DB.batch(
+      ids.map((id) =>
+        env.DB.prepare(
+          `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
+           VALUES (?, 'Many', ?, 'UTC', 1, 8, '2026-09-23T12:00:00.000Z')`,
+        ).bind(id, userId),
+      ),
+    );
+    const paid = ids.at(-1) ?? "";
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, limits_json, updated_at) VALUES (?, ?, 'starter', '{}', ?)",
+    )
+      .bind(`plan-ent-many-${n}`, paid, "2026-09-23T12:00:00.000Z")
+      .run();
+
+    const entitlements = await readWorkspaceEntitlements([...ids, ids[0] ?? ""]);
+
+    expect(entitlements.size).toBe(150);
+    expect(entitlements.get(paid)?.site_pages_scope).toBe("all");
+    expect(entitlements.get(ids[0] ?? "")?.site_pages_scope).toBe("home_pricing");
   });
 });

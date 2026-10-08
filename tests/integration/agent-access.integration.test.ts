@@ -238,6 +238,24 @@ describe("agent access, scoped to one workspace", () => {
     expect(body.tracked.map((row) => row.domain)).toEqual(["rival-a.example"]);
   });
 
+  it("refuses the REST API when api_access is off", async () => {
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, limits_json, updated_at) VALUES (?1, ?2, 'scout', 'active', ?3, ?4)",
+    )
+      .bind("plan_agent_a_no_api", a.workspaceId, JSON.stringify({ api_access: false }), NOW)
+      .run();
+    try {
+      const response = await apiResponse(
+        new Request("http://localhost/api/v1/brief", { headers: { authorization: `Bearer ${keyA}` } }),
+        readAgentBrief,
+      );
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({ error: "plan" });
+    } finally {
+      await env.DB.prepare("DELETE FROM plan WHERE id = ?").bind("plan_agent_a_no_api").run();
+    }
+  });
+
   it("slows one address guessing keys before any key lookup", async () => {
     const statuses = [];
     for (let attempt = 0; attempt < 240; attempt += 1) {
@@ -413,6 +431,25 @@ describe("agent access, scoped to one workspace", () => {
     expect(foreign.status).toBe(403);
     const own = await mcpResponse(from(new URL(env.BETTER_AUTH_URL).origin), { userId: a.userId, clientId: "test" });
     expect(own.status).toBe(200);
+  });
+
+  it("refuses a foreign-origin API preflight and allows the product origin", async () => {
+    const foreign = await apiResponse(
+      new Request("http://localhost/api/v1/brief", {
+        method: "OPTIONS",
+        headers: { origin: "https://evil.example", "access-control-request-method": "GET" },
+      }),
+      readAgentBrief,
+    );
+    expect(foreign.status).toBe(403);
+    const own = await apiResponse(
+      new Request("http://localhost/api/v1/brief", {
+        method: "OPTIONS",
+        headers: { origin: new URL(env.BETTER_AUTH_URL).origin, "access-control-request-method": "GET" },
+      }),
+      readAgentBrief,
+    );
+    expect(own.status).toBe(204);
   });
 
   // #5757: no test in this file runs without a cf-connecting-ip header after
