@@ -2,7 +2,7 @@ import { env, introspectWorkflowInstance } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { planFeedSweep } from "../../../app/lib/feeds/sweep.server";
-import { resetFeedFixtures, rssFeed, seedEntity } from "./seed";
+import { NOW, resetFeedFixtures, rssFeed, seedEntity } from "./seed";
 
 const PAD =
   "Every plan includes unlimited projects, priority support, single sign-on, audit logs, and a named account manager who answers within one business day, with onboarding help for your whole team.";
@@ -100,12 +100,12 @@ describe("nightly feed sweep workflow", () => {
     await env.DB.prepare(
       `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES ('user-feed-other', 'Other', 'feed-other@0509.io', 1, ?1, ?1)`,
     )
-      .bind("2026-10-02T02:00:00Z")
+      .bind(NOW)
       .run();
     await env.DB.prepare(
       `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES ('ws-feed-other', 'Other', 'user-feed-other', 'UTC', 1, 8, ?)`,
     )
-      .bind("2026-10-02T02:00:00Z")
+      .bind(NOW)
       .run();
     await seedEntity("ws-feed-other", "ent-rival-other", "rival.com");
 
