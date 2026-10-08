@@ -114,6 +114,7 @@ const resetTenant = async () => {
   await env.DB.exec("DELETE FROM watch");
   await env.DB.exec("DELETE FROM page");
   await env.DB.exec("DELETE FROM entity");
+  await env.DB.exec("DELETE FROM plan");
   await env.DB.exec("DELETE FROM workspace");
   await env.DB.exec('DELETE FROM "user"');
 
@@ -130,9 +131,9 @@ const resetTenant = async () => {
     .bind(WS, USER, NOW)
     .run();
   await env.DB.prepare(
-    "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
+    `INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'starter', 'active', ?)`,
   )
-    .bind(`plan-${WS}`, WS, NOW)
+    .bind("plan-site-sweep", WS, NOW)
     .run();
 };
 

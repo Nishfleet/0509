@@ -2,6 +2,7 @@ import { isWorkspacePaid } from "../../app/lib/billing/entitlements";
 import { markDigestSentStatement } from "../../app/lib/data/digest.server";
 import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
 import { claimIncidentNotice } from "../../app/lib/data/incident_notice.server";
+import { readEntitlements } from "../../app/lib/data/plan.server";
 import {
   claimChangeSlot,
   claimSendAttempt,
@@ -368,6 +369,9 @@ function renderIncidentEmail(incident: IncidentRow, to: string, token: string) {
 async function incidentBlocked(env: Env, incident: IncidentRow): Promise<DeliveryResult | null> {
   if (incident.role !== "self") return { outcome: "not_self", attempt_id: null, idempotency_key: null };
   if (incident.own_site_alerts === 0) return { outcome: "muted", attempt_id: null, idempotency_key: null };
+  if (!(await readEntitlements(incident.workspace_id)).own_site_alerts) {
+    return { outcome: "muted", attempt_id: null, idempotency_key: null };
+  }
   if (await isUnpaidWorkspace(env, incident.workspace_id)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }

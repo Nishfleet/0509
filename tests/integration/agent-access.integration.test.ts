@@ -238,6 +238,24 @@ describe("agent access, scoped to one workspace", () => {
     expect(body.tracked.map((row) => row.domain)).toEqual(["rival-a.example"]);
   });
 
+  it("refuses the REST API when api_access is off", async () => {
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, limits_json, updated_at) VALUES (?1, ?2, 'scout', 'active', ?3, ?4)",
+    )
+      .bind("plan_agent_a_no_api", a.workspaceId, JSON.stringify({ api_access: false }), NOW)
+      .run();
+    try {
+      const response = await apiResponse(
+        new Request("http://localhost/api/v1/brief", { headers: { authorization: `Bearer ${keyA}` } }),
+        readAgentBrief,
+      );
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({ error: "plan" });
+    } finally {
+      await env.DB.prepare("DELETE FROM plan WHERE id = ?").bind("plan_agent_a_no_api").run();
+    }
+  });
+
   it("slows one address guessing keys before any key lookup", async () => {
     const statuses = [];
     for (let attempt = 0; attempt < 240; attempt += 1) {

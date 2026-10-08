@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
+import { entitledTier, resolveEntitlements } from "../billing/entitlements";
 import { canonicalTimezone } from "../timezone";
 
 const SELECT_WORKSPACE_TIMEZONE = "SELECT timezone FROM workspace WHERE id = ?";
@@ -63,8 +64,18 @@ export async function readWorkspaceLanding(db: WorkspaceDb, userId: string): Pro
   return workspaceLandingRow.nullable().parse(await db.prepare(SELECT_WORKSPACE_LANDING).bind(userId).first());
 }
 
+const ownerPlanRow = z.object({
+  tier: z.string(),
+  status: z.string(),
+  current_period_end: z.string().nullable(),
+  limits_json: z.string(),
+});
+
+type OwnerPlanRow = z.infer<typeof ownerPlanRow>;
+
 interface BoundStatement {
   first<T>(): Promise<T | null>;
+  all(): Promise<{ results: OwnerPlanRow[] }>;
   run(): Promise<{ meta: { changes: number } }>;
 }
 
@@ -74,20 +85,74 @@ export interface WorkspaceDb {
   };
 }
 
+export class WorkspaceCapError extends Error {
+  constructor() {
+    super("workspace cap");
+    this.name = "WorkspaceCapError";
+  }
+}
+
 const INSERT_WORKSPACE = `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at, fixture)
-VALUES (?, ?, ?, ?, 1, 8, ?, ?)
+SELECT ?, ?, ?, ?, 1, 8, ?, ?
+WHERE ? = 1
+OR (
+  SELECT count(*) FROM workspace WHERE owner_user_id = ?
+) < ?
 ON CONFLICT(id) DO NOTHING`;
 
 const FILL_TIMEZONE = `UPDATE workspace SET timezone = ? WHERE id = ? AND timezone = 'UTC'`;
+
+const SELECT_WORKSPACE_ID = "SELECT id FROM workspace WHERE id = ?";
+
+const SELECT_OWNER_PLANS = `SELECT p.tier AS tier, p.status AS status, p.current_period_end AS current_period_end, p.limits_json AS limits_json
+FROM workspace w
+JOIN plan p ON p.workspace_id = w.id
+WHERE w.owner_user_id = ?`;
+
+function widerWorkspacesMax(left: number | null, right: number | null): number | null {
+  if (left === null || right === null) return null;
+  return left > right ? left : right;
+}
+
+async function ownerWorkspacesMax(db: WorkspaceDb, ownerUserId: string): Promise<number | null> {
+  const { results } = await db.prepare(SELECT_OWNER_PLANS).bind(ownerUserId).all();
+  const plans = z.array(ownerPlanRow).parse(results);
+  if (plans.length === 0) return resolveEntitlements("scout", "{}").workspaces_max;
+  const now = new Date();
+  return plans
+    .map(
+      (row) =>
+        resolveEntitlements(
+          entitledTier({ tier: row.tier, status: row.status, currentPeriodEnd: row.current_period_end }, now),
+          row.limits_json,
+        ).workspaces_max,
+    )
+    .reduce(widerWorkspacesMax);
+}
 
 export async function insertWorkspace(
   db: WorkspaceDb,
   input: { id: string; name: string; ownerUserId: string; timezone: string; createdAt: string; fixture: boolean },
 ): Promise<void> {
-  await db
+  const cap = await ownerWorkspacesMax(db, input.ownerUserId);
+  const result = await db
     .prepare(INSERT_WORKSPACE)
-    .bind(input.id, input.name, input.ownerUserId, input.timezone, input.createdAt, input.fixture ? 1 : 0)
+    .bind(
+      input.id,
+      input.name,
+      input.ownerUserId,
+      input.timezone,
+      input.createdAt,
+      input.fixture ? 1 : 0,
+      cap === null ? 1 : 0,
+      input.ownerUserId,
+      cap ?? 0,
+    )
     .run();
+  if (result.meta.changes === 1) return;
+  const existing = await db.prepare(SELECT_WORKSPACE_ID).bind(input.id).first<{ id: string }>();
+  if (existing !== null) return;
+  throw new WorkspaceCapError();
 }
 
 export async function fillWorkspaceTimezone(db: WorkspaceDb, id: string, timezone: string): Promise<boolean> {

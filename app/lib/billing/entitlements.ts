@@ -68,6 +68,16 @@ export function resolveEntitlements(tier: string, limitsJson: string): Entitleme
   return parsed.success ? parsed.data : schema.parse({});
 }
 
+export function pageRoleInScope(role: string, scope: Entitlements["site_pages_scope"]): boolean {
+  return scope === "all" || role === "home" || role === "pricing";
+}
+
+const PAID_SCRAPER_SOURCE_KEYS: ReadonlySet<string> = new Set(["scraper.paid"]);
+
+export function paidSourceAllowed(sourceKey: string, entitled: boolean): boolean {
+  return entitled || !PAID_SCRAPER_SOURCE_KEYS.has(sourceKey);
+}
+
 const PAID_STATUSES = new Set(["trialing", "active", "past_due"]);
 
 export function isSubscriptionLive(plan: { status: string; currentPeriodEnd: string | null }, now: Date): boolean {
