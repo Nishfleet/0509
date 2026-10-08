@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,11 +69,14 @@ describe("agent entry docs", () => {
 // `migrations/` resolves (otherwise a dangling one survives the deletions).
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const MIGRATIONS = `${join(REPO_ROOT, "migrations")}/`;
-// The whole repo root, walked recursively, minus the directories that cannot
-// carry a citation. A named allowlist (app/, workers/, tests/, e2e/,
-// migrations/, .github/, .agents/ plus five root files) left CLAUDE.md, every
-// other root config and any future top-level directory outside the gate, so a
-// dangling citation in one of them passed; the in-run review of #7275 found it.
+// Every tracked file at the repo root, minus the directories that cannot carry
+// a citation. A named allowlist (app/, workers/, tests/, e2e/, migrations/,
+// .github/, .agents/ plus five root files) left CLAUDE.md, every other root
+// config and any future top-level directory outside the gate, so a dangling
+// citation in one of them passed; the in-run review of #7275 found it. The list
+// comes from git, not a directory walk: another test file creates and removes a
+// scratch directory under app/ while this one runs, and a walk that listed it
+// failed with ENOENT on a shard of #7276.
 const SKIP_DIRS = [
   ".git",
   "node_modules",
@@ -85,28 +89,20 @@ const SKIP_DIRS = [
   ".wrangler",
 ] as const;
 const SKIP_EXTENSIONS = [".png", ".jpg", ".webp", ".ico", ".woff2"] as const;
-// The gate runs once per history doc, so the walk is cached: Test A and Test B
-// share one traversal instead of one per doc. Directories are skipped before
-// descending, so node_modules and the build output dirs are never entered.
 let scanCache: string[] | undefined;
 
 function scanSet(): string[] {
   if (scanCache) return scanCache;
-  const scanned: string[] = [];
-  const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const path = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (SKIP_DIRS.some((skip) => entry.name === skip)) continue;
-        walk(path);
-      } else if (entry.isFile() && !SKIP_EXTENSIONS.some((extension) => path.endsWith(extension))) {
-        scanned.push(path);
-      }
-    }
-  };
-  walk(REPO_ROOT);
-  scanCache = scanned;
-  return scanned;
+  const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: REPO_ROOT, maxBuffer: 64 * 1024 * 1024 })
+    .toString("utf8")
+    .split("\0")
+    .filter((name) => name !== "");
+  scanCache = tracked
+    .filter((name) => !SKIP_DIRS.some((skip) => name.split("/").includes(skip)))
+    .filter((name) => !SKIP_EXTENSIONS.some((extension) => name.endsWith(extension)))
+    .map((name) => join(REPO_ROOT, name))
+    .filter((path) => existsSync(path));
+  return scanCache;
 }
 
 // `AGENTS.md` records what was deleted and where to read it instead, so its
