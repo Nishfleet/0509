@@ -98,6 +98,29 @@ describe("ensureWorkspace against migrations/0001_rebuild.sql", () => {
     expect(await workspaceCount("user-4")).toBe(2);
   });
 
+  it("falls back to the Scout cap for an owner with no plan rows", async () => {
+    await seedUser("user-no-plans", "no-plans@example.com");
+    const create = (id: string) =>
+      insertWorkspace(env.DB, {
+        id,
+        name: id,
+        ownerUserId: "user-no-plans",
+        timezone: "UTC",
+        createdAt: "2026-09-23T12:00:00.000Z",
+        fixture: false,
+      });
+    const plans = await env.DB.prepare(
+      "SELECT count(*) AS n FROM plan WHERE workspace_id IN (SELECT id FROM workspace WHERE owner_user_id = ?)",
+    )
+      .bind("user-no-plans")
+      .first<{ n: number }>();
+    expect(plans?.n).toBe(0);
+
+    await create("ws-no-plans-first");
+    await expect(create("ws-no-plans-second")).rejects.toThrow(WorkspaceCapError);
+    expect(await workspaceCount("user-no-plans")).toBe(1);
+  });
+
   it("lets exactly one of two concurrent creates through at cap minus one", async () => {
     await seedUser("user-race-cap", "race-cap@example.com");
     const create = (id: string) =>
