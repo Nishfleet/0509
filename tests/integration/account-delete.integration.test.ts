@@ -4,6 +4,8 @@ import { RouterContextProvider } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAuth, deleteSignedInUser } from "../../app/lib/auth.server";
+import { nextBriefAt, rolloverInstance } from "../../app/lib/brief-schedule";
+import { readBriefScheduleForOwner } from "../../app/lib/data/workspace.server";
 import { firstWorkspaceId } from "../../app/lib/workspace.server";
 import {
   deleteAccount,
@@ -135,6 +137,26 @@ describe("delete my account", () => {
     expect(await count("SELECT COUNT(*) AS n FROM email_suppression WHERE address = 'to@0509.io'")).toBe(1);
     expect(await count("SELECT COUNT(*) AS n FROM email_suppression WHERE address LIKE 'https://%'")).toBe(0);
     expect(await count("SELECT COUNT(*) AS n FROM email_suppression WHERE address = ?", ADDRESS)).toBe(1);
+  });
+
+  it("terminates the workspace's sleeping weekly rollover so it does not outlive the account (0509#7191)", async () => {
+    const { cookie, userId } = await signIn("rollover-leaving@0509.io");
+    const owned = await readBriefScheduleForOwner(userId);
+    if (owned === null) throw new Error("sign-in created no workspace");
+    const pending = rolloverInstance(owned.workspaceId, nextBriefAt(owned.schedule, new Date()), "scheduled");
+    await using introspector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, pending.id);
+    await env.STANDING_ROLLOVER.create(pending);
+    expect(await introspector.waitForStepResult({ name: "workspace-exists" })).toBe(true);
+    const helpers = {
+      listUserGrants: () => Promise.resolve({ items: [], cursor: undefined }),
+      revokeGrant: () => Promise.resolve(),
+    } as unknown as Pick<OAuthHelpers, "listUserGrants" | "revokeGrant">;
+
+    const deleted = await deleteAccount(helpers, settingsRequest(cookie), userId);
+
+    expect(deleted).not.toBeNull();
+    const instance = await env.STANDING_ROLLOVER.get(pending.id);
+    await expect.poll(async () => (await instance.status()).status, { timeout: 20_000 }).toBe("terminated");
   });
 
   it("pages the stored files with a cursor and the Workflow deletes every page", async () => {
@@ -311,7 +333,7 @@ describe("delete my account", () => {
     expect(owned.setCookie).toMatch(/Path=\/(;|$)/);
   });
 
-  it("seals the Workflow instance id on the headers the deleting browser leaves with", async () => {
+  it("seals the Workflow instance id on the headers the deleting browser leaves with, and terminates the workspace's sleeping standing rollover (0509#7191)", async () => {
     const { cookie, userId } = await signIn();
     const revoked: string[] = [];
     const pages: Record<string, { items: { id: string }[]; cursor?: string }> = {
@@ -326,9 +348,19 @@ describe("delete my account", () => {
       },
     };
 
+    const owned = await readBriefScheduleForOwner(userId);
+    if (owned === null) throw new Error("sign-in created no workspace");
+    const rollover = rolloverInstance(owned.workspaceId, nextBriefAt(owned.schedule, new Date()), "scheduled");
+    await using rolloverIntrospector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, rollover.id);
+    await env.STANDING_ROLLOVER.create(rollover);
+    expect(await rolloverIntrospector.waitForStepResult({ name: "workspace-exists" })).toBe(true);
+    const rolloverStatus = async () => (await (await env.STANDING_ROLLOVER.get(rollover.id)).status()).status;
+    expect(await rolloverStatus()).toBe("running");
+
     const deleted = await deleteAccount(helpers, settingsRequest(cookie), userId);
 
     if (deleted === null) throw new Error("deleteAccount refused a fresh session");
+    await expect.poll(rolloverStatus, { timeout: 20_000 }).toBe("terminated");
     expect(revoked).toEqual(["grant-1", "grant-2"]);
     const baked = deleted.headers.getSetCookie().find((header) => header.startsWith("account-delete="));
     if (baked === undefined) throw new Error("no account-delete cookie on the delete headers");

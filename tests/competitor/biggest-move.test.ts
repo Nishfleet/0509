@@ -241,7 +241,7 @@ describe("quietWeekSentence", () => {
 
   it("says the first read lands tonight when the brand was never checked", () => {
     expect(quietWeekSentence([], null)).toBe(
-      "Nothing worth scoring for this competitor in the last 7 days. We watch its website; our first read is tonight at 02:00 UTC.",
+      "Nothing worth scoring for this competitor in the last 7 days. We watch its website; our first read is tonight at 21:00 UTC.",
     );
   });
 
