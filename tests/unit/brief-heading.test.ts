@@ -41,8 +41,8 @@ vi.mock("../../app/lib/data/workspace.server", () => ({
 }));
 
 vi.mock("../../app/lib/data/digest.server", () => ({
-  listBriefs: () => Promise.resolve(holder.rows),
-  readBrief: (_db: unknown, _workspaceId: string, digestId: string) =>
+  listWorkspaceBriefs: () => Promise.resolve(holder.rows),
+  readWorkspaceBrief: (_workspaceId: string, digestId: string) =>
     Promise.resolve(holder.rows.find((row) => row.id === digestId) ?? null),
 }));
 

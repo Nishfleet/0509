@@ -425,8 +425,15 @@ export const TABLE_WRITER_BLOCKS = readdirSync(new URL("./app/lib/data/", import
   }));
 
 const ENV_DB_IN_ROUTES = {
-  selector: "CallExpression[callee.object.name='env'][callee.property.name='DB']",
-  message: "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
+  selector: "MemberExpression[object.name='env'][property.name='DB']",
+  message:
+    "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4. Source: 0509#6999 — the old CallExpression[callee...] selector matched only a direct env.DB(...) call, so the five routes passing env.DB as an argument linted green.",
+};
+
+const ENV_DB_DESTRUCTURE_IN_ROUTES = {
+  selector: "VariableDeclarator[init.name='env'] > ObjectPattern > Property[key.name='DB']",
+  message:
+    "Routes do not touch env.DB, destructured or not. Go through the one data layer in app/lib/data/. Source: 0509#6999.",
 };
 
 const FORM_DATA_GET_BAN = {
@@ -1306,6 +1313,7 @@ export default tseslint.config(
         ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         ENV_DB_IN_ROUTES,
+        ENV_DB_DESTRUCTURE_IN_ROUTES,
         FEED_STATE_LITERAL,
       ],
       "form-rules/form-data-get": "error",

@@ -42,7 +42,7 @@ describe("workspace export", () => {
     const mine = await seed("mine");
     await seed("theirs");
 
-    const data = await readWorkspaceExport(env.DB, {
+    const data = await readWorkspaceExport({
       workspaceId: mine,
       email: "mine@test.dev",
       now: new Date(NOW),
