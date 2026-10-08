@@ -18,6 +18,28 @@ function ipv4Loopback(host: string): boolean {
   return octets[0] === 127;
 }
 
+const DENIED_SCHEMES = new Set([
+  "javascript",
+  "data",
+  "vbscript",
+  "file",
+  "blob",
+  "about",
+  "ftp",
+  "ws",
+  "wss",
+  "chrome",
+  "chrome-extension",
+]);
+
+const SCHEME = /^[a-z][a-z0-9+.-]*$/;
+
+function customSchemeAllowed(url: URL): boolean {
+  const scheme = url.protocol.slice(0, -1);
+  if (!SCHEME.test(scheme) || DENIED_SCHEMES.has(scheme)) return false;
+  return url.host !== "" || url.pathname !== "";
+}
+
 export function allowedRedirectUri(value: string): boolean {
   let url: URL;
   try {
@@ -26,7 +48,7 @@ export function allowedRedirectUri(value: string): boolean {
     return false;
   }
   if (url.protocol === "https:") return true;
-  if (url.protocol !== "http:") return false;
+  if (url.protocol !== "http:") return customSchemeAllowed(url);
   const host = hostOf(url.hostname);
   return LOOPBACK.has(host) || ipv4Loopback(host);
 }

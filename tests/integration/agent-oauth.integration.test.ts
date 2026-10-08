@@ -241,10 +241,10 @@ describe("an AI app signing in to 0509", () => {
     expect(await mcp.json()).toEqual({ userId: "u_oauth", clientId: body.client_id });
   });
 
-  it("refuses remote http and custom-scheme redirect URIs at registration", async () => {
+  it("refuses remote http and dangerous-scheme redirect URIs at registration", async () => {
     for (const [ip, uri] of [
       ["198.51.100.81", "http://evil.example/callback"],
-      ["198.51.100.82", "cursor://callback"],
+      ["198.51.100.82", "javascript:alert(1)"],
     ] as const) {
       const response = await send(
         new Request(`${ORIGIN}/oauth/register`, {
