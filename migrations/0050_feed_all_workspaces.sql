@@ -1,4 +1,4 @@
--- 0049_feed_all_workspaces.sql — sweep every workspace's brands for blog and changelog feeds.
+-- 0050_feed_all_workspaces.sql — sweep every workspace's brands for blog and changelog feeds.
 --
 -- Issue #6377. 0038 limited the feed.rss source to the soak account with config_json.pilot.
 -- The soak report on #4730 after the 2026-10-08 02:45Z sweep reads "vercel.com feed read, 1
