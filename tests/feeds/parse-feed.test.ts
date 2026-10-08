@@ -90,6 +90,17 @@ describe("parseFeed", () => {
     expect(items?.[0]?.title).toBe("Hi iptthere");
   });
 
+  it.each([
+    ["a tag opened inside a tag", "A &lt;a &lt;script&gt;b&gt; C"],
+    ["a tag that never closes", "A &lt;script C"],
+    ["stray closers", "A &gt;&gt; &lt;&lt; C"],
+  ])("leaves no angle bracket and no script opener for %s", (_label, title) => {
+    const items = parseFeed(rss(`<item><title>${title}</title><link>https://rival.com/y</link></item>`), BASE, {
+      now: NOW,
+    });
+    expect(items?.[0]?.title ?? "").not.toMatch(/[<>]|<script/i);
+  });
+
   it("drops items older than 30 days but keeps undated ones", () => {
     const items = parseFeed(
       rss(`<item><title>Old</title><link>https://rival.com/old</link><pubDate>Mon, 31 Aug 2026 10:00:00 GMT</pubDate></item>

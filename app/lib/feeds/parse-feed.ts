@@ -112,7 +112,14 @@ function entryDate(raw: Record<string, unknown>, published: string): string | nu
 }
 
 function unmarkup(value: string): string {
-  return value.replace(/<[^>]*>/g, "").replace(/[<>]/g, "");
+  let inTag = false;
+  let out = "";
+  for (const char of value) {
+    if (char === "<") inTag = true;
+    else if (char === ">") inTag = false;
+    else if (!inTag) out += char;
+  }
+  return out;
 }
 
 function entryId(raw: Record<string, unknown>, url: string, parsedId: string): string {
