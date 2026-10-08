@@ -9,12 +9,12 @@ import {
 } from "../data/jev_verdict.server";
 import { readRecentSignals, readUnjudgedChanges, type UnjudgedChange } from "../data/signal.server";
 import {
-  askChoice,
+  askMixed,
   askNoul,
   JevRateLimitedError,
   JevUnavailableError,
   type ChoiceQuestion,
-  type ChoiceVerdict,
+  type MixedVerdict,
   type NoulQuestion,
   type NoulVerdict,
 } from "../jev/client.server";
@@ -245,16 +245,13 @@ async function judgeNoteworthy(
   state: ChangeStateValue,
   decidedAt: string,
 ): Promise<{ noteworthy: NonNullable<JudgedChange["noteworthy"]>; rows: VerdictRow[] } | null> {
-  let noul: NoulVerdict;
-  let choice: ChoiceVerdict;
+  let mixed: MixedVerdict;
   try {
-    [noul, choice] = await Promise.all([
-      askNoul(input.workspaceId, D3_NOTEWORTHY, state),
-      askChoice(input.workspaceId, D3_KIND, state),
-    ]);
+    mixed = await askMixed(input.workspaceId, { noul: D3_NOTEWORTHY, choice: D3_KIND }, state);
   } catch (error) {
     return degradeUnlessRateLimited(error, input.stopOnUnavailable);
   }
+  const { noul, choice } = mixed;
   const p = noul.p;
   const kind = choice.choice;
   const base = { workspaceId: input.workspaceId, entityId: input.entityId, signalId: input.signalId, decidedAt };
