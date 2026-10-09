@@ -46,6 +46,9 @@ async function seedWorkspace(schedule: BriefSchedule) {
     env.DB.prepare(
       "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Rollover', ?2, ?3, ?4, ?5, ?6)",
     ).bind(WS, USER, schedule.timezone, schedule.weekday, schedule.hour, createdAt),
+    env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?1, ?2, 'scout', 'trialing', ?3)",
+    ).bind(`${WS}-plan`, WS, createdAt),
     ...[
       [SELF, "self", "own.example", "Own Brand", "on"],
       [RIVAL_A, "competitor", "a.example", "Rival A", "on"],
@@ -342,6 +345,28 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     expect(brief.why_line).not.toContain("Rival Before");
   });
 
+  it("finishes an orphaned instance instead of waiting out the week for a deleted workspace (0509#7191)", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    const closesAt = nextBriefAt(schedule, new Date());
+    expect(closesAt.getTime()).toBeGreaterThan(Date.now());
+    const gone = `ws-gone-${String(++runs)}`;
+    const instance = rolloverInstance(gone, closesAt, "scheduled");
+
+    await using introspector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, instance.id);
+    await env.STANDING_ROLLOVER.create(instance);
+    await introspector.waitForStatus("complete");
+
+    expect(await introspector.getOutput()).toMatchObject({
+      workspaceId: gone,
+      digestId: null,
+      skipped: "workspace_gone",
+    });
+    const digests = await env.DB.prepare("SELECT COUNT(*) AS n FROM digest WHERE workspace_id = ?1")
+      .bind(gone)
+      .first<{ n: number }>();
+    expect(digests?.n).toBe(0);
+  });
+
   it("stands down when the workspace moved its brief time", async () => {
     const schedule = scheduleOffsetFromToday(3);
     await seedWorkspace({ ...schedule, hour: 9 });
@@ -561,6 +586,61 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     expect(brief.is_quiet_week).toBe(false);
     expect(brief.headline_rank).toBeNull();
     expect(brief.why_line).toBe("We haven't finished reviewing this week's changes yet.");
+  });
+
+  it("freezes rank once an unjudged change is rejudged after Jev recovers", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    await seedWorkspace(schedule);
+    const closesAt = nextBriefAt(schedule, new Date());
+    const startsAt = previousBriefAt(schedule, closesAt);
+    const lastWeek = previousBriefAt(schedule, startsAt).toISOString();
+    await seedFrozenWeek(lastWeek, [
+      [SELF, 1],
+      [RIVAL_A, 2],
+      [RIVAL_B, 3],
+    ]);
+    const during = new Date(startsAt.getTime() + hour).toISOString();
+    const signalId = `${WS}_recovered_change`;
+    await env.DB.prepare(
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, canonical_url, url_hash, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'change', 'home', ?5, ?6, ?7, ?8)",
+    )
+      .bind(
+        signalId,
+        WS,
+        `${WS}_${RIVAL_A}`,
+        SOURCE,
+        `https://a.example/${signalId}`,
+        `hash-${signalId}`,
+        `dedup-${signalId}`,
+        during,
+      )
+      .run();
+    Reflect.set(env, "AI", {
+      async run(_model: string, request: { questions: Record<string, { type: string }> }) {
+        const answers: Record<string, { type: "noul"; noul: number } | { type: "choice"; choice: string }> = {};
+        for (const [id, question] of Object.entries(request.questions)) {
+          answers[id] = question.type === "noul" ? { type: "noul", noul: 0.95 } : { type: "choice", choice: "copy" };
+        }
+        return { answers };
+      },
+    });
+
+    const instance = rolloverInstance(WS, closesAt, "scheduled");
+    await using introspector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, instance.id);
+    await introspector.modify(async (m) => {
+      await m.disableSleeps();
+    });
+    await env.STANDING_ROLLOVER.create(instance);
+    await introspector.waitForStatus("complete");
+
+    const ranks = await standingFor(startsAt.toISOString());
+    expect(ranks.every((row) => row.rank !== null)).toBe(true);
+    const digest = await env.DB.prepare("SELECT payload_json FROM digest WHERE id = ?1")
+      .bind(`digest_${WS}_${instantStamp(closesAt)}`)
+      .first<{ payload_json: string }>();
+    const brief = parseBriefPayload(digest?.payload_json ?? "");
+    expect(brief.is_unjudged).toBe(false);
+    expect(brief.headline_rank).not.toBeNull();
   });
 });
 

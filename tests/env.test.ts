@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { experimental_readRawConfig } from "wrangler";
 
 import { env } from "cloudflare:workers";
 
@@ -78,7 +79,7 @@ function exampleSecrets(): Record<string, string> {
   const text = readFileSync(new URL("../.dev.vars.example", import.meta.url), "utf8");
   for (const line of text.split("\n")) {
     const match = /^([A-Z0-9_]+)=(.*)$/.exec(line);
-    if (match) secrets[String(match[1])] = String(match[2]);
+    if (match?.[1] !== undefined) secrets[match[1]] = match[2] ?? "";
   }
   return secrets;
 }
@@ -90,14 +91,17 @@ describe("worker env", () => {
 
   it("accepts every required entry and an unset liveness URL", () => {
     useEnv(configured());
-    expect(() => createWorkerEnvCheck()()).not.toThrow();
+    expect(() => {
+      createWorkerEnvCheck()();
+    }).not.toThrow();
   });
 
   it("names every missing entry in one error", () => {
     const values = configured();
-    delete values.DB;
-    delete values.BETTER_AUTH_SECRET;
-    useEnv(values);
+    const { DB: _droppedDb, BETTER_AUTH_SECRET: _droppedSecret, ...missing } = values;
+    expect(_droppedDb).toBeDefined();
+    expect(_droppedSecret).toBeDefined();
+    useEnv(missing);
     const error = namesOf(createWorkerEnvCheck());
     expect(error.names).toEqual(["DB", "BETTER_AUTH_SECRET"]);
     expect(error.message).toBe(
@@ -125,7 +129,9 @@ describe("worker env", () => {
     Reflect.set(globalThis, "LIVENESS_PING_URL", "also-not-a-url");
     Reflect.set(globalThis, "SITE_SWEEP_PING_URL", "sweep-not-a-url");
     try {
-      expect(() => createWorkerEnvCheck()()).not.toThrow();
+      expect(() => {
+        createWorkerEnvCheck()();
+      }).not.toThrow();
     } finally {
       Reflect.deleteProperty(globalThis, "LIVENESS_PING_URL");
       Reflect.deleteProperty(globalThis, "SITE_SWEEP_PING_URL");
@@ -181,16 +187,35 @@ describe("worker env", () => {
     }
   });
 
-  // The Turnstile keys in .dev.vars.example are Cloudflare's published dummy
-  // keys and tests/integration/wrangler.test.jsonc runs on this same origin
-  // with them on purpose, so the rejection table stays per variable.
-  it("still accepts the Cloudflare dummy turnstile keys on the production origin", () => {
+  // 0509#7170. Main used to keep a "still accepts the Cloudflare dummy
+  // turnstile keys on the production origin" test because
+  // tests/integration/wrangler.test.jsonc ran on this origin with those keys
+  // on purpose. That reason is the acceptance this issue removes: dummy keys
+  // on SITE_URL mean sign-in has no real captcha, so the same placeholder
+  // table now refuses them.
+  it("refuses the Cloudflare dummy turnstile keys on the production origin", () => {
     useEnv({
       ...configured(),
-      TURNSTILE_SITE_KEY: "1x00000000000000000000BB",
-      TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
+      TURNSTILE_SITE_KEY: PUBLIC_PLACEHOLDER_VALUES.TURNSTILE_SITE_KEY,
+      TURNSTILE_SECRET_KEY: PUBLIC_PLACEHOLDER_VALUES.TURNSTILE_SECRET_KEY,
     });
-    expect(() => createWorkerEnvCheck()()).not.toThrow();
+    const error = namesOf(createWorkerEnvCheck());
+    expect(error.names).toEqual(["TURNSTILE_SECRET_KEY", "TURNSTILE_SITE_KEY"]);
+    expect(error.message).toContain("misconfigured: TURNSTILE_SECRET_KEY");
+    expect(error.message).toContain("TURNSTILE_SITE_KEY");
+    expect(error.message).not.toContain(PUBLIC_PLACEHOLDER_VALUES.TURNSTILE_SITE_KEY);
+    expect(error.message).not.toContain(PUBLIC_PLACEHOLDER_VALUES.TURNSTILE_SECRET_KEY);
+  });
+
+  it("refuses dummy turnstile keys when the production origin has a trailing slash", () => {
+    useEnv({
+      ...configured(),
+      BETTER_AUTH_URL: `${SITE_URL}/`,
+      TURNSTILE_SITE_KEY: PUBLIC_PLACEHOLDER_VALUES.TURNSTILE_SITE_KEY,
+      TURNSTILE_SECRET_KEY: PUBLIC_PLACEHOLDER_VALUES.TURNSTILE_SECRET_KEY,
+    });
+    const error = namesOf(createWorkerEnvCheck());
+    expect(error.names).toEqual(["TURNSTILE_SECRET_KEY", "TURNSTILE_SITE_KEY"]);
   });
 
   // preview-assert's lighthouse step starts wrangler with
@@ -211,20 +236,26 @@ describe("worker env", () => {
   // playwright.config.ts --var and lighthouse's --env-file overlay both land
   // a loopback BETTER_AUTH_URL. The gate must accept the public placeholders
   // on that origin or the preview-assert lighthouse step 503s /design/landing.
-  it("accepts the placeholder secrets on the example env-file origin", () => {
+  it("accepts the placeholder values on the example env-file origin", () => {
     const example = exampleSecrets();
     useEnv({
       ...configured(),
       BETTER_AUTH_URL: example.BETTER_AUTH_URL,
       BETTER_AUTH_SECRET: PUBLIC_PLACEHOLDER_VALUES.BETTER_AUTH_SECRET,
       DODO_WEBHOOK_SECRET: PUBLIC_PLACEHOLDER_VALUES.DODO_WEBHOOK_SECRET,
+      TURNSTILE_SITE_KEY: PUBLIC_PLACEHOLDER_VALUES.TURNSTILE_SITE_KEY,
+      TURNSTILE_SECRET_KEY: PUBLIC_PLACEHOLDER_VALUES.TURNSTILE_SECRET_KEY,
     });
-    expect(() => createWorkerEnvCheck()()).not.toThrow();
+    expect(() => {
+      createWorkerEnvCheck()();
+    }).not.toThrow();
   });
 
   it("boots with no DODO_WEBHOOK_SECRET at all", () => {
     useEnv(configured());
-    expect(() => createWorkerEnvCheck()()).not.toThrow();
+    expect(() => {
+      createWorkerEnvCheck()();
+    }).not.toThrow();
   });
 
   it("answers 503 and names a placeholder secret without echoing it", async () => {
@@ -252,12 +283,60 @@ describe("worker env", () => {
     }
   });
 
+  it("answers 503 and names a dummy turnstile key without echoing it", async () => {
+    useEnv({
+      ...configured(),
+      TURNSTILE_SITE_KEY: PUBLIC_PLACEHOLDER_VALUES.TURNSTILE_SITE_KEY,
+      TURNSTILE_SECRET_KEY: PUBLIC_PLACEHOLDER_VALUES.TURNSTILE_SECRET_KEY,
+    });
+    const error = namesOf(createWorkerEnvCheck());
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const response = workerEnvFailureResponse(error);
+      expect(response.status).toBe(503);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      const body = await response.text();
+      expect(body).toContain("TURNSTILE_SITE_KEY");
+      expect(body).toContain("TURNSTILE_SECRET_KEY");
+      expect(body).not.toContain(PUBLIC_PLACEHOLDER_VALUES.TURNSTILE_SITE_KEY);
+      expect(body).not.toContain(PUBLIC_PLACEHOLDER_VALUES.TURNSTILE_SECRET_KEY);
+      expect(spy).toHaveBeenCalledWith(error.message);
+      expect(String(spy.mock.calls[0]?.[0])).not.toContain(PUBLIC_PLACEHOLDER_VALUES.TURNSTILE_SITE_KEY);
+      expect(String(spy.mock.calls[0]?.[0])).not.toContain(PUBLIC_PLACEHOLDER_VALUES.TURNSTILE_SECRET_KEY);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  // tests/integration/wrangler.test.jsonc used to pin those dummy keys to
+  // SITE_URL on purpose. After the gate closes, that config must use
+  // non-dummy values or a non-production origin, or every workers test 503s.
+  it("does not pin dummy turnstile keys to the production origin in the integration Worker", () => {
+    const { rawConfig } = experimental_readRawConfig({ config: "tests/integration/wrangler.test.jsonc" });
+    expect(rawConfig.vars?.BETTER_AUTH_URL).toBe(SITE_URL);
+    expect(rawConfig.vars?.TURNSTILE_SITE_KEY).not.toBe(PUBLIC_PLACEHOLDER_VALUES.TURNSTILE_SITE_KEY);
+    expect(rawConfig.vars?.TURNSTILE_SECRET_KEY).not.toBe(PUBLIC_PLACEHOLDER_VALUES.TURNSTILE_SECRET_KEY);
+  });
+
+  it("keeps dummy-token captcha tests on a non-production origin", () => {
+    const captcha = readFileSync(
+      new URL("./integration/magic-link-captcha.integration.test.ts", import.meta.url),
+      "utf8",
+    );
+    expect(captcha).toContain(`const ORIGIN = "http://localhost:8787"`);
+    expect(captcha).toContain(PUBLIC_PLACEHOLDER_VALUES.TURNSTILE_SECRET_KEY);
+  });
+
   it("checks once per isolate", () => {
     const check = createWorkerEnvCheck();
     useEnv(configured());
-    expect(() => check()).not.toThrow();
+    expect(() => {
+      check();
+    }).not.toThrow();
     useEnv({});
-    expect(() => check()).not.toThrow();
+    expect(() => {
+      check();
+    }).not.toThrow();
 
     const failing = createWorkerEnvCheck();
     useEnv({});

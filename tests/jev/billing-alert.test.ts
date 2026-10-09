@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const ai = vi.hoisted(() => ({ run: vi.fn() }));
 
-vi.mock("cloudflare:workers", () => ({ env: { AI: ai } }));
+vi.mock("cloudflare:workers", () => ({ env: { AI: ai, AI_SPEND: "on" } }));
 vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn() }));
 vi.mock("../../app/lib/data/jev_verdict.server", () => ({
   readCachedNoul: () => Promise.resolve(null),
@@ -55,6 +55,7 @@ describe("a Jev call the AI credits refuse", () => {
 
     expect(ai.run).toHaveBeenCalledWith("@cf/cloudflare/clef", expect.objectContaining({ model: "clef" }), {
       gateway: { id: "default" },
+      extraHeaders: { "cf-aig-timeout": "20000" },
     });
   });
 

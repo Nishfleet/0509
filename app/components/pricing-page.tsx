@@ -2,11 +2,13 @@ import type { StartSource } from "../lib/pricing-page";
 import { Footer } from "./footer";
 import { Price } from "./landing/price";
 import { eyebrow, pageWidth } from "./landing/section";
+import { MAIN_CONTENT_ID, SkipLink } from "./skip-link";
 import { Wordmark } from "./wordmark";
 
 export function PricingPage({ source }: { source: StartSource | null }) {
   return (
     <div className="bg-bone text-ink">
+      <SkipLink />
       <header className="border-b border-line">
         <div className={`${pageWidth} flex min-h-16 items-center justify-between gap-6`}>
           <Wordmark />
@@ -18,7 +20,7 @@ export function PricingPage({ source }: { source: StartSource | null }) {
           </a>
         </div>
       </header>
-      <main>
+      <main id={MAIN_CONTENT_ID} tabIndex={-1}>
         <div className={`${pageWidth} py-12 sm:py-16`}>
           <h1 className="max-w-[24ch] font-display text-display-2 font-extrabold uppercase">Five to Nine pricing</h1>
         </div>

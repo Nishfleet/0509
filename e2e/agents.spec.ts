@@ -48,8 +48,11 @@ test("the MCP server publishes its protected-resource and authorization-server m
 }) => {
   const resource = await request.get("/.well-known/oauth-protected-resource/mcp");
   expect(resource.status()).toBe(200);
-  const resourceBody: { resource: string; authorization_servers: string[]; scopes_supported: string[] } =
-    await resource.json();
+  const resourceBody = (await resource.json()) as {
+    resource: string;
+    authorization_servers: string[];
+    scopes_supported: string[];
+  };
   const origin = resourceBody.authorization_servers[0] ?? "";
   expect(origin).toMatch(/^https?:\/\/[^/]+$/);
   expect(resourceBody.resource).toBe(`${origin}/mcp`);
@@ -57,12 +60,12 @@ test("the MCP server publishes its protected-resource and authorization-server m
 
   const server = await request.get("/.well-known/oauth-authorization-server");
   expect(server.status()).toBe(200);
-  const serverBody: {
+  const serverBody = (await server.json()) as {
     authorization_endpoint: string;
     token_endpoint: string;
     code_challenge_methods_supported: string[];
     client_id_metadata_document_supported?: boolean;
-  } = await server.json();
+  };
   expect(serverBody.authorization_endpoint).toBe(`${origin}/oauth/authorize`);
   expect(serverBody.token_endpoint).toBe(`${origin}/oauth/token`);
   expect(serverBody.code_challenge_methods_supported).toEqual(["S256"]);
@@ -97,7 +100,7 @@ test("the REST API refuses a request without a key and never caches the answer @
 test("the API reference is public OpenAPI 3.1 @smoke", async ({ request }) => {
   const response = await request.get("/api/v1/openapi.json");
   expect(response.status()).toBe(200);
-  const body: { openapi: string; paths: Record<string, unknown> } = await response.json();
+  const body = (await response.json()) as { openapi: string; paths: Record<string, unknown> };
   expect(body.openapi).toBe("3.1.0");
   expect(Object.keys(body.paths).sort()).toEqual([
     "/api/v1/alerts",

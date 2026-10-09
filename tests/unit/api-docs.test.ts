@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { ApiReference } from "../../app/components/api-reference";
-import { schemaFields, schemaLabel } from "../../app/lib/agent/api-docs";
+import { schemaFields, schemaLabel, type JsonRecord } from "../../app/lib/agent/api-docs";
 import { openApiDocument } from "../../app/lib/agent/openapi";
 import { MCP_PATH } from "../../app/lib/agent/paths";
 
@@ -13,7 +13,7 @@ const SETTINGS = "/app/settings/agents";
 function page(): string {
   return renderToStaticMarkup(
     createElement(ApiReference, {
-      document: openApiDocument(ORIGIN),
+      document: openApiDocument(ORIGIN) as unknown as JsonRecord,
       mcpUrl: `${ORIGIN}${MCP_PATH}`,
       settingsHref: SETTINGS,
     }),

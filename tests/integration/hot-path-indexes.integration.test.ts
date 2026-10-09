@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 import { DELETE_EXPIRED_SESSIONS, DELETE_EXPIRED_VERIFICATIONS } from "../../app/lib/data/auth_expiry.server";
-import { SELECT_HIRING_SIGNAL_STATES } from "../../app/lib/data/signal.server";
+import { SELECT_HIRING_SIGNAL_STATES, SEEN_URLS } from "../../app/lib/data/signal.server";
 import { SELECT_RUN } from "../../app/lib/workspace.server";
 import { SELECT_LATEST_ATTEMPT_ERROR } from "../../workers/delivery/dlq-consumer";
 import { SELECT_STALE_PENDING_ATTEMPTS, SELECT_STALE_PENDING_DIGESTS } from "../../workers/delivery/sweeper";
@@ -101,36 +101,12 @@ async function liveIndexColumns(name: string): Promise<string[]> {
  * These are FK children whose parents DO get deleted on live paths — account
  * delete cascades through `workspace`, and competitor forget
  * (`app/lib/data/entity.server.ts` deleteCompetitor) deletes `entity` — so
- * deleting a parent still scans them. They are allowlisted, not excused:
- * 0509#5938 owns indexing them. The five account-delete children that scanned
- * are indexed by migration 0029 and are no longer in this list, and
- * `incident.page_id` ships its index in the same migration — a partial index
- * (`idx_incident_one_open_per_page`, `WHERE closed_at IS NULL`) was masking it,
- * which is why the gate counts only `partial = 0` indexes as covering.
+ * deleting a parent still scans them unless a leading-column index exists.
+ * 0055_cascade_child_indexes.sql (#7080) indexes the remaining allowlisted
+ * columns, so this list is empty. A new unindexed `*_id` still fails the gate
+ * below.
  */
-const LEGACY_UNINDEXED_ID_COLUMNS: readonly string[] = [
-  "alert.entity_id",
-  "alert.incident_id",
-  "alert.page_id",
-  "alert.signal_id",
-  "incident.entity_id",
-  "incident_notice.incident_id",
-  "jev_verdict.entity_id",
-  "jev_verdict.signal_id",
-  "plan.provider_customer_id",
-  "plan.provider_subscription_id",
-  "send_attempt.send_target_id",
-  "send_target.channel_id",
-  "signal.snapshot_id",
-  "signal_delivery.channel_id",
-  "signal_delivery.send_attempt_id",
-  "snapshot.page_id",
-  "standing.entity_id",
-  "suggestion.entity_id",
-  "user_decision.entity_id",
-  "user_decision.signal_id",
-  "watch.source_id",
-];
+const LEGACY_UNINDEXED_ID_COLUMNS: readonly string[] = [];
 
 async function unindexedIdColumns(): Promise<string[]> {
   const tables = await env.DB.prepare(
@@ -207,5 +183,18 @@ describe("0029_hot_path_indexes_and_sweep_run.sql", () => {
     } finally {
       await env.DB.exec("DROP TABLE gate_probe");
     }
+  });
+
+  it("reads seen mention URLs through idx_signal_dup_url (0509#7080)", async () => {
+    expect((await liveIndexColumns("idx_signal_dup_url")).slice(0, 2)).toEqual(["entity_id", "norm_url_hash"]);
+    const result = await env.DB.prepare(`EXPLAIN QUERY PLAN ${SEEN_URLS}`)
+      .bind("ent_mentions", JSON.stringify(["hash"]))
+      .all<{ detail: string }>();
+    const details = (result.results ?? []).map((row) => row.detail);
+    expect(
+      details.some((detail) => /USING (?:COVERING )?INDEX idx_signal_dup_url/.test(detail)),
+      `SEEN_URLS did not read through idx_signal_dup_url: ${details.join(" | ")}`,
+    ).toBe(true);
+    expect(details.filter((detail) => detail.startsWith("SCAN ") && !detail.includes("json_each"))).toEqual([]);
   });
 });

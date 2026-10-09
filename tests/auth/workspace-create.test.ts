@@ -61,6 +61,14 @@ function openDb(): DatabaseSync {
       started_at TEXT NOT NULL,
       watching_started_at TEXT
     );
+    CREATE TABLE plan (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      tier TEXT NOT NULL,
+      status TEXT,
+      current_period_end TEXT,
+      limits_json TEXT NOT NULL DEFAULT '{}'
+    );
   `);
   return database;
 }
@@ -76,6 +84,9 @@ function asWorkspaceDb(database: DatabaseSync): WorkspaceDb {
             async first<T>() {
               const row = statement.get(...params) as T | undefined;
               return row ?? null;
+            },
+            async all() {
+              return { results: statement.all(...params) as never[] };
             },
             async run() {
               const result = statement.run(...params);
@@ -273,6 +284,7 @@ describe("ensureWorkspace", () => {
                   brief_hour: 8,
                   created_at: input.now,
                 }) as T,
+              all: async () => ({ results: [] }),
               run: async () => ({ meta: { changes: 0 } }),
             }),
           };
@@ -311,13 +323,15 @@ describe("ensureWorkspace", () => {
             const bound = statement.bind(...values);
             return {
               first: bound.first.bind(bound),
+              all: bound.all.bind(bound),
               async run() {
                 if (query.startsWith("INSERT INTO workspace")) {
                   entered += 1;
                   if (entered === 1) await gate;
                   else release();
                 }
-                await bound.run();
+                const result = await bound.run();
+                return { meta: { changes: result.meta.changes } };
               },
             };
           },
@@ -423,6 +437,9 @@ describe("ensureWorkspace", () => {
                 reads += 1;
                 return (reads === 1 ? null : row) as T | null;
               },
+              async all() {
+                return { results: [] };
+              },
               async run() {
                 throw new Error("busy");
               },
@@ -454,6 +471,9 @@ describe("workspaceLanding", () => {
             return {
               async first<T>() {
                 return null as T | null;
+              },
+              async all() {
+                return { results: [] };
               },
               async run() {
                 throw new Error("workspaceLanding must not write");

@@ -37,6 +37,11 @@ async function seedWorkspace(id: string, ownerUserId: string, name: string): Pro
   )
     .bind(id, name, ownerUserId, NOW)
     .run();
+  await env.DB.prepare(
+    "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
+  )
+    .bind(`plan-${id}`, id, NOW)
+    .run();
 }
 
 async function seedSelf(workspaceId: string, domain: string): Promise<void> {

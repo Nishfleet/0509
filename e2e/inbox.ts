@@ -7,6 +7,8 @@ import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { expect, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
 
+import { isFixtureAccount } from "../app/lib/fixture-accounts";
+
 // The J1 mail path, per the amended decision on 0509#3927: Email Routing's
 // e2e@0509.io rule delivers e2e+<run-id>@0509.io (zone subaddressing on, RFC
 // 5233) to the 0509-e2e-inbox Worker, which stores the raw message in a
@@ -31,6 +33,15 @@ const PRODUCTION_ORIGIN = "https://0509.io";
 // Specs take the same branch off this rather than re-testing the variable.
 export function isLocalLane(): boolean {
   return !process.env.PLAYWRIGHT_TEST_BASE_URL;
+}
+
+function unknownToMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  try {
+    return JSON.stringify(error);
+  } catch (_circular) {
+    return Object.prototype.toString.call(error);
+  }
 }
 
 // The lane's origin is the only one a verify link may carry (0509#5841):
@@ -299,13 +310,17 @@ export async function waitForMagicLink(to: string, token: string | null, exclude
       // one, and a poll-callback error would read as "no email" — the thrown
       // error names the sink's state and carries the poll failure as cause.
       if (pollError !== undefined) {
-        throw new Error(`Reading the local email sink failed while waiting for ${to}: ${pollError}`, { cause });
+        throw new Error(`Reading the local email sink failed while waiting for ${to}: ${unknownToMessage(pollError)}`, {
+          cause,
+        });
       }
       const sinkMissing = await stat(join(process.cwd(), LOCAL_EMAIL_SINK)).then(
         () => false,
         (error: unknown) => {
           if (isNotFound(error)) return true;
-          throw new Error(`Reading the local email sink failed while waiting for ${to}: ${error}`, { cause });
+          throw new Error(`Reading the local email sink failed while waiting for ${to}: ${unknownToMessage(error)}`, {
+            cause,
+          });
         },
       );
       throw new Error(
@@ -580,8 +595,8 @@ export async function signInWithMagicLink(
 // unrecorded one is the no-row case. The extra sign-in sends one email, and
 // only on this path.
 
-// 0509#5688 (fleet-manager): the journey specs keep these six accounts on
-// purpose; the recurring teardown must never delete them. Match these exact
+// 0509#5688 (fleet-manager): the journey specs keep these accounts on
+// purpose (0051 added the five production-lane identities, #7225); the recurring teardown must never delete them. Match these exact
 // addresses, never a pattern. The one-time purge (0509#5730) kept four
 // of them (not e2e+j8-hard, added by J8, 0509#4124); a later purge may still take them — once the kept-account journey
 // specs land (0509#4123, #4124, #4125, #4128) they create them again.
@@ -594,7 +609,19 @@ const KEPT_JOURNEY_ACCOUNTS: readonly string[] = [
   "e2e+j9-mentions@0509.io",
   "e2e+j12-rollovers@0509.io",
   "e2e+soak@0509.io",
+  "e2e+onboarded-desktop@0509.io",
+  "e2e+onboarded-phone@0509.io",
+  "e2e+j6-desktop@0509.io",
+  "e2e+j6-phone@0509.io",
+  "e2e+j11@0509.io",
 ];
+
+// Every FIXTURE_ACCOUNTS address is kept too: those workspaces hold a
+// complimentary plan row (migration 0048, #7225) that nothing recreates once
+// the account is deleted, so neither delete helper may ever remove one.
+export function isKeptAccount(email: string): boolean {
+  return KEPT_JOURNEY_ACCOUNTS.includes(email.toLowerCase()) || isFixtureAccount(email);
+}
 
 export function classifySettingsDeleteRedirect(
   status: number,
@@ -625,21 +652,34 @@ export async function deleteAccountViaRequest(request: APIRequestContext, origin
     }
   }
   if (!email) return;
+  if (isKeptAccount(email)) {
+    console.log(`deleteAccountViaRequest: ${email} is a kept journey account; refusing to delete it`);
+    return;
+  }
 
+  // Names the row the run is about to remove, so a teardown that times out
+  // (#7247) leaves a row the soak report's user table can be matched against
+  // instead of an anonymous leftover. The elapsed time is the measurement
+  // #7247 asks for: the product call answered in 20-30s, and nothing on this
+  // path recorded how long the answer took.
+  console.log(`deleteAccountViaRequest: deleting ${email}`);
+  const startedAt = Date.now();
   const deleted = await request.post("/app/settings", {
     headers: { origin },
     form: { intent: "delete-account", confirm: email },
     maxRedirects: 0,
   });
+  const elapsedMs = Date.now() - startedAt;
   const location = deleted.headers().location ?? "";
   const outcome = classifySettingsDeleteRedirect(deleted.status(), location);
   if (outcome === "unexpected") {
     throw new Error(`settings delete answered HTTP ${String(deleted.status())} location=${location}`);
   }
+  console.log(`deleteAccountViaRequest: deleted ${email} in ${elapsedMs}ms`);
 }
 
 export async function deleteCreatedAccount(page: Page, email: string): Promise<void> {
-  if (KEPT_JOURNEY_ACCOUNTS.includes(email)) {
+  if (isKeptAccount(email)) {
     console.log(`deleteCreatedAccount: ${email} is a kept journey account; skipping`);
     return;
   }
@@ -713,6 +753,7 @@ export function run(db: DatabaseSync, sql: string, ...values: (string | number |
 export async function seedPreviewSession<T = void>(
   prefix: string,
   seed: (context: { db: DatabaseSync; suffix: string; userId: string }) => T,
+  options: { livePlan: boolean } = { livePlan: true },
 ): Promise<{ cookie: string; seeded: T }> {
   const suffix = crypto.randomUUID().slice(0, 8);
   const email = `${prefix}-${suffix}@0509.io`;
@@ -748,6 +789,7 @@ export async function seedPreviewSession<T = void>(
     const user = db.prepare('SELECT id FROM "user" WHERE email = ?').get(email) as { id: string } | undefined;
     if (user === undefined) throw new Error("magic link created no user");
     const seeded = seed({ db, suffix, userId: user.id });
+    if (options.livePlan) seedLivePlan(db, user.id);
     db.exec("PRAGMA wal_checkpoint(PASSIVE)");
     return { cookie, seeded };
   } finally {
@@ -762,4 +804,12 @@ export function readPreview<T>(read: (db: DatabaseSync) => T): T {
   } finally {
     db.close();
   }
+}
+
+const SEED_LIVE_PLAN = `INSERT INTO plan (id, workspace_id, tier, status, current_period_end, updated_at)
+  SELECT 'plan-' || id, id, 'scout', 'trialing', ?, '2026-01-01T00:00:00.000Z' FROM workspace WHERE owner_user_id = ?
+  ON CONFLICT(workspace_id) DO NOTHING`;
+
+function seedLivePlan(db: DatabaseSync, userId: string): void {
+  run(db, SEED_LIVE_PLAN, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), userId);
 }

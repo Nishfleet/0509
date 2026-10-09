@@ -127,6 +127,11 @@ const resetTenant = async () => {
     .bind(WS, USER, NOW)
     .run();
   await env.DB.prepare(
+    "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
+  )
+    .bind(`${WS}-plan`, WS, NOW)
+    .run();
+  await env.DB.prepare(
     `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
      VALUES (?, ?, 'competitor', 'rival.com', '{}', 'manual', 'on', ?)`,
   )

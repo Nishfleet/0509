@@ -18,6 +18,8 @@ describe("required", () => {
   });
 
   it("throws an Error whose message names the location for undefined", () => {
-    expect(() => required(undefined, "home loader")).toThrowError(new Error("Missing value at home loader"));
+    expect(() => {
+      required(undefined, "home loader");
+    }).toThrowError(new Error("Missing value at home loader"));
   });
 });

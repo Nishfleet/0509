@@ -32,7 +32,7 @@ async function sessionReadSql(adapter: { findOne: (args: never) => Promise<unkno
     where: [{ field: "token", value: "no-such-token-0509-5780" }],
     join: USER_JOIN,
   } as never);
-  const sql = prepare.mock.calls.map(([query]) => String(query));
+  const sql = prepare.mock.calls.map(([query]) => query);
   prepare.mockRestore();
   return sql;
 }

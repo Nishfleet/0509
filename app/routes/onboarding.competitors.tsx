@@ -52,7 +52,7 @@ export async function action({ request }: Route.ActionArgs) {
   const form = await request.formData();
   if (startWatchingForm.safeParse(Object.fromEntries(form)).success) {
     await markWatchingStarted(workspaceId, new Date().toISOString());
-    throw redirect("/app");
+    throw redirect("/onboarding/plan");
   }
   return handleCompetitorIntent(workspaceId, form);
 }

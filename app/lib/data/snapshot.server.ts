@@ -15,18 +15,22 @@ ON CONFLICT (id) DO NOTHING`;
 
 const SNAPSHOT_EXISTS = `SELECT 1 FROM snapshot WHERE id = ?`;
 
-interface SiteSnapshotRow {
-  id: string;
-  payload_hash: string;
-  payload_r2_key: string | null;
-}
+const siteSnapshotRow = z.object({
+  id: z.string(),
+  payload_hash: z.string(),
+  payload_r2_key: z.string().nullable(),
+});
+
+type SiteSnapshotRow = z.infer<typeof siteSnapshotRow>;
 
 export async function latestSiteSnapshot(
   watchId: string,
   pageId: string,
   before: string,
 ): Promise<SiteSnapshotRow | null> {
-  return env.DB.prepare(LATEST_SITE_SNAPSHOT).bind(watchId, pageId, before).first<SiteSnapshotRow>();
+  return siteSnapshotRow
+    .nullable()
+    .parse(await env.DB.prepare(LATEST_SITE_SNAPSHOT).bind(watchId, pageId, before).first());
 }
 
 export async function insertSnapshot(row: {
@@ -129,12 +133,17 @@ export interface CoveredPagePair {
   pageId: string;
 }
 
+const readCoveredPagePairsRow = z.object({
+  watch_id: z.string(),
+  page_id: z.string(),
+});
+
 export async function readCoveredPagePairs(
   sinceIso: string,
   watchIds: readonly string[],
 ): Promise<readonly CoveredPagePair[]> {
-  const rows = await env.DB.prepare(COVERED_PAGE_PAIRS)
-    .bind(sinceIso, JSON.stringify(watchIds))
-    .all<{ watch_id: string; page_id: string }>();
-  return rows.results.map((row) => ({ watchId: row.watch_id, pageId: row.page_id }));
+  return z
+    .array(readCoveredPagePairsRow)
+    .parse((await env.DB.prepare(COVERED_PAGE_PAIRS).bind(sinceIso, JSON.stringify(watchIds)).all()).results)
+    .map((row) => ({ watchId: row.watch_id, pageId: row.page_id }));
 }

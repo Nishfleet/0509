@@ -74,6 +74,15 @@ describe("workspaceLanding resume point", () => {
       landing: "/onboarding/competitors",
     });
     await markWatchingStarted(workspaceId, "2026-09-25T06:01:00.000Z");
+    expect(await workspaceLanding(env.DB, input)).toEqual({
+      workspaceId,
+      landing: "/onboarding/plan",
+    });
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
+    )
+      .bind("plan-resume-2", workspaceId, "2026-09-25T06:01:00.000Z")
+      .run();
     expect(await workspaceLanding(env.DB, input)).toEqual({ workspaceId, landing: null });
   });
 
@@ -94,6 +103,9 @@ describe("workspaceLanding resume point", () => {
       identityJson: "{}",
       now: "2026-09-25T06:00:30.000Z",
     });
-    expect(await workspaceLanding(env.DB, input)).toEqual({ workspaceId, landing: null });
+    expect(await workspaceLanding(env.DB, input)).toEqual({
+      workspaceId,
+      landing: "/onboarding/plan",
+    });
   });
 });

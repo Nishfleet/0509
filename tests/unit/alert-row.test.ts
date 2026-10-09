@@ -232,7 +232,7 @@ describe("an alert feed row", () => {
   });
 
   it("keeps the content, hiring and mention headline links on a 44px tap target", () => {
-    const link = (item: AlertFeedItem): string => render(item).match(/<a\b[^>]*>/)?.[0] ?? "";
+    const link = (item: AlertFeedItem): string => /<a\b[^>]*>/.exec(render(item))?.[0] ?? "";
     for (const item of [CONTENT_ITEM, HIRING_ITEM, MENTION_ITEM]) {
       expect(link(item)).toContain("min-h-11");
       expect(link(item)).toContain("inline-flex");
@@ -285,7 +285,7 @@ describe("new-tab link a11y", () => {
   const SUMMARY_CLASS = "inline-flex min-h-11 cursor-pointer items-center underline decoration-1 underline-offset-4";
 
   function newTabAnchor(html: string): string {
-    return html.match(/<a\b[^>]*>[\s\S]*?<span class="sr-only">[\s\S]*?<\/span>[\s\S]*?<\/a>/)?.[0] ?? "";
+    return /<a\b[^>]*>[\s\S]*?<span class="sr-only">[\s\S]*?<\/span>[\s\S]*?<\/a>/.exec(html)?.[0] ?? "";
   }
 
   function openingTag(anchor: string): string {

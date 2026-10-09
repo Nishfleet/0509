@@ -100,6 +100,7 @@ const briefPayloadSchema = z.object({
   why_line: text,
   is_quiet_week: flag,
   is_unjudged: flag,
+  judged_count: z.number().optional().catch(undefined),
   read_this_first: keepValid(markSchema),
   brands: keepValid(brandLineSchema),
   own_site: ownSiteSchema,

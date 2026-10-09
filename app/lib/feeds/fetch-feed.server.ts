@@ -1,4 +1,4 @@
-import { cappedText, fetchOutbound } from "../fetch/outbound.server";
+import { cappedText, fetchOutbound, leadingText } from "../fetch/outbound.server";
 import { CRAWLER_USER_AGENT, robotsAllows } from "../fetch/robots.server";
 
 export interface FeedValidators {
@@ -33,11 +33,9 @@ async function classify(response: Response): Promise<FeedFetch> {
     await response.body?.cancel();
     return { outcome: response.status === 404 || response.status === 410 ? "gone" : "unreadable" };
   }
-  const body = await cappedText(response, MAX_FEED_BYTES);
-  if (body === null) return { outcome: "unreadable" };
   return {
     outcome: "ok",
-    body,
+    body: await leadingText(response, MAX_FEED_BYTES),
     validators: { etag: response.headers.get("etag"), lastModified: response.headers.get("last-modified") },
   };
 }

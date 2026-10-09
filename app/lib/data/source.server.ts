@@ -99,14 +99,18 @@ export async function readEnabledSources(
   return enabledSourceRows.parse(rows.results);
 }
 
+const CANARY_STRIKES_BEFORE_DEGRADED = 2;
+
 const CANARY_SOURCES = `SELECT id, plugin_key, canary_query,
 COALESCE(json_extract(CASE WHEN json_valid(config_json) THEN config_json ELSE '{}' END, '$.min_interval_seconds'), 0) AS min_interval_seconds FROM source
 WHERE kind = 'mentions' AND is_enabled = 1 AND canary_query IS NOT NULL
 ORDER BY id`;
 
-const MARK_CANARY_GOOD = `UPDATE source SET degraded_reason = NULL, last_good_at = ?2 WHERE id = ?1`;
+const MARK_CANARY_GOOD = `UPDATE source SET degraded_reason = NULL, last_good_at = ?2, canary_strikes = NULL WHERE id = ?1`;
 
-const MARK_CANARY_BAD = `UPDATE source SET degraded_reason = 'not answering' WHERE id = ?1`;
+const COUNT_CANARY_STRIKE = `UPDATE source SET canary_strikes = COALESCE(canary_strikes, 0) + 1 WHERE id = ?1 RETURNING canary_strikes`;
+
+const MARK_CANARY_BAD = `UPDATE source SET degraded_reason = 'not answering' WHERE id = ?1 AND COALESCE(canary_strikes, 0) >= ?2`;
 
 const MARK_SOURCE_BLOCKED = "UPDATE source SET degraded_reason = ?2 WHERE id = ?1";
 
@@ -148,7 +152,10 @@ export async function recordSourceCanary(sourceId: string, canaryCount: number, 
     await env.DB.prepare(MARK_CANARY_GOOD).bind(sourceId, now).run();
     return;
   }
-  await env.DB.prepare(MARK_CANARY_BAD).bind(sourceId).run();
+  const struck = await env.DB.prepare(COUNT_CANARY_STRIKE).bind(sourceId).first<{ canary_strikes: number }>();
+  const strikes = struck?.canary_strikes ?? 0;
+  if (strikes < CANARY_STRIKES_BEFORE_DEGRADED) return;
+  await env.DB.prepare(MARK_CANARY_BAD).bind(sourceId, CANARY_STRIKES_BEFORE_DEGRADED).run();
 }
 
 export async function markSourceBlocked(sourceId: string, status: number): Promise<void> {

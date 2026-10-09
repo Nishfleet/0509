@@ -21,7 +21,6 @@ const localPort = process.env.PLAYWRIGHT_LOCAL_PORT;
 const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL ?? `http://127.0.0.1:${localPort}`;
 export const accessStatePath = "e2e/.auth/access.json";
 export const onboardedStatePath = (lane: "desktop" | "phone"): string => `e2e/.auth/onboarded-${lane}.json`;
-export const onboardedEmailPath = (lane: "desktop" | "phone"): string => `e2e/.auth/onboarded-${lane}.email`;
 export const sessionStatePath = "e2e/.auth/session.json";
 const accessState = process.env.CF_ACCESS_CLIENT_ID ? { storageState: accessStatePath } : {};
 const productionLane = Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL && process.env.CF_ACCESS_CLIENT_ID);
@@ -93,9 +92,7 @@ export default defineConfig({
             name: "onboarded-setup",
             testMatch: /onboarded\.setup\.ts/,
             dependencies: ["setup"],
-            teardown: "onboarded-teardown",
           },
-          { name: "onboarded-teardown", testMatch: /onboarded-teardown\.setup\.ts/ },
         ]
       : []),
     {

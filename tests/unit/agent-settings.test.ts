@@ -45,8 +45,8 @@ function keysScreen(): ReactElement {
 }
 
 const TWO_APPS = [
-  { grantId: "g1", name: "Notion", connectedAt: "2026-09-01T00:00:00.000Z" },
-  { grantId: "g2", name: "Linear", connectedAt: "2026-09-01T00:00:00.000Z" },
+  { grantId: "g1", name: "Notion", host: "notion.so", connectedAt: "2026-09-01T00:00:00.000Z" },
+  { grantId: "g2", name: "Linear", host: "linear.app", connectedAt: "2026-09-01T00:00:00.000Z" },
 ];
 
 function appsScreen(): ReactElement {
@@ -189,7 +189,7 @@ describe("AgentKeys", () => {
     expect(html.match(/up to 120 requests a minute/g)).toHaveLength(1);
     expect(html.match(/42 requests left/g)).toHaveLength(1);
     const openRow = html.match(/<li[^>]*data-testid="api-key"[^>]*>[\s\S]*?<\/li>/g)?.[1] ?? "";
-    const openDetails = openRow.match(/<span class="block text-body-sm text-ink-soft">([^<]*)<\/span>/)?.[1];
+    const openDetails = /<span class="block text-body-sm text-ink-soft">([^<]*)<\/span>/.exec(openRow)?.[1];
     expect(openDetails).toBe("Created 1 Sept 2026 · never used");
     expect(openRow).not.toContain("requests");
   });
@@ -241,7 +241,7 @@ describe("AgentKeys", () => {
     expect(makeKey).toContain("Make a key");
     expect(makeKey).not.toContain("Making…");
     expect(makeKey).not.toContain('disabled=""');
-    const keyName = html.match(/<input\b[^>]*id="key-name"[^>]*>/)?.[0] ?? "";
+    const keyName = /<input\b[^>]*id="key-name"[^>]*>/.exec(html)?.[0] ?? "";
     expect(keyName).toContain('autoComplete="off"');
   });
 
@@ -405,7 +405,9 @@ describe("ConnectedApps", () => {
   // reaches the same day() a bad key timestamp does.
   it("says date unknown instead of throwing when an app's connectedAt is unparseable", () => {
     const html = stubbed(
-      createElement(ConnectedApps, { apps: [{ grantId: "g1", name: "Notion", connectedAt: "garbage" }] }),
+      createElement(ConnectedApps, {
+        apps: [{ grantId: "g1", name: "Notion", host: "notion.so", connectedAt: "garbage" }],
+      }),
     );
 
     expect(html).toContain("Connected date unknown");
@@ -418,11 +420,28 @@ describe("ConnectedApps", () => {
   it("still formats the connected day for an app with a valid timestamp", () => {
     const html = stubbed(
       createElement(ConnectedApps, {
-        apps: [{ grantId: "g1", name: "Notion", connectedAt: "2026-09-01T00:00:00.000Z" }],
+        apps: [{ grantId: "g1", name: "Notion", host: "notion.so", connectedAt: "2026-09-01T00:00:00.000Z" }],
       }),
     );
 
     expect(html).toContain("Connected 1 Sept 2026");
+  });
+
+  it("shows the redirect host under a claimed app name", () => {
+    const html = stubbed(createElement(ConnectedApps, { apps: TWO_APPS }));
+    expect(html).toContain("Notion");
+    expect(html).toContain("notion.so");
+    expect(html).toContain("Linear");
+    expect(html).toContain("linear.app");
+  });
+
+  it("shows the host line even when it equals the name", () => {
+    const html = stubbed(
+      createElement(ConnectedApps, {
+        apps: [{ grantId: "g3", name: "evil.example", host: "evil.example", connectedAt: "2026-09-01T00:00:00.000Z" }],
+      }),
+    );
+    expect(html).toContain('>evil.example</span><span class="block font-mono');
   });
 });
 
@@ -608,7 +627,11 @@ describe("copying a new API key", () => {
   // place CopyKey is rendered.
   it("puts the key on screen above the copy button in the new-key notice", () => {
     const Stub = createRoutesStub([
-      { path: "/", Component: () => createElement(AgentKeys, { keys: [], newKey: NEW_KEY }) },
+      {
+        path: "/",
+        Component: () =>
+          createElement(AgentKeys, { keys: [], newKey: NEW_KEY, duplicate: false, submission: "test-submission" }),
+      },
     ]);
     const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
     const key = html.indexOf(`>${NEW_KEY}<`);

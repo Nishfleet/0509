@@ -69,7 +69,7 @@ const runCheck = async (id: string) => {
   });
   await env.OWN_SITE_CHECK.create({ id });
   await introspector.waitForStatus("complete");
-  return introspector.getOutput();
+  return await introspector.getOutput();
 };
 
 const incidents = async () => {
@@ -97,6 +97,7 @@ describe("own-site check", () => {
     await env.DB.exec("DELETE FROM watch");
     await env.DB.exec("DELETE FROM page");
     await env.DB.exec("DELETE FROM entity");
+    await env.DB.exec("DELETE FROM plan");
     await env.DB.exec("DELETE FROM workspace");
     await env.DB.exec('DELETE FROM "user"');
     const stored = await env.SNAPSHOTS.list({ prefix: "snapshot/site/" });
@@ -112,6 +113,11 @@ describe("own-site check", () => {
        VALUES (?, 'Own site', ?, 'UTC', 1, 8, ?)`,
     )
       .bind(WS, USER, NOW)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'starter', 'active', ?)`,
+    )
+      .bind("plan-own-site", WS, NOW)
       .run();
     await seedEntity("ent-self", "self", "mybrand.com");
     await seedEntity("ent-rival", "competitor", "rival.com");
@@ -136,6 +142,27 @@ describe("own-site check", () => {
     expect(await runCheck("own-healthy")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
     expect(await incidents()).toEqual([]);
     expect(await alerts()).toEqual([]);
+  });
+
+  it("probes no Scout pages even when the workspace preference is on", async () => {
+    await env.DB.prepare("DELETE FROM plan WHERE workspace_id = ?").bind(WS).run();
+    await env.DB.prepare(
+      `INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('page-scout-home', 'ent-self', 'https://mybrand.com/', 'home', ?)`,
+    )
+      .bind(NOW)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO incident (id, workspace_id, entity_id, page_id, kind, opened_at)
+       VALUES ('inc-scout', ?, 'ent-self', 'page-scout-home', 'error 503', ?)`,
+    )
+      .bind(WS, NOW)
+      .run();
+    expect(await runCheck("own-scout")).toEqual({ pages: 0, opened: 0, closed: 0, failed: 0 });
+    expect(fetched).toEqual([]);
+    const scout = await incidents();
+    expect(scout).toHaveLength(1);
+    expect(scout[0]).toMatchObject({ entity_id: "ent-self", kind: "error 503" });
+    expect(scout[0]?.closed_at).not.toBeNull();
   });
 
   it("opens one incident with a pinned alert when the site still fails on the confirming read, and closes it on the next clean hour", async () => {
@@ -190,7 +217,9 @@ describe("own-site check", () => {
     )
       .bind(WS, NOW)
       .run();
-    const send = vi.spyOn(workerEnv.SEND_EMAIL, "send").mockResolvedValue(undefined);
+    const send = vi.spyOn(workerEnv.SEND_EMAIL, "send").mockResolvedValue({
+      metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
+    });
 
     site.html = SOFT_BROKEN_HTML;
     expect(await runCheck("own-soft-broken")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });

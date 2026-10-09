@@ -57,7 +57,7 @@ describe("SignInSent names the recipient and the expiry (0509#6886)", () => {
 
   it("tells a screen reader how long the resend wait is", () => {
     const html = render();
-    const status = html.match(/<p role="status" class="sr-only">[\s\S]*?<\/p>/)?.[0] ?? "";
+    const status = /<p role="status" class="sr-only">[\s\S]*?<\/p>/.exec(html)?.[0] ?? "";
 
     expect(status).toContain('role="status"');
     expect(status).toContain("You can send it again in 30 seconds.");

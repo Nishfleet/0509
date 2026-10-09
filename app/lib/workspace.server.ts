@@ -1,5 +1,7 @@
 import { env } from "cloudflare:workers";
 
+import { isWorkspacePaid } from "./billing/entitlements";
+import { clearWorkspaceDeletedSuppression } from "./data/email_suppression.server";
 import { ensureOwnerEmailTarget } from "./data/send_target.server";
 import { isPerRunFixtureEmail } from "./fixture-accounts";
 import {
@@ -90,6 +92,7 @@ export async function ensureWorkspace(
       createdAt,
       fixture: isPerRunFixtureEmail(input.email),
     });
+    await clearWorkspaceDeletedSuppression(input.email, db);
   } catch (error) {
     const raced = await readWorkspace(db, input.userId);
     if (raced) return withCapturedTimezone(db, raced, timezone);
@@ -118,6 +121,7 @@ export async function ensureWorkspaceForSignIn(
 }
 
 export const ONBOARDING_COMPETITORS = "/onboarding/competitors";
+export const ONBOARDING_PLAN = "/onboarding/plan";
 
 export const SELECT_RUN =
   "SELECT input_raw, watching_started_at FROM onboarding_run WHERE workspace_id = ? ORDER BY started_at ASC LIMIT 1";
@@ -133,6 +137,12 @@ function resumePoint(hasSelf: boolean, run: RunRow | null): string | null {
   return ONBOARDING_COMPETITORS;
 }
 
+function paidLanding(row: { plan_status: string | null; plan_current_period_end: string | null }): string | null {
+  const plan =
+    row.plan_status === null ? null : { status: row.plan_status, currentPeriodEnd: row.plan_current_period_end };
+  return isWorkspacePaid(plan, new Date()) ? null : ONBOARDING_PLAN;
+}
+
 export async function workspaceLanding(
   db: WorkspaceDb,
   input: { userId: string; timezone: string | null },
@@ -145,7 +155,8 @@ export async function workspaceLanding(
   }
   const run =
     row.input_raw === null ? null : { input_raw: row.input_raw, watching_started_at: row.watching_started_at };
-  return { workspaceId: row.id, landing: resumePoint(row.self_id !== null, run) };
+  const landing = resumePoint(row.self_id !== null, run) ?? paidLanding(row);
+  return { workspaceId: row.id, landing };
 }
 
 export async function workspaceLandingForRequest(

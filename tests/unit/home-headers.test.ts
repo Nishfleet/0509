@@ -94,4 +94,11 @@ describe("static home analytics", () => {
       expect(csp).toContain(`'sha256-${digest}'`);
     }
   });
+
+  it.each(["/og.png", "/logo.svg", "/favicon.ico", "/apple-touch-icon.png", "/app-faces.css", "/home-faces.css"])(
+    "caches %s so a repeat visit does not revalidate it",
+    (path) => {
+      expect(headerValue(headersBlock(path), "Cache-Control")).toBe("public, max-age=86400");
+    },
+  );
 });

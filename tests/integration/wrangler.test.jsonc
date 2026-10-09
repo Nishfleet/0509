@@ -4,10 +4,11 @@
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "vars": {
     "SITE_SWEEP_PING_URL": "https://hc-ping.example.com/site-sweep",
+    "AI_SPEND": "on",
     "BETTER_AUTH_URL": "https://0509.io",
     "BETTER_AUTH_SECRET": "integration-test-secret",
-    "TURNSTILE_SITE_KEY": "1x00000000000000000000BB",
-    "TURNSTILE_SECRET_KEY": "1x0000000000000000000000000000000AA",
+    "TURNSTILE_SITE_KEY": "integration-test-site-key",
+    "TURNSTILE_SECRET_KEY": "integration-test-secret-key",
     "DODO_ENVIRONMENT": "test_mode",
     "DODO_PAYMENTS_API_KEY": "test-key-not-a-dodo-key",
     "DODO_WEBHOOK_SECRET": "whsec_dGVzdC13ZWJob29rLXNlY3JldC1ub3QtcmVhbA==",

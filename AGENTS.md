@@ -77,12 +77,17 @@ you.
   `playwright/no-networkidle`). Conditional `test.skip(condition, reason)` and
   `test.fail()` stay allowed. The full enforced set is the two test-lint blocks
   in `eslint.config.js`. Source: 0509#5785.
-- **Immutability.** New objects, never mutation.
 - **Formatting is Prettier.** `npm run lint` runs `prettier --check .`; run `npm run format` before committing.
 - **Stock only, at the version named in `docs/dependencies.md`.** `tests/stack-dependencies.test.ts` fails a dependency with no row there. A PR names the library or Cloudflare primitive it uses and what it rejected. Hand-rolled schedulers, diffing, crawlers, queues, retries, auth, billing, email, charts or design systems are rejected. A hand-written type annotation over a framework value is a hand-rolled assertion: use the generated types.
 - **Jev decides every typed decision** (`docs/REBUILD-JEV.md`, D1–D9). Code never guesses with regexes where a judgment is needed; Jev internals are never shown to customers.
 - **Cost** (`docs/REBUILD-COST.md`): writes batched, blobs in R2, counters in KV/DO, Browser Rendering capped at 10 concurrent sessions as a config value. Raising the cap needs Nish's yes with the cost in the PR, and is never left to degrade customers.
 - **Guardrails** (`docs/REBUILD-GUARDRAILS.md`): brands and creators only, never private individuals; disposable identities for collection; paid data providers only with Nish's yes.
+
+## Conventions a reviewer enforces
+
+Not in lint yet, so only a reviewer catches it: new objects,
+never mutation. 0509#5783 parked `eslint-plugin-functional` until the violation
+count is measured (0509#6999).
 
 ## Commands
 
@@ -94,7 +99,7 @@ npm run lint       # eslint . && knip && jscpd && prettier --check .
 npm run format     # prettier --write .
 npm test           # vitest run
 npm run e2e        # playwright test
-npm run eval       # vitest run --config vitest.evals.config.ts
+npm run eval       # vitest run --config vitest.evals.config.ts; live Workers AI, EVAL_MAX_NEURONS caps one run (evals.yml sets 2000; unset = no cap)
 npm run deploy     # wrangler deploy
 npm run verify:start # chrome-devtools start, headless, Playwright's Chromium, --no-sandbox
 npm run verify:stop  # chrome-devtools stop
@@ -177,24 +182,26 @@ rejection**, not a review comment. The row format is asserted by
 
 ## What gates a merge
 
-Four required checks on the `main-merge-queue` ruleset (id 21391031), **empty
-bypass list**:
+One required check on the `main-merge-queue` ruleset (id 21391031), **empty
+bypass list**: `ci-ok`. It is a job in `ci.yml` that needs the six gate jobs
 
 ```
-Gitleaks   codex-node-checks   semgrep   preview-assert
+codex-node-checks   vitest-shard   Gitleaks   semgrep   preview-assert   base-fresh
 ```
 
-`ci-ok` in `ci.yml` needs all four and fails unless every one succeeded,
-so the ruleset can require it alone (0509#7013). It checks for `success`, never
-for a list of bad results: a job no runner picked up matched neither `failure`
-nor `cancelled` and passed it once (2026-10-05). Until the ruleset swaps the
-four for `ci-ok`, the rule below still holds.
+and fails unless every one succeeded (0509#7013). It checks for `success`,
+never for a list of bad results: a job no runner picked up matched neither
+`failure` nor `cancelled` and passed it once (2026-10-05). `vitest-shard` is a
+four-way matrix (`vitest-shard (1)` … `(4)`, vitest's own `--shard`); its
+result in `needs` is `success` only when every shard succeeded (0509#7163).
+`base-fresh` fails a PR whose head lacks the newest `main` commit that touched a gate file, and `stale-base-retest.yml` reruns it on every open PR when one lands (`docs/incidents/2026-10-07-stale-base-queue-ejections.md`).
 
-Renaming one of these is not cosmetic. A required check that never reports fails
+Renaming `ci-ok` is not cosmetic. A required check that never reports fails
 closed and nothing can merge again, including the PR that renamed it. A
-_skipped_ required check counts as passing, so none of these four carries a
-job-level `if:` that can skip it: they report on every event, and on an event
-with nothing to do they pass through one explicit step. The merge queue tests
+_skipped_ job counts as passing, so no gate job carries a job-level `if:` that
+can skip it: they report on every event, and on an event with nothing to do
+they pass through one explicit step. `tests/required-checks-never-skip.test.ts`
+pins the gate list, the `if:` rule and `ci-ok`'s `needs`. The merge queue tests
 the merge result, so a PR that would redden `main` never lands. There is no
 AI grader: CI is the gate, and a PR that touches `.github/`, `migrations/`,
 `app/lib/auth*` or `app/lib/data/` is labelled `needs-coordinator` and the
@@ -228,8 +235,9 @@ Service daily quota (Nish 2026-09-28).
   never auto-armed. An orchestrator PR (author nish3451) carries no second
   review either way; the orchestrator-path decision is tracked at
   fleet-ops#9231. Every merge, worker or orchestrator, rides the merge queue's
-  four required checks. The reviewer checks the SQL, re-checks `main` for the
-  next free number, and relies on D1 Time Travel to undo a drop or delete.
+  one required check, `ci-ok`, which needs every gate job to succeed. The
+  reviewer checks the SQL, re-checks `main` for the next free number, and
+  relies on D1 Time Travel to undo a drop or delete.
   Data left from the old app may be dropped outright ("meh, delete, the old
   app had no users").
 - Deploys go through CI. Every push to `main` deploys via
@@ -237,6 +245,7 @@ Service daily quota (Nish 2026-09-28).
   break-glass only.
 - Prod schema changes go through one door: a numbered file in `migrations/`.
   Never DDL via `wrangler d1 execute --remote`.
+- Number a new migration with the next free number on `origin/main` at push time, re-check it immediately before pushing, and never skip a number: if a sibling PR claimed that number, take the next free one and update every citation in the same commit.
 - Nothing from the pre-wipe code is reused: old files are read only for facts
   about an outside API, never copied and never checked out beside a build.
 - No `scripts/`, `ops/`, `.github/scripts`, hooks, wrappers or helper files.

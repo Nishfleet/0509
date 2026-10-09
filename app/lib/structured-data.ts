@@ -7,6 +7,16 @@ export { SITE_URL };
 
 const ORGANIZATION_ID = `${SITE_URL}/#organization`;
 
+export function shareImageMeta() {
+  return [
+    { property: "og:image", content: `${SITE_URL}/og.png` },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
+    { property: "og:image:alt", content: "Know where you stand. And who's gaining on you." },
+    { name: "twitter:card", content: "summary_large_image" },
+  ];
+}
+
 export function organizationJsonLd() {
   return {
     "@type": "Organization",

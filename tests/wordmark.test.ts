@@ -9,7 +9,7 @@ function mark(className?: string): string {
 }
 
 function anchor(html: string): { attrs: string; inner: string } {
-  const match = html.match(/<a\b([^>]*)>([\s\S]*?)<\/a>/);
+  const match = /<a\b([^>]*)>([\s\S]*?)<\/a>/.exec(html);
   if (!match) throw new Error(`no anchor in: ${html}`);
   return { attrs: match[1] ?? "", inner: match[2] ?? "" };
 }
@@ -25,7 +25,7 @@ describe("Wordmark", () => {
   it("keeps the sr-only 'Five to Nine' name and the aria-hidden 05/09 inside the anchor", () => {
     const { inner } = anchor(mark());
     expect(inner).toContain('<span class="sr-only">Five to Nine</span>');
-    const hidden = inner.match(/<span aria-hidden="true">([\s\S]*)<\/span>/)?.[1] ?? "";
+    const hidden = /<span aria-hidden="true">([\s\S]*)<\/span>/.exec(inner)?.[1] ?? "";
     expect(hidden).toContain("05");
     expect(hidden).toContain("09");
   });

@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 
 import type { BriefPayload } from "../brief-payload";
 import { readBriefPayload } from "../brief-payload";
@@ -41,14 +42,16 @@ export interface DeliveryFailureRow {
   brief: BriefPayload | null;
 }
 
-interface AlertJoinRow {
-  id: string;
-  title: string;
-  body: string | null;
-  created_at: string;
-  digest_id: string | null;
-  payload_json: string | null;
-}
+const alertJoinRow = z.object({
+  id: z.string(),
+  title: z.string(),
+  body: z.string().nullable(),
+  created_at: z.string(),
+  digest_id: z.string().nullable(),
+  payload_json: z.string().nullable(),
+});
+
+type AlertJoinRow = z.infer<typeof alertJoinRow>;
 
 const SELECT_DELIVERY_FAILURES = `SELECT a.id, a.title, a.body, a.created_at, d.id AS digest_id, d.payload_json
 FROM alert a
@@ -58,8 +61,10 @@ ORDER BY a.created_at DESC
 LIMIT 20`;
 
 export async function readDeliveryFailures(db: D1Database, workspaceId: string): Promise<DeliveryFailureRow[]> {
-  const { results } = await db.prepare(SELECT_DELIVERY_FAILURES).bind(workspaceId).all<AlertJoinRow>();
-  return results.map((row) => ({
+  const rows: AlertJoinRow[] = z
+    .array(alertJoinRow)
+    .parse((await db.prepare(SELECT_DELIVERY_FAILURES).bind(workspaceId).all()).results);
+  return rows.map((row) => ({
     id: row.id,
     title: row.title,
     body: row.body,
@@ -69,11 +74,13 @@ export async function readDeliveryFailures(db: D1Database, workspaceId: string):
   }));
 }
 
-export interface TakedownNote {
-  id: string;
-  title: string;
-  created_at: string;
-}
+const takedownNoteRow = z.object({
+  id: z.string(),
+  title: z.string(),
+  created_at: z.string(),
+});
+
+export type TakedownNote = z.infer<typeof takedownNoteRow>;
 
 const SELECT_TAKEDOWN_NOTES = `SELECT id, title, created_at FROM alert
 WHERE workspace_id = ? AND kind = 'takedown'
@@ -81,8 +88,7 @@ ORDER BY created_at DESC
 LIMIT 20`;
 
 export async function readTakedownNotes(db: D1Database, workspaceId: string): Promise<TakedownNote[]> {
-  const { results } = await db.prepare(SELECT_TAKEDOWN_NOTES).bind(workspaceId).all<TakedownNote>();
-  return results;
+  return z.array(takedownNoteRow).parse((await db.prepare(SELECT_TAKEDOWN_NOTES).bind(workspaceId).all()).results);
 }
 
 export interface OwnSiteBreakageAlertRow {
@@ -120,12 +126,14 @@ export function insertIncidentAlertStatement(row: OwnSiteBreakageAlertRow): D1Pr
   );
 }
 
-export interface OwnSiteIncidentNote {
-  id: string;
-  title: string;
-  created_at: string;
-  closed_at: string | null;
-}
+const ownSiteIncidentNoteRow = z.object({
+  id: z.string(),
+  title: z.string(),
+  created_at: z.string(),
+  closed_at: z.string().nullable(),
+});
+
+export type OwnSiteIncidentNote = z.infer<typeof ownSiteIncidentNoteRow>;
 
 const SELECT_OWN_SITE_INCIDENTS = `SELECT a.id, a.title, a.created_at, i.closed_at
 FROM alert a
@@ -135,23 +143,25 @@ ORDER BY a.created_at DESC
 LIMIT 20`;
 
 export async function readOwnSiteIncidents(db: D1Database, workspaceId: string): Promise<OwnSiteIncidentNote[]> {
-  const { results } = await db.prepare(SELECT_OWN_SITE_INCIDENTS).bind(workspaceId).all<OwnSiteIncidentNote>();
-  return results;
+  return z
+    .array(ownSiteIncidentNoteRow)
+    .parse((await db.prepare(SELECT_OWN_SITE_INCIDENTS).bind(workspaceId).all()).results);
 }
 
-export interface OpenIncidentBlock {
-  alert_id: string;
-  title: string;
-  kind: string;
-  url: string;
-  opened_at: string;
-}
+const openIncidentBlockRow = z.object({
+  alert_id: z.string(),
+  title: z.string(),
+  kind: z.string(),
+  url: z.string(),
+  opened_at: z.string(),
+});
+
+export type OpenIncidentBlock = z.infer<typeof openIncidentBlockRow>;
 
 const SELECT_OPEN_INCIDENT_BLOCK = `SELECT a.id AS alert_id, a.title, i.kind, p.url, i.opened_at FROM alert a JOIN incident i ON i.id = a.incident_id JOIN page p ON p.id = i.page_id WHERE a.workspace_id = ?1 AND a.kind = 'own_site_broken' AND i.closed_at IS NULL AND a.status <> 'acknowledged' ORDER BY i.opened_at DESC LIMIT 1`;
 
 export async function readOpenIncidentBlock(db: D1Database, workspaceId: string): Promise<OpenIncidentBlock | null> {
-  const row = await db.prepare(SELECT_OPEN_INCIDENT_BLOCK).bind(workspaceId).first<OpenIncidentBlock>();
-  return row ?? null;
+  return openIncidentBlockRow.nullable().parse(await db.prepare(SELECT_OPEN_INCIDENT_BLOCK).bind(workspaceId).first());
 }
 
 const ACKNOWLEDGE_INCIDENT_ALERT = `UPDATE alert SET status = 'acknowledged', read_at = ?3 WHERE workspace_id = ?1 AND id = ?2 AND kind = 'own_site_broken'`;
@@ -192,14 +202,16 @@ export function insertSignalAlert(
     );
 }
 
-export interface SignalAlert {
-  id: string;
-  kind: string;
-  title: string;
-  body: string | null;
-  url: string | null;
-  created_at: string;
-}
+const signalAlertRow = z.object({
+  id: z.string(),
+  kind: z.string(),
+  title: z.string(),
+  body: z.string().nullable(),
+  url: z.string().nullable(),
+  created_at: z.string(),
+});
+
+export type SignalAlert = z.infer<typeof signalAlertRow>;
 
 const SELECT_SIGNAL_ALERTS = `SELECT a.id, a.kind, a.title, a.body, s.url, a.created_at
 FROM alert a
@@ -210,8 +222,7 @@ ORDER BY a.created_at DESC
 LIMIT 50`;
 
 export async function readSignalAlerts(db: D1Database, workspaceId: string): Promise<SignalAlert[]> {
-  const { results } = await db.prepare(SELECT_SIGNAL_ALERTS).bind(workspaceId).all<SignalAlert>();
-  return results;
+  return z.array(signalAlertRow).parse((await db.prepare(SELECT_SIGNAL_ALERTS).bind(workspaceId).all()).results);
 }
 
 const INSERT_COMPETITOR_RETIRED_ALERT =
