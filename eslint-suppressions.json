@@ -3,5 +3,75 @@
     "max-params": {
       "count": 1
     }
+  },
+  "app/lib/data/entity.server.ts": {
+    "row-rules/d1-row-parse": {
+      "count": 8
+    }
+  },
+  "app/lib/data/incident.server.ts": {
+    "row-rules/d1-row-parse": {
+      "count": 2
+    }
+  },
+  "app/lib/data/jev_verdict.server.ts": {
+    "row-rules/d1-row-parse": {
+      "count": 1
+    }
+  },
+  "app/lib/data/mention.server.ts": {
+    "row-rules/d1-row-parse": {
+      "count": 1
+    }
+  },
+  "app/lib/data/page.server.ts": {
+    "row-rules/d1-row-parse": {
+      "count": 5
+    }
+  },
+  "app/lib/data/plan.server.ts": {
+    "row-rules/d1-row-parse": {
+      "count": 1
+    }
+  },
+  "app/lib/data/signal.server.ts": {
+    "row-rules/d1-row-parse": {
+      "count": 14
+    }
+  },
+  "app/lib/data/snapshot.server.ts": {
+    "row-rules/d1-row-parse": {
+      "count": 2
+    }
+  },
+  "app/lib/data/source.server.ts": {
+    "row-rules/d1-row-parse": {
+      "count": 8
+    }
+  },
+  "app/lib/data/standing.server.ts": {
+    "row-rules/d1-row-parse": {
+      "count": 1
+    }
+  },
+  "app/lib/data/suggestion.server.ts": {
+    "row-rules/d1-row-parse": {
+      "count": 1
+    }
+  },
+  "app/lib/data/takedown.server.ts": {
+    "row-rules/d1-row-parse": {
+      "count": 1
+    }
+  },
+  "app/lib/data/watch.server.ts": {
+    "row-rules/d1-row-parse": {
+      "count": 12
+    }
+  },
+  "app/lib/data/workspace.server.ts": {
+    "row-rules/d1-row-parse": {
+      "count": 2
+    }
   }
 }

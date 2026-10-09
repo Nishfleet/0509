@@ -630,10 +630,68 @@ const FORM_RULES_PLUGIN = {
   },
 };
 
+// #7299: D1_ROW_TYPE_ARGUMENT only rejects a type argument on `.first` /
+// `.all` / `.raw` / `.run` / `.batch`. A writer can still return
+// `await stmt.first()` with no type argument and no parse, which is the
+// convention's first sentence unenforced. This rule requires a `.first` /
+// `.all` / `.raw` call in app/lib/data/ to sit inside a `.parse` /
+// `.safeParse` call, so an unchecked row cannot leave the function.
+// `.run()` and `.batch()` return execution metadata, not rows, and
+// `Promise.all` is not a D1 read. Armed as row-rules/d1-row-parse (not
+// no-restricted-syntax) so TABLE_WRITER_BLOCKS cannot drop it the way a
+// later matching no-restricted-syntax block would. Source: 0509#7299.
+const D1_ROW_PARSE = {
+  meta: {
+    type: "problem",
+    schema: [],
+    messages: {
+      d1RowParse:
+        "A D1 read in app/lib/data/ must be parsed with a zod schema before the row leaves the function. `.first()`, `.all()` and `.raw()` return unchecked values; wrap the call in `.parse()` or `.safeParse()`. `.run()` and `.batch()` are execution metadata and do not need a parse. Source: 0509#7299.",
+    },
+  },
+  create(context) {
+    const sourceCode = context.sourceCode;
+    function calleePropertyName(node) {
+      if (node.type !== "CallExpression") return null;
+      const callee = node.callee;
+      if (callee.type !== "MemberExpression") return null;
+      if (callee.computed && callee.property.type !== "Literal") return null;
+      if (callee.property.type === "Identifier") return callee.property.name;
+      if (callee.property.type === "Literal" && typeof callee.property.value === "string") {
+        return callee.property.value;
+      }
+      return null;
+    }
+    function wrappedInParse(node) {
+      return sourceCode.getAncestors(node).some((ancestor) => {
+        const name = calleePropertyName(ancestor);
+        return name === "parse" || name === "safeParse";
+      });
+    }
+    return {
+      CallExpression(node) {
+        const name = calleePropertyName(node);
+        if (name !== "first" && name !== "all" && name !== "raw") return;
+        const callee = node.callee;
+        if (
+          callee.type === "MemberExpression" &&
+          callee.object.type === "Identifier" &&
+          callee.object.name === "Promise"
+        ) {
+          return;
+        }
+        if (wrappedInParse(node)) return;
+        context.report({ node, messageId: "d1RowParse" });
+      },
+    };
+  },
+};
+
 const ROW_RULES_PLUGIN = {
   "row-rules": {
     rules: {
       "zod-row-catch": ZOD_ROW_CATCH_BAN,
+      "d1-row-parse": D1_ROW_PARSE,
     },
   },
 };
@@ -882,12 +940,15 @@ export default tseslint.config(
   {
     // app/lib/data/** is the only D1 row reader, so it is the only place a row
     // schema lives. `.catch(...)` on one silences the row-parse contract.
-    // Armed on this glob only: a `.catch(...)` on a request body or a feed
-    // config parsed elsewhere is a different contract and the rule cannot
-    // distinguish it from a row read. Source: 0509#7173.
+    // `row-rules/d1-row-parse` requires `.first` / `.all` / `.raw` to sit
+    // inside `.parse` / `.safeParse`. Armed on this glob only: a `.catch()`
+    // on a request body or a feed config parsed elsewhere is a different
+    // contract and the rule cannot distinguish it from a row read, and a D1
+    // read outside the data layer is already banned by ENV_DB_IN_ROUTES.
+    // Source: 0509#7173, 0509#7299.
     files: ["app/lib/data/**/*.ts"],
     plugins: ROW_RULES_PLUGIN,
-    rules: { "row-rules/zod-row-catch": "error" },
+    rules: { "row-rules/zod-row-catch": "error", "row-rules/d1-row-parse": "error" },
   },
 
   {

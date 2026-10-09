@@ -4,9 +4,10 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 // eslint-suppressions.json lists main's pre-existing lean-code violations
-// (0509#5783). ESLint prunes an entry when its code is fixed, but a PR could
-// still raise a count or commit `eslint --suppress-all`. This pin is the
-// ceiling: it only ever goes down, in the PR that fixes a listed violation.
+// (0509#5783) and the unparsed D1 reads grandfathered by 0509#7299. ESLint
+// prunes an entry when its code is fixed, but a PR could still raise a count
+// or commit `eslint --suppress-all`. This pin is the ceiling: it only ever
+// goes down, in the PR that fixes a listed violation.
 const SUPPRESSION_CEILING = 111;
 
 type Suppressions = Record<string, Record<string, { count: number }>>;
