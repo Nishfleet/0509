@@ -136,10 +136,10 @@ describe("pageRoleInScope (0509#7062)", () => {
 });
 
 describe("paidSourceAllowed (0509#7062)", () => {
-  it("denies scraper.paid unless the workspace is entitled", () => {
-    expect(paidSourceAllowed("scraper.paid", false)).toBe(false);
-    expect(paidSourceAllowed("scraper.paid", true)).toBe(true);
-    expect(paidSourceAllowed("site.web", false)).toBe(true);
-    expect(paidSourceAllowed("site.web", true)).toBe(true);
+  it("denies x.search unless the workspace is entitled", () => {
+    expect(paidSourceAllowed("x.search", false)).toBe(false);
+    expect(paidSourceAllowed("x.search", true)).toBe(true);
+    expect(paidSourceAllowed("site.page", false)).toBe(true);
+    expect(paidSourceAllowed("site.page", true)).toBe(true);
   });
 });

@@ -60,19 +60,33 @@ export async function readOwnerWorkspaceApiAccess(
   return { workspaceId, apiAccess: (await readEntitlements(workspaceId)).api_access };
 }
 
+const WORKSPACE_ID_CHUNK = 500;
+
+const workspacePlanRow = z.object({
+  workspace_id: z.string(),
+  tier: z.string(),
+  status: z.string(),
+  current_period_end: z.string().nullable(),
+  limits_json: z.string(),
+});
+
+async function readWorkspacePlanRows(unique: readonly string[]): Promise<z.infer<typeof workspacePlanRow>[]> {
+  const statements = [];
+  for (let start = 0; start < unique.length; start += WORKSPACE_ID_CHUNK) {
+    const ids = JSON.stringify(unique.slice(start, start + WORKSPACE_ID_CHUNK));
+    statements.push(env.DB.prepare(SELECT_WORKSPACE_PLANS).bind(ids));
+  }
+  const batches = await env.DB.batch(statements);
+  return batches.flatMap((batch) => workspacePlanRow.array().parse(batch.results));
+}
+
 export async function readWorkspaceEntitlements(
   workspaceIds: readonly string[],
 ): Promise<ReadonlyMap<string, Entitlements>> {
   const unique = [...new Set(workspaceIds)];
   const entitlements = new Map<string, Entitlements>();
   if (unique.length === 0) return entitlements;
-  const { results } = await env.DB.prepare(SELECT_WORKSPACE_PLANS).bind(JSON.stringify(unique)).all<{
-    workspace_id: string;
-    tier: string;
-    status: string;
-    current_period_end: string | null;
-    limits_json: string;
-  }>();
+  const results = await readWorkspacePlanRows(unique);
   const now = new Date();
   const found = new Map(results.map((row) => [row.workspace_id, row] as const));
   for (const id of unique) {
