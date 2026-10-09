@@ -13,7 +13,9 @@ SELECT ?1, ?2, ?3, ?4, ?5, ?6, 1
 WHERE EXISTS (SELECT 1 FROM watch WHERE id = ?2) AND EXISTS (SELECT 1 FROM page WHERE id = ?3)
 ON CONFLICT (id) DO NOTHING`;
 
-const SNAPSHOT_EXISTS = `SELECT 1 FROM snapshot WHERE id = ?`;
+const SNAPSHOT_EXISTS = `SELECT 1 AS present FROM snapshot WHERE id = ?`;
+
+const snapshotExistsRow = z.object({ present: z.number() });
 
 const siteSnapshotRow = z.object({
   id: z.string(),
@@ -46,7 +48,7 @@ export async function insertSnapshot(row: {
     recordSourceLatestSnapshot(row.id),
   ]);
   if (inserted !== undefined && inserted.meta.changes > 0) return true;
-  return (await env.DB.prepare(SNAPSHOT_EXISTS).bind(row.id).first()) !== null;
+  return snapshotExistsRow.nullable().parse(await env.DB.prepare(SNAPSHOT_EXISTS).bind(row.id).first()) !== null;
 }
 
 const INSERT_WATCH_SNAPSHOT = `INSERT INTO snapshot

@@ -7,6 +7,8 @@ import {
   type Transport,
 } from "../../app/lib/fetch/transport.server";
 
+import { browserHtmlScreenshot, browserScreenshot } from "../../app/lib/site/browser-budget.server";
+
 const browserHolder = vi.hoisted(() => ({
   current: undefined as undefined | (BrowserStub & { calls: string[]; closed: number }),
 }));
@@ -508,6 +510,25 @@ describe("readUrl", () => {
     } finally {
       vi.useRealTimers();
       stub.restore();
+    }
+  });
+
+  it("gives up on a screenshot that never answers with a typed cause", async () => {
+    const browser = fakeBrowser({ ok: false, throwOnCall: true });
+    browser.quickAction = () => new Promise<Response>(() => undefined);
+    vi.useFakeTimers();
+    try {
+      install(browser);
+      const pending = Promise.all([
+        browserScreenshot("https://gated.example.com/"),
+        browserHtmlScreenshot("<p>x</p>", 64),
+      ]);
+      await vi.advanceTimersByTimeAsync(30_000);
+      const [page, html] = await pending;
+      expect(page).toEqual({ ok: false, cause: "no answer after 25000 ms" });
+      expect(html).toEqual({ ok: false, cause: "no answer after 25000 ms" });
+    } finally {
+      vi.useRealTimers();
     }
   });
 

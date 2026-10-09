@@ -65,8 +65,8 @@ export interface WatchlessEntity {
   workspaceId: string;
 }
 
-function toWatchlessEntities(results: unknown): readonly WatchlessEntity[] {
-  return entityRows.parse(results).map((row) => ({ id: row.id, domain: row.domain, workspaceId: row.workspace_id }));
+function toWatchlessEntities(rows: z.infer<typeof entityRows>): readonly WatchlessEntity[] {
+  return rows.map((row) => ({ id: row.id, domain: row.domain, workspaceId: row.workspace_id }));
 }
 
 const unwatchedEntityRows = z.array(
@@ -299,7 +299,7 @@ export interface HiringTarget {
 
 export async function readEntitiesWithoutHiringWatch(): Promise<readonly WatchlessEntity[]> {
   const rows = await env.DB.prepare(ENTITIES_WITHOUT_HIRING_WATCH).all();
-  return toWatchlessEntities(rows.results);
+  return toWatchlessEntities(entityRows.parse(rows.results));
 }
 
 export async function readHiringTargets(): Promise<readonly HiringTarget[]> {
@@ -354,7 +354,7 @@ export interface FeedTarget {
 
 export async function readEntitiesWithoutFeedWatch(): Promise<readonly WatchlessEntity[]> {
   const rows = await env.DB.prepare(ENTITIES_WITHOUT_FEED_WATCH).all();
-  return toWatchlessEntities(rows.results);
+  return toWatchlessEntities(entityRows.parse(rows.results));
 }
 
 export async function readFeedTargets(): Promise<readonly FeedTarget[]> {
