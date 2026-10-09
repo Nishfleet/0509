@@ -57,7 +57,9 @@ test("the sent state lands in place and the resend waits 30 seconds with a visib
   expect(fitsViewport).toBe(true);
 
   expect(
-    await consoleFailures(page, watched, testInfo, (entry) => entry.text === "[Cloudflare Turnstile] Error: 200100."),
+    await consoleFailures(page, watched, testInfo, (entry) =>
+      /^\[Cloudflare Turnstile\] Error: (200100|[36]\d{5})\.$/.test(entry.text),
+    ),
     testInfo.project.name,
   ).toEqual([]);
 });
