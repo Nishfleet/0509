@@ -8,7 +8,11 @@ import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { probeKey } from "../../../app/lib/identity/probe-cache.server";
 import { classifyTailPages, identityTailInstanceId } from "../../../app/lib/identity/tail.server";
 import { sha256Hex } from "../../../app/lib/sha256";
-import { takeBrowserEscalation } from "../../../app/lib/site/browser-budget.server";
+import {
+  BROWSER_CONTENT_TIMEOUT_MS,
+  readBrowserMsForDay,
+  takeBrowserEscalation,
+} from "../../../app/lib/site/browser-budget.server";
 import gym from "../../fixtures/gymshark-2026-09-22-a.html?raw";
 
 const NOW = "2026-09-24T00:00:00Z";
@@ -50,6 +54,7 @@ function stubWeb(homepage: (url: string) => Response) {
 interface BrowserStub {
   calls: string[];
   quickAction(action: "content", options: { url: string }): Promise<Response>;
+  close(): Promise<void>;
 }
 
 function installBrowser(stub: BrowserStub): void {
@@ -68,6 +73,9 @@ function stubBrowser(html: string): BrowserStub {
           headers: { "content-type": "application/json" },
         }),
       );
+    },
+    close() {
+      return Promise.resolve();
     },
   };
 }
@@ -437,11 +445,15 @@ describe("startCard", () => {
   it("returns the unreached card when the browser call does not finish in time", { timeout: 20_000 }, async () => {
     stubAi(0.95);
     stubWeb(() => new Response("blocked", { status: 403 }));
+    const day = new Date().toISOString().slice(0, 10);
+    const spentBefore = await readBrowserMsForDay(day);
     installBrowser({
       calls: [],
       quickAction() {
-        // Pending forever: BROWSER_CONTENT_TIMEOUT_MS is the only exit.
         return new Promise<Response>(() => undefined);
+      },
+      close() {
+        return Promise.resolve();
       },
     });
     const started = Date.now();
@@ -453,8 +465,9 @@ describe("startCard", () => {
       review: { name: "empty", description: "empty", socials: "empty" },
       unfound: true,
     });
-    expect(Date.now() - started).toBeGreaterThan(7_000);
-    expect(Date.now() - started).toBeLessThan(15_000);
+    expect(Date.now() - started).toBeGreaterThan(BROWSER_CONTENT_TIMEOUT_MS - 1_000);
+    expect(Date.now() - started).toBeLessThan(BROWSER_CONTENT_TIMEOUT_MS + 7_000);
+    expect(await readBrowserMsForDay(day)).toBe(spentBefore + BROWSER_CONTENT_TIMEOUT_MS);
   });
 
   it("returns the unreached card without a browser call when the day's budget is spent", async () => {

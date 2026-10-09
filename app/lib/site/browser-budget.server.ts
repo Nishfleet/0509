@@ -3,7 +3,8 @@ import { env } from "cloudflare:workers";
 const ESCALATIONS_PER_BRAND_PER_DAY = 4;
 const SCREENSHOTS_PER_BRAND_PER_DAY = 4;
 const SHARE_IMAGES_PER_WORKSPACE_PER_DAY = 10;
-const BROWSER_CONTENT_TIMEOUT_MS = 8_000;
+export const BROWSER_CONTENT_TIMEOUT_MS = 8_000;
+const BROWSER_GOTO_TIMEOUT_MS = 6_000;
 
 function raceWithTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -26,16 +27,19 @@ export async function readBrowserMsForDay(day: string): Promise<number> {
   return browserMsCounter(day).totalMs();
 }
 
-async function recordBrowserMs(res: Response): Promise<void> {
-  const header = res.headers.get("X-Browser-Ms-Used");
-  if (header === null) return;
-  const ms = Number(header);
+async function recordBrowserMsSpent(ms: number): Promise<void> {
   if (!Number.isFinite(ms) || ms <= 0) return;
   try {
     await browserMsCounter(new Date().toISOString().slice(0, 10)).addMs(ms);
   } catch (err) {
     console.error(JSON.stringify({ event: "browser.ms_record_failed", error: String(err) }));
   }
+}
+
+async function recordBrowserMs(res: Response): Promise<void> {
+  const header = res.headers.get("X-Browser-Ms-Used");
+  if (header === null) return;
+  await recordBrowserMsSpent(Number(header));
 }
 
 export async function takeBrowserEscalation(workspaceId: string, entityId: string, day: string): Promise<boolean> {
@@ -63,13 +67,17 @@ export async function browserContent(
     const res = await raceWithTimeout(
       env.BROWSER.quickAction("content", {
         url,
-        gotoOptions: { timeout: BROWSER_CONTENT_TIMEOUT_MS, waitUntil: "networkidle0" },
+        gotoOptions: { timeout: BROWSER_GOTO_TIMEOUT_MS, waitUntil: "load" },
       }),
       BROWSER_CONTENT_TIMEOUT_MS,
     );
     await recordBrowserMs(res);
     return { ok: true, res };
   } catch (err) {
+    const timedOut =
+      (err instanceof DOMException && err.name === "TimeoutError") ||
+      (err instanceof Error && /timed out/i.test(err.message));
+    if (timedOut) await recordBrowserMsSpent(BROWSER_CONTENT_TIMEOUT_MS);
     return {
       ok: false,
       kind: "threw",

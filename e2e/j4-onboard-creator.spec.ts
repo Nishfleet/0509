@@ -1,6 +1,13 @@
 import { expect, test } from "@playwright/test";
 
-import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+import {
+  confirmPublicSubject,
+  consoleFailures,
+  deleteCreatedAccount,
+  requireInboxToken,
+  signInWithMagicLink,
+  watchConsole,
+} from "./inbox";
 
 let createdEmail = "";
 // The end-of-test screenshot is report evidence, not an assertion. Playwright's
@@ -50,11 +57,7 @@ test.describe("J4 onboard a creator handle", () => {
       const started = Date.now();
       await input.press("Enter");
 
-      const business = page.getByRole("button", { name: "Yes, a business or creator" });
-      await expect(async () => {
-        if (await business.isVisible()) await business.click();
-        await expect(page).toHaveURL(/\/onboarding\/identity\?subject=/, { timeout: 3_000 });
-      }).toPass({ timeout: 30_000 });
+      await confirmPublicSubject(page, /\/onboarding\/identity\?subject=/);
       await expect(page.getByRole("heading", { name: "Check your details. Fix anything that's wrong." })).toBeVisible({
         timeout: 30_000,
       });

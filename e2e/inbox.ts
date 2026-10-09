@@ -571,6 +571,14 @@ export async function signInWithMagicLink(
   return { link, status: response?.status() ?? 0 };
 }
 
+export async function confirmPublicSubject(page: Page, subjectUrl: RegExp): Promise<void> {
+  const business = page.getByRole("button", { name: "Yes, a business or creator" });
+  await expect(async () => {
+    if (await business.isVisible()) await business.click();
+    await expect(page).toHaveURL(subjectUrl, { timeout: 3_000 });
+  }).toPass({ timeout: 30_000 });
+}
+
 // Every production sign-in above creates a real row in the user table, and
 // until 0509#5723 the suite never removed it. This is the product's own
 // delete path — the settings flow J14 proves end to end — called from each

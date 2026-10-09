@@ -151,17 +151,17 @@ describe("e2e fixture teardown detector", () => {
   });
 
   it("J4 answers the public-subject question the same way J5 and J8 do", async () => {
-    const confirm = 'getByRole("button", { name: "Yes, a business or creator" })';
-    const pass = "toPass({ timeout: 30_000 })";
     for (const rel of [
       "e2e/j4-onboard-creator.spec.ts",
       "e2e/j5-onboard-blocked.spec.ts",
       "e2e/j8-own-site-break.spec.ts",
     ]) {
       const source = await readFile(path.join(REPO_ROOT, rel), "utf8");
-      expect(source, rel).toContain(confirm);
-      expect(source, rel).toContain(pass);
+      expect(source, rel).toContain("confirmPublicSubject(");
     }
+    const helper = await readFile(path.join(REPO_ROOT, "e2e/inbox.ts"), "utf8");
+    expect(helper).toContain('getByRole("button", { name: "Yes, a business or creator" })');
+    expect(helper).toContain("toPass({ timeout: 30_000 })");
   });
 
   it("treats every FIXTURE_ACCOUNTS address and the legacy kept accounts as kept, and a per-run one as not", () => {

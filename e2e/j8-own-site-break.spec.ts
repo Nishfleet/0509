@@ -1,7 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
-import { decodedBodies, InboxReadError, readRawMessage, requireInboxToken, signInWithMagicLink } from "./inbox";
+import {
+  confirmPublicSubject,
+  decodedBodies,
+  InboxReadError,
+  readRawMessage,
+  requireInboxToken,
+  signInWithMagicLink,
+} from "./inbox";
 
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
@@ -141,13 +148,7 @@ async function signInAndWatchFixture(
     const input = page.getByRole("textbox", { name: /your website address or social username/i });
     await input.fill(host);
     await input.press("Enter");
-    const business = page.getByRole("button", { name: "Yes, a business or creator" });
-    await expect(async () => {
-      if (await business.isVisible()) await business.click();
-      await expect(page).toHaveURL(new RegExp(`/onboarding/identity\\?subject=${host.replaceAll(".", "\\.")}$`), {
-        timeout: 3_000,
-      });
-    }).toPass({ timeout: 30_000 });
+    await confirmPublicSubject(page, new RegExp(`/onboarding/identity\\?subject=${host.replaceAll(".", "\\.")}$`));
     await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
     await page.getByRole("button", { name: "edit name" }).click();

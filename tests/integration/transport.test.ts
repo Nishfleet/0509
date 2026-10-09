@@ -6,6 +6,7 @@ import {
   type EscalationReason,
   type Transport,
 } from "../../app/lib/fetch/transport.server";
+import { BROWSER_CONTENT_TIMEOUT_MS } from "../../app/lib/site/browser-budget.server";
 
 const browserHolder = vi.hoisted(() => ({
   current: undefined as undefined | (BrowserStub & { calls: string[]; closed: number }),
@@ -499,7 +500,6 @@ describe("readUrl", () => {
       closed: 0,
       async quickAction(_action: "content", options: { url: string }) {
         calls.push(options.url);
-        // Pending forever: BROWSER_CONTENT_TIMEOUT_MS is the only exit.
         return new Promise<Response>(() => undefined);
       },
       close() {
@@ -513,9 +513,9 @@ describe("readUrl", () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("escalation-failed");
-      expect(result.detail).toContain("timed out");
-      expect(Date.now() - started).toBeGreaterThan(7_000);
-      expect(Date.now() - started).toBeLessThan(15_000);
+      expect(result.detail).toContain(`timed out after ${String(BROWSER_CONTENT_TIMEOUT_MS)}ms`);
+      expect(Date.now() - started).toBeGreaterThan(BROWSER_CONTENT_TIMEOUT_MS - 1_000);
+      expect(Date.now() - started).toBeLessThan(BROWSER_CONTENT_TIMEOUT_MS + 7_000);
       expect(browser.calls).toHaveLength(1);
     } finally {
       stub.restore();
