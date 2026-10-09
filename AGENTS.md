@@ -63,9 +63,10 @@ you.
   rows with a zod schema in the writer file and the row type is `z.infer` of
   it. `no-restricted-syntax` (D1_ROW_TYPE_ARGUMENT) rejects a type argument on
   `.first`, `.all`, `.raw`, `.run` or `.batch`. `row-rules/d1-row-parse` requires
-  `.first`, `.all` or `.raw` to sit inside `.parse` or `.safeParse`. Use `env.DB`
-  from `cloudflare:workers`. Take a `db: D1Database` parameter only where a
-  caller or test passes a different database. Source: 0509#7031, 0509#7299.
+  `.first`, `.all` or `.raw` to be parsed with a zod schema before the row leaves
+  the function. Use `env.DB` from `cloudflare:workers`. Take a `db: D1Database`
+  parameter only where a caller or test passes a different database. Source:
+  0509#7031, 0509#7299.
 - **Routes are thin.** 150 lines, enforced. Logic goes to `app/lib/`.
 - **Lean functions.** In `app/` and `workers/`: 50 lines, complexity 10, depth 3, 3 parameters. Code already over is listed in `eslint-suppressions.json` and cannot grow. Source: 0509#5783.
 - **Comments are banned in app code.** Not style — agents use a comment to

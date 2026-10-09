@@ -634,23 +634,37 @@ const FORM_RULES_PLUGIN = {
 // `.all` / `.raw` / `.run` / `.batch`. A writer can still return
 // `await stmt.first()` with no type argument and no parse, which is the
 // convention's first sentence unenforced. This rule requires a `.first` /
-// `.all` / `.raw` call in app/lib/data/ to sit inside a `.parse` /
-// `.safeParse` call, so an unchecked row cannot leave the function.
-// `.run()` and `.batch()` return execution metadata, not rows, and
-// `Promise.all` is not a D1 read. Armed as row-rules/d1-row-parse (not
-// no-restricted-syntax) so TABLE_WRITER_BLOCKS cannot drop it the way a
-// later matching no-restricted-syntax block would. Source: 0509#7299.
+// `.all` / `.raw` result to be passed to a zod `.parse` / `.safeParse`
+// before it leaves the function — either as a wrap
+// (`schema.parse(await stmt.first())`) or as a later parse of the binding
+// (`const row = await stmt.first(); return schema.parse(row)`). A bare
+// `JSON.parse` / `Date.parse` wrap does not count. `.run()` and `.batch()`
+// are out of scope even when RETURNING (0509#7299). `Promise.all` is not a
+// D1 read. Armed as row-rules/d1-row-parse (not no-restricted-syntax) so
+// TABLE_WRITER_BLOCKS cannot drop it the way a later matching
+// no-restricted-syntax block would. Source: 0509#7299.
 const D1_ROW_PARSE = {
   meta: {
     type: "problem",
     schema: [],
     messages: {
       d1RowParse:
-        "A D1 read in app/lib/data/ must be parsed with a zod schema before the row leaves the function. `.first()`, `.all()` and `.raw()` return unchecked values; wrap the call in `.parse()` or `.safeParse()`. `.run()` and `.batch()` are execution metadata and do not need a parse. Source: 0509#7299.",
+        "A D1 read in app/lib/data/ must be parsed with a zod schema before the row leaves the function. `.first()`, `.all()` and `.raw()` return unchecked values; pass the result to `.parse()` or `.safeParse()` on a zod schema in the same function. `.run()` and `.batch()` are out of scope (0509#7299) and do not need a parse. Source: 0509#7299.",
     },
   },
   create(context) {
     const sourceCode = context.sourceCode;
+    const services = sourceCode.parserServices;
+    if (services?.getTypeAtLocation === undefined) {
+      return {
+        Program(node) {
+          context.report({
+            node,
+            message: "row-rules/d1-row-parse needs TypeScript type information to match a zod parse.",
+          });
+        },
+      };
+    }
     function calleePropertyName(node) {
       if (node.type !== "CallExpression") return null;
       const callee = node.callee;
@@ -662,26 +676,107 @@ const D1_ROW_PARSE = {
       }
       return null;
     }
-    function wrappedInParse(node) {
-      return sourceCode.getAncestors(node).some((ancestor) => {
-        const name = calleePropertyName(ancestor);
-        return name === "parse" || name === "safeParse";
-      });
+    function memberName(node) {
+      if (node.type !== "MemberExpression") return null;
+      if (node.property.type === "Identifier") return node.property.name;
+      if (node.property.type === "Literal" && typeof node.property.value === "string") {
+        return node.property.value;
+      }
+      return null;
+    }
+    function isPromiseAll(node) {
+      if (calleePropertyName(node) !== "all") return false;
+      const callee = node.callee;
+      if (callee.type !== "MemberExpression") return false;
+      const obj = callee.object;
+      if (obj.type === "Identifier") return obj.name === "Promise";
+      return memberName(obj) === "Promise";
+    }
+    function isZodParse(node) {
+      const name = calleePropertyName(node);
+      if (name !== "parse" && name !== "safeParse") return false;
+      const callee = node.callee;
+      if (callee.type !== "MemberExpression") return false;
+      return isZodSchema(services.getTypeAtLocation(callee.object));
+    }
+    function wrappedInZodParse(node) {
+      return sourceCode.getAncestors(node).some((ancestor) => isZodParse(ancestor));
+    }
+    function identifierNames(pattern) {
+      if (pattern.type === "Identifier") return [pattern.name];
+      if (pattern.type === "ObjectPattern") {
+        return pattern.properties.flatMap((property) =>
+          property.type === "Property" ? identifierNames(property.value) : [],
+        );
+      }
+      if (pattern.type === "ArrayPattern") {
+        return pattern.elements.flatMap((element) => (element === null ? [] : identifierNames(element)));
+      }
+      return [];
+    }
+    function bindingNames(callNode) {
+      const parent = callNode.parent;
+      if (parent?.type === "AwaitExpression" && parent.parent?.type === "VariableDeclarator") {
+        return identifierNames(parent.parent.id);
+      }
+      if (parent?.type === "VariableDeclarator") {
+        return identifierNames(parent.id);
+      }
+      if (parent?.type === "ArrayExpression") {
+        const index = parent.elements.indexOf(callNode);
+        const allCall = parent.parent;
+        if (allCall === undefined || !isPromiseAll(allCall)) return [];
+        let after = allCall.parent;
+        if (after?.type === "AwaitExpression") after = after.parent;
+        if (after?.type === "VariableDeclarator" && after.id.type === "ArrayPattern") {
+          const element = after.id.elements[index];
+          return element === null || element === undefined ? [] : identifierNames(element);
+        }
+      }
+      return [];
+    }
+    function collectIdentifiers(node, names) {
+      if (node === undefined || node === null) return;
+      if (node.type === "Identifier") {
+        names.add(node.name);
+        return;
+      }
+      if (node.type === "MemberExpression") {
+        collectIdentifiers(node.object, names);
+        return;
+      }
+      if (node.type === "ArrayExpression") {
+        for (const element of node.elements) collectIdentifiers(element, names);
+        return;
+      }
+      if (node.type === "AwaitExpression" || node.type === "ChainExpression") {
+        collectIdentifiers(node.argument ?? node.expression, names);
+      }
+    }
+    const frames = [];
+    function enterFrame() {
+      frames.push({ parsedNames: new Set(), reads: [] });
+    }
+    function exitFrame() {
+      const frame = frames.pop();
+      for (const read of frame.reads) {
+        if (read.names.some((name) => frame.parsedNames.has(name))) continue;
+        context.report({ node: read.node, messageId: "d1RowParse" });
+      }
     }
     return {
+      "Program, FunctionDeclaration, FunctionExpression, ArrowFunctionExpression": enterFrame,
+      "Program, FunctionDeclaration, FunctionExpression, ArrowFunctionExpression:exit": exitFrame,
       CallExpression(node) {
+        const frame = frames.at(-1);
+        if (isZodParse(node) && node.arguments[0] !== undefined) {
+          collectIdentifiers(node.arguments[0], frame.parsedNames);
+        }
         const name = calleePropertyName(node);
         if (name !== "first" && name !== "all" && name !== "raw") return;
-        const callee = node.callee;
-        if (
-          callee.type === "MemberExpression" &&
-          callee.object.type === "Identifier" &&
-          callee.object.name === "Promise"
-        ) {
-          return;
-        }
-        if (wrappedInParse(node)) return;
-        context.report({ node, messageId: "d1RowParse" });
+        if (isPromiseAll(node)) return;
+        if (wrappedInZodParse(node)) return;
+        frame.reads.push({ node, names: bindingNames(node) });
       },
     };
   },
