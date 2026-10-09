@@ -33,7 +33,7 @@ import { watchedClaims } from "../lib/watched-claims";
 
 const PAGE_TITLE = "Competitor tracking for founders and creators | Five to Nine";
 function description(nouns: string): string {
-  return `Five to Nine watches your competitors' ${nouns} and emails you one brief every Monday with a screenshot behind every change.`;
+  return `Five to Nine watches your competitors' ${nouns} and emails one Monday brief, with screenshots.`;
 }
 const HOME = `${SITE_URL}/`;
 
