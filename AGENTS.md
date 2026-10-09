@@ -213,10 +213,13 @@ AI grader: CI is the gate, and a PR that touches `.github/`, `migrations/`,
 `app/lib/auth*` or `app/lib/data/` is labelled `needs-coordinator` and the
 coordinator reviews it before it merges.
 
-`lighthouse` runs in `deploy-production.yml` after the deploy job, and `e2e-production` (the sharded full
-suite in `e2e-scheduled.yml`, dispatched with `journey=suite`) runs on demand. To run one spec against production from any branch, dispatch
-`e2e-scheduled.yml` on that ref with the `spec` input (`e2e/<name>.spec.ts`).
-Neither is **required**, deliberately: they cannot run on a pull request, and a
+`lighthouse` runs in `deploy-production.yml` after the deploy job. Verify a fix on the local lane:
+`PLAYWRIGHT_TEST_BASE_URL` unset, so `npm run e2e -- e2e/<name>.spec.ts` starts `wrangler dev --local` with simulated
+email, a local D1 and `AI_SPEND` off. Do not dispatch `e2e-scheduled.yml` to verify a fix, and do not point a run at
+https://0509.io: each production sign-in sends a real email, the specs delete and recreate production D1 rows, and the
+live-AI journeys spend Workers AI neurons. Production e2e runs only on its schedule from `main`, and every job that
+reaches production declares the `production-e2e` environment, whose deployment branch policy allows `main` only.
+Neither `lighthouse` nor the production e2e is **required**, deliberately: they cannot run on a pull request, and a
 required check that cannot report blocks the queue forever. The suite is off the
 deploy path because every sign-in in it sends a real email against the Email
 Service daily quota (Nish 2026-09-28).

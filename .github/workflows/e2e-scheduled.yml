@@ -1,10 +1,13 @@
 name: e2e-scheduled
 
 # Journeys that need calendar time or break the fixture for hours run here on
-# their own clock, never per deploy (0509#4124, 0509#4128). So does the full
-# production suite, `journey=suite` (the `e2e-production` job below): it runs
-# everything except @scheduled, on demand, off the deploy path because its
-# sign-ins send real emails against the daily quota (0509#6033, 0509#6034).
+# their own clock, never per deploy (0509#4124, 0509#4128). The full production
+# suite (the `e2e-production` job below) runs everything except @scheduled and
+# its sign-ins send real emails against the daily quota (0509#6033, 0509#6034),
+# so `suite` is not a dispatch choice: agents verify on the local lane
+# (PLAYWRIGHT_TEST_BASE_URL unset, AGENTS.md) and the suite waits for a schedule
+# entry here. Every job that reaches production declares
+# `environment: production-e2e`, whose deployment branch policy is `main` only.
 # The weekly `j12` job also runs J11, whose kept account needs a 6-day gap.
 # `signin` is the one real sign-in smoke a day (0509#6093): the only production
 # run that sends a real email besides the suite, once, at 04:17 UTC.
@@ -21,7 +24,7 @@ on:
       journey:
         description: Journey to run now
         type: choice
-        options: [none, j12, suite, signin, j8-hard, j8-soft, soak-report, backup-proof, jev-failures]
+        options: [none, j12, signin, j8-hard, j8-soft, soak-report, backup-proof, jev-failures]
         default: none
       spec:
         description: 'One spec or a filter to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts (0509 sign-up verdict, 2026-09-28)'
@@ -40,6 +43,7 @@ jobs:
     name: j12
     if: github.event.schedule == '5 10 * * 3' || inputs.journey == 'j12'
     runs-on: ubuntu-latest
+    environment: production-e2e
     # One live-AI job at a time: they share the account's Clef call rate (about 60
     # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
     # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
@@ -94,6 +98,7 @@ jobs:
     # cookie (0509#5999); a failure is read from the job log.
     if: inputs.spec != ''
     runs-on: ubuntu-latest
+    environment: production-e2e
     # One live-AI job at a time: they share the account's Clef call rate (about 60
     # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
     # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
@@ -152,6 +157,7 @@ jobs:
     # (0509#5999); a failure is read from the job log.
     if: github.event.schedule == '17 4 * * *' || (inputs.journey == 'signin' && inputs.spec == '')
     runs-on: ubuntu-latest
+    environment: production-e2e
     # One live-AI job at a time: they share the account's Clef call rate (about 60
     # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
     # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
@@ -203,6 +209,7 @@ jobs:
     # the 6 hour cap.
     if: startsWith(inputs.journey, 'j8-') && inputs.spec == ''
     runs-on: ubuntu-latest
+    environment: production-e2e
     timeout-minutes: 350
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -281,6 +288,7 @@ jobs:
     needs: production-sha
     if: inputs.journey == 'suite'
     runs-on: ubuntu-latest
+    environment: production-e2e
     # One live-AI job at a time: they share the account's Clef call rate (about 60
     # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
     # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
@@ -389,6 +397,7 @@ jobs:
     # cron-started one (0509#5982, 0509#6289). Counts and R2 cursors only, no rows.
     if: inputs.journey == 'backup-proof' && inputs.spec == ''
     runs-on: ubuntu-latest
+    environment: production-e2e
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -419,6 +428,7 @@ jobs:
     # Dispatch: `journey=jev-failures`, then read the job log.
     if: inputs.journey == 'jev-failures' && inputs.spec == ''
     runs-on: ubuntu-latest
+    environment: production-e2e
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -448,6 +458,7 @@ jobs:
     # read credential for either is a repository secret, and the comment says so.
     if: github.event.schedule == '30 6 * * *' || (inputs.journey == 'soak-report' && inputs.spec == '')
     runs-on: ubuntu-latest
+    environment: production-e2e
     timeout-minutes: 10
     permissions:
       contents: read
