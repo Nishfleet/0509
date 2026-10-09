@@ -245,6 +245,7 @@ Service daily quota (Nish 2026-09-28).
   break-glass only.
 - Prod schema changes go through one door: a numbered file in `migrations/`.
   Never DDL via `wrangler d1 execute --remote`.
+- Number a new migration with the next free number on `origin/main` at push time, re-check it immediately before pushing, and never skip a number: if a sibling PR claimed that number, take the next free one and update every citation in the same commit.
 - Nothing from the pre-wipe code is reused: old files are read only for facts
   about an outside API, never copied and never checked out beside a build.
 - No `scripts/`, `ops/`, `.github/scripts`, hooks, wrappers or helper files.
