@@ -25,7 +25,7 @@ The log cannot say which file was in flight. Four things are missing:
 - vitest's default reporter prints a file only when it finishes, never when it starts, so the hung file has no line.
 - The Actions log API returns only the tail of a job, and the agent-access test floods that tail with stderr.
 - The step has no per-file or per-run time limit shorter than the job's 25 minutes, so nothing kills the hung worker and prints it.
-- `hanging-process` only reports after a run ends, and a stalled run never ends.
+- vitest's `verbose` and `hanging-process` reporters do not help either: `verbose` also prints a test only when it finishes, and `hanging-process` reports only after a run ends, which a stalled run never does (checked against the vitest 4.1 reporter docs). Per-test, hook and teardown timeouts already apply (30 s test, 10 s hook and teardown by default), so the stall is outside them, most likely a file that never finished loading or its worker.
 
 The next stall needs a different answer. "Flake" is not the cause; the cause is unknown because the evidence is not collected.
 
@@ -35,9 +35,9 @@ The next stall needs a different answer. "Flake" is not the cause; the cause is 
 
 ## The fix
 
-`vitest-shard` job `timeout-minutes` goes from 25 to 12. A healthy shard runs in about five minutes including install, so a stall now fails in 12 minutes instead of 25 and the queue frees sooner. This does not stop the stall; it shortens its cost.
+`vitest-shard` job `timeout-minutes` goes from 25 to 12. A healthy shard runs in about five minutes including install, so a stall now fails in 12 minutes instead of 25 and the queue frees sooner. `tests/file-start-reporter.ts` is added to the reporters in `vitest.config.ts` and prints `[file-start] <project> <file>` as each file starts, using vitest's own `onTestModuleStart` hook. This does not stop the stall; it shortens its cost and names the file next time.
 
 ## What stops a repeat
 
-1. Code and config (this fix, partial): the shorter limit. Still open: finding the file. When the next shard stalls, read the job's full log in the Actions UI (not the API tail) and diff the files that printed against that shard's list from `npx vitest list --project '!node' --shard 2/4`; the missing one is the hung file. Add its name here.
+1. Code and config (this fix, partial): the shorter limit and the start lines. When the next shard stalls, the last `[file-start]` line with no matching finished line is the hung file; add its name and cause here. Still open: why that file stalls.
 2. Not covered: a run that stalls before any file finishes.
