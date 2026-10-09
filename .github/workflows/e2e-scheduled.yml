@@ -2,12 +2,14 @@ name: e2e-scheduled
 
 # Journeys that need calendar time or break the fixture for hours run here on
 # their own clock, never per deploy (0509#4124, 0509#4128). The full production
-# suite (the `e2e-production` job below) runs everything except @scheduled and
-# its sign-ins send real emails against the daily quota (0509#6033, 0509#6034),
-# so `suite` is not a dispatch choice: agents verify on the local lane
-# (PLAYWRIGHT_TEST_BASE_URL unset, AGENTS.md) and the suite waits for a schedule
-# entry here. Every job that reaches production declares
-# `environment: production-e2e`, whose deployment branch policy is `main` only.
+# suite (the `e2e-production` job below) runs everything except @scheduled, and
+# its sign-ins send real emails against the daily quota (0509#6033, 0509#6034).
+# It runs once a week on the Wednesday cron below, from main: a predictable cost
+# (about 75 emails a week) instead of on-demand runs, which cost 152 emails in
+# one day on 2026-10-09. `suite` is not a dispatch choice: agents verify on the
+# local lane (PLAYWRIGHT_TEST_BASE_URL unset, AGENTS.md). Every job that reaches
+# production declares `environment: production-e2e`, whose deployment branch
+# policy is `main` only.
 # The weekly `j12` job also runs J11, whose kept account needs a 6-day gap.
 # `signin` is the one real sign-in smoke a day (0509#6093): the only production
 # run that sends a real email besides the suite, once, at 04:17 UTC.
@@ -35,7 +37,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: e2e-scheduled-${{ inputs.spec && 'spec' || github.event.schedule == '30 6 * * *' && 'soak' || inputs.journey == 'soak-report' && 'soak' || inputs.journey == 'suite' && 'suite' || github.event.schedule == '17 4 * * *' && 'signin' || inputs.journey == 'signin' && 'signin' || startsWith(inputs.journey, 'j8-') && 'j8' || inputs.journey == 'backup-proof' && 'backup' || inputs.journey == 'jev-failures' && 'jev-failures' || 'j12' }}
+  group: e2e-scheduled-${{ inputs.spec && 'spec' || github.event.schedule == '30 6 * * *' && 'soak' || inputs.journey == 'soak-report' && 'soak' || github.event.schedule == '17 4 * * *' && 'signin' || inputs.journey == 'signin' && 'signin' || startsWith(inputs.journey, 'j8-') && 'j8' || inputs.journey == 'backup-proof' && 'backup' || inputs.journey == 'jev-failures' && 'jev-failures' || 'j12' }}
   cancel-in-progress: false
 
 jobs:
@@ -256,7 +258,7 @@ jobs:
     # The suite runs the code of the deploy that is live, not main's head; no
     # deployment, or one that is not yet successful, fails this job and the
     # shards never start.
-    if: inputs.journey == 'suite'
+    if: github.event.schedule == '5 10 * * 3'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -286,7 +288,7 @@ jobs:
     # uploaded: the repo is public and a trace can hold the Access cookie
     # (0509#5999); a failure is read from the job log.
     needs: production-sha
-    if: inputs.journey == 'suite'
+    if: github.event.schedule == '5 10 * * 3'
     runs-on: ubuntu-latest
     environment: production-e2e
     # One live-AI job at a time: they share the account's Clef call rate (about 60
@@ -350,7 +352,7 @@ jobs:
   suite:
     name: e2e-production
     needs: [production-sha, suite-shard]
-    if: always() && inputs.journey == 'suite'
+    if: always() && github.event.schedule == '5 10 * * 3'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
