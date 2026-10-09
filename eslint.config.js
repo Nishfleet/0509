@@ -964,6 +964,11 @@ export default tseslint.config(
       // linting cannot see them either. Source: 0509#5661.
       ".semgrep/**",
       "**/+types/**",
+      // Vendored upstream skill (shadcn-ui/ui skills/shadcn at 2d3f1cd4), kept
+      // byte-for-byte so `skills update` diffs cleanly. Its showcase .tsx
+      // helpers are templates for a scratch app, in no tsconfig project here.
+      // Source: the shadcn skill adoption PR, Nish 2026-10-09.
+      ".agents/skills/shadcn/**",
     ],
   },
 
