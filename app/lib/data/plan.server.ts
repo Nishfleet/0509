@@ -188,14 +188,18 @@ export interface SubscriptionPlan {
   updatedAt: string;
 }
 
+const paidWorkspaceIdRow = z.object({
+  workspace_id: z.string(),
+  status: z.string(),
+  current_period_end: z.string().nullable(),
+});
+
 export async function readPaidWorkspaceIds(now: Date): Promise<ReadonlySet<string>> {
-  const rows = await env.DB.prepare("SELECT workspace_id, status, current_period_end FROM plan").all<{
-    workspace_id: string;
-    status: string;
-    current_period_end: string | null;
-  }>();
+  const rows = await env.DB.prepare("SELECT workspace_id, status, current_period_end FROM plan").all();
   return new Set(
-    rows.results
+    paidWorkspaceIdRow
+      .array()
+      .parse(rows.results)
       .filter((row) => isWorkspacePaid({ status: row.status, currentPeriodEnd: row.current_period_end }, now))
       .map((row) => row.workspace_id),
   );

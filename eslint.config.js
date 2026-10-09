@@ -417,6 +417,21 @@ const RAW_DML_WRITER = {
     "One writer per table. Raw DML lives in app/lib/data/<table>.server.ts — this matches the statement text itself, so holding it in a module constant still counts. docs/REBUILD-TRUST.md C5. Source: 0509#4313 — the kysely-era insertInto/updateTable/deleteFrom selectors matched nothing after the raw-D1 rebuild, and app/lib/workspace.server.ts grew a second workspace writer while the rule stayed green.",
 };
 
+// The row shape comes from a schema, never from a type argument. `.first<T>()`,
+// `.all<T>()`, `.raw<T>()`, `.run<T>()` and `.batch<T>()` each assert the row
+// shape at compile time and check nothing at run time, so a row that does not
+// match reaches the caller typed and wrong. The conversion children of #7031
+// replaced them with a zod schema per row and z.infer for the type; this
+// selector keeps the next one out. Armed in TABLE_WRITER_BLOCKS, not in a
+// block of its own, so it survives the option-array replacement 0509#7266
+// documents at the foot of this file.
+const D1_ROW_TYPE_ARGUMENT = {
+  selector:
+    "CallExpression[callee.type='MemberExpression'][callee.property.name=/^(first|all|raw|run|batch)$/][typeArguments]",
+  message:
+    "A D1 type argument asserts the row shape and is never checked. Parse the row with a zod schema in this writer file and derive the type with z.infer. Source: 0509#7027, 0509#7031.",
+};
+
 // 0509#7022: RAW_DML_WRITER only proves DML sits somewhere under
 // app/lib/data/. Inside it, <table>.server.ts may write only <table>.
 // One block per file, generated from the directory, so a new data file is
@@ -454,6 +469,7 @@ export const TABLE_WRITER_BLOCKS = readdirSync(new URL("./app/lib/data/", import
         ...BANNED_SYNTAX,
         ...NO_USER_DATA_IN_LOGS,
         FEED_STATE_LITERAL,
+        D1_ROW_TYPE_ARGUMENT,
         foreignTableWriter(file),
       ],
     },
