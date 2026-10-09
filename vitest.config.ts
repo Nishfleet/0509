@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { configDefaults, defineConfig } from "vitest/config";
 
+import { FileStartReporter } from "./tests/file-start-reporter.js";
+
 // Deliberately a separate config from vite.config.ts.
 //
 // vitest picks up vite.config.ts by default, which carries the cloudflare()
@@ -13,6 +15,7 @@ import { configDefaults, defineConfig } from "vitest/config";
 // cloudflareTest() belongs here.
 export default defineConfig({
   test: {
+    reporters: ["default", new FileStartReporter()],
     // CI runs `vitest run --changed` on pull requests (0509#5849). These files
     // reach tests without an import edge, so a change to any of them reruns
     // the whole suite. The stock default "**/{vitest,vite}.config.*/**" does
