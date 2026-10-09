@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 
 export const JEV_CALLS_PER_DAY = 20_000;
 
-export const JEV_CALLS_PER_WORKSPACE_PER_DAY = 4_000;
+const JEV_CALLS_PER_WORKSPACE_PER_DAY = 4_000;
 
 export const PROPOSER_CALLS_PER_DAY = 3_000;
 
