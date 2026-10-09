@@ -70,7 +70,7 @@ test("soak workspace: one persistent production workspace tracks at least four b
   test.skip(testInfo.project.name === "phone-390", "one sign-in, one workspace: the desktop lane sets it up");
 
   await signInWithMagicLink(page, FIXTURE_ACCOUNTS.soak.email, requireInboxToken(), /\/(app|onboarding)/);
-  const alreadyOnboarded = /\/app$/.test(new URL(page.url()).pathname);
+  const alreadyOnboarded = new URL(page.url()).pathname.endsWith("/app");
   if (!alreadyOnboarded) await onboardSelf(page);
   await addCompetitors(page);
 

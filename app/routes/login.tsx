@@ -2,6 +2,7 @@ import type { Route } from "./+types/login";
 import { env } from "cloudflare:workers";
 import { useState } from "react";
 import { data, redirect, useActionData, useLoaderData, useNavigation, useSearchParams } from "react-router";
+import { z } from "zod";
 
 import { AccountDeleteNotice } from "../components/account-delete-notice";
 import { SignInEmailForm, SignInError } from "../components/sign-in-email-form";
@@ -15,6 +16,7 @@ import { deadLinkMessage } from "../lib/login-link-error";
 import { formMagicLinkRequest } from "../lib/auth/login-magic-link.server";
 import { createAuthForRequest } from "../lib/auth.server";
 import { hasSession } from "../lib/require-session.server";
+import { MAIN_CONTENT_ID, SkipLink } from "../components/skip-link";
 import {
   clearAccountDeleteInstanceId,
   readAccountDeleteInstanceId,
@@ -24,6 +26,11 @@ import { usePasskeySignIn } from "../lib/use-passkey-sign-in";
 import { useTimezoneCookie } from "../lib/use-timezone-cookie";
 
 type LoginActionData = { error: string; sent?: never } | { sent: { email: string; at: number }; error?: never };
+
+const loginForm = z.object({
+  email: z.string(),
+  "cf-turnstile-response": z.string().optional(),
+});
 
 function signInTarget(search: URLSearchParams): string {
   return safeReturnTo(search.get("next") ?? subjectRedirect(search.get("subject")));
@@ -49,13 +56,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  const form = await request.formData();
-  const submitted = form.get("email");
-  const email = typeof submitted === "string" ? submitted.trim().toLowerCase() : "";
+  const parsed = loginForm.safeParse(Object.fromEntries(await request.formData()));
+  const email = parsed.success ? parsed.data.email.trim().toLowerCase() : "";
   if (!email) return { error: "Enter your email address, then we'll send the link." };
 
-  const captchaField = form.get("cf-turnstile-response");
-  const captcha = typeof captchaField === "string" ? captchaField.trim() : "";
+  const captchaField = parsed.success ? parsed.data["cf-turnstile-response"] : undefined;
+  const captcha = captchaField === undefined ? "" : captchaField.trim();
   const callbackURL = signInTarget(new URL(request.url).searchParams);
   const response = await (
     await createAuthForRequest(env, request)
@@ -98,10 +104,11 @@ export default function Login() {
 
   return (
     <div className={SIGN_IN_SHELL}>
+      <SkipLink />
       <header className="self-start">
         <Wordmark />
       </header>
-      <main className="flex flex-col">
+      <main id={MAIN_CONTENT_ID} tabIndex={-1} className="flex flex-col">
         <h1 className={SIGN_IN_TITLE}>Sign in</h1>
         <p className={SIGN_IN_LEDE}>We email you a link. Tap it and you're in. There is no password.</p>
         {deleted.progress === null || deleted.id === null ? null : (

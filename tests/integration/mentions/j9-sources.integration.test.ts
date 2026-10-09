@@ -106,6 +106,9 @@ describe("J9 mentions land from three sources", () => {
         "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Gymshark', 'user-j9', 'UTC', 1, 8, ?2)",
       ).bind(workspaceId, NOW),
       env.DB.prepare(
+        "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?1, ?2, 'scout', 'trialing', ?3)",
+      ).bind("ws-j9-plan", workspaceId, NOW),
+      env.DB.prepare(
         "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, created_at) VALUES ('ws-j9-self', ?1, 'self', 'gymshark-j9.com', 'Gymshark', '{\"description\":\"Gym clothing\"}', ?2)",
       ).bind(workspaceId, NOW),
       env.DB.prepare(
@@ -115,6 +118,10 @@ describe("J9 mentions land from three sources", () => {
     stubUpstreams();
     Reflect.set(env, "AI", { run: jevAnswering() });
 
+    await planTargets();
+    await env.DB.prepare("UPDATE watch SET created_at = '2026-09-01T00:00:00.000Z' WHERE entity_id = ?1")
+      .bind(competitorId)
+      .run();
     const targets = (await planTargets()).filter((entry) => entry.watches.some((w) => w.entity_id === competitorId));
     expect(targets.map((entry) => entry.pluginKey).sort()).toEqual(["gdelt.doc", "hn.algolia", "youtube.channel_rss"]);
 

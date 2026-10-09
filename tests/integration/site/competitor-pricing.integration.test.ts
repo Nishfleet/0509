@@ -20,7 +20,7 @@ const HOME_HTML = `<html><head><title>Rival</title></head><body>
 function installJev(): void {
   Reflect.set(env, "AI", {
     run(_model: string, request: { questions: Record<string, { type: string }> }) {
-      const asked = request.questions["page_role"] as { type: string; instructions?: string } | undefined;
+      const asked = request.questions.page_role as { type: string; instructions?: string } | undefined;
       const text = JSON.stringify(request);
       const choice = text.includes("/plans") ? "pricing" : "other";
       return Promise.resolve({ answers: { page_role: { type: asked?.type ?? "choice", choice } } });
@@ -38,6 +38,9 @@ async function seed(): Promise<void> {
       USER,
       NOW,
     ),
+    env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?1, ?2, 'scout', 'trialing', ?3)",
+    ).bind(`plan-${WS}`, WS, NOW),
     env.DB.prepare(
       "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, origin, state, created_at) VALUES (?1, ?2, 'self', 'owner-shop.com', 'Owner', '{}', 'manual', 'on', ?3)",
     ).bind(SELF, WS, NOW),
@@ -136,7 +139,7 @@ describe("a competitor's pricing page", () => {
     });
     const run = vi.fn((_model: string, request: { questions: Record<string, { type: string }> }) =>
       Promise.resolve({
-        answers: { page_role: { type: request.questions["page_role"]?.type ?? "choice", choice: "pricing" } },
+        answers: { page_role: { type: request.questions.page_role?.type ?? "choice", choice: "pricing" } },
       }),
     );
     Reflect.set(env, "AI", { run });
@@ -163,7 +166,7 @@ describe("a competitor's pricing page", () => {
         Promise.resolve({
           answers: {
             page_role: {
-              type: request.questions["page_role"]?.type ?? "choice",
+              type: request.questions.page_role?.type ?? "choice",
               choice: JSON.stringify(request).includes("/pricing") ? "pricing" : "other",
             },
           },

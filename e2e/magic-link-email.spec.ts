@@ -100,9 +100,7 @@ test("the sign-in email names the address, the expiry and the ignore line, and r
   // body the light lane screenshotted — the media query is the only
   // difference, so a colour-scheme emulation is the whole transformation.
   await page.emulateMedia({ colorScheme: "dark" });
-  await expect(await page.locator("body").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(
-    "rgb(20, 19, 15)",
-  );
+  expect(await page.locator("body").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(20, 19, 15)");
   await testInfo.attach("sign-in-email-dark-600", {
     body: await page.screenshot({ fullPage: true }),
     contentType: "image/png",

@@ -181,7 +181,7 @@ export const PRIVACY: LegalDocument = {
         {
           term: "Do-not-email record",
           details: [
-            "When you unsubscribe, or delete your account, we keep the email address and the reason on a do-not-email list, so we never email it again. It holds nothing else.",
+            "When you unsubscribe, we keep the email address and the reason on a do-not-email list, so we never email it again. It holds nothing else. When you delete your account we add the address the same way, and we remove that delete record if you sign up again with the same address.",
           ],
         },
         {

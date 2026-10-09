@@ -1,4 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
@@ -15,6 +18,11 @@ const PATH = /`((?:app|docs|workers|tests|e2e|migrations|\.agents)\/[\w./-]+[\w-
 // This is a wording gate, not a mechanism check: it catches the return of those
 // exact claims. It fails on the old text and passes once the claims are gone. The
 // live rules the section carried stay, so the deletion cannot take them with it.
+// 0509#6999: "Conventions, enforced not described" listed Immutability as
+// enforced, but eslint.config.js has no mutation rule — 0509#5783 parked
+// eslint-plugin-functional until the violation count is measured. The bullet
+// stays out of the enforced list until that mechanism exists. The rule itself
+// stays in the file, stated as reviewer-only.
 const RETIRED = [
   /\bhash-checked\b/,
   /\bFable\b/,
@@ -22,17 +30,19 @@ const RETIRED = [
   /Two orchestrator sessions/,
   /#3842/,
   /about \d+ KB/,
+  /- \*\*Immutability\.\*\*/,
 ] as const;
 
 // The four live rules move from "Rebuild rules" into "Conventions", the
 // gated-site rule moves to "Rules that are not about code", and the pre-wipe
 // reuse rule stays as policy. None of them may leave the file with the section.
 const LIVE = [
-  /Stock only, at the version named in `docs\/REBUILD-STACK\.md`/,
+  /Stock only, at the version named in `docs\/dependencies\.md`/,
   /Jev decides every typed decision/,
   /Browser Rendering capped at 10/,
   /Guardrails/,
   /Nothing from the pre-wipe code is reused/,
+  /new objects,\s+never mutation/,
   /site is gated until the audit passes/,
 ] as const;
 
@@ -55,5 +65,95 @@ describe("agent entry docs", () => {
     const text = readFileSync(new URL("../AGENTS.md", import.meta.url), "utf8");
     const missing = LIVE.filter((pattern) => !pattern.test(text)).map((pattern) => pattern.source);
     expect(missing).toEqual([]);
+  });
+});
+
+// 0509#7018 (R7): `docs/engines/*.md` and `docs/REBUILD-*.md` are design
+// history. A citation of one that was deleted sends the next agent `grep -r`
+// for a file that is only in git history, so the two tests below gate both
+// directions: every kept doc is cited somewhere (otherwise it is orphaned, and
+// the lock has nothing to lock), and every citation outside `docs/` and
+// `migrations/` resolves (otherwise a dangling one survives the deletions).
+const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
+const MIGRATIONS = `${join(REPO_ROOT, "migrations")}/`;
+// Every tracked file at the repo root, minus the directories that cannot carry
+// a citation. A named allowlist (app/, workers/, tests/, e2e/, migrations/,
+// .github/, .agents/ plus five root files) left CLAUDE.md, every other root
+// config and any future top-level directory outside the gate, so a dangling
+// citation in one of them passed; the in-run review of #7275 found it. The list
+// comes from git, not a directory walk: another test file creates and removes a
+// scratch directory under app/ while this one runs, and a walk that listed it
+// failed with ENOENT on a shard of #7276.
+const SKIP_DIRS = [
+  ".git",
+  "node_modules",
+  "docs",
+  "public",
+  "dist",
+  "coverage",
+  "playwright-report",
+  "test-results",
+  ".wrangler",
+] as const;
+const SKIP_EXTENSIONS = [".png", ".jpg", ".webp", ".ico", ".woff2"] as const;
+let scanCache: string[] | undefined;
+
+function scanSet(): string[] {
+  if (scanCache) return scanCache;
+  const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: REPO_ROOT, maxBuffer: 64 * 1024 * 1024 })
+    .toString("utf8")
+    .split("\0")
+    .filter((name) => name !== "");
+  scanCache = tracked
+    .filter((name) => !SKIP_DIRS.some((skip) => name.split("/").includes(skip)))
+    .filter((name) => !SKIP_EXTENSIONS.some((extension) => name.endsWith(extension)))
+    .map((name) => join(REPO_ROOT, name))
+    .filter((path) => existsSync(path));
+  return scanCache;
+}
+
+// `AGENTS.md` records what was deleted and where to read it instead, so its
+// `## Docs` section is a citation of design history by intent, not a claim that
+// a live file exists. Test B reads it whole; Test A stops at that heading.
+const DOCS_SECTION = /\n## Docs/;
+
+function readSource(path: string): string {
+  const text = readFileSync(path, "utf8");
+  return path === join(REPO_ROOT, "AGENTS.md") ? (text.split(DOCS_SECTION)[0] ?? text) : text;
+}
+
+function historyDocs(): { file: string; token: string }[] {
+  const enginesDir = join(REPO_ROOT, "docs/engines");
+  const engines = (existsSync(enginesDir) ? readdirSync(enginesDir) : [])
+    .filter((name) => name.endsWith(".md") && name !== "README.md")
+    .map((name) => ({ file: join(enginesDir, name), token: `engines/${name}` }));
+  const rebuilds = readdirSync(join(REPO_ROOT, "docs"))
+    .filter((name) => name.startsWith("REBUILD-") && name.endsWith(".md"))
+    .map((name) => ({ file: join(REPO_ROOT, "docs", name), token: name }));
+  return [...engines, ...rebuilds];
+}
+
+describe("design history docs", () => {
+  it.each(historyDocs().map((doc) => [doc.token, doc.file] as const))(
+    "%s is cited outside migrations/",
+    (token, file) => {
+      const cited = scanSet()
+        .filter((path) => !path.startsWith(MIGRATIONS))
+        .filter((path) => readSource(path).includes(token));
+      expect(cited.length).toBeGreaterThan(0);
+      expect(existsSync(file)).toBe(true);
+    },
+  );
+
+  it("is cited by a file that exists", () => {
+    const citation = /(?:docs\/)?(engines\/[\w-]+|REBUILD-[\w-]+)\.md/g;
+    const dangling: string[] = [];
+    for (const path of scanSet().filter((candidate) => !candidate.startsWith(MIGRATIONS))) {
+      for (const match of readFileSync(path, "utf8").matchAll(citation)) {
+        const target = join(REPO_ROOT, "docs", `${match[1]}.md`);
+        if (!existsSync(target)) dangling.push(`${path.slice(REPO_ROOT.length)}: ${match[0]}`);
+      }
+    }
+    expect(dangling).toEqual([]);
   });
 });

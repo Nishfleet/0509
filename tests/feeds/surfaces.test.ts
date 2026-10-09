@@ -71,7 +71,7 @@ describe("source kinds", () => {
     const feed = { key: "feed.rss", kind: "content", platform: "feed" } as const;
     const site = { key: "site.web", kind: "site", platform: "web" } as const;
     expect(firstSiteSweepAt({ now, sources: [feed], brandsOn: 0 })).toBeNull();
-    expect(firstSiteSweepAt({ now, sources: [feed, site], brandsOn: 0 })).toEqual(new Date("2026-10-02T06:00:00Z"));
+    expect(firstSiteSweepAt({ now, sources: [feed, site], brandsOn: 0 })).toEqual(new Date("2026-10-02T23:00:00Z"));
   });
 });
 

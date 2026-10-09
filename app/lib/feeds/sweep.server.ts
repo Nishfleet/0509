@@ -1,6 +1,7 @@
 import { getDomain } from "tldts";
 import { z } from "zod";
 
+import { readPaidWorkspaceIds } from "../data/plan.server";
 import type { FeedTarget } from "../data/watch.server";
 import { insertWatches, readEntitiesWithoutFeedWatch, readFeedTargets } from "../data/watch.server";
 import { readEnabledSourceId } from "../data/source.server";
@@ -23,7 +24,10 @@ export async function planFeedSweep(): Promise<{
   entities: readonly { id: string; domain: string }[];
   targets: readonly FeedTarget[];
 }> {
-  return { entities: await readEntitiesWithoutFeedWatch(), targets: await readFeedTargets() };
+  const paid = await readPaidWorkspaceIds(new Date());
+  const targets = (await readFeedTargets()).filter((target) => paid.has(target.workspaceId));
+  const entities = (await readEntitiesWithoutFeedWatch()).filter((entity) => paid.has(entity.workspaceId));
+  return { entities: entities.map(({ id, domain }) => ({ id, domain })), targets };
 }
 
 async function firstReadableFeed(candidates: readonly string[]): Promise<string | null> {
@@ -36,7 +40,7 @@ async function firstReadableFeed(candidates: readonly string[]): Promise<string 
 
 async function loadFeed(homepage: string): Promise<z.infer<typeof FEED_SCHEMA>> {
   const html = await fetchHomepage(homepage);
-  return { feedUrl: await firstReadableFeed(feedCandidates(html, homepage)) };
+  return { feedUrl: await firstReadableFeed(await feedCandidates(html, homepage)) };
 }
 
 export async function findFeed(entity: { id: string; domain: string }): Promise<FoundFeed> {
@@ -46,7 +50,7 @@ export async function findFeed(entity: { id: string; domain: string }): Promise<
 
   const homepage = `https://${entity.domain}/`;
   const found = await readThrough({
-    key: `feed:v2:${registrable}:url`,
+    key: `feed:v3:${registrable}:url`,
     schema: FEED_SCHEMA,
     ttlSeconds: FEED_TTL_SECONDS,
     run: () => loadFeed(homepage),

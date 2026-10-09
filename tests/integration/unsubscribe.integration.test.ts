@@ -12,9 +12,9 @@ interface Recorder {
 const recorder = (): Recorder => ({ sent: [] });
 
 const bindingFor = (rec: Recorder): SendEmail => ({
-  send(message: EmailMessageBuilder) {
-    rec.sent.push(message);
-    return Promise.resolve({} as EmailSendResult);
+  send(message: EmailMessage | EmailMessageBuilder) {
+    rec.sent.push(message as EmailMessageBuilder);
+    return Promise.resolve({ messageId: "unused" });
   },
 });
 
@@ -38,6 +38,11 @@ const seed = async () => {
      VALUES (?, 'Unsubscribe', ?, 'UTC', 1, 8, '2026-09-22T00:00:00Z')`,
   )
     .bind(WS, USER)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', '2026-09-22T00:00:00Z')",
+  )
+    .bind(`plan-${WS}`, WS)
     .run();
   await env.DB.prepare(`INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?, 'email', 1, '{}')`)
     .bind(CHANNEL)

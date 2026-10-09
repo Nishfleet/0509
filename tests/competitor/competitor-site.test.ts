@@ -1,6 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("cloudflare:workers", () => ({ env: {} }));
+import { describe, expect, it } from "vitest";
 
 import { SITE_INVALID_ERROR, SITE_LINK_MAX, SITE_SAME_ERROR, SITE_TOO_LONG_ERROR } from "../../app/lib/competitor-site";
 import { parseSiteInput } from "../../app/lib/competitor-site.server";

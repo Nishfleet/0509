@@ -19,7 +19,7 @@ const gdeltBody = JSON.stringify({
 });
 
 function stubFetch(body: string, status = 200) {
-  const fetchMock = vi.fn(async () => new Response(body, { status }));
+  const fetchMock = vi.fn(async (_input: string | URL | Request) => new Response(body, { status }));
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }
@@ -33,7 +33,7 @@ describe("gdelt adapter", () => {
   it("returns real article links with publisher and time, dropping non-web links", async () => {
     const fetchMock = stubFetch(gdeltBody);
     const result = await adapterFor("gdelt.doc")?.({ query: "Gymshark" }, null);
-    expect(String(fetchMock.mock.calls[0]?.at(0))).toContain(encodeURIComponent('"Gymshark"'));
+    expect(fetchMock.mock.calls[0]?.[0]).toEqual(expect.stringContaining(encodeURIComponent('"Gymshark"')));
     expect(result?.items).toEqual([
       {
         dedupKey: "https://www.example-news.com/gymshark-opens-store",

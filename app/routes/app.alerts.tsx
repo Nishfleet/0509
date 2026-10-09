@@ -1,7 +1,7 @@
 import type { Route } from "./+types/app.alerts";
 
-import { env } from "cloudflare:workers";
 import { Link } from "react-router";
+import { z } from "zod";
 
 import { AlertChipEmpty } from "../components/alert-chip-empty";
 import { AlertChips } from "../components/alert-chips";
@@ -11,7 +11,7 @@ import { PAGE, PageHeading } from "../components/page-heading";
 import { SourcePill } from "../components/source-pill";
 import { acknowledgeOwnSiteIncident, loadAlertsPage } from "../lib/alerts-page.server";
 import { parseAlertChip } from "../lib/alert-chips";
-import { listBriefs } from "../lib/data/digest.server";
+import { listWorkspaceBriefs } from "../lib/data/digest.server";
 import { onboardedContext } from "../lib/require-onboarded.server";
 import { requireFreshSession } from "../lib/require-session.server";
 
@@ -21,8 +21,13 @@ export function meta() {
 
 const WHEN_CLASS = "mt-2 block font-mono text-meta text-ink-soft uppercase";
 
+const acknowledgeForm = z.object({
+  intent: z.literal("acknowledge"),
+  alertId: z.string(),
+});
+
 async function readLatestBrief(workspaceId: string | null) {
-  return workspaceId === null ? undefined : (await listBriefs(env.DB, workspaceId))[0];
+  return workspaceId === null ? undefined : (await listWorkspaceBriefs(workspaceId))[0];
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -37,10 +42,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 export async function action({ request }: Route.ActionArgs) {
   const session = await requireFreshSession(request);
-  const form = await request.formData();
-  const alertId = form.get("alertId");
-  if (form.get("intent") !== "acknowledge" || typeof alertId !== "string") return { saved: false };
-  await acknowledgeOwnSiteIncident(session.user.id, alertId);
+  const parsed = acknowledgeForm.safeParse(Object.fromEntries(await request.formData()));
+  if (!parsed.success) return { saved: false };
+  await acknowledgeOwnSiteIncident(session.user.id, parsed.data.alertId);
   return { saved: true };
 }
 

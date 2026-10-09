@@ -8,9 +8,10 @@ export const DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
   timeZone: "UTC",
 });
 
-export function dayMonthLabel(value: string): string | null {
+export function dayMonthLabel(value: string, timeZone = "UTC"): string | null {
   if (Number.isNaN(Date.parse(value))) return null;
-  return DAY_MONTH.format(new Date(value));
+  if (timeZone === "UTC") return DAY_MONTH.format(new Date(value));
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone }).format(new Date(value));
 }
 
 export type BrandSwitchState = "on" | "off" | "you";
@@ -28,12 +29,6 @@ export function brandSwitchNote(state: BrandSwitchState, pausedOn: Date | null):
   if (pausedOn === null || Number.isNaN(pausedOn.getTime())) return "Paused, history kept";
   const day = DAY_MONTH.format(pausedOn);
   return `Paused ${day}, history kept`;
-}
-
-export function brandRowClass(state: BrandSwitchState): string {
-  if (state === "off") return "text-ink-faint";
-  if (state === "you") return "bg-green-wash";
-  return "";
 }
 
 export function BrandSwitchField({

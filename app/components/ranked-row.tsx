@@ -1,14 +1,16 @@
-import type { ReactElement } from "react";
+import { lazy, Suspense, type ReactElement } from "react";
 import { useSearchParams } from "react-router";
 
-import { BrandSwitch } from "./brand-switch";
+import { HomeRowSwitch } from "./home-row-switch";
 import { brandMonogram } from "./brand-chip";
 import { CapturePlate } from "./capture-plate";
 import { Mark } from "./mark";
-import { RowEvidence } from "./row-evidence";
 import type { HomePill, HomeRow, WeekEvidence } from "../lib/home-standing";
 import type { SiteChangeView } from "../lib/site-change";
 import { cn } from "../lib/utils";
+import { usePendingOpen } from "../lib/use-pending-open";
+
+const RowEvidence = lazy(() => import("./row-evidence").then((module) => ({ default: module.RowEvidence })));
 
 const PILL = "border border-line px-2 py-1 font-mono text-eyebrow uppercase";
 
@@ -85,18 +87,19 @@ function RowMonogram({ row }: { row: HomeRow }): ReactElement {
 
 interface RankedRowProps {
   row: HomeRow;
-  onSwitch?: (entityId: string, checked: boolean) => void;
   openId: string | null;
   evidence: readonly WeekEvidence[] | null;
 }
 
-export function RankedRow({ row, onSwitch, openId, evidence }: RankedRowProps): ReactElement {
+export function RankedRow({ row, openId, evidence }: RankedRowProps): ReactElement {
   const isOpen = openId === row.entityId;
+  const loading = usePendingOpen(row.entityId) && !isOpen;
   return (
     <li
       data-testid="standing-row"
       data-self={row.self ? "true" : undefined}
       data-open={isOpen ? "true" : undefined}
+      aria-busy={loading ? "true" : undefined}
       className={rowClass(row.self, isOpen)}
     >
       <span className="font-mono text-[0.88rem]">{positionLabel(row)}</span>
@@ -105,11 +108,7 @@ export function RankedRow({ row, onSwitch, openId, evidence }: RankedRowProps): 
       <span className="text-right font-mono text-eyebrow text-ink-soft uppercase max-sm:col-span-3 max-sm:col-start-3 max-sm:row-start-2 max-sm:text-left">
         {row.movement}
       </span>
-      <BrandSwitch
-        state={row.self ? "you" : "on"}
-        brandName={row.name}
-        onCheckedChange={(checked) => onSwitch?.(row.entityId, checked)}
-      />
+      <HomeRowSwitch entityId={row.entityId} name={row.name} self={row.self} />
       {row.move === null ? null : <RowMove move={row.move} />}
       {row.why === null ? null : (
         <p data-slot="row-why" className="col-span-full text-[0.88rem] leading-[1.5] text-ink-soft">
@@ -117,9 +116,14 @@ export function RankedRow({ row, onSwitch, openId, evidence }: RankedRowProps): 
         </p>
       )}
       <RowPills pills={row.pills} />
+      {loading ? (
+        <p role="status" data-slot="row-pending" className="col-span-full text-[0.88rem] text-ink-soft">
+          Loading {row.name}'s evidence…
+        </p>
+      ) : null}
       {isOpen ? (
         <div id={`evidence-${row.entityId}`} data-slot="row-evidence" className="col-span-full max-[859px]:hidden">
-          {evidence === null ? null : <RowEvidence evidence={evidence} />}
+          <Suspense fallback={null}>{evidence === null ? null : <RowEvidence evidence={evidence} />}</Suspense>
         </div>
       ) : null}
     </li>

@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { readDeliveryAddress, saveDeliveryAddress } from "../../app/lib/delivery-address.server";
+import { confirmDeliveryAddress } from "../../app/lib/verify-delivery-address.server";
 import { ensureWorkspaceForSignIn, firstWorkspaceId } from "../../app/lib/workspace.server";
 
 let USER_ID = "user-da";
@@ -16,9 +17,9 @@ interface Recorder {
 const recorder = (): Recorder => ({ sent: [], fail: null });
 
 const bindingFor = (rec: Recorder): SendEmail => ({
-  send(message: EmailMessageBuilder) {
+  send(message: EmailMessage | EmailMessageBuilder) {
     if (rec.fail) throw rec.fail;
-    rec.sent.push(message);
+    rec.sent.push(message as EmailMessageBuilder);
     return Promise.resolve({ messageId: "test-message" });
   },
 });
@@ -62,6 +63,18 @@ const suppressionRow = async (address: string): Promise<SuppressionRow | null> =
   env.DB.prepare(`SELECT address, reason FROM email_suppression WHERE address = ?`)
     .bind(address)
     .first<SuppressionRow>();
+
+const suppress = async (address: string): Promise<void> => {
+  await env.DB.prepare(`INSERT INTO email_suppression (address, reason, created_at) VALUES (?, 'unsubscribed', ?)`)
+    .bind(address, NOW)
+    .run();
+};
+
+const emailedToken = (rec: Recorder): string => {
+  const link = /https:\/\/0509\.io\/v\/([0-9a-f]{64})/.exec(rec.sent.at(-1)?.text ?? "");
+  if (link === null) throw new Error("expected a confirmation link in the sent email");
+  return link[1];
+};
 
 describe("change the workspace's email address (0509#4779)", () => {
   beforeEach(async () => {
@@ -146,12 +159,9 @@ describe("change the workspace's email address (0509#4779)", () => {
     });
   });
 
-  it("(c) refuses a suppressed address by default; resume clears the suppression and updates the target", async () => {
-    await env.DB.prepare(
-      `INSERT INTO email_suppression (address, reason, created_at) VALUES ('gone@0509.io', 'unsubscribed', ?)`,
-    )
-      .bind(NOW)
-      .run();
+  it("(c) refuses a suppressed address by default; resume keeps the suppression until the address owner confirms (0509#6998)", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    await suppress("gone@0509.io");
 
     const blocked = await saveDeliveryAddress({
       userId: USER_ID,
@@ -163,23 +173,96 @@ describe("change the workspace's email address (0509#4779)", () => {
     expect(blocked.error).not.toBeNull();
     expect(blocked.suppressed).toBe(true);
 
-    const unchanged = await allTargets(firstWorkspaceId(USER_ID));
+    const unchanged = await allTargets(workspaceId);
     expect(unchanged[0]?.target_value).toBe(SIGN_IN_EMAIL);
-    const stillSuppressed = await suppressionRow("gone@0509.io");
-    expect(stillSuppressed).not.toBeNull();
+    expect(await suppressionRow("gone@0509.io")).not.toBeNull();
 
+    const rec = recorder();
     const resumed = await saveDeliveryAddress({
       userId: USER_ID,
       signInEmail: SIGN_IN_EMAIL,
-      email: bindingFor(recorder()),
+      email: bindingFor(rec),
       address: "gone@0509.io",
       resume: true,
     });
     expect(resumed).toEqual({ error: null, suppressed: false });
 
+    expect(await suppressionRow("gone@0509.io")).not.toBeNull();
+    const updated = await allTargets(workspaceId);
+    expect(updated[0]).toMatchObject({ target_value: "gone@0509.io", is_verified: 0 });
+
+    await confirmDeliveryAddress(emailedToken(rec));
+
     expect(await suppressionRow("gone@0509.io")).toBeNull();
-    const updated = await allTargets(firstWorkspaceId(USER_ID));
-    expect(updated[0]?.target_value).toBe("gone@0509.io");
+    expect((await allTargets(workspaceId))[0]).toMatchObject({ target_value: "gone@0509.io", is_verified: 1 });
+  });
+
+  it("(c2) resume on the signed-in address clears the suppression at once (0509#6998)", async () => {
+    await suppress(SIGN_IN_EMAIL);
+
+    const resumed = await saveDeliveryAddress({
+      userId: USER_ID,
+      signInEmail: SIGN_IN_EMAIL,
+      email: bindingFor(recorder()),
+      address: SIGN_IN_EMAIL,
+      resume: true,
+    });
+    expect(resumed).toEqual({ error: null, suppressed: false });
+    expect(await suppressionRow(SIGN_IN_EMAIL)).toBeNull();
+  });
+
+  it("(c3) another user saving someone else's unsubscribed address with resume leaves the suppression in place (0509#6998)", async () => {
+    const victimWorkspace = firstWorkspaceId(USER_ID);
+    await suppress(SIGN_IN_EMAIL);
+
+    const attackerId = `user-da-attacker-${crypto.randomUUID()}`;
+    const attackerEmail = "attacker@0509.io";
+    await env.DB.prepare(
+      `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt)
+       VALUES (?, 'Attacker', ?, 1, ?, ?)`,
+    )
+      .bind(attackerId, attackerEmail, NOW, NOW)
+      .run();
+    await ensureWorkspaceForSignIn(env.DB, { userId: attackerId, request: null, now: NOW });
+
+    const result = await saveDeliveryAddress({
+      userId: attackerId,
+      signInEmail: attackerEmail,
+      email: bindingFor(recorder()),
+      address: SIGN_IN_EMAIL,
+      resume: true,
+    });
+    expect(result).toEqual({ error: null, suppressed: false });
+
+    expect(await suppressionRow(SIGN_IN_EMAIL)).toMatchObject({ address: SIGN_IN_EMAIL, reason: "unsubscribed" });
+    expect((await allTargets(victimWorkspace))[0]).toMatchObject({ target_value: SIGN_IN_EMAIL, is_verified: 1 });
+    expect((await allTargets(firstWorkspaceId(attackerId)))[0]).toMatchObject({
+      target_value: SIGN_IN_EMAIL,
+      is_verified: 0,
+    });
+  });
+
+  it("(c4) an expired or unknown confirm token leaves the suppression and the target alone (0509#6998)", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    await suppress("gone@0509.io");
+    const rec = recorder();
+    await saveDeliveryAddress({
+      userId: USER_ID,
+      signInEmail: SIGN_IN_EMAIL,
+      email: bindingFor(rec),
+      address: "gone@0509.io",
+      resume: true,
+    });
+    await env.DB.prepare("UPDATE send_target SET verify_token_expires_at = ? WHERE workspace_id = ?")
+      .bind("2020-01-01T00:00:00.000Z", workspaceId)
+      .run();
+    const before = await allTargets(workspaceId);
+
+    await confirmDeliveryAddress(emailedToken(rec));
+    await confirmDeliveryAddress("f".repeat(64));
+
+    expect(await suppressionRow("gone@0509.io")).not.toBeNull();
+    expect(await allTargets(workspaceId)).toEqual(before);
   });
 
   it("(d) rejects an address with no @", async () => {

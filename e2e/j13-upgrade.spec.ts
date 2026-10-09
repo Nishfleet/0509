@@ -115,7 +115,7 @@ async function watchOneCompetitor(page: Page): Promise<void> {
     await expect(watching.first()).toBeVisible();
   }
   await page.getByRole("button", { name: "Start watching" }).click();
-  await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/onboarding\/plan$/, { timeout: 30_000 });
 }
 
 async function deliverPreviewWebhook(page: Page, workspaceId: string): Promise<void> {
@@ -156,30 +156,26 @@ test("J13: the plan gate upgrades a workspace and the page flips without a reloa
 }, testInfo) => {
   test.setTimeout(240_000);
   const watched = watchConsole(page);
-  let workspaceId = "";
-
-  if (isLocalLane()) {
-    const seeded = await seedPreviewWorkspace("j13-upgrade", 5);
-    workspaceId = seeded.workspaceId;
-    await page.setExtraHTTPHeaders({ cookie: seeded.cookie });
-    await page.goto("/app/competitors?upgraded=starter");
-    await expect(page.getByText(/Confirming your Starter plan/)).toBeVisible();
-  } else {
+  if (!isLocalLane()) {
     await watchOneCompetitor(page);
-    await page.goto("/app/competitors");
+    await expect(page.getByRole("heading", { name: "Start your trial" })).toBeVisible();
+    await page.getByRole("button", { name: /^Upgrade to Starter\s*€46\/mo$/ }).click();
+    await page.waitForURL(/checkout\.dodopayments\.com/, { timeout: 30_000 });
+    console.log(
+      `J13 stopped at Dodo hosted checkout from /onboarding/plan, no payment made: ${new URL(page.url()).origin}`,
+    );
+    return;
   }
+
+  const { workspaceId, cookie } = await seedPreviewWorkspace("j13-upgrade", 5);
+  await page.setExtraHTTPHeaders({ cookie });
+  await page.goto("/app/competitors?upgraded=starter");
+  await expect(page.getByText(/Confirming your Starter plan/)).toBeVisible();
 
   await addUntilCap(page);
   const upgrade = page.getByRole("button", { name: /^Upgrade to Starter\s*€46\/mo$/ });
   await expect(upgrade).toBeVisible();
   await expect(page.getByText("Starter watches up to 15 competitors.")).toBeVisible();
-
-  if (!isLocalLane()) {
-    await upgrade.click();
-    await page.waitForURL(/checkout\.dodopayments\.com/, { timeout: 30_000 });
-    console.log(`J13 stopped at Dodo hosted checkout, no payment made: ${new URL(page.url()).origin}`);
-    return;
-  }
 
   await page.evaluate(() => {
     Object.assign(window, { j13NoReload: true });

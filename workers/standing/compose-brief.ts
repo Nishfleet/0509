@@ -3,10 +3,10 @@ import { z } from "zod";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule, BriefWeek } from "../../app/lib/brief-schedule";
 import { nextBriefAt } from "../../app/lib/brief-schedule";
+import { quietWeekLine } from "../../app/lib/quiet-week";
 import { UNJUDGED_WEEK_LINE, readThisFirstLine } from "../../app/lib/read-this-first";
 import { effectiveKindSql } from "../../app/lib/source-kind";
 import { sourceName } from "../../app/lib/source-name";
-import { countPhrase } from "../delivery/brief-template";
 import type { JudgedWeek } from "./read-this-first";
 import { required } from "../../app/lib/required";
 
@@ -131,10 +131,6 @@ export interface ComposeInput {
   schedule: BriefSchedule;
   week: BriefWeek;
   readThisFirst: JudgedWeek;
-}
-
-function quietWeekLine(mentions: number, siteChanges: number, newAds: number): string {
-  return `Quiet week: ${countPhrase(mentions, "mention", "mentions")}, ${countPhrase(siteChanges, "site change", "site changes")}, ${countPhrase(newAds, "new ad", "new ads")}.`;
 }
 
 export function pausedSentence(names: readonly string[]): string | null {
@@ -306,6 +302,7 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
     why_line: pausedLine === null ? headLine : `${headLine} ${pausedLine}`,
     is_quiet_week: marks.length === 0 && !readThisFirst.unjudged,
     is_unjudged: readThisFirst.unjudged,
+    judged_count: readThisFirst.judged,
     read_this_first: marks,
     brands: lines,
     own_site: buildOwnSite(rows.ownSite, closesAt),

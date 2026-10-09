@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 
-import { StepBar } from "./step-bar";
+import { StepBar, type OnboardingStep } from "./step-bar";
 import { Footer } from "./footer";
 import { ONBOARDING_PAGE } from "./page-heading";
 
@@ -10,7 +10,7 @@ export function OnboardingFrame({
   hideHeading = false,
   children,
 }: {
-  step: 1 | 2 | 3;
+  step: OnboardingStep;
   heading: string;
   hideHeading?: boolean;
   children: ReactNode;

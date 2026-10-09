@@ -20,6 +20,11 @@ export default defineConfig({
     name: "evals",
     environment: "node",
     include: ["tests/evals/**/*.eval.test.ts"],
+    // One worker, one module registry: the harness counts the neurons it spends in a
+    // module variable, and EVAL_MAX_NEURONS is a ceiling for the whole run only if every
+    // eval file shares that counter (0509#7249).
+    fileParallelism: false,
+    isolate: false,
     // Each case is asked REPEATS times, eight at a time, against a real Jev
     // call. 20 minutes is the ceiling for a full both-questions run.
     testTimeout: 1_200_000,

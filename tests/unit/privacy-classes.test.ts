@@ -47,7 +47,7 @@ function hasRule(css: string, className: string): boolean {
 
 async function classesWithNoRule(names: string[]): Promise<string[]> {
   const css = await readFile(path.join(REPO_ROOT, "app/app.css"), "utf8");
-  const { build } = await compile(css, {
+  const compiledCss = await compile(css, {
     base: REPO_ROOT,
     loadStylesheet: async (id) => {
       if (id !== "tailwindcss") {
@@ -61,7 +61,7 @@ async function classesWithNoRule(names: string[]): Promise<string[]> {
       };
     },
   });
-  const compiled = build(names);
+  const compiled = compiledCss.build(names);
   return names.filter((name) => !hasRule(compiled, name));
 }
 

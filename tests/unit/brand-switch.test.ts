@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 import {
   BrandSwitch,
   type BrandSwitchState,
-  brandRowClass,
   BrandSwitchField,
   brandSwitchNote,
   dayMonthLabel,
@@ -92,13 +91,9 @@ describe("dayMonthLabel", () => {
     expect(dayMonthLabel("2026-09-22T12:00:00.000Z")).toBe("22 Sept");
     expect(dayMonthLabel("garbage")).toBeNull();
   });
-});
 
-describe("brandRowClass", () => {
-  it("dims off rows, washes you rows and leaves on rows alone", () => {
-    expect(brandRowClass("off")).toBe("text-ink-faint");
-    expect(brandRowClass("you")).toBe("bg-green-wash");
-    expect(brandRowClass("on")).toBe("");
+  it("shifts the calendar day into the workspace zone", () => {
+    expect(dayMonthLabel("2026-09-14T00:00:00.000Z", "America/New_York")).toBe("13 Sept");
   });
 });
 

@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { deliver, handleBatch, type DeliveryMessage } from "../../workers/delivery/consumer";
+import { deliver, handleBatch, type DigestMessage } from "../../workers/delivery/consumer";
 import { sendOrThrow } from "../../workers/delivery/send";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 
@@ -13,10 +13,10 @@ interface Recorder {
 const recorder = (): Recorder => ({ sent: [], fail: null });
 
 const bindingFor = (rec: Recorder): SendEmail => ({
-  send(message: EmailMessageBuilder) {
+  send(message: EmailMessage | EmailMessageBuilder) {
     if (rec.fail) throw rec.fail;
-    rec.sent.push(message);
-    return Promise.resolve({} as EmailSendResult);
+    rec.sent.push(message as EmailMessageBuilder);
+    return Promise.resolve({ messageId: "stub-send-email" });
   },
 });
 
@@ -35,6 +35,11 @@ const seedWorkspace = async () => {
      VALUES (?, 'Send lane', 'user-one', 'UTC', 1, 8, '2026-09-22T00:00:00Z')`,
   )
     .bind(WS)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', '2026-09-22T00:00:00Z')",
+  )
+    .bind(`plan-${WS}`, WS)
     .run();
 };
 
@@ -127,7 +132,7 @@ const digestStatus = async (id: string) =>
     sent_at: string | null;
   }>();
 
-const message = (digestId: string): DeliveryMessage => ({ digest_id: digestId });
+const message = (digestId: string): DigestMessage => ({ digest_id: digestId });
 
 const batchFor = (bodies: unknown[]) => {
   const acked: number[] = [];
@@ -150,7 +155,6 @@ const batchFor = (bodies: unknown[]) => {
 };
 
 const envWith = (email: SendEmail): Env => ({ ...env, EMAIL: email }) as Env;
-
 describe("send lane (0509#3979)", () => {
   beforeEach(async () => {
     await env.DB.exec("DELETE FROM send_attempt");
@@ -294,6 +298,21 @@ describe("send lane (0509#3979)", () => {
     expect(rec.sent).toHaveLength(0);
     expect(await readAttempts()).toHaveLength(0);
     expect((await digestStatus(digestId))?.status).toBe("pending");
+  });
+
+  it("(c-case) skips a target whose suppression was stored with different capitals", async () => {
+    const rec = recorder();
+    const digestId = await seedDigest("pending");
+    await env.DB.prepare(
+      `INSERT INTO email_suppression (address, reason, created_at) VALUES (?, 'unsubscribed', '2026-09-22T00:00:02Z')`,
+    )
+      .bind(TARGET.toUpperCase())
+      .run();
+
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
+
+    expect(result.outcome).toBe("suppressed");
+    expect(rec.sent).toHaveLength(0);
   });
 
   it("never records 'delivered' any path", async () => {

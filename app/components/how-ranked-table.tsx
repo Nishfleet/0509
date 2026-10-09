@@ -1,14 +1,11 @@
 import type { ReactElement } from "react";
 
 import type { HowRanked, HowRankedBrand, HowRankedLine, HowRankedMultiplier, HowRankedWeight } from "../lib/how-ranked";
+import { formatScore } from "../lib/score-format";
 
 const HEADING_CLASS = "font-mono text-eyebrow text-ink-soft uppercase";
 const ROW_CLASS = "border-b border-line py-2 font-mono last:border-b-0";
 const LABEL_CLASS = "text-ink-soft";
-
-function format(value: number): string {
-  return Number(value.toFixed(2)).toString();
-}
 
 function weightLabelFor(weights: readonly HowRankedWeight[], bucket: HowRankedLine["bucket"]): string {
   const match = weights.find((entry) => entry.key === bucket);
@@ -35,7 +32,7 @@ export function HowRankedTable({ howRanked }: { howRanked: HowRanked }): ReactEl
       <ul className="mt-2">
         {howRanked.weights.map((entry) => (
           <li key={entry.key} className={ROW_CLASS}>
-            <span className={LABEL_CLASS}>{entry.label}</span> <span>{String(entry.weight)}</span>
+            <span className={LABEL_CLASS}>{entry.label}</span> <span>{formatScore(entry.weight)}</span>
           </li>
         ))}
       </ul>
@@ -44,7 +41,7 @@ export function HowRankedTable({ howRanked }: { howRanked: HowRanked }): ReactEl
       <ul className="mt-2">
         {howRanked.multipliers.map((entry) => (
           <li key={entry.reliability} className={ROW_CLASS}>
-            <span className={LABEL_CLASS}>{entry.label}</span> <span>×{String(entry.value)}</span>
+            <span className={LABEL_CLASS}>{entry.label}</span> <span>×{formatScore(entry.value)}</span>
           </li>
         ))}
       </ul>
@@ -78,10 +75,10 @@ function BrandBlock({
         {isEmpty && <li className={ROW_CLASS}>Nothing this week</li>}
         {brand.lines.map((line) => (
           <li className={ROW_CLASS} key={`${line.bucket}-${line.reliability}`}>
-            {`${String(line.n)} ${weightLabelFor(weights, line.bucket)} (${multiplierLabelFor(multipliers, line.reliability)}) × ${format(line.weight)} × ${format(line.multiplier)} = ${format(line.points)}`}
+            {`${String(line.n)} ${weightLabelFor(weights, line.bucket)} (${multiplierLabelFor(multipliers, line.reliability)}) × ${formatScore(line.weight)} × ${formatScore(line.multiplier)} = ${formatScore(line.points)}`}
           </li>
         ))}
-        <li className={ROW_CLASS}>{`Total ${isEmpty ? "—" : format(brand.total)}`}</li>
+        <li className={ROW_CLASS}>{`Total ${isEmpty ? "—" : formatScore(brand.total)}`}</li>
       </ul>
     </article>
   );

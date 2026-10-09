@@ -2,11 +2,13 @@ import { captureException } from "@sentry/cloudflare";
 
 import { insertDeliveryFailedAlert, type DeliveryFailedAlert } from "../../app/lib/data/alert.server";
 import { markDigestFailed } from "../../app/lib/data/digest.server";
+import { dropDeadLetteredChange } from "../../app/lib/data/send_attempt.server";
 import { parseMessage } from "./consumer";
 
 export const DELIVERY_FAILED_KIND = "delivery_failed";
 export const DLQ_ALERT_PREFIX = "dlq:";
 export const DLQ_INCIDENT_PREFIX = "dlq-incident:";
+export const DLQ_CHANGE_PREFIX = "dlq-change:";
 export const DELIVERY_FAILED_TITLE = "We could not send your brief by email, so it is in the app instead";
 
 export const DELIVERY_FAILED_BODY =
@@ -18,6 +20,11 @@ export const INCIDENT_UNDELIVERED_TITLE = "We could not email you about your sit
 
 export const INCIDENT_UNDELIVERED_BODY =
   "Your site broke and we tried several times to email you about it, so we have stopped trying. The breakage and every check that followed are on your Alerts page.";
+
+export const CHANGE_UNDELIVERED_TITLE = "We could not email you about a rival change";
+
+export const CHANGE_UNDELIVERED_BODY =
+  "A rival changed price or plan and we tried several times to email you about it, so we have stopped trying. The change is on your Alerts page.";
 
 export function deliveryFailedAlert(input: {
   digest_id: string;
@@ -53,6 +60,23 @@ export function incidentUndeliveredAlert(input: {
   };
 }
 
+export function changeUndeliveredAlert(input: {
+  signal_id: string;
+  workspace_id: string;
+  now: string;
+}): DeliveryFailedAlert {
+  return {
+    id: `${DLQ_CHANGE_PREFIX}${input.signal_id}`,
+    workspace_id: input.workspace_id,
+    kind: DELIVERY_FAILED_KIND,
+    severity: "high",
+    title: CHANGE_UNDELIVERED_TITLE,
+    body: CHANGE_UNDELIVERED_BODY,
+    status: "unread",
+    created_at: input.now,
+  };
+}
+
 function incidentDeadLetterError(input: { message_id: string; incident_id: string; reason: string }): Error {
   return new Error(
     JSON.stringify({
@@ -83,42 +107,45 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
     }
 
     if ("signal_id" in parsed) {
-      console.error(JSON.stringify({ event: "delivery.dead_lettered", signal_id: parsed.signal_id }));
+      const deadLettered = await deadLetteredChange(env, item.id, parsed.signal_id);
       item.ack();
+      if (deadLettered !== null) ids = [...ids, deadLettered];
       continue;
     }
 
-    const digest = await env.DB.prepare(`SELECT workspace_id FROM digest WHERE id = ?`)
-      .bind(parsed.digest_id)
-      .first<{ workspace_id: string }>();
-    if (!digest) {
-      console.error("send-email-dlq: digest not found", parsed.digest_id);
-      item.ack();
-      continue;
-    }
-
-    const attempt = await env.DB.prepare(SELECT_LATEST_ATTEMPT_ERROR)
-      .bind(parsed.digest_id)
-      .first<{ error: string | null }>();
-    console.error(
-      JSON.stringify({
-        event: "delivery.dead_lettered",
-        digest_id: parsed.digest_id,
-        reason: attempt?.error ?? null,
-      }),
-    );
-
-    const alert = deliveryFailedAlert({
-      digest_id: parsed.digest_id,
-      workspace_id: digest.workspace_id,
-      now: new Date().toISOString(),
-    });
-    await markDigestFailed(env.DB, parsed.digest_id);
-    await insertDeliveryFailedAlert(env.DB, alert);
+    const deadLettered = await deadLetteredDigest(env, parsed.digest_id);
     item.ack();
-    ids = [...ids, alert.id];
+    if (deadLettered !== null) ids = [...ids, deadLettered];
   }
   return ids;
+}
+
+async function deadLetteredDigest(env: Env, digestId: string): Promise<string | null> {
+  const digest = await env.DB.prepare(`SELECT workspace_id FROM digest WHERE id = ?`)
+    .bind(digestId)
+    .first<{ workspace_id: string }>();
+  if (!digest) {
+    console.error("send-email-dlq: digest not found", digestId);
+    return null;
+  }
+
+  const attempt = await env.DB.prepare(SELECT_LATEST_ATTEMPT_ERROR).bind(digestId).first<{ error: string | null }>();
+  console.error(
+    JSON.stringify({
+      event: "delivery.dead_lettered",
+      digest_id: digestId,
+      reason: attempt?.error ?? null,
+    }),
+  );
+
+  const alert = deliveryFailedAlert({
+    digest_id: digestId,
+    workspace_id: digest.workspace_id,
+    now: new Date().toISOString(),
+  });
+  await markDigestFailed(env.DB, digestId);
+  await insertDeliveryFailedAlert(env.DB, alert);
+  return alert.id;
 }
 
 async function deadLetteredIncident(env: Env, messageId: string, incidentId: string): Promise<string | null> {
@@ -157,6 +184,54 @@ async function deadLetteredIncident(env: Env, messageId: string, incidentId: str
   const alert = incidentUndeliveredAlert({
     incident_id: incidentId,
     workspace_id: incident.workspace_id,
+    now: new Date().toISOString(),
+  });
+  await insertDeliveryFailedAlert(env.DB, alert);
+  return alert.id;
+}
+
+function changeDeadLetterError(input: { message_id: string; signal_id: string; reason: string }): Error {
+  return new Error(
+    JSON.stringify({
+      event: "send-email-dlq.dead_lettered",
+      queue: "send-email-dlq",
+      message_id: input.message_id,
+      signal_id: input.signal_id,
+      reason: input.reason,
+    }),
+  );
+}
+
+async function deadLetteredChange(env: Env, messageId: string, signalId: string): Promise<string | null> {
+  await dropDeadLetteredChange(env.DB, signalId);
+  const signal = await env.DB.prepare(`SELECT workspace_id FROM signal WHERE id = ?`)
+    .bind(signalId)
+    .first<{ workspace_id: string }>();
+  if (!signal) {
+    captureException(
+      changeDeadLetterError({ message_id: messageId, signal_id: signalId, reason: "signal not found" }),
+      { tags: { queue: "send-email-dlq", signal_id: signalId } },
+    );
+    console.error("send-email-dlq: signal not found", signalId);
+    return null;
+  }
+
+  const attempt = await env.DB.prepare(
+    `SELECT error FROM send_attempt WHERE idempotency_key LIKE ? ORDER BY attempted_at DESC LIMIT 1`,
+  )
+    .bind(`change:${signalId}:%`)
+    .first<{ error: string | null }>();
+  const reason = attempt?.error ?? "no send attempt recorded";
+  captureException(changeDeadLetterError({ message_id: messageId, signal_id: signalId, reason }), {
+    tags: { queue: "send-email-dlq", signal_id: signalId },
+  });
+  console.error(
+    JSON.stringify({ event: "delivery.dead_lettered", signal_id: signalId, reason: attempt?.error ?? null }),
+  );
+
+  const alert = changeUndeliveredAlert({
+    signal_id: signalId,
+    workspace_id: signal.workspace_id,
     now: new Date().toISOString(),
   });
   await insertDeliveryFailedAlert(env.DB, alert);

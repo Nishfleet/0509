@@ -5,7 +5,10 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { parse } from "yaml";
 
-import { classifySettingsDeleteRedirect } from "../../e2e/inbox";
+import type { APIRequestContext } from "@playwright/test";
+
+import { FIXTURE_ACCOUNTS } from "../../app/lib/fixture-accounts";
+import { classifySettingsDeleteRedirect, deleteAccountViaRequest, isKeptAccount } from "../../e2e/inbox";
 
 // #5985: an e2e spec that mints an `e2e+` address creates a real user row in
 // production, and deleteCreatedAccount in e2e/inbox.ts is the only path that
@@ -18,12 +21,11 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 // `e2e+onboarded-${lane}-…` and `e2e+${tag}-…` leaked rows the bare
 // `e2e+${` probe never saw (0509#6968).
 const MINT = /e2e\+[\w-]*\$\{/;
-const HELPER = /deleteCreatedAccount/;
 // J14 drives the delete flow inline and asserts the mid-flow progress, so it
 // cannot call the helper; it is the flow's proof.
 const ALLOWED = new Set(["e2e/j14-delete-workspace.spec.ts"]);
 
-// The five accounts the journey specs keep on purpose (0509#5688,
+// The accounts the journey specs keep on purpose (0509#5688,
 // fleet-manager): exact addresses, never a pattern.
 const KEPT_JOURNEY_ACCOUNTS = [
   "e2e+j7@0509.io",
@@ -34,6 +36,11 @@ const KEPT_JOURNEY_ACCOUNTS = [
   "e2e+j9-mentions@0509.io",
   "e2e+j12-rollovers@0509.io",
   "e2e+soak@0509.io",
+  "e2e+onboarded-desktop@0509.io",
+  "e2e+onboarded-phone@0509.io",
+  "e2e+j6-desktop@0509.io",
+  "e2e+j6-phone@0509.io",
+  "e2e+j11@0509.io",
 ];
 
 // A setup project that mints is cleaned up by its `teardown:` project, not by
@@ -42,7 +49,7 @@ const KEPT_JOURNEY_ACCOUNTS = [
 const SETUP_TEARDOWN_ELSEWHERE = new Set(["e2e/lhci-session.setup.ts"]);
 
 const WORKFLOW = ".github/workflows/e2e-scheduled.yml";
-const TEARDOWN_RERUN = "--project=session-teardown --project=onboarded-teardown";
+const TEARDOWN_RERUN = "--project=session-teardown";
 
 interface WorkflowJob {
   concurrency?: unknown;
@@ -87,14 +94,18 @@ describe("e2e fixture teardown detector", () => {
     for (const rel of await e2eFiles(path.join(REPO_ROOT, "e2e"), /\.spec\.ts$/)) {
       if (ALLOWED.has(rel)) continue;
       const source = await readFile(path.join(REPO_ROOT, rel), "utf8");
-      if (MINT.test(source) && !HELPER.test(source)) offenders.push(rel);
+      if (MINT.test(source) && !source.includes("deleteCreatedAccount")) offenders.push(rel);
     }
     expect(offenders).toEqual([]);
   });
 
-  it("keeps the four journey accounts in the helper's guard", async () => {
+  it("keeps the journey accounts in the helper's guard", async () => {
     const source = await readFile(path.join(REPO_ROOT, "e2e/inbox.ts"), "utf8");
     for (const email of KEPT_JOURNEY_ACCOUNTS) expect(source).toContain(email);
+  });
+
+  it("keeps every FIXTURE_ACCOUNTS address in the guard, so the teardown never deletes a comp-plan identity", () => {
+    for (const account of Object.values(FIXTURE_ACCOUNTS)) expect(KEPT_JOURNEY_ACCOUNTS).toContain(account.email);
   });
 
   it("pairs every minting setup project with a teardown project", async () => {
@@ -137,6 +148,35 @@ describe("e2e fixture teardown detector", () => {
     const source = await readFile(path.join(REPO_ROOT, "e2e/j5-onboard-blocked.spec.ts"), "utf8");
     expect(source).toContain("/__wall?state=on");
     expect(source).not.toContain("/__wall?state=off");
+  });
+
+  it("treats every FIXTURE_ACCOUNTS address and the legacy kept accounts as kept, and a per-run one as not", () => {
+    for (const account of Object.values(FIXTURE_ACCOUNTS)) {
+      expect(isKeptAccount(account.email)).toBe(true);
+      expect(isKeptAccount(account.email.toUpperCase())).toBe(true);
+    }
+    for (const email of KEPT_JOURNEY_ACCOUNTS) expect(isKeptAccount(email)).toBe(true);
+    expect(isKeptAccount("e2e+abc123@0509.io")).toBe(false);
+  });
+
+  it("refuses to delete a FIXTURE_ACCOUNTS session through the request path, and deletes a per-run one", async () => {
+    const posted: string[] = [];
+    const requestFor = (email: string) =>
+      ({
+        get: () => Promise.resolve({ status: () => 200, json: () => Promise.resolve({ user: { email } }) }),
+        post: (url: string) => {
+          posted.push(url);
+          return Promise.resolve({ status: () => 302, headers: () => ({ location: "/login?deleted=1" }) });
+        },
+      }) as unknown as APIRequestContext;
+
+    for (const account of Object.values(FIXTURE_ACCOUNTS)) {
+      await deleteAccountViaRequest(requestFor(account.email), "https://0509.io");
+    }
+    expect(posted).toEqual([]);
+
+    await deleteAccountViaRequest(requestFor("e2e+abc123@0509.io"), "https://0509.io");
+    expect(posted).toEqual(["/app/settings"]);
   });
 
   it("classifies a settings delete redirect as deleted, already gone, or unexpected", () => {

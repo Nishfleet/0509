@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { READ_THIS_FIRST } from "../../../app/lib/read-this-first";
+import { toSignalRow } from "../../../workers/mentions/map";
 import { judgeWeek } from "../../../workers/standing/read-this-first";
 /**
  * The weekly D4 pass against the real D1 schema the deploy ships.
@@ -125,6 +126,15 @@ afterEach(() => {
   Reflect.deleteProperty(env, "AI");
 });
 
+const MAP_CTX = {
+  workspaceId: "ws_map",
+  entityId: "ent_map",
+  sourceId: "src_map",
+  watchId: null,
+  snapshotId: null,
+  observedAt: "2026-09-18T10:00:00.000Z",
+};
+
 describe("judgeWeek", () => {
   it("judges the week's D3/D6-passed items and writes every verdict", async () => {
     const seeded = await seed();
@@ -204,5 +214,126 @@ describe("judgeWeek", () => {
 
     expect(run).toHaveBeenCalledTimes(2);
     expect(askedTitles(run)).not.toContain(seeded.titleC);
+  });
+
+  async function addMention(seeded: Seeded, id: string, title: string, publishedAt: string, observedAt: string) {
+    const [source, entity] = await Promise.all([
+      env.DB.prepare("SELECT source_id FROM signal WHERE id = ?1").bind(seeded.signalA).first<{ source_id: string }>(),
+      env.DB.prepare("SELECT entity_id FROM signal WHERE id = ?1").bind(seeded.signalA).first<{ entity_id: string }>(),
+    ]);
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, canonical_url, url_hash, dedup_key, published_at, observed_at, is_tombstoned) VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?6, ?7, ?8, ?9, ?10, 0)",
+      ).bind(
+        id,
+        seeded.workspaceId,
+        entity?.entity_id,
+        source?.source_id,
+        title,
+        `https://${id}.example/post`,
+        `hash-${id}`,
+        `dedup-${id}`,
+        publishedAt,
+        observedAt,
+      ),
+      env.DB.prepare(
+        "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at) VALUES (?1, ?2, 'mention_matters', ?3, ?4, 0.95, ?5)",
+      ).bind(`verdict-${id}`, seeded.workspaceId, `ih-${id}`, id, DECIDED_AT),
+    ]);
+  }
+
+  it("excludes a story published long before the week even when it was observed inside it", async () => {
+    const seeded = await seed();
+    await addMention(
+      seeded,
+      `${seeded.signalA}-old`,
+      "Old story",
+      "2021-03-04T10:00:00.000Z",
+      "2026-09-18T10:00:00.000Z",
+    );
+    const run = vi.fn(async () => ({ answers: { [READ_THIS_FIRST.id]: { type: "noul", noul: 0.9 } } }));
+    Reflect.set(env, "AI", { run });
+
+    await judgeWeek(env.DB, inputFor(seeded.workspaceId));
+
+    expect(askedTitles(run)).not.toContain("Old story");
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it("compares dates by instant, so offset and second-precision published_at values land in the right week", async () => {
+    const seeded = await seed();
+    await addMention(
+      seeded,
+      `${seeded.signalA}-in`,
+      "Out of week offset",
+      "2026-09-21T23:30:00-05:00",
+      "2026-09-30T00:00:00.000Z",
+    );
+    await addMention(
+      seeded,
+      `${seeded.signalA}-out`,
+      "In week offset",
+      "2026-09-21T23:30:00+05:00",
+      "2026-09-18T00:00:00.000Z",
+    );
+    await addMention(
+      seeded,
+      `${seeded.signalA}-edge`,
+      "Edge no millis",
+      "2026-09-15T00:00:00Z",
+      "2026-09-01T00:00:00.000Z",
+    );
+    const run = vi.fn(async () => ({ answers: { [READ_THIS_FIRST.id]: { type: "noul", noul: 0.9 } } }));
+    Reflect.set(env, "AI", { run });
+
+    await judgeWeek(env.DB, inputFor(seeded.workspaceId));
+
+    const asked = askedTitles(run);
+    expect(asked).toContain("In week offset");
+    expect(asked).toContain("Edge no millis");
+    expect(asked).not.toContain("Out of week offset");
+  });
+  it("excludes an RFC822 item normalised at ingest from the week, and orders by published date over observed date", async () => {
+    const seeded = await seed();
+    const rfc822 = await toSignalRow(
+      {
+        dedupKey: "old",
+        url: "https://old.example/post",
+        title: "Rfc822 old story",
+        publishedAt: "Mon, 04 Mar 2021 10:00:00 GMT",
+      },
+      { ...MAP_CTX, observedAt: "2026-09-18T10:00:00.000Z" },
+    );
+    expect(rfc822.published_at).toBe("2021-03-04T10:00:00.000Z");
+    await addMention(
+      seeded,
+      `${seeded.signalA}-rfc`,
+      "Rfc822 old story",
+      rfc822.published_at ?? "",
+      rfc822.observed_at,
+    );
+    await addMention(
+      seeded,
+      `${seeded.signalA}-early`,
+      "Published early",
+      "2026-09-16T00:00:00.000Z",
+      "2026-09-30T00:00:00.000Z",
+    );
+    await addMention(
+      seeded,
+      `${seeded.signalA}-late`,
+      "Published late",
+      "2026-09-20T00:00:00.000Z",
+      "2026-09-17T00:00:00.000Z",
+    );
+    const run = vi.fn(async () => ({ answers: { [READ_THIS_FIRST.id]: { type: "noul", noul: 0.9 } } }));
+    Reflect.set(env, "AI", { run });
+
+    await judgeWeek(env.DB, inputFor(seeded.workspaceId));
+
+    const asked = askedTitles(run);
+    expect(asked).not.toContain("Rfc822 old story");
+    expect(asked.indexOf("Published late")).toBeGreaterThanOrEqual(0);
+    expect(asked.indexOf("Published late")).toBeLessThan(asked.indexOf("Published early"));
   });
 });

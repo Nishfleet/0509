@@ -36,9 +36,20 @@ const GATEWAY_MODEL = "@cf/cloudflare/clef";
 
 const JEV_URL = VIA_GATEWAY ? "workers-ai binding" : (process.env.JEV_URL ?? "http://127.0.0.1:4000/jev");
 
+// One descriptor holds the whole spelling of the yes/no-probability primitive for the
+// endpoint this run posts to, so the request type and the answer field stay paired
+// (0509#7177): the Workers AI binding path (VIA_GATEWAY) is the production call in
+// app/lib/jev/client.server.ts:140,149,218 and Clef keeps `noul`, while the /jev route
+// on this box goes to the Vercel AI Gateway evaluation model, which dropped `noul` and
+// answers `probability`.
+export const NOUL_WIRE: { type: string; field: string; value: (answer: JevAnswer) => number | undefined } = VIA_GATEWAY
+  ? { type: "noul", field: "noul", value: (answer) => answer.noul }
+  : { type: "boolean", field: "probability", value: (answer) => answer.probability };
+
 // Eval calls skip AI Gateway on purpose: error 2003 is the gateway's own rate limit,
 // and sharing the gateway `default` with customers failed two sign-ups on 2026-10-04
-// (docs/incidents/2026-10-04-signup-judge-failure.md). callBudget caps the spend.
+// (docs/incidents/2026-10-04-signup-judge-failure.md). EVAL_MAX_NEURONS caps the spend per run (0509#7249): no Cloudflare
+// control caps neurons for the account, and a gateway limit needs a token scope CI did not have.
 const WRANGLER_CONFIG = path.join(HERE, "..", "..", "wrangler.jsonc");
 
 let platform: Promise<PlatformProxy<{ AI: Ai }>> | undefined;
@@ -108,9 +119,16 @@ export type Ask<T extends EvalRow> = (row: T) => Promise<Call>;
 
 export type Score<T extends EvalRow> = (row: T, call: Call) => Outcome;
 
+export interface JevAnswer {
+  type?: string;
+  noul?: number;
+  probability?: number;
+  choice?: string;
+}
+
 interface JevResponse {
   model?: string;
-  answers?: Record<string, { type?: string; noul?: number; choice?: string }>;
+  answers?: Record<string, JevAnswer>;
 }
 
 export async function loadCases<T extends EvalRow>(
@@ -161,9 +179,99 @@ const JEV_TIMEOUT_MS = 60_000;
 
 const BUDGET_MARGIN = 1.2;
 
+// Per-run neuron ceiling (0509#7249). Workers AI has no account spend cap, and 96 manual
+// dispatches burned 1,113,645 neurons on 2026-10-02 (111x the 10k/day free line). The
+// harness cannot read the meter, so it spends an estimate per call and refuses the call
+// that would pass EVAL_MAX_NEURONS. The estimate is deliberately above what the meter
+// showed over 10-01..10-07: Clef 10.9 per call (21,818 per million input tokens, 17 at
+// the 750 tokens docs/REBUILD-COST.md assumes) and gpt-oss-120b 58.4 per call. Unset or
+// blank turns the ceiling off, which is what a local run against the /jev route wants.
+const NEURONS_PER_CLEF_CALL = 17;
+
+const NEURONS_PER_MODEL_CALL = 60;
+
+const NEURON_CEILING = Number(process.env.EVAL_MAX_NEURONS ?? "") || 0;
+
+// Per-day ceiling (0509#7249). A per-run cap alone lets 96 dispatches spend 96 times the cap.
+// Before the first Workers AI call of a run the harness asks Cloudflare's GraphQL
+// aiInferenceAdaptiveGroups for the account's neurons so far this UTC day, and refuses to
+// start when that plus EVAL_MAX_NEURONS would pass EVAL_DAILY_NEURON_CEILING. Any failure of
+// the query refuses too: a guard that cannot read the meter does not guess. Only the
+// Workers AI path is guarded; a run against the /jev route spends no neurons.
+const DAILY_CEILING = Number(process.env.EVAL_DAILY_NEURON_CEILING ?? "") || 9000;
+
+const GRAPHQL_URL = "https://api.cloudflare.com/client/v4/graphql";
+
+const DAILY_QUERY = `query($account: String!, $since: Time!, $until: Time!) {
+  viewer { accounts(filter: { accountTag: $account }) {
+    aiInferenceAdaptiveGroups(limit: 1, filter: { datetime_geq: $since, datetime_leq: $until }) {
+      sum { totalNeurons }
+    }
+  } }
+}`;
+
+interface DailyReply {
+  data?: { viewer?: { accounts?: { aiInferenceAdaptiveGroups?: { sum?: { totalNeurons?: unknown } }[] }[] } };
+  errors?: unknown;
+}
+
+async function neuronsToday(): Promise<number> {
+  const now = new Date();
+  const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const response = await fetch(GRAPHQL_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${CF_TOKEN}` },
+    body: JSON.stringify({
+      query: DAILY_QUERY,
+      variables: { account: CF_ACCOUNT, since: since.toISOString(), until: now.toISOString() },
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) throw new Error(`GraphQL answered ${String(response.status)}`);
+  const reply = (await response.json()) as DailyReply;
+  if (reply.errors !== undefined && reply.errors !== null) throw new Error("GraphQL returned errors");
+  const groups = reply.data?.viewer?.accounts?.[0]?.aiInferenceAdaptiveGroups;
+  if (groups === undefined) throw new Error("GraphQL returned no aiInferenceAdaptiveGroups");
+  const total = groups[0]?.sum?.totalNeurons ?? 0;
+  if (typeof total !== "number" || !Number.isFinite(total)) throw new Error("GraphQL neurons were not a number");
+  return total;
+}
+
+let dailyGuard: Promise<void> | undefined;
+
+async function checkDaily(): Promise<void> {
+  let today: number;
+  try {
+    today = await neuronsToday();
+  } catch (error) {
+    throw new Error(
+      `eval refused: cannot read today's neurons (${String(error)}), so the daily ceiling cannot be checked (0509#7249)`,
+      { cause: error },
+    );
+  }
+  const verdict = today + NEURON_CEILING > DAILY_CEILING ? "refused" : "ok";
+  console.log(
+    `daily neuron guard: ${verdict}; today (UTC) ${String(Math.round(today))} + this run's ceiling ${String(NEURON_CEILING)} vs daily ceiling ${String(DAILY_CEILING)}`,
+  );
+  if (verdict === "refused") {
+    throw new Error(
+      `eval refused: ${String(Math.round(today))} neurons used today (UTC) plus this run's ${String(NEURON_CEILING)} would pass the daily ceiling of ${String(DAILY_CEILING)}; set by EVAL_DAILY_NEURON_CEILING in .github/workflows/evals.yml (0509#7249)`,
+    );
+  }
+}
+
+function guardDaily(): Promise<void> {
+  if (!VIA_GATEWAY) return Promise.resolve();
+  dailyGuard ??= checkDaily();
+  return dailyGuard;
+}
+
 let callBudget = 0;
 
 let callsUsed = 0;
+
+// Never reset: callsUsed restarts per question, this one runs for the whole process.
+let neuronsSpent = 0;
 
 function withoutModel(body: unknown): unknown {
   const { model: _model, ...rest } = body as { model?: string };
@@ -186,21 +294,29 @@ async function withOneRetry<T>(call: () => Promise<T>): Promise<T> {
   }
 }
 
-function spendCall(): void {
+function spendCall(neurons: number): void {
   if (callsUsed >= callBudget) throw new Error(`eval stopped: call budget of ${String(callBudget)} spent`);
+  if (NEURON_CEILING > 0 && neuronsSpent + neurons > NEURON_CEILING) {
+    throw new Error(
+      `eval stopped: neuron ceiling of ${String(NEURON_CEILING)} spent (estimated ${String(neuronsSpent)}); set by EVAL_MAX_NEURONS in .github/workflows/evals.yml (0509#7249)`,
+    );
+  }
   callsUsed += 1;
+  neuronsSpent += neurons;
 }
 
 export async function postWorkersAi(model: string, body: unknown): Promise<unknown> {
+  await guardDaily();
   return withOneRetry(async () => {
-    spendCall();
+    spendCall(NEURONS_PER_MODEL_CALL);
     const ai = await aiBinding();
     return ai.run(model as never, body as never);
   });
 }
 
 async function postJev(body: unknown): Promise<JevResponse> {
-  spendCall();
+  await guardDaily();
+  spendCall(NEURONS_PER_CLEF_CALL);
   if (VIA_GATEWAY) {
     const raw = await (
       await aiBinding()
@@ -223,7 +339,7 @@ async function postJev(body: unknown): Promise<JevResponse> {
   return parsed;
 }
 
-function answerOf(body: JevResponse, questionId: string): { type?: string; noul?: number; choice?: string } {
+function answerOf(body: JevResponse, questionId: string): JevAnswer {
   const answer = body.answers?.[questionId];
   if (answer === undefined) throw new Error(`jev answer missing ${questionId}: ${JSON.stringify(body).slice(0, 300)}`);
   return answer;
@@ -260,46 +376,38 @@ export function loadSiteRows<L extends boolean | string>(caseFile: string, quest
   });
 }
 
+// One place builds the noul question body, so the request type and the answer field read
+// back cannot drift apart.
+function noulQuestions(questions: readonly NoulEvalQuestion[]): Record<string, unknown> {
+  return Object.fromEntries(
+    questions.map((question) => [
+      question.id,
+      {
+        type: NOUL_WIRE.type,
+        instructions: question.instructions,
+        criteria: { true: question.whenTrue, false: question.whenFalse },
+      },
+    ]),
+  );
+}
+
+function noulValue(answer: JevAnswer, questionId: string): number {
+  const value = NOUL_WIRE.value(answer);
+  if (typeof value !== "number") throw new Error(`jev answer missing a ${NOUL_WIRE.field} for ${questionId}`);
+  return value;
+}
+
 export function makeNoulAsk(question: NoulEvalQuestion): StateAsk {
   return async (state) => {
-    const body = await postJev({
-      model: "jev-latest",
-      state,
-      questions: {
-        [question.id]: {
-          type: "noul",
-          instructions: question.instructions,
-          criteria: { true: question.whenTrue, false: question.whenFalse },
-        },
-      },
-    });
-    const answer = answerOf(body, question.id);
-    if (typeof answer.noul !== "number") throw new Error(`jev answer missing a noul: ${question.id}`);
-    return { model: body.model as string, p: answer.noul, choice: null };
+    const body = await postJev({ model: "jev-latest", state, questions: noulQuestions([question]) });
+    return { model: body.model as string, p: noulValue(answerOf(body, question.id), question.id), choice: null };
   };
 }
 
 export function makeNoulsAsk(questions: readonly NoulEvalQuestion[], combine: (ps: number[]) => number): StateAsk {
   return async (state) => {
-    const body = await postJev({
-      model: "jev-latest",
-      state,
-      questions: Object.fromEntries(
-        questions.map((question) => [
-          question.id,
-          {
-            type: "noul",
-            instructions: question.instructions,
-            criteria: { true: question.whenTrue, false: question.whenFalse },
-          },
-        ]),
-      ),
-    });
-    const ps = questions.map((question) => {
-      const answer = answerOf(body, question.id);
-      if (typeof answer.noul !== "number") throw new Error(`jev answer missing a noul: ${question.id}`);
-      return answer.noul;
-    });
+    const body = await postJev({ model: "jev-latest", state, questions: noulQuestions(questions) });
+    const ps = questions.map((question) => noulValue(answerOf(body, question.id), question.id));
     return { model: body.model as string, p: combine(ps), choice: null };
   };
 }
@@ -387,6 +495,8 @@ export interface EvalReport {
   splits: SplitScore[];
   callsUsed: number;
   callBudget: number;
+  neuronsSpent: number;
+  neuronCeiling: number;
 }
 
 async function scoreSplit<T extends EvalRow>(
@@ -466,6 +576,8 @@ export async function runEval<T extends EvalRow>(
     splits,
     callsUsed,
     callBudget,
+    neuronsSpent,
+    neuronCeiling: NEURON_CEILING,
   };
 }
 
@@ -482,7 +594,7 @@ export function formatReport(report: EvalReport): string {
       ? ""
       : `\ntrain maybes: ${train.maybeIds.join(", ") || "none"}\ntrain wrong: ${train.wrongIds.join(", ") || "none"}`;
   return [
-    `question ${report.questionId}\tmodel ${report.model}\trepeats ${report.repeats}\tjev calls ${report.callsUsed}/${report.callBudget}`,
+    `question ${report.questionId}\tmodel ${report.model}\trepeats ${report.repeats}\tjev calls ${report.callsUsed}/${report.callBudget}\test. neurons so far ${report.neuronsSpent}/${report.neuronCeiling > 0 ? report.neuronCeiling : "no ceiling"}`,
     rows,
     uncertain,
   ].join("\n");

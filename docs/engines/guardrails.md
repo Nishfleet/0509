@@ -1,6 +1,6 @@
 # Engine 10 — Guardrails
 
-P3 step 10 of umbrella #3842, contract **#3899** (`docs/REBUILD-GUARDRAILS.md`). Written by the Opus deputy (second architect), **2026-09-21**. Pairs with `docs/REBUILD-JEV.md`, `docs/REBUILD-SCHEMA.md`, `docs/REBUILD-ONBOARDING.md`, `docs/REBUILD-STANDING-CARD.md` (engine 9), `docs/REBUILD-DONE.md` J14, `docs/REBUILD-STACK.md` §4.4.
+P3 step 10 of umbrella #3842, contract **#3899** (`docs/REBUILD-GUARDRAILS.md`). Written by the Opus deputy (second architect), **2026-09-21**. Pairs with `docs/REBUILD-JEV.md`, `docs/REBUILD-SCHEMA.md`, `docs/REBUILD-ONBOARDING.md (deleted, in git history)`, `docs/REBUILD-STANDING-CARD.md (deleted, in git history)` (engine 9), `docs/REBUILD-DONE.md` J14, `docs/REBUILD-STACK.md` §4.4.
 
 This engine is the one whose failures are not bugs. Everything else in the product degrades; this one either holds or it has already done the harm.
 
@@ -21,7 +21,7 @@ wrangler r2 bucket lifecycle set    <bucket>          # from a JSON file
 
 **So retention is `wrangler` configuration with a prefix — one command per rule, no code.** That is the whole implementation of #3899's _"the R2 lifecycle rule does this, nothing hand-rolled"_, and it is confirmed present in the pinned wrangler rather than assumed from docs.
 
-**Schema, from `migrations/0001_rebuild.sql`:** the tables are `account alert change channel digest dodo_webhook_event email_suppression entity incident incident_notice jev_verdict mention onboarding_run page plan rate_limit_events scoring_weight send_attempt send_target session signal signal_delivery snapshot source standing suggestion user user_decision verification watch workspace`.
+**Schema, from `migrations/0001_rebuild.sql`:** the tables are `account alert change channel digest dodo_webhook_event email_suppression entity incident incident_notice jev_verdict mention onboarding_run page plan scoring_weight send_attempt send_target session signal signal_delivery snapshot source standing suggestion user user_decision verification watch workspace`. `rate_limit_events` is left out of that list because 0001 creates it and `migrations/0048_drop_rate_limit_events.sql` drops it, since nothing on `main` reads or writes it (`change` and `mention` are views, not tables). Later migrations add `support_report` (0005), `takedown` (0009), `discovery_backlog` (0014), `cost_alert` (0027), `sweep_run` (0029) and `jev_failure` (0043), so the count on `main` is larger than this list.
 
 **There is no `takedown` table.** #3899 requires one (_"recorded on a `takedown` row"_). P10.2 adds it. Also absent and owned by engine 8: `apikey`, `passkey`.
 
@@ -82,7 +82,7 @@ A takedown writes a row to a global `takedown` table, then a Workflow fans out: 
 
 **Grafted from A, at the points where B's eventual consistency is not acceptable:**
 
-1. **The public card is gone** (Nish, 2026-09-24): customers share a picture rendered from live rows instead (docs/REBUILD-STANDING-CARD.md), so there is no unauthenticated surface left to check at serve time.
+1. **The public card is gone** (Nish, 2026-09-24): customers share a picture rendered from live rows instead (docs/REBUILD-STANDING-CARD.md (deleted, in git history)), so there is no unauthenticated surface left to check at serve time.
 2. **Onboarding and discovery check `takedown` before anything is crawled.** These are the two places a subject enters the product, and B's fan-out cannot reach a workspace that does not exist yet.
 3. **The fan-out is a Workflow with retries**, not a best-effort loop, and the nightly cron reconciles any `takedown` row whose `fanned_out_at` is null — the same watchdog shape engines 6 and 7 use, for the same reason.
 

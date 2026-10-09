@@ -135,6 +135,7 @@ export function ConnectedApps({ apps }: { apps: ConnectedApp[] }) {
             <li key={app.grantId} data-testid="connected-app" className={ROW}>
               <p className="min-w-0">
                 <span className="font-display font-bold">{app.name}</span>
+                <span className="block font-mono text-body-sm text-ink-soft">{app.host}</span>
                 <span className="block text-body-sm text-ink-soft">Connected {day(app.connectedAt)}</span>
               </p>
               <Form method="post">
@@ -188,7 +189,7 @@ function KeyRow({ apiKey }: { apiKey: AgentKey }) {
   const deleting =
     navigation.state !== "idle" &&
     navigation.formData?.get("intent") === "revoke-key" &&
-    navigation.formData.get("id") === apiKey.id;
+    navigation.formData?.get("id") === apiKey.id;
   return (
     <li data-testid="api-key" className={ROW}>
       <p className="min-w-0">
