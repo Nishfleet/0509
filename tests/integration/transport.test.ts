@@ -499,6 +499,7 @@ describe("readUrl", () => {
       closed: 0,
       async quickAction(_action: "content", options: { url: string }) {
         calls.push(options.url);
+        // Pending forever: BROWSER_CONTENT_TIMEOUT_MS is the only exit.
         return new Promise<Response>(() => undefined);
       },
       close() {

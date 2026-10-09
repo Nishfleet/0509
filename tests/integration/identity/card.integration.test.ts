@@ -440,7 +440,8 @@ describe("startCard", () => {
     installBrowser({
       calls: [],
       quickAction() {
-        return new Promise(() => undefined);
+        // Pending forever: BROWSER_CONTENT_TIMEOUT_MS is the only exit.
+        return new Promise<Response>(() => undefined);
       },
     });
     const started = Date.now();
