@@ -1035,8 +1035,9 @@ export default tseslint.config(
   {
     // app/lib/data/** is the only D1 row reader, so it is the only place a row
     // schema lives. `.catch(...)` on one silences the row-parse contract.
-    // `row-rules/d1-row-parse` requires `.first` / `.all` / `.raw` to sit
-    // inside `.parse` / `.safeParse`. Armed on this glob only: a `.catch()`
+    // `row-rules/d1-row-parse` requires `.first` / `.all` / `.raw` to be
+    // parsed with a zod schema before the row leaves the function. Armed on
+    // this glob only: a `.catch()`
     // on a request body or a feed config parsed elsewhere is a different
     // contract and the rule cannot distinguish it from a row read, and a D1
     // read outside the data layer is already banned by ENV_DB_IN_ROUTES.
