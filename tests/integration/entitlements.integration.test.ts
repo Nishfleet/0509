@@ -102,4 +102,39 @@ describe("readEntitlements (0509#5293)", () => {
     expect(entitlements.get(paid)?.site_pages_scope).toBe("all");
     expect(entitlements.get(ids[0] ?? "")?.site_pages_scope).toBe("home_pricing");
   });
+
+  it("reads entitlements across several id chunks and keeps a paid workspace from every chunk", async () => {
+    seededRuns += 1;
+    const n = String(seededRuns);
+    const ids = Array.from({ length: 1200 }, (_, index) => `ws-ent-chunk-${n}-${String(index)}`);
+    const paid = [ids[0] ?? "", ids[700] ?? "", ids[1199] ?? ""];
+    await env.DB.prepare(
+      'INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, 1, ?, ?)',
+    )
+      .bind(
+        `user-ent-chunk-${n}`,
+        "Chunk",
+        `ent-chunk-${n}@example.com`,
+        "2026-09-23T12:00:00.000Z",
+        "2026-09-23T12:00:00.000Z",
+      )
+      .run();
+    await env.DB.batch(
+      paid.flatMap((id, index) => [
+        env.DB.prepare(
+          `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
+           VALUES (?, 'Chunk', ?, 'UTC', 1, 8, '2026-09-23T12:00:00.000Z')`,
+        ).bind(id, `user-ent-chunk-${n}`),
+        env.DB.prepare(
+          "INSERT INTO plan (id, workspace_id, tier, limits_json, updated_at) VALUES (?, ?, 'starter', '{}', ?)",
+        ).bind(`plan-ent-chunk-${n}-${String(index)}`, id, "2026-09-23T12:00:00.000Z"),
+      ]),
+    );
+
+    const entitlements = await readWorkspaceEntitlements(ids);
+
+    expect(entitlements.size).toBe(1200);
+    for (const id of paid) expect(entitlements.get(id)?.site_pages_scope).toBe("all");
+    expect(entitlements.get(ids[1] ?? "")?.site_pages_scope).toBe("home_pricing");
+  });
 });

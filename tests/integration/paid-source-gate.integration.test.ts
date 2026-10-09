@@ -9,7 +9,7 @@ import {
 } from "../../app/lib/data/watch.server";
 
 const NOW = "2026-10-08T02:00:00Z";
-const PAID_PLUGIN = "scraper.paid";
+const PAID_PLUGIN = "x.search";
 const FREE_PLUGIN = "test.free";
 
 const SCOUT = { user: "user-paid-gate-scout", ws: "ws-paid-gate-scout", entity: "ent-paid-gate-scout" };
@@ -97,8 +97,8 @@ describe("paid scraper sources stay behind the plan (0509#7062)", () => {
 
     expect(rows.map((row) => [row.workspace_id, row.plugin_key]).sort()).toEqual([
       [SCOUT.ws, FREE_PLUGIN],
-      [STARTER.ws, PAID_PLUGIN],
       [STARTER.ws, FREE_PLUGIN],
+      [STARTER.ws, PAID_PLUGIN],
     ]);
   });
 

@@ -101,8 +101,10 @@ describe("create-key is idempotent per submission", () => {
     expect(await keyRows("My agent")).toBeGreaterThan(0);
   });
 
-  it("refuses the create, minting nothing, when the plan does not include API access", async () => {
+  it("refuses a new create when the plan has no API access, but reports a resubmitted one as a duplicate", async () => {
     const request = await signedInRequest();
+    const minted = crypto.randomUUID();
+    expect((await createAgentKey(request, createForm("before-lapse", minted))).newKey?.startsWith("0509_")).toBe(true);
     const owner = await env.DB.prepare(
       'SELECT w.id AS id FROM workspace w JOIN "user" u ON u.id = w.owner_user_id WHERE u.email = ?',
     )
@@ -119,6 +121,11 @@ describe("create-key is idempotent per submission", () => {
 
       expect(result).toEqual({ newKey: null, duplicate: false });
       expect(await keyRows("refused")).toBe(0);
+      expect(await createAgentKey(request, createForm("before-lapse", minted))).toEqual({
+        newKey: null,
+        duplicate: true,
+      });
+      expect(await keyRows("before-lapse")).toBe(1);
     } finally {
       await env.DB.prepare("DELETE FROM plan WHERE id = ?").bind("plan_create_key_no_api").run();
     }
