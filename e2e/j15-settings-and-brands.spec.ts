@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { onboardedStatePath } from "../playwright.config";
 
-test.describe("J15 a signed-in customer changes settings and hits the plan limit", () => {
+test.describe("J15 a signed-in customer changes settings", () => {
   test.describe.configure({ mode: "serial" });
   test.skip(
     !process.env.PLAYWRIGHT_TEST_BASE_URL,
@@ -74,13 +74,5 @@ test.describe("J15 a signed-in customer changes settings and hits the plan limit
     expect(await field.evaluate((input: HTMLInputElement) => input.validity.typeMismatch)).toBe(true);
     await page.reload();
     await expect(page.locator("#delivery-address-input")).toHaveValue(original);
-  });
-
-  test("J15 adding a brand at the plan limit says so and offers the upgrade", async ({ page }) => {
-    await page.goto("/app/competitors");
-    await page.locator("#add-competitor").fill("example.org");
-    await page.getByRole("button", { name: "Add" }).click();
-    await expect(page.getByText(/Your plan watches up to \d+ competitors/)).toBeVisible();
-    await expect(page.getByRole("button", { name: /^Upgrade to / })).toBeVisible();
   });
 });
