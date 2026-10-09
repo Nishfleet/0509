@@ -18,7 +18,7 @@ Not yet proven. What is known:
 1. Only shard 2 stalled. Shards 1, 3 and 4 of the same run finished. Shard 2 is the workers project (workerd) files, run with `vitest run --project '!node' --shard 2/4`.
 2. No test failed and no error was printed. A failing assertion does not hang the workers pool: a probe test with a deliberately failing spy assertion failed in seconds.
 3. The stall is not in the 2026-10-09 daily-cap change. Cancelled 25 minute `vitest-shard` jobs also exist on runs from 2026-10-06 and 2026-10-08 (including a merge_group run for #7283) on other heads, and the stalled head passed when re-run unchanged.
-4. Files finish about every 10 seconds in the minutes before the stall, so the stall is a file that started and never reported, not a slow suite.
+4. Files finish about every 10 seconds in the minutes before the stall, so the stall is not a slow suite: the run stops after a file reports and the next one never starts.
 
 On the first stall the log could not say which file was in flight. The `[file-start]` reporter in this PR then caught a second stall on this PR's own head (run 37953795021, shard 2, cancelled at the new 12 minute limit): the last file to finish was again `tests/integration/discovery/start-twice.integration.test.ts`, and no later file started. Both stalls end at the same file, so it is the prime suspect. It starts a real Discovery Workflow (`startDiscovery`) and ends the test without letting the instance finish, so a live Workflow engine is still running when the file is torn down. That is a likely cause, not a proven one: the stall has not been reproduced locally (the file passed on every local run, before and after the change).
 
