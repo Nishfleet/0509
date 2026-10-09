@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 const ESCALATIONS_PER_BRAND_PER_DAY = 4;
 const SCREENSHOTS_PER_BRAND_PER_DAY = 4;
 const SHARE_IMAGES_PER_WORKSPACE_PER_DAY = 10;
-export const BROWSER_CONTENT_TIMEOUT_MS = 8_000;
+const BROWSER_CONTENT_TIMEOUT_MS = 8_000;
 
 function raceWithTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
