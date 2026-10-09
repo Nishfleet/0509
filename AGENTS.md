@@ -141,7 +141,7 @@ workers out on 2026-09-23. Chromium is already installed on this host
 
 1. **Read the raw report.** `npx wrangler d1 execute 0509 --remote --command "select raw from support_report where id = '<id>'"`, where `<id>` is the report id in the issue body. This is a read; never run any other statement against `--remote`. Never paste any of the raw text into the issue, the PR, a commit message or a spec.
 2. **Map the report to rows of `.agents/skills/verify/feature-map.md`** by the paths in the issue body and the words in the raw text, following the procedure in `.agents/skills/verify/SKILL.md#reproduce-a-vague-user-report` — link it, do not restate it. If no row matches, say in the issue whether the map is missing a feature or the report is not about this product, and stop.
-3. **Drive production through the e2e suite.** `source ~/.config/cloudflare/access-0509-agents.env`, then `PLAYWRIGHT_TEST_BASE_URL=https://0509.io npm run e2e -- e2e/report-<id>.spec.ts`. The deliverable is one spec `e2e/report-<id>.spec.ts` whose test title contains the report id. If the report reproduces, the test asserts the correct behaviour and is marked `test.fail()`, so CI stays green until the fix lands. If it does not reproduce, the test has no `test.fail()` and the issue gets a no-repro comment listing each step tried with its UTC timestamp.
+3. **Drive the local lane through the e2e suite.** `PLAYWRIGHT_TEST_BASE_URL` unset, then `npm run e2e -- e2e/report-<id>.spec.ts` (simulated email, local D1, AI off). Do not run it against https://0509.io: each production sign-in sends a real email and churns production D1. If the report depends on production-only data, say so in the issue instead. The deliverable is one spec `e2e/report-<id>.spec.ts` whose test title contains the report id. If the report reproduces, the test asserts the correct behaviour and is marked `test.fail()`, so CI stays green until the fix lands. If it does not reproduce, the test has no `test.fail()` and the issue gets a no-repro comment listing each step tried with its UTC timestamp.
 4. **The PR that fixes the report** removes the `test.fail()` from that spec and keeps the spec.
 
 ## Architecture
@@ -215,10 +215,13 @@ AI grader: CI is the gate, and a PR that touches `.github/`, `migrations/`,
 `app/lib/auth*` or `app/lib/data/` is labelled `needs-coordinator` and the
 coordinator reviews it before it merges.
 
-`lighthouse` runs in `deploy-production.yml` after the deploy job, and `e2e-production` (the sharded full
-suite in `e2e-scheduled.yml`, dispatched with `journey=suite`) runs on demand. To run one spec against production from any branch, dispatch
-`e2e-scheduled.yml` on that ref with the `spec` input (`e2e/<name>.spec.ts`).
-Neither is **required**, deliberately: they cannot run on a pull request, and a
+`lighthouse` runs in `deploy-production.yml` after the deploy job. Verify a fix on the local lane:
+`PLAYWRIGHT_TEST_BASE_URL` unset, so `npm run e2e -- e2e/<name>.spec.ts` starts `wrangler dev --local` with simulated
+email, a local D1 and `AI_SPEND` off. Do not dispatch `e2e-scheduled.yml` to verify a fix, and do not point a run at
+https://0509.io: each production sign-in sends a real email, the specs delete and recreate production D1 rows, and the
+live-AI journeys spend Workers AI neurons. Production e2e runs only on its schedule from `main`, and every job that
+reaches production declares the `production-e2e` environment, whose deployment branch policy allows `main` only.
+Neither `lighthouse` nor the production e2e is **required**, deliberately: they cannot run on a pull request, and a
 required check that cannot report blocks the queue forever. The suite is off the
 deploy path because every sign-in in it sends a real email against the Email
 Service daily quota (Nish 2026-09-28).
