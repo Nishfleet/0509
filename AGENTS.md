@@ -59,6 +59,12 @@ you.
 - **One writer per table.** Writes live in `app/lib/data/<table>.server.ts`.
   A route that writes directly becomes the second writer the moment a second
   route needs the row.
+- **D1 rows are parsed, never asserted.** In `app/lib/data/`, a read parses its
+  rows with a zod schema in the writer file and the row type is `z.infer` of
+  it. `no-restricted-syntax` (D1_ROW_TYPE_ARGUMENT) rejects a type argument on
+  `.first`, `.all`, `.raw`, `.run` or `.batch`. Use `env.DB` from
+  `cloudflare:workers`. Take a `db: D1Database` parameter only where a caller
+  or test passes a different database. Source: 0509#7031.
 - **Routes are thin.** 150 lines, enforced. Logic goes to `app/lib/`.
 - **Lean functions.** In `app/` and `workers/`: 50 lines, complexity 10, depth 3, 3 parameters. Code already over is listed in `eslint-suppressions.json` and cannot grow. Source: 0509#5783.
 - **Comments are banned in app code.** Not style — agents use a comment to
