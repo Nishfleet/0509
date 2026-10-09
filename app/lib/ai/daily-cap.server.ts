@@ -53,11 +53,14 @@ async function refusalFor(cap: Cap): Promise<AiDailyCapError> {
   const used =
     cap.scope === "all"
       ? `of ${String(cap.limit)} calls is used`
-      : `share of ${String(cap.limit)} calls for one workspace is used`;
+      : `is used up for this workspace (${String(cap.limit)} calls each)`;
   const refusal = new AiDailyCapError(cap.line, used);
   if (await take({ ...cap, limit: cap.limit + 1 })) {
     console.error(JSON.stringify({ event: "ai.daily_cap_reached", line: cap.line, scope: cap.scope, day: today() }));
-    captureException(refusal, { level: "error", fingerprint: ["ai-daily-cap", cap.line, cap.scope] });
+    captureException(refusal, {
+      level: "error",
+      fingerprint: cap.scope === "all" ? ["ai-daily-cap", cap.line] : ["ai-daily-cap", cap.line, cap.scope],
+    });
   }
   return refusal;
 }
