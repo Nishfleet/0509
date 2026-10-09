@@ -62,7 +62,7 @@ test("a passkey registered on first sign-in signs in on its own @own-signin", as
     );
     await page.getByRole("button", { name: /passkey/i }).click();
     expect((await registered).status()).toBe(200);
-    await expect(page.getByRole("status")).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: /\S/ })).toBeVisible();
 
     await page.goto("/app/settings");
     await page.getByRole("button", { name: "Sign out" }).click();
