@@ -93,3 +93,35 @@ describe("upgrade checkout when Dodo refuses (J13)", () => {
     expect(JSON.stringify(logged.mock.calls)).not.toContain("upgrade@example.com");
   });
 });
+
+describe("upgrade checkout when the workspace already has a plan (#7228)", () => {
+  async function seedPlan(status: string, periodEnd: string | null): Promise<void> {
+    await seedOwner();
+    await env.DB.prepare("DELETE FROM plan WHERE workspace_id = 'ws-upgrade'").run();
+    await env.DB.prepare(
+      `INSERT INTO plan (id, workspace_id, tier, status, current_period_end, updated_at)
+       VALUES ('plan-upgrade', 'ws-upgrade', 'scout', ?1, ?2, '2026-09-29T00:00:00Z')`,
+    )
+      .bind(status, periodEnd)
+      .run();
+  }
+
+  it("starts no second checkout for an active plan", async () => {
+    await seedPlan("active", "2099-01-01T00:00:00Z");
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const result = await action(upgradeRequest("starter"));
+
+    expect(result).toEqual({ message: "This workspace already has a plan. Change it from Settings." });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("still checks out for a cancelled plan past its period end", async () => {
+    await seedPlan("cancelled", "2020-01-01T00:00:00Z");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json(checkoutSession, { status: 200 }));
+
+    const result = await action(upgradeRequest("starter"));
+
+    expect((result as Response).headers.get("Location")).toBe(checkoutSession.checkout_url);
+  });
+});
