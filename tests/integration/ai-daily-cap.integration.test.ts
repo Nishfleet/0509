@@ -32,7 +32,7 @@ describe("takeAiCall", () => {
   });
 
   it("keeps one workspace's share apart from the others", async () => {
-    await Promise.all(Array.from({ length: JEV_CALLS_PER_WORKSPACE_PER_DAY }, () => takeJevWorkspaceShare("heavy")));
+    for (let taken = 0; taken < JEV_CALLS_PER_WORKSPACE_PER_DAY; taken += 1) await takeJevWorkspaceShare("heavy");
 
     await expect(takeJevWorkspaceShare("heavy")).rejects.toThrow(AiDailyCapError);
     await expect(takeJevWorkspaceShare("quiet")).resolves.toBeUndefined();

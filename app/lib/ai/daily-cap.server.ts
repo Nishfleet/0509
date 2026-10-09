@@ -25,14 +25,15 @@ export class AiDailyCapError extends Error {
 
 const COUNTER_DOWN_REPORT_EVERY_MS = 60_000;
 
-const counterDownReportedAt = new Map<CappedLine, number>();
+const counterDownReportedAt = new Map<string, number>();
 
-function reportCounterDown(error: unknown, line: CappedLine): void {
+function reportCounterDown(error: unknown, cap: Cap): void {
   const now = Date.now();
-  const last = counterDownReportedAt.get(line);
+  const key = `${cap.line}:${cap.scope}`;
+  const last = counterDownReportedAt.get(key);
   if (last !== undefined && now - last < COUNTER_DOWN_REPORT_EVERY_MS) return;
-  counterDownReportedAt.set(line, now);
-  captureException(error, { level: "error", fingerprint: ["ai-daily-cap-counter-down", line] });
+  counterDownReportedAt.set(key, now);
+  captureException(error, { level: "error", fingerprint: ["ai-daily-cap-counter-down", cap.line] });
 }
 
 function today(): string {
@@ -43,7 +44,7 @@ async function take(cap: Cap): Promise<boolean> {
   try {
     return await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName(cap.name)).take(cap.limit);
   } catch (error) {
-    reportCounterDown(error, cap.line);
+    reportCounterDown(error, cap);
     throw new AiDailyCapError(cap.line, "could not be checked, so the call was refused");
   }
 }
