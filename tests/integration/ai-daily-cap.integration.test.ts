@@ -13,7 +13,9 @@ describe("takeAiCall", () => {
     await takeAiCall("proposer", 2);
 
     await expect(takeAiCall("proposer", 2)).rejects.toThrow(AiDailyCapError);
-    expect(logged).toHaveBeenCalledWith(expect.stringContaining('"event":"ai.daily_cap_reached"'));
+    await expect(takeAiCall("proposer", 2)).rejects.toThrow(AiDailyCapError);
+    const alerts = logged.mock.calls.filter(([entry]) => String(entry).includes('"event":"ai.daily_cap_reached"'));
+    expect(alerts).toHaveLength(1);
   });
 
   it("counts each line on its own", async () => {
