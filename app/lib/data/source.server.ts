@@ -147,12 +147,14 @@ export async function readCanarySources(): Promise<CanarySource[]> {
     }));
 }
 
+const canaryStrikeRow = z.object({ canary_strikes: z.number() });
+
 export async function recordSourceCanary(sourceId: string, canaryCount: number, now: string): Promise<void> {
   if (canaryCount > 0) {
     await env.DB.prepare(MARK_CANARY_GOOD).bind(sourceId, now).run();
     return;
   }
-  const struck = await env.DB.prepare(COUNT_CANARY_STRIKE).bind(sourceId).first<{ canary_strikes: number }>();
+  const struck = canaryStrikeRow.nullable().parse(await env.DB.prepare(COUNT_CANARY_STRIKE).bind(sourceId).first());
   const strikes = struck?.canary_strikes ?? 0;
   if (strikes < CANARY_STRIKES_BEFORE_DEGRADED) return;
   await env.DB.prepare(MARK_CANARY_BAD).bind(sourceId, CANARY_STRIKES_BEFORE_DEGRADED).run();
