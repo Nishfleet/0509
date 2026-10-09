@@ -72,7 +72,7 @@ export function pageRoleInScope(role: string, scope: Entitlements["site_pages_sc
   return scope === "all" || role === "home" || role === "pricing";
 }
 
-const PAID_SCRAPER_SOURCE_KEYS: ReadonlySet<string> = new Set(["x.search"]);
+const PAID_SCRAPER_SOURCE_KEYS: ReadonlySet<string> = new Set(["scraper.paid", "x.search"]);
 
 export function paidSourceAllowed(sourceKey: string, entitled: boolean): boolean {
   return entitled || !PAID_SCRAPER_SOURCE_KEYS.has(sourceKey);

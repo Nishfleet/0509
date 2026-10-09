@@ -139,6 +139,8 @@ describe("paidSourceAllowed (0509#7062)", () => {
   it("denies x.search unless the workspace is entitled", () => {
     expect(paidSourceAllowed("x.search", false)).toBe(false);
     expect(paidSourceAllowed("x.search", true)).toBe(true);
+    expect(paidSourceAllowed("scraper.paid", false)).toBe(false);
+    expect(paidSourceAllowed("scraper.paid", true)).toBe(true);
     expect(paidSourceAllowed("site.page", false)).toBe(true);
     expect(paidSourceAllowed("site.page", true)).toBe(true);
   });
