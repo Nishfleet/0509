@@ -277,4 +277,24 @@ describe("ensureWorkspace against migrations/0001_rebuild.sql", () => {
     });
     expect(await workspaceCount("user-6")).toBe(0);
   });
+
+  it("clears a workspace_deleted suppression when the same address signs up again (0509#7080)", async () => {
+    await env.DB.prepare(
+      `INSERT INTO email_suppression (address, reason, created_at) VALUES ('back@example.com', 'workspace_deleted', ?), ('gone@example.com', 'unsubscribed', ?)`,
+    )
+      .bind("2026-09-22T12:00:00.000Z", "2026-09-22T12:00:00.000Z")
+      .run();
+    await seedUser("user-7", "back@example.com");
+    await ensureWorkspace(env.DB, {
+      userId: "user-7",
+      email: "back@example.com",
+      timezone: "UTC",
+      now: "2026-09-22T12:00:00.000Z",
+    });
+    const rows = await env.DB.prepare("SELECT address, reason FROM email_suppression ORDER BY address").all<{
+      address: string;
+      reason: string;
+    }>();
+    expect(rows.results).toEqual([{ address: "gone@example.com", reason: "unsubscribed" }]);
+  });
 });
