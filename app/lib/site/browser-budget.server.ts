@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 const ESCALATIONS_PER_BRAND_PER_DAY = 4;
 const SCREENSHOTS_PER_BRAND_PER_DAY = 4;
 const SHARE_IMAGES_PER_WORKSPACE_PER_DAY = 10;
-const BROWSER_CONTENT_TIMEOUT_MS = 25_000;
+const BROWSER_CALL_TIMEOUT_MS = 25_000;
 
 function browserMsCounter(day: string) {
   return env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName(`browser-ms:${day}`));
@@ -61,7 +61,7 @@ export async function browserContent(
     return { ok: false, kind: "unconfigured", cause: "browser binding is not configured" };
   }
   try {
-    const res = await withinMs(env.BROWSER.quickAction("content", { url }), BROWSER_CONTENT_TIMEOUT_MS);
+    const res = await withinMs(env.BROWSER.quickAction("content", { url }), BROWSER_CALL_TIMEOUT_MS);
     await recordBrowserMs(res);
     return { ok: true, res };
   } catch (err) {
@@ -80,10 +80,10 @@ export async function browserScreenshot(
     return { ok: false, cause: "browser binding is not configured" };
   }
   try {
-    const res = await env.BROWSER.quickAction("screenshot", {
-      url,
-      viewport: { width: 1440, height: 900 },
-    });
+    const res = await withinMs(
+      env.BROWSER.quickAction("screenshot", { url, viewport: { width: 1440, height: 900 } }),
+      BROWSER_CALL_TIMEOUT_MS,
+    );
     await recordBrowserMs(res);
     if (!res.ok) {
       return { ok: false, cause: `browser answered ${String(res.status)}` };
@@ -102,12 +102,15 @@ export async function browserHtmlScreenshot(
     return { ok: false, cause: "browser binding is not configured" };
   }
   try {
-    const response = await env.BROWSER.quickAction("screenshot", {
-      html,
-      viewport: { width: size, height: size },
-      gotoOptions: { waitUntil: "networkidle0" },
-      screenshotOptions: { type: "png" },
-    });
+    const response = await withinMs(
+      env.BROWSER.quickAction("screenshot", {
+        html,
+        viewport: { width: size, height: size },
+        gotoOptions: { waitUntil: "networkidle0" },
+        screenshotOptions: { type: "png" },
+      }),
+      BROWSER_CALL_TIMEOUT_MS,
+    );
     await recordBrowserMs(response);
     if (!response.ok) {
       return { ok: false, cause: `browser answered ${String(response.status)}` };
