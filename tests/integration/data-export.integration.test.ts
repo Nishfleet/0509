@@ -5,6 +5,8 @@ import { readWorkspaceExport } from "../../app/lib/data-export.server";
 
 const NOW = "2026-09-25T00:00:00.000Z";
 
+const SEED_IPS: Readonly<Record<string, string>> = { mine: "203.0.113.8", theirs: "203.0.113.9" };
+
 async function seed(tag: string): Promise<{ workspaceId: string; userId: string }> {
   const userId = `user-${tag}`;
   const workspaceId = `ws-${tag}`;
@@ -35,16 +37,16 @@ async function seed(tag: string): Promise<{ workspaceId: string; userId: string 
     ).bind(`jev-${tag}`, workspaceId, `hash-${tag}`, `sig-${tag}`, `ent-${tag}`, NOW),
     env.DB.prepare(
       `INSERT INTO session (id, expiresAt, token, createdAt, updatedAt, ipAddress, userAgent, userId)
-       VALUES (?1, ?2, ?1, ?2, ?2, '203.0.113.8', 'TestBrowser/1', ?3)`,
-    ).bind(`sess-${tag}`, NOW, userId),
+       VALUES (?1, ?2, ?1, ?2, ?2, ?4, ?5, ?3)`,
+    ).bind(`sess-${tag}`, NOW, userId, SEED_IPS[tag] ?? "203.0.113.99", `TestBrowser/${tag}`),
     env.DB.prepare(
       `INSERT INTO passkey (id, name, publicKey, userId, credentialID, counter, deviceType, backedUp, createdAt)
-       VALUES (?1, 'Laptop', 'pubkey', ?2, ?1, 0, 'platform', 1, ?3)`,
-    ).bind(`pk-${tag}`, userId, NOW),
+       VALUES (?1, ?4, 'pubkey', ?2, ?1, 0, 'platform', 1, ?3)`,
+    ).bind(`pk-${tag}`, userId, NOW, `Laptop-${tag}`),
     env.DB.prepare(
       `INSERT INTO apikey (id, configId, referenceId, "key", name, start, lastRequest, enabled, createdAt, updatedAt)
-       VALUES (?1, 'default', ?2, ?1, 'CLI', '0509', ?3, 1, ?3, ?3)`,
-    ).bind(`key-${tag}`, userId, NOW),
+       VALUES (?1, 'default', ?2, ?1, ?4, '0509', ?3, 1, ?3, ?3)`,
+    ).bind(`key-${tag}`, userId, NOW, `CLI-${tag}`),
     env.DB.prepare(
       `INSERT INTO suggestion (id, workspace_id, kind, candidate_domain, status, decided_by, decided_at, created_at)
        VALUES (?1, ?2, 'add', ?3, 'dismissed', 'user', ?4, ?4)`,
@@ -75,15 +77,18 @@ describe("workspace export", () => {
     expect(data.account.name).toBe("mine");
     expect(data.brands).toHaveLength(1);
     expect(data.signals).toEqual([expect.objectContaining({ brand: "mine.example", title: "Mention of mine" })]);
-    expect(data.sessions).toEqual([expect.objectContaining({ ipAddress: "203.0.113.8", userAgent: "TestBrowser/1" })]);
-    expect(data.passkeys).toEqual([expect.objectContaining({ name: "Laptop", deviceType: "platform" })]);
-    expect(data.agentKeys).toEqual([expect.objectContaining({ name: "CLI", start: "0509" })]);
+    expect(data.sessions).toEqual([
+      expect.objectContaining({ ipAddress: "203.0.113.8", userAgent: "TestBrowser/mine" }),
+    ]);
+    expect(data.passkeys).toEqual([expect.objectContaining({ name: "Laptop-mine", deviceType: "platform" })]);
+    expect(data.agentKeys).toEqual([expect.objectContaining({ name: "CLI-mine", start: "0509" })]);
     expect(data.choices).toEqual([
       expect.objectContaining({ candidate_domain: "mine-skip.example", status: "dismissed" }),
     ]);
     expect(data.decisions).toEqual([expect.objectContaining({ verdict: "public_subject:confirmed" })]);
     expect(data.plan).toEqual(expect.objectContaining({ tier: "scout", billed: false }));
     expect(text).not.toContain("theirs");
+    expect(text).not.toContain("203.0.113.9");
     expect(text).not.toContain("internal");
     expect(text).not.toContain("jev");
     expect(text).not.toContain("pubkey");
