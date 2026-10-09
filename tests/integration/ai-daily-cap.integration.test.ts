@@ -1,12 +1,7 @@
 import { env } from "cloudflare:workers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  AiDailyCapError,
-  JEV_CALLS_PER_WORKSPACE_PER_DAY,
-  takeAiCall,
-  takeJevWorkspaceShare,
-} from "../../app/lib/ai/daily-cap.server";
+import { AiDailyCapError, takeAiCall, takeJevWorkspaceShare } from "../../app/lib/ai/daily-cap.server";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -32,10 +27,11 @@ describe("takeAiCall", () => {
   });
 
   it("keeps one workspace's share apart from the others", async () => {
-    for (let taken = 0; taken < JEV_CALLS_PER_WORKSPACE_PER_DAY; taken += 1) await takeJevWorkspaceShare("heavy");
+    await takeJevWorkspaceShare("heavy", 2);
+    await takeJevWorkspaceShare("heavy", 2);
 
-    await expect(takeJevWorkspaceShare("heavy")).rejects.toThrow(AiDailyCapError);
-    await expect(takeJevWorkspaceShare("quiet")).resolves.toBeUndefined();
+    await expect(takeJevWorkspaceShare("heavy", 2)).rejects.toThrow(AiDailyCapError);
+    await expect(takeJevWorkspaceShare("quiet", 2)).resolves.toBeUndefined();
   });
 
   it("refuses the call when the counter cannot be reached", async () => {

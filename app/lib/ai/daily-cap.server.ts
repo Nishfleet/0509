@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 
 export const JEV_CALLS_PER_DAY = 20_000;
 
-export const JEV_CALLS_PER_WORKSPACE_PER_DAY = 2_000;
+export const JEV_CALLS_PER_WORKSPACE_PER_DAY = 4_000;
 
 export const PROPOSER_CALLS_PER_DAY = 3_000;
 
@@ -71,10 +71,10 @@ export function takeAiCall(line: CappedLine, limit: number): Promise<void> {
   return takeCap({ name: `ai-calls:${line}:${today()}`, limit, line, scope: "all" });
 }
 
-export function takeJevWorkspaceShare(workspaceId: string): Promise<void> {
+export function takeJevWorkspaceShare(workspaceId: string, limit = JEV_CALLS_PER_WORKSPACE_PER_DAY): Promise<void> {
   return takeCap({
     name: `ai-calls:jev:${workspaceId}:${today()}`,
-    limit: JEV_CALLS_PER_WORKSPACE_PER_DAY,
+    limit,
     line: "jev",
     scope: "workspace",
   });
