@@ -5,7 +5,7 @@ import { captcha, magicLink } from "better-auth/plugins";
 import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
 
-import { API_KEY_PREFIX } from "./agent/paths";
+import { API_KEY_PREFIX, READ_SCOPE } from "./agent/paths";
 import { cancelPendingDigests } from "./data/digest.server";
 import { suppressWorkspaceTargets } from "./data/email_suppression.server";
 import { readWorkspaceIdForOwner } from "./data/workspace.server";
@@ -68,10 +68,46 @@ function sendChangeEmailMessage(
   });
 }
 
+const DISABLED_AUTH_PATHS = [
+  "/delete-user",
+  "/delete-user/callback",
+  "/change-email",
+  "/update-user",
+  "/change-password",
+  "/list-sessions",
+  "/revoke-session",
+  "/revoke-sessions",
+  "/revoke-other-sessions",
+  "/sign-out",
+  "/sign-up/email",
+  "/sign-in/email",
+  "/sign-in/social",
+  "/send-verification-email",
+  "/request-password-reset",
+  "/reset-password",
+  "/verify-password",
+  "/update-session",
+  "/link-social",
+  "/unlink-account",
+  "/list-accounts",
+  "/refresh-token",
+  "/get-access-token",
+  "/account-info",
+  "/ok",
+  "/error",
+  "/passkey/delete-passkey",
+  "/passkey/update-passkey",
+  "/passkey/list-user-passkeys",
+  "/api-key/create",
+  "/api-key/delete",
+  "/api-key/update",
+  "/api-key/get",
+  "/api-key/list",
+];
+
 function authHooks(env: AuthEnv) {
   return {
     before: createAuthMiddleware(async (ctx) => {
-      if (ctx.path === "/send-verification-email") throw new APIError("NOT_FOUND");
       if (ctx.path !== MAGIC_LINK_PATH) return;
       const ip = ctx.headers?.get(CLIENT_IP_HEADER) ?? null;
       if (!(await signInLinkAllowed(env, emailOf(ctx.body), ip))) {
@@ -124,6 +160,7 @@ function authPlugins(env: AuthEnv, options?: { captcha?: boolean }) {
       defaultPrefix: API_KEY_PREFIX,
       maximumNameLength: 60,
       enableMetadata: true,
+      permissions: { defaultPermissions: { [READ_SCOPE]: ["*"] } },
       rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 120 },
     }),
   ];
@@ -160,6 +197,7 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
       sendVerificationEmail: ({ user, url }) =>
         sendChangeEmailMessage(env.EMAIL, { kind: "confirm", to: user.email, named: user.email, url }),
     },
+    disabledPaths: DISABLED_AUTH_PATHS,
     hooks: authHooks(env),
     databaseHooks: {
       session: {

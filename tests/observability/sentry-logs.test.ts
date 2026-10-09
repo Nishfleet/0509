@@ -40,11 +40,14 @@ function fakeTransport() {
 // the dsn, the recording transport, and a stack parser that drops frames
 // because no assertion here reads a stack frame.
 function initProductionOptions(): void {
+  const productionOptions = sentryOptions({} as unknown as Env);
+  const integrations = productionOptions.integrations;
   const client = new CloudflareClient({
-    ...sentryOptions({} as unknown as Env),
+    ...productionOptions,
     dsn: "https://examplePublicKey@o0.ingest.sentry.io/0",
     transport: fakeTransport,
     stackParser: () => [],
+    integrations: typeof integrations === "function" ? integrations([]) : (integrations ?? []),
   });
   setCurrentClient(client);
   client.init();
@@ -192,7 +195,7 @@ describe("Sentry Logs (#6604)", () => {
     const [shipped] = logItems().filter((log) => log.body?.includes("probe.nested"));
     expect(shipped).toBeDefined();
     expect(attribute(shipped, "contact")).toBe('{"name":"[redacted]"}');
-    expect(attribute(shipped, "links")).toBe('["https://0509.io/u/[redacted]",{"inner":"[redacted]"}]');
+    expect(attribute(shipped, "links")).toBe('["[redacted]",{"inner":"[redacted]"}]');
     // Past the depth cap the subtree is redacted whole, never copied through.
     expect(attribute(shipped, "deep")).toBe('{"a":{"b":{"c":{"d":{"e":{"f":"[redacted]"}}}}}}');
     // A self-referencing attribute terminates and is redacted.

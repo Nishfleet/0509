@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readSignalAlerts } from "../../../app/lib/data/alert.server";
+import { JEV_TIMEOUT_MS } from "../../../app/lib/jev/client.server";
 import { mentionReasonLine } from "../../../app/lib/mentions/reason-customer";
 import { readMentionFeed } from "../../../app/lib/data/mention.server";
 import { planTargets, sweepTarget } from "../../../workers/mentions/sweep";
@@ -46,6 +47,9 @@ async function seedWorkspace(): Promise<{ workspaceId: string; competitorId: str
       "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Gymshark', ?2, 'UTC', 1, 8, ?3)",
     ).bind(workspaceId, userId, NOW),
     env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?1, ?2, 'scout', 'trialing', ?3)",
+    ).bind(`${workspaceId}-plan`, workspaceId, NOW),
+    env.DB.prepare(
       "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, created_at) VALUES (?1, ?2, 'self', ?3, 'Gymshark', '{\"description\":\"Gym clothing\"}', ?4)",
     ).bind(`${workspaceId}-self`, workspaceId, `gymshark-${String(runs)}.com`, NOW),
     env.DB.prepare(
@@ -68,7 +72,9 @@ function stubSlowGdelt(delayMs: number) {
     vi.fn(
       (_input: unknown, init?: RequestInit) =>
         new Promise<Response>((resolve, reject) => {
-          const timer = setTimeout(() => resolve(new Response(JSON.stringify({ articles: ARTICLES }))), delayMs);
+          const timer = setTimeout(() => {
+            resolve(new Response(JSON.stringify({ articles: ARTICLES })));
+          }, delayMs);
           init?.signal?.addEventListener("abort", () => {
             clearTimeout(timer);
             reject(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
@@ -189,6 +195,137 @@ describe("nightly mentions sweep", () => {
       .bind(competitorId)
       .first<{ item_count: number }>();
     expect(snapshot?.item_count).toBeGreaterThan(0);
+  });
+
+  const useCalls = async (entityId: string, count: number) => {
+    const day = new Date().toISOString().slice(0, 10);
+    const counter = env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName(`mention-calls:${entityId}:${day}`));
+    for (let index = 0; index < count; index += 1) await counter.take(72);
+  };
+
+  it("asks the AI nothing for a brand that used its daily calls, and keeps every item unjudged", async () => {
+    const { competitorId, brand } = await seedWorkspace();
+    await useCalls(competitorId, 72);
+    stubGdelt();
+    const run = jevAnswering();
+    Reflect.set(env, "AI", { run });
+
+    const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
+
+    expect(run).not.toHaveBeenCalled();
+    expect(outcome.unjudged).toBe(3);
+  });
+
+  it("never makes more AI calls than a brand has left of its daily calls, of any kind", async () => {
+    const { competitorId, brand } = await seedWorkspace();
+    await useCalls(competitorId, 70);
+    stubGdelt();
+    const run = jevAnswering();
+    Reflect.set(env, "AI", { run });
+
+    await sweepTarget(await gdeltTargetFor(brand), NOW, null);
+
+    expect(run.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+
+  it("judges the items it deferred on the next day's sweep", async () => {
+    const { competitorId, brand } = await seedWorkspace();
+    await useCalls(competitorId, 72);
+    stubGdelt();
+    const run = jevAnswering();
+    Reflect.set(env, "AI", { run });
+    const first = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
+    expect(first.unjudged).toBe(3);
+    expect(run).not.toHaveBeenCalled();
+
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(Date.now() + 24 * 60 * 60_000);
+      const second = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
+      expect(second.unjudged).toBe(0);
+      expect(run).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  const LATER_ARTICLES = [
+    {
+      url: "https://news.example.com/zephyrwear-opens-paris-flagship",
+      title: "Zephyrwear opens a Paris flagship",
+      seendate: "20260924T101500Z",
+      domain: "news.example.com",
+    },
+    {
+      url: "https://blog.example.com/zephyrwear-autumn-range",
+      title: "Zephyrwear shows its autumn range",
+      seendate: "20260924T091500Z",
+      domain: "blog.example.com",
+    },
+  ];
+
+  const callsLeft = async (entityId: string) => {
+    const day = new Date().toISOString().slice(0, 10);
+    const counter = env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName(`mention-calls:${entityId}:${day}`));
+    return counter.take(72);
+  };
+
+  it("refuses the 73rd paid call of a UTC day when the calls are spread over two sweep runs", async () => {
+    const { competitorId, brand } = await seedWorkspace();
+    await useCalls(competitorId, 66);
+    stubGdelt();
+    const run = jevAnswering();
+    Reflect.set(env, "AI", { run });
+
+    const first = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
+    expect(first.unjudged).toBe(0);
+    expect(run).toHaveBeenCalledTimes(5);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ articles: LATER_ARTICLES }))),
+    );
+    const second = await sweepTarget(await gdeltTargetFor(brand), "2026-09-24T04:00:00.000Z", null);
+
+    expect(run).toHaveBeenCalledTimes(6);
+    expect(second.unjudged).toBe(2);
+    expect(await callsLeft(competitorId)).toBe(false);
+  });
+
+  it("keeps one brand's daily calls apart from another's", async () => {
+    const spent = await seedWorkspace();
+    const fresh = await seedWorkspace();
+    await useCalls(spent.competitorId, 72);
+    stubGdelt();
+    const run = jevAnswering();
+    Reflect.set(env, "AI", { run });
+
+    const freshOutcome = await sweepTarget(await gdeltTargetFor(fresh.brand), NOW, null);
+    expect(freshOutcome.unjudged).toBe(0);
+    const callsForFresh = run.mock.calls.length;
+    expect(callsForFresh).toBeGreaterThan(0);
+
+    const spentOutcome = await sweepTarget(await gdeltTargetFor(spent.brand), NOW, null);
+    expect(spentOutcome.unjudged).toBe(3);
+    expect(run).toHaveBeenCalledTimes(callsForFresh);
+  });
+
+  it("stops at a billing refusal and never asks the AI again in that run", async () => {
+    const { brand } = await seedWorkspace();
+    stubGdelt();
+    const run = vi.fn((_model: string, _input: unknown, _options?: unknown) =>
+      Promise.reject(new Error("3036: account has used its daily free allocation")),
+    );
+    Reflect.set(env, "AI", { run });
+
+    const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
+
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run.mock.calls[0]?.[2]).toEqual({
+      gateway: { id: "default" },
+      extraHeaders: { "cf-aig-timeout": String(JEV_TIMEOUT_MS) },
+    });
+    expect(outcome).toEqual({ items: 3, stored: 0, unjudged: 3, skipped: 0 });
   });
 
   it("does not judge or alert the same article twice", async () => {

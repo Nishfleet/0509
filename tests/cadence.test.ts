@@ -12,8 +12,27 @@ import {
   SITE_SWEEP_UTC_HOUR,
   SNAPSHOT_BACKUP_CRON,
   SITE_SWEEP_UTC_LABEL,
+  siteSweepLabel,
+  SWEEP_MONITORS,
   WEEKLY_REFRESH_CRON,
+  sweepMonitor,
 } from "../app/lib/cadence";
+
+const MINUTES_IN_DAY = 24 * 60;
+
+function cronMinuteOfDay(cron: string): number {
+  const [minute = "0", hour = "0"] = cron.trim().split(/\s+/);
+  return Number(hour) * 60 + Number(minute);
+}
+
+/**
+ * Minutes from a sweep's start to the next nightly refresh. The overnight
+ * block wraps midnight (19:00 to 03:00), so the difference is taken modulo a
+ * day rather than as a plain subtraction.
+ */
+function minutesToNightly(cron: string): number {
+  return (cronMinuteOfDay(NIGHTLY_CRON) - cronMinuteOfDay(cron) + MINUTES_IN_DAY) % MINUTES_IN_DAY;
+}
 
 // 0509#5823: the schedule constants live in app/lib/cadence.ts. The
 // Workflow schedule and the trigger crons below are asserted against the
@@ -23,9 +42,10 @@ describe("cadence", () => {
   it("leaves the six scheduled Workflows off `schedules` and starts them from triggers.crons", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
     const daily = ["site-sweep", "mentions-sweep", "hiring-sweep", "feed-sweep", "snapshot-backup", "own-site-check"];
-    const workflows = (rawConfig.workflows ?? []).filter((workflow) => daily.includes(workflow.name));
-    expect(workflows).toHaveLength(6);
-    expect(workflows.map((workflow) => workflow.schedules)).toEqual([
+    const workflows = (rawConfig.workflows ?? []) as { name: string; schedules?: unknown }[];
+    const scheduled = workflows.filter((workflow) => daily.includes(workflow.name));
+    expect(scheduled).toHaveLength(6);
+    expect(scheduled.map((workflow) => workflow.schedules)).toEqual([
       undefined,
       undefined,
       undefined,
@@ -52,8 +72,48 @@ describe("cadence", () => {
   });
 
   it("pins the site-sweep cron and label to the UTC hour the sweep runs at", () => {
-    expect(SITE_SWEEP_CRON).toBe(`0 ${SITE_SWEEP_UTC_HOUR} * * *`);
+    expect(SITE_SWEEP_CRON).toBe(`0 ${String(SITE_SWEEP_UTC_HOUR).padStart(2, "0")} * * *`);
     expect(SITE_SWEEP_UTC_LABEL).toBe(`${String(SITE_SWEEP_UTC_HOUR).padStart(2, "0")}:00 UTC`);
+  });
+
+  it("names the sweep clock in the workspace zone, not as a UTC-only label", () => {
+    const now = new Date("2026-10-05T12:00:00.000Z");
+    expect(siteSweepLabel("UTC", now)).toBe(SITE_SWEEP_UTC_LABEL);
+    expect(siteSweepLabel("Asia/Kolkata", now)).toMatch(/^02:30 /);
+    expect(siteSweepLabel("Asia/Kolkata", now)).not.toContain("UTC");
+  });
+});
+
+/**
+ * 0509#7191: the site sweep ran from 02:00 UTC with a 120 minute budget and the
+ * nightly refresh starts at 03:00, so at 40 to 50 workspaces the sweep was
+ * still writing when the refresh wanted to write. Every sweep now starts early
+ * enough to finish before NIGHTLY_CRON, and the Workflows build their monitor
+ * from SWEEP_MONITORS, so a cron and the budget that watches it live in one
+ * place. These two assertions are the gate: a cron moved back to 02:00, or a
+ * budget raised past the nightly, reddens here instead of the nightly.
+ */
+describe("nightly sweeps finish before the nightly refresh", () => {
+  it("starts and finishes every sweep before NIGHTLY_CRON", () => {
+    for (const [cron, monitor] of Object.entries(SWEEP_MONITORS)) {
+      const runway = minutesToNightly(cron);
+      expect(
+        monitor.maxRuntime,
+        `${monitor.slug} starts at ${cron} and can run ${String(monitor.maxRuntime)} minutes, past the ${NIGHTLY_CRON} nightly refresh ${String(runway)} minutes later.`,
+      ).toBeLessThanOrEqual(runway);
+    }
+  });
+
+  it("watches each sweep with its own cron, so a monitor cannot drift off the schedule it watches", () => {
+    for (const cron of [MENTIONS_SWEEP_CRON, SITE_SWEEP_CRON, HIRING_SWEEP_CRON, FEED_SWEEP_CRON]) {
+      const monitor = SWEEP_MONITORS[cron];
+      expect(sweepMonitor(cron)).toEqual({
+        schedule: { type: "crontab", value: cron },
+        checkinMargin: monitor?.checkinMargin,
+        maxRuntime: monitor?.maxRuntime,
+      });
+    }
+    expect(() => sweepMonitor(NIGHTLY_CRON)).toThrow(/No sweep monitor for cron/);
   });
 });
 
@@ -97,7 +157,7 @@ describe("cron weekday fields", () => {
 
   it("leaves every wrangler trigger free of a numbered weekday", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
-    const crons = rawConfig.triggers?.crons ?? [];
+    const crons: string[] = rawConfig.triggers?.crons ?? [];
     expect(crons).toEqual(expect.arrayContaining([...Object.values(CRON_CONSTANTS), "*/5 * * * *"]));
     const numbered = crons.filter((cron) => /\d/.test(dayOfWeekField(cron)));
     expect(numbered, `wrangler.jsonc numbers the day of week in: ${numbered.join(", ")}`).toEqual([]);

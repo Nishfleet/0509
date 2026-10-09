@@ -28,12 +28,17 @@ export default defineConfig({
       "**/tsconfig*.json",
       "**/migrations/**",
       "**/wrangler*.jsonc",
+      // tests/dependabot-config.test.ts reads this from disk (0509#7078);
+      // without the trigger a dependabot.yml-only PR reruns nothing.
+      "**/.github/dependabot.yml",
       "**/tests/integration/apply-migrations.ts",
-      // tests/agents-md-canonical.test.ts reads these from disk (0509#7005);
-      // without the trigger a doc-only PR reruns nothing and the shadowing
-      // verdict is left to the merge queue instead of the PR.
+      // tests/agents-md-canonical.test.ts and tests/migration-gate-docs.test.ts
+      // read these from disk (0509#7005, 0509#7003); without the trigger a
+      // doc-only PR reruns nothing and the false-lock verdict is left to the
+      // merge queue instead of the PR.
       "**/AGENTS.md",
       "**/CLAUDE.md",
+      "**/.github/CODEOWNERS",
     ],
     coverage: {
       provider: "v8",

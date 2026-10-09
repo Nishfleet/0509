@@ -9,8 +9,15 @@ const REDACTED = "[redacted]";
 const DEPTH_CAP = 6;
 const SEEN_CAP = 2000;
 
+function releaseFrom(env: SentryEnv): Pick<CloudflareOptions, "release" | "environment"> {
+  const version = env.CF_VERSION_METADATA;
+  if (version === undefined) return {};
+  return { release: version.id, environment: version.tag === "" ? "production" : version.tag };
+}
+
 export const sentryOptions = (env: SentryEnv): CloudflareOptions => ({
   dsn: env.SENTRY_DSN,
+  ...releaseFrom(env),
   sendDefaultPii: false,
   beforeBreadcrumb: () => null,
   beforeSend: scrubEvent,
@@ -104,7 +111,7 @@ function scrubEvent<T extends ErrorEvent | TransactionEvent>(event: T): T {
 }
 
 function scrubText(value: string): string {
-  return value.replace(URL_PATTERN, (match) => scrubRequestUrl(match) ?? match).replace(EMAIL_PATTERN, REDACTED);
+  return value.replace(URL_PATTERN, REDACTED).replace(EMAIL_PATTERN, REDACTED);
 }
 
 function scrubRequestUrl(url: string | undefined): string | undefined {

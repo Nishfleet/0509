@@ -57,10 +57,10 @@ function renderSheet(): string {
   return renderToStaticMarkup(createElement(HowRankedSheet, { howRanked: RANKED }));
 }
 
-function findElement(node: ReactNode, type: unknown): ReactElement | null {
+function findElement(node: ReactNode, type: unknown): ReactElement<{ className?: string }> | null {
   for (const child of Children.toArray(node)) {
     if (!isValidElement(child)) continue;
-    if (child.type === type) return child;
+    if (child.type === type) return child as ReactElement<{ className?: string }>;
     const nested = findElement((child.props as { children?: ReactNode }).children, type);
     if (nested !== null) return nested;
   }

@@ -204,6 +204,28 @@ describe("biggestMoveView", () => {
     expect(onePoint.read).not.toContain("1 points");
   });
 
+  it.each([
+    { weight: 3, multiplier: 0.6, shown: "3 × 0.6 = 1.8 points" },
+    { weight: 3, multiplier: 0.7, shown: "3 × 0.7 = 2.1 points" },
+    { weight: 4, multiplier: 0.6, shown: "4 × 0.6 = 2.4 points" },
+    { weight: 3, multiplier: 0.9, shown: "3 × 0.9 = 2.7 points" },
+    { weight: 4, multiplier: 1, shown: "4 × 1 = 4 points" },
+    { weight: 2, multiplier: 1.0, shown: "2 × 1 = 2 points" },
+  ])("formats $weight × $multiplier for people, never as a raw float", ({ weight, multiplier, shown }) => {
+    const view = biggestMoveView({ ...move, weight, multiplier, points: weight * multiplier }, now);
+
+    expect(view.read).toBe(`Ad wording or offer changes: ${shown}, the most of anything this brand did this week.`);
+    expect(view.read).not.toMatch(/\d\.\d{3,}/);
+  });
+
+  it("says point for a product that rounds to one", () => {
+    const view = biggestMoveView({ ...move, weight: 1, multiplier: 0.9999, points: 0.9999 }, now);
+
+    expect(view.read).toBe(
+      "Ad wording or offer changes: 1 × 1 = 1 point, the most of anything this brand did this week.",
+    );
+  });
+
   it("falls back to the summary, then to the source label, for the title", () => {
     expect(biggestMoveView(move, now).title).toBe("Fresh copy on the winter sale");
     expect(biggestMoveView({ ...move, signal: { ...move.signal, summary: null } }, now).title).toBe("Ad library");
@@ -219,7 +241,13 @@ describe("quietWeekSentence", () => {
 
   it("says the first read lands tonight when the brand was never checked", () => {
     expect(quietWeekSentence([], null)).toBe(
-      "Nothing worth scoring for this competitor in the last 7 days. We watch its website; our first read is tonight at 02:00 UTC.",
+      "Nothing worth scoring for this competitor in the last 7 days. We watch its website; our first read is tonight at 21:00 UTC.",
+    );
+  });
+
+  it("uses the workspace sweep clock instead of a UTC-only label", () => {
+    expect(quietWeekSentence([], null, "07:30 GMT+5:30")).toBe(
+      "Nothing worth scoring for this competitor in the last 7 days. We watch its website; our first read is tonight at 07:30 GMT+5:30.",
     );
   });
 });

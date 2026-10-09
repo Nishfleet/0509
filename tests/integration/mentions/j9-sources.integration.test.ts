@@ -106,6 +106,9 @@ describe("J9 mentions land from three sources", () => {
         "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Gymshark', 'user-j9', 'UTC', 1, 8, ?2)",
       ).bind(workspaceId, NOW),
       env.DB.prepare(
+        "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?1, ?2, 'scout', 'trialing', ?3)",
+      ).bind("ws-j9-plan", workspaceId, NOW),
+      env.DB.prepare(
         "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, created_at) VALUES ('ws-j9-self', ?1, 'self', 'gymshark-j9.com', 'Gymshark', '{\"description\":\"Gym clothing\"}', ?2)",
       ).bind(workspaceId, NOW),
       env.DB.prepare(

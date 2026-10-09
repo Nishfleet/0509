@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 import {
   BrandSwitch,
   type BrandSwitchState,
-  brandRowClass,
   BrandSwitchField,
   brandSwitchNote,
   dayMonthLabel,
@@ -92,13 +91,9 @@ describe("dayMonthLabel", () => {
     expect(dayMonthLabel("2026-09-22T12:00:00.000Z")).toBe("22 Sept");
     expect(dayMonthLabel("garbage")).toBeNull();
   });
-});
 
-describe("brandRowClass", () => {
-  it("dims off rows, washes you rows and leaves on rows alone", () => {
-    expect(brandRowClass("off")).toBe("text-ink-faint");
-    expect(brandRowClass("you")).toBe("bg-green-wash");
-    expect(brandRowClass("on")).toBe("");
+  it("shifts the calendar day into the workspace zone", () => {
+    expect(dayMonthLabel("2026-09-14T00:00:00.000Z", "America/New_York")).toBe("13 Sept");
   });
 });
 
@@ -128,7 +123,7 @@ describe("the brand switch field", () => {
 
 describe("the brand switch geometry (0509#7071)", () => {
   function switchClass(html: string): string {
-    return html.replace(/&amp;/g, "&").match(/role="switch"[^>]*class="([^"]*)"/)?.[1] ?? "";
+    return /role="switch"[^>]*class="([^"]*)"/.exec(html.replace(/&amp;/g, "&"))?.[1] ?? "";
   }
 
   it("sizes the track at 38x22 by winning the size against the stock 32x18.4 track", () => {

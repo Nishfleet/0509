@@ -9,8 +9,8 @@ function authSending(sent: string[]) {
   return createAuth({
     DB: env.DB,
     EMAIL: {
-      send: async (message: { text?: string }) => {
-        sent.push(message.text ?? "");
+      send: async (message: EmailMessage | EmailMessageBuilder) => {
+        sent.push((message as { text?: string }).text ?? "");
         return { messageId: "test" };
       },
     },

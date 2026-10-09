@@ -1,6 +1,6 @@
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 
-import { sourcePillStatus } from "../../components/source-pill";
+import { sourcePillStatus } from "../source-pill-status";
 import { readRegistrySources } from "../data/source.server";
 import { joinList } from "../../lib/coverage";
 import type { FreshnessSource } from "../../lib/freshness.server";
@@ -62,7 +62,7 @@ function registerStanding(server: McpServer, workspaceId: string): void {
     {
       title: standing.title,
       description:
-        "Where the user ranks against their tracked competitors this week, the movement since last week, the one-line why, and one line per competitor. Paused competitors are left out.",
+        "Where the user ranks against their tracked competitors this week, the movement since last week, the one-line why, and one line per competitor. Off competitors are left out.",
       outputSchema: standingResultSchema,
       annotations: READ_ONLY,
     },
@@ -107,7 +107,7 @@ function registerCompetitor(server: McpServer, workspaceId: string): void {
     {
       title: competitor.title,
       description:
-        "One tracked competitor: its state (on, or paused), how many of its pages are watched and when they were last checked, and its website changes from the last 90 days. Returns null for an id that is not one of the user's competitors.",
+        "One tracked competitor that is on: how many of its pages are watched and when they were last checked, and its website changes from the last 90 days. Returns null for an id that is not one of the user's on competitors, including an off brand.",
       inputSchema: competitorArgsSchema,
       outputSchema: competitorResultSchema,
       annotations: READ_ONLY,

@@ -1,8 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("cloudflare:workers", () => ({ env: {} }));
-
 const reschedule = vi.hoisted(() => vi.fn(() => Promise.resolve({ cancelledId: null, createdId: null })));
 vi.mock("../../app/lib/standing/reschedule.server", () => ({ rescheduleBriefSchedule: reschedule }));
 
@@ -11,6 +9,7 @@ import {
   ensureWorkspace,
   ensureWorkspaceForSignIn,
   firstWorkspaceId,
+  workspaceLanding,
   workspaceNameFromEmail,
   type WorkspaceDb,
 } from "../../app/lib/workspace.server";
@@ -42,6 +41,34 @@ function openDb(): DatabaseSync {
       created_at TEXT NOT NULL,
       UNIQUE (workspace_id, channel_id, target_value)
     );
+    CREATE TABLE entity (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      domain TEXT,
+      name TEXT,
+      identity_json TEXT,
+      origin TEXT,
+      confirmed_at TEXT,
+      state TEXT,
+      created_at TEXT
+    );
+    CREATE TABLE onboarding_run (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      input_raw TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      watching_started_at TEXT
+    );
+    CREATE TABLE plan (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      tier TEXT NOT NULL,
+      status TEXT,
+      current_period_end TEXT,
+      limits_json TEXT NOT NULL DEFAULT '{}'
+    );
   `);
   return database;
 }
@@ -57,6 +84,9 @@ function asWorkspaceDb(database: DatabaseSync): WorkspaceDb {
             async first<T>() {
               const row = statement.get(...params) as T | undefined;
               return row ?? null;
+            },
+            async all() {
+              return { results: statement.all(...params) as never[] };
             },
             async run() {
               const result = statement.run(...params);
@@ -254,6 +284,7 @@ describe("ensureWorkspace", () => {
                   brief_hour: 8,
                   created_at: input.now,
                 }) as T,
+              all: async () => ({ results: [] }),
               run: async () => ({ meta: { changes: 0 } }),
             }),
           };
@@ -292,13 +323,15 @@ describe("ensureWorkspace", () => {
             const bound = statement.bind(...values);
             return {
               first: bound.first.bind(bound),
+              all: bound.all.bind(bound),
               async run() {
                 if (query.startsWith("INSERT INTO workspace")) {
                   entered += 1;
                   if (entered === 1) await gate;
                   else release();
                 }
-                await bound.run();
+                const result = await bound.run();
+                return { meta: { changes: result.meta.changes } };
               },
             };
           },
@@ -404,6 +437,9 @@ describe("ensureWorkspace", () => {
                 reads += 1;
                 return (reads === 1 ? null : row) as T | null;
               },
+              async all() {
+                return { results: [] };
+              },
               async run() {
                 throw new Error("busy");
               },
@@ -421,5 +457,58 @@ describe("ensureWorkspace", () => {
         now: "2026-09-22T12:00:00.000Z",
       }),
     ).resolves.toEqual(row);
+  });
+});
+
+describe("workspaceLanding", () => {
+  it("does not insert when the owner has no workspace", async () => {
+    const queries: string[] = [];
+    const db: WorkspaceDb = {
+      prepare(query: string) {
+        queries.push(query);
+        return {
+          bind() {
+            return {
+              async first<T>() {
+                return null as T | null;
+              },
+              async all() {
+                return { results: [] };
+              },
+              async run() {
+                throw new Error("workspaceLanding must not write");
+              },
+            };
+          },
+        };
+      },
+    };
+
+    await expect(
+      workspaceLanding(db, {
+        userId: "user-gone",
+        timezone: "Asia/Kolkata",
+      }),
+    ).resolves.toEqual({ workspaceId: null, landing: null });
+    expect(queries.some((query) => query.includes("INSERT"))).toBe(false);
+  });
+
+  it("fills UTC from the landing read when a real zone arrives", async () => {
+    const database = openDb();
+    seedUser(database, "user-1", "ada@example.com");
+    const db = asWorkspaceDb(database);
+    await ensureWorkspace(db, {
+      userId: "user-1",
+      email: "ada@example.com",
+      timezone: null,
+      now: "2026-09-22T12:00:00.000Z",
+    });
+    await expect(workspaceLanding(db, { userId: "user-1", timezone: "Asia/Kolkata" })).resolves.toEqual({
+      workspaceId: firstWorkspaceId("user-1"),
+      landing: "/onboarding",
+    });
+    expect(database.prepare("SELECT timezone FROM workspace WHERE owner_user_id = 'user-1'").get()).toEqual({
+      timezone: "Asia/Kolkata",
+    });
   });
 });

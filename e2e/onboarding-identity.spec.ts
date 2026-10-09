@@ -3,6 +3,11 @@ import { expect, test } from "@playwright/test";
 import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
 
 let createdEmail = "";
+// The end-of-test screenshot is report evidence, not an assertion. Playwright's
+// recorder attaches it and drops a capture that fails instead of failing the
+// test; e2e/reduced-motion.spec.ts has the why.
+test.use({ screenshot: "on" });
+
 test.afterEach(async ({ page }, testInfo) => {
   if (createdEmail === "") return;
   testInfo.setTimeout(testInfo.timeout + 60_000);
@@ -56,7 +61,7 @@ test.describe("signed in", () => {
     await page.goto("/onboarding");
     await expect(page).toHaveURL(/\/onboarding\/competitors$/);
     await page.getByRole("button", { name: "Start watching" }).click();
-    await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
+    await expect(page).toHaveURL(/\/onboarding\/plan$/, { timeout: 30_000 });
     expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
   });
 
@@ -113,10 +118,6 @@ test.describe("signed in", () => {
       );
       expect(noHorizontalScroll).toBe(true);
       expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
-      await test.info().attach(`card-${width}`, {
-        body: await page.screenshot(),
-        contentType: "image/png",
-      });
     });
   }
 });

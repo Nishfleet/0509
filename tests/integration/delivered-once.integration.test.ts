@@ -17,10 +17,10 @@ interface Recorder {
 const recorder = (): Recorder => ({ sent: [], fail: null });
 
 const bindingFor = (rec: Recorder): SendEmail => ({
-  send(message: EmailMessageBuilder) {
+  send(message: EmailMessage | EmailMessageBuilder) {
     if (rec.fail) throw rec.fail;
-    rec.sent.push(message);
-    return Promise.resolve({} as EmailSendResult);
+    rec.sent.push(message as EmailMessageBuilder);
+    return Promise.resolve({ messageId: "unused" });
   },
 });
 
@@ -123,6 +123,9 @@ describe("delivered once across weeks (0509#4063)", () => {
         `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
          VALUES (?1, ?2, ?3, 'UTC', 1, 8, ?4)`,
       ).bind(WS, "Once Test", USER, "2026-09-14T00:00:00Z"),
+      env.DB.prepare(
+        "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?1, ?2, 'scout', 'trialing', ?3)",
+      ).bind(`plan-${WS}`, WS, "2026-09-14T00:00:00Z"),
       env.DB.prepare(`INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?1, 'email', 1, '{}')`).bind(
         CHANNEL,
       ),
@@ -227,6 +230,7 @@ describe("delivered once across weeks (0509#4063)", () => {
       readThisFirst: judged,
     });
     expect(payload.read_this_first.map((mark) => mark.signal_id)).toEqual([SIG_C]);
+    expect(payload.judged_count).toBe(1);
 
     const weekTwo = await composeAndDeliverWeekTwo(payload);
     expect(weekTwo.outcome).toBe("sent");

@@ -1,10 +1,21 @@
 import { SUPPORT_ADDRESS } from "../components/footer";
 import { PLANS } from "./billing/plans";
 import type { FaqEntry } from "./faq";
+import { SITE_URL } from "./site-url";
 
-export const SITE_URL = "https://0509.io";
+export { SITE_URL };
 
 const ORGANIZATION_ID = `${SITE_URL}/#organization`;
+
+export function shareImageMeta() {
+  return [
+    { property: "og:image", content: `${SITE_URL}/og.png` },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
+    { property: "og:image:alt", content: "Know where you stand. And who's gaining on you." },
+    { name: "twitter:card", content: "summary_large_image" },
+  ];
+}
 
 export function organizationJsonLd() {
   return {

@@ -31,7 +31,7 @@ interface StillFields {
     summary: string;
     url: string;
     aspect: string | null;
-    observed_at: string;
+    observedAt: string;
   }[];
 }
 
@@ -41,10 +41,10 @@ type StillReasonCase = ChoiceEvalRow & StillFields;
 
 const STILL_FIELDS = ["kind", "self", "competitors", "subject", "history"] as const;
 
-vi.mock("cloudflare:workers", () => ({ env: {} }));
 vi.mock("../../app/lib/jev/client.server", () => ({
   askNoul: () => Promise.resolve(null),
   askChoice: () => Promise.resolve(null),
+  askMixed: () => Promise.resolve({ noul: null, choice: null }),
   JevUnavailableError: class JevUnavailableError extends Error {},
 }));
 vi.mock("../../app/lib/data/signal.server", () => ({

@@ -1,7 +1,6 @@
 import type { Route } from "./+types/app.home";
-import { env } from "cloudflare:workers";
 
-import { data, Link, redirect, useFetcher } from "react-router";
+import { data, Link, redirect } from "react-router";
 
 import { FreshnessLine } from "../components/freshness-line";
 import { HomePageFrame, HomeStanding } from "../components/home-standing";
@@ -22,7 +21,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const timings = createTimings();
   const { session, workspaceId } = context.get(onboardedContext);
   if (workspaceId === null) throw redirect("/onboarding");
-  const inputs = await timings.measure("standing", readHomeStandingInputs(env.DB, session.user.id, workspaceId));
+  const inputs = await timings.measure("standing", readHomeStandingInputs(session.user.id, workspaceId));
   if (inputs === null) throw redirect("/onboarding");
   const payload = inputs.payload;
   const openId = resolveOpenId(new URL(request.url).searchParams.get("open"), payload, inputs.entities);
@@ -69,7 +68,6 @@ function HomeFooter({ line }: { line: string }) {
 }
 
 export default function Page({ loaderData }: Route.ComponentProps) {
-  const fetcher = useFetcher();
   useRevalidateOnVisible(loaderData.view.standing.kind !== "ranked");
   return (
     <HomePageFrame eyebrow={loaderData.view.eyebrow} footer={<HomeFooter line={loaderData.view.footer} />}>
@@ -79,12 +77,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         openId={loaderData.open}
         evidence={loaderData.evidence}
         showEyebrow={false}
-        onSwitch={(entityId, checked) =>
-          void fetcher.submit(
-            { intent: checked ? "on" : "off", entityId },
-            { method: "post", action: "/app/competitors" },
-          )
-        }
       />
       {loaderData.siteFill === "pending" || loaderData.siteFill === "gave_up" ? (
         <SiteFillLine state={loaderData.siteFill} />

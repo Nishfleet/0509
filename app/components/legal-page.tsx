@@ -1,4 +1,5 @@
 import { Footer, SupportLink } from "./footer";
+import { MAIN_CONTENT_ID, SkipLink } from "./skip-link";
 import type { LegalDocument, LegalSection } from "../lib/legal/document";
 import { LEGAL_UPDATED } from "../lib/legal/document";
 
@@ -98,10 +99,11 @@ function OnThisPage({ sections }: { sections: readonly LegalSection[] }) {
 export function LegalPage({ doc }: { doc: LegalDocument }) {
   return (
     <div className="mx-auto w-full max-w-[46rem] bg-bone px-6 py-16 text-ink sm:py-24">
+      <SkipLink />
       <header>
         <LegalLogo />
       </header>
-      <main className="mt-8">
+      <main id={MAIN_CONTENT_ID} tabIndex={-1} className="mt-8">
         <h1 className="font-display text-[clamp(1.75rem,3.6vw,2.9rem)] leading-[1.15] font-semibold tracking-[-0.02em]">
           {doc.title}
         </h1>

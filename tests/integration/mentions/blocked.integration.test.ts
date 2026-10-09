@@ -45,6 +45,9 @@ async function seedBlockedSource(
       "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Gymshark', ?2, 'UTC', 1, 8, ?3)",
     ).bind(workspaceId, userId, NOW),
     env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?1, ?2, 'scout', 'trialing', ?3)",
+    ).bind(`${workspaceId}-plan`, workspaceId, NOW),
+    env.DB.prepare(
       "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, created_at) VALUES (?1, ?2, 'self', ?3, 'Gymshark', '{\"description\":\"Gym clothing\"}', ?4)",
     ).bind(`${workspaceId}-self`, workspaceId, `gymshark-${String(runs)}.com`, NOW),
     env.DB.prepare(
@@ -138,7 +141,7 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
 
   it("case B: HTTP 429 on the canary returns no count and leaves degraded_reason NULL (0509#6612)", async () => {
     const { sourceId } = await seedBlockedSource("b", { enabled: false });
-    const source: CanarySource = { id: sourceId, pluginKey: "gdelt.doc", canaryQuery: "google" };
+    const source: CanarySource = { id: sourceId, pluginKey: "gdelt.doc", canaryQuery: "google", minIntervalSeconds: 1 };
     const fetchMock = vi.fn(async () => new Response("", { status: 429 }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -215,7 +218,7 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
 
   it("case D: a later good canary clears the blocked reason", async () => {
     const { sourceId } = await seedBlockedSource("d", { enabled: false });
-    const source: CanarySource = { id: sourceId, pluginKey: "gdelt.doc", canaryQuery: "google" };
+    const source: CanarySource = { id: sourceId, pluginKey: "gdelt.doc", canaryQuery: "google", minIntervalSeconds: 1 };
 
     try {
       vi.stubGlobal(

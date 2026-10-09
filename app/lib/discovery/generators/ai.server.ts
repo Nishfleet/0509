@@ -2,10 +2,11 @@ import { env } from "cloudflare:workers";
 import { parse } from "tldts";
 import { z } from "zod";
 
+import { aiGatewayId } from "../../ai/gateway.server";
+import { refuseWhenAiSpendOff } from "../../ai/spend.server";
 import { fetchOutbound } from "../../fetch/outbound.server";
 import { CRAWLER_USER_AGENT } from "../../fetch/robots.server";
 import { cacheUnavailable, readThrough } from "../../identity/probe-cache.server";
-import { GATEWAY_ID } from "../../jev/client.server";
 import { sha256Hex } from "../../sha256";
 import { defaultFetchText } from "../fetch-text.server";
 import { type Candidate, type FetchText, type Generator, type Subject } from "../types";
@@ -56,6 +57,11 @@ export const RESPONSE_FORMAT = {
   type: "json_schema",
   json_schema: { name: "competitors", schema: RESPONSE_SCHEMA },
 } as const;
+
+const REASONING: Readonly<Record<(typeof MODELS)[number], Record<string, unknown>>> = {
+  [MODEL]: {},
+  [SECOND_MODEL]: { chat_template_kwargs: { enable_thinking: true, low_effort: true } },
+};
 
 const proposalItemSchema = z.object({
   name: z.string().max(NAME_MAX),
@@ -152,14 +158,16 @@ export function proposalBody(raw: unknown): unknown {
 }
 
 async function propose(model: (typeof MODELS)[number], subject: Subject, site: SiteText): Promise<Proposal[]> {
+  refuseWhenAiSpendOff();
   const raw: unknown = await env.AI.run(
     model,
     {
       messages: messagesFor(subject, site),
       max_tokens: MAX_TOKENS,
       response_format: RESPONSE_FORMAT,
+      ...REASONING[model],
     },
-    { gateway: { id: GATEWAY_ID }, signal: AbortSignal.timeout(AI_TIMEOUT_MS) },
+    { gateway: { id: aiGatewayId() }, signal: AbortSignal.timeout(AI_TIMEOUT_MS) },
   );
   const parsed = proposalSchema.safeParse(proposalBody(raw));
   if (!parsed.success) throw new Error("ai proposer returned malformed JSON");

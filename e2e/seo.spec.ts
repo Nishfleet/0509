@@ -113,6 +113,6 @@ test("www.0509.io redirects to the apex with the path and query kept (0509#4498)
   const request = await playwright.request.newContext({ maxRedirects: 0 });
   const response = await request.get("https://www.0509.io/privacy?utm_source=check");
   expect(response.status()).toBe(308);
-  expect(response.headers()["location"]).toBe("https://0509.io/privacy?utm_source=check");
+  expect(response.headers().location).toBe("https://0509.io/privacy?utm_source=check");
   await request.dispose();
 });

@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 
 import type { NoulVerdict } from "../jev/client.server";
 import { noulAction } from "../jev/thresholds";
@@ -217,19 +218,24 @@ export interface DismissedSuggestion {
   dismissedAt: string;
 }
 
+const readUserDismissedRow = z.object({
+  id: z.string(),
+  candidate_domain: z.string(),
+  candidate_name: z.string().nullable(),
+  decided_at: z.string(),
+});
+
 export async function readUserDismissed(workspaceId: string): Promise<DismissedSuggestion[]> {
-  const rows = await env.DB.prepare(SELECT_USER_DISMISSED).bind(workspaceId).all<{
-    id: string;
-    candidate_domain: string;
-    candidate_name: string | null;
-    decided_at: string;
-  }>();
-  return rows.results.map((row) => ({
-    suggestionId: row.id,
-    name: row.candidate_name ?? row.candidate_domain,
-    domain: row.candidate_domain,
-    dismissedAt: row.decided_at,
-  }));
+  const { results } = await env.DB.prepare(SELECT_USER_DISMISSED).bind(workspaceId).all();
+  return z
+    .array(readUserDismissedRow)
+    .parse(results)
+    .map((row) => ({
+      suggestionId: row.id,
+      name: row.candidate_name ?? row.candidate_domain,
+      domain: row.candidate_domain,
+      dismissedAt: row.decided_at,
+    }));
 }
 
 export async function restoreSuggestion(input: { workspaceId: string; suggestionId: string }): Promise<void> {

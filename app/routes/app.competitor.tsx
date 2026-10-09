@@ -13,15 +13,12 @@ import { handleCompetitorForm, type CompetitorFormErrors } from "../lib/competit
 import { readCompetitorPage } from "../lib/competitor-page.server";
 import { snapshotCells } from "../lib/competitor-snapshot";
 import { readCompetitorSnapshot } from "../lib/competitor-snapshot.server";
-import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { daysAgoLabel } from "../lib/delivery-alert";
 import { onboardedContext } from "../lib/require-onboarded.server";
-import { requireFreshSession } from "../lib/require-session.server";
 import { captureLabel } from "../lib/site-change";
 
-async function freshWorkspaceFor(request: Request): Promise<string> {
-  const session = await requireFreshSession(request);
-  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+function workspaceFrom(context: Route.LoaderArgs["context"]): string {
+  const { workspaceId } = context.get(onboardedContext);
   if (workspaceId === null) throw redirect("/onboarding");
   return workspaceId;
 }
@@ -31,8 +28,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
 }
 
 export async function loader({ params, context }: Route.LoaderArgs) {
-  const { workspaceId } = context.get(onboardedContext);
-  if (workspaceId === null) throw redirect("/onboarding");
+  const workspaceId = workspaceFrom(context);
   const now = new Date();
   const [page, snapshot] = await Promise.all([
     readCompetitorPage(workspaceId, params.entityId, now),
@@ -49,9 +45,8 @@ export async function loader({ params, context }: Route.LoaderArgs) {
   };
 }
 
-export async function action({ request, params }: Route.ActionArgs) {
-  const workspaceId = await freshWorkspaceFor(request);
-  return handleCompetitorForm(workspaceId, params.entityId, await request.formData());
+export async function action({ request, params, context }: Route.ActionArgs) {
+  return handleCompetitorForm(workspaceFrom(context), params.entityId, await request.formData());
 }
 
 function CompetitorFoot(props: {
@@ -103,8 +98,9 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         quiet={loaderData.quiet}
         pages={loaderData.watch.pages}
         lastChecked={loaderData.lastChecked}
-        pausedOn={pausedAt === null ? null : dayMonthLabel(pausedAt)}
+        pausedOn={pausedAt === null ? null : dayMonthLabel(pausedAt, loaderData.timezone)}
         unreadable={loaderData.watch.unreadable}
+        sweepClock={loaderData.sweepClock}
         rail={{ ...loaderData.rail, entityId: competitor.id, now: loaderData.now }}
       />
       <CompetitorFoot

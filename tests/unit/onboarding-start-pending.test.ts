@@ -1,9 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, RouterProvider } from "react-router";
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("cloudflare:workers", () => ({ env: {} }));
+import { describe, expect, it } from "vitest";
 
 import Page from "../../app/routes/onboarding.competitors";
 
@@ -19,7 +17,7 @@ function render(submission: { intent: string } | null): string {
         id: "onboarding",
         path: "/onboarding/competitors",
         // The screen reads the loader's data, as hydration passes it.
-        Component: () => createElement(Page, { loaderData: LOADER_DATA }),
+        Component: () => createElement(Page, { loaderData: LOADER_DATA } as RouteProps),
         action: NEVER,
       },
     ],

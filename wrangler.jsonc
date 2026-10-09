@@ -5,20 +5,22 @@
  * name, so renaming it would orphan DODO_API_KEY, BETTER_AUTH_* and the rest,
  * and the first deploy would come up unconfigured.
  *
- * Declares only what this app uses. The pre-rebuild Worker carried Workflow and
- * Durable Object classes, eight rate-limit bindings and eight cron triggers;
- * none are here, because nothing in this app reads them. Bindings come back one
- * at a time, with the engine packet that needs them.
+ * Bindings and triggers live here: Workflows, Durable Objects, Queues,
+ * rate-limit bindings and the cron list under triggers.crons. A new engine
+ * adds the binding it reads, in the same PR as the reader.
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "0509",
-  // >= 2026-08-04, so nodejs_compat is on by default and needs no flag.
+  // >= 2026-08-04 turns nodejs_compat on by default; still set it so a
+  // Vitest inject cannot hide a missing production flag
+  // (https://developers.cloudflare.com/workers/configuration/compatibility-flags/).
   "compatibility_date": "2026-09-16",
   // Agent sign-in (@cloudflare/workers-oauth-provider) fetches a client's
-  // Client ID Metadata Document by URL; this flag keeps that fetch on the
-  // public internet so a client_id can never reach this zone's own origin.
-  "compatibility_flags": ["global_fetch_strictly_public"],
+  // Client ID Metadata Document by URL; global_fetch_strictly_public keeps
+  // that fetch on the public internet so a client_id can never reach this
+  // zone's own origin.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "main": "./workers/app.ts",
   "placement": { "mode": "smart" },
   "observability": {
@@ -76,6 +78,8 @@
     "subrequests": 10000,
   },
   "upload_source_maps": true,
+  // Sentry `release` and `environment` read this binding (0509#7079).
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "assets": { "run_worker_first": ["/mcp"] },
 
   "durable_objects": {
@@ -110,7 +114,12 @@
   // it, and a client-supplied value would let a link point anywhere.
   // BETTER_AUTH_SECRET stays a Worker secret.
   // TURNSTILE_SECRET_KEY and TURNSTILE_SITE_KEY are Worker secrets too.
-  // SLACK_TARGET_SECRET is the AES-GCM key for send_target Slack webhook rows.
+  // SLACK_TARGET_SECRET is the AES-GCM key for send_target Slack webhook rows:
+  // a comma-separated list of at most 3 base64 32-byte keys, current first. Rows
+  // name their sealing key in the enc:v2:<key id>: prefix (0509#6983). Reads never
+  // write. The nightly 03:00Z job seals rows with the first key after a key is
+  // added. To rotate, put the new key first in the comma list, deploy, wait until
+  // the job stops logging slack_backfill.remaining, then drop the old key.
   // Listing them under secrets.required makes deploy inherit the values already
   // on the Worker instead of replacing them with a plaintext var.
   // LANDING_WORKSPACE_ID: the public workspace we run ourselves whose changes the landing ticker and mark section show (#4083, #4084). Empty draws no strip and no marks, never filler.
@@ -123,6 +132,12 @@
   "vars": {
     "BETTER_AUTH_URL": "https://0509.io",
     "LANDING_WORKSPACE_ID": "",
+    // #7187: the deployed git commit, named by /api/health. Empty here and in
+    // preview; deploy-production.yml overrides it with the pushed SHA through
+    // `wrangler deploy --var GIT_SHA:<sha>`
+    // (https://developers.cloudflare.com/workers/wrangler/commands/#deploy).
+    // Not CF_VERSION_METADATA.tag: workers/sentry.ts reads that as the Sentry environment.
+    "GIT_SHA": "",
     // Dodo Payments (docs/REBUILD-STACK.md, J13). DODO_ENVIRONMENT selects the SDK's
     // base URL: test_mode is https://test.dodopayments.com, live_mode is
     // https://live.dodopayments.com. The three product ids are the recurring
@@ -139,6 +154,16 @@
     "DODO_PRODUCT_AGENCY_YEARLY": "",
     "DODO_PRODUCT_TESTER": "",
     "TESTER_EMAIL_HASHES": "",
+    // 0509#7191: the ai spend kill switch. Set AI_SPEND to "off" to make every
+    // model call refuse before it reaches the gateway, on the scheduled paths and
+    // the request paths alike. Any value other than "on" stops spend, and so does
+    // leaving it unset or blank: the switch fails closed.
+    "AI_SPEND": "on",
+    // 0509#7191, and the operations follow-up on #7079: the named AI Gateway
+    // that carries the product's Jev traffic. Creating it is a dashboard step, so
+    // the id stays "default" until it exists and both model call sites read it
+    // from here rather than each pinning their own.
+    "AI_GATEWAY_ID": "default",
     "ACCESS_TEAM_DOMAIN": "https://nish345.cloudflareaccess.com",
     "ACCESS_AUD": "b4fa400a1848c913b92c3212dc0714fcdbd1b1b66eb24659e4a7cc01c790575d",
   },
@@ -177,9 +202,8 @@
   ],
 
   // Identity probe cache (engine 1, issue #4419): a read-through cache for
-  // probe results keyed identity:<registrable>:<probe> with a 24-hour TTL
-  // (docs/engines/identity-card.md P1, graft 1). KV only, for the same reason
-  // the doc picks it: the cache is read-mostly, tolerant of the 60-second
+  // probe results keyed identity:<registrable>:<probe> with a 24-hour TTL.
+  // KV only, because the cache is read-mostly, tolerant of the 60-second
   // propagation window and never same-key hot (docs/REBUILD-STACK.md §4.5).
   //
   // The id is pinned (#4631). The production CLOUDFLARE_API_TOKEN cannot
@@ -260,6 +284,10 @@
         "max_batch_timeout": 30,
         "max_retries": 5,
         "max_concurrency": 2,
+        // retry_delay 60 matches fetch-sweep (0509#7084 / #7032): without it a
+        // failed send is redelivered at once, so a brief SMTP or D1 blip is
+        // retried before the provider has recovered.
+        "retry_delay": 60,
         "dead_letter_queue": "send-email-dlq",
       },
       // #4065: a message that exhausts send-email lands here and becomes one alert.
@@ -312,7 +340,7 @@
       "binding": "STANDING_ROLLOVER",
       "class_name": "StandingRolloverWorkflow",
     },
-    // Competitor discovery (docs/engines/competitor-discovery.md): one instance
+    // Competitor discovery: one instance
     // when a workspace confirms its card, then one per workspace per night.
     {
       "name": "competitor-discovery",
@@ -320,8 +348,9 @@
       "class_name": "DiscoveryWorkflow",
     },
     // The nightly website sweep (docs/engines/site-change.md). The `scheduled`
-    // handler creates one instance a night (triggers.crons), at 02:00 UTC so the changes
-    // it files land before the 03:00 standing refresh counts them. Each page
+    // handler creates one instance a night (triggers.crons), at 21:00 UTC so it
+    // finishes, and the changes it files land, well before the 03:00 standing
+    // refresh counts them (0509#7191). Each page
     // is its own retried step; a page that cannot be read fails alone.
     // Nothing to provision: deploy creates the Workflow, unlike a queue.
     {
@@ -329,20 +358,20 @@
       "binding": "SITE_SWEEP",
       "class_name": "SiteSweepWorkflow",
     },
-    // The nightly hiring sweep (docs/engines/hiring.md): finds each tracked
-    // brand's job board, then reads every watched board. 02:30 UTC — after
-    // the 02:00 site sweep and before the 03:00 standing refresh counts its
-    // new-role signals. One retried step per entity and per board; a step
+    // The nightly hiring sweep: finds each tracked
+    // brand's job board, then reads every watched board. 23:30 UTC — after
+    // the 21:00 site sweep and before the 03:00 standing refresh counts its
+    // new-role signals (0509#7191). One retried step per entity and per board; a step
     // that cannot be read fails alone.
     {
       "name": "hiring-sweep",
       "binding": "HIRING_SWEEP",
       "class_name": "HiringSweepWorkflow",
     },
-    // The nightly blog and changelog feed sweep (docs/engines/content.md):
+    // The nightly blog and changelog feed sweep:
     // finds each tracked brand's RSS or Atom feed, then reads every watched
-    // feed with a conditional GET. 02:45 UTC, after the 02:30 hiring sweep and
-    // before the 03:00 standing refresh. One retried step per entity and per
+    // feed with a conditional GET. 01:00 UTC, after the 23:30 hiring sweep and
+    // before the 03:00 standing refresh (0509#7191). One retried step per entity and per
     // feed; a step that cannot be read fails alone. Inert until the
     // `feed.rss` source row is enabled.
     {
@@ -353,7 +382,7 @@
     // The nightly snapshot backup (0509#5802): copies every object in
     // 0509-snapshots that 0509-snapshots-backup does not yet hold, one
     // retried step per page of up to 200 objects, preserving httpMetadata.
-    // 05:00 UTC: after the 01:00 mentions sweep and the 02:00 site sweep
+    // 05:00 UTC: after the 19:00 mentions sweep and the 21:00 site sweep
     // have written their objects, and clear of the 03:00 standing cron and
     // the Monday 04:00 refresh. No deletes are propagated — an object deleted
     // from the source ages out of the backup by the backup's own lifecycle
@@ -408,9 +437,14 @@
     // pending digests and claims, and the Monday 04:00 UTC D2 competitor
     // refresh.
     //
-    // Also the Workflow starts: 01:00 mentions-sweep, 02:00 site-sweep, 02:30
-    // hiring-sweep, 02:45 feed-sweep, 05:00 snapshot-backup (0509#6289) and the hourly
-    // own-site-check (0509#4124). The
+    // Also the Workflow starts: 19:00 mentions-sweep, 21:00 site-sweep, 23:30
+    // hiring-sweep, 01:00 feed-sweep, 05:00 snapshot-backup (0509#6289) and the hourly
+    // own-site-check (0509#4124). The four nightly sweeps moved from 01:00-02:45
+    // UTC to 19:00-01:00 UTC because at 40 to 50 workspaces they ran past the
+    // 03:00 nightly refresh (0509#7191); every sweep's runtime budget and the nightly are
+    // held against each other by `tests/cadence.test.ts`, and each Workflow
+    // builds its monitor from `SWEEP_MONITORS` in app/lib/cadence.ts rather
+    // than repeating the crontab string here. The
     // Workflow-level `schedules` bind was skipped around redeploys (this Worker
     // deploys 20-90 times a day; snapshot-backup's never fired), so the
     // `scheduled` handler creates each instance with createBatch under the id
@@ -423,10 +457,10 @@
     "crons": [
       "*/5 * * * *",
       "0 * * * *",
+      "0 19 * * *",
+      "0 21 * * *",
+      "30 23 * * *",
       "0 1 * * *",
-      "0 2 * * *",
-      "30 2 * * *",
-      "45 2 * * *",
       "0 3 * * *",
       "0 4 * * MON",
       "0 5 * * *",

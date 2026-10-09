@@ -3,6 +3,11 @@ import { expect, test } from "@playwright/test";
 import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
 
 let createdEmail = "";
+// The end-of-test screenshot is report evidence, not an assertion. Playwright's
+// recorder attaches it and drops a capture that fails instead of failing the
+// test; e2e/reduced-motion.spec.ts has the why.
+test.use({ screenshot: "on" });
+
 test.afterEach(async ({ page }, testInfo) => {
   if (createdEmail === "") return;
   testInfo.setTimeout(testInfo.timeout + 60_000);
@@ -90,10 +95,6 @@ test.describe("J4 onboard a creator handle", () => {
       );
       expect(noHorizontalScroll).toBe(true);
       expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
-      await test.info().attach(`j4-${width}`, {
-        body: await page.screenshot(),
-        contentType: "image/png",
-      });
     });
   }
 });

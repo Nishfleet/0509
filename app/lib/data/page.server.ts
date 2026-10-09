@@ -1,5 +1,10 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
+import {
+  RANKED_PRICING_PAGES,
+  resumeWantedPricingWatchesStatement,
+  stopUnwantedPricingWatchesStatement,
+} from "./watch.server";
 
 export interface NewPage {
   id: string;
@@ -20,11 +25,11 @@ export interface JudgedPage {
 }
 
 const INSERT_PAGE = `INSERT INTO page (id, entity_id, url, role, discovered_at)
-VALUES (?1, ?2, ?3, ?4, ?5)
+SELECT ?1, ?2, ?3, ?4, ?5 WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
 ON CONFLICT (entity_id, url) DO NOTHING`;
 
 const UPSERT_JUDGED_PAGE = `INSERT INTO page (id, entity_id, url, title, role, role_decided_for_hash, discovered_at)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
 ON CONFLICT (entity_id, url) DO UPDATE SET
   title = excluded.title,
   role = excluded.role,
@@ -68,8 +73,12 @@ export async function readPageHashes(entityId: string): Promise<ReadonlyMap<stri
 const SELECT_JUDGED_PRICING =
   "SELECT url FROM page WHERE entity_id = ?1 AND role = 'pricing' AND role_decided_for_hash IS NOT NULL ORDER BY url LIMIT 1";
 
+const readJudgedPricingUrlRow = z.object({ url: z.string() });
+
 export async function readJudgedPricingUrl(entityId: string): Promise<string | null> {
-  const row = await env.DB.prepare(SELECT_JUDGED_PRICING).bind(entityId).first<{ url: string }>();
+  const row = readJudgedPricingUrlRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_JUDGED_PRICING).bind(entityId).first());
   return row?.url ?? null;
 }
 
@@ -125,37 +134,10 @@ export async function readCompetitorsToClassify(limit: number, now: string): Pro
 
 const PRICING_PAGES_WATCHED = 3;
 
-const RANKED_PRICING_PAGES = `SELECT p.entity_id AS entity_id, p.url AS url,
-       ROW_NUMBER() OVER (PARTITION BY p.entity_id ORDER BY p.rowid) AS position
-FROM page p
-JOIN entity e ON e.id = p.entity_id AND e.state = 'on'
-WHERE p.role = 'pricing' AND p.role_decided_for_hash IS NOT NULL`;
-
-const WANTED_PRICING_WATCH = `EXISTS (
-  SELECT 1 FROM (${RANKED_PRICING_PAGES}) r
-  WHERE r.position <= ?2 AND r.entity_id = watch.entity_id AND r.url = watch.target_key
-)`;
-
-const STOP_UNWANTED_PRICING_WATCHES = `UPDATE watch SET is_active = 0
-WHERE source_id = ?1 AND is_active = 1
-  AND entity_id IN (SELECT id FROM entity WHERE state = 'on' AND role = 'competitor')
-  AND EXISTS (
-    SELECT 1 FROM page p
-    WHERE p.entity_id = watch.entity_id AND p.url = watch.target_key
-      AND p.role IS NOT NULL AND p.role <> 'home' AND p.role_decided_for_hash IS NOT NULL
-      AND EXISTS (SELECT 1 FROM page h WHERE h.entity_id = p.entity_id AND h.role = 'home' AND h.url <> p.url)
-  )
-  AND NOT ${WANTED_PRICING_WATCH}`;
-
-const RESUME_WANTED_PRICING_WATCHES = `UPDATE watch SET is_active = 1
-WHERE source_id = ?1 AND is_active = 0
-  AND entity_id IN (SELECT id FROM entity WHERE role = 'competitor')
-  AND ${WANTED_PRICING_WATCH}`;
-
 export async function syncPricingWatches(sourceId: string): Promise<void> {
   await env.DB.batch([
-    env.DB.prepare(STOP_UNWANTED_PRICING_WATCHES).bind(sourceId, PRICING_PAGES_WATCHED),
-    env.DB.prepare(RESUME_WANTED_PRICING_WATCHES).bind(sourceId, PRICING_PAGES_WATCHED),
+    stopUnwantedPricingWatchesStatement(sourceId, PRICING_PAGES_WATCHED),
+    resumeWantedPricingWatchesStatement(sourceId, PRICING_PAGES_WATCHED),
   ]);
 }
 

@@ -1,9 +1,6 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
+
+import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
 // #7027 / #7033: 16 of 17 action modules read form fields with formData.get
 // instead of a zod parse. #7111: the gate was selector-based on the receiver
@@ -13,8 +10,6 @@ import { describe, expect, it } from "vitest";
 // form.get / formData.get is the action-input shape; navigation.formData?.get
 // (pending UI) is FormData | undefined and stays allowed. These probes boot the
 // real eslint.config.js (same rig as tests/eslint-catch-null-rule.test.ts).
-
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const FORM_GET_MESSAGE = "formData.get by hand";
 
@@ -73,51 +68,26 @@ export function readField(form: DraftForm): unknown {
 }
 `;
 
-async function lintProbe(rel: string, code: string): Promise<{ ignored: boolean; messages: string[] }> {
-  const file = path.join(REPO_ROOT, rel);
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, code);
-  try {
-    const eslint = new ESLint({ cwd: REPO_ROOT });
-    if (await eslint.isPathIgnored(file)) {
-      return { ignored: true, messages: [] };
-    }
-    const results = await eslint.lintFiles([file]);
-    return {
-      ignored: false,
-      messages: results.flatMap((result) => result.messages.map((m) => m.message)),
-    };
-  } finally {
-    await rm(file, { force: true });
-  }
-}
-
-async function lintExisting(rel: string): Promise<string[]> {
-  const eslint = new ESLint({ cwd: REPO_ROOT });
-  const results = await eslint.lintFiles([path.join(REPO_ROOT, rel)]);
-  return results.flatMap((result) => result.messages.map((m) => m.message));
-}
-
 describe("eslint formData.get rule (#7027)", () => {
   it("rejects formData.get in an action route", { timeout: 60_000 }, async () => {
-    const result = await lintProbe("app/routes/probe-form-get-tmp.ts", HAND_GET);
+    const result = await lintTextAt("app/routes/login.tsx", HAND_GET);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(true);
   });
 
   it("rejects form.get in a server action module", { timeout: 60_000 }, async () => {
-    const result = await lintProbe("app/lib/probe-form-get-tmp.server.ts", FORM_GET);
+    const result = await lintTextAt("app/lib/require-session.server.ts", FORM_GET);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(true);
   });
 
   it("allows a zod parse of Object.fromEntries(formData) in a route", { timeout: 60_000 }, async () => {
-    const result = await lintProbe("app/routes/probe-form-get-tmp.ts", ZOD_PARSE);
+    const result = await lintTextAt("app/routes/login.tsx", ZOD_PARSE);
     expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(false);
   });
 
   it("leaves navigation.formData.get for pending UI unblocked", { timeout: 60_000 }, async () => {
-    const result = await lintProbe("app/routes/probe-form-get-tmp.ts", PENDING_UI);
+    const result = await lintTextAt("app/routes/login.tsx", PENDING_UI);
     expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(false);
   });
 
@@ -127,35 +97,35 @@ describe("eslint formData.get rule (#7027)", () => {
   });
 
   it("rejects a FormData receiver under any other name", { timeout: 60_000 }, async () => {
-    const result = await lintProbe("app/routes/probe-form-get-tmp.ts", OTHER_NAME);
+    const result = await lintTextAt("app/routes/login.tsx", OTHER_NAME);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(true);
   });
 
   it("rejects a FormData local under any other name", { timeout: 60_000 }, async () => {
-    const result = await lintProbe("app/routes/probe-form-get-tmp.ts", OTHER_LOCAL);
+    const result = await lintTextAt("app/routes/login.tsx", OTHER_LOCAL);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(true);
   });
 
   it('rejects a computed form["get"] read', { timeout: 60_000 }, async () => {
-    const result = await lintProbe("app/routes/probe-form-get-tmp.ts", COMPUTED_GET);
+    const result = await lintTextAt("app/routes/login.tsx", COMPUTED_GET);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(true);
   });
 
   it("leaves a Map.get unblocked", { timeout: 60_000 }, async () => {
-    const result = await lintProbe("app/routes/probe-form-get-tmp.ts", MAP_GET);
+    const result = await lintTextAt("app/routes/login.tsx", MAP_GET);
     expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(false);
   });
 
   it("leaves a Headers.get unblocked", { timeout: 60_000 }, async () => {
-    const result = await lintProbe("app/routes/probe-form-get-tmp.ts", HEADERS_GET);
+    const result = await lintTextAt("app/routes/login.tsx", HEADERS_GET);
     expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(false);
   });
 
   it("rejects a FormData subclass", { timeout: 60_000 }, async () => {
-    const result = await lintProbe("app/routes/probe-form-get-tmp.ts", SUBCLASS_GET);
+    const result = await lintTextAt("app/routes/login.tsx", SUBCLASS_GET);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(FORM_GET_MESSAGE))).toBe(true);
   });

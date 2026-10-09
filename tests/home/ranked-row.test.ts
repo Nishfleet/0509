@@ -1,6 +1,7 @@
-import { createElement } from "react";
+import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router";
+import { prerender } from "react-dom/static";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { HomeStanding } from "../../app/components/home-standing";
@@ -225,24 +226,39 @@ const KINDRED_EVIDENCE: readonly WeekEvidence[] = [
   },
 ];
 
+// prerender waits for the lazy RowEvidence chunk; once it has resolved, a
+// static render paints the evidence in place, with no hydration comments or
+// streamed segments to strip. If the chunk had not loaded, the Suspense
+// fallback (null) would render and the evidence assertions would fail.
+async function renderSettled(element: ReactElement): Promise<string> {
+  await prerender(element);
+  return renderToStaticMarkup(element);
+}
+
 describe("a ranked row expands in place to the week's evidence", () => {
-  function renderStanding(openId: string | null, evidence: readonly WeekEvidence[] | null): string {
+  function renderStanding(openId: string | null, evidence: readonly WeekEvidence[] | null): Promise<string> {
     const entries = openId === null ? ["/app"] : [`/app?open=${openId}`];
-    return renderToStaticMarkup(
-      createElement(
-        MemoryRouter,
-        { initialEntries: entries },
-        createElement(
-          "ol",
-          null,
-          rowsFor(PAYLOAD).map((row) => createElement(RankedRow, { key: row.entityId, row, openId, evidence })),
+    return renderSettled(
+      createElement(RouterProvider, {
+        router: createMemoryRouter(
+          [
+            {
+              path: "/app",
+              element: createElement(
+                "ol",
+                null,
+                rowsFor(PAYLOAD).map((row) => createElement(RankedRow, { key: row.entityId, row, openId, evidence })),
+              ),
+            },
+          ],
+          { initialEntries: entries },
         ),
-      ),
+      }),
     );
   }
 
-  it("opens Kindred's row on ?open=ent_kindred with type tabs and its evidence", () => {
-    const html = renderStanding("ent_kindred", KINDRED_EVIDENCE);
+  it("opens Kindred's row on ?open=ent_kindred with type tabs and its evidence once the lazy chunk loads", async () => {
+    const html = await renderStanding("ent_kindred", KINDRED_EVIDENCE);
     expect(html).toContain('data-open="true"');
     expect(html).toContain('aria-controls="evidence-ent_kindred"');
     expect(html).toContain('id="evidence-ent_kindred"');
@@ -260,8 +276,8 @@ describe("a ranked row expands in place to the week's evidence", () => {
     expect(html).toContain('data-slot="evidence-row"');
   });
 
-  it("keeps every row collapsed without an open param", () => {
-    const html = renderStanding(null, null);
+  it("keeps every row collapsed without an open param", async () => {
+    const html = await renderStanding(null, null);
     expect(html).not.toContain('data-open="true"');
     expect(html).not.toContain('data-slot="row-evidence"');
     expect(html.match(/aria-expanded="false"/g)).toHaveLength(3);
@@ -269,7 +285,7 @@ describe("a ranked row expands in place to the week's evidence", () => {
 });
 
 describe("below 860px an open ranked row's evidence is a bottom sheet", () => {
-  it("server-render keeps the in-place evidence and the sheet stays closed", () => {
+  it("server-render keeps the in-place evidence and the sheet stays closed", async () => {
     const view = homeView({
       payload: PAYLOAD,
       entities: ENTITIES,
@@ -280,15 +296,30 @@ describe("below 860px an open ranked row's evidence is a bottom sheet", () => {
       now: NOW,
       moves: [],
     });
-    const html = renderToStaticMarkup(
-      createElement(
-        MemoryRouter,
-        { initialEntries: ["/app?open=ent_kindred"] },
-        createElement(HomeStanding, { view, openId: "ent_kindred", evidence: KINDRED_EVIDENCE }),
-      ),
+    const html = await renderSettled(
+      createElement(RouterProvider, {
+        router: createMemoryRouter(
+          [
+            {
+              path: "/app",
+              element: createElement(HomeStanding, { view, openId: "ent_kindred", evidence: KINDRED_EVIDENCE }),
+            },
+          ],
+          { initialEntries: ["/app?open=ent_kindred"] },
+        ),
+      }),
     );
     expect(html.match(/data-slot="row-evidence"/g)).toHaveLength(1);
     expect(html).toContain("Pricing page rewrote its hero");
     expect(html).not.toContain('data-slot="row-sheet"');
+  });
+});
+
+describe("a row's pending expand and switch", () => {
+  it("renders no pending text while idle", () => {
+    const html = render(rowFor("ent_kindred"));
+    expect(html).not.toContain('data-slot="row-pending"');
+    expect(html).not.toContain('data-slot="row-switch-pending"');
+    expect(html).not.toContain("aria-busy");
   });
 });

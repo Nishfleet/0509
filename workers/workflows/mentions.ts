@@ -1,6 +1,7 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
+import { MENTIONS_SWEEP_CRON, sweepMonitor } from "../../app/lib/cadence";
 import { readCanarySources } from "../../app/lib/data/source.server";
 import { runCanary } from "../mentions/canary";
 import type { TargetOutcome } from "../mentions/sweep";
@@ -12,12 +13,7 @@ const RETRY: WorkflowStepConfig = {
   retries: { limit: 2, delay: "10 seconds", backoff: "exponential" },
 };
 
-const MONITOR = {
-  schedule: { type: "crontab", value: "0 1 * * *" },
-  checkinMargin: 60,
-  maxRuntime: 90,
-  timezone: "UTC",
-} as const;
+const MONITOR = { ...sweepMonitor(MENTIONS_SWEEP_CRON), timezone: "UTC" } as const;
 
 export interface MentionsOutcome {
   targets: number;

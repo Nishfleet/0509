@@ -1,10 +1,14 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 
 const SELECT_VERDICT = "SELECT p FROM jev_verdict WHERE question_id = ?1 AND input_hash = ?2";
 
 const SELECT_CHOICE = "SELECT choice FROM jev_verdict WHERE question_id = ?1 AND input_hash = ?2";
 
-const COUNT_VERDICTS = "SELECT COUNT(*) AS n FROM jev_verdict WHERE entity_id = ?1 AND decided_at >= ?2";
+const COUNT_VERDICTS =
+  "SELECT COUNT(*) AS n FROM jev_verdict WHERE entity_id = ?1 AND decided_at >= ?2 AND question_id IN (SELECT value FROM json_each(?3))";
+
+const COUNT_VERDICTS_ON_DAY = "SELECT COUNT(*) AS n FROM jev_verdict WHERE decided_at >= ?1 AND decided_at < ?2";
 
 const SELECT_LAST_STILL_COMPETITOR =
   "SELECT choice, decided_at FROM jev_verdict WHERE workspace_id = ?1 AND entity_id = ?2 AND question_id = 'still_competitor_reason' AND choice IS NOT NULL ORDER BY decided_at DESC LIMIT 1";
@@ -27,10 +31,9 @@ export interface StillCompetitorVerdict {
   decidedAt: string;
 }
 
-interface StillCompetitorRow {
-  choice: string;
-  decided_at: string;
-}
+const stillCompetitorRow = z.object({ choice: z.string(), decided_at: z.string() });
+
+type StillCompetitorRow = z.infer<typeof stillCompetitorRow>;
 
 export interface VerdictRow {
   workspaceId: string;
@@ -44,8 +47,25 @@ export interface VerdictRow {
   decidedAt: string;
 }
 
-export async function countVerdictsSince(entityId: string, sinceIso: string): Promise<number> {
-  const row = await env.DB.prepare(COUNT_VERDICTS).bind(entityId, sinceIso).first<{ n: number }>();
+const countVerdictRow = z.object({ n: z.number() });
+
+export async function countVerdictsSince(
+  entityId: string,
+  sinceIso: string,
+  questionIds: readonly string[],
+): Promise<number> {
+  const row = countVerdictRow
+    .nullable()
+    .parse(await env.DB.prepare(COUNT_VERDICTS).bind(entityId, sinceIso, JSON.stringify(questionIds)).first());
+  return row?.n ?? 0;
+}
+
+export async function countVerdictsOnDay(db: D1Database, day: string): Promise<number> {
+  const start = `${day}T00:00:00.000Z`;
+  const startMs = Date.parse(start);
+  if (!Number.isFinite(startMs)) throw new Error("countVerdictsOnDay: day is not YYYY-MM-DD");
+  const end = new Date(startMs + 86_400_000).toISOString();
+  const row = countVerdictRow.nullable().parse(await db.prepare(COUNT_VERDICTS_ON_DAY).bind(start, end).first());
   return row?.n ?? 0;
 }
 
@@ -54,13 +74,21 @@ export async function insertVerdicts(rows: readonly VerdictRow[]): Promise<void>
   await env.DB.batch(rows.map(insertVerdict));
 }
 
+const readCachedNoulRow = z.object({ p: z.number().nullable() });
+
 export async function readCachedNoul(questionId: string, inputHash: string): Promise<number | null> {
-  const row = await env.DB.prepare(SELECT_VERDICT).bind(questionId, inputHash).first<{ p: number | null }>();
+  const row = readCachedNoulRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_VERDICT).bind(questionId, inputHash).first());
   return row?.p ?? null;
 }
 
+const readCachedChoiceRow = z.object({ choice: z.string().nullable() });
+
 export async function readCachedChoice(questionId: string, inputHash: string): Promise<string | null> {
-  const row = await env.DB.prepare(SELECT_CHOICE).bind(questionId, inputHash).first<{ choice: string | null }>();
+  const row = readCachedChoiceRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_CHOICE).bind(questionId, inputHash).first());
   return row?.choice ?? null;
 }
 
@@ -68,9 +96,9 @@ export async function readLastStillCompetitor(
   workspaceId: string,
   entityId: string,
 ): Promise<StillCompetitorVerdict | null> {
-  const row = await env.DB.prepare(SELECT_LAST_STILL_COMPETITOR)
-    .bind(workspaceId, entityId)
-    .first<StillCompetitorRow>();
+  const row: StillCompetitorRow | null = stillCompetitorRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_LAST_STILL_COMPETITOR).bind(workspaceId, entityId).first());
   if (row === null) {
     return null;
   }
@@ -92,14 +120,14 @@ export function insertVerdict(row: VerdictRow): D1PreparedStatement {
   );
 }
 
+const readVerdictIdsRows = z.array(z.object({ id: z.string() }));
+
 export async function readVerdictIds(rows: readonly VerdictRow[]): Promise<readonly string[]> {
   const [first] = rows;
   if (first === undefined) return [];
   const keys = rows.map((row) => ({ questionId: row.questionId, inputHash: row.inputHash }));
-  const result = await env.DB.prepare(SELECT_VERDICT_IDS)
-    .bind(first.workspaceId, JSON.stringify(keys))
-    .all<{ id: string }>();
-  return result.results.map((row) => row.id);
+  const result = await env.DB.prepare(SELECT_VERDICT_IDS).bind(first.workspaceId, JSON.stringify(keys)).all();
+  return readVerdictIdsRows.parse(result.results).map((row) => row.id);
 }
 
 export function linkVerdictsStatement(input: {

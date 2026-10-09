@@ -11,10 +11,10 @@ interface Recorder {
 const recorder = (): Recorder => ({ sent: [], fail: null });
 
 const bindingFor = (rec: Recorder): SendEmail => ({
-  send(message: EmailMessageBuilder) {
+  send(message: EmailMessage | EmailMessageBuilder) {
     if (rec.fail) throw rec.fail;
-    rec.sent.push(message);
-    return Promise.resolve({} as EmailSendResult);
+    rec.sent.push(message as EmailMessageBuilder);
+    return Promise.resolve({ messageId: "unused" });
   },
 });
 
@@ -48,6 +48,11 @@ const seedUserAndWorkspace = async () => {
      VALUES (?, 'Incident lane', ?, 'UTC', 1, 8, '2026-09-23T00:00:00Z')`,
   )
     .bind(WS, USER)
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'starter', 'active', '2026-09-23T00:00:00Z')`,
+  )
+    .bind("plan-incident-lane", WS)
     .run();
   await env.DB.prepare(`INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?, 'email', 1, '{}')`)
     .bind(CHANNEL)
@@ -162,6 +167,7 @@ const cleanTables = [
   "digest",
   "channel",
   "email_suppression",
+  "plan",
   "workspace",
 ];
 
@@ -393,6 +399,16 @@ describe("incident lane (0509#4364)", () => {
       .bind(INCIDENT_A)
       .first<{ n: number }>();
     expect(alerts?.n).toBe(1);
+  });
+
+  it("sends nothing on Scout even when the workspace preference is on", async () => {
+    await env.DB.prepare("DELETE FROM plan WHERE workspace_id = ?").bind(WS).run();
+    const rec = recorder();
+
+    const result = await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
+
+    expect(result.outcome).toBe("muted");
+    expect(rec.sent).toHaveLength(0);
   });
 
   it("returns no_incident when the incident row is gone", async () => {

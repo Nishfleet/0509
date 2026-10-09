@@ -8,18 +8,25 @@ import { parse } from "yaml";
 // 0509#5738: on GitHub a SKIPPED required check counts as a pass (#4664 merged
 // with a required check SKIPPED). So no required job may carry a job-level
 // `if:`; its steps decide instead and the job always reports. The names below
-// are the required_status_checks of ruleset 21391031 that are jobs in this repo.
-// A rename fails the first test instead of silently checking nothing.
-// 0509#7013: `ci-ok` aggregates them so the ruleset can require it alone.
+// are the gate jobs `ci-ok` aggregates (0509#7013), and `ci-ok` is the one
+// required_status_check of ruleset 21391031. A rename fails the first test
+// instead of silently checking nothing. vitest-shard is the test matrix split
+// out of codex-node-checks when one job no longer fit its timeout (0509#7163).
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const WORKFLOWS = path.join(REPO_ROOT, ".github/workflows");
-const REQUIRED = ["Gitleaks", "codex-node-checks", "semgrep", "preview-assert"];
+const REQUIRED = ["Gitleaks", "codex-node-checks", "vitest-shard", "semgrep", "preview-assert", "base-fresh"];
+
+interface WorkflowStep {
+  if?: unknown;
+  run?: string;
+}
 
 interface WorkflowJob {
   name?: string;
   if?: unknown;
   needs?: string | string[];
+  steps?: WorkflowStep[];
 }
 
 interface Job {
@@ -75,6 +82,34 @@ describe("ci-ok aggregates every required check (0509#7013)", () => {
     const ciOk = (await allJobs()).find(({ file, reported }) => file === "ci.yml" && reported === "ci-ok");
     expect(ciOk?.job.if).toBe("always()");
     expect([ciOk?.job.needs ?? []].flat().sort()).toEqual([...REQUIRED].sort());
+  });
+
+  it("passes only when every needed job succeeded, never on a denylist of results", async () => {
+    const ciOk = (await allJobs()).find(({ file, reported }) => file === "ci.yml" && reported === "ci-ok");
+    const steps = ciOk?.job.steps ?? [];
+    expect(steps.map((step) => step.if)).toEqual(["always()"]);
+    expect(steps[0]?.run).toContain('all(.[]; .result == "success")');
+  });
+});
+
+describe("a stale base is caught on the pull request, not in the queue (2026-10-07 incident)", () => {
+  it("rechecks base-fresh whenever a gate file changes on main, over the paths base-fresh reads", async () => {
+    const retest = parse(await readFile(path.join(WORKFLOWS, "stale-base-retest.yml"), "utf8")) as {
+      on: { push: { branches: string[]; paths: string[] } };
+    };
+    const ci = await readFile(path.join(WORKFLOWS, "ci.yml"), "utf8");
+    const line = ci.split("\n").find((l) => l.includes("git log -1 --first-parent")) ?? "";
+    const read = line
+      .split(" -- ")
+      .pop()
+      ?.replace(")", "")
+      .trim()
+      .split(" ")
+      .map((p) => p.replaceAll("'", ""))
+      .sort();
+    const pushed = retest.on.push.paths.map((p) => p.replace("/**", "")).sort();
+    expect(retest.on.push.branches).toEqual(["main"]);
+    expect(read).toEqual(pushed);
   });
 });
 

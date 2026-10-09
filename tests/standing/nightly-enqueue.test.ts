@@ -25,6 +25,8 @@ function scheduleRow(id: string) {
     brief_weekday: UTC_MONDAY.weekday,
     brief_hour: UTC_MONDAY.hour,
     brief_paused_at: null,
+    status: "trialing",
+    current_period_end: null,
   };
 }
 
@@ -55,6 +57,7 @@ describe("nightly standing enqueue (0509#5753)", () => {
     await loadNightlyPlan(db, NOW);
     const select = prepares.find((sql) => sql.includes("FROM entity"));
     expect(select).toContain("w.fixture = 0");
+    expect(select).toContain("INNER JOIN plan p ON p.workspace_id = w.id");
   });
 
   it("loads every due workspace with two queries and one createBatch, never per-workspace scoring", async () => {

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { readEntitlements } from "./plan.server";
 import { shouldRetryD1, tryWhile } from "./retries.server";
+import { resetYoutubeWatchStatement } from "./watch.server";
 
 const identitySocials = z.object({
   socials: z.array(z.object({ platform: z.string(), url: z.string() })).optional(),
@@ -42,14 +43,14 @@ export interface MaybeCompetitor {
   reason: string | null;
 }
 
-interface Row {
-  id: string;
-  name: string | null;
-  domain: string;
-  state: CompetitorState;
-  state_changed_at: string | null;
-  state_reason: string | null;
-}
+const readCompetitorRow = z.object({
+  id: z.string(),
+  name: z.string().nullable(),
+  domain: z.string(),
+  state: z.enum(["on", "off"]),
+  state_changed_at: z.string().nullable(),
+  state_reason: z.string().nullable(),
+});
 
 export interface RetireQuestion {
   suggestionId: string;
@@ -59,24 +60,26 @@ export interface RetireQuestion {
   reason: string | null;
 }
 
-interface OnRow {
-  entity_id: string;
-  name: string | null;
-  domain: string;
-  reason: string | null;
-}
+const onRow = z.object({
+  entity_id: z.string(),
+  name: z.string().nullable(),
+  domain: z.string(),
+  reason: z.string().nullable(),
+});
 
-interface MaybeRow {
-  suggestion_id: string;
-  name: string | null;
-  domain: string;
-  reason: string | null;
-}
+const maybeRow = z.object({
+  suggestion_id: z.string(),
+  name: z.string().nullable(),
+  domain: z.string(),
+  reason: z.string().nullable(),
+});
 
 const SELECT_COMPETITOR =
   "SELECT id, name, domain, state, state_changed_at, state_reason FROM entity WHERE id = ? AND workspace_id = ? AND role = 'competitor' AND state IN ('on', 'off')";
 
 const SELECT_ENTITY_DOMAIN = "SELECT domain FROM entity WHERE id = ? AND workspace_id = ?";
+
+const readEntityDomainRow = z.object({ domain: z.string() });
 
 const SET_COMPETITOR_STATE =
   "UPDATE entity SET state = ?1, state_changed_at = ?2, state_changed_by = 'user', state_reason = NULL WHERE id = ?3 AND workspace_id = ?4 AND role = 'competitor' AND state IN ('on', 'off') AND state <> ?1 AND (?1 = 'off' OR (SELECT count(*) FROM entity WHERE workspace_id = ?4 AND role = 'competitor' AND state = 'on') < ?5)";
@@ -98,7 +101,9 @@ function displayName(name: string | null, domain: string): string {
 }
 
 export async function readCompetitor(workspaceId: string, entityId: string): Promise<CompetitorEntity | null> {
-  const row = await env.DB.prepare(SELECT_COMPETITOR).bind(entityId, workspaceId).first<Row>();
+  const row = readCompetitorRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_COMPETITOR).bind(entityId, workspaceId).first());
   if (row === null) return null;
   return {
     id: row.id,
@@ -113,6 +118,8 @@ export async function readCompetitor(workspaceId: string, entityId: string): Pro
 const SELECT_COMPETITOR_IDENTITY =
   "SELECT identity_json FROM entity WHERE id = ? AND workspace_id = ? AND role = 'competitor' AND json_valid(identity_json)";
 
+const identityJsonRow = z.object({ identity_json: z.string() });
+
 const REPLACE_COMPETITOR_YOUTUBE = `UPDATE entity SET identity_json = json_set(identity_json, '$.socials', json_insert(
   (SELECT json_group_array(json(je.value)) FROM json_each(identity_json, '$.socials') je
    WHERE je.type = 'object' AND CASE WHEN je.type = 'object' THEN json_extract(je.value, '$.platform') END IS NOT 'youtube'),
@@ -120,16 +127,13 @@ const REPLACE_COMPETITOR_YOUTUBE = `UPDATE entity SET identity_json = json_set(i
 WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor' AND json_valid(identity_json)
   AND coalesce(json_type(identity_json, '$.socials'), 'array') = 'array'`;
 
-const RESET_YOUTUBE_WATCH =
-  "UPDATE watch SET config_json = json_remove(CASE WHEN json_valid(config_json) THEN config_json ELSE '{}' END, '$.channelId', '$.pendingChannelId', '$.degraded', '$.noChannel'), last_polled_at = NULL WHERE entity_id = ?1 AND source_id = 'src_mentions_youtube' AND entity_id IN (SELECT id FROM entity WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor' AND json_valid(identity_json) AND coalesce(json_type(identity_json, '$.socials'), 'array') = 'array')";
-
 export async function readCompetitorSocials(
   workspaceId: string,
   entityId: string,
 ): Promise<readonly { platform: string; url: string }[] | null> {
-  const row = await env.DB.prepare(SELECT_COMPETITOR_IDENTITY)
-    .bind(entityId, workspaceId)
-    .first<{ identity_json: string }>();
+  const row = identityJsonRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_COMPETITOR_IDENTITY).bind(entityId, workspaceId).first());
   if (row === null) return null;
   const parsed = identitySocials.safeParse(JSON.parse(row.identity_json));
   return parsed.success ? (parsed.data.socials ?? []) : null;
@@ -146,7 +150,7 @@ export async function replaceCompetitorYoutube(input: {
     () =>
       env.DB.batch([
         env.DB.prepare(REPLACE_COMPETITOR_YOUTUBE).bind(entityId, workspaceId, social),
-        env.DB.prepare(RESET_YOUTUBE_WATCH).bind(entityId, workspaceId),
+        resetYoutubeWatchStatement(entityId, workspaceId),
       ]),
     shouldRetryD1,
   );
@@ -154,7 +158,9 @@ export async function replaceCompetitorYoutube(input: {
 }
 
 export async function readEntityDomain(workspaceId: string, entityId: string): Promise<string | null> {
-  const row = await env.DB.prepare(SELECT_ENTITY_DOMAIN).bind(entityId, workspaceId).first<{ domain: string }>();
+  const row = readEntityDomainRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_ENTITY_DOMAIN).bind(entityId, workspaceId).first());
   return row?.domain ?? null;
 }
 
@@ -181,18 +187,20 @@ export async function readOnboardingCompetitors(
   workspaceId: string,
 ): Promise<{ on: OnCompetitor[]; maybes: MaybeCompetitor[] }> {
   const [onResult, maybeResult] = await Promise.all([
-    env.DB.prepare(SELECT_ON).bind(workspaceId).all<OnRow>(),
-    env.DB.prepare(SELECT_MAYBE).bind(workspaceId).all<MaybeRow>(),
+    env.DB.prepare(SELECT_ON).bind(workspaceId).all(),
+    env.DB.prepare(SELECT_MAYBE).bind(workspaceId).all(),
   ]);
+  const onRows = z.array(onRow).parse(onResult.results);
+  const maybeRows = z.array(maybeRow).parse(maybeResult.results);
 
-  const on = onResult.results.map((row) => ({
+  const on = onRows.map((row) => ({
     entityId: row.entity_id,
     name: displayName(row.name, row.domain),
     domain: row.domain,
     reason: row.reason,
   }));
 
-  const maybes = maybeResult.results.map((row) => ({
+  const maybes = maybeRows.map((row) => ({
     suggestionId: row.suggestion_id,
     name: displayName(row.name, row.domain),
     domain: row.domain,
@@ -243,14 +251,25 @@ const SELECT_WORKSPACE_SELF_ID = "SELECT id FROM entity WHERE workspace_id = ?1 
 
 const SELECT_SELF_BY_ID = "SELECT id FROM entity WHERE id = ?1 AND workspace_id = ?2 AND role = 'self'";
 
+const idRow = z.object({ id: z.string() });
+
 export async function readWorkspaceSelfId(workspaceId: string): Promise<string | null> {
-  const row = await env.DB.prepare(SELECT_WORKSPACE_SELF_ID).bind(workspaceId).first<{ id: string }>();
-  return row?.id ?? null;
+  const row = idRow.nullable().parse(await env.DB.prepare(SELECT_WORKSPACE_SELF_ID).bind(workspaceId).first());
+  return row === null ? null : row.id;
+}
+
+const SELECT_WORKSPACE_ENTITY_IDS = "SELECT id FROM entity WHERE workspace_id = ?1 ORDER BY id";
+
+const workspaceEntityIds = z.array(z.object({ id: z.string() }));
+
+export async function readWorkspaceEntityIds(workspaceId: string): Promise<string[]> {
+  const rows = await env.DB.prepare(SELECT_WORKSPACE_ENTITY_IDS).bind(workspaceId).all();
+  return workspaceEntityIds.parse(rows.results).map((row) => row.id);
 }
 
 export async function readSelfEntityId(workspaceId: string, entityId: string): Promise<string | null> {
-  const row = await env.DB.prepare(SELECT_SELF_BY_ID).bind(entityId, workspaceId).first<{ id: string }>();
-  return row?.id ?? null;
+  const row = idRow.nullable().parse(await env.DB.prepare(SELECT_SELF_BY_ID).bind(entityId, workspaceId).first());
+  return row === null ? null : row.id;
 }
 
 export interface DiscoverySelf {
@@ -277,28 +296,36 @@ const SELECT_KNOWN =
 const SELECT_DISCOVERABLE_WORKSPACES =
   "SELECT e.workspace_id AS workspace_id, w.created_at AS created_at, p.status AS status, p.current_period_end AS current_period_end FROM entity e JOIN workspace w ON w.id = e.workspace_id JOIN plan p ON p.workspace_id = w.id WHERE e.role = 'self' AND w.fixture = 0 ORDER BY e.workspace_id";
 
-interface SelfRow {
-  workspace_id: string;
-  name: string | null;
-  domain: string;
-  description: string | null;
-  kind: string | null;
-}
+const readDiscoverableWorkspacesRow = z.object({
+  workspace_id: z.string(),
+  created_at: z.string(),
+  status: z.string(),
+  current_period_end: z.string().nullable(),
+});
 
-interface KnownRow {
-  domain: string;
-  name: string | null;
-  role: string;
-  state: string;
-}
+const selfRowSchema = z.object({
+  workspace_id: z.string(),
+  name: z.string().nullable(),
+  domain: z.string(),
+  description: z.string().nullable(),
+  kind: z.string().nullable(),
+});
+
+const knownRow = z.object({
+  domain: z.string(),
+  name: z.string().nullable(),
+  role: z.string(),
+  state: z.string(),
+});
 
 export async function readDiscoveryContext(workspaceId: string): Promise<DiscoveryContext | null> {
-  const [selfRow, known] = await Promise.all([
-    env.DB.prepare(SELECT_SELF).bind(workspaceId).first<SelfRow>(),
-    env.DB.prepare(SELECT_KNOWN).bind(workspaceId).all<KnownRow>(),
+  const [self, known] = await Promise.all([
+    env.DB.prepare(SELECT_SELF).bind(workspaceId).first(),
+    env.DB.prepare(SELECT_KNOWN).bind(workspaceId).all(),
   ]);
+  const selfRow = selfRowSchema.nullable().parse(self);
   if (selfRow === null) return null;
-  const rows = known.results;
+  const rows = z.array(knownRow).parse(known.results);
   return {
     self: {
       workspaceId: selfRow.workspace_id,
@@ -325,13 +352,10 @@ interface DiscoverableWorkspace {
 }
 
 export async function readDiscoverableWorkspaces(): Promise<DiscoverableWorkspace[]> {
-  const rows = await env.DB.prepare(SELECT_DISCOVERABLE_WORKSPACES).all<{
-    workspace_id: string;
-    created_at: string;
-    status: string;
-    current_period_end: string | null;
-  }>();
-  return rows.results.map((row) => ({
+  const rows = z
+    .array(readDiscoverableWorkspacesRow)
+    .parse((await env.DB.prepare(SELECT_DISCOVERABLE_WORKSPACES).all()).results);
+  return rows.map((row) => ({
     workspaceId: row.workspace_id,
     createdAt: row.created_at,
     status: row.status,
@@ -342,21 +366,24 @@ export async function readDiscoverableWorkspaces(): Promise<DiscoverableWorkspac
 const SELECT_REFRESH_TARGETS =
   "SELECT id, name, domain, origin FROM entity WHERE workspace_id = ? AND role = 'competitor' AND state = 'on' ORDER BY created_at ASC, id ASC";
 
-interface RefreshRow {
-  id: string;
-  name: string | null;
-  domain: string;
-  origin: EntityOrigin;
-}
+const refreshRow = z.object({
+  id: z.string(),
+  name: z.string().nullable(),
+  domain: z.string(),
+  origin: z.enum(["manual", "auto", "seed"]),
+});
 
 export async function readRefreshTargets(workspaceId: string): Promise<RefreshTarget[]> {
-  const { results } = await env.DB.prepare(SELECT_REFRESH_TARGETS).bind(workspaceId).all<RefreshRow>();
-  return results.map((row) => ({
-    entityId: row.id,
-    name: displayName(row.name, row.domain),
-    domain: row.domain,
-    origin: row.origin,
-  }));
+  const { results } = await env.DB.prepare(SELECT_REFRESH_TARGETS).bind(workspaceId).all();
+  return z
+    .array(refreshRow)
+    .parse(results)
+    .map((row) => ({
+      entityId: row.id,
+      name: displayName(row.name, row.domain),
+      domain: row.domain,
+      origin: row.origin,
+    }));
 }
 
 const INSERT_MANUAL_COMPETITOR =
@@ -365,8 +392,10 @@ const INSERT_MANUAL_COMPETITOR =
 const COUNT_OTHER_ON =
   "SELECT count(*) AS n FROM entity WHERE workspace_id = ? AND role = 'competitor' AND state = 'on' AND domain <> ?";
 
+const countRow = z.object({ n: z.number() });
+
 export async function countOtherOnCompetitors(workspaceId: string, domain: string): Promise<number | null> {
-  const row = await env.DB.prepare(COUNT_OTHER_ON).bind(workspaceId, domain).first<{ n: number }>();
+  const row = countRow.nullable().parse(await env.DB.prepare(COUNT_OTHER_ON).bind(workspaceId, domain).first());
   return row === null ? null : row.n;
 }
 
@@ -387,7 +416,9 @@ export async function addManualCompetitor(input: {
     shouldRetryD1,
   );
   if (result.meta.changes === 1) return "added";
-  const count = await env.DB.prepare(COUNT_OTHER_ON).bind(input.workspaceId, input.domain).first<{ n: number }>();
+  const count = countRow
+    .nullable()
+    .parse(await env.DB.prepare(COUNT_OTHER_ON).bind(input.workspaceId, input.domain).first());
   if (count !== null && count.n >= input.cap) return "at_cap";
   return "added";
 }
@@ -425,25 +456,25 @@ export interface CompetitorRow {
 const SELECT_COMPETITORS =
   "SELECT e.id AS entity_id, e.name, e.domain, e.state, e.state_changed_at, s.verdict_reason AS reason FROM entity e LEFT JOIN suggestion s ON s.entity_id = e.id AND s.workspace_id = e.workspace_id WHERE e.workspace_id = ? AND e.role = 'competitor' AND e.state IN ('on', 'off') ORDER BY e.state = 'off', e.origin <> 'manual', CASE WHEN e.origin = 'manual' THEN e.created_at END DESC, e.created_at ASC, e.id ASC";
 
-interface CompetitorDbRow {
-  entity_id: string;
-  name: string | null;
-  domain: string;
-  state: CompetitorState;
-  state_changed_at: string | null;
-  reason: string | null;
-}
+const competitorDbRow = z.object({
+  entity_id: z.string(),
+  name: z.string().nullable(),
+  domain: z.string(),
+  state: z.enum(["on", "off"]),
+  state_changed_at: z.string().nullable(),
+  reason: z.string().nullable(),
+});
 
 const SELECT_RETIRE_QUESTIONS =
   "SELECT s.id AS suggestion_id, e.id AS entity_id, e.name, e.domain, s.verdict_reason AS reason FROM suggestion s JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id WHERE s.workspace_id = ?1 AND s.kind = 'retire' AND s.status = 'pending' AND e.role = 'competitor' AND e.state = 'on' ORDER BY s.created_at ASC, s.id ASC";
 
-interface RetireQuestionRow {
-  suggestion_id: string;
-  entity_id: string;
-  name: string | null;
-  domain: string;
-  reason: string | null;
-}
+const retireQuestionRow = z.object({
+  suggestion_id: z.string(),
+  entity_id: z.string(),
+  name: z.string().nullable(),
+  domain: z.string(),
+  reason: z.string().nullable(),
+});
 
 const TURN_OFF_FROM_RETIRE_SUGGESTION =
   "UPDATE entity SET state = 'off', state_changed_at = ?1, state_changed_by = 'user', state_reason = NULL WHERE workspace_id = ?2 AND role = 'competitor' AND state = 'on' AND id = (SELECT entity_id FROM suggestion WHERE id = ?3 AND workspace_id = ?2 AND kind = 'retire' AND status = 'pending')";
@@ -471,9 +502,9 @@ export function retireCompetitorByJev(input: {
 const READ_IDENTITY_JSON = "SELECT identity_json FROM entity WHERE id = ?1 AND workspace_id = ?2";
 
 export async function readEntityIdentityJson(workspaceId: string, entityId: string): Promise<string | null> {
-  const row = await env.DB.prepare(READ_IDENTITY_JSON).bind(entityId, workspaceId).first<{
-    identity_json: string;
-  }>();
+  const row = identityJsonRow
+    .nullable()
+    .parse(await env.DB.prepare(READ_IDENTITY_JSON).bind(entityId, workspaceId).first());
   return row === null ? null : row.identity_json;
 }
 
@@ -481,27 +512,33 @@ export async function readCompetitors(
   workspaceId: string,
 ): Promise<{ competitors: CompetitorRow[]; maybes: MaybeCompetitor[]; questions: RetireQuestion[] }> {
   const [rows, { maybes }, questions] = await Promise.all([
-    env.DB.prepare(SELECT_COMPETITORS).bind(workspaceId).all<CompetitorDbRow>(),
+    env.DB.prepare(SELECT_COMPETITORS).bind(workspaceId).all(),
     readOnboardingCompetitors(workspaceId),
-    env.DB.prepare(SELECT_RETIRE_QUESTIONS).bind(workspaceId).all<RetireQuestionRow>(),
+    env.DB.prepare(SELECT_RETIRE_QUESTIONS).bind(workspaceId).all(),
   ]);
   return {
-    competitors: rows.results.map((row) => ({
-      entityId: row.entity_id,
-      name: displayName(row.name, row.domain),
-      domain: row.domain,
-      state: row.state,
-      stateChangedAt: row.state_changed_at,
-      reason: row.reason,
-    })),
+    competitors: z
+      .array(competitorDbRow)
+      .parse(rows.results)
+      .map((row) => ({
+        entityId: row.entity_id,
+        name: displayName(row.name, row.domain),
+        domain: row.domain,
+        state: row.state,
+        stateChangedAt: row.state_changed_at,
+        reason: row.reason,
+      })),
     maybes,
-    questions: questions.results.map((row) => ({
-      suggestionId: row.suggestion_id,
-      entityId: row.entity_id,
-      name: displayName(row.name, row.domain),
-      domain: row.domain,
-      reason: row.reason,
-    })),
+    questions: z
+      .array(retireQuestionRow)
+      .parse(questions.results)
+      .map((row) => ({
+        suggestionId: row.suggestion_id,
+        entityId: row.entity_id,
+        name: displayName(row.name, row.domain),
+        domain: row.domain,
+        reason: row.reason,
+      })),
   };
 }
 
@@ -520,7 +557,9 @@ export async function fillCompetitorSocials(input: {
   return result.meta.changes === 1;
 }
 
-export type SiteFillState = "pending" | "filled" | "gave_up";
+const SITE_FILL_STATES = ["pending", "filled", "gave_up"] as const;
+
+export type SiteFillState = (typeof SITE_FILL_STATES)[number];
 
 const FILL_SELF_SITE_FIELDS =
   "UPDATE entity SET identity_json = json_set(identity_json, '$.description', coalesce(json_extract(identity_json, '$.description'), ?2), '$.socials', CASE WHEN json_array_length(identity_json, '$.socials') > 0 THEN json(json_extract(identity_json, '$.socials')) ELSE json(?3) END, '$.siteFill', 'filled') WHERE id = ?1 AND workspace_id = ?4 AND role = 'self'";
@@ -546,10 +585,14 @@ export async function markSelfSiteFill(workspaceId: string, entityId: string, st
 }
 
 const READ_SELF_SITE_FILL =
-  "SELECT json_extract(identity_json, '$.siteFill') AS site_fill FROM entity WHERE workspace_id = ?1 AND role = 'self'";
+  "SELECT json_extract(identity_json, '$.siteFill') AS site_fill, json_type(identity_json, '$.siteFill') AS site_fill_type FROM entity WHERE workspace_id = ?1 AND role = 'self'";
+
+const siteFillRow = z.object({
+  site_fill: z.enum(SITE_FILL_STATES).nullable(),
+  site_fill_type: z.literal("text").nullable(),
+});
 
 export async function readSelfSiteFill(workspaceId: string): Promise<SiteFillState | null> {
-  const row = await env.DB.prepare(READ_SELF_SITE_FILL).bind(workspaceId).first<{ site_fill: string | null }>();
-  const value = row?.site_fill ?? null;
-  return value === "pending" || value === "filled" || value === "gave_up" ? value : null;
+  const row = siteFillRow.nullable().parse(await env.DB.prepare(READ_SELF_SITE_FILL).bind(workspaceId).first());
+  return row === null ? null : row.site_fill;
 }

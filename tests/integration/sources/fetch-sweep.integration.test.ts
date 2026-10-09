@@ -21,6 +21,7 @@ interface BrowserStub {
   calls: string[];
   closed: number;
   quickAction(action: "content", options: { url: string }): Promise<Response>;
+  close(): Promise<void>;
 }
 
 vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn() }));
@@ -124,6 +125,11 @@ const resetTenant = async () => {
      VALUES (?, 'Fetch sweep', ?, 'UTC', 1, 8, ?)`,
   )
     .bind(WS, USER, NOW)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
+  )
+    .bind(`${WS}-plan`, WS, NOW)
     .run();
   await env.DB.prepare(
     `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
