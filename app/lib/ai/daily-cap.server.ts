@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 
 export const JEV_CALLS_PER_DAY = 20_000;
 
-export const PROPOSER_CALLS_PER_DAY = 3_000;
+export const PROPOSER_CALLS_PER_DAY = 1_000;
 
 type CappedLine = "jev" | "proposer";
 
@@ -19,9 +19,7 @@ export async function takeAiCall(line: CappedLine, limit: number): Promise<void>
   const id = env.BROWSER_BUDGET.idFromName(`ai-calls:${line}:${day}`);
   if (await env.BROWSER_BUDGET.get(id).take(limit)) return;
   const refusal = new AiDailyCapError(line, limit);
-  if (await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName(`ai-calls-alert:${line}:${day}`)).take(1)) {
-    console.error(JSON.stringify({ event: "ai.daily_cap_reached", line, day }));
-    captureException(refusal, { level: "error", fingerprint: ["ai-daily-cap", line] });
-  }
+  console.error(JSON.stringify({ event: "ai.daily_cap_reached", line, day }));
+  captureException(refusal, { level: "error", fingerprint: ["ai-daily-cap", line] });
   throw refusal;
 }
