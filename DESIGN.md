@@ -96,8 +96,8 @@ again" that is disabled for 30 seconds with the count visible.
 
 ### 2.3 Onboarding
 
-Three screens, each one action. A mono step bar with
-the current step on the marker runs across the top of all three.
+Four screens, each one action. A mono step bar with
+the current step on the marker runs across the top of all four.
 
 1. **One input.** Placeholder "yourbrand.com or @yourbrand", button "Continue". Nothing else on screen.
 2. **Check your details.** The heading is "This is you. Fix anything we got wrong." The card
@@ -109,6 +109,9 @@ the current step on the marker runs across the top of all three.
    one-line reason each; maybes below on the bone ground, off, with Jev's reason and its
    probability. "Add one we missed" is the same one input, inline, at the bottom of the
    list. One action: "Start watching — €10/mo".
+4. **Start your trial.** The plan gate is the last onboarding step: the trial terms, then
+   each plan with its price on its button. Checkout starts the 7-day card-up-front trial,
+   and /app does not open until the workspace has a live subscription (#7061).
 
 First viewport of screen 2 at 390 shows the card header and the first four fields. First
 viewport of screen 3 shows the heading and three candidates.
@@ -405,6 +408,8 @@ Declared under both `@media (prefers-color-scheme: dark)` scoped to
 
 A plan gate appears only when a paid thing is asked for, in place, with the price on the
 button and one line saying what it unlocks. Never as an interstitial, never as a banner.
+The one exception is onboarding's last step (§2.3), where the trial starts before /app
+opens (#7061).
 
 ---
 

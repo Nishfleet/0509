@@ -15,6 +15,7 @@ import { insertChangeSignalStatement } from "../data/signal.server";
 import { readCoveredPagePairs } from "../data/snapshot.server";
 import { readEnabledSourceId } from "../data/source.server";
 import type { SiteSweepTarget } from "../data/watch.server";
+import { readPaidWorkspaceIds } from "../data/plan.server";
 import { insertWatches, markWatchPolled, readSiteSweepTargets, readUnwatchedEntities } from "../data/watch.server";
 import { robotsAllows } from "../fetch/robots.server";
 import { normaliseSubject } from "../identity/normalise";
@@ -96,7 +97,8 @@ export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
   await insertWatches(
     pricing.map((page) => ({ id: crypto.randomUUID(), entityId: page.entityId, sourceId, targetKey: page.url })),
   );
-  return [...(await readSiteSweepTargets(SITE_SOURCE_KEY))];
+  const paid = await readPaidWorkspaceIds(new Date(now));
+  return (await readSiteSweepTargets(SITE_SOURCE_KEY)).filter((target) => paid.has(target.workspaceId));
 }
 
 export async function uncoveredItems(items: readonly SiteSweepTarget[], sinceIso: string): Promise<SiteSweepTarget[]> {

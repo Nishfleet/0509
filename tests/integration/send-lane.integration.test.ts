@@ -36,6 +36,11 @@ const seedWorkspace = async () => {
   )
     .bind(WS)
     .run();
+  await env.DB.prepare(
+    "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', '2026-09-22T00:00:00Z')",
+  )
+    .bind(`plan-${WS}`, WS)
+    .run();
 };
 
 const seedChannel = async () => {

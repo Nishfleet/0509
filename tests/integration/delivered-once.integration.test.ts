@@ -123,6 +123,9 @@ describe("delivered once across weeks (0509#4063)", () => {
         `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
          VALUES (?1, ?2, ?3, 'UTC', 1, 8, ?4)`,
       ).bind(WS, "Once Test", USER, "2026-09-14T00:00:00Z"),
+      env.DB.prepare(
+        "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?1, ?2, 'scout', 'trialing', ?3)",
+      ).bind(`plan-${WS}`, WS, "2026-09-14T00:00:00Z"),
       env.DB.prepare(`INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?1, 'email', 1, '{}')`).bind(
         CHANNEL,
       ),

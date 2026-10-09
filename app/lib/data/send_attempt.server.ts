@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 const STALE_CLAIM_MS = 60 * 60 * 1000;
 
 const CLAIM_ATTEMPT = `INSERT INTO send_attempt
@@ -14,9 +16,13 @@ const SENT_UNRECORDED = `SELECT a.id FROM send_attempt a
   JOIN digest d ON d.id = a.digest_id
  WHERE a.idempotency_key = ? AND a.status = 'sent' AND d.status <> 'sent'`;
 
+const readUnrecordedSendRow = z.object({ id: z.string() });
+
 export async function readUnrecordedSend(db: D1Database, idempotencyKey: string): Promise<{ id: string } | null> {
-  return db.prepare(SENT_UNRECORDED).bind(idempotencyKey).first<{ id: string }>();
+  return readUnrecordedSendRow.nullable().parse(await db.prepare(SENT_UNRECORDED).bind(idempotencyKey).first());
 }
+
+const claimSendAttemptRow = z.object({ id: z.string() });
 
 export async function claimSendAttempt(
   db: D1Database,
@@ -29,18 +35,22 @@ export async function claimSendAttempt(
 ): Promise<{ id: string } | null> {
   const now = new Date().toISOString();
   const staleBefore = new Date(Date.now() - STALE_CLAIM_MS).toISOString();
-  return db
-    .prepare(CLAIM_ATTEMPT)
-    .bind(
-      input.idempotencyKey,
-      input.workspaceId,
-      input.targetId,
-      input.digestId,
-      input.idempotencyKey,
-      now,
-      staleBefore,
-    )
-    .first<{ id: string }>();
+  return claimSendAttemptRow
+    .nullable()
+    .parse(
+      await db
+        .prepare(CLAIM_ATTEMPT)
+        .bind(
+          input.idempotencyKey,
+          input.workspaceId,
+          input.targetId,
+          input.digestId,
+          input.idempotencyKey,
+          now,
+          staleBefore,
+        )
+        .first(),
+    );
 }
 
 export async function resolveSendAttempt(
@@ -74,27 +84,36 @@ export async function dropDeadLetteredChange(db: D1Database, signalId: string): 
 
 export type ChangeSlot = { kind: "claimed"; id: string } | { kind: "duplicate" } | { kind: "capped" };
 
+const claimChangeSlotRow = z.object({ id: z.string() });
+const claimChangeSlotExistingRow = z.object({ found: z.number() });
+
 export async function claimChangeSlot(
   db: D1Database,
   input: { idempotencyKey: string; workspaceId: string; targetId: string; since: string; cap: number },
 ): Promise<ChangeSlot> {
   const now = new Date().toISOString();
   const staleBefore = new Date(Date.now() - STALE_CLAIM_MS).toISOString();
-  const claimed = await db
-    .prepare(CLAIM_CHANGE_SLOT)
-    .bind(
-      crypto.randomUUID(),
-      input.workspaceId,
-      input.targetId,
-      input.idempotencyKey,
-      now,
-      input.workspaceId,
-      input.since,
-      input.cap,
-      staleBefore,
-    )
-    .first<{ id: string }>();
+  const claimed = claimChangeSlotRow
+    .nullable()
+    .parse(
+      await db
+        .prepare(CLAIM_CHANGE_SLOT)
+        .bind(
+          crypto.randomUUID(),
+          input.workspaceId,
+          input.targetId,
+          input.idempotencyKey,
+          now,
+          input.workspaceId,
+          input.since,
+          input.cap,
+          staleBefore,
+        )
+        .first(),
+    );
   if (claimed !== null) return { kind: "claimed", id: claimed.id };
-  const existing = await db.prepare(SELECT_ATTEMPT_KEY).bind(input.idempotencyKey).first<{ found: number }>();
+  const existing = claimChangeSlotExistingRow
+    .nullable()
+    .parse(await db.prepare(SELECT_ATTEMPT_KEY).bind(input.idempotencyKey).first());
   return existing === null ? { kind: "capped" } : { kind: "duplicate" };
 }

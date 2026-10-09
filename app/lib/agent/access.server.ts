@@ -96,6 +96,7 @@ async function apiAccessDenied(request: Request): Promise<boolean> {
 
 export async function createAgentKey(request: Request, form: FormData): Promise<CreateKeyResult> {
   const { name, submission } = keyFields(form);
+  if (await submissionMinted(request, submission).catch(() => false)) return { newKey: null, duplicate: true };
   if (await apiAccessDenied(request)) return { newKey: null, duplicate: false };
   try {
     const body = { name, metadata: { submission } };

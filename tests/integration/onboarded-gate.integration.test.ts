@@ -99,6 +99,12 @@ describe("requireOnboarded against real D1", () => {
     expect(await redirectedTo(request)).toBe("/onboarding/competitors");
 
     await markWatchingStarted(workspaceId, "2026-09-28T00:01:00.000Z");
+    expect(await redirectedTo(request)).toBe("/onboarding/plan");
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
+    )
+      .bind("plan-gate-2", workspaceId, "2026-09-28T00:01:00.000Z")
+      .run();
     const context = new RouterContextProvider();
     await expect(requireOnboarded({ request, context })).resolves.toBeUndefined();
     expect(context.get(onboardedContext).workspaceId).toBe(workspaceId);

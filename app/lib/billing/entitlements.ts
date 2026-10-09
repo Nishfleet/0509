@@ -72,7 +72,7 @@ export function pageRoleInScope(role: string, scope: Entitlements["site_pages_sc
   return scope === "all" || role === "home" || role === "pricing";
 }
 
-const PAID_SCRAPER_SOURCE_KEYS: ReadonlySet<string> = new Set(["scraper.paid"]);
+const PAID_SCRAPER_SOURCE_KEYS: ReadonlySet<string> = new Set(["scraper.paid", "x.search"]);
 
 export function paidSourceAllowed(sourceKey: string, entitled: boolean): boolean {
   return entitled || !PAID_SCRAPER_SOURCE_KEYS.has(sourceKey);
@@ -84,6 +84,10 @@ export function isSubscriptionLive(plan: { status: string; currentPeriodEnd: str
   if (PAID_STATUSES.has(plan.status)) return true;
   const paidThrough = plan.currentPeriodEnd === null ? Number.NaN : Date.parse(plan.currentPeriodEnd);
   return plan.status === "cancelled" && paidThrough > now.getTime();
+}
+
+export function isWorkspacePaid(plan: { status: string; currentPeriodEnd: string | null } | null, now: Date): boolean {
+  return plan !== null && isSubscriptionLive(plan, now);
 }
 
 export function entitledTier(

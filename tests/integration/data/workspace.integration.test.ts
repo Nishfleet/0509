@@ -54,6 +54,8 @@ describe("readWorkspaceLanding", () => {
       self_id: "ent-a",
       input_raw: "Acme and its rivals",
       watching_started_at: "2026-09-25T00:00:00Z",
+      plan_status: null,
+      plan_current_period_end: null,
     });
   });
 
@@ -64,6 +66,8 @@ describe("readWorkspaceLanding", () => {
       self_id: null,
       input_raw: null,
       watching_started_at: null,
+      plan_status: null,
+      plan_current_period_end: null,
     });
   });
 
