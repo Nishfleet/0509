@@ -4,6 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const ai = vi.hoisted(() => ({ run: vi.fn() }));
 
 vi.mock("cloudflare:workers", () => ({ env: { AI: ai, AI_SPEND: "on" } }));
+vi.mock("../../app/lib/ai/daily-cap.server", () => ({
+  JEV_CALLS_PER_DAY: 1,
+  takeAiCall: () => Promise.resolve(),
+}));
 vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn() }));
 vi.mock("../../app/lib/data/jev_verdict.server", () => ({
   readCachedNoul: () => Promise.resolve(null),

@@ -14,13 +14,18 @@ const jevAnswers = {
   states: [] as unknown[],
 };
 
-const jevFailures = { next: 0, message: "gateway down" };
+const jevFailures: { next: number; message: string; on: string | null } = {
+  next: 0,
+  message: "gateway down",
+  on: null,
+};
 
 function installJev(): void {
   Reflect.set(env, "AI", {
     async run(_model: string, request: { state: unknown; questions: Record<string, { type: string }> }) {
       jevAnswers.states.push(request.state);
       jevAnswers.calls += 1;
+      if (jevFailures.on !== null && jevFailures.on in request.questions) throw new Error(jevFailures.message);
       if (jevFailures.next > 0) {
         jevFailures.next -= 1;
         throw new Error(jevFailures.message);
@@ -149,6 +154,7 @@ describe("judgeChange", () => {
     jevAnswers.calls = 0;
     jevAnswers.states.length = 0;
     jevFailures.next = 0;
+    jevFailures.on = null;
     jevFailures.message = "gateway down";
     installJev();
     await seedWorkspace("ws-mine");
@@ -455,7 +461,7 @@ describe("judgeChange", () => {
   it("case h: Jev unavailable defers without writing verdicts", async () => {
     jevAnswers.noul.set("noteworthy_change", 0.95);
     jevAnswers.choice.set("change_kind", "pricing");
-    jevFailures.next = 1;
+    jevFailures.on = "noteworthy_change";
 
     const judgment = await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
 
@@ -467,7 +473,7 @@ describe("judgeChange", () => {
   it("case h2: a Jev outage during a site judgment is logged", async () => {
     jevAnswers.noul.set("noteworthy_change", 0.95);
     jevAnswers.choice.set("change_kind", "pricing");
-    jevFailures.next = 1;
+    jevFailures.on = "noteworthy_change";
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
@@ -480,7 +486,7 @@ describe("judgeChange", () => {
   it("case h3: a rate-limited Jev call throws so the workflow step can retry", async () => {
     jevAnswers.noul.set("noteworthy_change", 0.95);
     jevAnswers.choice.set("change_kind", "pricing");
-    jevFailures.next = 1;
+    jevFailures.on = "noteworthy_change";
     jevFailures.message = "2003: Rate limited";
 
     await expect(judgeChange(judgeInput({ entity: "rival", isSelf: false }))).rejects.toThrow(JevRateLimitedError);
@@ -489,7 +495,7 @@ describe("judgeChange", () => {
 
   it("case i: Jev unavailable for the self breakage question defers too", async () => {
     jevAnswers.noul.set("own_site_breakage", 0.7);
-    jevFailures.next = 1;
+    jevFailures.on = "own_site_breakage";
 
     const judgment = await judgeChange(judgeInput({ entity: "mine", isSelf: true }));
 

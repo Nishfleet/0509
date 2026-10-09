@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { parse } from "tldts";
 import { z } from "zod";
 
+import { PROPOSER_CALLS_PER_DAY, takeAiCall } from "../../ai/daily-cap.server";
 import { aiGatewayId } from "../../ai/gateway.server";
 import { refuseWhenAiSpendOff } from "../../ai/spend.server";
 import { fetchOutbound } from "../../fetch/outbound.server";
@@ -159,6 +160,7 @@ export function proposalBody(raw: unknown): unknown {
 
 async function propose(model: (typeof MODELS)[number], subject: Subject, site: SiteText): Promise<Proposal[]> {
   refuseWhenAiSpendOff();
+  await takeAiCall("proposer", PROPOSER_CALLS_PER_DAY);
   const raw: unknown = await env.AI.run(
     model,
     {

@@ -182,6 +182,9 @@ describe("judgeWeek", () => {
     const result = await judgeWeek(env.DB, inputFor(seeded.workspaceId));
 
     expect(result).toEqual({ picks: [], judged: 0, unjudged: true });
+    await vi.waitFor(() => {
+      expect(run).toHaveBeenCalledTimes(2);
+    });
   });
 
   it("never sends a tombstoned signal even with a 0.95 verdict", async () => {

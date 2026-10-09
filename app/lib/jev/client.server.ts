@@ -2,6 +2,7 @@ import { captureException, captureMessage } from "@sentry/cloudflare";
 import { env, waitUntil } from "cloudflare:workers";
 import { z } from "zod";
 
+import { JEV_CALLS_PER_DAY, takeAiCall } from "../ai/daily-cap.server";
 import { aiGatewayId } from "../ai/gateway.server";
 import { AiSpendOffError, refuseWhenAiSpendOff } from "../ai/spend.server";
 import { insertJevFailure } from "../data/jev_failure.server";
@@ -229,8 +230,9 @@ function choiceHash(workspaceId: string, question: ChoiceQuestion, state: unknow
   );
 }
 
-function decide(state: unknown, questions: Record<string, unknown>, retries?: AttemptPolicy): Promise<unknown> {
+async function decide(state: unknown, questions: Record<string, unknown>, retries?: AttemptPolicy): Promise<unknown> {
   refuseWhenAiSpendOff();
+  await takeAiCall("jev", JEV_CALLS_PER_DAY);
   const gatewayId = aiGatewayId();
   const gateway = retries === undefined ? { id: gatewayId } : { id: gatewayId, retries };
   return env.AI.run(
