@@ -1,3 +1,95 @@
+---
+name: Five to Nine (0509)
+colors:
+  bone: "#f4f1e8"
+  card: "#fffdf6"
+  ink: "#0e0d0a"
+  ink-soft: "#55524a"
+  ink-faint: "#8e8878"
+  line: "#ddd6c6"
+  green: "#16c47f"
+  green-ink: "#064d31"
+  green-wash: "#d9f6e8"
+  red: "#e0442c"
+  on-green: "#0e0d0a"
+typography:
+  display-1:
+    fontFamily: '"Bricolage Grotesque", "Bricolage Fallback", ui-sans-serif, sans-serif'
+    fontSize: "clamp(2.35rem, 4.6vw, 4.1rem)"
+    lineHeight: 1.04
+    letterSpacing: "-0.045em"
+  display-2:
+    fontFamily: '"Bricolage Grotesque", "Bricolage Fallback", ui-sans-serif, sans-serif'
+    fontSize: "clamp(1.8rem, 4vw, 3rem)"
+    lineHeight: 1.04
+    letterSpacing: "-0.04em"
+  display-3:
+    fontFamily: '"Bricolage Grotesque", "Bricolage Fallback", ui-sans-serif, sans-serif'
+    fontSize: "clamp(1.7rem, 3.6vw, 2.8rem)"
+    lineHeight: 1.06
+    letterSpacing: "-0.035em"
+  mark-lg:
+    fontFamily: '"Bricolage Grotesque", "Bricolage Fallback", ui-sans-serif, sans-serif'
+    fontSize: "clamp(1.4rem, 3.4vw, 2.5rem)"
+    lineHeight: 1.1
+    letterSpacing: "-0.02em"
+  mark-md:
+    fontFamily: '"Bricolage Grotesque", "Bricolage Fallback", ui-sans-serif, sans-serif'
+    fontSize: "clamp(1rem, 1.9vw, 1.45rem)"
+    lineHeight: 1.1
+    letterSpacing: "-0.02em"
+  mark-sm:
+    fontFamily: '"Bricolage Grotesque", "Bricolage Fallback", ui-sans-serif, sans-serif'
+    fontSize: "1rem"
+    lineHeight: 1.1
+    letterSpacing: "-0.02em"
+  title:
+    fontFamily: '"Bricolage Grotesque", "Bricolage Fallback", ui-sans-serif, sans-serif'
+    fontSize: "1.15rem"
+    lineHeight: 1.1
+    letterSpacing: "0.02em"
+  row-name:
+    fontFamily: '"Bricolage Grotesque", "Bricolage Fallback", ui-sans-serif, sans-serif'
+    fontSize: "1.02rem"
+    lineHeight: 1.2
+    letterSpacing: "-0.015em"
+  body:
+    fontFamily: '"Instrument Sans", "Instrument Fallback", ui-sans-serif, -apple-system, sans-serif'
+    fontSize: "1rem"
+    lineHeight: 1.55
+    letterSpacing: "0"
+  body-sm:
+    fontFamily: '"Instrument Sans", "Instrument Fallback", ui-sans-serif, -apple-system, sans-serif'
+    fontSize: "0.88rem"
+    lineHeight: 1.5
+    letterSpacing: "0"
+  eyebrow:
+    fontFamily: '"IBM Plex Mono", "Plex Mono Fallback", ui-monospace, "SF Mono", Menlo, monospace'
+    fontSize: "0.72rem"
+    lineHeight: 1.4
+    letterSpacing: "0.16em"
+  pill:
+    fontFamily: '"IBM Plex Mono", "Plex Mono Fallback", ui-monospace, "SF Mono", Menlo, monospace'
+    fontSize: "0.66rem"
+    lineHeight: 1.3
+    letterSpacing: "0.08em"
+  meta:
+    fontFamily: '"IBM Plex Mono", "Plex Mono Fallback", ui-monospace, "SF Mono", Menlo, monospace'
+    fontSize: "0.68rem"
+    lineHeight: 1.4
+    letterSpacing: "0.06em"
+rounded:
+  none: 0px
+  xs: 0px
+  sm: 0px
+  md: 0px
+  lg: 0px
+  xl: 0px
+  2xl: 0px
+  3xl: 0px
+  4xl: 0px
+---
+
 # Design brief — the 0509 rebuild
 
 Umbrella #3842. Issue #3878. Author: the Opus deputy (design lead). Checked by Fable.
