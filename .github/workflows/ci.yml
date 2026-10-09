@@ -110,7 +110,7 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4]
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 12
     env:
       SHARD: ${{ matrix.shard }}/4
     steps:
