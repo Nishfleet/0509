@@ -235,6 +235,7 @@ export interface MentionSignal {
 }
 
 const readSeenDedupKeysRow = z.object({ dedup_key: z.string() });
+const readSeenNormUrlHashRow = z.object({ norm_url_hash: z.string() });
 
 export async function readSeenDedupKeys(sourceId: string, keys: readonly string[]): Promise<Set<string>> {
   if (keys.length === 0) return new Set();
@@ -245,8 +246,9 @@ export async function readSeenDedupKeys(sourceId: string, keys: readonly string[
 
 export async function readSeenNormUrlHashes(entityId: string, hashes: readonly string[]): Promise<Set<string>> {
   if (hashes.length === 0) return new Set();
-  const rows = await env.DB.prepare(SEEN_URLS).bind(entityId, JSON.stringify(hashes)).all<{ norm_url_hash: string }>();
-  return new Set(rows.results.map((row) => row.norm_url_hash));
+  const { results } = await env.DB.prepare(SEEN_URLS).bind(entityId, JSON.stringify(hashes)).all();
+  const rows = z.array(readSeenNormUrlHashRow).parse(results);
+  return new Set(rows.map((row) => row.norm_url_hash));
 }
 
 export function insertMention(signal: MentionSignal): D1PreparedStatement {

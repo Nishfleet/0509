@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 const ESCALATIONS_PER_BRAND_PER_DAY = 4;
 const SCREENSHOTS_PER_BRAND_PER_DAY = 4;
 const SHARE_IMAGES_PER_WORKSPACE_PER_DAY = 10;
+const BROWSER_CONTENT_TIMEOUT_MS = 25_000;
 
 function browserMsCounter(day: string) {
   return env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName(`browser-ms:${day}`));
@@ -39,6 +40,20 @@ export async function takeBrowserShareImage(workspaceId: string, day: string): P
   return env.BROWSER_BUDGET.get(id).take(SHARE_IMAGES_PER_WORKSPACE_PER_DAY);
 }
 
+async function withinMs<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`no answer after ${String(ms)} ms`));
+    }, ms);
+  });
+  try {
+    return await Promise.race([work, expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function browserContent(
   url: string,
 ): Promise<{ ok: true; res: Response } | { ok: false; kind: "unconfigured" | "threw"; cause: string }> {
@@ -46,7 +61,7 @@ export async function browserContent(
     return { ok: false, kind: "unconfigured", cause: "browser binding is not configured" };
   }
   try {
-    const res = await env.BROWSER.quickAction("content", { url });
+    const res = await withinMs(env.BROWSER.quickAction("content", { url }), BROWSER_CONTENT_TIMEOUT_MS);
     await recordBrowserMs(res);
     return { ok: true, res };
   } catch (err) {

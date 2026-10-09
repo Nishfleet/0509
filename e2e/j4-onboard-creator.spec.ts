@@ -50,7 +50,20 @@ test.describe("J4 onboard a creator handle", () => {
       const started = Date.now();
       await input.press("Enter");
 
-      await expect(page.getByRole("heading", { name: "Check your details. Fix anything that's wrong." })).toBeVisible();
+      try {
+        await expect(
+          page.getByRole("heading", { name: "Check your details. Fix anything that's wrong." }),
+        ).toBeVisible();
+      } catch (error) {
+        const shown = await page
+          .locator("main")
+          .innerText({ timeout: 2_000 })
+          .catch(() => "no main element");
+        throw new Error(
+          `${(error as Error).message}\nurl=${new URL(page.url()).pathname}\nmain=${shown.slice(0, 400)}`,
+          { cause: error },
+        );
+      }
       const editName = page.getByRole("button", { name: "edit name" });
       await expect(editName).toBeVisible({ timeout: 30_000 });
       const firstField = Date.now() - started;
