@@ -150,6 +150,20 @@ describe("e2e fixture teardown detector", () => {
     expect(source).not.toContain("/__wall?state=off");
   });
 
+  it("J4 answers the public-subject question the same way J5 and J8 do", async () => {
+    const confirm = 'getByRole("button", { name: "Yes, a business or creator" })';
+    const pass = "toPass({ timeout: 30_000 })";
+    for (const rel of [
+      "e2e/j4-onboard-creator.spec.ts",
+      "e2e/j5-onboard-blocked.spec.ts",
+      "e2e/j8-own-site-break.spec.ts",
+    ]) {
+      const source = await readFile(path.join(REPO_ROOT, rel), "utf8");
+      expect(source, rel).toContain(confirm);
+      expect(source, rel).toContain(pass);
+    }
+  });
+
   it("treats every FIXTURE_ACCOUNTS address and the legacy kept accounts as kept, and a per-run one as not", () => {
     for (const account of Object.values(FIXTURE_ACCOUNTS)) {
       expect(isKeptAccount(account.email)).toBe(true);

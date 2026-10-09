@@ -489,6 +489,38 @@ describe("readUrl", () => {
     }
   });
 
+  it("fails typed when the browser call does not finish in time", { timeout: 20_000 }, async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const calls: string[] = [];
+    const browser = {
+      calls,
+      closed: 0,
+      async quickAction(_action: "content", options: { url: string }) {
+        calls.push(options.url);
+        return new Promise<Response>(() => undefined);
+      },
+      close() {
+        return Promise.resolve();
+      },
+    };
+    const started = Date.now();
+    try {
+      install(browser);
+      const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("escalation-failed");
+      expect(result.detail).toContain("timed out");
+      expect(Date.now() - started).toBeGreaterThan(7_000);
+      expect(Date.now() - started).toBeLessThan(15_000);
+      expect(browser.calls).toHaveLength(1);
+    } finally {
+      stub.restore();
+    }
+  });
+
   it("logs the escalation even when the browser call throws", async () => {
     const stub = stubFetch({
       "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),

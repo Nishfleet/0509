@@ -3,6 +3,19 @@ import { env } from "cloudflare:workers";
 const ESCALATIONS_PER_BRAND_PER_DAY = 4;
 const SCREENSHOTS_PER_BRAND_PER_DAY = 4;
 const SHARE_IMAGES_PER_WORKSPACE_PER_DAY = 10;
+export const BROWSER_CONTENT_TIMEOUT_MS = 8_000;
+
+function abortAfter(ms: number): Promise<never> {
+  return new Promise((_, reject) => {
+    AbortSignal.timeout(ms).addEventListener(
+      "abort",
+      () => {
+        reject(new DOMException(`browser content timed out after ${String(ms)}ms`, "TimeoutError"));
+      },
+      { once: true },
+    );
+  });
+}
 
 function browserMsCounter(day: string) {
   return env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName(`browser-ms:${day}`));
@@ -46,7 +59,13 @@ export async function browserContent(
     return { ok: false, kind: "unconfigured", cause: "browser binding is not configured" };
   }
   try {
-    const res = await env.BROWSER.quickAction("content", { url });
+    const res = await Promise.race([
+      env.BROWSER.quickAction("content", {
+        url,
+        gotoOptions: { timeout: BROWSER_CONTENT_TIMEOUT_MS, waitUntil: "networkidle0" },
+      }),
+      abortAfter(BROWSER_CONTENT_TIMEOUT_MS),
+    ]);
     await recordBrowserMs(res);
     return { ok: true, res };
   } catch (err) {

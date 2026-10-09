@@ -434,6 +434,28 @@ describe("startCard", () => {
     expect(left).toBe(3);
   });
 
+  it("returns the unreached card when the browser call does not finish in time", { timeout: 20_000 }, async () => {
+    stubAi(0.95);
+    stubWeb(() => new Response("blocked", { status: 403 }));
+    installBrowser({
+      calls: [],
+      quickAction() {
+        return new Promise(() => undefined);
+      },
+    });
+    const started = Date.now();
+    const card = startCard("ws-1", subjectFor("hangingwall.com"), []);
+    expect(await card.site).toEqual({
+      name: null,
+      description: null,
+      socials: [],
+      review: { name: "empty", description: "empty", socials: "empty" },
+      unfound: true,
+    });
+    expect(Date.now() - started).toBeGreaterThan(7_000);
+    expect(Date.now() - started).toBeLessThan(15_000);
+  });
+
   it("returns the unreached card without a browser call when the day's budget is spent", async () => {
     const subject = subjectFor("botgatedspent.com");
     const day = new Date().toISOString().slice(0, 10);

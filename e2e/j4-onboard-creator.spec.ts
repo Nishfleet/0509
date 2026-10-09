@@ -50,7 +50,14 @@ test.describe("J4 onboard a creator handle", () => {
       const started = Date.now();
       await input.press("Enter");
 
-      await expect(page.getByRole("heading", { name: "Check your details. Fix anything that's wrong." })).toBeVisible();
+      const business = page.getByRole("button", { name: "Yes, a business or creator" });
+      await expect(async () => {
+        if (await business.isVisible()) await business.click();
+        await expect(page).toHaveURL(/\/onboarding\/identity\?subject=/, { timeout: 3_000 });
+      }).toPass({ timeout: 30_000 });
+      await expect(page.getByRole("heading", { name: "Check your details. Fix anything that's wrong." })).toBeVisible({
+        timeout: 30_000,
+      });
       const editName = page.getByRole("button", { name: "edit name" });
       await expect(editName).toBeVisible({ timeout: 30_000 });
       const firstField = Date.now() - started;
