@@ -8,6 +8,7 @@ import { productIdFor, testerProductId } from "./products.server";
 interface CheckoutInput {
   workspaceId: string;
   email: string;
+  returnPath?: string;
 }
 
 async function startCheckout(input: CheckoutInput & { product: string; planId: PlanId; trialDays?: number }) {
@@ -17,6 +18,7 @@ async function startCheckout(input: CheckoutInput & { product: string; planId: P
     environment: env.DODO_ENVIRONMENT,
   });
   const plan = input.planId;
+  const returnPath = input.returnPath ?? `/app/competitors?upgraded=${plan}`;
   try {
     const session = await client.checkoutSessions.create({
       product_cart: [{ product_id: input.product, quantity: 1 }],
@@ -27,7 +29,7 @@ async function startCheckout(input: CheckoutInput & { product: string; planId: P
         plan,
         proof: await checkoutProof(input.workspaceId, input.product),
       },
-      return_url: `${env.BETTER_AUTH_URL}/app/competitors?upgraded=${plan}`,
+      return_url: `${env.BETTER_AUTH_URL}${returnPath}`,
     });
     return session.checkout_url ?? null;
   } catch (error) {

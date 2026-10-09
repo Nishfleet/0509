@@ -86,6 +86,10 @@ export function isSubscriptionLive(plan: { status: string; currentPeriodEnd: str
   return plan.status === "cancelled" && paidThrough > now.getTime();
 }
 
+export function isWorkspacePaid(plan: { status: string; currentPeriodEnd: string | null } | null, now: Date): boolean {
+  return plan !== null && isSubscriptionLive(plan, now);
+}
+
 export function entitledTier(
   plan: { tier: string; status: string; currentPeriodEnd: string | null },
   now: Date,

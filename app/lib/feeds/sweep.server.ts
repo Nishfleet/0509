@@ -1,6 +1,7 @@
 import { getDomain } from "tldts";
 import { z } from "zod";
 
+import { readPaidWorkspaceIds } from "../data/plan.server";
 import type { FeedTarget } from "../data/watch.server";
 import { insertWatches, readEntitiesWithoutFeedWatch, readFeedTargets } from "../data/watch.server";
 import { readEnabledSourceId } from "../data/source.server";
@@ -23,7 +24,10 @@ export async function planFeedSweep(): Promise<{
   entities: readonly { id: string; domain: string }[];
   targets: readonly FeedTarget[];
 }> {
-  return { entities: await readEntitiesWithoutFeedWatch(), targets: await readFeedTargets() };
+  const paid = await readPaidWorkspaceIds(new Date());
+  const targets = (await readFeedTargets()).filter((target) => paid.has(target.workspaceId));
+  const entities = (await readEntitiesWithoutFeedWatch()).filter((entity) => paid.has(entity.workspaceId));
+  return { entities: entities.map(({ id, domain }) => ({ id, domain })), targets };
 }
 
 async function firstReadableFeed(candidates: readonly string[]): Promise<string | null> {

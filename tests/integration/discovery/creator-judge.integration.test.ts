@@ -21,6 +21,9 @@ async function seedWorkspace(identityJson: string): Promise<string> {
       "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Training with Mia', ?2, 'UTC', 1, 8, ?3)",
     ).bind(workspaceId, userId, NOW),
     env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?1, ?2, 'scout', 'trialing', ?3)",
+    ).bind(`${workspaceId}-plan`, workspaceId, NOW),
+    env.DB.prepare(
       "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, created_at) VALUES (?1, ?2, 'self', 'mia.example', 'Training with Mia', ?3, ?4)",
     ).bind(`${workspaceId}-self`, workspaceId, identityJson, NOW),
   ]);

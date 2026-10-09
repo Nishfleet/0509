@@ -39,6 +39,9 @@ async function seedWorkspace(): Promise<{ workspaceId: string; competitorId: str
       "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Gymshark', ?2, 'UTC', 1, 8, ?3)",
     ).bind(workspaceId, userId, NIGHT_ONE),
     env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?1, ?2, 'scout', 'trialing', ?3)",
+    ).bind(`${workspaceId}-plan`, workspaceId, NIGHT_ONE),
+    env.DB.prepare(
       "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, created_at) VALUES (?1, ?2, 'self', ?3, 'Gymshark', '{\"description\":\"Gym clothing\"}', ?4)",
     ).bind(`${workspaceId}-self`, workspaceId, `gymshark-rejudge-${String(runs)}.com`, NIGHT_ONE),
     env.DB.prepare(

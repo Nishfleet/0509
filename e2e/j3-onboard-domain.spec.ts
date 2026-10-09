@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { onboardedStatePath } from "../playwright.config";
 import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink } from "./inbox";
 
 let createdEmail = "";
@@ -17,8 +18,9 @@ test.afterEach(async ({ page }, testInfo) => {
 });
 
 // J3 from docs/REBUILD-DONE.md §A: one input becomes a confirmed brand card
-// in under 30 s, a competitor list in under 60 s, and Home's first-file
-// panel names a real arrival time. Timings come from the test's own clock.
+// in under 30 s, a competitor list in under 60 s, and Start watching leads to
+// the plan step (#7061): a per-run identity has no live plan, so Home is not
+// its finish line. Timings come from the test's own clock.
 // Production only: the preview lane's wrangler dev has no EMAIL binding and
 // no inbox to read, so the whole spec skips there rather than fake the journey.
 test.skip(
@@ -96,30 +98,12 @@ for (const { width, height } of [
       await expect(watching.first()).toBeVisible();
     }
     await page.getByRole("button", { name: "Start watching" }).click();
-    await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
-    await expect(page.locator('[data-home="standing"]')).toBeVisible();
-
-    const panel = page.locator('[data-home="first-file"]');
-    if (!(await panel.isVisible())) {
-      await page.goto("/app/competitors");
-      await page.locator("#add-competitor").fill("nike.com");
-      await page.getByRole("button", { name: "Add" }).click();
-      const row = page
-        .getByRole("list", { name: "Competitors", exact: true })
-        .getByRole("listitem")
-        .filter({ hasText: "nike.com" });
-      await expect(row.getByRole("switch")).toBeChecked({ timeout: 30_000 });
-      await page.goto("/app");
-      await expect(page.locator('[data-home="standing"]')).toBeVisible();
-    }
-    await expect(panel).toContainText(
-      /Your first site snapshots arrive on (?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday) \d{1,2} [A-Z][a-z]+, around (?:[01]\d|2[0-3]):[0-5]\d \S+\./,
-    );
-    await expect(panel).not.toContainText("once the first check is scheduled");
-    const homeMs = Date.now() - started;
+    await expect(page).toHaveURL(/\/onboarding\/plan$/, { timeout: 30_000 });
+    await expect(page.getByRole("heading", { name: "Start your trial" })).toBeVisible();
+    const planMs = Date.now() - started;
     test.info().annotations.push({
-      type: "input-to-home-first-file-ms",
-      description: String(homeMs),
+      type: "input-to-plan-step-ms",
+      description: String(planMs),
     });
 
     expect(consoleErrors).toEqual([]);
@@ -132,3 +116,25 @@ for (const { width, height } of [
     test.info().annotations.push({ type: "domain", description: "gymshark.com" });
   });
 }
+
+// J3's "Home not empty" (docs/REBUILD-DONE.md §A) on a kept account with a
+// complimentary plan (migration 0048, #7225): the onboarded-setup session for
+// this lane is gymshark.com with nike.com and adidas.com ON, the same subject
+// the per-run journey above onboards before it stops at the plan step.
+test.describe("J3 Home after onboarding", () => {
+  test.use({
+    storageState: async ({}, use, testInfo) => {
+      await use(onboardedStatePath(testInfo.project.name === "phone-390" ? "phone" : "desktop"));
+    },
+  });
+
+  test("an onboarded gymshark.com workspace opens a Home that is not empty", async ({ page }) => {
+    const response = await page.goto("/app");
+    expect(response?.status()).toBe(200);
+    await expect(page).toHaveURL(/\/app$/);
+    const standing = page.locator('[data-home="standing"]');
+    await expect(standing).toBeVisible();
+    await expect(standing.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(standing.getByText("Add a competitor to see where you stand.")).toHaveCount(0);
+  });
+});
