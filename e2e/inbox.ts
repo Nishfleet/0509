@@ -571,11 +571,22 @@ export async function signInWithMagicLink(
   return { link, status: response?.status() ?? 0 };
 }
 
-export async function confirmPublicSubject(page: Page, subjectUrl: RegExp): Promise<void> {
+export async function confirmPublicSubject(page: Page, subject?: string): Promise<void> {
   const business = page.getByRole("button", { name: "Yes, a business or creator" });
   await expect(async () => {
     if (await business.isVisible()) await business.click();
-    await expect(page).toHaveURL(subjectUrl, { timeout: 3_000 });
+    await expect(page).toHaveURL(
+      (url) => {
+        const value = url.searchParams.get("subject");
+        return (
+          url.pathname === "/onboarding/identity" &&
+          value !== null &&
+          value !== "" &&
+          (subject === undefined || value === subject)
+        );
+      },
+      { timeout: 3_000 },
+    );
   }).toPass({ timeout: 30_000 });
 }
 

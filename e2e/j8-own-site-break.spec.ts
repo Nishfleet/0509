@@ -148,7 +148,7 @@ async function signInAndWatchFixture(
     const input = page.getByRole("textbox", { name: /your website address or social username/i });
     await input.fill(host);
     await input.press("Enter");
-    await confirmPublicSubject(page, new RegExp(`/onboarding/identity\\?subject=${host.replaceAll(".", "\\.")}$`));
+    await confirmPublicSubject(page, host);
     await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
     await page.getByRole("button", { name: "edit name" }).click();

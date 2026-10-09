@@ -65,7 +65,7 @@ test.describe("J5", () => {
     await input.fill("j5.fixture.0509.in");
     await input.press("Enter");
 
-    await confirmPublicSubject(page, /\/onboarding\/identity\?subject=j5\.fixture\.0509\.in$/);
+    await confirmPublicSubject(page, "j5.fixture.0509.in");
     await expect(page.getByRole("status")).toHaveText("We couldn't read that site, so fill in what you can.", {
       timeout: 45_000,
     });

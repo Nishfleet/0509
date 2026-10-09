@@ -57,7 +57,7 @@ test.describe("J4 onboard a creator handle", () => {
       const started = Date.now();
       await input.press("Enter");
 
-      await confirmPublicSubject(page, /\/onboarding\/identity\?subject=/);
+      await confirmPublicSubject(page);
       await expect(page.getByRole("heading", { name: "Check your details. Fix anything that's wrong." })).toBeVisible({
         timeout: 30_000,
       });
