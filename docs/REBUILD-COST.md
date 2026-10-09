@@ -64,7 +64,7 @@ That dominance claim is still an estimate. The measured week below can price wor
 
 ## Measured week, 2026-09-15 to 2026-09-22
 
-Queried 2026-09-22 from Cloudflare's GraphQL Analytics API, account `f670a698e17bf160c8e4679823e68916`, window `datetime_geq` 2026-09-15T00:00:00Z and `datetime_lt` 2026-09-22T00:00:00Z. Seven UTC days. The raw responses and the brand-count SQL are in the PR that added this section.
+Queried 2026-09-22 from Cloudflare's GraphQL Analytics API, the Cloudflare account, window `datetime_geq` 2026-09-15T00:00:00Z and `datetime_lt` 2026-09-22T00:00:00Z. Seven UTC days. The raw responses and the brand-count SQL are in the PR that added this section.
 
 ON brands inside the window: 0, as far as the current `entity` table can show. Production D1 `0509`, database `746c6e3d-782e-443a-82d6-28ca93a16294`, had one `entity` row with `state = 'on'` at query time. Domain `gymshark.com`, role `self`, `created_at` 2026-09-22T14:54:40.669Z, which is after the window. That table is current state, so it cannot show a brand that was ON during the week and later removed. `snapshot` rows: 0. `watch` rows: 0. No line below is divided by a brand count. A per-brand-per-day figure needs a brand that was ON during the week.
 
