@@ -40,6 +40,7 @@ const SESSION_GATE_ALLOWLIST: Readonly<Record<string, string>> = {
   "/onboarding": "first-run flow after sign-in, not under /app layouts",
   "/onboarding/competitors": "first-run flow after sign-in, not under /app layouts",
   "/onboarding/identity": "first-run flow after sign-in, not under /app layouts",
+  "/onboarding/plan": "first-run flow after sign-in, not under /app layouts; the route calls requireSession itself",
   "/oauth/authorize": "MCP OAuth consent; the route calls requireFreshSession itself",
   "/app/changes/:signalId/:side":
     "published landing shots load signed out; the route calls requireSession for the rest",

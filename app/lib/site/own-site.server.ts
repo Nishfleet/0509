@@ -8,6 +8,7 @@ import {
   readOpenBreakageBaselines,
   readOpenIncidents,
 } from "../data/incident.server";
+import { readPaidWorkspaceIds } from "../data/plan.server";
 import type { OwnSitePage } from "../data/page.server";
 import { readOwnSitePages } from "../data/page.server";
 import { readWorkspaceEntitlements } from "../data/plan.server";
@@ -119,7 +120,8 @@ async function entitledOwnSitePages(pages: OwnSitePage[]): Promise<OwnSitePage[]
 
 export async function planOwnSiteCheck(now: string): Promise<OwnSitePlan> {
   await ensureHomePages(now);
-  const pages = await entitledOwnSitePages(await readOwnSitePages());
+  const paid = await readPaidWorkspaceIds(new Date(now));
+  const pages = await entitledOwnSitePages((await readOwnSitePages()).filter((page) => paid.has(page.workspaceId)));
   await closeIncidentsOutside(
     pages.map((page) => page.pageId),
     now,

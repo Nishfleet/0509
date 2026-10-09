@@ -46,6 +46,9 @@ async function seedWorkspace(schedule: BriefSchedule) {
     env.DB.prepare(
       "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Rollover', ?2, ?3, ?4, ?5, ?6)",
     ).bind(WS, USER, schedule.timezone, schedule.weekday, schedule.hour, createdAt),
+    env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?1, ?2, 'scout', 'trialing', ?3)",
+    ).bind(`${WS}-plan`, WS, createdAt),
     ...[
       [SELF, "self", "own.example", "Own Brand", "on"],
       [RIVAL_A, "competitor", "a.example", "Rival A", "on"],

@@ -39,6 +39,9 @@ async function seed(): Promise<void> {
       NOW,
     ),
     env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?1, ?2, 'scout', 'trialing', ?3)",
+    ).bind(`plan-${WS}`, WS, NOW),
+    env.DB.prepare(
       "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, origin, state, created_at) VALUES (?1, ?2, 'self', 'owner-shop.com', 'Owner', '{}', 'manual', 'on', ?3)",
     ).bind(SELF, WS, NOW),
     env.DB.prepare(

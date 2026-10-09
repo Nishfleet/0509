@@ -74,6 +74,11 @@ describe("nightly hiring sweep workflow", () => {
     )
       .bind(WS, USER, NOW)
       .run();
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
+    )
+      .bind(`plan-${WS}`, WS, NOW)
+      .run();
     await seedEntity("ent-rival", "rival.com", "on");
     await seedEntity("ent-paused", "paused.com", "off");
     await env.DB.prepare(

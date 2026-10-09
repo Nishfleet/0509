@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { isWorkspacePaid } from "../../app/lib/billing/entitlements";
 import type { BriefSchedule, RolloverInstance, RolloverParams } from "../../app/lib/brief-schedule";
 import { openWeek, previousBriefAt, rolloverInstance } from "../../app/lib/brief-schedule";
 
@@ -12,9 +13,11 @@ export interface WorkspaceSchedule {
 export const CATCH_UP_GRACE_MS = 60 * 60 * 1000;
 const UNRANKED_LOOKBACK_MS = 16 * 24 * 60 * 60 * 1000;
 
-const WORKSPACE_SCHEDULES = `SELECT DISTINCT w.id, w.timezone, w.brief_weekday, w.brief_hour, w.brief_paused_at
+const WORKSPACE_SCHEDULES = `SELECT DISTINCT w.id, w.timezone, w.brief_weekday, w.brief_hour, w.brief_paused_at,
+       p.status AS status, p.current_period_end AS current_period_end
 FROM entity e
 INNER JOIN workspace w ON w.id = e.workspace_id
+INNER JOIN plan p ON p.workspace_id = w.id
 WHERE e.role = 'self' AND e.state = 'on' AND w.fixture = 0
 ORDER BY w.id`;
 
@@ -34,6 +37,8 @@ const scheduleRows = z.array(
     brief_weekday: z.number().int(),
     brief_hour: z.number().int(),
     brief_paused_at: z.string().nullable(),
+    status: z.string().optional(),
+    current_period_end: z.string().nullable().optional(),
   }),
 );
 
@@ -58,9 +63,14 @@ export function unrankedWeekKey(workspaceId: string, weekStartAt: string): strin
   return `${workspaceId}\t${weekStartAt}`;
 }
 
-async function readWorkspaceSchedules(db: D1Database): Promise<readonly WorkspaceSchedule[]> {
+async function readWorkspaceSchedules(db: D1Database, now: Date): Promise<readonly WorkspaceSchedule[]> {
   const rows = await db.prepare(WORKSPACE_SCHEDULES).all();
-  return toSchedules(rows.results);
+  const live = scheduleRows
+    .parse(rows.results)
+    .filter((row) =>
+      isWorkspacePaid({ status: row.status ?? "", currentPeriodEnd: row.current_period_end ?? null }, now),
+    );
+  return toSchedules(live);
 }
 
 export async function readWorkspaceSchedule(db: D1Database, workspaceId: string): Promise<WorkspaceSchedule | null> {
@@ -83,7 +93,7 @@ export async function loadNightlyPlan(
   db: D1Database,
   now: Date,
 ): Promise<{ workspaces: number; scheduled: RolloverInstance[]; catchUpAt: CatchUp[] }> {
-  const [workspaces, unranked] = await Promise.all([readWorkspaceSchedules(db), readUnrankedWeeks(db, now)]);
+  const [workspaces, unranked] = await Promise.all([readWorkspaceSchedules(db, now), readUnrankedWeeks(db, now)]);
   const { scheduled, catchUpAt } = planRollovers(workspaces, unranked, now);
   return { workspaces: workspaces.length, scheduled, catchUpAt };
 }
