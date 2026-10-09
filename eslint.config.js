@@ -243,6 +243,16 @@ const BARE_FETCH = {
     "Outbound fetch is owned by app/lib/fetch/: fetchOutbound refuses non-public hosts and re-checks every redirect hop under an 8 s deadline, and cappedBody bounds the body. A bare fetch( anywhere else in server code is a second transport that drifts from all three. Client code is exempt: a browser fetch goes to our own origin and SSRF is a server-side risk. Source: 0509#4951, 0509#6212.",
 };
 
+// A Browser Rendering call that never answers held the onboarding card open
+// until the platform gave up (J5, full suite 11:01Z). Every call to the binding
+// goes through app/lib/site/browser-budget.server.ts, where it is raced against
+// a 25 s limit.
+const BARE_BROWSER_CALL = {
+  selector: "CallExpression[callee.property.name='quickAction']",
+  message:
+    "Browser Rendering calls go through app/lib/site/browser-budget.server.ts (browserContent, browserScreenshot, browserHtmlScreenshot): they race the binding against a 25 s limit and return a typed failure. A bare quickAction( has no upper bound, and a call that never answers holds the page, the Workflow step or the sign-up card open until the platform gives up. Source: 0509#7296, 0509#7300.",
+};
+
 // DESIGN.md: fonts are self-hosted. A Google Fonts <link> put LCP at 2021 ms against the
 // 1500 ms budget (CI run 35635617508, main 5166ebb81; fixed in fd1457288).
 const GOOGLE_FONTS_BAN = {
@@ -366,6 +376,7 @@ const BANNED_SYNTAX = [
   XML_PARSER_CONSTRUCTOR,
   DOMAIN_HOSTNAME_BAN,
   BARE_FETCH,
+  BARE_BROWSER_CALL,
   {
     selector:
       "NewExpression[callee.name='RegExp'] > Literal.arguments, NewExpression[callee.name='RegExp'] > TemplateLiteral",
@@ -1170,6 +1181,24 @@ export default tseslint.config(
       "no-restricted-syntax": [
         "error",
         ...BANNED_SYNTAX.filter((rule) => rule !== BARE_FETCH && rule !== BARE_TOAST),
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  {
+    // The browser paved path, where the bounded calls live by definition, and
+    // the retained ads transport (J10, #3974), which is dropped-feature code
+    // that is not extended. The array restates the shared list because a later
+    // matching block's no-restricted-syntax entry replaces the earlier one
+    // wholesale. 0509#7296.
+    files: ["app/lib/site/browser-budget.server.ts", "app/lib/ads/transport-browser.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== BARE_BROWSER_CALL),
         ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         FEED_STATE_LITERAL,
