@@ -417,6 +417,21 @@ const RAW_DML_WRITER = {
     "One writer per table. Raw DML lives in app/lib/data/<table>.server.ts — this matches the statement text itself, so holding it in a module constant still counts. docs/REBUILD-TRUST.md C5. Source: 0509#4313 — the kysely-era insertInto/updateTable/deleteFrom selectors matched nothing after the raw-D1 rebuild, and app/lib/workspace.server.ts grew a second workspace writer while the rule stayed green.",
 };
 
+// The row shape comes from a schema, never from a type argument. `.first<T>()`,
+// `.all<T>()`, `.raw<T>()`, `.run<T>()` and `.batch<T>()` each assert the row
+// shape at compile time and check nothing at run time, so a row that does not
+// match reaches the caller typed and wrong. The conversion children of #7031
+// replaced them with a zod schema per row and z.infer for the type; this
+// selector keeps the next one out. Armed in TABLE_WRITER_BLOCKS, not in a
+// block of its own, so it survives the option-array replacement 0509#7266
+// documents at the foot of this file.
+const D1_ROW_TYPE_ARGUMENT = {
+  selector:
+    "CallExpression[callee.type='MemberExpression'][callee.property.name=/^(first|all|raw|run|batch)$/][typeArguments]",
+  message:
+    "A D1 type argument asserts the row shape and is never checked. Parse the row with a zod schema in this writer file and derive the type with z.infer. Source: 0509#7027, 0509#7031.",
+};
+
 // 0509#7022: RAW_DML_WRITER only proves DML sits somewhere under
 // app/lib/data/. Inside it, <table>.server.ts may write only <table>.
 // One block per file, generated from the directory, so a new data file is
@@ -454,6 +469,7 @@ export const TABLE_WRITER_BLOCKS = readdirSync(new URL("./app/lib/data/", import
         ...BANNED_SYNTAX,
         ...NO_USER_DATA_IN_LOGS,
         FEED_STATE_LITERAL,
+        D1_ROW_TYPE_ARGUMENT,
         foreignTableWriter(file),
       ],
     },
@@ -704,10 +720,6 @@ const TAILWIND_DEFAULT_PALETTE = {
   message:
     "The Tailwind default palette is banned: every colour is a @theme token in app/app.css (bg-green is the one accent, DESIGN.md rule 8). Source: 0509#5871.",
 };
-
-// outline- covers the stock tabs trigger's focus-visible:outline-ring (0509#7014).
-const SHADCN_STOCK_TOKEN_CLASSES =
-  "(?:^|:)(?:bg|text|border|ring|fill|stroke|outline)-(?:background|foreground|muted|muted-foreground|primary|primary-foreground|secondary|secondary-foreground|destructive|border|input|ring|popover|popover-foreground)(?:/[0-9]+)?$";
 
 const TW_ANIMATE_STOCK_CLASSES =
   "(?:^|:)(?:animate-in|animate-out|fade-in-0|fade-out-0|zoom-in-95|zoom-out-95|slide-in-from-(?:top|bottom|left|right)-2)$";
@@ -1565,16 +1577,16 @@ export default tseslint.config(
   // `(?:[^\s]*:)*` because a variant prefix is not always one word: this repo
   // writes `max-[859px]:`, `aria-[current=page]:` and `[&:hover]:`, and a
   // prefix pattern of `[a-z0-9-]+` let a banned colour hide behind all three.
-  // The `ui/` ignore list covers stock shadcn semantic tokens and
-  // tw-animate-css classes that are dead on main: the tokens are not in
-  // `@theme`, and registering them would start painting, a design change out
-  // of scope for this slice. 81 hits were probed on a74ad41 — 80 in
-  // app/components/ui/, one `cf-turnstile` in
-  // app/components/turnstile-widget.tsx, which is Cloudflare's widget class,
-  // never a Tailwind class. The `ui/` override is a later matching block
-  // because flat config replaces a rule's options per matching block: it
-  // widens `no-unknown-classes` only, and the strict block's
-  // restricted-classes and class-order settings stay in force there.
+  // The `ui/` ignore list keeps only the tw-animate-css classes (0509#7071):
+  // the stock shadcn semantic tokens used to be ignored here too, on the false
+  // premise that they were dead on main. They are not — DialogContent carries
+  // `bg-popover` — so those tokens are now aliased onto the house palette in
+  // app/app.css and this rule fails on any token without a mapping. tw-animate
+  // is a separate package the app never imports, so its classes stay ignored.
+  // The `ui/` override is a later matching block because flat config replaces a
+  // rule's options per matching block: it widens `no-unknown-classes` only, and
+  // the strict block's restricted-classes and class-order settings stay in force
+  // there.
   {
     files: ["app/**/*.{ts,tsx}"],
     plugins: { "better-tailwindcss": betterTailwindcss },
@@ -1593,10 +1605,7 @@ export default tseslint.config(
   {
     files: ["app/components/ui/**/*.tsx"],
     rules: {
-      "better-tailwindcss/no-unknown-classes": [
-        "error",
-        { ignore: [SHADCN_STOCK_TOKEN_CLASSES, TW_ANIMATE_STOCK_CLASSES] },
-      ],
+      "better-tailwindcss/no-unknown-classes": ["error", { ignore: [TW_ANIMATE_STOCK_CLASSES] }],
     },
   },
 

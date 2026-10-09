@@ -81,9 +81,20 @@ describe("eslint DESIGN.md colour gate (#5871)", () => {
     expect(result.messages.some((m) => m.includes(UNKNOWN))).toBe(true);
   });
 
-  it("rejects a shadcn semantic token outside app/components/ui", { timeout: 60_000 }, async () => {
+  it(
+    "rejects a shadcn token that has no @theme mapping, in and outside app/components/ui",
+    { timeout: 60_000 },
+    async () => {
+      const outside = await lintProbe(PROBE, component("bg-sidebar-accent"));
+      expect(outside.messages.some((m) => m.includes(UNKNOWN))).toBe(true);
+      const inside = await lintProbe(UI_PROBE, component("bg-sidebar-accent"));
+      expect(inside.messages.some((m) => m.includes(UNKNOWN))).toBe(true);
+    },
+  );
+
+  it("accepts a shadcn name that @theme maps to a house token (0509#7071)", { timeout: 60_000 }, async () => {
     const result = await lintProbe(PROBE, component("bg-muted"));
-    expect(result.messages.some((m) => m.includes(UNKNOWN))).toBe(true);
+    expect(result.messages.some((m) => m.includes(UNKNOWN))).toBe(false);
   });
 
   it("allows the stock shadcn and tw-animate tokens inside app/components/ui", { timeout: 60_000 }, async () => {

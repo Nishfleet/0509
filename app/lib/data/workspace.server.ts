@@ -25,12 +25,10 @@ const DELETE_WORKSPACE = "DELETE FROM workspace WHERE id = ?";
 const SELECT_WORKSPACE_BY_OWNER = `SELECT id FROM workspace WHERE owner_user_id = ?
 ORDER BY created_at LIMIT 1`;
 
-const readWorkspaceIdForOwnerRow = z.object({ id: z.string() });
+const workspaceIdRow = z.object({ id: z.string() });
 
 export async function readWorkspaceIdForOwner(userId: string): Promise<string | null> {
-  const row = readWorkspaceIdForOwnerRow
-    .nullable()
-    .parse(await env.DB.prepare(SELECT_WORKSPACE_BY_OWNER).bind(userId).first());
+  const row = workspaceIdRow.nullable().parse(await env.DB.prepare(SELECT_WORKSPACE_BY_OWNER).bind(userId).first());
   return row?.id ?? null;
 }
 
@@ -150,7 +148,7 @@ export async function insertWorkspace(
     )
     .run();
   if (result.meta.changes === 1) return;
-  const existing = await db.prepare(SELECT_WORKSPACE_ID).bind(input.id).first<{ id: string }>();
+  const existing = workspaceIdRow.nullable().parse(await db.prepare(SELECT_WORKSPACE_ID).bind(input.id).first());
   if (existing !== null) return;
   throw new WorkspaceCapError();
 }
