@@ -13,6 +13,8 @@ describe("takeAiCall", () => {
     await takeAiCall("proposer", 2);
 
     await expect(takeAiCall("proposer", 2)).rejects.toThrow(AiDailyCapError);
+    await expect(takeAiCall("proposer", 2)).rejects.toThrow(AiDailyCapError);
+    expect(logged).toHaveBeenCalledTimes(1);
     expect(logged).toHaveBeenCalledWith(expect.stringContaining('"event":"ai.daily_cap_reached"'));
   });
 
