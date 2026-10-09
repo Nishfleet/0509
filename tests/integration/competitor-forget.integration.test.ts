@@ -13,6 +13,11 @@ async function seedWorkspace(id: string, ownerUserId: string): Promise<void> {
   )
     .bind(id, ownerUserId, NOW)
     .run();
+  await env.DB.prepare(
+    "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
+  )
+    .bind(`plan-${id}`, id, NOW)
+    .run();
 }
 
 async function seedEntity(row: {

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const D3_QUESTION_ID = "noteworthy_change";
+export const D3S_QUESTION_ID = "own_site_breakage";
 export const D6_QUESTION_ID = "mention_matters";
 
 export const reliabilitySchema = z.enum(["official_api", "rss", "scraped_page", "best_effort"]);

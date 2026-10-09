@@ -1,8 +1,9 @@
 import { env } from "cloudflare:workers";
 
-import { readWorkspaceIdForOwner } from "../data/workspace.server";
+import { readOwnerWorkspaceApiAccess } from "../data/plan.server";
 import { clientIp, withinLimit } from "./client-limit.server";
 import type { AgentProps } from "./context.server";
+import { agentPreflight, forbiddenOrigin, originAllowed } from "./cors.server";
 import { RATE_LIMITED, bearerToken, propsForApiKey } from "./keys.server";
 import { serveMcp } from "./mcp.server";
 
@@ -28,23 +29,33 @@ const RATE_LIMITED_PROBLEM: Problem = {
 async function workspaceFor(props: AgentProps): Promise<string | Response> {
   const { success } = await env.AGENT_LIMIT.limit({ key: props.userId });
   if (!success) return problem(429, RATE_LIMITED_PROBLEM, { "retry-after": "60" });
-  const workspaceId = await readWorkspaceIdForOwner(props.userId);
-  if (workspaceId === null)
+  const access = await readOwnerWorkspaceApiAccess(props.userId);
+  if (access === null)
     return problem(403, { error: "no_workspace", description: "Finish signing up at 0509.io first." });
-  return workspaceId;
+  if (!access.apiAccess) {
+    return problem(403, { error: "plan", description: "This plan does not include API access." });
+  }
+  return access.workspaceId;
+}
+
+function refuseOrigin(request: Request): Response | null {
+  const origin = request.headers.get("origin");
+  return originAllowed(origin) ? null : forbiddenOrigin();
 }
 
 export async function mcpResponse(request: Request, props: AgentProps): Promise<Response> {
-  const origin = request.headers.get("origin");
-  if (origin !== null && origin !== new URL(env.BETTER_AUTH_URL).origin) {
-    return problem(403, { error: "forbidden_origin", description: "This origin may not call the MCP server." });
-  }
+  if (request.method === "OPTIONS") return agentPreflight(request);
+  const blocked = refuseOrigin(request);
+  if (blocked) return blocked;
   const workspace = await workspaceFor(props);
   if (workspace instanceof Response) return workspace;
   return serveMcp(request, workspace);
 }
 
 export async function apiResponse<T>(request: Request, read: (workspaceId: string) => Promise<T>): Promise<Response> {
+  if (request.method === "OPTIONS") return agentPreflight(request);
+  const blocked = refuseOrigin(request);
+  if (blocked) return blocked;
   if (!(await withinLimit(env.AGENT_LIMIT, clientIp(request)))) {
     return problem(429, RATE_LIMITED_PROBLEM, { "retry-after": "60" });
   }

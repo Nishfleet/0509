@@ -1,27 +1,19 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { previousBriefAt } from "../app/lib/brief-schedule";
-import {
-  decodedBodies,
-  deleteCreatedAccount,
-  laneOrigin,
-  readRawMessage,
-  requireInboxToken,
-  signInWithMagicLink,
-} from "./inbox";
-
-let createdEmail = "";
-test.afterEach(async ({ page }, testInfo) => {
-  if (createdEmail === "") return;
-  testInfo.setTimeout(testInfo.timeout + 60_000);
-  await deleteCreatedAccount(page, createdEmail);
-  createdEmail = "";
-});
+import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
+import { decodedBodies, laneOrigin, readRawMessage, requireInboxToken, signInWithMagicLink } from "./inbox";
 
 // J11 from docs/REBUILD-DONE.md §A. Of the three lanes — local, merge-queue
 // Preview and production — J11 runs in production only. One project — the
 // phone project would send a second brief, and the check the contract asks
 // for is the HTML at 600 px.
+// The account is FIXTURE_ACCOUNTS.j11, kept between runs with a complimentary
+// plan row (migration 0048, #7225): a per-run address stops at
+// /onboarding/plan since #7061. A kept workspace gets a catch-up brief only
+// when its last one is 6 or more days old (rescheduleRollover), so J11 is
+// @scheduled and runs weekly from e2e-scheduled.yml. It ends by unsubscribing,
+// so it opens by re-subscribing.
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL || laneOrigin() !== "https://0509.io",
   "J11 proves the production mail path: the brief is sent by the send-email queue consumer on the production Worker. The local Worker cannot mail, and a merge-queue Preview cannot consume queues (https://developers.cloudflare.com/workers/previews/resources/#queue-consumers)",
@@ -55,6 +47,7 @@ function header(raw: string, pattern: RegExp): string | null {
   return pattern.exec(raw)?.[1]?.trim() ?? null;
 }
 
+const SELF_NAME = "J11 Weekly";
 const DEFAULT_WEEKDAY = 1;
 const DEFAULT_HOUR = 8;
 
@@ -112,13 +105,46 @@ async function switchOffEveryRival(page: Page): Promise<void> {
 }
 
 async function addCompetitor(page: Page, domain: string): Promise<void> {
-  await page.locator("#add-competitor").fill(domain);
-  await page.getByRole("button", { name: "Add" }).click();
   const row = page
     .getByRole("list", { name: "Competitors", exact: true })
     .getByRole("listitem")
     .filter({ hasText: domain });
+  if ((await row.count()) > 0) {
+    await saveCompetitorSwitch(page, row.getByRole("switch"));
+  } else {
+    await page.locator("#add-competitor").fill(domain);
+    await page.getByRole("button", { name: "Add" }).click();
+  }
   await expect(row.getByRole("switch")).toBeChecked();
+}
+
+async function onboard(page: Page): Promise<void> {
+  await page.goto("/onboarding");
+  if (!new URL(page.url()).pathname.startsWith("/onboarding/competitors")) {
+    const input = page.getByRole("textbox", { name: /your website address or social username/i });
+    await input.fill("gymshark.com");
+    await input.press("Enter");
+    await expect(page).toHaveURL(/\/onboarding\/identity\?subject=gymshark\.com$/);
+    const editName = page.getByRole("button", { name: "edit name" });
+    await expect(editName).toBeVisible({ timeout: 45_000 });
+    await editName.click();
+    const name = page.getByRole("textbox", { name: "name" });
+    await name.fill(SELF_NAME);
+    await name.press("Escape");
+    await page.getByRole("button", { name: "That's me" }).click();
+    await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
+  }
+  await page.getByRole("button", { name: "Start watching" }).click();
+  await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
+}
+
+async function resubscribe(page: Page): Promise<void> {
+  await page.goto("/app/settings");
+  const resume = page.getByLabel("Send the brief to this address again");
+  if ((await resume.count()) === 0) return;
+  await resume.check();
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(resume).toHaveCount(0);
 }
 
 async function waitForBrief(to: string, token: string): Promise<string> {
@@ -162,34 +188,18 @@ function assertOrder(text: string, markers: readonly string[]): void {
   }
 }
 
-test("the weekly brief arrives from the inbox, in order, and unsubscribe stops the next one @own-signin", async ({
+test("the weekly brief arrives from the inbox, in order, and unsubscribe stops the next one @own-signin @scheduled", async ({
   page,
 }, testInfo) => {
   test.setTimeout(480_000);
   test.skip(testInfo.project.name === "phone-390", "one production brief; the HTML is checked at 600 px");
 
   const token = requireInboxToken();
-  const tag = crypto.randomUUID().replaceAll("-", "").slice(0, 12);
-  const email = `e2e+${tag}@0509.io`;
-  createdEmail = email;
-  const selfName = `J11 ${tag}`;
+  const email = FIXTURE_ACCOUNTS.j11.email;
 
-  await signInWithMagicLink(page, email, token);
-  await page.goto("/onboarding");
-  const input = page.getByRole("textbox", { name: /your website address or social username/i });
-  await input.fill("gymshark.com");
-  await input.press("Enter");
-  await expect(page).toHaveURL(/\/onboarding\/identity\?subject=gymshark\.com$/);
-  const editName = page.getByRole("button", { name: "edit name" });
-  await expect(editName).toBeVisible({ timeout: 45_000 });
-  await editName.click();
-  const name = page.getByRole("textbox", { name: "name" });
-  await name.fill(selfName);
-  await name.press("Escape");
-  await page.getByRole("button", { name: "That's me" }).click();
-  await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
-  await page.getByRole("button", { name: "Start watching" }).click();
-  await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
+  await signInWithMagicLink(page, email, token, /\/(app|onboarding)/);
+  if (new URL(page.url()).pathname.startsWith("/onboarding")) await onboard(page);
+  await resubscribe(page);
 
   await page.goto("/app/competitors");
   await switchOffEveryRival(page);
@@ -244,7 +254,7 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   ];
   assertOrder(text, markers);
   const brands = text.slice(text.indexOf("Your tracked brands"), text.indexOf("Your site looks"));
-  expect(brands).toContain(selfName);
+  expect(brands).toContain(SELF_NAME);
   const brandsLower = brands.toLowerCase();
   for (const domain of ON) expect(brandsLower).toContain(domain.split(".")[0]);
   expect(brandsLower, "an off brand is absent, not a zeroed line").not.toContain(OFF.split(".")[0]);

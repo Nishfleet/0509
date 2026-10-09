@@ -159,11 +159,11 @@ function render(input: {
 describe("Home page frame", () => {
   it("puts the date in the banner, the standing in main, and the footer in contentinfo", () => {
     const html = renderToStaticMarkup(
-      createElement(
-        HomePageFrame,
-        { eyebrow: "Thursday 24 September", footer: "Checked today" },
-        createElement("h1", null, "Good morning"),
-      ),
+      createElement(HomePageFrame, {
+        eyebrow: "Thursday 24 September",
+        footer: "Checked today",
+        children: createElement("h1", null, "Good morning"),
+      }),
     );
     const header = html.indexOf("<header");
     const main = html.indexOf("<main>");
@@ -305,7 +305,7 @@ describe("Home standing", () => {
   it("says when the first standing comes while the first week is still open", () => {
     const html = render({ payload: null });
     expect(html).toContain(
-      `We&#x27;re collecting your first week of data: ${WATCHED_NOUNS} for 3 brands. Your first site snapshots arrive on Friday 25 September, around 07:00 BST. Your first ranking arrives with your brief on Monday 08:00.`,
+      `We&#x27;re collecting your first week of data: ${WATCHED_NOUNS} for 3 brands. Your first site snapshots arrive on Friday 25 September, around 00:00 BST. Your first ranking arrives with your brief on Monday 08:00.`,
     );
     expect(html).toContain('data-home="first-file"');
     expect(html).toContain("Good morning.</h1>");
@@ -362,16 +362,16 @@ describe("Home standing", () => {
     expect(addCompetitor).not.toContain('class="mt-4"');
   });
 
-  it("lands the first site sweep on the next 02:00Z strictly after now", () => {
-    expect(nextSiteSweepAt(new Date("2026-09-24T01:00:00Z"))).toEqual(new Date("2026-09-24T02:00:00Z"));
-    expect(nextSiteSweepAt(new Date("2026-09-24T02:00:00Z"))).toEqual(new Date("2026-09-25T02:00:00Z"));
+  it("lands the first site sweep on the next 21:00Z strictly after now (0509#7191)", () => {
+    expect(nextSiteSweepAt(new Date("2026-09-24T01:00:00Z"))).toEqual(new Date("2026-09-24T21:00:00Z"));
+    expect(nextSiteSweepAt(new Date("2026-09-24T21:00:00Z"))).toEqual(new Date("2026-09-25T21:00:00Z"));
   });
 
   it("names the next sweep before the site source exists, because a brand is on", () => {
     for (const sources of [[], MENTION_SOURCES]) {
       const standing = homeStanding({ ...GATHERING_INPUT, sources });
       if (standing.kind !== "gathering") throw new Error("expected a gathering standing");
-      expect(standing.firstSweepAt).toBe("Friday 25 September, around 07:00 BST");
+      expect(standing.firstSweepAt).toBe("Friday 25 September, around 00:00 BST");
     }
   });
 
@@ -381,7 +381,7 @@ describe("Home standing", () => {
     );
     const standing = homeStanding(GATHERING_INPUT);
     if (standing.kind !== "gathering") throw new Error("expected a gathering standing");
-    expect(standing.firstSweepAt).toBe("Friday 25 September, around 07:00 BST");
+    expect(standing.firstSweepAt).toBe("Friday 25 September, around 00:00 BST");
     expect(homeView(GATHERING_INPUT).standing).toEqual(standing);
   });
 
@@ -527,22 +527,22 @@ describe("Home chips", () => {
 });
 
 describe("four-week chart", () => {
-  it("shows four weeks ascending, dropping the oldest, with the London week labelled 21 SEP", () => {
+  it("shows the history weeks ascending, with the London week labelled 21 SEP", () => {
     const standing = chartStanding(HISTORY);
-    expect(standing.chart.weeks).toEqual(["31 AUG", "7 SEP", "14 SEP", "21 SEP"]);
+    expect(standing.chart.weeks).toEqual(["24 AUG", "31 AUG", "7 SEP", "14 SEP", "21 SEP"]);
   });
 
   it("keeps a missing week as null, never a zero", () => {
     const standing = chartStanding(HISTORY);
     const self = standing.chart.lines.find((line) => line.entityId === "ent_self");
-    expect(self?.ranks).toEqual([2, null, 2, 1]);
+    expect(self?.ranks).toEqual([3, 2, null, 2, 1]);
   });
 
   it("marks an entity whose state is off as paused", () => {
     const standing = chartStanding(HISTORY);
     const paused = standing.chart.lines.find((line) => line.entityId === "ent_paused");
     expect(paused?.paused).toBe(true);
-    expect(paused?.ranks).toEqual([3, 3, null, null]);
+    expect(paused?.ranks).toEqual([null, 3, 3, null, null]);
   });
 
   it("labels the self line YOU and the others by their ranked name", () => {

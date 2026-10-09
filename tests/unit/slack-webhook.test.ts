@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseSlackWebhook, slackEscape } from "../../app/lib/slack-webhook";
+import { neutralizeBareUrls, parseSlackWebhook, slackEscape } from "../../app/lib/slack-webhook";
 
 describe("Slack webhook address", () => {
   it("accepts a Slack incoming webhook and trims it", () => {
@@ -21,6 +21,8 @@ describe("Slack webhook address", () => {
   });
 
   it("escapes what a rival's page said so it cannot add Slack links", () => {
-    expect(slackEscape("<https://evil.example|click> & more")).toBe("&lt;https://evil.example|click&gt; &amp; more");
+    expect(neutralizeBareUrls(slackEscape("<https://evil.example|click> & more"))).toBe(
+      "&lt;https[:]//evil.example|click&gt; &amp; more",
+    );
   });
 });

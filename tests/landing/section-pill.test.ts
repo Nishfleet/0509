@@ -9,7 +9,7 @@ const SECTION_PROPS = { id: "agents", kicker: "For AI agents", title: "Built for
 
 function section(overrides: { lead?: string } = {}): string {
   return renderToStaticMarkup(
-    createElement(Section, { ...SECTION_PROPS, ...overrides }, createElement("p", null, "child paragraph")),
+    createElement(Section, { ...SECTION_PROPS, ...overrides, children: createElement("p", null, "child paragraph") }),
   );
 }
 
@@ -27,7 +27,7 @@ describe("landing section", () => {
     const html = section();
     expect(html).toContain('<section id="agents" aria-labelledby="agents-title"');
     expect(html).toContain("Built for your agents too.");
-    const labelledBy = html.match(/aria-labelledby="([^"]+)"/)?.[1] ?? "";
+    const labelledBy = /aria-labelledby="([^"]+)"/.exec(html)?.[1] ?? "";
     expect(labelledBy).toBe("agents-title");
     expect(html).toContain(`<h2 id="${labelledBy}"`);
   });

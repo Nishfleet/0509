@@ -21,7 +21,7 @@ export interface LegalDocument {
   readonly sections: readonly LegalSection[];
 }
 
-export const LEGAL_UPDATED = "2026-09-30";
+export const LEGAL_UPDATED = "2026-10-06";
 export const OPERATOR = "Five to Nine";
 export const GOVERNING_LAW = "India";
 export const PRICE_NOTICE_DAYS = 30;

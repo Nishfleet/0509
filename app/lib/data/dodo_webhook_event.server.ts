@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 
 const RECORD_EVENT = `INSERT INTO dodo_webhook_event (id, event_type, payload_json, received_at)
 VALUES (?, ?, ?, ?)
@@ -8,6 +9,8 @@ const SELECT_PROCESSED = "SELECT processed_at FROM dodo_webhook_event WHERE id =
 
 const MARK_PROCESSED = "UPDATE dodo_webhook_event SET processed_at = ? WHERE id = ?";
 
+const recordWebhookEventRow = z.object({ processed_at: z.string().nullable() });
+
 export async function recordWebhookEvent(input: {
   id: string;
   eventType: string;
@@ -15,7 +18,7 @@ export async function recordWebhookEvent(input: {
   receivedAt: string;
 }): Promise<"processed" | "pending"> {
   await env.DB.prepare(RECORD_EVENT).bind(input.id, input.eventType, input.payloadJson, input.receivedAt).run();
-  const row = await env.DB.prepare(SELECT_PROCESSED).bind(input.id).first<{ processed_at: string | null }>();
+  const row = recordWebhookEventRow.nullable().parse(await env.DB.prepare(SELECT_PROCESSED).bind(input.id).first());
   return row !== null && row.processed_at !== null ? "processed" : "pending";
 }
 

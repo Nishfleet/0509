@@ -56,7 +56,9 @@ test.fail("the collector catches a deliberate console error @smoke", async ({ pa
 
   await page.goto("/");
   const caught = page.waitForEvent("console", { predicate: (message) => message.type() === "error" });
-  await page.evaluate(() => console.error("deliberate console error"));
+  await page.evaluate(() => {
+    console.error("deliberate console error");
+  });
   await caught;
   expect(await consoleFailures(page, watched, testInfo)).toEqual([]);
 });

@@ -44,14 +44,12 @@ export function HomePageFrame({
 export function HomeStanding({
   view,
   howRanked,
-  onSwitch,
   openId = null,
   evidence = null,
   showEyebrow = true,
 }: {
   view: HomeView;
   howRanked?: HowRanked | null;
-  onSwitch?: (entityId: string, checked: boolean) => void;
   openId?: string | null;
   evidence?: readonly WeekEvidence[] | null;
   showEyebrow?: boolean;
@@ -61,7 +59,7 @@ export function HomeStanding({
       {showEyebrow ? <p className={EYEBROW}>{view.eyebrow}</p> : null}
       {greeting(view)}
       {chips(view)}
-      {body({ view, howRanked, onSwitch, openId, evidence })}
+      {body({ view, howRanked, openId, evidence })}
     </section>
   );
 }
@@ -90,12 +88,11 @@ function greeting(view: HomeView): ReactElement {
 interface BodyInput {
   view: HomeView;
   howRanked: HowRanked | null | undefined;
-  onSwitch: ((entityId: string, checked: boolean) => void) | undefined;
   openId: string | null;
   evidence: readonly WeekEvidence[] | null;
 }
 
-function body({ view, howRanked, onSwitch, openId, evidence }: BodyInput): ReactElement {
+function body({ view, howRanked, openId, evidence }: BodyInput): ReactElement {
   const { standing } = view;
   if (standing.kind === "add-competitor") {
     return (
@@ -123,19 +120,17 @@ function body({ view, howRanked, onSwitch, openId, evidence }: BodyInput): React
       </>
     );
   }
-  return rankedBody({ standing, howRanked, onSwitch, openId, evidence });
+  return rankedBody({ standing, howRanked, openId, evidence });
 }
 
 function rankedBody({
   standing,
   howRanked,
-  onSwitch,
   openId,
   evidence,
 }: {
   standing: Extract<HomeView["standing"], { kind: "ranked" }>;
   howRanked: HowRanked | null | undefined;
-  onSwitch: ((entityId: string, checked: boolean) => void) | undefined;
   openId: string | null;
   evidence: readonly WeekEvidence[] | null;
 }): ReactElement {
@@ -155,7 +150,7 @@ function rankedBody({
       <h2 className={cn(EYEBROW, "mt-8 border-t border-line pt-4")}>This week's ranking</h2>
       <ol className="mt-2">
         {standing.rows.map((row) => (
-          <RankedRow key={row.entityId} row={row} onSwitch={onSwitch} openId={openId} evidence={evidence} />
+          <RankedRow key={row.entityId} row={row} openId={openId} evidence={evidence} />
         ))}
       </ol>
       {rowSheet(standing.rows, openId, evidence)}

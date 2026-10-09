@@ -17,7 +17,7 @@ describe("hn.algolia mentions adapter", () => {
   });
 
   it("adapterFor returns the HN adapter and it fetches the Algolia URL once", async () => {
-    const fetchMock = vi.fn(async () => new Response(fixture));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(fixture));
     vi.stubGlobal("fetch", fetchMock);
     try {
       const adapter = adapterFor("hn.algolia");
@@ -33,7 +33,7 @@ describe("hn.algolia mentions adapter", () => {
   });
 
   it("bounds the Algolia query to the last week, or to the stored cursor", async () => {
-    const fetchMock = vi.fn(async () => new Response(fixture));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(fixture));
     vi.stubGlobal("fetch", fetchMock);
     try {
       const before = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
@@ -70,7 +70,9 @@ describe("hn.algolia mentions adapter", () => {
   });
 
   it("rejects an unsuccessful Algolia response", async () => {
-    const fetchMock = vi.fn(async () => new Response("", { status: 500 }));
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) => new Response("", { status: 500 }),
+    );
     vi.stubGlobal("fetch", fetchMock);
     try {
       await expect(hnAdapter({ query: "gymshark" }, null)).rejects.toThrow("hn.algolia 500");

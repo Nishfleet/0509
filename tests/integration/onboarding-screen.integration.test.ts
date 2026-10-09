@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Subject } from "../../app/lib/identity/normalise";
 import { REFUSAL, UNAVAILABLE, screenOnboardingSubject } from "../../app/lib/onboarding-screen.server";
+import { insertSubjectDecision } from "../../app/lib/data/user_decision.server";
 
 const NOW = "2026-09-24T06:00:00.000Z";
 
@@ -412,5 +413,31 @@ describe("screenOnboardingSubject", () => {
     } finally {
       fetchSpy.mockRestore();
     }
+  });
+
+  it("reads a stored confirmation before calling Jev, so an outage is never raised (0509#7084)", async () => {
+    const { userId, workspaceId } = await seedWorkspace();
+    const subject = `stored-${String(runs)}.example`;
+    await insertSubjectDecision({
+      workspaceId,
+      userId,
+      subject,
+      verdict: "public_subject:confirmed",
+      decidedAt: NOW,
+    });
+    const run = vi.fn(() => Promise.reject(new Error("Jev unavailable")));
+    Reflect.set(env, "AI", { run });
+
+    const result = await screenOnboardingSubject({
+      workspaceId,
+      userId,
+      subject: domainSubject(subject),
+      raw: subject,
+      answer: null,
+      now: NOW,
+    });
+
+    expect(result).toEqual({ kind: "proceed" });
+    expect(run).not.toHaveBeenCalled();
   });
 });

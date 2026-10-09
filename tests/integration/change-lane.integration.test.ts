@@ -55,6 +55,9 @@ describe("rival change email lane (0509#6375)", () => {
         `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
          VALUES (?, 'Change lane', ?, 'UTC', 1, 8, '2026-09-23T00:00:00Z')`,
       ).bind(WS, USER),
+      env.DB.prepare(
+        "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', '2026-09-23T00:00:00Z')",
+      ).bind(`plan-${WS}`, WS),
       env.DB.prepare(`INSERT INTO channel (id, key, is_enabled, config_json) VALUES ('chan-email', 'email', 1, '{}')`),
       env.DB.prepare(
         `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at)

@@ -1,5 +1,6 @@
 import type { BriefContext, BriefPayload, RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
+import { countPhrase } from "../../app/lib/quiet-week";
 import { UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
 import { EYEBROW, FONT, MONO, emailDocument } from "./email-shell";
 
@@ -71,11 +72,6 @@ export function formatDate(iso: string, timezone: string, withTime: boolean): st
     console.error(JSON.stringify({ event: "delivery.brief_date_format_failed", error: String(error) }));
     return iso;
   }
-}
-
-export function countPhrase(count: number, one: string, many: string): string {
-  if (count === 0) return `no ${many}`;
-  return count === 1 ? `1 ${one}` : `${n(count)} ${many}`;
 }
 
 function movementText(movement: number | null, isNew: boolean): string {

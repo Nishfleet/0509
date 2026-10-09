@@ -1,6 +1,7 @@
 import { captureException } from "@sentry/cloudflare";
 import { getDomain } from "tldts";
 
+import { AiSpendOffError } from "../ai/spend.server";
 import type { BacklogRow } from "../data/discovery_backlog.server";
 import type { DiscoveryContext, DiscoverySelf } from "../data/entity.server";
 import type { DiscoveryResult } from "../data/suggestion.server";
@@ -79,6 +80,10 @@ export class DiscoveryUnavailableError extends Error {
   }
 }
 
+function refusedSpend(reason: unknown): boolean {
+  return reason instanceof AiSpendOffError || isBillingRefusal(reason);
+}
+
 function failureMessage(reason: unknown): string {
   return (reason instanceof Error ? reason.message : String(reason)).slice(0, 300);
 }
@@ -95,10 +100,12 @@ async function settledCandidates(self: DiscoverySelf): Promise<Candidate[]> {
   if (failed.length === runs.length) {
     throw new DiscoveryUnavailableError(
       `every discovery generator failed: ${failed.map((item) => `${String(item.generator)}: ${failureMessage(item.reason)}`).join("; ")}`,
-      failed.every((item) => isBillingRefusal(item.reason)),
+      failed.every((item) => refusedSpend(item.reason)),
     );
   }
-  for (const { generator, reason } of failed) captureException(reason, { tags: { discovery_generator: generator } });
+  for (const { generator, reason } of failed) {
+    if (!(reason instanceof AiSpendOffError)) captureException(reason, { tags: { discovery_generator: generator } });
+  }
   return runs.flatMap((run) => (run.status === "fulfilled" ? run.value : []));
 }
 

@@ -57,11 +57,15 @@ type Snapshot = Record<(typeof NAMES)[number], unknown>;
 export const PUBLIC_PLACEHOLDER_NAMES = [
   "BETTER_AUTH_SECRET",
   "DODO_WEBHOOK_SECRET",
+  "TURNSTILE_SITE_KEY",
+  "TURNSTILE_SECRET_KEY",
 ] as const satisfies readonly EnvName[];
 
 export const PUBLIC_PLACEHOLDER_VALUES = {
   BETTER_AUTH_SECRET: "local-only-not-a-production-secret",
   DODO_WEBHOOK_SECRET: "whsec_bG9jYWwtb25seS1ub3QtYS13ZWJob29rLXNlY3JldA==",
+  TURNSTILE_SITE_KEY: "1x00000000000000000000BB",
+  TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
 } as const satisfies Record<(typeof PUBLIC_PLACEHOLDER_NAMES)[number], string>;
 
 const NAME_SET: ReadonlySet<string> = new Set(NAMES);
@@ -78,6 +82,11 @@ function binding(method?: "prepare" | "get" | "sendBatch" | "limit") {
     if (!method) return true;
     return typeof Reflect.get(value, method) === "function";
   });
+}
+
+function urlOrigin(value: string): string | undefined {
+  if (!URL.canParse(value)) return undefined;
+  return new URL(value).origin;
 }
 
 const workerEnvSchema = z
@@ -103,7 +112,7 @@ const workerEnvSchema = z
     SITE_SWEEP_PING_URL: httpUrl.optional(),
   })
   .check((ctx) => {
-    if (ctx.value.BETTER_AUTH_URL !== SITE_URL) return;
+    if (urlOrigin(ctx.value.BETTER_AUTH_URL) !== urlOrigin(SITE_URL)) return;
     for (const name of PUBLIC_PLACEHOLDER_NAMES) {
       if (ctx.value[name] !== PUBLIC_PLACEHOLDER_VALUES[name]) continue;
       ctx.issues.push({ code: "custom", input: ctx.value[name], path: [name], message: "public placeholder value" });
@@ -128,6 +137,11 @@ function blank(value: unknown): unknown {
   if (typeof value !== "string") return value;
   const trimmed = value.trim();
   return trimmed.length === 0 ? undefined : trimmed;
+}
+
+export function blankEnvString(value: unknown): string | null {
+  const trimmed = blank(value);
+  return typeof trimmed === "string" ? trimmed : null;
 }
 
 function pingUrl(name: "LIVENESS_PING_URL" | "SITE_SWEEP_PING_URL"): unknown {

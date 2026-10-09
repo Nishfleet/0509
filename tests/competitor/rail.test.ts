@@ -103,7 +103,7 @@ describe("the competitor rail", () => {
       "comp-off",
       "comp-x",
     ]);
-    const offRow = html.match(/<li data-entity-id="comp-off"[^>]*>/)?.[0];
+    const offRow = /<li data-entity-id="comp-off"[^>]*>/.exec(html)?.[0];
     expect(offRow).toContain('data-state="off"');
     expect(offRow).toContain("opacity-60");
     expect(text(html)).toContain("You");
@@ -171,7 +171,7 @@ describe("the competitor rail", () => {
     expect(empty).toContain("No ranking yet. It arrives with your first weekly brief.");
     expect(empty).toContain("Nothing new from them in the last 30 days.");
     expect(empty).toContain("We check this every week. The first answer arrives after a week of watching.");
-    expect(empty).toContain("First read tonight at 02:00 UTC.");
+    expect(empty).toContain("First read tonight at 21:00 UTC.");
     expect(
       text(
         render({ peers: [], facts: [], sources: [], verdict: null, lastChecked: null, sweepClock: "07:30 GMT+5:30" }),

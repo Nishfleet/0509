@@ -30,8 +30,7 @@ function getSession() {
 describe("auth schema validation", () => {
   it("the per-request auth instance adds no schema introspection queries", async () => {
     const prepare = vi.spyOn(env.DB, "prepare");
-    const introspected = () =>
-      prepare.mock.calls.map(([query]) => String(query)).filter((query) => INTROSPECTION.test(query));
+    const introspected = () => prepare.mock.calls.map(([query]) => query).filter((query) => INTROSPECTION.test(query));
     // checkSchema also fires detached at init, so settle after each arm: two
     // consecutive polls with no growth.
     const settle = async () => {

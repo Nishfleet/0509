@@ -4,13 +4,13 @@ import { useFetcher, useRevalidator } from "react-router";
 import { monthlyPrice, PLANS, TRIAL_TERMS, type PlanId } from "../lib/billing/plans";
 import { Button } from "./ui/button";
 
-export function PlanGate({ planId }: { planId: PlanId }) {
+export function PlanGate({ planId, action = "/app/upgrade" }: { planId: PlanId; action?: string }) {
   const fetcher = useFetcher<{ message: string }>();
   const plan = PLANS.find((entry) => entry.id === planId);
   if (plan === undefined) return null;
   const submitting = fetcher.state !== "idle";
   return (
-    <fetcher.Form method="post" action="/app/upgrade" className="mt-4">
+    <fetcher.Form method="post" action={action} className="mt-4">
       <input type="hidden" name="plan" value={plan.id} />
       <p className="text-body-sm text-ink-soft">
         {plan.name} watches up to {String(plan.limits.competitors)} competitors.

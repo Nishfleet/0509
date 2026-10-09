@@ -1,3 +1,5 @@
+import { readdirSync } from "node:fs";
+
 import js from "@eslint/js";
 import betterTailwindcss from "eslint-plugin-better-tailwindcss";
 import boundaries from "eslint-plugin-boundaries";
@@ -67,7 +69,7 @@ const CHART_IMPORTS = [UPLOT_IMPORT, UPLOT_REACT_IMPORT, FOUR_WEEK_PLOT_STATIC_I
 const FAST_XML_PARSER_IMPORT = {
   name: "fast-xml-parser",
   message:
-    "Feed XML is parsed only by @extractus/feed-extractor in workers/sources/mentions/feed.ts. A direct fast-xml-parser import is a second parser. Source: 0509#4051.",
+    "Feed XML is parsed only by @extractus/feed-extractor. A direct fast-xml-parser import is a second parser. Source: 0509#4051.",
 };
 
 const UNSCOPED_WRITER_MESSAGE =
@@ -143,6 +145,20 @@ const CATCH_RETURNS_NULL = {
     "A catch whose only statement is `return null` swallows the error, so a thrown fetch or a bug fails as silently as a real 'not found'. Give the clause an error binding and a logged failure path (or rethrow). Source: 0509#4462.",
 };
 
+const SCORE_NAME = "/^(points|weight|multiplier|score|total)$/";
+
+const RAW_SCORE_STRING = {
+  selector: [
+    `CallExpression[callee.name='String'][arguments.0.name=${SCORE_NAME}]`,
+    `CallExpression[callee.name='String'][arguments.0.property.name=${SCORE_NAME}]`,
+    "CallExpression[callee.name='String'] > BinaryExpression.arguments[operator='*']",
+    `CallExpression[callee.property.name='toString'][callee.object.name=${SCORE_NAME}]`,
+    `CallExpression[callee.property.name='toString'][callee.object.property.name=${SCORE_NAME}]`,
+  ].join(", "),
+  message:
+    "String() on a score, weight, multiplier or computed product prints binary floating point to people: 3 × 0.6 showed as '1.7999999999999998 points' on the brand page. Format it with formatScore from app/lib/score-format.ts. Source: 0509#7206, commit 96ccfdf39 (docs/incidents/2026-10-06-raw-float-in-biggest-move.md).",
+};
+
 const MIN_H_11_ANCHOR = {
   selector:
     "JSXOpeningElement[name.name=/^(a|Link)$/] > JSXAttribute[name.name='className'] > Literal[value!=/min-h-11/]",
@@ -159,7 +175,42 @@ const FEED_STATE_LITERAL = {
 const XML_PARSER_CONSTRUCTOR = {
   selector: "NewExpression[callee.name='XMLParser']",
   message:
-    "Feed XML is parsed only by @extractus/feed-extractor in workers/sources/mentions/feed.ts. A second XMLParser is a second feed path. Source: 0509#4051.",
+    "Feed XML is parsed only by @extractus/feed-extractor. A second XMLParser is a second feed path. Source: 0509#4051.",
+};
+
+// The other half of the same gate, and the half that catches #7000.
+// FAST_XML_PARSER_IMPORT and XML_PARSER_CONSTRUCTOR only catch a parser someone
+// imported. The parser that actually sat beside the extractor until #7000
+// imported nothing: it read tags with openTagAt()/elementAt() over indexOf and
+// slices, and fed `item`, `entry` and `guid` to them as arguments. That is the
+// shape a second feed parser has to have — you cannot read XML without naming a
+// tag — so the ban is on naming a feed tag for a tag lookup at all, whether the
+// name is a literal or a template. HTMLRewriter takes a CSS selector string, and
+// the feed body goes through the extractor, so neither path needs to look a tag
+// up by name.
+//
+// A literal spelling a feed tag is banned under app/lib/feeds/, which is where
+// a second feed parser can only live. A bare "title" or "link" elsewhere in the
+// repo is a DOM property, a JSON key or a column name, so the ban is scoped to
+// the feed module and not applied repo-wide. The close-tag template covers the
+// form that hides the name in a variable, which is how the deleted scanner
+// found a close tag.
+const HAND_ROLLED_FEED_TAG_SCAN = {
+  selector:
+    "Literal[value=/^(item|entry|items|channel|rss|feed|guid|pubdate)$/i], TemplateLiteral[quasis.0.value.raw=/^<\\//]",
+  message:
+    "Feed XML is read by @extractus/feed-extractor (app/lib/feeds/parse-feed.ts maps extractFromXml onto FeedItem) and a homepage <link> by one HTMLRewriter selector (app/lib/feeds/discover-feed.ts). Looking a feed tag up by name is a hand-rolled parser: one that imports nothing, so the fast-xml-parser import and XMLParser bans cannot see it, and one that must be re-audited against CDATA, entities, namespaces, case and hostile input forever. That is the parser #7000 deleted. The one tag name allowed here is dc:date, which the extractor does not surface; reach it through getExtraEntryFields as this file does, and add any other to the extractor instead. Source: 0509#7000.",
+};
+
+// The tag-reader helpers themselves. A function whose body slices a string at a
+// tag offset is the scanner; banning the two shapes it was built from (a
+// close-tag template, a lower-cased copy of a document) catches the same code
+// before it is finished.
+const HAND_ROLLED_TAG_READER = {
+  selector:
+    "CallExpression[callee.name=/^(openTagAt|elementAt|firstTag|findTag|parseTag|readTag|matchTag|unwrapCdata|stripTags|attributes)$/]",
+  message:
+    "A tag-reading helper is a hand-rolled parser. Feed XML is read by @extractus/feed-extractor and a homepage <link> by one HTMLRewriter selector (app/lib/feeds/discover-feed.ts). A local openTagAt/elementAt/stripTags/attributes has to re-derive CDATA, entities, namespaces and case, and the copy that sat beside the extractor for a year could not read RDF or dc:date. Source: 0509#7000.",
 };
 
 // The one domain normaliser. The identity engine — app/lib/identity/normalise.ts
@@ -311,6 +362,7 @@ const BANNED_SYNTAX = [
   GOOGLE_FONTS_BAN,
   CRAWLER_USER_AGENT_BAN,
   CATCH_RETURNS_NULL,
+  RAW_SCORE_STRING,
   XML_PARSER_CONSTRUCTOR,
   DOMAIN_HOSTNAME_BAN,
   BARE_FETCH,
@@ -365,9 +417,58 @@ const RAW_DML_WRITER = {
     "One writer per table. Raw DML lives in app/lib/data/<table>.server.ts — this matches the statement text itself, so holding it in a module constant still counts. docs/REBUILD-TRUST.md C5. Source: 0509#4313 — the kysely-era insertInto/updateTable/deleteFrom selectors matched nothing after the raw-D1 rebuild, and app/lib/workspace.server.ts grew a second workspace writer while the rule stayed green.",
 };
 
+// 0509#7022: RAW_DML_WRITER only proves DML sits somewhere under
+// app/lib/data/. Inside it, <table>.server.ts may write only <table>.
+// One block per file, generated from the directory, so a new data file is
+// guarded with no edit here. better-auth owns session and verification;
+// auth_expiry is their one writer.
+const TABLE_WRITER_ALLOWED_TABLES = { auth_expiry: ["session", "verification"] };
+
+function foreignTableWriter(file) {
+  const table = file.replace(/\.server\.ts$/, "");
+  const allowed = TABLE_WRITER_ALLOWED_TABLES[table] ?? [table];
+  const own = `(?:${allowed.join("|")})\\b`;
+  // SQLite accepts `UPDATE OR <action> <table> SET ...` and
+  // `UPDATE <table> AS <alias> SET ...`, so the table name itself — not the
+  // word after UPDATE — is what the lookahead has to see.
+  const UPDATE_HEAD = `\\bUPDATE\\s+(?:OR\\s+\\w+\\s+)?`;
+  const UPDATE_TAIL = `(?:\\s+AS\\s+[\\w".]+)?\\s+SET\\s+[\\w".]+\\s*=`;
+  const shape =
+    `\\b(INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|DELETE\\s+FROM)\\s+"?(?!${own})\\w` +
+    `|${UPDATE_HEAD}"?(?!${own})[\\w.]+"?${UPDATE_TAIL}`;
+  return {
+    selector: `Literal[value=/${shape}/i], TemplateElement[value.raw=/${shape}/i]`,
+    message: `Foreign-table write: app/lib/data/${file} may write only ${allowed.join(", ")}. Move this statement to app/lib/data/<its table>.server.ts as an exported function that returns a D1PreparedStatement, and put that in this file's env.DB.batch so the batch stays atomic. Source: 0509#7022.`,
+  };
+}
+
+// A later matching block's no-restricted-syntax entry replaces the earlier
+// one wholesale, so each block restates what data files already get.
+export const TABLE_WRITER_BLOCKS = readdirSync(new URL("./app/lib/data/", import.meta.url))
+  .filter((file) => file.endsWith(".server.ts"))
+  .map((file) => ({
+    files: [`app/lib/data/${file}`],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX,
+        ...NO_USER_DATA_IN_LOGS,
+        FEED_STATE_LITERAL,
+        foreignTableWriter(file),
+      ],
+    },
+  }));
+
 const ENV_DB_IN_ROUTES = {
-  selector: "CallExpression[callee.object.name='env'][callee.property.name='DB']",
-  message: "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
+  selector: "MemberExpression[object.name='env'][property.name='DB']",
+  message:
+    "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4. Source: 0509#6999 — the old CallExpression[callee...] selector matched only a direct env.DB(...) call, so the five routes passing env.DB as an argument linted green.",
+};
+
+const ENV_DB_DESTRUCTURE_IN_ROUTES = {
+  selector: "VariableDeclarator[init.name='env'] > ObjectPattern > Property[key.name='DB']",
+  message:
+    "Routes do not touch env.DB, destructured or not. Go through the one data layer in app/lib/data/. Source: 0509#6999.",
 };
 
 const FORM_DATA_GET_BAN = {
@@ -434,10 +535,89 @@ function isFormData(type) {
   return false;
 }
 
+function isZodSchema(type) {
+  const seen = new Set();
+  const pending = [type];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (current === undefined || seen.has(current)) continue;
+    seen.add(current);
+    if (current.isUnion() || current.isIntersection()) {
+      pending.push(...current.types);
+      continue;
+    }
+    if ((current.getSymbol() ?? current.aliasSymbol)?.getName().startsWith("Zod")) return true;
+    pending.push(...(current.getBaseTypes?.() ?? []));
+  }
+  return false;
+}
+
+// #7173: `zod`'s `.catch()` reads like a schema statement ("this row can be
+// malformed") when what it does is "a row that violates the schema is silently
+// repaired with a fallback". In app/lib/data/ — the one place that parses D1
+// rows, and the place a reader of a writer learns what a row must look like —
+// the two are the same characters. A row whose value no writer can produce is
+// drift: it must reach the caller as a ZodError, not as a default. Arming this
+// glob only, because a `.catch()` default on a request body or a feed config
+// outside the data layer is a different contract and the rule cannot tell the
+// two apart. Source: 0509#7173.
+const ZOD_ROW_CATCH_BAN = {
+  meta: {
+    type: "problem",
+    schema: [],
+    messages: {
+      zodRowCatch:
+        "A row schema in app/lib/data/ is the row-parse contract: every row the SQL returns must meet it. `.catch(...)` silently repairs a row that violates it and substitutes a fallback, which hides the drift instead of reporting it. Parse with the true schema and let the ZodError reach the caller. docs/REBUILD-TRUST.md C1. Source: 0509#7173.",
+    },
+  },
+  create(context) {
+    const services = context.sourceCode.parserServices;
+    if (services?.getTypeAtLocation === undefined) {
+      // A gate that silently passes every file it was armed for is the old
+      // defect in a new costume, so a missing program is an error, not a
+      // no-op — the same shape form-rules/form-data-get reports. Nothing in
+      // this config can reach it: the rule is armed on app/lib/data/**, where
+      // every file has type information. 0509#7173.
+      return {
+        Program(node) {
+          context.report({
+            node,
+            message: "row-rules/zod-row-catch needs TypeScript type information to match the receiver type.",
+          });
+        },
+      };
+    }
+    return {
+      CallExpression(node) {
+        const callee = node.callee;
+        if (callee.type !== "MemberExpression") return;
+        const name =
+          callee.property.type === "Identifier"
+            ? callee.property.name
+            : callee.property.type === "Literal" && typeof callee.property.value === "string"
+              ? callee.property.value
+              : null;
+        if (callee.computed && callee.property.type !== "Literal") return;
+        if (name !== "catch") return;
+        if (!isZodSchema(services.getTypeAtLocation(callee.object))) return;
+        context.report({ node, messageId: "zodRowCatch" });
+      },
+    };
+  },
+};
+
 const FORM_RULES_PLUGIN = {
   "form-rules": {
     rules: {
       "form-data-get": FORM_DATA_GET_BAN,
+    },
+  },
+};
+
+const ROW_RULES_PLUGIN = {
+  "row-rules": {
+    rules: {
+      "zod-row-catch": ZOD_ROW_CATCH_BAN,
     },
   },
 };
@@ -688,6 +868,17 @@ export default tseslint.config(
   },
 
   {
+    // app/lib/data/** is the only D1 row reader, so it is the only place a row
+    // schema lives. `.catch(...)` on one silences the row-parse contract.
+    // Armed on this glob only: a `.catch(...)` on a request body or a feed
+    // config parsed elsewhere is a different contract and the rule cannot
+    // distinguish it from a row read. Source: 0509#7173.
+    files: ["app/lib/data/**/*.ts"],
+    plugins: ROW_RULES_PLUGIN,
+    rules: { "row-rules/zod-row-catch": "error" },
+  },
+
+  {
     // The one blessed site for the support address. It still bans every other
     // shape; only the address literal is allowed here. 0509#3986.
     files: ["app/components/footer.tsx"],
@@ -708,8 +899,8 @@ export default tseslint.config(
     // for a purpose that is not domain normalisation, so the shared selector is
     // restated without `DOMAIN_HOSTNAME_BAN`: the identity engine itself, a
     // public-host guard in the transport layer, the job-board host match, this
-    // site's www variant and page-host display, and the support worker's
-    // site-host allow. Every
+    // site's www variant and page-host display, the OAuth loopback redirect
+    // allow-list, and the support worker's site-host allow. Every
     // other `.hostname` read in app/ or workers/ keeps the ban. This block
     // restates the list because a later matching block's no-restricted-syntax
     // entry replaces the earlier one wholesale (flat config never merges a rule's
@@ -719,6 +910,7 @@ export default tseslint.config(
       "app/lib/fetch/transport.server.ts",
       "app/lib/hiring/discover-board.server.ts",
       "app/lib/site/own-site.server.ts",
+      "app/lib/agent/redirect-uri.ts",
       "workers/support-inbox.ts",
     ],
     rules: {
@@ -827,6 +1019,27 @@ export default tseslint.config(
         ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  {
+    // The feed read itself. A second parser in here cannot be reached by the
+    // import ban (it needs no import) or the whole-repo tag ban (a "title"
+    // elsewhere is a DOM property), so the tag ban is scoped to the module a
+    // feed parser can only live in. dc:date is the one name parse-feed.ts
+    // reaches for through getExtraEntryFields, and it is excluded above; the
+    // extractor does not surface it.
+    files: ["app/lib/feeds/**"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX,
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+        HAND_ROLLED_FEED_TAG_SCAN,
+        HAND_ROLLED_TAG_READER,
       ],
     },
   },
@@ -1104,6 +1317,18 @@ export default tseslint.config(
               message:
                 "The delivery-address save is the second app-side sender after app/lib/auth.server.ts, and it goes through the one paved path (workers/delivery/send.ts) instead of calling env.EMAIL.send a second time. Only that one file reaches the worker; every other server leaf keeps the boundary. Source: 0509#5811.",
             },
+            {
+              from: { element: { type: "data-writer" } },
+              disallow: {
+                to: [
+                  { element: { type: "component" } },
+                  { element: { type: "route" } },
+                  { file: { categories: "route-module" } },
+                ],
+              },
+              message:
+                "The data layer returns rows, never view code: app/lib/data/** may not import app/components/** or app/routes/**. Move shared pure logic into app/lib/. Source: 0509#7027, 0509#7031.",
+            },
           ],
         },
       ],
@@ -1144,6 +1369,7 @@ export default tseslint.config(
         ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         ENV_DB_IN_ROUTES,
+        ENV_DB_DESTRUCTURE_IN_ROUTES,
         FEED_STATE_LITERAL,
       ],
       "form-rules/form-data-get": "error",
@@ -1238,45 +1464,75 @@ export default tseslint.config(
     },
   },
 
-  // 0509#7073: e2e is type-aware so no-floating-promises is on. The rest of
-  // strictTypeChecked on Playwright evaluate callbacks and poll messages is a
-  // follow-up (restrict-template-expressions on timeout numbers, no-unsafe-*
-  // on JSON.parse of fixture pages).
+  // 0509#7229: e2e gets full strictTypeChecked. Number interpolation is the
+  // one relaxation: a report label like `step ${i}` is safe and the #7183
+  // comment named timeout numbers as the reason this rule was off. Every
+  // other strictTypeChecked check applies to e2e specs.
   {
     files: ["e2e/**/*.ts"],
     rules: {
-      "@typescript-eslint/restrict-template-expressions": "off",
-      "@typescript-eslint/no-unsafe-assignment": "off",
-      "@typescript-eslint/no-unsafe-call": "off",
-      "@typescript-eslint/no-unsafe-member-access": "off",
-      "@typescript-eslint/no-unsafe-return": "off",
-      "@typescript-eslint/no-unsafe-argument": "off",
-      "@typescript-eslint/no-confusing-void-expression": "off",
-      "@typescript-eslint/dot-notation": "off",
-      "@typescript-eslint/no-unnecessary-type-assertion": "off",
-      "@typescript-eslint/restrict-plus-operands": "off",
-      "@typescript-eslint/prefer-includes": "off",
-      "@typescript-eslint/prefer-string-starts-ends-with": "off",
-      "@typescript-eslint/no-base-to-string": "off",
+      "@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true }],
     },
   },
 
-  // 0509#7073: type-aware lint is on for e2e and *.config.ts. The comment
-  // exemption used to live on the disableTypeChecked block that also listed
-  // those globs; keep it here so inline comments in specs and configs stay
-  // allowed (AGENTS.md: config files and tests are exempt).
+  // 0509#7233: tests/** runs under strictTypeChecked. The named offs are the
+  // findings typecheck cannot fix:
+  // - vi.fn() mocks and JSON.parse results are `any`/`error` (no-unsafe-*).
+  // - Test doubles declare `async` to match D1/fetch without awaiting a
+  //   fixture (require-await).
+  // - `cloudflare:test`'s `env` is @deprecated in favour of
+  //   `cloudflare:workers` (2,571 of 2,578 no-deprecated hits).
+  // - Partial loader/action args and mock shapes use `as` because `!` is
+  //   banned (no-unnecessary-type-assertion,
+  //   non-nullable-type-assertion-style).
+  // - fetch spy args are `Request | string` (no-base-to-string).
+  // - Workers `EmailMessage` types resolve as error in the test project
+  //   (no-redundant-type-constituents).
+  // - Tests mark unused bindings with `void x` (no-meaningless-void-operator).
+  // - Handlers are cast off `worker.fetch` and `worker.email`, and `env.X.get`
+  //   is asserted on as a spy (unbound-method).
+  // - Send and fetch fixtures reject with the recorded value, including the
+  //   non-Error string production `errorText` must stringify
+  //   (prefer-promise-reject-errors).
+  // Number and `any` interpolation is the same class as the e2e relaxation.
   {
-    files: ["e2e/**/*.ts", "*.config.ts"],
+    files: ["tests/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-return": "off",
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/require-await": "off",
+      "@typescript-eslint/no-deprecated": "off",
+      "@typescript-eslint/no-unnecessary-type-assertion": "off",
+      "@typescript-eslint/non-nullable-type-assertion-style": "off",
+      "@typescript-eslint/no-base-to-string": "off",
+      "@typescript-eslint/no-redundant-type-constituents": "off",
+      "@typescript-eslint/no-meaningless-void-operator": "off",
+      "@typescript-eslint/prefer-promise-reject-errors": "off",
+      "@typescript-eslint/unbound-method": "off",
+      "@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true, allowAny: true }],
+    },
+  },
+
+  // 0509#7073 / #7233: type-aware lint is on for e2e, tests and *.config.ts.
+  // The comment exemption used to live on the disableTypeChecked block that
+  // also listed those globs; keep it here so inline comments in specs,
+  // configs and tests stay allowed (AGENTS.md: config files and tests are
+  // exempt).
+  {
+    files: ["e2e/**/*.ts", "tests/**/*.ts", "*.config.ts"],
     rules: {
       "no-inline-comments": "off",
       "no-warning-comments": "off",
     },
   },
 
-  // 0509#7073: tests/** stay untyped until the excluded files in
-  // tsconfig.test.json typecheck. e2e/** and *.config.ts are off this list.
+  // 0509#7233: tests/** is off disableTypeChecked. **/*.js, **/*.mjs,
+  // **/*.cjs and public/index.html stay untyped.
   {
-    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "tests/**/*.ts", "public/index.html"],
+    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "public/index.html"],
     extends: [tseslint.configs.disableTypeChecked],
     rules: {
       "no-inline-comments": "off",
@@ -1343,4 +1599,12 @@ export default tseslint.config(
       ],
     },
   },
+
+  // 0509#7266: TABLE_WRITER_BLOCKS must be the last entries in this array.
+  // Flat config replaces a rule's options wholesale per matching block — a
+  // later block with no-restricted-syntax on app/lib/data/** would silently
+  // drop the per-file foreign-table-write selector. Spreading here guarantees
+  // no existing block comes after them; a future block placed after this
+  // comment overrides them by design and must restate every entry.
+  ...TABLE_WRITER_BLOCKS,
 );

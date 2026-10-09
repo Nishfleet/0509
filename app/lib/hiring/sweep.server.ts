@@ -1,6 +1,7 @@
 import { getDomain } from "tldts";
 import { z } from "zod";
 
+import { readPaidWorkspaceIds } from "../data/plan.server";
 import type { HiringTarget } from "../data/watch.server";
 import { insertWatches, readEntitiesWithoutHiringWatch, readHiringTargets } from "../data/watch.server";
 import { readEnabledSourceId } from "../data/source.server";
@@ -50,7 +51,10 @@ export async function planHiringSweep(): Promise<{
   entities: readonly { id: string; domain: string }[];
   targets: readonly HiringTarget[];
 }> {
-  return { entities: await readEntitiesWithoutHiringWatch(), targets: await readHiringTargets() };
+  const paid = await readPaidWorkspaceIds(new Date());
+  const targets = (await readHiringTargets()).filter((target) => paid.has(target.workspaceId));
+  const entities = (await readEntitiesWithoutHiringWatch()).filter((entity) => paid.has(entity.workspaceId));
+  return { entities: entities.map(({ id, domain }) => ({ id, domain })), targets };
 }
 
 async function loadBoard(domain: string, homepage: string): Promise<z.infer<typeof BOARD_SCHEMA>> {

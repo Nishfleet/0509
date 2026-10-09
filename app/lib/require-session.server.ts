@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { redirect } from "react-router";
+import { createContext, redirect, type RouterContextProvider } from "react-router";
 
 import { createAuth, signOut } from "./auth.server";
 
@@ -16,6 +16,24 @@ export function requireSession(request: Request, returnTo?: string) {
 
 export function requireFreshSession(request: Request, returnTo?: string) {
   return readSession(request, returnTo, true);
+}
+
+export function sessionForRequest(request: Request, returnTo?: string) {
+  return request.method === "GET" ? requireSession(request, returnTo) : requireFreshSession(request, returnTo);
+}
+
+export type Session = Awaited<ReturnType<typeof requireSession>>;
+
+export const sessionContext = createContext<Session>();
+
+export async function requireSessionMiddleware({
+  request,
+  context,
+}: {
+  request: Request;
+  context: Pick<RouterContextProvider, "set">;
+}): Promise<void> {
+  context.set(sessionContext, await sessionForRequest(request));
 }
 
 export async function hasSession(request: Request): Promise<boolean> {

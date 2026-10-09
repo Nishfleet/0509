@@ -1,11 +1,17 @@
+import { globSync, readFileSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it, vi } from "vitest";
 
 import {
   ENTITLEMENT_KEYS,
   MOST_RESTRICTIVE,
+  pageRoleInScope,
+  paidSourceAllowed,
   resolveEntitlements,
   type Entitlements,
 } from "../../app/lib/billing/entitlements";
+import { PLANS } from "../../app/lib/billing/plans";
 
 const SCOUT = {
   competitors: 5,
@@ -95,5 +101,47 @@ describe("resolveEntitlements", () => {
     expect(result).toEqual(SCOUT);
     expect(result).not.toHaveProperty("unknown_key");
     expect(Object.keys(result)).toEqual([...ENTITLEMENT_KEYS]);
+  });
+});
+
+describe("every entitlement key has a reader (0509#7062)", () => {
+  const ROOT = path.resolve(import.meta.dirname, "../..");
+  const texts = globSync("{app,workers}/**/*.{ts,tsx}", { cwd: ROOT })
+    .filter((file) => !file.startsWith("app/lib/billing/"))
+    .map((file) => ({ file, text: readFileSync(path.join(ROOT, file), "utf8") }));
+
+  it.each([...ENTITLEMENT_KEYS])("%s is read outside billing", (key) => {
+    const hits = texts.filter(({ text }) => {
+      if (!/readEntitlements|resolveEntitlements|readWorkspaceEntitlements/.test(text)) return false;
+      return new RegExp(`\\.${key}\\b`).test(text);
+    });
+    expect(
+      hits.map(({ file }) => file),
+      `${key} needs a reader outside app/lib/billing`,
+    ).not.toEqual([]);
+  });
+
+  it("keeps api_access on every live plan", () => {
+    expect(PLANS.every((plan) => plan.limits.api_access)).toBe(true);
+  });
+});
+
+describe("pageRoleInScope (0509#7062)", () => {
+  it("keeps home and pricing on Scout and lets Starter take the rest", () => {
+    expect(pageRoleInScope("home", "home_pricing")).toBe(true);
+    expect(pageRoleInScope("pricing", "home_pricing")).toBe(true);
+    expect(pageRoleInScope("other", "home_pricing")).toBe(false);
+    expect(pageRoleInScope("other", "all")).toBe(true);
+  });
+});
+
+describe("paidSourceAllowed (0509#7062)", () => {
+  it("denies x.search unless the workspace is entitled", () => {
+    expect(paidSourceAllowed("x.search", false)).toBe(false);
+    expect(paidSourceAllowed("x.search", true)).toBe(true);
+    expect(paidSourceAllowed("scraper.paid", false)).toBe(false);
+    expect(paidSourceAllowed("scraper.paid", true)).toBe(true);
+    expect(paidSourceAllowed("site.page", false)).toBe(true);
+    expect(paidSourceAllowed("site.page", true)).toBe(true);
   });
 });

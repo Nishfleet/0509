@@ -13,7 +13,7 @@ const WATCHING_LIST = createElement(
 
 function markup(props: { hideHeading?: boolean }): string {
   return renderToStaticMarkup(
-    createElement(OnboardingFrame, { step: 2, heading: "H", ...props }, createElement("p", null, "body")),
+    createElement(OnboardingFrame, { step: 2, heading: "H", ...props, children: createElement("p", null, "body") }),
   );
 }
 
@@ -37,7 +37,7 @@ describe("OnboardingFrame", () => {
 
   it("keeps screen 3's watching list a polite additions-only live region inside the frame", () => {
     const html = renderToStaticMarkup(
-      createElement(OnboardingFrame, { step: 3, heading: "Your competitors" }, WATCHING_LIST),
+      createElement(OnboardingFrame, { step: 3, heading: "Your competitors", children: WATCHING_LIST }),
     );
 
     expect(html).toContain("<main>");

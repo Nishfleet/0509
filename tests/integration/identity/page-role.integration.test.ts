@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { classifyNavPages, PAGE_ROLE } from "../../../app/lib/identity/page-role.server";
 
+import { JEV_BATCH_SIZE } from "../../../app/lib/jev/client.server";
+
 const NOW = "2026-09-24T12:00:00.000Z";
 
 const PAGE_URL = "https://www.gymshark.com/collections/all-products";
@@ -53,7 +55,9 @@ describe("classifyNavPages", () => {
   beforeEach(seed);
 
   it("asks Jev once per page and writes the judged page with its decision hash", async () => {
-    const run = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) =>
+      Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }),
+    );
     Reflect.set(env, "AI", { run });
 
     const rows = await classifyNavPages({ workspaceId, entity: ENTITY, pages: [PAGE], now: NOW });
@@ -86,7 +90,9 @@ describe("classifyNavPages", () => {
   });
 
   it("leaves an unchanged page alone and asks Jev nothing more", async () => {
-    const run = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) =>
+      Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }),
+    );
     Reflect.set(env, "AI", { run });
 
     await classifyNavPages({ workspaceId, entity: ENTITY, pages: [PAGE], now: NOW });
@@ -105,13 +111,17 @@ describe("classifyNavPages", () => {
   });
 
   it("re-judges a page whose title changed and rewrites the one row", async () => {
-    const run = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) =>
+      Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }),
+    );
     Reflect.set(env, "AI", { run });
     await classifyNavPages({ workspaceId, entity: ENTITY, pages: [PAGE], now: NOW });
     const firstHash = (await readPages())[0]?.role_decided_for_hash;
 
     Reflect.deleteProperty(env, "AI");
-    const secondRun = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "other" } } }));
+    const secondRun = vi.fn((_model: string, _request: unknown, _options?: unknown) =>
+      Promise.resolve({ answers: { page_role: { type: "choice", choice: "other" } } }),
+    );
     Reflect.set(env, "AI", { run: secondRun });
 
     const second = await classifyNavPages({
@@ -158,7 +168,9 @@ describe("classifyNavPages", () => {
   });
 
   it("logs one uncached verdict per judged page and writes the page rows in one batch", async () => {
-    const run = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "blog" } } }));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) =>
+      Promise.resolve({ answers: { page_role: { type: "choice", choice: "blog" } } }),
+    );
     Reflect.set(env, "AI", { run });
 
     await classifyNavPages({
@@ -189,7 +201,7 @@ describe("classifyNavPages", () => {
   });
 
   it("writes nothing and propagates JevUnavailableError when Jev refuses", async () => {
-    const run = vi.fn(() => Promise.reject(new Error("jev down")));
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) => Promise.reject(new Error("jev down")));
     Reflect.set(env, "AI", { run });
 
     await expect(classifyNavPages({ workspaceId, entity: ENTITY, pages: [PAGE], now: NOW })).rejects.toThrow(
@@ -198,5 +210,49 @@ describe("classifyNavPages", () => {
     expect(await readPages()).toEqual([]);
     const { results } = await env.DB.prepare("SELECT id FROM jev_verdict").all();
     expect(results).toHaveLength(0);
+  });
+});
+
+describe("classifyNavPages under load", () => {
+  beforeEach(seed);
+
+  const pages = Array.from({ length: 40 }, (_, index) => ({
+    url: `https://www.gymshark.com/p/${String(index)}`,
+    title: `Page ${String(index)}`,
+  }));
+
+  it("never has more than the batch size of Jev calls in flight", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const run = vi.fn(async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await Promise.resolve();
+      inFlight -= 1;
+      return { answers: { page_role: { type: "choice", choice: "other" } } };
+    });
+    Reflect.set(env, "AI", { run });
+
+    const rows = await classifyNavPages({ workspaceId, entity: ENTITY, pages, now: NOW });
+
+    expect(rows).toHaveLength(40);
+    expect(peak).toBeLessThanOrEqual(JEV_BATCH_SIZE);
+  });
+
+  it("keeps the verdicts that landed and stops asking once rate limited", async () => {
+    let calls = 0;
+    const run = vi.fn(() => {
+      calls += 1;
+      return calls === 2
+        ? Promise.reject(new Error("2003: Rate limit exceeded"))
+        : Promise.resolve({ answers: { page_role: { type: "choice", choice: "other" } } });
+    });
+    Reflect.set(env, "AI", { run });
+
+    const rows = await classifyNavPages({ workspaceId, entity: ENTITY, pages, now: NOW });
+
+    expect(rows).toHaveLength(JEV_BATCH_SIZE - 1);
+    expect(run).toHaveBeenCalledTimes(JEV_BATCH_SIZE);
+    expect(await readPages()).toHaveLength(JEV_BATCH_SIZE - 1);
   });
 });

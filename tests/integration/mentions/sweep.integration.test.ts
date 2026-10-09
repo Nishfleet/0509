@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readSignalAlerts } from "../../../app/lib/data/alert.server";
+import { JEV_TIMEOUT_MS } from "../../../app/lib/jev/client.server";
 import { mentionReasonLine } from "../../../app/lib/mentions/reason-customer";
 import { readMentionFeed } from "../../../app/lib/data/mention.server";
 import { planTargets, sweepTarget } from "../../../workers/mentions/sweep";
@@ -46,6 +47,9 @@ async function seedWorkspace(): Promise<{ workspaceId: string; competitorId: str
       "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Gymshark', ?2, 'UTC', 1, 8, ?3)",
     ).bind(workspaceId, userId, NOW),
     env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?1, ?2, 'scout', 'trialing', ?3)",
+    ).bind(`${workspaceId}-plan`, workspaceId, NOW),
+    env.DB.prepare(
       "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, created_at) VALUES (?1, ?2, 'self', ?3, 'Gymshark', '{\"description\":\"Gym clothing\"}', ?4)",
     ).bind(`${workspaceId}-self`, workspaceId, `gymshark-${String(runs)}.com`, NOW),
     env.DB.prepare(
@@ -68,7 +72,9 @@ function stubSlowGdelt(delayMs: number) {
     vi.fn(
       (_input: unknown, init?: RequestInit) =>
         new Promise<Response>((resolve, reject) => {
-          const timer = setTimeout(() => resolve(new Response(JSON.stringify({ articles: ARTICLES }))), delayMs);
+          const timer = setTimeout(() => {
+            resolve(new Response(JSON.stringify({ articles: ARTICLES })));
+          }, delayMs);
           init?.signal?.addEventListener("abort", () => {
             clearTimeout(timer);
             reject(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
@@ -315,7 +321,10 @@ describe("nightly mentions sweep", () => {
     const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
 
     expect(run).toHaveBeenCalledTimes(1);
-    expect(run.mock.calls[0]?.[2]).toEqual({ gateway: { id: "default" } });
+    expect(run.mock.calls[0]?.[2]).toEqual({
+      gateway: { id: "default" },
+      extraHeaders: { "cf-aig-timeout": String(JEV_TIMEOUT_MS) },
+    });
     expect(outcome).toEqual({ items: 3, stored: 0, unjudged: 3, skipped: 0 });
   });
 

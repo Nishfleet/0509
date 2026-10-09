@@ -1,22 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
 import {
   consoleFailures,
-  deleteCreatedAccount,
   isLocalLane,
   requireInboxToken,
   seedPreviewSession,
   signInWithMagicLink,
   watchConsole,
 } from "./inbox";
-
-let createdEmail = "";
-test.afterEach(async ({ page }, testInfo) => {
-  if (createdEmail === "") return;
-  testInfo.setTimeout(testInfo.timeout + 60_000);
-  await deleteCreatedAccount(page, createdEmail);
-  createdEmail = "";
-});
 
 // J6 by keyboard alone (0509#4158): a customer can turn a competitor off and
 // back on without a pointer. From whatever app page the session lands on, the
@@ -58,23 +50,23 @@ async function seedSession(): Promise<string> {
   return cookie;
 }
 
-// J3 setup for the production lane — the same journey competitor-page.spec.ts
-// drives — because a per-brand switch only exists once the workspace watches a
-// competitor.
-async function watchOneCompetitor(page: Page): Promise<void> {
-  const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
-  createdEmail = email;
-  await signInWithMagicLink(page, email, requireInboxToken());
-
+// The production lane signs in a kept account per width
+// (FIXTURE_ACCOUNTS.j6Desktop, j6Phone) that holds a complimentary plan row
+// (migration 0048, #7225): a per-run address stops at /onboarding/plan since
+// #7061. First use onboards gymshark.com; every run makes sure one competitor
+// is ON, because the per-brand switch only exists once the workspace watches
+// one. J6 ends with the switch back ON, so the account is left as it started.
+async function onboard(page: Page): Promise<void> {
   await page.goto("/onboarding");
-  const input = page.getByRole("textbox", { name: /your website address or social username/i });
-  await input.fill("gymshark.com");
-  await input.press("Enter");
-  await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
-  await page.getByRole("button", { name: "That's me" }).click();
-  await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
-
+  if (!new URL(page.url()).pathname.startsWith("/onboarding/competitors")) {
+    const input = page.getByRole("textbox", { name: /your website address or social username/i });
+    await input.fill("gymshark.com");
+    await input.press("Enter");
+    await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
+    await page.getByRole("button", { name: "That's me" }).click();
+    await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
+  }
   const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
   if ((await watching.count()) === 0) {
     await page.locator("#add-competitor").fill("nike.com");
@@ -85,12 +77,30 @@ async function watchOneCompetitor(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
 }
 
+async function watchOneCompetitor(page: Page, projectName: string): Promise<void> {
+  const account = projectName === "phone-390" ? FIXTURE_ACCOUNTS.j6Phone : FIXTURE_ACCOUNTS.j6Desktop;
+  await signInWithMagicLink(page, account.email, requireInboxToken(), /\/(app|onboarding)/);
+  if (new URL(page.url()).pathname.startsWith("/onboarding")) await onboard(page);
+
+  await page.goto("/app/competitors");
+  const on = page.getByRole("switch", { name: / tracking/, checked: true });
+  if ((await on.count()) > 0) return;
+  const first = page.getByRole("switch", { name: / tracking/ }).first();
+  if ((await first.count()) > 0) {
+    await first.click();
+  } else {
+    await page.locator("#add-competitor").fill("nike.com");
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+  }
+  await expect(on.first()).toBeVisible({ timeout: 30_000 });
+}
+
 test("the per-brand switch is operable with a keyboard alone @own-signin", async ({ page }, testInfo) => {
   test.setTimeout(150_000);
   const watched = watchConsole(page);
 
   if (!isLocalLane()) {
-    await watchOneCompetitor(page);
+    await watchOneCompetitor(page, testInfo.project.name);
   } else {
     await page.setExtraHTTPHeaders({ cookie: await seedSession() });
     // Any app page carries the nav; /app/alerts renders on these seeds alone.

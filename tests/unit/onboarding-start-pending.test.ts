@@ -17,7 +17,7 @@ function render(submission: { intent: string } | null): string {
         id: "onboarding",
         path: "/onboarding/competitors",
         // The screen reads the loader's data, as hydration passes it.
-        Component: () => createElement(Page, { loaderData: LOADER_DATA }),
+        Component: () => createElement(Page, { loaderData: LOADER_DATA } as RouteProps),
         action: NEVER,
       },
     ],

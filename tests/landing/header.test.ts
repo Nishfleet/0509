@@ -22,6 +22,6 @@ describe("landing header", () => {
       expect(link).toContain("flex");
       expect(link).toContain("items-center");
     }
-    expect(html.match(/<a\b[^>]*href="\/login"[^>]*>/)?.[0]).toContain("min-h-11");
+    expect(/<a\b[^>]*href="\/login"[^>]*>/.exec(html)?.[0]).toContain("min-h-11");
   });
 });

@@ -4,6 +4,7 @@ import {
   breadcrumbJsonLd,
   jsonLdGraph,
   organizationJsonLd,
+  shareImageMeta,
   softwareApplicationJsonLd,
 } from "./structured-data";
 
@@ -39,6 +40,7 @@ export function pricingMeta() {
     { property: "og:title", content: title },
     { property: "og:description", content: description },
     { property: "og:url", content: url },
+    ...shareImageMeta(),
     {
       "script:ld+json": jsonLdGraph([
         organizationJsonLd(),
