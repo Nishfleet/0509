@@ -1,6 +1,7 @@
 import { captureException } from "@sentry/cloudflare";
 import { getDomain } from "tldts";
 
+import { AiDailyCapError } from "../ai/daily-cap.server";
 import { AiSpendOffError } from "../ai/spend.server";
 import type { BacklogRow } from "../data/discovery_backlog.server";
 import type { DiscoveryContext, DiscoverySelf } from "../data/entity.server";
@@ -81,7 +82,7 @@ export class DiscoveryUnavailableError extends Error {
 }
 
 function refusedSpend(reason: unknown): boolean {
-  return reason instanceof AiSpendOffError || isBillingRefusal(reason);
+  return reason instanceof AiSpendOffError || reason instanceof AiDailyCapError || isBillingRefusal(reason);
 }
 
 function failureMessage(reason: unknown): string {
@@ -104,7 +105,8 @@ async function settledCandidates(self: DiscoverySelf): Promise<Candidate[]> {
     );
   }
   for (const { generator, reason } of failed) {
-    if (!(reason instanceof AiSpendOffError)) captureException(reason, { tags: { discovery_generator: generator } });
+    if (!(reason instanceof AiSpendOffError || reason instanceof AiDailyCapError))
+      captureException(reason, { tags: { discovery_generator: generator } });
   }
   return runs.flatMap((run) => (run.status === "fulfilled" ? run.value : []));
 }
