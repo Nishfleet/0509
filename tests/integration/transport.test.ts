@@ -489,6 +489,28 @@ describe("readUrl", () => {
     }
   });
 
+  it("gives up on a browser call that never answers instead of hanging the caller", async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const browser = fakeBrowser({ ok: false, throwOnCall: true });
+    browser.quickAction = () => new Promise<Response>(() => undefined);
+    vi.useFakeTimers();
+    try {
+      install(browser);
+      const pending = readUrl("https://gated.example.com/", { mayEscalate: async () => true });
+      await vi.advanceTimersByTimeAsync(30_000);
+      const result = await pending;
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("escalation-failed");
+      expect(result.detail).toContain("no answer after 25000 ms");
+    } finally {
+      vi.useRealTimers();
+      stub.restore();
+    }
+  });
+
   it("logs the escalation even when the browser call throws", async () => {
     const stub = stubFetch({
       "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
