@@ -33,7 +33,11 @@ function reportCounterDown(error: unknown, cap: Cap): void {
   const last = counterDownReportedAt.get(key);
   if (last !== undefined && now - last < COUNTER_DOWN_REPORT_EVERY_MS) return;
   counterDownReportedAt.set(key, now);
-  captureException(error, { level: "error", fingerprint: ["ai-daily-cap-counter-down", cap.line] });
+  const cause = error instanceof Error ? error.name : "unknown";
+  captureException(new Error(`ai daily cap counter unreachable: ${cap.line} ${cap.scope} (${cause})`), {
+    level: "error",
+    fingerprint: ["ai-daily-cap-counter-down", cap.line, cap.scope],
+  });
 }
 
 function today(): string {
