@@ -2,7 +2,7 @@ import { captureException, captureMessage } from "@sentry/cloudflare";
 import { env, waitUntil } from "cloudflare:workers";
 import { z } from "zod";
 
-import { JEV_CALLS_PER_DAY, takeAiCall } from "../ai/daily-cap.server";
+import { JEV_CALLS_PER_DAY, takeAiCall, takeJevWorkspaceShare } from "../ai/daily-cap.server";
 import { aiGatewayId } from "../ai/gateway.server";
 import { AiSpendOffError, refuseWhenAiSpendOff } from "../ai/spend.server";
 import { insertJevFailure } from "../data/jev_failure.server";
@@ -230,6 +230,15 @@ function choiceHash(workspaceId: string, question: ChoiceQuestion, state: unknow
   );
 }
 
+async function takeShare(workspaceId: string, questionIds: string): Promise<void> {
+  try {
+    refuseWhenAiSpendOff();
+    await takeJevWorkspaceShare(workspaceId);
+  } catch (error) {
+    throw failedCall(questionIds, error);
+  }
+}
+
 async function decide(state: unknown, questions: Record<string, unknown>, retries?: AttemptPolicy): Promise<unknown> {
   refuseWhenAiSpendOff();
   await takeAiCall("jev", JEV_CALLS_PER_DAY);
@@ -271,6 +280,7 @@ export async function askNoul(workspaceId: string, question: NoulQuestion, state
   const hash = await inputHash(workspaceId, question, state);
   const cached = await readCachedNoul(question.id, hash);
   if (cached !== null) return { questionId: question.id, inputHash: hash, p: cached, cached: true };
+  await takeShare(workspaceId, question.id);
   const p = await run(question, state);
   return { questionId: question.id, inputHash: hash, p, cached: false };
 }
@@ -292,6 +302,7 @@ export async function askNouls(
   let answers: NoulAnswers = {};
   let unparsed: { raw: unknown; issues: readonly ParseIssue[] } = { raw: undefined, issues: [] };
   if (pending.length > 0) {
+    await takeShare(workspaceId, questionIds);
     const asked = Object.fromEntries(pending.map((entry) => [entry.question.id, noulAsk(entry.question)]));
     let raw: unknown;
     try {
@@ -336,6 +347,7 @@ async function askChoiceUnreported(
   const hash = await choiceHash(workspaceId, question, state);
   const cached = await readCachedChoice(question.id, hash);
   if (cached !== null) return { questionId: question.id, inputHash: hash, choice: cached, cached: true };
+  await takeShare(workspaceId, question.id);
   const choice = await runChoice(question, state);
   return { questionId: question.id, inputHash: hash, choice, cached: false };
 }
@@ -394,6 +406,9 @@ export async function askMixed(workspaceId: string, questions: MixedQuestions, s
   const choiceInput = await choiceHash(workspaceId, questions.choice, state);
   const cachedNoul = await readCachedNoul(questions.noul.id, noulInput);
   const cachedChoice = await readCachedChoice(questions.choice.id, choiceInput);
+  if (cachedNoul === null || cachedChoice === null) {
+    await takeShare(workspaceId, `${questions.noul.id},${questions.choice.id}`);
+  }
   const reply = await answerMixed(
     mixedAsk(questions, { noul: cachedNoul === null, choice: cachedChoice === null }),
     state,
