@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const envState = vi.hoisted(() => ({ DOC_COMPRESSION: "on" }));
+const envState = vi.hoisted(() => ({ DOC_COMPRESSION: "on" as string | undefined }));
 vi.mock("cloudflare:workers", () => ({ env: envState }));
 
 import { gzipAccepted, withCompressedDocument } from "../app/lib/document-compression.server";
@@ -32,6 +32,8 @@ describe("gzip acceptance", () => {
     expect(gzipAccepted("GZIP")).toBe(true);
     expect(gzipAccepted("gzip;q=0.5")).toBe(true);
     expect(gzipAccepted("gzip;q=0.001, br;q=1")).toBe(true);
+    expect(gzipAccepted("gzip ; q=1")).toBe(true);
+    expect(gzipAccepted("gzip ; q = 0.5")).toBe(true);
   });
 
   it("refuses gzip with a zero q-value, other codings, and an absent header", () => {
@@ -82,32 +84,40 @@ describe("withCompressedDocument", () => {
     const response = documentResponse();
     expect(withCompressedDocument(documentRequest("gzip;q=0"), response)).toBe(response);
     expect(withCompressedDocument(documentRequest(null), response)).toBe(response);
+    expect(response.headers.get("Vary")).toBe("Accept-Encoding");
   });
 
   it("returns the same response when the body is already encoded", () => {
     const response = documentResponse();
     response.headers.set("Content-Encoding", "br");
     expect(withCompressedDocument(documentRequest(), response)).toBe(response);
+    expect(response.headers.get("Vary")).toBe("Accept-Encoding");
   });
 
   it("returns the same response on the body-less HEAD path", () => {
     const response = documentResponse();
     expect(withCompressedDocument(documentRequest("gzip", "HEAD"), response)).toBe(response);
+    expect(response.headers.get("Vary")).toBe("Accept-Encoding");
     const bodyless = new Response(null, { status: 200 });
     expect(withCompressedDocument(documentRequest(), bodyless)).toBe(bodyless);
+    expect(bodyless.headers.get("Vary")).toBe("Accept-Encoding");
   });
 
   it("returns the same response when the compression switch is off, as in the preview lanes", () => {
     envState.DOC_COMPRESSION = "off";
     const response = documentResponse();
     expect(withCompressedDocument(documentRequest(), response)).toBe(response);
+    expect(response.headers.get("Vary")).toBe(null);
   });
 
-  it("fails closed to plain documents when the switch is unset or blank", () => {
+  it("fails closed to plain documents when the switch is blank or unset", () => {
     envState.DOC_COMPRESSION = "";
     const blank = documentResponse();
     expect(withCompressedDocument(documentRequest(), blank)).toBe(blank);
+    expect(blank.headers.get("Vary")).toBe(null);
+    envState.DOC_COMPRESSION = undefined;
     const unset = documentResponse();
     expect(withCompressedDocument(documentRequest(), unset)).toBe(unset);
+    expect(unset.headers.get("Vary")).toBe(null);
   });
 });
