@@ -11,7 +11,7 @@ test.skip(
 
 // Soft mode needs a good baseline: a sweep only reports a change against the
 // page the previous sweep read. Dispatch j8-soft about 90 minutes before the
-// sweep (SITE_SWEEP_UTC_HOUR in app/lib/cadence.ts, currently 21:00 UTC), on an
+// sweep (SITE_SWEEP_UTC_HOUR in app/lib/cadence.ts), on an
 // account that already went through one sweep with the fixture off, so the break
 // lands before the next sweep (run 36952916004 broke a fresh account minutes
 // before its first sweep, which then took the broken page as its baseline).
