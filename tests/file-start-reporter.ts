@@ -13,4 +13,8 @@ export class FileStartReporter implements Reporter {
   onTestModuleStart(testModule: TestModule): void {
     console.log(`[file-start] ${testModule.project.name} ${testModule.moduleId}`);
   }
+
+  onTestRunEnd(testModules: ReadonlyArray<TestModule>): void {
+    console.log(`[run-end] ${String(testModules.length)} files finished`);
+  }
 }
