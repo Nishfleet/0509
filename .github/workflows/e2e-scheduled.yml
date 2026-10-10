@@ -503,9 +503,10 @@ jobs:
   soak-report:
     name: soak-report
     # Reads counts only, never rows: no email, report text or other customer
-    # data reaches the log or the comment. Every query is a SELECT. The
-    # healthchecks.io pings and the Sentry issue count are not read here: no
-    # read credential for either is a repository secret, and the comment says so.
+    # data reaches the log or the comment. Every query is a SELECT. New
+    # Sentry crashes are GitHub issues Sentry filed in the last 24 h (author
+    # app/sentry, 0509#7076). Uptime is healthchecks.io Management API v3
+    # with the read-only HEALTHCHECKS_API_KEY repository secret.
     if: github.event.schedule == '30 6 * * *' || (inputs.journey == 'soak-report' && inputs.spec == '' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     environment: production-e2e
@@ -528,6 +529,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+          HEALTHCHECKS_API_KEY: ${{ secrets.HEALTHCHECKS_API_KEY }}
         run: |
           set -euo pipefail
           since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
@@ -584,6 +586,27 @@ jobs:
           feed_bad=$(jq -r '[.[] | select(.watches > 0 and .snapshots == 0)] | length' <<< "$feeds")
           feed_posts=$(d1 "SELECT COUNT(*) AS n FROM signal WHERE kind = 'content' AND observed_at >= '$since'$scope" | jq -r '.[0].n')
           [ "$feed_bad" -eq 0 ] || failed=1
+          sentry_day=$(date -u -d '24 hours ago' +%Y-%m-%d)
+          sentry_json=$(gh issue list --state all --search "author:app/sentry created:>=$sentry_day" --limit 100 --json number,createdAt) || sentry_json=null
+          sentry_n=$(jq -r --arg since "$since" 'if type == "array" then [.[] | select(.createdAt >= $since)] | length else "unreadable" end' <<< "$sentry_json") || sentry_n=unreadable
+          [ "$sentry_n" = "0" ] || failed=1
+          hc_json=null
+          if [ -n "${HEALTHCHECKS_API_KEY:-}" ]; then
+            hc_json=$(printf 'X-Api-Key: %s\n' "$HEALTHCHECKS_API_KEY" | curl -sS --fail-with-body --max-time 30 -H @- https://healthchecks.io/api/v3/checks/) || hc_json=null
+          fi
+          hc_up=$(jq -r '.checks | if type == "array" then map(select(.status == "up")) | length else 0 end' <<< "$hc_json") || hc_up=0
+          hc_bad=$(jq -r '.checks | if type == "array" then map(select(.status != "paused" and .status != "up")) | length else 1 end' <<< "$hc_json") || hc_bad=1
+          hc_lines=$(jq -r '.checks | if type == "array" and length > 0 then map(select(.status != "paused") | "\(.name) \(.status)") | join("; ") else empty end' <<< "$hc_json") || hc_lines=""
+          if [ -z "${HEALTHCHECKS_API_KEY:-}" ]; then
+            hc_line="unreadable, HEALTHCHECKS_API_KEY repository secret is empty"
+          elif [ "$(jq -r '.checks | type' <<< "$hc_json" 2>/dev/null)" != "array" ]; then
+            hc_line="unreadable"
+          elif [ -z "$hc_lines" ]; then
+            hc_line="no unpaused checks"
+          else
+            hc_line="$hc_lines"
+          fi
+          [ "$hc_up" -gt 0 ] && [ "$hc_bad" -eq 0 ] || failed=1
           {
             echo "Soak report for the 24 hours before $(date -u +%Y-%m-%dT%H:%MZ) (send counts: $label)."
             echo
@@ -599,8 +622,8 @@ jobs:
             echo "- user table (0509#5731): $users"
             echo "- pricing-page watches, soak brands: $pricing_lines$([ "$pricing_bad" -eq 0 ] && [ "$pricing_any" -gt 0 ] || echo " (FAIL, $pricing_any brands have a judged pricing page and $pricing_bad of those lack a watch or a snapshot)")"
             echo "- blog and changelog feeds, soak brands: $feed_lines; $feed_posts new posts filed in the last 24 h$([ "$feed_bad" -eq 0 ] || echo " (FAIL, $feed_bad watched feeds were not read)")"
-            echo "- healthchecks.io dead-man and site-sweep pings: not read, no healthchecks.io read key is a repository secret"
-            echo "- new Sentry issues: not read, no Sentry auth token is a repository secret"
+            echo "- healthchecks.io dead-man and site-sweep pings: $hc_line$([ "$hc_up" -gt 0 ] && [ "$hc_bad" -eq 0 ] || echo " (FAIL)")"
+            echo "- new Sentry issues in the last 24 h: $sentry_n (author app/sentry)$([ "$sentry_n" = "0" ] || echo " (FAIL)")"
           } > comment.md
           gh issue comment 4730 --body-file comment.md
           [ "$failed" -eq 0 ] || { echo "An engine check failed, see the issue comment"; exit 1; }
