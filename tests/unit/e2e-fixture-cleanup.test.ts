@@ -228,7 +228,7 @@ function runStep(script: string, cwd: string, env: Record<string, string> = {}):
   try {
     const out = execFileSync("bash", ["--noprofile", "--norc", "-eo", "pipefail", "-c", script], {
       cwd,
-      env: { PATH: process.env.PATH ?? "", ...env },
+      env: { ...process.env, ...env },
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
