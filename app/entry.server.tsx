@@ -4,6 +4,7 @@ import { isRouteErrorResponse, ServerRouter } from "react-router";
 import { isbot } from "isbot";
 import { renderToReadableStream } from "react-dom/server";
 
+import { withCompressedDocument } from "./lib/document-compression.server";
 import { withDocumentSecurityHeaders } from "./lib/security-headers";
 
 export const streamTimeout = 5_000;
@@ -87,5 +88,5 @@ export default async function handleRequest(
   headers.set("Content-Type", "text/html");
   const reference = errorReferences.get(request);
   if (reference !== undefined) headers.set("X-Error-Reference", reference);
-  return new Response(body, { headers, status });
+  return withCompressedDocument(request, new Response(body, { headers, status }));
 }
