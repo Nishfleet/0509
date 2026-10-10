@@ -148,7 +148,7 @@ describe("classify maps the response to a FeedFetch outcome", () => {
     const huge = `<feed>${"a".repeat(FEED_CAP_BYTES + 1_000)}</feed>`;
     fetchOutboundMock.mockResolvedValue(feedResponse(200, { "content-length": String(huge.length) }, huge));
     const result = await fetchFeed(FEED_URL, null);
-    expect(result).toMatchObject({ outcome: "ok" });
+    expect(result).toMatchObject({ outcome: "ok", truncated: true });
     expect(result.outcome === "ok" ? result.body : "").toBe(huge.slice(0, FEED_CAP_BYTES));
   });
 
@@ -157,6 +157,7 @@ describe("classify maps the response to a FeedFetch outcome", () => {
     await expect(fetchFeed(FEED_URL, null)).resolves.toEqual({
       outcome: "ok",
       body: "<rss/>",
+      truncated: false,
       validators: { etag: ETAG, lastModified: LAST_MODIFIED },
     });
   });

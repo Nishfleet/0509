@@ -118,6 +118,10 @@ async function keepSnapshot(input: {
   });
 }
 
+function isReadable<T>(parsed: T[] | null, truncated: boolean): parsed is T[] {
+  return parsed !== null && !(truncated && parsed.length === 0);
+}
+
 export async function readFeed(target: FeedTarget, tick: SweepTick): Promise<FeedResult> {
   const config = parseConfig(await readWatchConfigJson(target.watchId));
   const fetched = await fetchFeed(target.feedUrl, validatorsOf(config));
@@ -135,7 +139,7 @@ export async function readFeed(target: FeedTarget, tick: SweepTick): Promise<Fee
     return { outcome: "unchanged", newPosts: 0 };
   }
   const parsed = parseFeed(fetched.body, target.feedUrl, { now: new Date(now) });
-  if (parsed === null) return { outcome: "unreadable", newPosts: 0 };
+  if (!isReadable(parsed, fetched.truncated)) return { outcome: "unreadable", newPosts: 0 };
 
   await rememberValidators(target.watchId, config, fetched.validators);
   const items = await keyItems(parsed);
