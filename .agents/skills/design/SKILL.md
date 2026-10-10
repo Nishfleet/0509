@@ -7,6 +7,8 @@ description: Build new screens inside the 0509 design system. Extend the nearest
 
 DESIGN.md at the repo root is the system. `docs/design-directions/a-final/` holds the keyframes: landing, onboarding, home, competitor, alerts and settings, each as HTML with desktop-1440 and mobile-390 renders. Figma is not a source; the code tokens are the only source of truth.
 
+Work that adds or restyles a shadcn component follows `.agents/skills/shadcn` and reads its tokens from the DESIGN.md frontmatter.
+
 ## Start from the nearest keyframe
 
 A new screen extends the nearest keyframe in `docs/design-directions/a-final/`. Take its structure and ingredients; never invent a layout from a guess.

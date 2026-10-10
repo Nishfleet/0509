@@ -41,6 +41,11 @@ export default defineConfig({
       // merge queue instead of the PR.
       "**/AGENTS.md",
       "**/CLAUDE.md",
+      // tests/design-md-tokens.test.ts reads these two from disk; neither has
+      // an import edge into a test, so an edit to one reruns nothing without
+      // the trigger (Nish asked for the shadcn DESIGN.md skill, 2026-10-09).
+      "**/DESIGN.md",
+      "**/app/app.css",
       "**/.github/CODEOWNERS",
     ],
     coverage: {
