@@ -228,6 +228,7 @@ Service daily quota (Nish 2026-09-28).
 
 ## Rules that are not about code
 
+- If this repo's claim PR is already open, not a draft, not CONFLICTING, with no red required check and no open finding, only exit 0 and do not push, even when mergeable is still BLOCKED because checks are pending (0509#6993, 0509#7316).
 - Nothing merges on its own author's say-so. An independent reviewer or Nish,
   never the author reviewing itself.
 - A feature's finish line cites a real production record — a row id, a Workflow instance id or a run URL — created after the merge, not only a green test (0509#5736).
