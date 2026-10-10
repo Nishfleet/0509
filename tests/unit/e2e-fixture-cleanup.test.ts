@@ -1,4 +1,6 @@
-import { readdir, readFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -51,10 +53,19 @@ const SETUP_TEARDOWN_ELSEWHERE = new Set(["e2e/lhci-session.setup.ts"]);
 const WORKFLOW = ".github/workflows/e2e-scheduled.yml";
 const TEARDOWN_RERUN = "--project=session-teardown";
 
+interface WorkflowStep {
+  name?: string;
+  run?: string;
+  if?: unknown;
+  env?: Record<string, string>;
+}
+
 interface WorkflowJob {
+  if?: string;
   concurrency?: unknown;
+  env?: Record<string, string>;
   strategy?: { matrix?: unknown; "max-parallel"?: number };
-  steps?: { run?: string; if?: unknown }[];
+  steps?: WorkflowStep[];
 }
 
 function readJobs(source: string): Record<string, WorkflowJob> {
@@ -202,5 +213,140 @@ describe("e2e fixture teardown detector", () => {
     }
     expect(grouped).toContain("e2e-scheduled.yml:suite-shard");
     expect(offenders).toEqual([]);
+  });
+});
+
+// #7186: the e2e-scheduled dispatch rules that live in the workflow file. Each
+// shell step is run for real in bash with the runner's default flags, so a
+// test passes on what the step does, not on how it is spelled.
+const PRINT_STEP = "Print what the page showed when it failed";
+const SPEC_STEP = "Accept one spec file and no flags";
+const MAIN_ONLY_JOBS = ["j12", "signin", "j8", "backup-proof", "jev-failures", "soak-report"];
+const CLOUDFLARE_TOKEN = /CLOUDFLARE_(API|SETTINGS)_TOKEN/;
+
+function runStep(script: string, cwd: string, env: Record<string, string> = {}): { code: number; out: string } {
+  try {
+    const out = execFileSync("bash", ["--noprofile", "--norc", "-eo", "pipefail", "-c", script], {
+      cwd,
+      env: { PATH: process.env.PATH ?? "", ...env },
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return { code: 0, out };
+  } catch (error) {
+    const failed = error as { status: number; stdout: string };
+    return { code: failed.status, out: failed.stdout };
+  }
+}
+
+async function scheduledJobs(): Promise<Record<string, WorkflowJob>> {
+  return readJobs(await readFile(path.join(REPO_ROOT, WORKFLOW), "utf8"));
+}
+
+function stepNamed(job: WorkflowJob, name: string): WorkflowStep | undefined {
+  return (job.steps ?? []).find((step) => step.name === name);
+}
+
+describe("e2e-scheduled dispatch rules (0509#7186)", () => {
+  it("prints the failure context in every job that runs a spec, and passes when there is none", async () => {
+    const jobs = await scheduledJobs();
+    const running = Object.entries(jobs).filter(([, job]) =>
+      (job.steps ?? []).some((step) => /npm run e2e -- (?!--project=s(etup|ession-teardown) )/.test(step.run ?? "")),
+    );
+    expect(running.map(([key]) => key).sort()).toEqual(["j12", "j8", "signin", "spec", "suite-shard"]);
+    const dir = await mkdtemp(path.join(tmpdir(), "e2e-print-"));
+    try {
+      for (const [key, job] of running) {
+        const step = stepNamed(job, PRINT_STEP);
+        expect(step?.if, key).toBe("failure()");
+        expect(runStep(step?.run ?? "", dir).code, `${key} with no test-results`).toBe(0);
+      }
+      const script = stepNamed(jobs.j12, PRINT_STEP)?.run ?? "";
+      const globbed = /test-results\/\*\*\/([\w.-]+)/.exec(script)?.[1];
+      expect(globbed).toBeDefined();
+      await mkdir(path.join(dir, "test-results/a/b"), { recursive: true });
+      await writeFile(path.join(dir, "test-results/a/b", globbed ?? ""), "deep-probe\n");
+      const printed = runStep(script, dir);
+      expect(printed.code).toBe(0);
+      expect(printed.out).toContain("deep-probe");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("runs the spec input only when it names one e2e spec file, before anything is installed", async () => {
+    const { spec } = await scheduledJobs();
+    const steps = spec.steps ?? [];
+    expect(steps[0]?.name).toBe(SPEC_STEP);
+    expect(steps[0]?.env?.SPEC).toBe("${{ inputs.spec }}");
+    const script = steps[0]?.run ?? "";
+    const accepted = (value: string) => runStep(script, tmpdir(), { SPEC: value }).code === 0;
+    expect(accepted("e2e/j3-onboard-domain.spec.ts")).toBe(true);
+    for (const bad of [
+      "",
+      "e2e/j3-onboard-domain.spec.ts --project=setup",
+      "--grep=.",
+      "e2e/",
+      "e2e/sub/x.spec.ts",
+      "e2e/../x.spec.ts",
+      "tests/x.spec.ts",
+      "e2e/x.spec.tsx",
+      "e2e/a.spec.ts e2e/b.spec.ts",
+      "e2e/x.spec.ts\ne2e/y.spec.ts",
+    ]) {
+      expect(accepted(bad), JSON.stringify(bad)).toBe(false);
+    }
+    expect(spec.if).not.toContain("refs/heads/main");
+  });
+
+  it("dispatches every journey from main only, and fails a branch dispatch out loud", async () => {
+    const jobs = await scheduledJobs();
+    for (const key of MAIN_ONLY_JOBS) expect(jobs[key]?.if, key).toContain("github.ref == 'refs/heads/main'");
+    for (const key of ["production-sha", "suite-shard", "suite"]) {
+      expect(jobs[key]?.if, key).toContain("github.event.schedule == '40 7 * * 0'");
+      expect(jobs[key]?.if, key).not.toContain("inputs.");
+    }
+    expect(jobs.j12.if).toMatch(/^github\.event\.schedule == '5 10 \* \* 3' \|\| \(/);
+    expect(jobs.signin.if).toMatch(/^github\.event\.schedule == '17 4 \* \* \*' \|\| \(/);
+    expect(jobs["soak-report"].if).toMatch(/^github\.event\.schedule == '30 6 \* \* \*' \|\| \(/);
+    const guard = jobs["main-only"];
+    expect(guard.if).toBe(
+      "github.event_name == 'workflow_dispatch' && inputs.journey != 'none' && github.ref != 'refs/heads/main'",
+    );
+    const refused = runStep(guard.steps?.[0]?.run ?? "", tmpdir(), { JOURNEY: "suite", REF: "refs/heads/x" });
+    expect(refused.code).toBe(1);
+    expect(refused.out).toContain("journey=suite dispatches from main only, not refs/heads/x");
+  });
+
+  it("installs with scripts off in every job whose job-level env holds a Cloudflare token", async () => {
+    const dir = path.join(REPO_ROOT, ".github/workflows");
+    const holders: string[] = [];
+    const offenders: string[] = [];
+    for (const file of await readdir(dir)) {
+      if (!/\.ya?ml$/.test(file)) continue;
+      for (const [key, job] of Object.entries(readJobs(await readFile(path.join(dir, file), "utf8")))) {
+        const env = job.env ?? {};
+        if (!Object.entries(env).some(([name, value]) => CLOUDFLARE_TOKEN.test(`${name}=${value}`))) continue;
+        const name = `${file}:${key}`;
+        holders.push(name);
+        const installs = (job.steps ?? []).filter((step) => /\bnpm ci\b/.test(step.run ?? ""));
+        const off = (step: WorkflowStep) =>
+          (step.env?.NPM_CONFIG_IGNORE_SCRIPTS ?? env.NPM_CONFIG_IGNORE_SCRIPTS) === "true";
+        if (!installs.every(off)) offenders.push(name);
+      }
+    }
+    expect(holders).toContain("cloudflare-settings.yml:apply");
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps install scripts on for deploy and evals, which need esbuild, workerd and unrs-resolver", async () => {
+    for (const [file, key] of [
+      ["deploy-production.yml", "deploy"],
+      ["evals.yml", "evals"],
+    ]) {
+      const source = await readFile(path.join(REPO_ROOT, ".github/workflows", file), "utf8");
+      expect(readJobs(source)[key], `${file}:${key}`).toBeDefined();
+      expect(source, file).not.toContain("NPM_CONFIG_IGNORE_SCRIPTS");
+    }
   });
 });
