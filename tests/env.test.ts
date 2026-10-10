@@ -233,6 +233,15 @@ describe("worker env", () => {
     expect(ci).toContain("npx wrangler dev --env-file .dev.vars.example");
   });
 
+  it("turns document gzip off in the example env-file the preview lanes load (0509#7323)", () => {
+    const example = exampleSecrets();
+    expect(example.DOC_COMPRESSION, ".dev.vars.example no longer turns DOC_COMPRESSION off").toBe("off");
+    const playwright = readFileSync(new URL("../playwright.config.ts", import.meta.url), "utf8");
+    expect(playwright).toContain("npx wrangler dev --env-file .dev.vars.example");
+    const ci = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+    expect(ci).toContain("npx wrangler dev --env-file .dev.vars.example");
+  });
+
   // playwright.config.ts --var and lighthouse's --env-file overlay both land
   // a loopback BETTER_AUTH_URL. The gate must accept the public placeholders
   // on that origin or the preview-assert lighthouse step 503s /design/landing.
