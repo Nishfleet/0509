@@ -22,6 +22,16 @@ concurrency:
   group: evals
   cancel-in-progress: false
 
+env:
+  # Workers AI neurons the whole account may have used today (UTC) before a live
+  # run starts. 10,000 is Cloudflare's free line; each 1,000 neurons above it
+  # costs $0.011, so one run that starts just under it and burns about 70k adds
+  # about $0.77. 2026-10-02 used 1,113,645 neurons, $12.14 over, from 96 runs in
+  # four days with no cap (0509#7249). Raising it needs Nish's yes. To switch the
+  # guard off, delete the two neuron steps and this variable.
+  EVAL_NEURON_BUDGET: "10000"
+  CF_GRAPHQL: https://api.cloudflare.com/client/v4/graphql
+
 jobs:
   evals:
     name: evals
@@ -46,6 +56,23 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Refuse past the daily neuron budget
+        shell: bash
+        run: |
+          set -euo pipefail
+          today=$(date -u +%F)
+          used=$(jq -n --arg a "$CLOUDFLARE_ACCOUNT_ID" --arg s "${today}T00:00:00Z" --arg e "$(date -u -d "$today +1 day" +%F)T00:00:00Z" \
+            '{query: "query($a:String!,$s:Time!,$e:Time!){viewer{accounts(filter:{accountTag:$a}){aiInferenceAdaptiveGroups(limit:1000,filter:{datetime_geq:$s,datetime_lt:$e}){sum{totalNeurons}}}}}", variables: {a: $a, s: $s, e: $e}}' \
+            | curl -sf "$CF_GRAPHQL" --config <(printf 'header = "Authorization: Bearer %s"\n' "$CLOUDFLARE_API_TOKEN") -d @- \
+            | jq -e '[.data.viewer.accounts[0].aiInferenceAdaptiveGroups[].sum.totalNeurons] | add // 0 | floor')
+          echo "neurons used so far on $today UTC: $used, budget: $EVAL_NEURON_BUDGET" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$used" -ge "$EVAL_NEURON_BUDGET" ]; then
+            echo "Refused: the account is at or over the daily budget. Raising it needs Nish's yes (0509#7249)." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - name: Score the Jev questions
         shell: bash
         run: npm run eval -- ${FILTER:+"$FILTER"} 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
@@ -62,5 +89,19 @@ jobs:
           # when that read fails. Deleting this line leaves the default of 9000 in harness.ts.
           EVAL_DAILY_NEURON_CEILING: "9000"
           FILTER: ${{ inputs.filter }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Print the neuron cost
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          today=$(date -u +%F)
+          used=$(jq -n --arg a "$CLOUDFLARE_ACCOUNT_ID" --arg s "${today}T00:00:00Z" --arg e "$(date -u -d "$today +1 day" +%F)T00:00:00Z" \
+            '{query: "query($a:String!,$s:Time!,$e:Time!){viewer{accounts(filter:{accountTag:$a}){aiInferenceAdaptiveGroups(limit:1000,filter:{datetime_geq:$s,datetime_lt:$e}){sum{totalNeurons}}}}}", variables: {a: $a, s: $s, e: $e}}' \
+            | curl -sf "$CF_GRAPHQL" --config <(printf 'header = "Authorization: Bearer %s"\n' "$CLOUDFLARE_API_TOKEN") -d @- \
+            | jq -e '[.data.viewer.accounts[0].aiInferenceAdaptiveGroups[].sum.totalNeurons] | add // 0 | floor')
+          echo "neurons used on $today UTC after this run (whole account, includes customers): $used of $EVAL_NEURON_BUDGET" | tee -a "$GITHUB_STEP_SUMMARY"
+        env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
