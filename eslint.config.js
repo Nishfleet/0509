@@ -1005,6 +1005,10 @@ export default tseslint.config(
     rules: {
       "@typescript-eslint/consistent-type-imports": ["error", { fixStyle: "separate-type-imports" }],
       "@typescript-eslint/no-unnecessary-condition": "off",
+      // A union switch with no default and a missing member returns undefined at
+      // runtime; TypeScript does not fail it, so the gap only shows as a
+      // wrong-shape value later. Source: 0509#7085 (audit #7077 item 4).
+      "@typescript-eslint/switch-exhaustiveness-check": "error",
       "@typescript-eslint/no-unused-vars": [
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
