@@ -13,20 +13,23 @@ const EMAIL = "ttl@test.dev";
 describe("magic link expiry", () => {
   it("stores the expiry the email tells the reader", async () => {
     const sent: string[] = [];
-    const auth = createAuth({
-      DB: env.DB,
-      EMAIL: {
-        send: async (message: EmailMessage | EmailMessageBuilder) => {
-          sent.push((message as { text?: string }).text ?? "");
-          return { messageId: "test" };
+    const auth = createAuth(
+      {
+        DB: env.DB,
+        EMAIL: {
+          send: async (message: EmailMessage | EmailMessageBuilder) => {
+            sent.push((message as { text?: string }).text ?? "");
+            return { messageId: "test" };
+          },
         },
+        SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
+        SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
+        TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
+        BETTER_AUTH_SECRET: "integration-test-secret-integration-test-secret",
+        BETTER_AUTH_URL: ORIGIN,
       },
-      SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
-      SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
-      TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
-      BETTER_AUTH_SECRET: "integration-test-secret-integration-test-secret",
-      BETTER_AUTH_URL: ORIGIN,
-    });
+      { captcha: false },
+    );
 
     const response = await auth.handler(
       new Request(`${ORIGIN}/api/auth/sign-in/magic-link`, {
@@ -34,7 +37,6 @@ describe("magic link expiry", () => {
         headers: {
           "content-type": "application/json",
           origin: ORIGIN,
-          "x-captcha-response": "XXXX.DUMMY.TOKEN.XXXX",
         },
         body: JSON.stringify({ email: EMAIL, callbackURL: "/app" }),
       }),
