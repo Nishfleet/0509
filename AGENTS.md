@@ -230,6 +230,11 @@ Service daily quota (Nish 2026-09-28).
 
 - Nothing merges on its own author's say-so. An independent reviewer or Nish,
   never the author reviewing itself.
+- A claim PR whose current head carries a `coordinator-approval: <head sha>`
+  comment and has no red required check on the PR itself is finished: exit 0
+  without pushing. A push to that head invalidates the approval, restarts the
+  review loop and can strand the PR after a merge-queue dequeue (0509#7084,
+  0509#7323).
 - A feature's finish line cites a real production record — a row id, a Workflow instance id or a run URL — created after the merge, not only a green test (0509#5736).
 - Production state stays gated: secrets and provider mutations need Nish's
   explicit authorization. Merging a reviewed green PR is ordinary work.
