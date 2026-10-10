@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { gzipAccepted, withCompressedDocument } from "../app/lib/document-compression";
+const envState = vi.hoisted(() => ({ DOC_COMPRESSION: "on" }));
+vi.mock("cloudflare:workers", () => ({ env: envState }));
+
+import { gzipAccepted, withCompressedDocument } from "../app/lib/document-compression.server";
 
 const DOCUMENT_URL = "https://0509.io/privacy";
 
@@ -18,6 +21,7 @@ function documentResponse(body = "<html><body>privacy</body></html>"): Response 
 }
 
 async function gunzip(response: Response): Promise<string> {
+  if (response.body === null) throw new Error("the fixture response must carry a body");
   return await new Response(response.body.pipeThrough(new DecompressionStream("gzip"))).text();
 }
 
@@ -40,6 +44,10 @@ describe("gzip acceptance", () => {
 });
 
 describe("withCompressedDocument", () => {
+  beforeEach(() => {
+    envState.DOC_COMPRESSION = "on";
+  });
+
   it("gzips the body and names the encoding", async () => {
     const response = await gunzip(withCompressedDocument(documentRequest(), documentResponse()));
     expect(response).toBe("<html><body>privacy</body></html>");
@@ -89,15 +97,17 @@ describe("withCompressedDocument", () => {
     expect(withCompressedDocument(documentRequest(), bodyless)).toBe(bodyless);
   });
 
-  it("never compresses behind the local dev proxy, which compresses the document itself", () => {
+  it("returns the same response when the compression switch is off, as in the preview lanes", () => {
+    envState.DOC_COMPRESSION = "off";
     const response = documentResponse();
-    const devRequest = new Request("http://127.0.0.1:8787/privacy", {
-      headers: { "Accept-Encoding": "gzip" },
-    });
-    expect(withCompressedDocument(devRequest, response)).toBe(response);
-    const localhostRequest = new Request("http://localhost:8787/privacy", {
-      headers: { "Accept-Encoding": "gzip" },
-    });
-    expect(withCompressedDocument(localhostRequest, response)).toBe(response);
+    expect(withCompressedDocument(documentRequest(), response)).toBe(response);
+  });
+
+  it("fails closed to plain documents when the switch is unset or blank", () => {
+    envState.DOC_COMPRESSION = "";
+    const blank = documentResponse();
+    expect(withCompressedDocument(documentRequest(), blank)).toBe(blank);
+    const unset = documentResponse();
+    expect(withCompressedDocument(documentRequest(), unset)).toBe(unset);
   });
 });

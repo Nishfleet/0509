@@ -1,15 +1,20 @@
-const DEV_PROXY_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+import { env } from "cloudflare:workers";
+
+import { blankEnvString } from "./env.server";
+
+export const DOC_COMPRESSION_VAR = "DOC_COMPRESSION";
+export const DOC_COMPRESSION_ON = "on";
 
 export function gzipAccepted(acceptEncoding: string | null): boolean {
   const members = (acceptEncoding ?? "").split(",").map((member) => member.trim().toLowerCase());
   const gzip = members.find((member) => member === "gzip" || member.startsWith("gzip;"));
   if (gzip === undefined) return false;
-  const q = /;\s*q=([0-9]*\.?[0-9]+)/.exec(gzip);
-  return q === null || Number.parseFloat(q[1]) > 0;
+  const q = /;\s*q=([0-9]*\.?[0-9]+)/.exec(gzip)?.[1];
+  return q === undefined || Number.parseFloat(q) > 0;
 }
 
-function behindDevProxy(request: Request): boolean {
-  return DEV_PROXY_HOSTS.has(new URL(request.url).hostname.toLowerCase());
+export function documentCompressionEnabled(): boolean {
+  return blankEnvString(env[DOC_COMPRESSION_VAR]) === DOC_COMPRESSION_ON;
 }
 
 function withVaryAcceptEncoding(headers: Headers): Headers {
@@ -21,7 +26,7 @@ function withVaryAcceptEncoding(headers: Headers): Headers {
 }
 
 export function withCompressedDocument(request: Request, response: Response): Response {
-  if (behindDevProxy(request)) return response;
+  if (!documentCompressionEnabled()) return response;
   if (response.headers.has("Content-Encoding")) return response;
   if (request.method.toUpperCase() === "HEAD" || response.body === null) return response;
   if (!gzipAccepted(request.headers.get("Accept-Encoding"))) return response;

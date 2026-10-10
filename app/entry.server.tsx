@@ -4,7 +4,7 @@ import { isRouteErrorResponse, ServerRouter } from "react-router";
 import { isbot } from "isbot";
 import { renderToReadableStream } from "react-dom/server";
 
-import { withCompressedDocument } from "./lib/document-compression";
+import { withCompressedDocument } from "./lib/document-compression.server";
 import { withDocumentSecurityHeaders } from "./lib/security-headers";
 
 export const streamTimeout = 5_000;

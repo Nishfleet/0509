@@ -1085,8 +1085,7 @@ export default tseslint.config(
     // restated without `DOMAIN_HOSTNAME_BAN`: the identity engine itself, a
     // public-host guard in the transport layer, the job-board host match, this
     // site's www variant and page-host display, the OAuth loopback redirect
-    // allow-list, the support worker's site-host allow, and the document
-    // server's dev-proxy lane check. Every
+    // allow-list, and the support worker's site-host allow. Every
     // other `.hostname` read in app/ or workers/ keeps the ban. This block
     // restates the list because a later matching block's no-restricted-syntax
     // entry replaces the earlier one wholesale (flat config never merges a rule's
@@ -1097,7 +1096,6 @@ export default tseslint.config(
       "app/lib/hiring/discover-board.server.ts",
       "app/lib/site/own-site.server.ts",
       "app/lib/agent/redirect-uri.ts",
-      "app/lib/document-compression.ts",
       "workers/support-inbox.ts",
     ],
     rules: {

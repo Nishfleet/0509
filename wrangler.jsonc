@@ -159,6 +159,14 @@
     // the request paths alike. Any value other than "on" stops spend, and so does
     // leaving it unset or blank: the switch fails closed.
     "AI_SPEND": "on",
+    // 0509#7323: the document gzip switch. The local preview lanes (playwright's
+    // webServer and the lighthouse collect both load .dev.vars.example, which
+    // sets this to "off") must not compress: the local dev proxy re-compresses a
+    // response that already carries Content-Encoding, double-gzipping the page
+    // for the browser. Production stays "on": no-transform keeps the edge from
+    // touching the response, so the Worker's own gzip layer ships as-is. Any
+    // value other than "on" fails closed: documents ship plain, as before #7323.
+    "DOC_COMPRESSION": "on",
     // 0509#7191, and the operations follow-up on #7079: the named AI Gateway
     // that carries the product's Jev traffic. Creating it is a dashboard step, so
     // the id stays "default" until it exists and both model call sites read it
