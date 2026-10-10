@@ -398,6 +398,7 @@ jobs:
         run: test "$SHARDS" = success
   backup-proof:
     name: backup-proof
+    environment: production
     # Reads the snapshot-backup instances of the last 48 h and describes each
     # cron-started one (0509#5982, 0509#6289). Counts and R2 cursors only, no rows.
     if: inputs.journey == 'backup-proof' && inputs.spec == ''
@@ -427,6 +428,7 @@ jobs:
           done
   jev-failures:
     name: jev-failures
+    environment: production
     # Reads why the judge failed. One SELECT each:
     # counts by kind and code over 24 h, then the latest 20 rows. Rows hold a
     # kind, a 4-digit code, a 160-char redacted message and the question ids.
@@ -457,6 +459,7 @@ jobs:
           npx wrangler d1 execute 0509 --remote --json --command "SELECT occurred_at, kind, code, question, message FROM jev_failure ORDER BY occurred_at DESC LIMIT 20" | jq -c '.[0].results[]'
   soak-report:
     name: soak-report
+    environment: production
     # Reads counts only, never rows: no email, report text or other customer
     # data reaches the log or the comment. Every query is a SELECT. The
     # healthchecks.io pings and the Sentry issue count are not read here: no

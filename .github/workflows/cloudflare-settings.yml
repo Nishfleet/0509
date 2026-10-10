@@ -23,6 +23,7 @@ concurrency:
 jobs:
   apply:
     name: apply
+    environment: production
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10

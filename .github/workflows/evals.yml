@@ -25,6 +25,7 @@ concurrency:
 jobs:
   evals:
     name: evals
+    environment: production
     runs-on: ubuntu-latest
     # One live-AI job at a time: they share the account's Clef call rate (about 60
     # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
