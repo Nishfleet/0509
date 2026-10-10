@@ -7,17 +7,26 @@ import { gzipAccepted, withCompressedDocument } from "../app/lib/document-compre
 
 const DOCUMENT_URL = "https://0509.io/privacy";
 
+const DOCUMENT_STATUS = 207;
+const DOCUMENT_STATUS_TEXT = "Partial Content";
+const NOT_FOUND_STATUS = 404;
+const NOT_FOUND_STATUS_TEXT = "Not Found";
+
 function documentRequest(acceptEncoding: string | null = "gzip", method = "GET"): Request {
   const headers = new Headers(acceptEncoding === null ? {} : { "Accept-Encoding": acceptEncoding });
   return new Request(DOCUMENT_URL, { headers, method });
 }
 
-function documentResponse(body = "<html><body>privacy</body></html>"): Response {
+function documentResponse(body = "<html><body>privacy</body></html>", status = DOCUMENT_STATUS): Response {
   return new Response(body, {
-    status: 207,
-    statusText: "Partial Content",
+    status,
+    statusText: status === NOT_FOUND_STATUS ? NOT_FOUND_STATUS_TEXT : DOCUMENT_STATUS_TEXT,
     headers: { "Content-Type": "text/html", "Content-Length": String(body.length), "Cache-Control": "no-transform" },
   });
+}
+
+function notFoundDocument(body = "<html><body>no page here</body></html>"): Response {
+  return documentResponse(body, NOT_FOUND_STATUS);
 }
 
 async function gunzip(response: Response): Promise<string> {
@@ -119,5 +128,36 @@ describe("withCompressedDocument", () => {
     const unset = documentResponse();
     expect(withCompressedDocument(documentRequest(), unset)).toBe(unset);
     expect(unset.headers.get("Vary")).toBe(null);
+  });
+});
+
+describe("the 404 document (0509#7328)", () => {
+  beforeEach(() => {
+    envState.DOC_COMPRESSION = "on";
+  });
+
+  it("ships plain, so a compressed size cannot carry the nonce", () => {
+    const response = notFoundDocument();
+    const served = withCompressedDocument(documentRequest(), response);
+    expect(served).toBe(response);
+    expect(served.headers.get("Content-Encoding")).toBe(null);
+    expect(served.headers.get("Content-Length")).toBe(String("<html><body>no page here</body></html>".length));
+  });
+
+  it("still varies on Accept-Encoding, as every on-path document does", () => {
+    const response = notFoundDocument();
+    withCompressedDocument(documentRequest(), response);
+    expect(response.headers.get("Vary")).toBe("Accept-Encoding");
+  });
+
+  it("keeps the body readable, because nothing encoded it", async () => {
+    const served = withCompressedDocument(documentRequest(), notFoundDocument());
+    expect(await served.text()).toBe("<html><body>no page here</body></html>");
+  });
+
+  it("gzips the documents that do not echo the requested path", async () => {
+    const compressed = withCompressedDocument(documentRequest(), documentResponse());
+    expect(compressed.headers.get("Content-Encoding")).toBe("gzip");
+    expect(await gunzip(compressed)).toBe("<html><body>privacy</body></html>");
   });
 });
