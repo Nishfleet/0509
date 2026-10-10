@@ -45,7 +45,7 @@ describe("gzip acceptance", () => {
     expect(gzipAccepted("gzip ; q = 0.5")).toBe(true);
   });
 
-  it("refuses gzip with a zero q-value, other codings, and an absent header", () => {
+  it("conservatively refuses gzip with a zero q-value, other codings, and an absent header", () => {
     expect(gzipAccepted("gzip;q=0")).toBe(false);
     expect(gzipAccepted("gzip ; q=0")).toBe(false);
     expect(gzipAccepted("deflate, br")).toBe(false);

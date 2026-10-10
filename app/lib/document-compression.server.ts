@@ -18,7 +18,7 @@ function documentCompressionEnabled(): boolean {
   return blankEnvString(env[DOC_COMPRESSION_VAR]) === DOC_COMPRESSION_ON;
 }
 
-function withVaryAcceptEncoding(headers: Headers): Headers {
+function addVaryAcceptEncoding(headers: Headers): Headers {
   const vary = headers.get("Vary");
   const members = (vary ?? "").split(",").map((member) => member.trim().toLowerCase());
   if (members.includes("accept-encoding")) return headers;
@@ -26,17 +26,17 @@ function withVaryAcceptEncoding(headers: Headers): Headers {
   return headers;
 }
 
-function documentEchoesRequestPath(response: Response): boolean {
+function isNotFoundDocument(response: Response): boolean {
   return response.status === NOT_FOUND_STATUS;
 }
 
 export function withCompressedDocument(request: Request, response: Response): Response {
   if (!documentCompressionEnabled()) return response;
-  withVaryAcceptEncoding(response.headers);
+  addVaryAcceptEncoding(response.headers);
   if (response.headers.has("Content-Encoding")) return response;
   if (request.method.toUpperCase() === "HEAD" || response.body === null) return response;
   if (!gzipAccepted(request.headers.get("Accept-Encoding"))) return response;
-  if (documentEchoesRequestPath(response)) return response;
+  if (isNotFoundDocument(response)) return response;
   const headers = new Headers(response.headers);
   headers.delete("Content-Length");
   headers.set("Content-Encoding", "gzip");
