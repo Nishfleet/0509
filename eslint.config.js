@@ -1198,12 +1198,10 @@ export default tseslint.config(
   },
 
   {
-    // The browser paved path, where the bounded calls live by definition, and
-    // the retained ads transport (J10, #3974), which is dropped-feature code
-    // that is not extended. The array restates the shared list because a later
-    // matching block's no-restricted-syntax entry replaces the earlier one
-    // wholesale. 0509#7296.
-    files: ["app/lib/site/browser-budget.server.ts", "app/lib/ads/transport-browser.ts"],
+    // The browser paved path, where the bounded calls live by definition. The
+    // array restates the shared list because a later matching block's
+    // no-restricted-syntax entry replaces the earlier one wholesale. 0509#7296.
+    files: ["app/lib/site/browser-budget.server.ts"],
     rules: {
       "no-restricted-syntax": [
         "error",
