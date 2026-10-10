@@ -30,4 +30,4 @@
   Cache-Control: public, max-age=86400
 
 /
-  Cache-Control: public, max-age=300, no-transform
+  Cache-Control: public, max-age=300
