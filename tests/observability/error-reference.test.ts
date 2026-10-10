@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const streamErrorHook = vi.hoisted(() => ({ current: null as ((error: unknown) => void) | null }));
 
+const compressionEnv = vi.hoisted(() => ({ DOC_COMPRESSION: "on" as string | undefined }));
+vi.mock("cloudflare:workers", () => ({ env: compressionEnv }));
 vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn() }));
 vi.mock("react-dom/server", () => ({
   renderToReadableStream: vi.fn((_element: unknown, options: { onError: (error: unknown) => void }) => {
@@ -39,6 +41,28 @@ describe("X-Error-Reference", () => {
     const response = await handleRequest(request, 200, new Headers(), routerContext, new RouterContextProvider());
 
     expect(response.headers.has("X-Error-Reference")).toBe(false);
+  });
+});
+
+describe("document gzip HEAD", () => {
+  it("sends HEAD through the same wrapper as GET so both carry Vary", async () => {
+    const get = await handleRequest(
+      new Request("https://0509.io/privacy"),
+      200,
+      new Headers(),
+      routerContext,
+      new RouterContextProvider(),
+    );
+    const head = await handleRequest(
+      new Request("https://0509.io/privacy", { method: "HEAD" }),
+      200,
+      new Headers(),
+      routerContext,
+      new RouterContextProvider(),
+    );
+    expect(get.headers.get("Vary")).toBe("Accept-Encoding");
+    expect(head.headers.get("Vary")).toBe(get.headers.get("Vary"));
+    expect(head.body).toBeNull();
   });
 });
 

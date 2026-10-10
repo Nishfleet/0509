@@ -18,10 +18,15 @@ function documentCompressionEnabled(): boolean {
 }
 
 function withVaryAcceptEncoding(headers: Headers): Headers {
-  const vary = headers.get("Vary");
-  const members = (vary ?? "").split(",").map((member) => member.trim().toLowerCase());
+  const raw = headers.get("Vary");
+  const vary = raw === null ? "" : raw.trim();
+  if (vary === "") {
+    headers.set("Vary", "Accept-Encoding");
+    return headers;
+  }
+  const members = vary.split(",").map((member) => member.trim().toLowerCase());
   if (members.includes("accept-encoding")) return headers;
-  headers.set("Vary", vary === null ? "Accept-Encoding" : `${vary}, Accept-Encoding`);
+  headers.set("Vary", `${vary}, Accept-Encoding`);
   return headers;
 }
 

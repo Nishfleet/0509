@@ -78,6 +78,12 @@ describe("withCompressedDocument", () => {
     const varied = documentResponse();
     varied.headers.set("Vary", "Accept-Encoding");
     expect(withCompressedDocument(documentRequest(), varied).headers.get("Vary")).toBe("Accept-Encoding");
+    const empty = documentResponse();
+    empty.headers.set("Vary", "");
+    expect(withCompressedDocument(documentRequest(), empty).headers.get("Vary")).toBe("Accept-Encoding");
+    const whitespace = documentResponse();
+    whitespace.headers.set("Vary", "  ");
+    expect(withCompressedDocument(documentRequest(), whitespace).headers.get("Vary")).toBe("Accept-Encoding");
   });
 
   it("returns the same response when the client refuses gzip", () => {

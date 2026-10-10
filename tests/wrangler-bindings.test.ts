@@ -131,6 +131,11 @@ describe("deployed wrangler configs", () => {
   // env.server.ts cannot import structured-data.ts: that module imports
   // app/components/footer, which would drag the React tree into the Worker's
   // boot path. site-url.ts is the import-free leaf both sides read.
+  it("turns document gzip on in production (0509#7323)", () => {
+    const { rawConfig } = readConfig("wrangler.jsonc");
+    expect(rawConfig.vars?.DOC_COMPRESSION, "wrangler.jsonc no longer deploys DOC_COMPRESSION=on").toBe("on");
+  });
+
   it("pins the deployed BETTER_AUTH_URL to the site origin every node builds on", () => {
     const { rawConfig } = readConfig("wrangler.jsonc");
     expect(rawConfig.vars?.BETTER_AUTH_URL, "wrangler.jsonc no longer deploys BETTER_AUTH_URL to SITE_URL").toBe(

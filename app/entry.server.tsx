@@ -61,7 +61,7 @@ export default async function handleRequest(
   const headers = withDocumentSecurityHeaders(responseHeaders, nonce);
 
   if (request.method.toUpperCase() === "HEAD") {
-    return new Response(null, { status: responseStatusCode, headers });
+    return withCompressedDocument(request, new Response(null, { status: responseStatusCode, headers }));
   }
 
   let status = responseStatusCode;
