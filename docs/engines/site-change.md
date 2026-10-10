@@ -241,7 +241,7 @@ Per 1,000 page checks, priced from `REBUILD-COST.md` (2026-09-21):
 
 **GOAL.** `readPage(page, env) → { html, transport, status, ms, browserMsUsed? }`: plain fetch first, escalate to Browser Rendering on non-2xx, a challenge body, or under 200 extracted characters; persist the learned transport on the `page` row and re-test it weekly.
 
-**STOCK FEATURE OR LIBRARY.** The shared transport module from the identity engine's P3 (`env.BROWSER.quickAction`), `@cloudflare/puppeteer` **1.4.0** only where a wait-for selector is needed, with `sessions()` → `connect()` → `disconnect()`. Durable Object budget counter for escalations per brand per day.
+**STOCK FEATURE OR LIBRARY.** The shared transport module from the identity engine's P3 (`env.BROWSER.quickAction`). No session SDK is installed — `@cloudflare/puppeteer` was dropped with the ads transport it served (0509#7030) — so a wait-for-selector path needs a chain of Quick Actions, and adding a session SDK back means adding the dependency with a row in `docs/REBUILD-STACK.md` §9 first. Durable Object budget counter for escalations per brand per day.
 
 **FILES IN SCOPE.** `app/lib/site/read-page.ts`, `workers/budget-counter.ts`, `tests/integration/site/read-page.test.ts`.
 
