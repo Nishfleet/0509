@@ -477,4 +477,95 @@
     // which runs before the Worker and costs no invocation. Adding a route here
     // would put the Worker in that path for nothing.
   ],
+
+  // The preview environment (0509#7336). .github/workflows/pr-preview.yml builds
+  // this environment and uploads the result as a version of the `0509-preview`
+  // Worker under a per-PR `--preview-alias`, so the link the workflow posts on
+  // the pull request serves that PR's build at
+  // https://pr-<number>-0509-preview.<subdomain>.workers.dev. The alias moves
+  // when the same PR is pushed again, so one link per pull request stays live
+  // instead of a new URL per push.
+  //
+  // Nish 2026-09-04: `wrangler versions upload` against the production Worker
+  // evicts real deploys from its version history, so a preview never targets
+  // `0509` itself. It lands on `0509-preview`, which already fronts the same
+  // Access application as the app (`*-0509-preview.<subdomain>.workers.dev`
+  // redirects to the login), so the preview keeps the login the app has.
+  //
+  // Every binding below points at a preview twin of the resource the production
+  // config declares: no D1 row, KV key, R2 object, queue message or Workflow
+  // instance reachable from here is production data. The twins that did not
+  // exist yet (0509-identity-cache-preview) are created
+  // by the operator and pinned by tests/wrangler-bindings.test.ts.
+  "env": {
+    "preview": {
+      // A preview must never claim the app's custom domains or run a sweep: the
+      // routes and crons above are production's alone.
+      "routes": [],
+      "triggers": { "crons": [] },
+      // Preview URLs and the workers.dev hostname are what make
+      // https://pr-<number>-0509-preview.<subdomain>.workers.dev resolve; the
+      // production Worker above has neither, because 0509.io is a custom domain.
+      // A preview is never deployed: `wrangler versions upload` publishes a
+      // version and its preview URL, and `wrangler deploy` is what would put a
+      // build in front of the Worker's own hostname. `workers_dev` is off so
+      // that even a stray deploy of this environment has no public route, and
+      // `preview_urls` is what actually serves the alias URL below.
+      "workers_dev": false,
+      "preview_urls": true,
+      // No `durable_objects`, and `migrations` is emptied so the chain above
+      // (which carries classes the current script does not export) is not
+      // inherited: the preview Worker has never deployed, so it has no Durable
+      // Object history, and `wrangler versions upload` cannot apply a migration.
+      // Cloudflare rejects the upload with "a pending Durable Object migration,
+      // which cannot be applied by `wrangler versions upload`". Applying it needs
+      // one `wrangler deploy` of this environment, and a deploy is the one thing
+      // a preview must never do: it would put this build in front of the
+      // Worker's hostname. The paths that take an AI budget call (BrowserBudget)
+      // are the sign-in-only paths, which a preview cannot reach anyway, so the
+      // binding is left unbound rather than bound and unrunnable. 0509#5737 is
+      // the issue that runs a preview behind a full twin set.
+      "migrations": [],
+      "secrets": {
+        // The preview Worker carries only these three (set with the test
+        // Turnstile pair at upload time, see pr-preview.yml). Requiring the
+        // billing or Slack secrets here would demand a preview key for a
+        // provider the preview never calls.
+        "required": ["BETTER_AUTH_SECRET", "TURNSTILE_SECRET_KEY", "TURNSTILE_SITE_KEY"],
+      },
+      "d1_databases": [
+        { "binding": "DB", "database_name": "0509-preview", "database_id": "d6643a38-0666-470e-8e08-1953918dfd8a" },
+      ],
+      "kv_namespaces": [
+        { "binding": "OAUTH_KV", "id": "41d23c5a12ab4effb4388cc8fecc7f36" },
+        { "binding": "IDENTITY_CACHE", "id": "42d92635afbe47aa8e02c842f75ae5e4" },
+      ],
+      "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "0509-preview-snapshots" }],
+      "queues": {
+        // Producer only. A consumer is set by a deploy, and a preview is never
+        // deployed: mail that reaches the preview queue waits there, which is
+        // the intended stop for a sign-in link no one should act on.
+        "producers": [{ "queue": "send-email-preview", "binding": "SEND_EMAIL" }],
+      },
+      "workflows": [],
+      "analytics_engine_datasets": [],
+      // Declared here because the Vite plugin's env-selected config does not
+      // inherit them: `CLOUDFLARE_ENV=preview npm run build` writes
+      // build/server/wrangler.json from this environment alone, and a preview
+      // built without these four answered `/login` with
+      // `misconfigured: EMAIL (magic links and briefs cannot send); BROWSER`.
+      "send_email": [{ "name": "EMAIL" }],
+      "browser": { "binding": "BROWSER" },
+      "ai": { "binding": "AI" },
+      "version_metadata": { "binding": "CF_VERSION_METADATA" },
+      "ratelimits": [
+        { "name": "AGENT_LIMIT", "namespace_id": "6091", "simple": { "limit": 120, "period": 60 } },
+        { "name": "SIGN_IN_EMAIL_LIMIT", "namespace_id": "6092", "simple": { "limit": 5, "period": 60 } },
+        { "name": "SIGN_IN_IP_LIMIT", "namespace_id": "6093", "simple": { "limit": 20, "period": 60 } },
+        { "name": "AGENT_REGISTER_LIMIT", "namespace_id": "6094", "simple": { "limit": 10, "period": 60 } },
+        { "name": "PROBE_LIMIT", "namespace_id": "6095", "simple": { "limit": 10, "period": 60 } },
+        { "name": "CHANGE_EMAIL_LIMIT", "namespace_id": "6096", "simple": { "limit": 3, "period": 60 } },
+      ],
+    },
+  },
 }
