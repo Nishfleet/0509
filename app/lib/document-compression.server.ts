@@ -18,25 +18,31 @@ function documentCompressionEnabled(): boolean {
 }
 
 function withVaryAcceptEncoding(headers: Headers): Headers {
-  const raw = headers.get("Vary");
+  const next = new Headers(headers);
+  const raw = next.get("Vary");
   const vary = raw === null ? "" : raw.trim();
   if (vary === "") {
-    headers.set("Vary", "Accept-Encoding");
-    return headers;
+    next.set("Vary", "Accept-Encoding");
+    return next;
   }
   const members = vary.split(",").map((member) => member.trim().toLowerCase());
-  if (members.includes("accept-encoding")) return headers;
-  headers.set("Vary", `${vary}, Accept-Encoding`);
-  return headers;
+  if (members.includes("accept-encoding")) return next;
+  next.set("Vary", `${vary}, Accept-Encoding`);
+  return next;
+}
+
+function passthrough(response: Response, headers: Headers): Response {
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 export function withCompressedDocument(request: Request, response: Response): Response {
   if (!documentCompressionEnabled()) return response;
-  withVaryAcceptEncoding(response.headers);
-  if (response.headers.has("Content-Encoding")) return response;
-  if (request.method.toUpperCase() === "HEAD" || response.body === null) return response;
-  if (!gzipAccepted(request.headers.get("Accept-Encoding"))) return response;
-  const headers = new Headers(response.headers);
+  const headers = withVaryAcceptEncoding(response.headers);
+  if (headers.has("Content-Encoding")) return passthrough(response, headers);
+  if (request.method.toUpperCase() === "HEAD" || response.body === null) {
+    return new Response(null, { status: response.status, statusText: response.statusText, headers });
+  }
+  if (!gzipAccepted(request.headers.get("Accept-Encoding"))) return passthrough(response, headers);
   headers.delete("Content-Length");
   headers.set("Content-Encoding", "gzip");
   const body = response.body.pipeThrough(new CompressionStream("gzip"));

@@ -86,27 +86,40 @@ describe("withCompressedDocument", () => {
     expect(withCompressedDocument(documentRequest(), whitespace).headers.get("Vary")).toBe("Accept-Encoding");
   });
 
-  it("returns the same response when the client refuses gzip", () => {
+  it("returns a Vary-tagged copy when the client refuses gzip, and leaves the original alone", () => {
     const response = documentResponse();
-    expect(withCompressedDocument(documentRequest("gzip;q=0"), response)).toBe(response);
-    expect(withCompressedDocument(documentRequest(null), response)).toBe(response);
-    expect(response.headers.get("Vary")).toBe("Accept-Encoding");
+    const refused = withCompressedDocument(documentRequest("gzip;q=0"), response);
+    expect(refused).not.toBe(response);
+    expect(refused.headers.get("Vary")).toBe("Accept-Encoding");
+    expect(refused.headers.get("Content-Encoding")).toBeNull();
+    expect(response.headers.get("Vary")).toBeNull();
+    const missing = withCompressedDocument(documentRequest(null), response);
+    expect(missing.headers.get("Vary")).toBe("Accept-Encoding");
+    expect(response.headers.get("Vary")).toBeNull();
   });
 
-  it("returns the same response when the body is already encoded", () => {
+  it("returns a Vary-tagged copy when the body is already encoded, and leaves the original alone", () => {
     const response = documentResponse();
     response.headers.set("Content-Encoding", "br");
-    expect(withCompressedDocument(documentRequest(), response)).toBe(response);
-    expect(response.headers.get("Vary")).toBe("Accept-Encoding");
+    const skipped = withCompressedDocument(documentRequest(), response);
+    expect(skipped).not.toBe(response);
+    expect(skipped.headers.get("Vary")).toBe("Accept-Encoding");
+    expect(skipped.headers.get("Content-Encoding")).toBe("br");
+    expect(response.headers.get("Vary")).toBeNull();
   });
 
-  it("returns the same response on the body-less HEAD path", () => {
+  it("returns a Vary-tagged copy on the body-less HEAD path, and leaves the original alone", () => {
     const response = documentResponse();
-    expect(withCompressedDocument(documentRequest("gzip", "HEAD"), response)).toBe(response);
-    expect(response.headers.get("Vary")).toBe("Accept-Encoding");
+    const head = withCompressedDocument(documentRequest("gzip", "HEAD"), response);
+    expect(head).not.toBe(response);
+    expect(head.headers.get("Vary")).toBe("Accept-Encoding");
+    expect(head.body).toBeNull();
+    expect(response.headers.get("Vary")).toBeNull();
     const bodyless = new Response(null, { status: 200 });
-    expect(withCompressedDocument(documentRequest(), bodyless)).toBe(bodyless);
-    expect(bodyless.headers.get("Vary")).toBe("Accept-Encoding");
+    const copied = withCompressedDocument(documentRequest(), bodyless);
+    expect(copied).not.toBe(bodyless);
+    expect(copied.headers.get("Vary")).toBe("Accept-Encoding");
+    expect(bodyless.headers.get("Vary")).toBeNull();
   });
 
   it("returns the same response when the compression switch is off, as in the preview lanes", () => {
