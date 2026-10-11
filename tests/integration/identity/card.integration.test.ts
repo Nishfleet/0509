@@ -345,9 +345,11 @@ describe("startCard", () => {
     try {
       await answerHomepage();
       Reflect.set(env, "AI", { run: () => new Promise(() => undefined) });
+      vi.stubGlobal("fetch", () => Promise.resolve(new Response("", { status: 404 })));
       const card = startCard("ws-1", subjectFor("gymshark.com"), []);
       await vi.advanceTimersByTimeAsync(28_000);
       const site = await card.site;
+      await card.logo;
       expect(site.name).toBe("Gymshark");
       expect(site.review).toEqual({ name: "check", description: "check", socials: "empty" });
       expect(site.unfound).toBe(false);
