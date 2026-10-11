@@ -372,7 +372,9 @@ export function resolveUnjudgedMention(id: string, tombstoned: boolean): D1Prepa
 }
 
 const SELECT_UNJUDGED_CHANGES = `SELECT s.id AS id, s.workspace_id AS workspace_id, s.entity_id AS entity_id,
-  s.url AS url, s.aspect AS aspect, s.payload_json AS payload_json,
+  s.url AS url, s.aspect AS aspect, s.payload_json AS payload_json, s.observed_at AS observed_at,
+  (SELECT p.id FROM watch w JOIN page p ON p.entity_id = w.entity_id AND p.url = w.target_key
+   WHERE w.id = s.watch_id) AS page_id,
   e.role AS entity_role, e.name AS entity_name, e.domain AS entity_domain
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.state = 'on'
@@ -392,11 +394,19 @@ const unjudgedChangeRows = z.array(
     url: z.string().nullable(),
     aspect: z.string().nullable(),
     payload_json: z.string(),
+    observed_at: z.string(),
+    page_id: z.string().nullable(),
     entity_role: z.enum(["self", "competitor"]),
     entity_name: z.string().nullable(),
     entity_domain: z.string(),
   }),
 );
+
+const MARK_SIGNAL_BREAKAGE = "UPDATE signal SET aspect = 'breakage' WHERE id = ?1";
+
+export function markSignalBreakageStatement(signalId: string): D1PreparedStatement {
+  return env.DB.prepare(MARK_SIGNAL_BREAKAGE).bind(signalId);
+}
 
 export interface UnjudgedChange {
   id: string;
@@ -405,6 +415,8 @@ export interface UnjudgedChange {
   url: string | null;
   aspect: string | null;
   payloadJson: string;
+  observedAt: string;
+  pageId: string | null;
   entityRole: "self" | "competitor";
   entityName: string | null;
   entityDomain: string;
@@ -426,6 +438,8 @@ export async function readUnjudgedChanges(input: {
     url: row.url,
     aspect: row.aspect,
     payloadJson: row.payload_json,
+    observedAt: row.observed_at,
+    pageId: row.page_id,
     entityRole: row.entity_role,
     entityName: row.entity_name,
     entityDomain: row.entity_domain,

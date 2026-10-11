@@ -420,7 +420,7 @@ Pricing (<https://developers.cloudflare.com/queues/platform/pricing/>): "An oper
 Two routes, and the cheap one is not the famous one:
 
 - **Quick Actions** — `/content`, `/screenshot`, `/pdf`, `/markdown`, `/snapshot`, `/accessibilityTree`, `/scrape`, `/json`, `/links`, `/crawl` (REST-only). Reachable from REST **and** from the binding via `.quickAction("screenshot", { url })` with `compatibility_date` ≥ `2026-03-24`, and **without** `nodejs_compat`. <https://developers.cloudflare.com/browser-rendering/rest-api/>
-- **Browser Sessions.** `@cloudflare/puppeteer` `^1.4.0` is installed. `app/lib/ads/transport-browser.ts` imports `connect`, `launch`, and `sessions` from it. `@cloudflare/playwright` is the other session SDK and is not installed. Either one requires `nodejs_compat`.
+- **Browser Sessions.** No session SDK is installed (`@cloudflare/puppeteer` was dropped with the ads transport, 0509#7030; `@cloudflare/playwright` is not installed either). Either one requires `nodejs_compat`.
 
 **The 10-concurrent number is an allotment, not a ceiling.** The limits page gives the Paid hard cap as **200 concurrent browsers per account**; the pricing page gives **10 browsers included (averaged monthly), then $2.00 per additional browser**. Both are real and they answer different questions. Nish's standing rule — cap 10, raising it costs $2/browser/month and needs his recorded yes — is the _pricing_ number, and it is the one we configure.
 

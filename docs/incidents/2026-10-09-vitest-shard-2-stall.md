@@ -29,6 +29,12 @@ On the first stall the log could not say which file was in flight. The `[file-st
 
 So the stall is at the end of the shard, while vitest starts the next file or the next project's workerd, not in any test body. The reporter now also prints `[file-queued]` (vitest's `onTestModuleQueued`, which fires before the file is imported), so the next stall names the file even if it hangs while loading.
 
+Later evidence (2026-10-10, run 38029789089): shard 2 queued, started and passed all 144 files, then never printed its summary. So the run reached its end and then hung, which points at teardown rather than any test body.
+
+Suspect, narrowed but not proven: ten workers tests built a real better-auth captcha plugin, and `magic-link-ttl` and `sign-in-limit` posted to the magic-link path, which called the live Turnstile siteverify endpoint (`challenges.cloudflare.com`) from workerd. A live outbound call that never settles could keep a workerd alive after the files pass. Offline, `magic-link-ttl` failed, which shows it depended on that call. No run has yet shown the stall gone after the change, so the live call is not confirmed as the cause.
+
+The change: `magic-link-ttl` and `sign-in-limit` build auth with captcha off (neither is about captcha), and `magic-link-captcha` stubs siteverify and keeps its pass, reject and missing-token cases. The reporter now prints `[run-end] N files finished`, so the next stall shows whether vitest reached the end of the run. With no network, the whole non-node suite passes (213 files, 1440 tests).
+
 The four gaps below are why the first stall could not be read. Four things are missing:
 
 - vitest's default reporter prints a file only when it finishes, never when it starts, so the hung file has no line.
