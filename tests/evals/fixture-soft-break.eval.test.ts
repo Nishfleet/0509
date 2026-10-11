@@ -6,14 +6,7 @@ import { computeBreakageEvidence } from "../../app/lib/site/breakage-evidence";
 import { diffPageText } from "../../app/lib/site/diff";
 import { changeState, D3S_BREAKAGE } from "../../app/lib/site/judge.server";
 import { FIXTURE_HEALTHY_TEXT, FIXTURE_SOFT_TEXT } from "../fixtures/fixture-page-texts";
-import {
-  formatReport,
-  jevKeyPresent,
-  makeNoulAsk,
-  noulScore,
-  runEval,
-  type NoulEvalRow,
-} from "./harness";
+import { formatReport, jevKeyPresent, makeNoulAsk, noulScore, runEval, type NoulEvalRow } from "./harness";
 
 // 0509#7340's measurement: the shipped D3S_BREAKAGE question, fed the exact
 // judged state the nightly sweep produces for the J8 soft fixture, must answer
@@ -102,14 +95,19 @@ describe.skipIf(!jevKeyPresent())("eval: the J8 soft fixture's judged state agai
   it("own_site_breakage: the emptied soft page answers alert and the healthy page stays clear", async () => {
     const states = await fixtureStates();
     const seenPs: string[] = [];
-    const report = await runEval(D3S_BREAKAGE.id, rows, (row) => {
-      const state = states[row.id];
-      if (state === undefined) throw new Error(`no judged state for ${row.id}`);
-      return makeNoulAsk(D3S_BREAKAGE)(state).then((call) => {
-        if (call.p !== null) seenPs.push(`${row.id}: p=${call.p.toFixed(3)} -> ${noulAction(call.p)}`);
-        return call;
-      });
-    }, noulScore);
+    const report = await runEval(
+      D3S_BREAKAGE.id,
+      rows,
+      (row) => {
+        const state = states[row.id];
+        if (state === undefined) throw new Error(`no judged state for ${row.id}`);
+        return makeNoulAsk(D3S_BREAKAGE)(state).then((call) => {
+          if (call.p !== null) seenPs.push(`${row.id}: p=${call.p.toFixed(3)} -> ${noulAction(call.p)}`);
+          return call;
+        });
+      },
+      noulScore,
+    );
     console.log(`raw ps:\n${seenPs.join("\n")}\n${formatReport(report)}`);
     expect(report.splits.length).toBeGreaterThan(0);
   });
