@@ -263,6 +263,19 @@ describe("incident lane (0509#4364)", () => {
     expect(await readNotices(PAGE_A)).toHaveLength(0);
   });
 
+  it("(c4) sends no fixed follow-up when the open email never went out", async () => {
+    const failing = recorder();
+    failing.fail = new Error("boom");
+    await deliverIncident(envWith(bindingFor(failing)), message(INCIDENT_A));
+    await closeIncident(INCIDENT_A);
+
+    const rec = recorder();
+    const result = await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
+
+    expect(result.outcome).toBe("unannounced");
+    expect(rec.sent).toHaveLength(0);
+  });
+
   it("(c2) still sends the fixed follow-up after the alert is acknowledged (0509#4115)", async () => {
     const rec = recorder();
     await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
