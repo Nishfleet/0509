@@ -76,11 +76,12 @@ async function fixtureStates(): Promise<Record<string, unknown>> {
   };
 }
 
-// A two-state probe of one fixture's judged state, not a scored case set: the
-// labeled case set for this question stays tests/evals/cases/site-change.json
-// (scored by site-change.eval.test.ts). One row in each split is what lets this
-// file run under both defaults — bare `npm run eval` (EVAL_SPLIT=all) and the
-// evals.yml dispatch (EVAL_SPLIT=test) — where runEval throws on an empty split.
+// A two-state probe of one fixture's judged state, not the scored case set:
+// the labeled case set for this question stays
+// tests/evals/cases/site-change.json (scored by site-change.eval.test.ts). One
+// row in each split is what lets this file run under both defaults — bare
+// `npm run eval` (EVAL_SPLIT=all) and the evals.yml dispatch
+// (EVAL_SPLIT=test) — where runEval throws on an empty split.
 const rows: NoulEvalRow[] = [
   {
     id: "fixture-soft-broken",
