@@ -4,22 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { computeBreakageEvidence } from "../../app/lib/site/breakage-evidence";
 import { extractPageText } from "../../app/lib/site/extract-text";
 import worker from "../../workers/fixture-site";
-
-/**
- * The exact texts extractPageText yields for the fixture's healthy and soft
- * pages. The soft break must stay this empty (0509#7340): with only the pricing
- * section gone, the nightly D3s verdict swung between 0.58 and 0.173 because a
- * tidy one-section removal reads as a deliberate redesign. Now the page keeps
- * nothing visible but its title — the shape the labeled case set already calls
- * broken (patagonia-empty-body in tests/evals/cases/own_site_breakage.json).
- * These two constants are the source for the fixture-soft-break eval, which
- * judges this exact diff; any change to the fixture's visible text fails here
- * and forces that eval to be regenerated.
- */
-const HEALTHY_TEXT =
-  "Five to Nine &mdash; fixture Track every competitor move, in one weekly brief Pricing " +
-  "Starter &mdash; ₹499 / month Pro &mdash; ₹1,299 / month Team &mdash; ₹2,499 / month Choose a plan and check out";
-const SOFT_TEXT = "Five to Nine &mdash; fixture";
+import { FIXTURE_HEALTHY_TEXT, FIXTURE_SOFT_TEXT } from "../fixtures/fixture-page-texts";
 
 /**
  * The J8 fixture's whole reason to exist, pinned in a merge gate: the healthy
@@ -121,7 +106,7 @@ describe("0509-fixture-site", () => {
     expect(pricing).toContain("₹499");
     expect(pricing).toContain("₹2,499");
     expect(html).toMatch(/href="https:\/\/0509\.io\/checkout\?plan=pro"/);
-    expect((await extractPageText(html)).text).toBe(HEALTHY_TEXT);
+    expect((await extractPageText(html)).text).toBe(FIXTURE_HEALTHY_TEXT);
   });
 
   it("flips to a hard break and answers 500", async () => {
@@ -170,11 +155,11 @@ describe("0509-fixture-site", () => {
     expect(html).not.toContain("<h1>");
     expect(html).toContain('data-mode="soft"');
     const broken = await extractPageText(html);
-    expect(broken.text).toBe(SOFT_TEXT);
+    expect(broken.text).toBe(FIXTURE_SOFT_TEXT);
     // The evidence the judge actually reads, computed by production's own
     // function: a 200 whose text collapsed below half with every price gone.
     expect(
-      computeBreakageEvidence({ status: 200, beforeText: HEALTHY_TEXT, afterText: broken.text }),
+      computeBreakageEvidence({ status: 200, beforeText: FIXTURE_HEALTHY_TEXT, afterText: broken.text }),
     ).toMatchObject({ httpError: false, textHalved: true, pricesVanished: true });
   });
 

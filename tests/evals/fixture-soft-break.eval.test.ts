@@ -5,6 +5,7 @@ import { sha256Hex } from "../../app/lib/sha256";
 import { computeBreakageEvidence } from "../../app/lib/site/breakage-evidence";
 import { diffPageText } from "../../app/lib/site/diff";
 import { changeState, D3S_BREAKAGE } from "../../app/lib/site/judge.server";
+import { FIXTURE_HEALTHY_TEXT, FIXTURE_SOFT_TEXT } from "../fixtures/fixture-page-texts";
 import {
   formatReport,
   jevKeyPresent,
@@ -19,19 +20,15 @@ import {
 // alert (p >= 0.5), and the healthy page must stay clear. The old soft break (a
 // 200 with only the pricing section gone) swung 0.58 -> 0.173 across nights
 // because the judge read a tidy one-section removal as a deliberate redesign;
-// the fixture now keeps nothing visible but its title. The two texts below are
-// extractPageText's output for the fixture's healthy and soft pages, pinned
-// byte-for-byte by tests/integration/fixture-site.test.ts (HEALTHY_TEXT /
-// SOFT_TEXT): that test fails if the fixture's visible text ever changes, and
-// these constants must be regenerated with it. The eval runtime is node: it
-// has no HTMLRewriter to re-run the extraction, and the fixture module itself
-// extends DurableObject, so neither step can be re-derived here — which is why
-// the walk is pinned in the workers project instead.
-const BEFORE_TEXT =
-  "Five to Nine &mdash; fixture Track every competitor move, in one weekly brief Pricing " +
-  "Starter &mdash; ₹499 / month Pro &mdash; ₹1,299 / month Team &mdash; ₹2,499 / month Choose a plan and check out";
-const AFTER_TEXT = "Five to Nine &mdash; fixture";
-
+// the fixture now keeps nothing visible but its title. The two texts are
+// extractPageText's output for the fixture's healthy and soft pages, shared
+// with tests/integration/fixture-site.test.ts from
+// tests/fixtures/fixture-page-texts.ts — that test fails if the fixture's
+// visible text ever changes, and the eval's input is regenerated with it. The
+// eval runtime is node: it has no HTMLRewriter to re-run the extraction, and
+// the fixture module itself extends DurableObject, so neither step can be
+// re-derived here — which is why the walk is pinned in the workers project
+// instead.
 const SUBJECT = { name: "Five to Nine", domain: "0509.in" };
 const PAGE_URL = "https://j8-soft.fixture.0509.in/";
 
@@ -44,8 +41,8 @@ async function extracted(text: string) {
 }
 
 async function fixtureStates(): Promise<Record<string, unknown>> {
-  const before = await extracted(BEFORE_TEXT);
-  const after = await extracted(AFTER_TEXT);
+  const before = await extracted(FIXTURE_HEALTHY_TEXT);
+  const after = await extracted(FIXTURE_SOFT_TEXT);
   const diff = diffPageText(before, after);
   if (diff === null) throw new Error("the soft break must change the page text");
   const base = {
@@ -60,7 +57,11 @@ async function fixtureStates(): Promise<Record<string, unknown>> {
       {
         ...base,
         hunks: diff.hunks,
-        evidence: computeBreakageEvidence({ status: 200, beforeText: BEFORE_TEXT, afterText: AFTER_TEXT }),
+        evidence: computeBreakageEvidence({
+          status: 200,
+          beforeText: FIXTURE_HEALTHY_TEXT,
+          afterText: FIXTURE_SOFT_TEXT,
+        }),
       },
       base.history30d,
     ),
@@ -71,7 +72,11 @@ async function fixtureStates(): Promise<Record<string, unknown>> {
         // short-circuits on the hash); the control asks the question what it
         // would say if it saw the healthy page with no diff at all.
         hunks: [],
-        evidence: computeBreakageEvidence({ status: 200, beforeText: BEFORE_TEXT, afterText: BEFORE_TEXT }),
+        evidence: computeBreakageEvidence({
+          status: 200,
+          beforeText: FIXTURE_HEALTHY_TEXT,
+          afterText: FIXTURE_HEALTHY_TEXT,
+        }),
       },
       base.history30d,
     ),
