@@ -303,6 +303,59 @@ describe("startCard", () => {
     expect((await env.IDENTITY_CACHE.list()).keys).toEqual([]);
   });
 
+  it("gives up on a read that never answers and says it could not reach the site, inside the card budget", async () => {
+    vi.useFakeTimers();
+    try {
+      stubAi(0.95);
+      vi.stubGlobal("fetch", () => new Promise<Response>(() => undefined));
+      installBrowser({ calls: [], quickAction: () => new Promise<Response>(() => undefined) });
+      const card = startCard("ws-1", subjectFor("slowread.com"), []);
+      await vi.advanceTimersByTimeAsync(28_000);
+      expect(await card.site).toEqual({
+        name: null,
+        description: null,
+        socials: [],
+        review: { name: "empty", description: "empty", socials: "empty" },
+        unfound: true,
+      });
+      expect(await card.logo).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("draws a creator's card from the handle when the profile read runs out of budget", async () => {
+    vi.useFakeTimers();
+    try {
+      stubAi(0.95);
+      vi.stubGlobal("fetch", () => new Promise<Response>(() => undefined));
+      installBrowser({ calls: [], quickAction: () => new Promise<Response>(() => undefined) });
+      const card = startCard("ws-1", subjectFor("https://www.youtube.com/@slowchannel"), []);
+      await vi.advanceTimersByTimeAsync(28_000);
+      const site = await card.site;
+      expect(site.name).toBe("@slowchannel");
+      expect(site.unfound).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("fills every field as it stands when the confidence review outlasts the card budget", async () => {
+    vi.useFakeTimers();
+    try {
+      await answerHomepage();
+      Reflect.set(env, "AI", { run: () => new Promise(() => undefined) });
+      const card = startCard("ws-1", subjectFor("gymshark.com"), []);
+      await vi.advanceTimersByTimeAsync(28_000);
+      const site = await card.site;
+      expect(site.name).toBe("Gymshark");
+      expect(site.review).toEqual({ name: "fill", description: "fill", socials: "empty" });
+      expect(site.unfound).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not keep a read that found no name, description or socials", async () => {
     stubAi(0.95);
     const calls = stubWeb((url) =>

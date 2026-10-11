@@ -41,6 +41,8 @@ const readSiteCardSchema = siteCardSchema.refine(hasIdentity);
 
 const ICON_PROBE_V = 3;
 
+const CARD_BUDGET_MS = 28_000;
+
 const logoSchema = z.object({ v: z.literal(ICON_PROBE_V), url: z.string().nullable() });
 
 const UNREACHED: SiteCard = {
@@ -272,17 +274,40 @@ export async function backfillLogo(registrable: string): Promise<R2ObjectBody | 
   return readLogo(subject.registrable);
 }
 
+async function orElseAfter<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<T>((resolve) => {
+    timer = setTimeout(() => {
+      resolve(fallback);
+    }, ms);
+  });
+  try {
+    return await Promise.race([work, expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function startCard(
   workspaceId: string,
   subject: Subject,
   edited: readonly DraftField[],
 ): { site: Promise<SiteFields>; logo: Promise<string | null> } {
-  const read = readSiteCard(subject, brandBudget(workspaceId, subject.registrable));
+  const deadline = Date.now() + CARD_BUDGET_MS;
+  const read = orElseAfter(readSiteCard(subject, brandBudget(workspaceId, subject.registrable)), CARD_BUDGET_MS, {
+    card: UNREACHED,
+    reached: false,
+  });
   const site = read.then(async ({ card, reached }): Promise<SiteFields> => {
     const values = cardValues(subject, card);
+    const fallback = fillReview(values);
     const review: CardReview = reached
-      ? await reviewFields({ workspaceId, subject, fields: values, edited, now: new Date().toISOString() })
-      : fillReview(values);
+      ? await orElseAfter(
+          reviewFields({ workspaceId, subject, fields: values, edited, now: new Date().toISOString() }),
+          Math.max(deadline - Date.now(), 0),
+          fallback,
+        )
+      : fallback;
     return { ...applyReview(values, review), unfound: subject.kind === "domain" && !reached };
   });
   const logo = read
