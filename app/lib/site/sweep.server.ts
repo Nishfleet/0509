@@ -356,7 +356,7 @@ async function openBreakageIncident(change: SiteChangeInput, filing: BreakageFil
       verdictIds: filing.judgment.verdictIds,
     }).run();
   }
-  if (results[1]?.meta.changes === 1 && filing.band === "alert") {
+  if (results[1]?.meta.changes === 1) {
     await env.SEND_EMAIL.send({ incident_id: ids.incident });
   }
 }

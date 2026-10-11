@@ -633,7 +633,7 @@ describe("nightly site sweep", () => {
       expect(send).toHaveBeenCalledTimes(1);
     });
 
-    it("opens the incident and a normal alert, and sends nothing, when D3s says check", async () => {
+    it("opens the incident, a normal alert and one queued email when D3s says check", async () => {
       installJev(0.3);
       await baseline("ent-self", SELF_BEFORE_HTML);
       await changeOnce("ent-self", SELF_BROKEN_HTML, "self-check");
@@ -641,7 +641,8 @@ describe("nightly site sweep", () => {
       const filed = await rows();
       expect(filed.incidents).toHaveLength(1);
       expect(filed.alerts).toEqual([{ incident_id: filed.incidents[0]?.id, severity: "normal", body: null }]);
-      expect(send).not.toHaveBeenCalled();
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(send).toHaveBeenCalledWith({ incident_id: filed.incidents[0]?.id });
     });
 
     it("opens no incident when D3s says clear, and files the signal as any other change", async () => {
