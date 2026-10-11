@@ -264,8 +264,7 @@ describe("incident lane (0509#4364)", () => {
   });
 
   it("(c4) sends no fixed follow-up when the open email never went out", async () => {
-    const failing = recorder();
-    failing.fail = new Error("boom");
+    const failing = { ...recorder(), fail: new Error("boom") };
     await deliverIncident(envWith(bindingFor(failing)), message(INCIDENT_A));
     await closeIncident(INCIDENT_A);
 
