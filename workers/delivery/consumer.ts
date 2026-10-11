@@ -1,7 +1,7 @@
 import { isWorkspacePaid } from "../../app/lib/billing/entitlements";
 import { markDigestSentStatement } from "../../app/lib/data/digest.server";
 import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
-import { claimIncidentNotice } from "../../app/lib/data/incident_notice.server";
+import { claimIncidentNotice, incidentWasAnnounced } from "../../app/lib/data/incident_notice.server";
 import { readEntitlements } from "../../app/lib/data/plan.server";
 import {
   claimChangeSlot,
@@ -78,6 +78,7 @@ type DeliveryOutcome =
   | "no_target"
   | "no_digest"
   | "no_incident"
+  | "unannounced"
   | "not_self"
   | "muted"
   | "no_signal"
@@ -378,12 +379,17 @@ async function incidentBlocked(env: Env, incident: IncidentRow): Promise<Deliver
   return null;
 }
 
+async function unannouncedFixed(env: Env, incident: IncidentRow): Promise<DeliveryResult | null> {
+  if (incident.closed_at === null || (await incidentWasAnnounced(env.DB, incident.id))) return null;
+  return { outcome: "unannounced", attempt_id: null, idempotency_key: null };
+}
+
 export async function deliverIncident(env: Env, message: IncidentMessage): Promise<DeliveryResult> {
   const incident = await readIncident(env, message.incident_id);
   if (!incident) {
     return { outcome: "no_incident", attempt_id: null, idempotency_key: null };
   }
-  const blocked = await incidentBlocked(env, incident);
+  const blocked = (await incidentBlocked(env, incident)) ?? (await unannouncedFixed(env, incident));
   if (blocked) return blocked;
 
   const target = await readTarget(env, incident.workspace_id);
