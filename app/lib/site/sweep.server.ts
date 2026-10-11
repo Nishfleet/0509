@@ -357,7 +357,12 @@ async function openBreakageIncident(change: SiteChangeInput, filing: BreakageFil
     }).run();
   }
   if (results[1]?.meta.changes === 1) {
-    await env.SEND_EMAIL.send({ incident_id: ids.incident });
+    try {
+      await env.SEND_EMAIL.send({ incident_id: ids.incident });
+    } catch (error) {
+      console.log(JSON.stringify({ event: "site.incident_email_enqueue_failed", incidentId: ids.incident }));
+      captureException(error, { tags: { queue: "send-email", lane: "incident" } });
+    }
   }
 }
 

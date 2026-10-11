@@ -645,6 +645,18 @@ describe("nightly site sweep", () => {
       expect(send).toHaveBeenCalledWith({ incident_id: filed.incidents[0]?.id });
     });
 
+    it("keeps the incident when the email enqueue fails, and the sweep carries on", async () => {
+      installJev(0.3);
+      send.mockRejectedValueOnce(new Error("queue unavailable"));
+      await baseline("ent-self", SELF_BEFORE_HTML);
+
+      await expect(changeOnce("ent-self", SELF_BROKEN_HTML, "self-check-enqueue-fail")).resolves.toBeDefined();
+
+      const filed = await rows();
+      expect(filed.incidents).toEqual([{ id: expect.any(String), kind: "breakage", closed_at: null }]);
+      expect(filed.alerts).toHaveLength(1);
+    });
+
     it("opens no incident when D3s says clear, and files the signal as any other change", async () => {
       installJev(0.05);
       await baseline("ent-self", SELF_BEFORE_HTML);
