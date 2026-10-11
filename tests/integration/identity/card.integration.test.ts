@@ -324,6 +324,33 @@ describe("startCard", () => {
     }
   });
 
+  it("keeps a read that outlasts the card budget running until its answer is cached", async () => {
+    vi.useFakeTimers();
+    try {
+      stubAi(0.95);
+      vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url.startsWith("https://www.wikidata.org/")) return Promise.resolve(Response.json({ search: [] }));
+        if (isLogo(url)) return Promise.resolve(new Response("", { status: 404 }));
+        return new Promise<Response>((resolve) => {
+          setTimeout(() => {
+            resolve(new Response(gym, { status: 200 }));
+          }, 30_000);
+        });
+      });
+      const card = startCard("ws-1", subjectFor("latebloomer.com"), []);
+      await vi.advanceTimersByTimeAsync(28_000);
+      expect((await card.site).unfound).toBe(true);
+      await vi.advanceTimersByTimeAsync(3_000);
+      await card.settled;
+      const keys = (await env.IDENTITY_CACHE.list()).keys.map((key) => key.name);
+      expect(keys).toContain(probeKey(subjectFor("latebloomer.com"), "homepage"));
+      await card.logo;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("draws a creator's card from the handle when the profile read runs out of budget", async () => {
     vi.useFakeTimers();
     try {

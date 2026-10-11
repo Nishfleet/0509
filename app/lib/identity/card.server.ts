@@ -292,12 +292,10 @@ export function startCard(
   workspaceId: string,
   subject: Subject,
   edited: readonly DraftField[],
-): { site: Promise<SiteFields>; logo: Promise<string | null> } {
+): { site: Promise<SiteFields>; logo: Promise<string | null>; settled: Promise<void> } {
   const deadline = Date.now() + CARD_BUDGET_MS;
-  const read = orElseAfter(readSiteCard(subject, brandBudget(workspaceId, subject.registrable)), CARD_BUDGET_MS, {
-    card: UNREACHED,
-    reached: false,
-  });
+  const unbounded = readSiteCard(subject, brandBudget(workspaceId, subject.registrable));
+  const read = orElseAfter(unbounded, CARD_BUDGET_MS, { card: UNREACHED, reached: false });
   const site = read.then(async ({ card, reached }): Promise<SiteFields> => {
     const values = cardValues(subject, card);
     const review: CardReview = reached
@@ -315,7 +313,11 @@ export function startCard(
       console.log(JSON.stringify({ event: "identity-logo-failed", workspaceId, error: String(error) }));
       return null;
     });
-  return { site, logo };
+  const settled = unbounded.then(
+    () => undefined,
+    () => undefined,
+  );
+  return { site, logo, settled };
 }
 
 export async function readCachedSiteProof(subject: Subject): Promise<{ adLibraryHints: string[]; navLinks: string[] }> {
