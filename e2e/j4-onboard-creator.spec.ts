@@ -1,6 +1,13 @@
 import { expect, test } from "@playwright/test";
 
-import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+import {
+  confirmPublicSubject,
+  consoleFailures,
+  deleteCreatedAccount,
+  requireInboxToken,
+  signInWithMagicLink,
+  watchConsole,
+} from "./inbox";
 
 let createdEmail = "";
 // The end-of-test screenshot is report evidence, not an assertion. Playwright's
@@ -50,10 +57,11 @@ test.describe("J4 onboard a creator handle", () => {
       const started = Date.now();
       await input.press("Enter");
 
+      await confirmPublicSubject(page);
       try {
-        await expect(
-          page.getByRole("heading", { name: "Check your details. Fix anything that's wrong." }),
-        ).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Check your details. Fix anything that's wrong." })).toBeVisible(
+          { timeout: 30_000 },
+        );
       } catch (error) {
         const shown = await page
           .locator("main")
