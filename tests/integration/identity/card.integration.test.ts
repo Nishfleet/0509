@@ -340,7 +340,7 @@ describe("startCard", () => {
     }
   });
 
-  it("fills every field as it stands when the confidence review outlasts the card budget", async () => {
+  it("asks the user to check every field when the confidence review outlasts the card budget", async () => {
     vi.useFakeTimers();
     try {
       await answerHomepage();
@@ -349,7 +349,7 @@ describe("startCard", () => {
       await vi.advanceTimersByTimeAsync(28_000);
       const site = await card.site;
       expect(site.name).toBe("Gymshark");
-      expect(site.review).toEqual({ name: "fill", description: "fill", socials: "empty" });
+      expect(site.review).toEqual({ name: "check", description: "check", socials: "empty" });
       expect(site.unfound).toBe(false);
     } finally {
       vi.useRealTimers();

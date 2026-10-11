@@ -7,7 +7,7 @@ import { sha256Hex } from "../sha256";
 import { takeBrowserEscalation } from "../site/browser-budget.server";
 import type { CardReview, CardValues, DraftField, SiteFields } from "./card-fields";
 import { extractIdentity } from "./extract";
-import { reviewFields } from "./field-confidence.server";
+import { reviewFields, unreviewedFields } from "./field-confidence.server";
 import { readLogo, storeLogo } from "./logo-store.server";
 import { logoCandidatesFor, logoCandidateUrls } from "./logo-cascade";
 import type { LogoCandidates } from "./logo-cascade";
@@ -300,14 +300,13 @@ export function startCard(
   });
   const site = read.then(async ({ card, reached }): Promise<SiteFields> => {
     const values = cardValues(subject, card);
-    const fallback = fillReview(values);
     const review: CardReview = reached
       ? await orElseAfter(
           reviewFields({ workspaceId, subject, fields: values, edited, now: new Date().toISOString() }),
           Math.max(deadline - Date.now(), 0),
-          fallback,
+          unreviewedFields(values, edited),
         )
-      : fallback;
+      : fillReview(values);
     return { ...applyReview(values, review), unfound: subject.kind === "domain" && !reached };
   });
   const logo = read
