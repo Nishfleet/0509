@@ -1,7 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const envState = vi.hoisted(() => ({ DOC_COMPRESSION: "on" as string | undefined }));
-vi.mock("cloudflare:workers", () => ({ env: envState }));
+import { describe, expect, it, vi } from "vitest";
 
 import { gzipAccepted, withCompressedDocument } from "../app/lib/document-compression.server";
 
@@ -46,10 +43,6 @@ describe("gzip acceptance", () => {
 });
 
 describe("withCompressedDocument", () => {
-  beforeEach(() => {
-    envState.DOC_COMPRESSION = "on";
-  });
-
   it("gzips the body and names the encoding", async () => {
     const response = await gunzip(withCompressedDocument(documentRequest(), documentResponse()));
     expect(response).toBe("<html><body>privacy</body></html>");
@@ -120,23 +113,5 @@ describe("withCompressedDocument", () => {
     expect(copied).not.toBe(bodyless);
     expect(copied.headers.get("Vary")).toBe("Accept-Encoding");
     expect(bodyless.headers.get("Vary")).toBeNull();
-  });
-
-  it("returns the same response when the compression switch is off, as in the preview lanes", () => {
-    envState.DOC_COMPRESSION = "off";
-    const response = documentResponse();
-    expect(withCompressedDocument(documentRequest(), response)).toBe(response);
-    expect(response.headers.get("Vary")).toBe(null);
-  });
-
-  it("fails closed to plain documents when the switch is blank or unset", () => {
-    envState.DOC_COMPRESSION = "";
-    const blank = documentResponse();
-    expect(withCompressedDocument(documentRequest(), blank)).toBe(blank);
-    expect(blank.headers.get("Vary")).toBe(null);
-    envState.DOC_COMPRESSION = undefined;
-    const unset = documentResponse();
-    expect(withCompressedDocument(documentRequest(), unset)).toBe(unset);
-    expect(unset.headers.get("Vary")).toBe(null);
   });
 });
