@@ -37,6 +37,7 @@ const SESSION_GATE_ALLOWLIST: Readonly<Record<string, string>> = {
   "/api/health": "liveness probe has no cookie",
   "/api/docs": "public OpenAPI explorer",
   "/status": "public status page; walled by Access until LAUNCH, listed in robots Disallow until then",
+  "/security": "public security page; walled by Access until LAUNCH, listed in robots Disallow until then",
   "/design/landing": "public marketing page",
   "/onboarding": "first-run flow after sign-in, not under /app layouts",
   "/onboarding/competitors": "first-run flow after sign-in, not under /app layouts",
