@@ -1,7 +1,6 @@
 import type { Route } from "./+types/api-docs";
 
 import { ApiReference } from "../components/api-reference";
-import { endpointViews } from "../lib/agent/api-docs";
 import { openApiDocument } from "../lib/agent/openapi";
 import { MCP_PATH } from "../lib/agent/paths";
 
@@ -15,10 +14,10 @@ export function meta() {
 export function loader({ request }: Route.LoaderArgs) {
   const origin = new URL(request.url).origin;
   const document = openApiDocument(origin);
-  const first = endpointViews(document).find((endpoint) => !endpoint.path.includes("{"));
+  const first = Object.keys(document.paths ?? {}).find((path) => !path.includes("{"));
   return {
     document,
-    exampleUrl: first === undefined ? null : `${origin}${first.path}`,
+    exampleUrl: first === undefined ? null : `${origin}${first}`,
     mcpUrl: `${origin}${MCP_PATH}`,
     settingsHref: "/app/settings/agents",
   };
