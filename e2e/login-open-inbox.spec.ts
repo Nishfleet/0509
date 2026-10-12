@@ -1,16 +1,25 @@
 import { expect, test } from "@playwright/test";
 
-import { isLocalLane, settleSignInWidget } from "./inbox";
+import { deleteCreatedAccount, isLocalLane, settleSignInWidget } from "./inbox";
 
 test.skip(!isLocalLane(), "a Gmail address would be mailed for real on the remote lanes");
+
+const requested: string[] = [];
+test.afterEach(async ({ page }) => {
+  for (const email of requested.splice(0)) await deleteCreatedAccount(page, email);
+});
+
+function mint(domain: string): string {
+  const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@${domain}`;
+  requested.push(email);
+  return email;
+}
 
 test("the sent state links straight to the webmail for a Gmail address and not for a work address", async ({
   page,
 }) => {
   await page.goto("/login");
-  await page
-    .locator('input[name="email"]')
-    .fill(`e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@gmail.com`);
+  await page.locator('input[name="email"]').fill(mint("gmail.com"));
   await settleSignInWidget(page);
   await page.locator('button[type="submit"]').click();
 
@@ -21,9 +30,7 @@ test("the sent state links straight to the webmail for a Gmail address and not f
   await expect(open).toHaveAttribute("rel", /noopener/);
 
   await page.getByRole("button", { name: "Use a different email" }).click();
-  await page
-    .locator('input[name="email"]')
-    .fill(`e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@acme-e2e.test`);
+  await page.locator('input[name="email"]').fill(mint("acme-e2e.test"));
   await settleSignInWidget(page);
   await page.locator('button[type="submit"]').click();
 
