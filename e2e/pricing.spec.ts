@@ -64,7 +64,7 @@ test("the start button leads to sign-in and carries a known utm_source only @smo
 test("the pricing page links back to the overview and carries the footer links @smoke", async ({ page }) => {
   await page.goto(PATH);
 
-  await expect(page.getByRole("link", { name: "Back to overview" })).toHaveAttribute("href", "/");
+  await expect(page.getByRole("link", { name: "Overview", exact: true })).toHaveAttribute("href", "/");
   const footer = page.locator("footer");
   await expect(footer.locator('a[href="/privacy"]')).toBeVisible();
   await expect(footer.locator('a[href="/terms"]')).toBeVisible();
