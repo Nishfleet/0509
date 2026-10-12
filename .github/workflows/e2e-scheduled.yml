@@ -32,7 +32,7 @@ on:
         options: [none, j12, signin, j8-hard, j8-soft, soak-report, backup-proof, jev-failures]
         default: none
       spec:
-        description: 'One spec or a filter to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts (0509 sign-up verdict, 2026-09-28)'
+        description: 'One spec file to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts, no flags (0509 sign-up verdict, 2026-09-28; 0509#7186)'
         type: string
         default: ''
 
@@ -44,9 +44,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  main-only:
+    name: main-only
+    # Every journey mints accounts, sends real mail or reads production with a
+    # Cloudflare token, so a dispatch runs one only from main; the jobs below
+    # skip on any other ref and this job makes that skip red, not a quiet
+    # green (0509#7186). The spec input stays open to any branch.
+    if: github.event_name == 'workflow_dispatch' && inputs.journey != 'none' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Refuse a journey dispatched from a branch
+        env:
+          JOURNEY: ${{ inputs.journey }}
+          REF: ${{ github.ref }}
+        run: |
+          echo "::error::journey=$JOURNEY dispatches from main only, not $REF"
+          exit 1
   j12:
     name: j12
-    if: github.event.schedule == '5 10 * * 3' || inputs.journey == 'j12'
+    if: github.event.schedule == '5 10 * * 3' || (inputs.journey == 'j12' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     environment: production-e2e
     # One live-AI job at a time: they share the account's Clef call rate (about 60
@@ -97,6 +114,12 @@ jobs:
           PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      - name: Print what the page showed when it failed
+        if: failure()
+        run: |
+          shopt -s globstar nullglob
+          files=(test-results/**/error-context.md)
+          if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
   spec:
     name: spec
     # No trace is uploaded: the repo is public and a trace can hold the Access
@@ -115,6 +138,13 @@ jobs:
       cancel-in-progress: false
     timeout-minutes: 30
     steps:
+      - name: Accept one spec file and no flags
+        # The spec input is the one dispatch allowed from any branch, so it runs
+        # one named file and nothing Playwright would read as an option (0509#7186).
+        env:
+          SPEC: ${{ inputs.spec }}
+        run: |
+          [[ "$SPEC" =~ ^e2e/[A-Za-z0-9._-]+\.spec\.ts$ ]] || { echo "::error::spec must be one file, e2e/<name>.spec.ts, with no flags"; exit 1; }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -153,14 +183,17 @@ jobs:
         # Playwright writes the page snapshot next to each failure; printing it
         # is how a failure is read, since nothing is uploaded.
         if: failure()
-        run: tail -n +1 test-results/*/error-context.md
+        run: |
+          shopt -s globstar nullglob
+          files=(test-results/**/error-context.md)
+          if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
   signin:
     name: signin
     # One sign-in, one real email against the Email Service daily quota
     # (0509#6033, 0509#6093): no retries, no loop, no other spec. No trace is
     # uploaded: the repo is public and a trace can hold the Access cookie
     # (0509#5999); a failure is read from the job log.
-    if: github.event.schedule == '17 4 * * *' || (inputs.journey == 'signin' && inputs.spec == '')
+    if: github.event.schedule == '17 4 * * *' || (inputs.journey == 'signin' && inputs.spec == '' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     environment: production-e2e
     # One live-AI job at a time: they share the account's Clef call rate (about 60
@@ -200,7 +233,10 @@ jobs:
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
       - name: Print what the page showed when it failed
         if: failure()
-        run: tail -n +1 test-results/*/error-context.md
+        run: |
+          shopt -s globstar nullglob
+          files=(test-results/**/error-context.md)
+          if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
   j8:
     name: j8
     # One break of j8-hard.fixture.0509.in or j8-soft.fixture.0509.in per dispatch, journey j8-hard or j8-soft,
@@ -212,7 +248,7 @@ jobs:
     # public and a trace can hold the Access cookie (0509#5999); a failure is
     # read from the job log. 350 minutes is the most a hosted job may run under
     # the 6 hour cap.
-    if: startsWith(inputs.journey, 'j8-') && inputs.spec == ''
+    if: startsWith(inputs.journey, 'j8-') && inputs.spec == '' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production-e2e
     timeout-minutes: 350
@@ -255,7 +291,10 @@ jobs:
           FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
       - name: Print what the page showed when it failed
         if: failure()
-        run: tail -n +1 test-results/*/error-context.md
+        run: |
+          shopt -s globstar nullglob
+          files=(test-results/**/error-context.md)
+          if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
   production-sha:
     name: production-sha
     # The suite runs the code of the deploy that is live, not main's head; no
@@ -352,6 +391,12 @@ jobs:
           PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      - name: Print what the page showed when it failed
+        if: failure()
+        run: |
+          shopt -s globstar nullglob
+          files=(test-results/**/error-context.md)
+          if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
   suite:
     name: e2e-production
     needs: [production-sha, suite-shard]
@@ -400,7 +445,7 @@ jobs:
     name: backup-proof
     # Reads the snapshot-backup instances of the last 48 h and describes each
     # cron-started one (0509#5982, 0509#6289). Counts and R2 cursors only, no rows.
-    if: inputs.journey == 'backup-proof' && inputs.spec == ''
+    if: inputs.journey == 'backup-proof' && inputs.spec == '' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production-e2e
     timeout-minutes: 10
@@ -431,7 +476,7 @@ jobs:
     # counts by kind and code over 24 h, then the latest 20 rows. Rows hold a
     # kind, a 4-digit code, a 160-char redacted message and the question ids.
     # Dispatch: `journey=jev-failures`, then read the job log.
-    if: inputs.journey == 'jev-failures' && inputs.spec == ''
+    if: inputs.journey == 'jev-failures' && inputs.spec == '' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production-e2e
     timeout-minutes: 10
@@ -458,10 +503,11 @@ jobs:
   soak-report:
     name: soak-report
     # Reads counts only, never rows: no email, report text or other customer
-    # data reaches the log or the comment. Every query is a SELECT. The
-    # healthchecks.io pings and the Sentry issue count are not read here: no
-    # read credential for either is a repository secret, and the comment says so.
-    if: github.event.schedule == '30 6 * * *' || (inputs.journey == 'soak-report' && inputs.spec == '')
+    # data reaches the log or the comment. Every query is a SELECT. New
+    # Sentry crashes are GitHub issues Sentry filed in the last 24 h (author
+    # app/sentry, 0509#7076). Uptime is healthchecks.io Management API v3
+    # with the read-only HEALTHCHECKS_API_KEY repository secret.
+    if: github.event.schedule == '30 6 * * *' || (inputs.journey == 'soak-report' && inputs.spec == '' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     environment: production-e2e
     timeout-minutes: 10
@@ -483,6 +529,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+          HEALTHCHECKS_API_KEY: ${{ secrets.HEALTHCHECKS_API_KEY }}
         run: |
           set -euo pipefail
           since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
@@ -539,6 +586,27 @@ jobs:
           feed_bad=$(jq -r '[.[] | select(.watches > 0 and .snapshots == 0)] | length' <<< "$feeds")
           feed_posts=$(d1 "SELECT COUNT(*) AS n FROM signal WHERE kind = 'content' AND observed_at >= '$since'$scope" | jq -r '.[0].n')
           [ "$feed_bad" -eq 0 ] || failed=1
+          sentry_day=$(date -u -d '24 hours ago' +%Y-%m-%d)
+          sentry_json=$(gh issue list --state all --search "author:app/sentry created:>=$sentry_day" --limit 100 --json number,createdAt) || sentry_json=null
+          sentry_n=$(jq -r --arg since "$since" 'if type == "array" then [.[] | select(.createdAt >= $since)] | length else "unreadable" end' <<< "$sentry_json") || sentry_n=unreadable
+          [ "$sentry_n" = "0" ] || failed=1
+          hc_json=null
+          if [ -n "${HEALTHCHECKS_API_KEY:-}" ]; then
+            hc_json=$(printf 'X-Api-Key: %s\n' "$HEALTHCHECKS_API_KEY" | curl -sS --fail-with-body --max-time 30 -H @- https://healthchecks.io/api/v3/checks/) || hc_json=null
+          fi
+          hc_up=$(jq -r '.checks | if type == "array" then map(select(.status == "up")) | length else 0 end' <<< "$hc_json") || hc_up=0
+          hc_bad=$(jq -r '.checks | if type == "array" then map(select(.status != "paused" and .status != "up")) | length else 1 end' <<< "$hc_json") || hc_bad=1
+          hc_lines=$(jq -r '.checks | if type == "array" and length > 0 then map(select(.status != "paused") | "\(.name) \(.status)") | join("; ") else empty end' <<< "$hc_json") || hc_lines=""
+          if [ -z "${HEALTHCHECKS_API_KEY:-}" ]; then
+            hc_line="unreadable, HEALTHCHECKS_API_KEY repository secret is empty"
+          elif [ "$(jq -r '.checks | type' <<< "$hc_json" 2>/dev/null)" != "array" ]; then
+            hc_line="unreadable"
+          elif [ -z "$hc_lines" ]; then
+            hc_line="no unpaused checks"
+          else
+            hc_line="$hc_lines"
+          fi
+          [ "$hc_up" -gt 0 ] && [ "$hc_bad" -eq 0 ] || failed=1
           {
             echo "Soak report for the 24 hours before $(date -u +%Y-%m-%dT%H:%MZ) (send counts: $label)."
             echo
@@ -554,8 +622,8 @@ jobs:
             echo "- user table (0509#5731): $users"
             echo "- pricing-page watches, soak brands: $pricing_lines$([ "$pricing_bad" -eq 0 ] && [ "$pricing_any" -gt 0 ] || echo " (FAIL, $pricing_any brands have a judged pricing page and $pricing_bad of those lack a watch or a snapshot)")"
             echo "- blog and changelog feeds, soak brands: $feed_lines; $feed_posts new posts filed in the last 24 h$([ "$feed_bad" -eq 0 ] || echo " (FAIL, $feed_bad watched feeds were not read)")"
-            echo "- healthchecks.io dead-man and site-sweep pings: not read, no healthchecks.io read key is a repository secret"
-            echo "- new Sentry issues: not read, no Sentry auth token is a repository secret"
+            echo "- healthchecks.io dead-man and site-sweep pings: $hc_line$([ "$hc_up" -gt 0 ] && [ "$hc_bad" -eq 0 ] || echo " (FAIL)")"
+            echo "- new Sentry issues in the last 24 h: $sentry_n (author app/sentry)$([ "$sentry_n" = "0" ] || echo " (FAIL)")"
           } > comment.md
           gh issue comment 4730 --body-file comment.md
           [ "$failed" -eq 0 ] || { echo "An engine check failed, see the issue comment"; exit 1; }

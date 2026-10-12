@@ -1,18 +1,27 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { SITE_SWEEP_UTC_HOUR } from "../app/lib/cadence";
 import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
-import { decodedBodies, InboxReadError, readRawMessage, requireInboxToken, signInWithMagicLink } from "./inbox";
+import {
+  confirmPublicSubject,
+  decodedBodies,
+  InboxReadError,
+  readRawMessage,
+  requireInboxToken,
+  signInWithMagicLink,
+} from "./inbox";
 
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "J8 needs the production fixture Worker on j8-hard.fixture.0509.in and j8-soft.fixture.0509.in, the hourly own-site check and the mail inbox; the preview lane has none of them",
 );
 
-// Soft mode needs a good baseline: a nightly sweep only reports a change against
-// the page it read the night before. Dispatch j8-soft about 00:30 UTC, on an
-// account that already went through one 02:00 UTC sweep with the fixture off, so
-// the break lands before the next sweep (run 36952916004 broke a fresh account
-// minutes before its first sweep, which then took the broken page as its baseline).
+// Soft mode needs a good baseline: a sweep only reports a change against the
+// page the previous sweep read. Dispatch j8-soft about 90 minutes before the
+// sweep (SITE_SWEEP_UTC_HOUR in app/lib/cadence.ts), on an
+// account that already went through one sweep with the fixture off, so the break
+// lands before the next sweep (run 36952916004 broke a fresh account minutes
+// before its first sweep, which then took the broken page as its baseline).
 const POLL_INTERVAL_MS = 30_000;
 const TICK_WAIT_MS = 75 * 60_000;
 const SWEEP_WAIT_MS = 90 * 60_000;
@@ -72,12 +81,11 @@ async function latestMessageId(to: string, token: string): Promise<string | null
   }
 }
 
-const SWEEP_HOUR_UTC = 2;
 const SWEEP_GRACE_MS = 45 * 60_000;
 
 function sweepDeadlineMs(from: Date, minimumMs: number): number {
   const sweep = new Date(from);
-  sweep.setUTCHours(SWEEP_HOUR_UTC, 0, 0, 0);
+  sweep.setUTCHours(SITE_SWEEP_UTC_HOUR, 0, 0, 0);
   if (sweep.getTime() <= from.getTime()) sweep.setUTCDate(sweep.getUTCDate() + 1);
   return Math.max(minimumMs, sweep.getTime() + SWEEP_GRACE_MS - from.getTime());
 }
@@ -141,13 +149,7 @@ async function signInAndWatchFixture(
     const input = page.getByRole("textbox", { name: /your website address or social username/i });
     await input.fill(host);
     await input.press("Enter");
-    const business = page.getByRole("button", { name: "Yes, a business or creator" });
-    await expect(async () => {
-      if (await business.isVisible()) await business.click();
-      await expect(page).toHaveURL(new RegExp(`/onboarding/identity\\?subject=${host.replaceAll(".", "\\.")}$`), {
-        timeout: 3_000,
-      });
-    }).toPass({ timeout: 30_000 });
+    await confirmPublicSubject(page, host);
     await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
     await page.getByRole("button", { name: "edit name" }).click();

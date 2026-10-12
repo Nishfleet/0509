@@ -29,6 +29,7 @@ import {
 import { parseDiffHunks, parseSiteChangePayload, type SiteChangePayload } from "../site-change";
 import { daysBefore } from "../site-changes.server";
 import { computeBreakageEvidence, type BreakageEvidence } from "./breakage-evidence";
+import { openLateBreakage } from "./late-breakage.server";
 
 const CHANGE_VERDICT_ROWS_PER_BRAND_PER_DAY = 6;
 
@@ -366,6 +367,10 @@ async function rejudgeStoredChange(row: UnjudgedChange): Promise<boolean> {
   const input = await judgeInputFromStored(row);
   if (input === null) return false;
   const judged = await judgeChange(input);
+  const band = judged.selfBreakage?.band;
+  if (row.entityRole === "self" && (band === "alert" || band === "check")) {
+    await openLateBreakage(row, band, new Date());
+  }
   if (judged.verdictIds.length > 0) {
     await linkVerdictsStatement({
       signalId: row.id,

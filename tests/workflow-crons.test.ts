@@ -104,6 +104,12 @@ describe("startScheduledWorkflow", () => {
     ]);
   });
 
+  it("leaves a daily slot less than five minutes old to its own cron trigger, so a late tick cannot report it as missed", async () => {
+    const { createBatch, env } = fakeEnv();
+    await startMissedDailyWorkflows(env, Date.UTC(2026, 9, 10, 1, 0, 59));
+    expect(createBatch.mock.calls.flat().flat()).not.toContainEqual({ id: "feed-sweep-2026-10-10" });
+  });
+
   it("never starts a sweep whose refresh has already gone out, so a late catch-up cannot become the overrun", async () => {
     const { createBatch, env } = fakeEnv();
     await startMissedDailyWorkflows(env, Date.UTC(2026, 9, 2, 3, 5, 0));

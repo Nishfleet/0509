@@ -1,11 +1,12 @@
 import { env } from "cloudflare:test";
 import { data } from "react-router";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAuth, createAuthForRequest } from "../../app/lib/auth.server";
 import { action as loginAction } from "../../app/routes/login";
 
 const ORIGIN = "http://localhost:8787";
+const SITEVERIFY = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const PASSING_TOKEN = "XXXX.DUMMY.TOKEN.XXXX";
 
 function authEnv(sent: string[], secret = "1x0000000000000000000000000000000AA") {
@@ -35,7 +36,25 @@ function magicLinkPost(token?: string): Request {
   });
 }
 
+function stubSiteverify() {
+  const realFetch = globalThis.fetch;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) !== SITEVERIFY) return realFetch(input, init);
+      const { secret } = JSON.parse(String(init?.body)) as { secret: string };
+      return Response.json({ success: secret.startsWith("1x") });
+    }),
+  );
+}
+
 describe("magic-link captcha", () => {
+  beforeEach(stubSiteverify);
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("refuses a post with no turnstile token", async () => {
     const response = await createAuth(authEnv([])).handler(magicLinkPost());
     expect(response.status).toBe(400);
