@@ -53,10 +53,12 @@ function brandsBlock(payload: BriefPayload): ReactElement {
         </Fragment>
       ) : (
         payload.brands.map((brand) => (
-          <p key={brand.entity_id} className={LINE}>
-            {brand.name}: {rankText(brand.rank)}
-            {brand.biggest_move === null ? null : ` ${brand.biggest_move}`}
-          </p>
+          <div key={brand.entity_id} className={LINE}>
+            <p>
+              {brand.name}: {rankText(brand.rank)}
+            </p>
+            {brand.biggest_move === null ? null : <p className="text-ink-soft">{brand.biggest_move}</p>}
+          </div>
         ))
       )}
     </section>

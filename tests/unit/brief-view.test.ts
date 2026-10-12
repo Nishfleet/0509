@@ -116,7 +116,7 @@ describe("the brief view", () => {
     expect(html).toContain("You&#x27;re #2 of 6 this week");
     expect(html).toContain("12 mentions · 3 site changes<");
     expect(html).toContain("cart 500s on https://drylight.example/, still broken");
-    expect(html).toContain("Oaks: #1 Oaks shipped a 2026 pricing page");
+    expect(html).toMatch(/<p>Oaks: #1<\/p><p class="text-ink-soft">Oaks shipped a 2026 pricing page<\/p>/);
     expect(html).toContain("Drylight: unranked");
   });
 
