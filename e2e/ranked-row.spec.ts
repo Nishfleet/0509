@@ -109,6 +109,9 @@ test("a row's source pills read live, degraded and none for the same week @smoke
   await expect(pills.filter({ hasText: "News mentions · 1" })).toHaveAttribute("data-state", "live");
   await expect(pills.filter({ hasText: "Hacker News mentions" })).toHaveAttribute("data-state", "degraded");
   await expect(pills.filter({ hasText: "YouTube mentions · nothing new" })).toHaveAttribute("data-state", "none");
+  const quiet = rankedRow(page, "Casetta").locator('[data-slot="row-pills"] li');
+  await expect(quiet.filter({ hasText: "Nothing new this week" })).toHaveAttribute("data-state", "none");
+  await expect(quiet.filter({ hasText: "· nothing new" })).toHaveCount(0);
 
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
