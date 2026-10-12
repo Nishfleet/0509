@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { gzipAccepted, withCompressedDocument } from "../app/lib/document-compression.server";
 
