@@ -26,6 +26,10 @@ describe("the API reference page", () => {
     expect(page()).toContain(`curl -H &quot;Authorization: Bearer &lt;key&gt;&quot; ${ORIGIN}/api/v1/brief`);
   });
 
+  it("shows a Claude Code line that adds the MCP server by its address", () => {
+    expect(page()).toContain(`claude mcp add --transport http five-to-nine ${ORIGIN}${MCP_PATH}`);
+  });
+
   it("renders every path key of the OpenAPI document", () => {
     const document = openApiDocument(ORIGIN);
     const html = page();
