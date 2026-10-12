@@ -88,5 +88,7 @@ describe("an Alerts chip with no rows of its own (0509#6617)", () => {
 
     expect(html).toContain("Nothing yet. When a competitor changes its website");
     expect(html).not.toContain("No hiring alerts yet.");
+    expect(html).toContain('href="/app/competitors"');
+    expect(html).toContain("See who you are watching");
   });
 });
