@@ -61,6 +61,20 @@ Cause: still not proven. "Flake" is not the cause and neither is a slow runner (
 
 What changed: the reporter now has a watchdog. If no file is queued, started or finished for 90 seconds it prints `[stalled]` lines with the files still unfinished, what the vitest process still holds open (`process.getActiveResourcesInfo()`) and the full process tree. The next stalled shard names the process that is holding it, and that settles which `dispose` step is stuck.
 
+## 2026-10-12: cause found and reproduced, `identity/field-edit` leaked a Miniflare
+
+The reporter's watchdog caught the stall on run 38250151409 (job 114814384168, #7365, dump at 12:41:41Z). No test was failing. `vitest`, `esbuild` and one `workerd` were still alive.
+
+- The surviving `workerd` was started within 0.3 seconds of `tests/integration/identity/field-edit.integration.test.ts` being queued. The 10-11 capture also had exactly one survivor.
+- At the end of that file three `outputGateBroken` exceptions fired 2 ms after its pass line.
+- `field-edit` calls `confirmCard` in tests that never observe the tail Workflow. The tail Workflow calls `startDiscovery`, which starts a real `DISCOVERY` instance. With Jev unavailable in tests, Discovery throws a `NonRetryableError` and the engine aborts the instance while the file is tearing down. A Workflow instance still running when the pool calls `Miniflare.dispose()` keeps the runtime mutex busy, and `dispose()` waits on it, so the pool never finishes.
+
+Reproduced locally by running only that file 12 times, each under four busy CPU loops with a 70 second limit. A healthy run takes 41 to 46 seconds. 4 of 12 runs hit the limit, and each left one `workerd` alive. After the fix, 8 of 8 runs finished in 42 to 45 seconds with no `workerd` left. Eight clean runs is evidence, not proof: the failure rate before the fix was one in three.
+
+Fix: `field-edit` replaces the `DISCOVERY` binding with an empty `createBatch` for each test, the same way `discovery/start-eligibility` does. The test still checks everything it did before, because it asserts on field-edit rows, not on Discovery. No test is skipped or weakened.
+
+What stops a repeat: any test that starts the tail Workflow without observing it can leak the same way. The watchdog stays, so the next stall names the process and file. A candidate for a lint rule is a workers test that calls `confirmCard` without `introspectWorkflow(env.IDENTITY_TAIL)` or a stubbed `DISCOVERY`; not added here.
+
 ## How it was detected
 
 `ci-ok` failed on the merge_group run with `vitest-shard (2)` cancelled.
