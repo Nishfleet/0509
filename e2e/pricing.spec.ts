@@ -21,8 +21,11 @@ test("the pricing page states every plan and its monthly price @smoke", async ({
     await expect(card.getByRole("heading", { level: 3, name: plan.name })).toBeVisible();
     await expect(card).toContainText(`€${String(plan.monthlyPriceEur)}/month`);
   }
-  const cardOf = (id: string) =>
-    plans.filter({ has: page.getByRole("heading", { level: 3, name: PLANS.find((plan) => plan.id === id)?.name }) });
+  const cardOf = (id: string) => {
+    const plan = PLANS.find((candidate) => candidate.id === id);
+    if (!plan) throw new Error(`plan ${id} is not in PLANS`);
+    return plans.filter({ has: page.getByRole("heading", { level: 3, name: plan.name, exact: true }) });
+  };
   await expect(cardOf("starter")).toContainText("Everything in Scout, plus");
   await expect(cardOf("agency")).toContainText("Everything in Starter, plus");
   await expect(cardOf("scout")).not.toContainText("Everything in");
