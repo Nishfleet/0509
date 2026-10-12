@@ -1,15 +1,20 @@
 import { createExecutionContext, env as workerdEnv, waitOnExecutionContext } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { computeBreakageEvidence } from "../../app/lib/site/breakage-evidence";
+import { extractPageText } from "../../app/lib/site/extract-text";
 import worker from "../../workers/fixture-site";
+import { FIXTURE_HEALTHY_TEXT, FIXTURE_SOFT_TEXT } from "../fixtures/fixture-page-texts";
 
 /**
  * The J8 fixture's whole reason to exist, pinned in a merge gate: the healthy
  * page carries a pricing section with real price tokens, the hard break is a
- * 500, the soft break is a 200 with that section gone, and the flip back to
- * healthy is a real repair (0509#4046; docs/engines/delivery.md P7.5). The soft
- * case is the one D3s actually exercises, so its assertion is on the pricing
- * markup, not on a status code — a 200 that lost its prices is the regression.
+ * 500, the soft break is a 200 whose visible content is entirely gone, and the
+ * flip back to healthy is a real repair (0509#4046; docs/engines/delivery.md
+ * P7.5). The soft case is the one D3s actually exercises, so its assertion runs
+ * the page through the production extraction and evidence functions and pins
+ * the empty-page shape — a 200 that still reads as a working page is the
+ * regression the nightly verdict must not see (0509#7340).
  *
  * Real workerd against a real local SQLite Durable Object, the same binding kinds
  * production has: a broken gate or a break state that does not survive the
@@ -85,6 +90,8 @@ describe("0509-fixture-site", () => {
   beforeEach(async () => {
     await state().put("break-mode", "off");
     await state().put("bot-wall", "off");
+    await state().put("price-variant", "base");
+    await state().delete("price-flipped-at");
   });
 
   it("serves the healthy page with its pricing section and price tokens", async () => {
@@ -99,6 +106,7 @@ describe("0509-fixture-site", () => {
     expect(pricing).toContain("₹499");
     expect(pricing).toContain("₹2,499");
     expect(html).toMatch(/href="https:\/\/0509\.io\/checkout\?plan=pro"/);
+    expect((await extractPageText(html)).text).toBe(FIXTURE_HEALTHY_TEXT);
   });
 
   it("flips to a hard break and answers 500", async () => {
@@ -124,7 +132,7 @@ describe("0509-fixture-site", () => {
     expect(await state().get("break-mode")).toBe("hard");
   });
 
-  it("flips to a soft break and answers 200 with the pricing section absent", async () => {
+  it("flips to a soft break: a 200 whose visible content is all gone, the shape D3s must call broken", async () => {
     const ctx = createExecutionContext();
     await callFetch(
       new Request("https://fixture.0509.in/__break?mode=soft", {
@@ -140,9 +148,19 @@ describe("0509-fixture-site", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(readPricing(html)).toBeNull();
-    // The headline survives, which is what makes this a content regression the
-    // diff sees rather than a dead page.
-    expect(html).toContain("<h1>");
+    // The headline goes with the rest (0509#7340): a page that still answers
+    // with its hero line kept reading as a deliberate redesign, and the
+    // nightly verdict fell into the check band. Only the hidden mode and price
+    // markers survive, so the e2e spec's served-mode probe keeps working.
+    expect(html).not.toContain("<h1>");
+    expect(html).toContain('data-mode="soft"');
+    const broken = await extractPageText(html);
+    expect(broken.text).toBe(FIXTURE_SOFT_TEXT);
+    // The evidence the judge actually reads, computed by production's own
+    // function: a 200 whose text collapsed below half with every price gone.
+    expect(
+      computeBreakageEvidence({ status: 200, beforeText: FIXTURE_HEALTHY_TEXT, afterText: broken.text }),
+    ).toMatchObject({ httpError: false, textHalved: true, pricesVanished: true });
   });
 
   it("repairs back to the healthy page with the pricing section restored", async () => {

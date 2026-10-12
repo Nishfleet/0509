@@ -6,27 +6,29 @@ import { createAuth } from "../../app/lib/auth.server";
 const ORIGIN = "http://localhost:8787";
 
 function authSending(sent: string[]) {
-  return createAuth({
-    DB: env.DB,
-    EMAIL: {
-      send: async (message: EmailMessage | EmailMessageBuilder) => {
-        sent.push((message as { text?: string }).text ?? "");
-        return { messageId: "test" };
+  return createAuth(
+    {
+      DB: env.DB,
+      EMAIL: {
+        send: async (message: EmailMessage | EmailMessageBuilder) => {
+          sent.push((message as { text?: string }).text ?? "");
+          return { messageId: "test" };
+        },
       },
+      SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
+      SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
+      TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
+      BETTER_AUTH_SECRET: "integration-test-secret-integration-test-secret",
+      BETTER_AUTH_URL: ORIGIN,
     },
-    SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
-    SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
-    TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
-    BETTER_AUTH_SECRET: "integration-test-secret-integration-test-secret",
-    BETTER_AUTH_URL: ORIGIN,
-  });
+    { captcha: false },
+  );
 }
 
 function requestLink(auth: ReturnType<typeof createAuth>, email: string, ip: string | null): Promise<Response> {
   const headers: Record<string, string> = {
     "content-type": "application/json",
     origin: ORIGIN,
-    "x-captcha-response": "XXXX.DUMMY.TOKEN.XXXX",
   };
   if (ip !== null) headers["cf-connecting-ip"] = ip;
   return auth.handler(

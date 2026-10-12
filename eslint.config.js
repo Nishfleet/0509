@@ -1005,6 +1005,10 @@ export default tseslint.config(
     rules: {
       "@typescript-eslint/consistent-type-imports": ["error", { fixStyle: "separate-type-imports" }],
       "@typescript-eslint/no-unnecessary-condition": "off",
+      // A union switch with no default and a missing member returns undefined at
+      // runtime; TypeScript does not fail it, so the gap only shows as a
+      // wrong-shape value later. Source: 0509#7085 (audit #7077 item 4).
+      "@typescript-eslint/switch-exhaustiveness-check": "error",
       "@typescript-eslint/no-unused-vars": [
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
@@ -1194,12 +1198,10 @@ export default tseslint.config(
   },
 
   {
-    // The browser paved path, where the bounded calls live by definition, and
-    // the retained ads transport (J10, #3974), which is dropped-feature code
-    // that is not extended. The array restates the shared list because a later
-    // matching block's no-restricted-syntax entry replaces the earlier one
-    // wholesale. 0509#7296.
-    files: ["app/lib/site/browser-budget.server.ts", "app/lib/ads/transport-browser.ts"],
+    // The browser paved path, where the bounded calls live by definition. The
+    // array restates the shared list because a later matching block's
+    // no-restricted-syntax entry replaces the earlier one wholesale. 0509#7296.
+    files: ["app/lib/site/browser-budget.server.ts"],
     rules: {
       "no-restricted-syntax": [
         "error",
