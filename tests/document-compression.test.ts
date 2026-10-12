@@ -40,7 +40,7 @@ function documentRequest(acceptEncoding: string | null = "gzip", method = "GET")
 
 function documentResponse(body = "<html><body>privacy</body></html>"): Response {
   return new Response(body, {
-    status: 207,
+    status: 206,
     statusText: "Partial Content",
     headers: { "Content-Type": "text/html", "Content-Length": String(body.length), "Cache-Control": "no-transform" },
   });
@@ -98,7 +98,7 @@ describe("withCompressedDocument", () => {
 
   it("keeps status, statusText and the headers the document already carried", () => {
     const compressed = withCompressedDocument(documentRequest(), documentResponse());
-    expect(compressed.status).toBe(207);
+    expect(compressed.status).toBe(206);
     expect(compressed.statusText).toBe("Partial Content");
     expect(compressed.headers.get("Cache-Control")).toBe("no-transform");
     expect(compressed.headers.get("Content-Type")).toBe("text/html");
@@ -203,6 +203,13 @@ describe("withCompressedDocument", () => {
  * embeds the per-request CSP nonce. Compressing it would give a compressed-size
  * side channel that tracks bytes the attacker supplied, the BREACH shape. The
  * guard is one status check, so the rest of the negotiation above is untouched.
+ *
+ * The property the guard rests on, "a document that echoes request input is
+ * never compressed", is pinned from both sides: this block for the 404, and
+ * tests/error-page.test.ts, which renders the other ErrorBoundary branch and
+ * asserts the requested pathname and the upstream message are absent from it.
+ * A 200 route that starts echoing request input would need its own pin here,
+ * because a status check cannot see it.
  */
 describe("withCompressedDocument on the 404 document", () => {
   it("ships the 404 body plain even when the client accepts gzip", async () => {
