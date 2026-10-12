@@ -29,6 +29,7 @@ test("a customer who removes every competitor still gets working pages and a way
   for (const path of ["/app", "/app/brief", "/app/alerts"]) {
     const response = await page.goto(path);
     expect(response?.status(), path).toBe(200);
+    await expect(page, path).toHaveURL(new RegExp(`${path}$`));
     await expect(page.getByRole("main"), path).toBeVisible();
   }
 });
