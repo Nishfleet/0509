@@ -390,7 +390,7 @@ export async function settleSignInWidget(page: Page): Promise<void> {
     await expect(field).toHaveCount(1, { timeout: 30_000 });
     return;
   }
-  await expect(field).toHaveValue(/\S/);
+  await expect(field).toHaveValue(/\S/, { timeout: 30_000 });
 }
 
 export async function turnstileToken(page: Page): Promise<string> {
