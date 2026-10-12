@@ -127,11 +127,6 @@ jobs:
     if: inputs.spec != ''
     runs-on: ubuntu-latest
     environment: production-e2e
-    # One live-AI job at a time: they share the account's Clef call rate (about 60
-    # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
-    # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
-    # every workflow in the repo. One run waits per group; a newer waiting run
-    # replaces an older one (actionlint 1.7.12 rejects `queue: max`).
     # See the live-ai note on the j12 job.
     concurrency:
       group: live-ai
@@ -196,11 +191,6 @@ jobs:
     if: github.event.schedule == '17 4 * * *' || (inputs.journey == 'signin' && inputs.spec == '' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     environment: production-e2e
-    # One live-AI job at a time: they share the account's Clef call rate (about 60
-    # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
-    # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
-    # every workflow in the repo. One run waits per group; a newer waiting run
-    # replaces an older one (actionlint 1.7.12 rejects `queue: max`).
     # See the live-ai note on the j12 job.
     concurrency:
       group: live-ai
@@ -333,11 +323,6 @@ jobs:
     if: github.event.schedule == '40 7 * * 0'
     runs-on: ubuntu-latest
     environment: production-e2e
-    # One live-AI job at a time: they share the account's Clef call rate (about 60
-    # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
-    # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
-    # every workflow in the repo. One run waits per group; a newer waiting run
-    # replaces an older one (actionlint 1.7.12 rejects `queue: max`).
     # See the live-ai note on the j12 job.
     concurrency:
       group: live-ai
