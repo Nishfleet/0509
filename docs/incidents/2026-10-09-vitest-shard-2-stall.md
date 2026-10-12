@@ -44,6 +44,23 @@ The four gaps below are why the first stall could not be read. Four things are m
 
 The next stall needs a different answer. "Flake" is not the cause; the cause is unknown because the evidence is not collected.
 
+## 2026-10-11: the stall is a shutdown hang after every file passed
+
+Merge-queue run 38112796284 (the #7330 branch, 04:49Z) had the hermetic Turnstile change and the `[run-end]` line on `main`, and `vitest-shard (2)` still stalled. Read in full (3664 lines):
+
+- All 54 files in the shard were queued, started and printed a pass line. None failed, none was left unfinished. The last pass line is 04:55:19Z (`discovery/start-twice` and `identity/probe-limit`, the two smallest files, run as a pair).
+- Then 7 minutes 15 seconds of silence until the 12 minute cap cancelled the job at 05:02:34Z. Healthy shards print vitest's `Test Files` summary and the `[run-end]` line within a second of their last pass line. This one printed neither, so vitest never reached the end of the run even though no test was still running.
+- Cleanup killed exactly one `workerd`. Every healthy run leaves none. So one Miniflare was not disposed when the run stalled.
+- Each workers-project file boots its own Miniflare (about 9 seconds) and the pool disposes it when the file ends (`CloudflarePoolWorker.stop()` calls `mf.dispose()`, about 1.2 seconds in the log). The last pair's dispose is where the log stops.
+- The hang is not in Turnstile and not in a test body. The earlier guess that `start-twice` leaves a Workflow running is not supported either: it is the last file of every stalled shard only because files run smallest last.
+- Not reproduced: a full local run of the same shard (54 files, 5 minutes, exit 0, `[run-end]` printed), 5 runs of the 17 discovery files, and 8 runs of the last pair under six busy CPU loops each all ended cleanly with no `workerd` left.
+
+What the code says (miniflare 5.20260926.1-alpha, not proven to be the cause): `Miniflare.dispose()` first awaits `#waitForReady(true)`, which awaits the runtime mutex, and only then asks the runtime to stop `workerd`. A live `workerd` after the stall means dispose never got past that wait, or the runtime stop itself never returned.
+
+Cause: still not proven. "Flake" is not the cause and neither is a slow runner (the same files take 5 minutes locally).
+
+What changed: the reporter now has a watchdog. If no file is queued, started or finished for 90 seconds it prints `[stalled]` lines with the files still unfinished, what the vitest process still holds open (`process.getActiveResourcesInfo()`) and the full process tree. The next stalled shard names the process that is holding it, and that settles which `dispose` step is stuck.
+
 ## How it was detected
 
 `ci-ok` failed on the merge_group run with `vitest-shard (2)` cancelled.
