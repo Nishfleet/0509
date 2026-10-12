@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigation, useSubmit } from "react-router";
 
 import { MAGIC_LINK_TTL_SECONDS } from "../lib/auth/magic-link-email";
+import { inboxLinkFor } from "../lib/inbox-link";
 import { cn } from "../lib/utils";
 import { Footer } from "./footer";
 import { TurnstileWidget, turnstileResponse } from "./turnstile-widget";
-import { Button } from "./ui/button";
+import { Button, buttonVariants } from "./ui/button";
 import { Wordmark } from "./wordmark";
 
 const RESEND_AFTER_SECONDS = 30;
@@ -44,10 +45,27 @@ export function SignInSent({
           once and expires in {minutes} minutes.
         </p>
         <TurnstileWidget siteKey={turnstileSiteKey} startOn="mount" />
+        <OpenInbox email={email} />
         <ResendControls email={email} onChangeEmail={onChangeEmail} />
       </main>
       <Footer />
     </div>
+  );
+}
+
+function OpenInbox({ email }: { email: string }) {
+  const inbox = inboxLinkFor(email);
+  if (inbox === null) return null;
+  return (
+    <a
+      href={inbox.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`Open ${inbox.name} (opens in a new tab)`}
+      className={cn(buttonVariants({ variant: "primary", size: "lg" }), "mt-8 self-start")}
+    >
+      Open {inbox.name}
+    </a>
   );
 }
 
@@ -61,7 +79,7 @@ function ResendControls({ email, onChangeEmail }: { email: string; onChangeEmail
         type="button"
         variant="secondary"
         size="lg"
-        className="mt-8 self-start"
+        className={cn("self-start", inboxLinkFor(email) === null ? "mt-8" : "mt-3")}
         disabled={wait > 0 || busy}
         onClick={() => void submit({ email, "cf-turnstile-response": turnstileResponse() }, { method: "post" })}
       >
