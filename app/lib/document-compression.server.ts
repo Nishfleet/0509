@@ -20,24 +20,24 @@ function withVaryAcceptEncoding(headers: Headers): Headers {
   return next;
 }
 
-function passthrough(response: Response, headers: Headers): Response {
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
-}
-
-export function withCompressedDocument(request: Request, response: Response): Response {
-  const headers = withVaryAcceptEncoding(response.headers);
-  if (headers.has("Content-Encoding")) return passthrough(response, headers);
-  if (request.method.toUpperCase() === "HEAD" || response.body === null) {
-    return new Response(null, { status: response.status, statusText: response.statusText, headers });
-  }
-  if (!gzipAccepted(request.headers.get("Accept-Encoding"))) return passthrough(response, headers);
-  headers.delete("Content-Length");
-  headers.set("Content-Encoding", "gzip");
-  const body = response.body.pipeThrough(new CompressionStream("gzip"));
+function copy(response: Response, headers: Headers, body: BodyInit | null): Response {
   return new Response(body, {
     status: response.status,
     statusText: response.statusText,
     headers,
     encodeBody: "manual",
   });
+}
+
+export function withCompressedDocument(request: Request, response: Response): Response {
+  const headers = withVaryAcceptEncoding(response.headers);
+  const body = response.body;
+  if (headers.has("Content-Encoding")) return copy(response, headers, body);
+  const gzip = body !== null && gzipAccepted(request.headers.get("Accept-Encoding"));
+  if (gzip) {
+    headers.delete("Content-Length");
+    headers.set("Content-Encoding", "gzip");
+  }
+  if (body === null || request.method.toUpperCase() === "HEAD") return copy(response, headers, null);
+  return copy(response, headers, gzip ? body.pipeThrough(new CompressionStream("gzip")) : body);
 }
