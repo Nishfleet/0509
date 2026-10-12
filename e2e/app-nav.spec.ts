@@ -1,11 +1,10 @@
 import { expect, test } from "@playwright/test";
 
 import { onboardedStatePath } from "../playwright.config";
-import { consoleFailures, watchConsole } from "./inbox";
+import { consoleFailures, isLocalLane, run, seedPreviewSession, watchConsole } from "./inbox";
 
-// The session comes from the `session` setup project's storageState (one
-// magic-link sign-in per run). The only test here is production-only, so the
-// missing local state file is never read.
+// Production reads the onboarded storageState; the preview lane has none, so
+// the beforeEach below signs in with a seeded session.
 test.use({
   storageState: async ({}, use, testInfo) => {
     await use(
@@ -16,16 +15,37 @@ test.use({
   },
 });
 
-// The signed-in nav walk, production only: its session comes from a magic-link
-// sign-in, which the preview Worker can neither send nor receive, so the guard
-// below skips the spec unless PLAYWRIGHT_TEST_BASE_URL points at a deployed
-// Worker (the `e2e-production` job after deploy). Its storageState is the
-// already-onboarded session that `e2e/onboarded.setup.ts` mints per lane, so
-// Home (`/app`) is a real page: each walk ends on Home, which waits for `/app$`.
-test.skip(
-  !process.env.PLAYWRIGHT_TEST_BASE_URL,
-  "the nav walk needs a real session; the local preview Worker can neither send nor receive email",
-);
+// The signed-in nav walk. Production uses the already-onboarded session that
+// `e2e/onboarded.setup.ts` mints per lane; the preview lane signs in with a
+// seeded session (`seedPreviewSession`), so every PR walks the nav too.
+test.beforeEach(async ({ page, baseURL }) => {
+  if (!isLocalLane()) return;
+  const { cookie } = await seedPreviewSession("nav", ({ db, suffix, userId }) => {
+    const stamp = "2026-10-12T00:00:00.000Z";
+    run(
+      db,
+      "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?, ?, ?, 'UTC', 1, 8, ?)",
+      `ws-${suffix}`,
+      "Nav Preview",
+      userId,
+      stamp,
+    );
+    run(
+      db,
+      "INSERT INTO entity (id, workspace_id, role, domain, name, created_at) VALUES (?, ?, 'self', ?, 'Nav Brand', ?)",
+      `ent-self-${suffix}`,
+      `ws-${suffix}`,
+      `nav-${suffix}.example`,
+      stamp,
+    );
+  });
+  await page.context().addCookies(
+    cookie.split("; ").map((pair) => {
+      const [name, ...value] = pair.split("=");
+      return { name, value: value.join("="), url: baseURL ?? "" };
+    }),
+  );
+});
 
 test("a signed-in user reaches the four places by tapping and by Tab+Enter", async ({ page }, testInfo) => {
   // Production lane: the nav walk overruns the 30 s
