@@ -133,5 +133,8 @@ test("the Competitors list says what a switch does once, not under every brand @
   const pausedBox = await note.boundingBox();
   expect(pausedBox?.width ?? 0, "a paused row still prints its date").toBeGreaterThan(1);
 
+  await toggle.click();
+  await expect(toggle).toBeChecked();
+
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
