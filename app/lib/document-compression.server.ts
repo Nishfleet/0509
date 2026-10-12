@@ -1,3 +1,5 @@
+const NOT_FOUND_STATUS = 404;
+
 export function gzipAccepted(acceptEncoding: string | null): boolean {
   const members = (acceptEncoding ?? "").split(",").map((member) => member.trim().toLowerCase());
   const gzip = members.find((member) => member === "gzip" || /^gzip\s*;/.test(member));
@@ -34,6 +36,7 @@ function copy(response: Response, headers: Headers, body: BodyInit | null): Resp
 export function withCompressedDocument(request: Request, response: Response): Response {
   const headers = withVaryAcceptEncoding(response.headers);
   const body = response.body;
+  if (response.status === NOT_FOUND_STATUS) return copy(response, headers, body);
   if (headers.has("Content-Encoding")) return copy(response, headers, body);
   const gzip = gzipAccepted(request.headers.get("Accept-Encoding"));
   if (gzip) {

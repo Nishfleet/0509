@@ -51,6 +51,20 @@ async function gunzip(response: Response): Promise<string> {
   return await new Response(response.body.pipeThrough(new DecompressionStream("gzip"))).text();
 }
 
+const NOT_FOUND_BODY = "<html><body>There is no page at /this-page-is-not-here.</body></html>";
+
+function notFoundResponse(): Response {
+  return new Response(NOT_FOUND_BODY, {
+    status: 404,
+    statusText: "Not Found",
+    headers: {
+      "Content-Type": "text/html",
+      "Content-Length": String(NOT_FOUND_BODY.length),
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
 describe("gzip acceptance", () => {
   it("accepts gzip in any position and case", () => {
     expect(gzipAccepted("gzip")).toBe(true);
@@ -178,5 +192,52 @@ describe("withCompressedDocument", () => {
     expect(copied.headers.get("Vary")).toBe("Accept-Encoding");
     expect(copied.headers.get("Content-Encoding")).toBeNull();
     expect(bodyless.headers.get("Vary")).toBeNull();
+  });
+});
+
+/*
+ * 0509#7328: the 404 document ships plain.
+ *
+ * The 404 is the one document whose bytes a requester chooses: the root
+ * ErrorBoundary puts the requested pathname in the page, and every document
+ * embeds the per-request CSP nonce. Compressing it would give a compressed-size
+ * side channel that tracks bytes the attacker supplied, the BREACH shape. The
+ * guard is one status check, so the rest of the negotiation above is untouched.
+ */
+describe("withCompressedDocument on the 404 document", () => {
+  it("ships the 404 body plain even when the client accepts gzip", async () => {
+    const shipped = withCompressedDocument(documentRequest("gzip"), notFoundResponse());
+    expect(shipped.status).toBe(404);
+    expect(shipped.statusText).toBe("Not Found");
+    expect(shipped.headers.get("Content-Encoding")).toBeNull();
+    expect(shipped.headers.get("Content-Length")).toBe(String(NOT_FOUND_BODY.length));
+    expect(await shipped.text()).toBe(NOT_FOUND_BODY);
+  });
+
+  it("still varies the 404 on Accept-Encoding, so a cache keys on the client's encoding", () => {
+    const response = notFoundResponse();
+    const shipped = withCompressedDocument(documentRequest("gzip"), response);
+    expect(shipped.headers.get("Vary")).toBe("Accept-Encoding");
+    expect(response.headers.get("Vary")).toBeNull();
+  });
+
+  it("never claims an encoding on the 404, whichever way the client negotiates", () => {
+    expect(
+      withCompressedDocument(documentRequest(null), notFoundResponse()).headers.get("Content-Encoding"),
+    ).toBeNull();
+    expect(
+      withCompressedDocument(documentRequest("gzip;q=0"), notFoundResponse()).headers.get("Content-Encoding"),
+    ).toBeNull();
+    expect(
+      withCompressedDocument(documentRequest("br"), notFoundResponse()).headers.get("Content-Encoding"),
+    ).toBeNull();
+  });
+
+  it("ships a body-less 404 with no encoding and no body", () => {
+    const head = withCompressedDocument(documentRequest("gzip", "HEAD"), new Response(null, { status: 404 }));
+    expect(head.status).toBe(404);
+    expect(head.headers.get("Content-Encoding")).toBeNull();
+    expect(head.headers.get("Vary")).toBe("Accept-Encoding");
+    expect(head.body).toBeNull();
   });
 });
