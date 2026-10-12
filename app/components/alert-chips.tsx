@@ -12,8 +12,9 @@ export function AlertChips({
   chip: AlertChipKey;
   counts: Record<AlertChipKey, number>;
   hiringCapped: boolean;
-}): ReactElement {
+}): ReactElement | null {
   const [, setSearchParams] = useSearchParams();
+  if (counts.all === 0 && chip === "all") return null;
   return (
     <ToggleGroup
       value={[chip]}
