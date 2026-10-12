@@ -23,7 +23,10 @@ describe("the postal address line in every email footer", () => {
 
   it("is set before the landing page is routed at /", () => {
     const routes = readFileSync("app/routes.ts", "utf8");
-    const launched = routes.includes('index("routes/landing.tsx")');
+    const launched =
+      /\bindex\(\s*["'`]routes\/landing\.tsx["'`]|\broute\(\s*["'`]\/?["'`]\s*,\s*["'`]routes\/landing\.tsx["'`]/.test(
+        routes,
+      );
     expect(
       !launched || POSTAL_ADDRESS !== null,
       "launch edit routes the landing at /: set POSTAL_ADDRESS in workers/delivery/email-shell.ts first",
