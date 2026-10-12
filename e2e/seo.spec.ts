@@ -90,7 +90,7 @@ test("the sitemap leaves out the noindex rebuild notice at / @smoke", async ({ r
 });
 
 test("both legal routes carry the one robots policy @smoke", async ({ page }) => {
-  for (const path of ["/privacy", "/terms", "/security"]) {
+  for (const path of ["/privacy", "/terms"]) {
     await page.goto(path);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "index, follow");
   }

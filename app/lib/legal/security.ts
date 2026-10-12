@@ -14,7 +14,7 @@ export const SECURITY: LegalDocument = {
       id: "short-version",
       heading: "The short version",
       list: [
-        "Everything runs on Cloudflare, and every connection is encrypted.",
+        "The app and its data run on Cloudflare, and every connection is encrypted.",
         "There are no passwords to steal: you sign in with a one-time email link or a passkey.",
         "Your agents and API keys can read your workspace and cannot change it.",
         "We watch brands and creators in public. We never read anything behind a login.",
