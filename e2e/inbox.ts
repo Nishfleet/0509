@@ -769,7 +769,7 @@ export function run(db: DatabaseSync, sql: string, ...values: (string | number |
   db.prepare(sql).run(...values);
 }
 
-export async function seedPreviewSession<T = void>(
+async function seedPreviewSessionOnce<T>(
   prefix: string,
   seed: (context: { db: DatabaseSync; suffix: string; userId: string }) => T,
   options: { livePlan: boolean } = { livePlan: true },
@@ -813,6 +813,23 @@ export async function seedPreviewSession<T = void>(
     return { cookie, seeded };
   } finally {
     db.close();
+  }
+}
+
+const SEED_ATTEMPTS = 4;
+
+export async function seedPreviewSession<T = void>(
+  prefix: string,
+  seed: (context: { db: DatabaseSync; suffix: string; userId: string }) => T,
+  options: { livePlan: boolean } = { livePlan: true },
+): Promise<{ cookie: string; seeded: T }> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await seedPreviewSessionOnce(prefix, seed, options);
+    } catch (error) {
+      const contended = unknownToMessage(error).includes("no session cookie");
+      if (!contended || attempt >= SEED_ATTEMPTS) throw error;
+    }
   }
 }
 
