@@ -176,6 +176,12 @@ describe("RankedRow", () => {
   it("keeps a none source's own chip beside a live one so the row explains itself", () => {
     const html = render(rowFor("ent_kindred", { ...PAYLOAD, checked: { ...PAYLOAD.checked, degraded_sources: [] } }));
     expect(html).not.toContain("Nothing new this week");
+    expect(html).toContain("· nothing new");
+  });
+
+  it("says nothing about the week when the workspace has no sources to check", () => {
+    const html = render({ ...rowFor("ent_casetta"), pills: [] });
+    expect(html).not.toContain("Nothing new this week");
   });
 
   it("prints a live source with its count", () => {
