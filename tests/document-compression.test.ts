@@ -24,6 +24,11 @@ import { gzipAccepted, withCompressedDocument } from "../app/lib/document-compre
  * `Content-Encoding: gzip`, which Node's Response does not do. That failure is
  * exercised end to end by e2e/privacy.spec.ts and e2e/terms.spec.ts in preview
  * mode, the repo's own proof for a change under app/.
+ *
+ * The negotiation contract is deliberately narrow, and pinned here: only an
+ * explicit `gzip` member counts — `*` and `x-gzip` do not — and a member whose
+ * weight is present but unparseable or outside 0 < q <= 1 is refused. Where the
+ * contract is unclear the wrapper sends plain, which every client decodes.
  */
 
 const DOCUMENT_URL = "https://0509.io/privacy";
@@ -57,9 +62,13 @@ describe("gzip acceptance", () => {
     expect(gzipAccepted("gzip ; q = 0.5")).toBe(true);
   });
 
-  it("refuses gzip with a zero q-value, other codings, and an absent header", () => {
+  it("refuses gzip with a zero, unparseable or out-of-range q-value, other codings, and an absent header", () => {
     expect(gzipAccepted("gzip;q=0")).toBe(false);
     expect(gzipAccepted("gzip ; q=0")).toBe(false);
+    expect(gzipAccepted("gzip;q=")).toBe(false);
+    expect(gzipAccepted("gzip;q=2")).toBe(false);
+    expect(gzipAccepted("gzip;q=0.5x")).toBe(false);
+    expect(gzipAccepted("x-gzip")).toBe(false);
     expect(gzipAccepted("deflate, br")).toBe(false);
     expect(gzipAccepted("*")).toBe(false);
     expect(gzipAccepted(null)).toBe(false);
@@ -144,22 +153,30 @@ describe("withCompressedDocument", () => {
     expect(refused.body).toBeNull();
   });
 
-  it("claims no encoding on a body-less response, which has nothing to encode", () => {
+  it("carries the negotiated encoding onto a body-less response, which has nothing to encode", () => {
     const bodyless = new Response(null, { status: 204, statusText: "No Content" });
     const copied = withCompressedDocument(documentRequest(), bodyless);
     expect(copied).not.toBe(bodyless);
+    expect(copied.status).toBe(204);
+    expect(copied.statusText).toBe("No Content");
     expect(copied.headers.get("Vary")).toBe("Accept-Encoding");
-    expect(copied.headers.get("Content-Encoding")).toBeNull();
+    expect(copied.headers.get("Content-Encoding")).toBe("gzip");
     expect(copied.headers.get("Content-Length")).toBeNull();
     expect(copied.body).toBeNull();
     expect(bodyless.headers.get("Vary")).toBeNull();
+    expect(bodyless.headers.get("Content-Encoding")).toBeNull();
+
+    const unclaimed = withCompressedDocument(documentRequest(null), new Response(null, { status: 204 }));
+    expect(unclaimed.headers.get("Content-Encoding")).toBeNull();
+    expect(unclaimed.headers.get("Vary")).toBe("Accept-Encoding");
   });
 
   it("returns a Vary-tagged copy on the body-less path, and leaves the original alone", () => {
     const bodyless = new Response(null, { status: 200 });
-    const copied = withCompressedDocument(documentRequest(), bodyless);
+    const copied = withCompressedDocument(documentRequest(null), bodyless);
     expect(copied).not.toBe(bodyless);
     expect(copied.headers.get("Vary")).toBe("Accept-Encoding");
+    expect(copied.headers.get("Content-Encoding")).toBeNull();
     expect(bodyless.headers.get("Vary")).toBeNull();
   });
 });

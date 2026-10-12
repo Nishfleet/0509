@@ -2,8 +2,10 @@ export function gzipAccepted(acceptEncoding: string | null): boolean {
   const members = (acceptEncoding ?? "").split(",").map((member) => member.trim().toLowerCase());
   const gzip = members.find((member) => member === "gzip" || /^gzip\s*;/.test(member));
   if (gzip === undefined) return false;
-  const q = /;\s*q\s*=\s*([0-9]*\.?[0-9]+)/.exec(gzip)?.[1];
-  return q === undefined || Number.parseFloat(q) > 0;
+  const q = /;\s*q\s*=\s*([0-9]*\.?[0-9]+)$/.exec(gzip)?.[1];
+  if (q === undefined) return !gzip.includes(";");
+  const weight = Number.parseFloat(q);
+  return weight > 0 && weight <= 1;
 }
 
 function withVaryAcceptEncoding(headers: Headers): Headers {
@@ -33,7 +35,7 @@ export function withCompressedDocument(request: Request, response: Response): Re
   const headers = withVaryAcceptEncoding(response.headers);
   const body = response.body;
   if (headers.has("Content-Encoding")) return copy(response, headers, body);
-  const gzip = body !== null && gzipAccepted(request.headers.get("Accept-Encoding"));
+  const gzip = gzipAccepted(request.headers.get("Accept-Encoding"));
   if (gzip) {
     headers.delete("Content-Length");
     headers.set("Content-Encoding", "gzip");
