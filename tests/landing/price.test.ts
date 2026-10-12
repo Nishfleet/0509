@@ -26,6 +26,14 @@ describe("landing price", () => {
     }
   });
 
+  it("opens each higher plan with what it builds on, so the lists do not repeat", () => {
+    const body = section(markup());
+    expect(body.indexOf("Everything in Scout, plus")).toBeGreaterThan(body.indexOf("Scout"));
+    expect(body.indexOf("Everything in Starter, plus")).toBeGreaterThan(body.indexOf("Starter"));
+    expect(body.indexOf("Everything in Starter, plus")).toBeLessThan(body.indexOf("50 competitors per workspace"));
+    expect(body).not.toMatch(/Everything in Scout, plus[\s\S]*Everything in Scout, plus/);
+  });
+
   it("shows the trial line from the module", () => {
     const html = markup();
     expect(html).toContain(TRIAL_TERMS);
