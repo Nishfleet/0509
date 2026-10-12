@@ -15,19 +15,14 @@ const INCLUDES: Record<PlanId, readonly (string | { line: string; needs: Coverag
     "Read-only API and MCP",
   ],
   starter: [
+    "Everything in Scout, plus",
     "15 competitors watched at once",
     { line: "Every page we find, checked for changes", needs: "site.all" },
     { line: "Alerts the moment your own site breaks", needs: "own.breakage" },
     { line: "Google Search results and LinkedIn ads", needs: "ads.linkedin" },
     "A year of before-and-afters and standing",
-    "Everything in Scout",
   ],
-  agency: [
-    "50 competitors per workspace",
-    { line: "Every page, checked for changes", needs: "site.all" },
-    "As many workspaces as you set up",
-    "Everything in Starter",
-  ],
+  agency: ["Everything in Starter, plus", "50 competitors per workspace", "As many workspaces as you set up"],
 };
 
 function includes(plan: PlanId): string[] {
