@@ -23,7 +23,7 @@ export function StatusPage({ working, checkedAt }: { working: boolean; checkedAt
         </div>
       </main>
       <div className={`${pageWidth} pb-12`}>
-        <Footer />
+        <Footer status />
       </div>
     </div>
   );
