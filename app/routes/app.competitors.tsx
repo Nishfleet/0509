@@ -14,6 +14,7 @@ import { RetireQuestions } from "../components/retire-questions";
 import { isPlanId } from "../lib/billing/plans";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import type { CompetitorRow } from "../lib/data/entity.server";
+import { cn } from "../lib/utils";
 import { readCompetitors } from "../lib/data/entity.server";
 import { readPlanTier } from "../lib/data/plan.server";
 import { onboardedContext } from "../lib/require-onboarded.server";
@@ -67,7 +68,7 @@ function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
             void fetcher.submit({ intent: checked ? "on" : "off", entityId: competitor.entityId }, { method: "post" });
           }}
         />
-        <p id={noteId} className="basis-full text-meta text-ink-soft">
+        <p id={noteId} className={cn("basis-full text-meta text-ink-soft", state === "on" && "sr-only")}>
           {brandSwitchNote(state, competitor.stateChangedAt === null ? null : new Date(competitor.stateChangedAt))}
         </p>
       </div>

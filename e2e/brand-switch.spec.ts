@@ -110,3 +110,22 @@ test("a row's switch is square and paints the card fill when off @smoke", async 
 
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
+
+test("the Competitors list says what a switch does once, not under every brand @smoke", async ({ page }, testInfo) => {
+  const watched = watchConsole(page);
+
+  const cookie = await seedRankedHomeSession("switch-note-once");
+  await page.setExtraHTTPHeaders({ cookie });
+
+  await page.goto("/app/competitors");
+  const toggle = page.getByRole("switch", { name: "Kindred tracking" });
+  await expect(toggle).toBeVisible();
+
+  const noteId = await toggle.getAttribute("aria-describedby");
+  const note = page.locator(`[id="${noteId ?? ""}"]`);
+  await expect(note).toContainText("Turn off to stop watching and alerts");
+  const box = await note.boundingBox();
+  expect(box === null || box.width <= 1, "the consequence stays for screen readers only").toBe(true);
+
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
+});
