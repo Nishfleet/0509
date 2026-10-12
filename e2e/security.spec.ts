@@ -35,6 +35,11 @@ test("the security page tells a researcher how to report and links security.txt 
   await expect(page.locator('main a[href="mailto:support@0509.io"]')).toBeVisible();
 });
 
+test("the security page asks search engines to stay out until launch @smoke", async ({ page }) => {
+  await page.goto("/security");
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
+});
+
 test("the security contents list reaches every section @smoke", async ({ page }) => {
   await page.goto("/security");
 

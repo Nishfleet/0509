@@ -6,6 +6,7 @@ export const SECURITY: LegalDocument = {
   path: "/security",
   title: "Security",
   updated: SECURITY_UPDATED,
+  walled: true,
   description:
     "How Five to Nine keeps your workspace safe: where the data lives, how you sign in, what agents can touch, and how to report a security problem.",
   intro: `This page says, in plain words, how ${OPERATOR} protects what you give it and how to tell us if you find a hole. What we collect and for how long is on the privacy page.`,
@@ -52,7 +53,7 @@ export const SECURITY: LegalDocument = {
       heading: "In your browser",
       list: [
         "Every page is served over HTTPS, and browsers are told to insist on it.",
-        "A strict content policy blocks scripts we did not write.",
+        "A strict content policy blocks scripts from sites we have not approved.",
         "No other site can put 0509 inside a frame.",
         "We use no advertising or tracking cookies.",
       ],

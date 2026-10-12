@@ -16,6 +16,7 @@ export interface LegalSection {
 export interface LegalDocument {
   readonly path: "/privacy" | "/terms" | "/security";
   readonly updated?: string;
+  readonly walled?: boolean;
   readonly title: string;
   readonly description: string;
   readonly intro: string;
