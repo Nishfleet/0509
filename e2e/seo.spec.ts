@@ -54,13 +54,9 @@ test("every sitemap url is served as an indexable 200, not noindex", async ({ ba
   // the production run's `request` fixture is not (it presents the Access
   // service token), so this is the only fixture that can see the gate.
   const anonymous = await playwright.request.newContext({ baseURL });
-  // /status has no Access bypass: the whole wall comes off at LAUNCH, so a
-  // production stranger gets the gate until then. Drop this set at LAUNCH.
-  const gatedUntilLaunch = process.env.PLAYWRIGHT_TEST_BASE_URL === "https://0509.io" ? ["/status"] : [];
   await Promise.all(
     locs.map(async (loc) => {
       const path = new URL(loc[1]).pathname;
-      if (gatedUntilLaunch.includes(path)) return;
       const response = await anonymous.get(path);
       expect(response.status(), `${path} is not a 200 for a stranger`).toBe(200);
       expect((response.headers()["x-robots-tag"] ?? "").toLowerCase(), `${path} is noindex by header`).not.toContain(
