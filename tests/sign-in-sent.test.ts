@@ -63,6 +63,14 @@ describe("SignInSent names the recipient and the expiry (0509#6886)", () => {
     expect(status).toContain("You can send it again in 30 seconds.");
   });
 
+  it("offers one click to the inbox for a Gmail address and none for a work address", () => {
+    const gmail = render("ada@gmail.com");
+    expect(gmail).toContain("Open Gmail");
+    expect(gmail).toContain('href="https://mail.google.com/');
+    expect(gmail).toContain('rel="noopener noreferrer"');
+    expect(render("ada@acme.com")).not.toContain("Open ");
+  });
+
   it("offers a different email, ready to click", () => {
     const html = render();
 
