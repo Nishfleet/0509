@@ -150,6 +150,17 @@ describe("handleCompetitorIntent intent=add", () => {
     });
   });
 
+  it("asks for an address when the field is submitted blank, without a fetch or a row", async () => {
+    const workspaceId = await seedWorkspace();
+    const fetched = vi.fn(NOT_FOUND);
+    vi.stubGlobal("fetch", fetched);
+
+    expect(await handleCompetitorIntent(workspaceId, addForm("   "))).toEqual({
+      message: "Enter their website address, like brand.com.",
+    });
+    expect(fetched).not.toHaveBeenCalled();
+  });
+
   it("returns the couldn't-find message when resolveDomain cannot find the brand", async () => {
     const workspaceId = await seedWorkspace();
     vi.stubGlobal(
