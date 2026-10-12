@@ -21,9 +21,11 @@ test("the pricing page states every plan and its monthly price @smoke", async ({
     await expect(card.getByRole("heading", { level: 3, name: plan.name })).toBeVisible();
     await expect(card).toContainText(`€${String(plan.monthlyPriceEur)}/month`);
   }
-  await expect(plans.nth(1)).toContainText("Everything in Scout, plus");
-  await expect(plans.nth(2)).toContainText("Everything in Starter, plus");
-  await expect(plans.nth(0)).not.toContainText("Everything in");
+  const cardOf = (id: string) =>
+    plans.filter({ has: page.getByRole("heading", { level: 3, name: PLANS.find((plan) => plan.id === id)?.name }) });
+  await expect(cardOf("starter")).toContainText("Everything in Scout, plus");
+  await expect(cardOf("agency")).toContainText("Everything in Starter, plus");
+  await expect(cardOf("scout")).not.toContainText("Everything in");
 });
 
 test("the pricing page states the trial terms from the plans module @smoke", async ({ page }) => {
