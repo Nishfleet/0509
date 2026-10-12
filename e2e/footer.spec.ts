@@ -37,6 +37,7 @@ for (const route of PUBLIC_ROUTES) {
     if (route !== "/") {
       await expect(footer.locator('a[href="/pricing"]')).toBeVisible();
       await expect(footer.locator('a[href="/api/docs"]')).toBeVisible();
+      await expect(footer.locator('a[href="/status"]')).toHaveCount(0);
     }
 
     // The anchors sit in the footer's own source order, compared without

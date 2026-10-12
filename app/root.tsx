@@ -11,6 +11,7 @@ const SERVER_ONLY_ROUTES: ReadonlySet<string> = new Set([
   "routes/privacy",
   "routes/terms",
   "routes/pricing",
+  "routes/status",
   "routes/api-docs",
   "routes/unmatched",
 ]);

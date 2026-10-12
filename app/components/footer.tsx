@@ -13,7 +13,7 @@ export function SupportLink({ className = linkClass }: { className?: string }) {
   );
 }
 
-export function Footer() {
+export function Footer({ status = false }: { status?: boolean }) {
   return (
     <footer className="mt-14 flex flex-wrap gap-x-6 border-t border-line pt-7 font-mono text-[0.72rem] tracking-[0.06em]">
       <SupportLink className={footerLinkClass} />
@@ -29,6 +29,11 @@ export function Footer() {
       <a className={footerLinkClass} href="/api/docs">
         API docs
       </a>
+      {status ? (
+        <a className={footerLinkClass} href="/status">
+          Status
+        </a>
+      ) : null}
     </footer>
   );
 }

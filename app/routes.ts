@@ -32,6 +32,7 @@ export default [
   route("u/:token", "routes/u.$token.tsx"),
   route("v/:token", "routes/v.$token.tsx"),
   route("api/health", "routes/api.health.ts"),
+  route("status", "routes/status.tsx"),
   route("api/auth/*", "routes/api.auth.$.ts"),
   route("api/webhooks/dodo", "routes/api.webhooks.dodo.ts"),
   route("mcp", "routes/mcp.ts"),

@@ -54,7 +54,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           <DeleteAccount email={loaderData.email} error={actionData?.deleteError ?? null} />
         </div>
       </div>
-      <Footer />
+      <Footer status />
     </main>
   );
 }
