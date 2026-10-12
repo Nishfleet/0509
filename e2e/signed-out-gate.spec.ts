@@ -1,5 +1,12 @@
 import { expect, test } from "@playwright/test";
 
+import { isLocalLane } from "./inbox";
+
+test.skip(
+  !isLocalLane(),
+  "production sits behind Cloudflare Access, whose login page answers before the app does; the app's own redirect is only reachable on the preview Worker",
+);
+
 const SIGNED_IN_PAGES = [
   "/app",
   "/app/competitors",
@@ -21,7 +28,7 @@ test("every signed-in page sends a signed-out visitor to the login page", async 
   }
 });
 
-test("the pause-the-brief form does nothing for a signed-out visitor", async ({ request }) => {
+test("the pause-the-brief form refuses a signed-out visitor", async ({ request }) => {
   const response = await request.post("/app/settings/brief-pause", {
     form: { value: "pause" },
     maxRedirects: 0,
