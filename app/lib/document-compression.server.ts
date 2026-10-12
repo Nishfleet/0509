@@ -33,12 +33,12 @@ function copy(response: Response, headers: Headers, body: BodyInit | null): Resp
   });
 }
 
-export function withCompressedDocument(request: Request, response: Response): Response {
+export function withCompressedDocument(request: Request, response: Response, settled = true): Response {
   const headers = withVaryAcceptEncoding(response.headers);
   const body = response.body;
   if (response.status === NOT_FOUND_STATUS) return copy(response, headers, body);
   if (headers.has("Content-Encoding")) return copy(response, headers, body);
-  const gzip = gzipAccepted(request.headers.get("Accept-Encoding"));
+  const gzip = settled && gzipAccepted(request.headers.get("Accept-Encoding"));
   if (gzip) {
     headers.delete("Content-Length");
     headers.set("Content-Encoding", "gzip");

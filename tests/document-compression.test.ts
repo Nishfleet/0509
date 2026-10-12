@@ -89,6 +89,44 @@ describe("gzip acceptance", () => {
   });
 });
 
+describe("a document that is still streaming", () => {
+  function streamingDocument() {
+    const encoder = new TextEncoder();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode("<html><body>shell"));
+      },
+      async pull(controller) {
+        await gate;
+        controller.enqueue(encoder.encode("late card</body></html>"));
+        controller.close();
+      },
+    });
+    return { response: new Response(body, { headers: { "Content-Type": "text/html" } }), release };
+  }
+
+  it("ships plain, so the shell reaches the browser before the late chunk exists (CX J4, 2026-10-12)", async () => {
+    const { response, release } = streamingDocument();
+    const shipped = withCompressedDocument(documentRequest(), response, false);
+    expect(shipped.headers.get("Content-Encoding")).toBeNull();
+    const reader = shipped.body?.getReader();
+    const first = await reader?.read();
+    expect(new TextDecoder().decode(first?.value)).toBe("<html><body>shell");
+    release();
+    const second = await reader?.read();
+    expect(new TextDecoder().decode(second?.value)).toBe("late card</body></html>");
+  });
+
+  it("still gzips a document that finished rendering", async () => {
+    const shipped = withCompressedDocument(documentRequest(), documentResponse(), true);
+    expect(shipped.headers.get("Content-Encoding")).toBe("gzip");
+  });
+});
+
 describe("withCompressedDocument", () => {
   it("gzips the body and names the encoding", async () => {
     const response = await gunzip(withCompressedDocument(documentRequest(), documentResponse()));
