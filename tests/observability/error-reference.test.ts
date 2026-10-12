@@ -2,8 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const streamErrorHook = vi.hoisted(() => ({ current: null as ((error: unknown) => void) | null }));
 
-const compressionEnv = vi.hoisted(() => ({ DOC_COMPRESSION: "on" as string | undefined }));
-vi.mock("cloudflare:workers", () => ({ env: compressionEnv }));
 vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn() }));
 vi.mock("react-dom/server", () => ({
   renderToReadableStream: vi.fn((_element: unknown, options: { onError: (error: unknown) => void }) => {
