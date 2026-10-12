@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { planLine } from "../../app/lib/billing/plan-line";
 
 describe("planLine", () => {
-  it("says no payment is set up when nothing is billed", () => {
+  it("says nothing has been charged when no card is on file", () => {
     expect(planLine({ tier: "scout", status: "none", currentPeriodEnd: null, trialing: false, billed: false })).toBe(
-      "You're on Scout. No payment is set up.",
+      "You're on Scout. You haven't added a card yet, so nothing has been charged.",
     );
   });
 

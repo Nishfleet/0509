@@ -19,6 +19,9 @@ export function PlanSection({ plan }: { plan: PlanSummary | null }) {
       <p className="mt-2 max-w-prose leading-[1.55]">{planLine(plan)}</p>
       {plan.billed ? (
         <fetcher.Form method="post" action="/app/settings/billing" className="mt-3">
+          <p className="mb-3 max-w-prose text-[0.95rem] leading-[1.55] text-ink-soft">
+            Dodo Payments takes payment, charges any tax and sends your receipts. Open them from Manage or cancel plan.
+          </p>
           <Button type="submit" variant="secondary" size="lg" disabled={opening}>
             {opening ? "Opening…" : "Manage or cancel plan"}
           </Button>

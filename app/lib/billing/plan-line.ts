@@ -15,7 +15,7 @@ function isTrialRunning(plan: PlanSummary, now: Date): boolean {
 export function planLine(plan: PlanSummary, now: Date = new Date()): string {
   const name = PLANS.find((entry) => entry.id === plan.tier)?.name ?? "Scout";
   const date = formatDay(plan.currentPeriodEnd);
-  if (!plan.billed) return `You're on ${name}. No payment is set up.`;
+  if (!plan.billed) return `You're on ${name}. You haven't added a card yet, so nothing has been charged.`;
   if (plan.status === "cancelled") {
     return date === null
       ? `You're on ${name}. It has been cancelled.`
