@@ -6,6 +6,7 @@ const LINKS = [
   { href: "#what-we-watch", label: "What we watch" },
   { href: "#agents", label: "For agents" },
   { href: "#price", label: "Pricing" },
+  { href: "/api/docs", label: "API" },
   { href: "#faq", label: "Questions" },
 ] as const;
 
@@ -14,7 +15,7 @@ export function Header() {
     <header className="border-b border-line">
       <div className={`${pageWidth} flex min-h-16 items-center justify-between gap-6`}>
         <Wordmark />
-        <nav aria-label="On this page" className="hidden md:block">
+        <nav aria-label="Site" className="hidden md:block">
           <ul className={`${eyebrow} flex gap-7 text-ink-soft`}>
             {LINKS.map((link) => (
               <li key={link.href}>

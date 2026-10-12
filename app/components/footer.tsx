@@ -23,6 +23,12 @@ export function Footer() {
       <a className={footerLinkClass} href="/terms">
         Terms
       </a>
+      <a className={footerLinkClass} href="/pricing">
+        Pricing
+      </a>
+      <a className={footerLinkClass} href="/api/docs">
+        API docs
+      </a>
     </footer>
   );
 }
