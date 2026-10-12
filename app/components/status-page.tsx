@@ -11,7 +11,7 @@ export function StatusPage({ working, checkedAt }: { working: boolean; checkedAt
       <main id={MAIN_CONTENT_ID} tabIndex={-1}>
         <div className={`${pageWidth} py-12 sm:py-16`}>
           <h1 className="max-w-[24ch] font-display text-display-2 font-extrabold uppercase">Status</h1>
-          <p role="status" className="mt-6 max-w-prose text-lg leading-[1.55]">
+          <p className="mt-6 max-w-prose text-lg leading-[1.55]">
             {working
               ? "The Five to Nine site and its database are working."
               : "Five to Nine is having trouble right now."}
