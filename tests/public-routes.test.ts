@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import routes from "../app/routes";
 import { PLANS, TRIAL_DAYS } from "../app/lib/billing/plans";
 import { LEGAL_UPDATED } from "../app/lib/legal/document";
+import { SECURITY_UPDATED } from "../app/lib/legal/security";
 import type { SourceRow, SourceSnapshot } from "../app/lib/source-pill-status";
 import {
   AGENT_PATHS,
@@ -165,6 +166,7 @@ describe("public-route manifest", () => {
     for (const path of ["/privacy", "/terms"]) {
       expect(body).toContain(`<loc>https://0509.io${path}</loc><lastmod>${LEGAL_UPDATED}</lastmod>`);
     }
+    expect(body).toContain(`<loc>https://0509.io/security</loc><lastmod>${SECURITY_UPDATED}</lastmod>`);
     expect(body).toContain("<loc>https://0509.io/llms.txt</loc></url>");
   });
 

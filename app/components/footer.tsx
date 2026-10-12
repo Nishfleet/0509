@@ -26,6 +26,9 @@ export function Footer({ status = false }: { status?: boolean }) {
       <a className={footerLinkClass} href="/pricing">
         Pricing
       </a>
+      <a className={footerLinkClass} href="/security">
+        Security
+      </a>
       <a className={footerLinkClass} href="/api/docs">
         API docs
       </a>

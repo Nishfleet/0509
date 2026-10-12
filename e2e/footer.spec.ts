@@ -11,7 +11,7 @@ import { expect, test } from "@playwright/test";
 // is the contract - the link exists, is visible, is labelled and points at the
 // right destination - plus the source order, which is what "same order" means
 // here.
-const PUBLIC_ROUTES = ["/", "/login", "/pricing", "/privacy", "/terms"] as const;
+const PUBLIC_ROUTES = ["/", "/login", "/pricing", "/privacy", "/terms", "/security"] as const;
 
 const PRIVACY_HREF = 'a[href="/privacy"]';
 const TERMS_HREF = 'a[href="/terms"]';
@@ -33,6 +33,8 @@ for (const route of PUBLIC_ROUTES) {
     await expect(terms).toHaveAccessibleName(/\S/);
     await expect(support).toBeVisible();
     await expect(support).toHaveAccessibleName(/\S/);
+
+    await expect(footer.locator('a[href="/security"]')).toBeVisible();
 
     if (route !== "/") {
       await expect(footer.locator('a[href="/pricing"]')).toBeVisible();

@@ -10,14 +10,14 @@ describe("Footer", () => {
   it("gives each footer link a 44px-tall tap target", () => {
     const html = renderToStaticMarkup(createElement(Footer, { status: true }));
     const links = html.match(/<a\b[^>]*>/g) ?? [];
-    expect(links).toHaveLength(6);
+    expect(links).toHaveLength(7);
     for (const link of links) expect(link).toContain("min-h-11");
   });
 
   it("leaves the Status link out unless the page asks for it", () => {
     const html = renderToStaticMarkup(createElement(Footer));
     expect(html).not.toContain('href="/status"');
-    expect(html.match(/<a\b[^>]*>/g)).toHaveLength(5);
+    expect(html.match(/<a\b[^>]*>/g)).toHaveLength(6);
   });
 
   it("asks for the Status link only on pages a visitor behind the Access wall can already reach", () => {

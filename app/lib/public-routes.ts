@@ -4,6 +4,7 @@ import { TRIAL_DAYS, TRIAL_TERMS } from "./billing/plans";
 import { LIVE_COVERAGE, PLAN_NOTE } from "./coverage";
 import { FAQ } from "./faq";
 import { LEGAL_UPDATED } from "./legal/document";
+import { SECURITY_UPDATED } from "./legal/security";
 import { planNames, planPriceList } from "./pricing-page";
 import { plainSourceReason } from "./source-status-words";
 import { SITE_URL } from "./structured-data";
@@ -14,11 +15,12 @@ export interface LlmsTxtSource {
   snapshot: SourceSnapshot | null;
 }
 
-export const PUBLIC_PATHS = ["/pricing", "/privacy", "/terms"] as const;
-export const SITEMAP_PATHS = ["/pricing", "/privacy", "/terms", "/llms.txt"] as const;
+export const PUBLIC_PATHS = ["/pricing", "/privacy", "/terms", "/security"] as const;
+export const SITEMAP_PATHS = ["/pricing", "/privacy", "/terms", "/security", "/llms.txt"] as const;
 export const SITEMAP_LASTMOD: Readonly<Record<string, string>> = {
   "/privacy": LEGAL_UPDATED,
   "/terms": LEGAL_UPDATED,
+  "/security": SECURITY_UPDATED,
 };
 export const DISALLOWED_PREFIXES = [
   "/app",
@@ -47,6 +49,10 @@ const PAGE_SUMMARIES: Record<(typeof PUBLIC_PATHS)[number], { title: string; sum
     title: "Terms",
     summary:
       "who can use 0509, fair use, agent access, plans and cancelling, and how either side can end the agreement",
+  },
+  "/security": {
+    title: "Security",
+    summary: "where your data lives, how sign-in and agent keys work, and how to report a security problem",
   },
 };
 
