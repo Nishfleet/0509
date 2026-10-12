@@ -76,6 +76,12 @@ async function fixtureStates(): Promise<Record<string, unknown>> {
   };
 }
 
+// A two-state probe of one fixture's judged state, not the scored case set:
+// the labeled case set for this question stays
+// tests/evals/cases/site-change.json (scored by site-change.eval.test.ts). One
+// row in each split is what lets this file run under both defaults — bare
+// `npm run eval` (EVAL_SPLIT=all) and the evals.yml dispatch
+// (EVAL_SPLIT=test) — where runEval throws on an empty split.
 const rows: NoulEvalRow[] = [
   {
     id: "fixture-soft-broken",
@@ -85,7 +91,9 @@ const rows: NoulEvalRow[] = [
   },
   {
     id: "fixture-healthy",
-    split: "train",
+    // The control: the healthy page was not touched by 0509#7340's fixture
+    // change, so it scores under the default test split.
+    split: "test",
     label: false,
     why: "the healthy fixture page: hero line, priced plans, checkout link all present",
   },
