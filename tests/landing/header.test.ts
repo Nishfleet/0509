@@ -16,7 +16,7 @@ describe("landing header", () => {
     const html = markup();
     const nav = html.slice(html.indexOf("<nav"), html.indexOf("</nav>"));
     const links = nav.match(/<a\b[^>]*>/g) ?? [];
-    expect(links).toHaveLength(5);
+    expect(links).toHaveLength(6);
     for (const link of links) {
       expect(link).toContain("min-h-11");
       expect(link).toContain("flex");

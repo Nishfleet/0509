@@ -34,6 +34,11 @@ for (const route of PUBLIC_ROUTES) {
     await expect(support).toBeVisible();
     await expect(support).toHaveAccessibleName(/\S/);
 
+    if (route !== "/") {
+      await expect(footer.locator('a[href="/pricing"]')).toBeVisible();
+      await expect(footer.locator('a[href="/api/docs"]')).toBeVisible();
+    }
+
     // The anchors sit in the footer's own source order, compared without
     // layout: the static landing has no gap utilities, so its separator is a
     // text span, and the only cross-route invariant that survives is that the
