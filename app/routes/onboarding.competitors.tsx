@@ -5,6 +5,7 @@ import { data, Form, redirect, useNavigation, useRevalidator } from "react-route
 import { z } from "zod";
 
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
+import { DiscoverySkeleton } from "../components/discovery-skeleton";
 import { Monogram } from "../components/monogram";
 import { OnboardingFrame } from "../components/onboarding-frame";
 import { Button } from "../components/ui/button";
@@ -82,7 +83,8 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   const { on, maybes, discovery } = loaderData;
   const navigation = useNavigation();
   const starting = navigation.state !== "idle" && navigation.formData?.get("intent") === "start";
-  const notice = discoveryNotice(useDiscoveryPolling(discovery), on.length + maybes.length);
+  const state = useDiscoveryPolling(discovery);
+  const notice = discoveryNotice(state, on.length + maybes.length);
 
   return (
     <OnboardingFrame step={3} heading="Your competitors">
@@ -91,6 +93,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           {notice}
         </p>
       )}
+      {state === "looking" && on.length + maybes.length === 0 ? <DiscoverySkeleton /> : null}
       {on.length === 0 ? null : (
         <ul aria-label="Watching" aria-live="polite" aria-relevant="additions" className="mt-8 border-b border-line">
           {on.map((competitor) => (
