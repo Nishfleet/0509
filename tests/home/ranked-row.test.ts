@@ -182,7 +182,7 @@ describe("RankedRow", () => {
   it("says nothing about the week when the workspace has no sources to check", () => {
     const html = render({ ...rowFor("ent_casetta"), pills: [] });
     expect(html).not.toContain("Nothing new this week");
-    expect(html).toMatch(/<ul[^>]*data-slot="row-pills"[^>]*><\/ul>/);
+    expect(html).toMatch(/<ul[^>]*data-slot="row-pills"[^>]*>\s*<\/ul>/);
   });
 
   it("prints a live source with its count", () => {

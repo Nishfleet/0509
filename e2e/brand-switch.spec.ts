@@ -127,6 +127,8 @@ test("the Competitors list says what a switch does once, not under every brand @
   const box = await note.boundingBox();
   expect(box === null || box.width <= 1, "the consequence stays for screen readers only").toBe(true);
 
+  // Local lane only (test.skip above): the brand belongs to a throwaway account
+  // seeded for this run, so pausing it touches no shared or production row.
   await toggle.click();
   await expect(toggle).not.toBeChecked();
   await expect(note).toContainText(/Paused .*history kept/);
