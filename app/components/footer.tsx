@@ -29,6 +29,9 @@ export function Footer() {
       <a className={footerLinkClass} href="/api/docs">
         API docs
       </a>
+      <a className={footerLinkClass} href="/status">
+        Status
+      </a>
     </footer>
   );
 }

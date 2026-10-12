@@ -8,7 +8,7 @@ describe("Footer", () => {
   it("gives each footer link a 44px-tall tap target", () => {
     const html = renderToStaticMarkup(createElement(Footer));
     const links = html.match(/<a\b[^>]*>/g) ?? [];
-    expect(links).toHaveLength(5);
+    expect(links).toHaveLength(6);
     for (const link of links) expect(link).toContain("min-h-11");
   });
 

@@ -14,8 +14,8 @@ export interface LlmsTxtSource {
   snapshot: SourceSnapshot | null;
 }
 
-export const PUBLIC_PATHS = ["/pricing", "/privacy", "/terms"] as const;
-export const SITEMAP_PATHS = ["/pricing", "/privacy", "/terms", "/llms.txt"] as const;
+export const PUBLIC_PATHS = ["/pricing", "/privacy", "/terms", "/status"] as const;
+export const SITEMAP_PATHS = ["/pricing", "/privacy", "/terms", "/status", "/llms.txt"] as const;
 export const SITEMAP_LASTMOD: Readonly<Record<string, string>> = {
   "/privacy": LEGAL_UPDATED,
   "/terms": LEGAL_UPDATED,
@@ -33,6 +33,7 @@ const PAGE_SUMMARIES: Record<(typeof PUBLIC_PATHS)[number], { title: string; sum
     title: "Privacy",
     summary: "what we collect, who helps run 0509, how long we keep it, and how any brand or creator can be removed",
   },
+  "/status": { title: "Status", summary: "whether Five to Nine is up right now" },
   "/terms": {
     title: "Terms",
     summary:
