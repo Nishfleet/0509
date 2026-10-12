@@ -125,7 +125,7 @@ export function LegalPage({ doc }: { doc: LegalDocument }) {
           </p>
         </section>
       </main>
-      <Footer />
+      <Footer walled={doc.path === "/security"} />
     </div>
   );
 }

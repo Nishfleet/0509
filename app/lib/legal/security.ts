@@ -1,6 +1,6 @@
 import { OPERATOR, type LegalDocument } from "./document";
 
-export const SECURITY_UPDATED = "2026-10-12";
+const SECURITY_UPDATED = "2026-10-12";
 
 export const SECURITY: LegalDocument = {
   path: "/security",
