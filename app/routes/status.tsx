@@ -1,3 +1,5 @@
+import { data } from "react-router";
+
 import type { Route } from "./+types/status";
 
 import { StatusPage } from "../components/status-page";
@@ -11,7 +13,10 @@ export function meta(_: Route.MetaArgs) {
 }
 
 export async function loader() {
-  return { working: await currentStatus(), checkedAt: new Date().toISOString() };
+  return data(
+    { working: await currentStatus(), checkedAt: new Date().toISOString() },
+    { headers: { "Cache-Control": "public, max-age=30" } },
+  );
 }
 
 export default function Status({ loaderData }: Route.ComponentProps) {
