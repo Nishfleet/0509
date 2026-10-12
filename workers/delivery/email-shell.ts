@@ -51,7 +51,14 @@ function emailStyle(): string {
   ].join("");
 }
 
-export function emailDocument(title: string, body: string): string {
+const PREHEADER_STYLE =
+  "display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;";
+
+function preheaderHtml(preheader: string): string {
+  return preheader === "" ? "" : `<div style="${PREHEADER_STYLE}">${escapeHtml(preheader)}</div>`;
+}
+
+export function emailDocument(title: string, body: string, preheader = ""): string {
   return [
     `<!doctype html>`,
     `<html lang="en">`,
@@ -63,6 +70,7 @@ export function emailDocument(title: string, body: string): string {
     `<title>${escapeHtml(title)}</title>`,
     `</head>`,
     `<body class="brief-page" style="margin:0;padding:0;">`,
+    preheaderHtml(preheader),
     `<div style="padding:24px 12px;">`,
     `<div class="brief-card" style="max-width:600px;margin:0 auto;padding:24px;">`,
     `<p style="margin:0 0 20px;font-family:${FONT};font-size:17px;line-height:22px;font-weight:800;letter-spacing:-0.03em;">05<span class="brief-marker" style="padding:0 5px;">09</span></p>`,
