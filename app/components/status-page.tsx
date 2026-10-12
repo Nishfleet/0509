@@ -12,9 +12,7 @@ export function StatusPage({ working, checkedAt }: { working: boolean; checkedAt
         <div className={`${pageWidth} py-12 sm:py-16`}>
           <h1 className="max-w-[24ch] font-display text-display-2 font-extrabold uppercase">Status</h1>
           <p role="status" className="mt-6 max-w-prose text-lg leading-[1.55]">
-            {working
-              ? "Five to Nine is working."
-              : "Five to Nine is having trouble right now. We know, and we are on it."}
+            {working ? "Five to Nine is working." : "Five to Nine is having trouble right now."}
           </p>
           <p className="mt-3 font-mono text-meta text-ink-soft">
             Checked <time dateTime={checkedAt}>{checkedAt.slice(0, 19).replace("T", " ")} UTC</time>. Reload to check
