@@ -89,7 +89,10 @@ export default async function handleRequest(
   const reference = errorReferences.get(request);
   if (reference !== undefined) headers.set("X-Error-Reference", reference);
   const settled = await Promise.race([
-    body.allReady.then(() => true),
+    body.allReady.then(
+      () => true,
+      () => false,
+    ),
     new Promise<boolean>((resolve) => {
       setTimeout(() => {
         resolve(false);
