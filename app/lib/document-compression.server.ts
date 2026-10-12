@@ -41,5 +41,10 @@ export function withCompressedDocument(request: Request, response: Response): Re
   headers.delete("Content-Length");
   headers.set("Content-Encoding", "gzip");
   const body = response.body.pipeThrough(new CompressionStream("gzip"));
-  return new Response(body, { status: response.status, statusText: response.statusText, headers });
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+    encodeBody: "manual",
+  });
 }

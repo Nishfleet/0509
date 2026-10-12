@@ -7,7 +7,7 @@ import { gzipAccepted, withCompressedDocument } from "../app/lib/document-compre
 
 const DOCUMENT_URL = "https://0509.io/privacy";
 
-const DOCUMENT_STATUS = 207;
+const DOCUMENT_STATUS = 206;
 const DOCUMENT_STATUS_TEXT = "Partial Content";
 const NOT_FOUND_STATUS = 404;
 const NOT_FOUND_STATUS_TEXT = "Not Found";
@@ -67,7 +67,7 @@ describe("withCompressedDocument", () => {
 
   it("keeps status, statusText and the headers the document already carried", () => {
     const compressed = withCompressedDocument(documentRequest(), documentResponse());
-    expect(compressed.status).toBe(207);
+    expect(compressed.status).toBe(206);
     expect(compressed.statusText).toBe("Partial Content");
     expect(compressed.headers.get("Cache-Control")).toBe("no-transform");
     expect(compressed.headers.get("Content-Type")).toBe("text/html");
