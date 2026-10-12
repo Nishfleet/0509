@@ -20,6 +20,7 @@ const INCLUDES: Record<PlanId, readonly (string | { line: string; needs: Coverag
     { line: "Alerts the moment your own site breaks", needs: "own.breakage" },
     { line: "Google Search results and LinkedIn ads", needs: "ads.linkedin" },
     "A year of before-and-afters and standing",
+    "Everything in Scout",
   ],
   agency: [
     "50 competitors per workspace",
