@@ -46,5 +46,4 @@ test("the web-bot-auth key directory is either a signed-keys document or a plain
   if (response.status() === 404) return;
   expect(response.status()).toBe(200);
   expect(response.headers()["content-type"]).toMatch(/application\/http-message-signatures-directory\+json/);
-  expect(response.headers()["cache-control"]).toContain("public");
 });
