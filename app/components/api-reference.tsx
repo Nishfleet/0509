@@ -69,6 +69,8 @@ function McpBlock({ mcpUrl, settingsHref }: { mcpUrl: string; settingsHref: stri
         <SettingsLink href={settingsHref} />.
       </p>
       <p className={`mt-3 ${MONO}`}>{mcpUrl}</p>
+      <p className={BODY}>In Claude Code, run:</p>
+      <p className={`mt-3 ${MONO}`}>{`claude mcp add --transport http five-to-nine ${mcpUrl}`}</p>
     </section>
   );
 }
