@@ -1,11 +1,14 @@
 import AxeBuilder from "@axe-core/playwright";
+import type { DatabaseSync } from "node:sqlite";
+
 import { expect, type Page, type TestInfo } from "@playwright/test";
 
-import { consoleFailures, watchConsole, watchRequests } from "./inbox";
+import { consoleFailures, run, watchConsole, watchRequests } from "./inbox";
 
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const MAX_TAB_STOPS = 60;
 const MAX_LAYOUT_SHIFT = 0.02;
+const STAMP = "2026-10-12T00:00:00.000Z";
 
 export interface Quality {
   watched: ReturnType<typeof watchConsole>;
@@ -91,4 +94,91 @@ export async function expectQuiet(page: Page, testInfo: TestInfo, quality: Quali
   expect.soft(shift, `${label}: layout shift on load`).toBeLessThan(MAX_LAYOUT_SHIFT);
   expect.soft(await consoleFailures(page, quality.watched, testInfo), `${label}: console`).toEqual([]);
   expect.soft(quality.failedRequests, `${label}: failed requests`).toEqual([]);
+}
+
+export const SCHEMES = ["light", "dark"] as const;
+
+export async function animationsSettled(page: Page): Promise<void> {
+  await page.evaluate(() =>
+    Promise.allSettled(
+      document
+        .getAnimations()
+        .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+        .map((animation) => animation.finished),
+    ).then(() => undefined),
+  );
+}
+
+export async function scanPage(
+  page: Page,
+  testInfo: TestInfo,
+  quality: Quality,
+  label: string,
+  options: { keyboard: boolean } = { keyboard: true },
+): Promise<void> {
+  await animationsSettled(page);
+  await expectNoSeriousAxe(page, testInfo, label);
+  await expectQuiet(page, testInfo, quality, label);
+  if (options.keyboard) await expectKeyboardReachesVisibleFocus(page, label);
+  resetQuality(quality);
+}
+
+export function seedWorkspace(db: DatabaseSync, suffix: string, userId: string, name = "Quality Sweep"): string {
+  const workspaceId = `ws-${suffix}`;
+  run(
+    db,
+    "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?, ?, ?, 'UTC', 1, 8, ?)",
+    workspaceId,
+    name,
+    userId,
+    STAMP,
+  );
+  run(
+    db,
+    "INSERT INTO entity (id, workspace_id, role, domain, name, created_at) VALUES (?, ?, 'self', ?, 'Self Brand', ?)",
+    `ent-self-${suffix}`,
+    workspaceId,
+    `self-${suffix}.example`,
+    STAMP,
+  );
+  return workspaceId;
+}
+
+export function seedCompetitor(db: DatabaseSync, suffix: string, workspaceId: string): string {
+  const entityId = `ent-z-${suffix}`;
+  run(
+    db,
+    "INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES (?, ?, 'competitor', ?, 'Zephyrwear', 'on', ?)",
+    entityId,
+    workspaceId,
+    `zephyr-${suffix}.example`,
+    STAMP,
+  );
+  run(
+    db,
+    "INSERT INTO suggestion (id, workspace_id, kind, candidate_domain, candidate_name, verdict_p, verdict_reason, status, created_at) VALUES (?, ?, 'add', ?, 'Northloop', 0.7, 'Sells the same running kit to the same buyers.', 'pending', ?)",
+    `sug-${suffix}`,
+    workspaceId,
+    `northloop-${suffix}.example`,
+    STAMP,
+  );
+  run(
+    db,
+    "INSERT INTO onboarding_run (id, workspace_id, user_id, input_raw, started_at, watching_started_at) SELECT ?, ?, owner_user_id, 'self.example', ?, ? FROM workspace WHERE id = ?",
+    `run-${suffix}`,
+    workspaceId,
+    STAMP,
+    STAMP,
+    workspaceId,
+  );
+  return entityId;
+}
+
+export async function signIn(page: Page, baseURL: string | undefined, cookie: string): Promise<void> {
+  await page.context().addCookies(
+    cookie.split("; ").map((pair) => {
+      const [name, ...value] = pair.split("=");
+      return { name, value: value.join("="), url: baseURL ?? "" };
+    }),
+  );
 }
