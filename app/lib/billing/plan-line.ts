@@ -20,12 +20,12 @@ function endedLine(name: string, date: string | null): string {
 }
 
 function troubledLine(plan: PlanSummary, name: string): string | null {
-  const onScout = plan.tier !== "scout";
+  const dropsToScout = plan.tier !== "scout";
   if (isPaymentHeld(plan)) {
-    return `Your last payment for ${name} didn't go through, so it's paused${onScout ? " and you're on Scout" : ""}. Update your card to switch it back on.`;
+    return `Your last payment for ${name} didn't go through, so it's paused${dropsToScout ? " and you're on Scout" : ""}. Update your card to switch it back on.`;
   }
   return isPaymentFailed(plan)
-    ? `Your payment for ${name} didn't go through${onScout ? ", so you're on Scout" : ""}.`
+    ? `Your payment for ${name} didn't go through${dropsToScout ? ", so you're on Scout" : ""}.`
     : null;
 }
 
