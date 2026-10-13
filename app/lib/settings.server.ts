@@ -34,7 +34,7 @@ const SLACK_FAILED = "Slack did not accept a test message. Check the address and
 const SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then delete your account.";
 const PASSKEY_SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then remove your passkey.";
 const PLAN_NOT_CANCELLED =
-  "We couldn't cancel your plan, so we haven't deleted anything and you won't be charged for the account. Try again in a minute.";
+  "We couldn't cancel your plan, so nothing was deleted and your plan is still active. Try again in a minute.";
 const PASSKEY_FAILED = "The passkey wasn't removed. Try again.";
 
 const alertSwitchForm = z.object({ value: z.enum(["on", "off"]) });

@@ -10,7 +10,12 @@ export async function cancelPlanForDelete(workspaceId: string): Promise<boolean>
   const subscriptionId = plan?.subscriptionId ?? null;
   if (plan === null || subscriptionId === null || ENDED.has(plan.status)) return true;
   if (env.DODO_PAYMENTS_API_KEY === "") return false;
-  const client = new DodoPayments({ bearerToken: env.DODO_PAYMENTS_API_KEY, environment: env.DODO_ENVIRONMENT });
+  const client = new DodoPayments({
+    bearerToken: env.DODO_PAYMENTS_API_KEY,
+    environment: env.DODO_ENVIRONMENT,
+    timeout: 10_000,
+    maxRetries: 1,
+  });
   try {
     await client.subscriptions.update(subscriptionId, {
       status: "cancelled",
