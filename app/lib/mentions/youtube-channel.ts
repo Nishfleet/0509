@@ -169,7 +169,7 @@ export function youtubePageUrl(href: string): string | null {
   const normalised = normaliseSubject(href);
   if (normalised.ok) {
     const { platform, url } = normalised.subject;
-    return platform === "youtube" && url.startsWith("https://www.youtube.com/") ? url : null;
+    return platform === "youtube" && url?.startsWith("https://www.youtube.com/") ? url : null;
   }
   const name = BARE_YOUTUBE_NAME.exec(href)?.[1];
   if (name === undefined || RESERVED_YOUTUBE_PATHS.has(name.toLowerCase())) return null;
