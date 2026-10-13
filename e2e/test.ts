@@ -27,13 +27,18 @@ function ownDocumentLine(failures: ReadonlyMap<string, number>): (entry: Console
 }
 
 export function expectNoise(pattern: RegExp): void {
-  base.info().annotations.push({ type: "quiet-exception", description: pattern.source });
+  base.info().annotations.push({ type: "quiet-exception", description: pattern.toString() });
+}
+
+function parseNoise(described: string): RegExp {
+  const end = described.lastIndexOf("/");
+  return new RegExp(described.slice(1, end), described.slice(end + 1));
 }
 
 async function failuresOf(watch: Watch, testInfo: TestInfo, origin: string | null): Promise<string[]> {
   const allowed = testInfo.annotations
     .filter((annotation) => annotation.type === "quiet-exception")
-    .map((annotation) => new RegExp(annotation.description ?? "(?!)"));
+    .map((annotation) => parseNoise(annotation.description ?? ""));
   const unexpected = (line: string) => !allowed.some((pattern) => pattern.test(line));
   const consoleLines = await consoleFailures(
     watch.page,

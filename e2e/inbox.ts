@@ -452,18 +452,23 @@ export function watchConsole(page: Page): {
   return { consoleErrors, pageErrors, prefetchRefused };
 }
 
+function withoutQuery(url: string): string {
+  const parsed = new URL(url);
+  return `${parsed.origin}${parsed.pathname}`;
+}
+
 export function watchRequests(page: Page): string[] {
   const failed: string[] = [];
   page.on("requestfailed", (request) => {
     const reason = request.failure()?.errorText ?? "";
     if (reason === "net::ERR_ABORTED") return;
-    failed.push(`${request.method()} ${request.url()} ${reason}`);
+    failed.push(`${request.method()} ${withoutQuery(request.url())} ${reason}`);
   });
   page.on("response", (response) => {
     if (response.status() < 400) return;
     if (response.headers()["cf-speculation-refused"]) return;
     if (response.request().resourceType() === "document") return;
-    failed.push(`${String(response.status())} ${response.request().method()} ${response.url()}`);
+    failed.push(`${String(response.status())} ${response.request().method()} ${withoutQuery(response.url())}`);
   });
   return failed;
 }
