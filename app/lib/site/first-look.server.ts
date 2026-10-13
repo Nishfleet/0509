@@ -4,6 +4,7 @@ import { normaliseSubject } from "../identity/normalise";
 import { planSiteSweep, uncoveredItems } from "./sweep.server";
 
 const RECENT_HOURS = 20;
+const QUEUE_BATCH_LIMIT = 100;
 
 const onDomain = (url: string, domain: string): boolean => {
   const subject = normaliseSubject(url);
@@ -17,16 +18,17 @@ export async function enqueueFirstLook(workspaceId: string, now: string, domain?
   );
   const unread = await uncoveredItems(mine, since);
   if (unread.length === 0) return 0;
-  await env.FETCH_SWEEP.sendBatch(
-    unread.map((target) => ({
-      body: {
-        watchId: target.watchId,
-        entityId: target.entityId,
-        sourceId: target.sourceId,
-        targetKey: target.url,
-      },
-    })),
-  );
+  const messages = unread.map((target) => ({
+    body: {
+      watchId: target.watchId,
+      entityId: target.entityId,
+      sourceId: target.sourceId,
+      targetKey: target.url,
+    },
+  }));
+  for (let start = 0; start < messages.length; start += QUEUE_BATCH_LIMIT) {
+    await env.FETCH_SWEEP.sendBatch(messages.slice(start, start + QUEUE_BATCH_LIMIT));
+  }
   return unread.length;
 }
 
