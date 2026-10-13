@@ -40,7 +40,7 @@ describe("planLine", () => {
         status: "cancelled",
         currentPeriodEnd: "2026-09-15T00:00:00.000Z",
         trialing: false,
-        billed: false,
+        billed: true,
       }),
     ).toBe("Your paid plan ended on 15 September 2026. You're on Scout.");
   });

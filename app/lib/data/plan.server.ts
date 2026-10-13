@@ -1,13 +1,7 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-import {
-  entitledTier,
-  isSubscriptionLive,
-  isWorkspacePaid,
-  resolveEntitlements,
-  type Entitlements,
-} from "../billing/entitlements";
+import { entitledTier, isWorkspacePaid, resolveEntitlements, type Entitlements } from "../billing/entitlements";
 import { isPlanId, type PlanId, type PlanSummary } from "../billing/plans";
 import { readWorkspaceIdForOwner } from "./workspace.server";
 
@@ -21,8 +15,6 @@ const planRow = z.object({
 });
 
 type PlanRow = z.infer<typeof planRow>;
-
-const ENDED_STATUSES = new Set(["cancelled", "expired"]);
 
 const SELECT_PLAN =
   "SELECT tier, status, current_period_end, trialing, limits_json, provider_customer_id FROM plan WHERE workspace_id = ?";
@@ -117,24 +109,15 @@ export async function readPlanTier(workspaceId: string): Promise<PlanId> {
   return isPlanId(tier) ? tier : "scout";
 }
 
-function summarize(tier: string, row: PlanRow | null): PlanSummary {
-  if (row === null) {
-    return { tier: "scout", status: "none", currentPeriodEnd: null, trialing: false, billed: false };
-  }
-  const live = isSubscriptionLive({ status: row.status, currentPeriodEnd: row.current_period_end }, new Date());
-  const lapsed = ENDED_STATUSES.has(row.status) && !live;
-  return {
-    tier: isPlanId(tier) ? tier : "scout",
-    status: row.status,
-    currentPeriodEnd: row.current_period_end,
-    trialing: row.trialing === 1,
-    billed: row.provider_customer_id !== null && !lapsed,
-  };
-}
-
 export async function readPlanSummary(workspaceId: string, db: D1Database = env.DB): Promise<PlanSummary> {
   const { tier, row } = await readPlan(workspaceId, db);
-  return summarize(tier, row);
+  return {
+    tier: isPlanId(tier) ? tier : "scout",
+    status: row === null ? "none" : row.status,
+    currentPeriodEnd: row === null ? null : row.current_period_end,
+    trialing: row !== null && row.trialing === 1,
+    billed: row !== null && row.provider_customer_id !== null,
+  };
 }
 
 const readPlanCustomerIdRow = z.object({ provider_customer_id: z.string().nullable() });

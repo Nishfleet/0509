@@ -74,16 +74,17 @@ describe("PlanSection", () => {
     expect(html).toContain("€46/mo");
   });
 
-  it("offers the next plan again to someone whose paid plan has ended", () => {
+  it("offers the next plan again, and keeps billing history, once a paid plan has ended", () => {
     const html = render({
       tier: "scout",
       status: "cancelled",
       currentPeriodEnd: "2026-09-15T00:00:00.000Z",
       trialing: false,
-      billed: false,
+      billed: true,
     });
     expect(html).toContain("Your paid plan ended on 15 September 2026. You&#x27;re on Scout.");
     expect(html).toContain("Upgrade to Starter");
+    expect(html).toContain("See billing history");
     expect(html).not.toContain("Manage or cancel plan");
   });
 
