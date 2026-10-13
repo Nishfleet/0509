@@ -30,7 +30,7 @@ export function PlanSection({ plan }: { plan: PlanSummary | null }) {
         </fetcher.Form>
       ) : (
         <>
-          {upgrade === null ? null : <PlanGate planId={upgrade.id} />}
+          {upgrade === null ? null : <PlanGate planId={upgrade.id} returning={plan.status !== "none"} />}
           <Link
             to="/app/competitors"
             className="mt-3 inline-flex min-h-11 items-center gap-2 font-display font-bold underline decoration-1 underline-offset-4"

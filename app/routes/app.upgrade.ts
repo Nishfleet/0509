@@ -30,6 +30,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   if (workspaceId === null || !isPlanId(planId) || !isBillingInterval(interval)) return UNAVAILABLE;
   const current = await readPlanSubscription(workspaceId);
   if (current !== null && isSubscriptionLive(current, new Date())) return HAS_PLAN;
-  const url = await createCheckoutUrl({ planId, interval, workspaceId, email: session.user.email });
+  const returning = current !== null && current.subscriptionId !== null;
+  const url = await createCheckoutUrl({ planId, interval, workspaceId, email: session.user.email, returning });
   return url === null ? UNAVAILABLE : redirect(url);
 }

@@ -124,4 +124,17 @@ describe("upgrade checkout when the workspace already has a plan (#7228)", () =>
 
     expect((result as Response).headers.get("Location")).toBe(checkoutSession.checkout_url);
   });
+
+  it("gives a returning customer no second free trial", async () => {
+    await seedPlan("cancelled", "2020-01-01T00:00:00Z");
+    await env.DB.prepare(
+      "UPDATE plan SET provider_subscription_id = 'sub_before' WHERE workspace_id = 'ws-upgrade'",
+    ).run();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json(checkoutSession, { status: 200 }));
+
+    await action(upgradeRequest("starter"));
+
+    const [, init] = fetchSpy.mock.calls[0] ?? [];
+    expect(JSON.parse(String(init?.body))).not.toHaveProperty("subscription_data");
+  });
 });
