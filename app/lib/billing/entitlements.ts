@@ -92,6 +92,14 @@ export function isPlanLapsed(plan: { status: string; currentPeriodEnd: string | 
   return ENDED_STATUSES.has(plan.status) && !isSubscriptionLive(plan, now);
 }
 
+export function isPaymentHeld(plan: { status: string }): boolean {
+  return plan.status === "on_hold";
+}
+
+export function isPaymentFailed(plan: { status: string }): boolean {
+  return plan.status === "failed";
+}
+
 export function isWorkspacePaid(plan: { status: string; currentPeriodEnd: string | null } | null, now: Date): boolean {
   return plan !== null && isSubscriptionLive(plan, now);
 }

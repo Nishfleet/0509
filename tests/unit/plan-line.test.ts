@@ -74,3 +74,25 @@ describe("planLine", () => {
     expect(planLine({ ...trialing, status }, before)).not.toContain("trial");
   });
 });
+
+describe("planLine when a payment did not go through", () => {
+  const base = {
+    tier: "starter",
+    status: "on_hold",
+    currentPeriodEnd: "2026-10-20T00:00:00.000Z",
+    trialing: false,
+    billed: true,
+  } as const;
+
+  it("says the plan is paused and what to do, instead of promising a renewal", () => {
+    expect(planLine(base, new Date("2026-10-13T00:00:00.000Z"))).toBe(
+      "Your last payment for Starter didn't go through, so it's paused and you're on Scout. Update your card to switch it back on.",
+    );
+  });
+
+  it("says a failed first payment left the customer on Scout", () => {
+    expect(planLine({ ...base, status: "failed" }, new Date("2026-10-13T00:00:00.000Z"))).toBe(
+      "Your payment for Starter didn't go through, so you're on Scout.",
+    );
+  });
+});

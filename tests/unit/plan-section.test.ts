@@ -88,6 +88,20 @@ describe("PlanSection", () => {
     expect(html).not.toContain("Manage or cancel plan");
   });
 
+  it("offers to update the card, not an upgrade, when a renewal payment is on hold", () => {
+    const html = render({ ...BILLED, status: "on_hold", currentPeriodEnd: "2026-10-20T00:00:00.000Z" });
+    expect(html).toContain("Update payment method");
+    expect(html).toContain("paused");
+    expect(html).not.toContain("Upgrade to");
+    expect(html).not.toContain("Manage or cancel plan");
+  });
+
+  it("offers the next plan again, with billing history, after a first payment failed", () => {
+    const html = render({ ...BILLED, status: "failed" });
+    expect(html).toContain("Upgrade to Agency");
+    expect(html).toContain("See billing history");
+  });
+
   it("offers manage or cancel, not an upgrade, to a subscriber", () => {
     const html = render(BILLED);
     expect(html).toContain("Manage or cancel plan");

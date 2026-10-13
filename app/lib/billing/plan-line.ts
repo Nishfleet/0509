@@ -1,4 +1,5 @@
 import { isPlanLapsed } from "./entitlements";
+import { isPaymentFailed, isPaymentHeld } from "./entitlements";
 import { PLANS, type PlanSummary } from "./plans";
 
 const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
@@ -19,9 +20,18 @@ function endedLine(name: string, date: string | null): string {
     : `Your paid plan ended on ${date}. You're on ${name}.`;
 }
 
+function troubledLine(plan: PlanSummary, name: string): string | null {
+  if (isPaymentHeld(plan)) {
+    return `Your last payment for ${name} didn't go through, so it's paused and you're on Scout. Update your card to switch it back on.`;
+  }
+  return isPaymentFailed(plan) ? `Your payment for ${name} didn't go through, so you're on Scout.` : null;
+}
+
 function runningLine(plan: PlanSummary, name: string, now: Date): string {
   const date = formatDay(plan.currentPeriodEnd);
   if (!plan.billed) return `You're on ${name}. No payment is set up.`;
+  const troubled = troubledLine(plan, name);
+  if (troubled !== null) return troubled;
   if (plan.status === "cancelled") {
     return date === null
       ? `You're on ${name}. It has been cancelled.`
