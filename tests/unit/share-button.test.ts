@@ -90,7 +90,7 @@ describe("sharePicture", () => {
 
     const done = await sharePicture();
 
-    expect(done).toBe(true);
+    expect(done).toBe("shared");
     expect(harness.downloads).toBe(0);
     expect(console.error).not.toHaveBeenCalled();
   });
@@ -107,7 +107,7 @@ describe("sharePicture", () => {
 
     const done = await sharePicture();
 
-    expect(done).toBe(true);
+    expect(done).toBe("shared");
     expect(harness.downloads).toBe(0);
     expect(console.error).not.toHaveBeenCalled();
   });
@@ -124,7 +124,7 @@ describe("sharePicture", () => {
 
     const done = await sharePicture();
 
-    expect(done).toBe(true);
+    expect(done).toBe("saved");
     expect(harness.downloads).toBe(1);
     expect(console.error).toHaveBeenCalledTimes(1);
     const logged = String((console.error as ReturnType<typeof vi.fn>).mock.calls[0][0]);
@@ -141,7 +141,7 @@ describe("sharePicture", () => {
 
     const done = await sharePicture();
 
-    expect(done).toBe(true);
+    expect(done).toBe("saved");
     expect(harness.downloads).toBe(1);
     expect(console.error).not.toHaveBeenCalled();
   });
