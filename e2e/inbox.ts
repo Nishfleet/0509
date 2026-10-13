@@ -769,7 +769,7 @@ export function run(db: DatabaseSync, sql: string, ...values: (string | number |
   db.prepare(sql).run(...values);
 }
 
-export async function seedPreviewSession<T = void>(
+async function seedPreviewSessionOnce<T>(
   prefix: string,
   seed: (context: { db: DatabaseSync; suffix: string; userId: string }) => T,
   options: { livePlan: boolean } = { livePlan: true },
@@ -814,6 +814,19 @@ export async function seedPreviewSession<T = void>(
   } finally {
     db.close();
   }
+}
+
+export async function seedPreviewSession<T = void>(
+  prefix: string,
+  seed: (context: { db: DatabaseSync; suffix: string; userId: string }) => T,
+  options: { livePlan: boolean } = { livePlan: true },
+): Promise<{ cookie: string; seeded: T }> {
+  let seeded: { cookie: string; seeded: T } | undefined;
+  await expect(async () => {
+    seeded = await seedPreviewSessionOnce(prefix, seed, options);
+  }).toPass({ intervals: [250, 500, 1000], timeout: 20_000 });
+  if (seeded === undefined) throw new Error("seedPreviewSession finished without a session");
+  return seeded;
 }
 
 export function readPreview<T>(read: (db: DatabaseSync) => T): T {
