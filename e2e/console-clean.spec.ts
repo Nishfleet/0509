@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, expectNoise } from "./test";
 import type { RouteConfigEntry } from "@react-router/dev/routes";
 import routes from "../app/routes";
 
@@ -117,6 +117,7 @@ test("the collector drops a Cloudflare prefetch-refused 503 @smoke", async ({ pa
 });
 
 test("the collector still fails a same-origin 503 that is not prefetch-refused @smoke", async ({ page }, testInfo) => {
+  expectNoise(/plain-503\.data/);
   const watched = watchConsole(page);
   await page.route("**/plain-503.data", (route) =>
     route.fulfill({

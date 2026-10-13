@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { SITE_SWEEP_UTC_HOUR } from "../app/lib/cadence";
 import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
