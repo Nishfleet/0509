@@ -20,6 +20,10 @@ The 7-day soak report on #4730 (FAIL on the cron-instance line).
 
 The id now includes the hour (`mentions-sweep-2026-10-08T19`), so a moved schedule can never collide with the one it replaced. The catch-up uses the same function, so it still matches its own cron tick. `tests/workflow-crons.test.ts` pins the 10-08 case.
 
+## Cost of the fix itself
+
+The ids changed shape, so on the first night after the deploy a slot that already ran under a date-only id runs once more when the hourly catch-up builds its hour id. That is one extra round of source calls per sweep, one extra snapshot backup and a few "Missed Workflow started" Sentry messages, once. It is accepted rather than avoided.
+
 ## What stops a repeat
 
 1. Code: the hour in the id and its test.
