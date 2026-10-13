@@ -125,16 +125,41 @@ describe("upgrade checkout when the workspace already has a plan (#7228)", () =>
     expect((result as Response).headers.get("Location")).toBe(checkoutSession.checkout_url);
   });
 
-  it("gives a returning customer no second free trial", async () => {
-    await seedPlan("cancelled", "2020-01-01T00:00:00Z");
+  async function checkoutBodyAfterLookup(
+    status: string,
+    productOnFile: string,
+  ): Promise<Record<string, unknown> | undefined> {
+    await seedPlan(status, "2020-01-01T00:00:00Z");
     await env.DB.prepare(
       "UPDATE plan SET provider_subscription_id = 'sub_before' WHERE workspace_id = 'ws-upgrade'",
     ).run();
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json(checkoutSession, { status: 200 }));
-
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation((input) =>
+        Promise.resolve(
+          String(input).includes("/subscriptions/")
+            ? Response.json({ product_id: productOnFile })
+            : Response.json(checkoutSession, { status: 200 }),
+        ),
+      );
     await action(upgradeRequest("starter"));
+    const call = fetchSpy.mock.calls.find(([url]) => String(url).endsWith("/checkouts"));
+    return call === undefined ? undefined : (JSON.parse(String(call[1]?.body)) as Record<string, unknown>);
+  }
 
-    const [, init] = fetchSpy.mock.calls[0] ?? [];
-    expect(JSON.parse(String(init?.body))).not.toHaveProperty("subscription_data");
+  it("gives a returning customer no second free trial", async () => {
+    expect(await checkoutBodyAfterLookup("cancelled", "pdt_test_starter")).not.toHaveProperty("subscription_data");
+  });
+
+  it("still gives the trial to a workspace whose only subscription was the free Tester one", async () => {
+    expect(await checkoutBodyAfterLookup("cancelled", env.DODO_PRODUCT_TESTER)).toMatchObject({
+      subscription_data: { trial_period_days: 7 },
+    });
+  });
+
+  it("still gives the trial when the first checkout failed before it began", async () => {
+    expect(await checkoutBodyAfterLookup("failed", "pdt_test_starter")).toMatchObject({
+      subscription_data: { trial_period_days: 7 },
+    });
   });
 });

@@ -5,6 +5,7 @@ import type { RouterContextProvider } from "react-router";
 
 import { deleteAccount } from "./account-delete.server";
 import { cancelPlanForDelete } from "./billing/cancel.server";
+import { returningForGate } from "./billing/returning.server";
 import { oauthHelpersContext } from "./agent/context.server";
 import { hasFreshSession, removeSignedInPasskey, requestEmailChange, signOut } from "./auth.server";
 import { nextBriefAt } from "./brief-schedule";
@@ -82,6 +83,7 @@ const NO_WORKSPACE_SETTINGS = {
   slackConnected: false,
   dismissed: [],
   plan: null,
+  returning: false,
 };
 
 async function readWorkspaceSettings(workspaceId: string) {
@@ -92,7 +94,8 @@ async function readWorkspaceSettings(workspaceId: string) {
     readUserDismissed(workspaceId),
     readPlanSummary(workspaceId),
   ]);
-  return { ownSiteAlerts, changeAlerts, slackConnected: slackTarget !== null, dismissed, plan };
+  const returning = await returningForGate(workspaceId, plan);
+  return { ownSiteAlerts, changeAlerts, slackConnected: slackTarget !== null, dismissed, plan, returning };
 }
 
 export async function readSettings(user: SettingsUser) {
@@ -109,7 +112,8 @@ export async function readSettings(user: SettingsUser) {
           nextLine: formatBriefAt(nextBriefAt(owned.schedule, new Date()), owned.schedule.timezone),
         };
   const workspace = workspaceId === null ? null : await readWorkspaceSettings(workspaceId);
-  const { ownSiteAlerts, changeAlerts, slackConnected, dismissed, plan } = workspace ?? NO_WORKSPACE_SETTINGS;
+  const { ownSiteAlerts, changeAlerts, slackConnected, dismissed, plan, returning } =
+    workspace ?? NO_WORKSPACE_SETTINGS;
   return {
     email: user.email,
     schedule,
@@ -119,6 +123,7 @@ export async function readSettings(user: SettingsUser) {
     dismissed,
     delivery,
     plan,
+    returning,
   };
 }
 

@@ -5,6 +5,7 @@ import { nameFromDomain } from "./competitor/domain-name";
 import { readCompetitorName } from "./competitor/site-name.server";
 import { addManualCompetitor, countOtherOnCompetitors, readCompetitor, setCompetitorState } from "./data/entity.server";
 import { nextPlan, type PlanId } from "./billing/plans";
+import { isReturningCustomer } from "./billing/returning.server";
 import { readEntitlements, readPlanSubscription, readPlanTier } from "./data/plan.server";
 import { withinProbeLimit } from "./identity/card.server";
 import {
@@ -46,10 +47,6 @@ const competitorIntentForm = z.object({
   competitor: z.string().trim().default(""),
 });
 
-async function hasPaidBefore(workspaceId: string): Promise<boolean> {
-  return ((await readPlanSubscription(workspaceId))?.subscriptionId ?? null) !== null;
-}
-
 async function upgradePlanIdFor(workspaceId: string): Promise<PlanId | null> {
   const next = nextPlan(await readPlanTier(workspaceId));
   return next === null ? null : next.id;
@@ -59,7 +56,7 @@ async function capRefusal(workspaceId: string, cap: number): Promise<CompetitorA
   return {
     message: `Your plan watches up to ${String(cap)} competitors. Switch one off to add another.`,
     upgradePlanId: await upgradePlanIdFor(workspaceId),
-    returning: await hasPaidBefore(workspaceId),
+    returning: await isReturningCustomer(await readPlanSubscription(workspaceId)),
   };
 }
 

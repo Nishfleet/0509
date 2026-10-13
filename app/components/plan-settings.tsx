@@ -6,7 +6,7 @@ import { BLOCK_HEADING } from "./page-heading";
 import { PlanGate } from "./plan-gate";
 import { Button } from "./ui/button";
 
-export function PlanSection({ plan }: { plan: PlanSummary | null }) {
+export function PlanSection({ plan, returning = false }: { plan: PlanSummary | null; returning?: boolean }) {
   const fetcher = useFetcher<{ message: string }>();
   if (plan === null) return null;
   const opening = fetcher.state !== "idle";
@@ -30,7 +30,7 @@ export function PlanSection({ plan }: { plan: PlanSummary | null }) {
         </fetcher.Form>
       ) : (
         <>
-          {upgrade === null ? null : <PlanGate planId={upgrade.id} returning={plan.status !== "none"} />}
+          {upgrade === null ? null : <PlanGate planId={upgrade.id} returning={returning} />}
           <Link
             to="/app/competitors"
             className="mt-3 inline-flex min-h-11 items-center gap-2 font-display font-bold underline decoration-1 underline-offset-4"
