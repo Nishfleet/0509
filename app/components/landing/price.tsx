@@ -1,8 +1,9 @@
 import { type PlanId, PLANS, TRIAL_TERMS } from "../../lib/billing/plans";
 import { type CoverageId, isLive } from "../../lib/coverage";
-import type { StartSource } from "../../lib/pricing-page";
+import { planStartHref, type StartSource } from "../../lib/pricing-page";
 import { cn } from "../../lib/utils";
 import { eyebrow, Section } from "./section";
+import { buttonVariants } from "../ui/button";
 import { StartButton } from "./start-button";
 
 const INCLUDES: Record<PlanId, readonly (string | { line: string; needs: CoverageId })[]> = {
@@ -60,6 +61,12 @@ export function Price({ source = null }: { source?: StartSource | null }) {
                 </li>
               ))}
             </ul>
+            <a
+              href={planStartHref(plan.id, source)}
+              className={`${buttonVariants({ variant: "secondary" })} mt-5 w-full`}
+            >
+              Start with {plan.name}
+            </a>
           </li>
         ))}
       </ul>
