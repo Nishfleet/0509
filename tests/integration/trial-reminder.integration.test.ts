@@ -121,4 +121,13 @@ describe("trial ending reminder", () => {
     expect(await sendTrialReminders(envWith(sent), new Date("2026-10-14T03:00:00.000Z"), isTester)).toBe(1);
     expect(sent).toHaveLength(1);
   });
+
+  it("still sends when the workspace timezone is unusable", async () => {
+    await seedPlan({ status: "active", trialing: 1, periodEnd: IN_36_HOURS });
+    await env.DB.exec("UPDATE workspace SET timezone = 'Not/AZone'");
+    const sent: EmailMessageBuilder[] = [];
+
+    expect(await sendTrialReminders(envWith(sent), NOW, isTester)).toBe(1);
+    expect(sent).toHaveLength(1);
+  });
 });

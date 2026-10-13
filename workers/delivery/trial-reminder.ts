@@ -29,6 +29,15 @@ async function remind(env: Env, trial: TrialEnding, isTester: TesterCheck): Prom
     digestId: null,
   });
   if (claim === null) return false;
+  const result = await deliver(env, trial, plan).catch((error: unknown) => ({
+    outcome: "failed" as const,
+    error: error instanceof Error ? error.message : "render failed",
+  }));
+  await resolveSendAttempt(env.DB, { attemptId: claim.id, outcome: result.outcome, error: result.error });
+  return result.outcome === "sent";
+}
+
+async function deliver(env: Env, trial: TrialEnding, plan: NonNullable<Awaited<ReturnType<typeof reminderPlan>>>) {
   const rendered = renderTrialEnding({
     plan: plan.name,
     monthly_price_eur: plan.monthlyPriceEur,
@@ -36,15 +45,13 @@ async function remind(env: Env, trial: TrialEnding, isTester: TesterCheck): Prom
     timezone: trial.timezone,
     link: SETTINGS_LINK,
   });
-  const result = await sendMessage(env.EMAIL, {
+  return sendMessage(env.EMAIL, {
     to: trial.target_value,
     from: BRIEF_SENDER,
     subject: rendered.subject,
     html: rendered.html,
     text: rendered.text,
   });
-  await resolveSendAttempt(env.DB, { attemptId: claim.id, outcome: result.outcome, error: result.error });
-  return result.outcome === "sent";
 }
 
 export async function sendTrialReminders(
