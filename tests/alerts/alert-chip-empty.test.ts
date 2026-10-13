@@ -104,4 +104,11 @@ describe("an Alerts chip with no rows of its own (0509#6617)", () => {
 
     expect(html).toContain('data-testid="alert-chips"');
   });
+
+  it("draws no chips for a bookmarked filter when the workspace holds no alerts at all", () => {
+    const html = render("hiring", counts([]), []);
+
+    expect(html).not.toContain('data-testid="alert-chips"');
+    expect(html).toContain("Nothing yet.");
+  });
 });
