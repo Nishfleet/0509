@@ -603,7 +603,9 @@ async function flagLostChannel(watchId: string, now: string): Promise<void> {
 
 async function notePageMiss(watchId: string, reason: string | undefined, now: string): Promise<void> {
   if (reason === undefined) return;
-  await writeWatchConfigJson(watchId, withPageMiss(await requireWatchConfigJson(watchId), reason, now));
+  const current = await requireWatchConfigJson(watchId);
+  const noted = withPageMiss(current, reason, now);
+  if (noted !== current) await writeWatchConfigJson(watchId, noted);
 }
 
 async function flagNoChannel(watchId: string, now: string): Promise<void> {

@@ -67,7 +67,7 @@ export async function lookupYoutubeChannel(identityJson: string): Promise<Youtub
   const subject: Subject = {
     kind: "channel",
     platform: "youtube",
-    registrable: (pageUrl.split("/").pop() ?? "").replace(/^@/, "").toLowerCase(),
+    registrable: new URL(pageUrl).pathname.split("/").filter(Boolean).join(":").toLowerCase(),
     url: pageUrl,
   };
   try {

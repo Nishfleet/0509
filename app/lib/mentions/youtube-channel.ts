@@ -167,7 +167,10 @@ const BARE_YOUTUBE_NAME = /^https?:\/\/(?:www\.|m\.)?youtube\.com\/([^/?#]+)\/?(
 
 export function youtubePageUrl(href: string): string | null {
   const normalised = normaliseSubject(href);
-  if (normalised.ok) return normalised.subject.platform === "youtube" ? normalised.subject.url : null;
+  if (normalised.ok) {
+    const { platform, url } = normalised.subject;
+    return platform === "youtube" && url.startsWith("https://www.youtube.com/") ? url : null;
+  }
   const name = BARE_YOUTUBE_NAME.exec(href)?.[1];
   if (name === undefined || RESERVED_YOUTUBE_PATHS.has(name.toLowerCase())) return null;
   return `https://www.youtube.com/${name}`;
@@ -220,7 +223,9 @@ export function withNoChannel(raw: string, at: string): string {
   const read = readWatchConfig(raw);
   if (read.status !== "ok") throw new Error("watch config_json is unreadable");
   if (read.noChannel !== null) return raw;
-  return withFlags(read.record, read.lostChannel, { reason: NO_CHANNEL_REASON, at });
+  const record: Record<string, unknown> = { ...read.record };
+  delete record.pageMiss;
+  return withFlags(record, read.lostChannel, { reason: NO_CHANNEL_REASON, at });
 }
 
 export function withoutLostChannel(raw: string): string {
@@ -251,6 +256,8 @@ export function withResolvedChannel(raw: string, channelId: string): string {
 export function withPageMiss(raw: string, reason: string, at: string): string {
   const read = readWatchConfig(raw);
   if (read.status !== "ok") throw new Error("watch config_json is unreadable");
+  const held = read.record.pageMiss;
+  if (typeof held === "object" && held !== null && "reason" in held && held.reason === reason) return raw;
   return JSON.stringify({ ...read.record, pageMiss: { reason, at } });
 }
 

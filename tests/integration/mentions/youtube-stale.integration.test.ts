@@ -113,7 +113,7 @@ async function snapshotCount(watchId: string): Promise<number> {
 
 afterEach(async () => {
   vi.unstubAllGlobals();
-  await env.IDENTITY_CACHE.delete("identity:gymshark:youtube-channel");
+  await env.IDENTITY_CACHE.delete("identity:@gymshark:youtube-channel");
 });
 
 describe("YouTube sweep stale channel", () => {
