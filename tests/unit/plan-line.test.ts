@@ -5,7 +5,7 @@ import { planLine } from "../../app/lib/billing/plan-line";
 describe("planLine", () => {
   it("says no payment is set up when nothing is billed", () => {
     expect(planLine({ tier: "scout", status: "none", currentPeriodEnd: null, trialing: false, billed: false })).toBe(
-      "You're on Scout. Nothing is being charged.",
+      "You're on Scout. No payment is set up.",
     );
   });
 

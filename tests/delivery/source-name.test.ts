@@ -28,6 +28,10 @@ describe("platformName", () => {
     expect(platformName("not-a-platform")).toBe("other sources");
   });
 
+  it("keeps a platform key literally named other in the fallback group", () => {
+    expect(watchedNames(["other", "odd", "feed"])).toEqual(["Blog and changelog", "other sources"]);
+  });
+
   it("reads as one sentence in the quiet-week line, with each name once", () => {
     const names = watchedNames(["odd", "gdelt", "web", "web", "other"]);
     expect(quietWeekSentence(names, null, "21:00 UTC")).toContain("We watch News, Website, and other sources;");
