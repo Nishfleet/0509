@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createAuth, requestEmailChange } from "../../app/lib/auth.server";
+import { runSettingsIntent } from "../../app/lib/settings.server";
 
 const sent: { to: string; text: string }[] = [];
 
@@ -103,7 +104,7 @@ describe("change sign-in email", () => {
       .run();
     const before = sent.length;
 
-    await expect(requestEmailChange(authEnv, asRequest(cookie), "new-c@0509.io")).rejects.toBeDefined();
+    expect(await requestEmailChange(authEnv, asRequest(cookie), "new-c@0509.io")).toBe("stale");
     expect(sent.length).toBe(before);
   });
 
@@ -153,5 +154,19 @@ describe("change sign-in email", () => {
     );
     expect(response.status).toBe(404);
     expect(sent.length).toBe(before);
+  });
+});
+
+describe("change email from Settings", () => {
+  it("tells a customer with no fresh session to sign in again, not that sending failed", async () => {
+    const result = await runSettingsIntent(
+      { id: "u-none", email: "none@0509.io" },
+      new Request("https://0509.io/app/settings", {
+        method: "POST",
+        body: new URLSearchParams({ intent: "change-email", newEmail: "next@0509.io" }),
+      }),
+      {} as never,
+    );
+    expect(result.emailChangeError).toBe("For your safety, sign out and sign back in, then change your email.");
   });
 });

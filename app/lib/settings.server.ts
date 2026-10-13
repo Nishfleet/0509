@@ -28,7 +28,8 @@ import { saveBriefSchedule } from "./standing/reschedule.server";
 
 const MISMATCH = "That doesn't match your email. Type it exactly to delete your account.";
 const EMAIL_INVALID = "Enter an email address, like you@company.com.";
-const EMAIL_FAILED = "We couldn't send the link. For your safety, sign out and back in, then try again.";
+const EMAIL_FAILED = "We couldn't send the link. Try again in a minute.";
+const EMAIL_SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then change your email.";
 const EMAIL_LIMITED = "Too many tries. Wait a minute and try again.";
 const SLACK_INVALID = "That is not a Slack webhook address. It starts with https://hooks.slack.com/services/.";
 const SLACK_FAILED = "Slack did not accept a test message. Check the address and try again.";
@@ -174,9 +175,9 @@ async function changeEmail(request: Request, form: FormData): Promise<SettingsRe
   const newEmail = parsed.success ? parsed.data.newEmail.trim() : "";
   if (!z.email().safeParse(newEmail).success) return result({ emailChangeError: EMAIL_INVALID });
   try {
-    if ((await requestEmailChange(env, request, newEmail)) === "limited") {
-      return result({ emailChangeError: EMAIL_LIMITED });
-    }
+    const outcome = await requestEmailChange(env, request, newEmail);
+    if (outcome === "limited") return result({ emailChangeError: EMAIL_LIMITED });
+    if (outcome === "stale") return result({ emailChangeError: EMAIL_SIGN_IN_AGAIN });
   } catch (failed) {
     console.error(
       JSON.stringify({
