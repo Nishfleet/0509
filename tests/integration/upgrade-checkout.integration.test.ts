@@ -127,7 +127,7 @@ describe("upgrade checkout when the workspace already has a plan (#7228)", () =>
 
   async function checkoutBodyAfterLookup(
     status: string,
-    productOnFile: string,
+    productOnFile: string | null | 404,
   ): Promise<Record<string, unknown> | undefined> {
     await seedPlan(status, "2020-01-01T00:00:00Z");
     await env.DB.prepare(
@@ -138,7 +138,11 @@ describe("upgrade checkout when the workspace already has a plan (#7228)", () =>
       .mockImplementation((input) =>
         Promise.resolve(
           String(input).includes("/subscriptions/")
-            ? Response.json({ product_id: productOnFile })
+            ? productOnFile === null
+              ? new Response("boom", { status: 500 })
+              : productOnFile === 404
+                ? new Response("gone", { status: 404 })
+                : Response.json({ product_id: productOnFile })
             : Response.json(checkoutSession, { status: 200 }),
         ),
       );
@@ -161,5 +165,13 @@ describe("upgrade checkout when the workspace already has a plan (#7228)", () =>
     expect(await checkoutBodyAfterLookup("failed", "pdt_test_starter")).toMatchObject({
       subscription_data: { trial_period_days: 7 },
     });
+  });
+
+  it("starts no checkout when Dodo cannot say whether the customer paid before", async () => {
+    expect(await checkoutBodyAfterLookup("cancelled", null)).toBeUndefined();
+  });
+
+  it("treats a subscription Dodo no longer has as a paid one, so the customer is not stuck", async () => {
+    expect(await checkoutBodyAfterLookup("cancelled", 404)).not.toHaveProperty("subscription_data");
   });
 });
