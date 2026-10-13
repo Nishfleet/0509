@@ -36,8 +36,20 @@ describe("the push when navigating into a brand", () => {
 
   it("keeps every view-transition rule inside the no-preference block", async () => {
     const css = await readFile(CSS_PATH, "utf8");
-    const outside = css.replace(block(css, "@media (prefers-reduced-motion: no-preference)"), "");
+    const outside = css
+      .replace(block(css, "@media (prefers-reduced-motion: no-preference)"), "")
+      .replace(block(css, "@media (prefers-reduced-motion: reduce)"), "");
 
     expect(outside).not.toContain("::view-transition");
+  });
+
+  it("switches the browser's default cross-fade off for visitors who asked for reduced motion", async () => {
+    const css = await readFile(CSS_PATH, "utf8");
+    const reduced = block(css, "@media (prefers-reduced-motion: reduce)");
+
+    expect(reduced).toMatch(/::view-transition-old\(\*\)/);
+    expect(reduced).toMatch(/::view-transition-new\(\*\)/);
+    expect(reduced).toMatch(/::view-transition-group\(\*\)/);
+    expect(reduced).toMatch(/animation: none !important/);
   });
 });
