@@ -9,30 +9,34 @@ not have told anyone, so a customer's brief could go stale before we noticed.
 
 ## Start and end
 
-Start: when the cron monitors were first declared (about 11 of them).
+Start: 2026-10-05. The last Sentry check-ins were mentions-sweep 10-05T01:01Z
+and site-sweep 10-05T02:02Z; neither monitor reported again.
 End: when `HEALTHCHECKS_PING_KEY` is set on the Worker (see Fix).
 
 ## What happened
 
-- Sentry showed every cron monitor except `liveness-ping` as disabled, with
-  old schedules (mentions `0 1`, site `0 2`, hiring `30 2`, feed `45 2`), and
-  no alert workflow was attached to any of them.
+- Read-only Sentry reads on 2026-10-13: mentions-sweep and site-sweep are
+  DISABLED, still scheduled `0 1` and `0 2`; only `liveness-ping` is active.
+  No alert workflow is attached to any monitor.
 - The code sends the current schedule with every check-in
   (`SWEEP_MONITORS` in `app/lib/cadence.ts`, `cronMonitor` in
-  `workers/cron-monitors.ts`), so a stale schedule means check-ins were
-  dropped, not that the code was wrong.
+  `workers/cron-monitors.ts`), so the stale schedules mean check-ins stopped
+  being accepted, not that the code was wrong.
+- Over 14 days Sentry accepted 9133 check-ins and rate-limited 484. The
+  monitor-seat stat came back empty and the plan endpoint returned 404, so the
+  quota is unknown.
 
 ## Root cause
 
-Proven: the monitors are disabled and nothing is attached to alert.
+Proven: Sentry disabled the sweep monitors on or after 10-05, and nothing was
+attached to alert on a missed or failed run, so the sweeps went unwatched from
+10-05 to now.
 
-Not proven: why they are disabled. Leading cause is the free Sentry plan's
-monitor limit (about one) against the ~11 we declare, so extras are disabled
-and their check-ins ignored. Four read-only Sentry GETs in
-`/mnt/project-files/ci/journeys-sentry-asks.md` settle it.
+Not proven: why Sentry disabled them. Likely the free plan's monitor limit
+against the ~11 we declare; the plan page is the one thing only Nish can read.
 
-Either way, the design was wrong: the only path to a human was a Sentry
-setting nobody had made, and nothing in code could tell us it was missing.
+Either way the design was wrong: the only path to a human was a Sentry setting
+nobody had made, and nothing in code could show it was missing.
 
 ## Detection
 
