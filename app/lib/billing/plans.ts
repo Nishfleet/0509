@@ -71,6 +71,8 @@ export const NO_TRIAL_TERMS =
 
 export const TRIAL_TERMS = `Your first plan starts with a ${String(TRIAL_DAYS)}-day trial. Your card is taken up front and charged on day ${String(TRIAL_DAYS + 1)} unless you cancel.`;
 
+export const TRIAL_SUMMARY = `${String(TRIAL_DAYS)}-day trial, card charged on day ${String(TRIAL_DAYS + 1)} unless you cancel.`;
+
 export function isPlanId(value: unknown): value is PlanId {
   return PLANS.some((plan) => plan.id === value);
 }
