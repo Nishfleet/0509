@@ -25,9 +25,12 @@ import {
 vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn(), captureMessage: vi.fn() }));
 
 function fakeEnv(existing = new Set<string>()) {
-  const createBatch = vi.fn((batch: { id: string }[]) =>
-    Promise.resolve(existing.has(batch[0]?.id ?? "") ? [] : [...batch]),
-  );
+  const createBatch = vi.fn((batch: { id: string }[]) => {
+    const id = batch[0]?.id ?? "";
+    if (existing.has(id)) return Promise.resolve([]);
+    existing.add(id);
+    return Promise.resolve([...batch]);
+  });
   const bindings = {
     MENTIONS: { createBatch },
     SITE_SWEEP: { createBatch },
@@ -48,13 +51,13 @@ describe("startScheduledWorkflow", () => {
   });
 
   it("gives a moved schedule a new id on the day it moves, so the old slot cannot swallow the new one (10-08 sweeps)", async () => {
-    const { env } = fakeEnv(new Set(["mentions-sweep-2026-10-08T01"]));
+    const { env } = fakeEnv(new Set(["mentions-sweep-2026-10-08"]));
     const id = await startScheduledWorkflow(env, MENTIONS_SWEEP_CRON, Date.UTC(2026, 9, 8, 19, 0, 0));
     expect(id).toBe("mentions-sweep-2026-10-08T19");
     const started = await startMissedDailyWorkflows(env, Date.UTC(2026, 9, 8, 20, 0, 0));
     expect(started).toContainEqual({
       status: "fulfilled",
-      value: { cron: MENTIONS_SWEEP_CRON, id: "mentions-sweep-2026-10-08T19", created: true },
+      value: { cron: MENTIONS_SWEEP_CRON, id: "mentions-sweep-2026-10-08T19", created: false },
     });
   });
 

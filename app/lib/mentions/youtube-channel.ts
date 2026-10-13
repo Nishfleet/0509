@@ -181,7 +181,9 @@ export function withLostChannel(raw: string, at: string): string {
   const read = readWatchConfig(raw);
   if (read.status !== "ok") throw new Error("watch config_json is unreadable");
   if (read.lostChannel !== null) return raw;
-  return withFlags(read.record, { reason: LOST_CHANNEL_REASON, at }, read.noChannel);
+  const record: Record<string, unknown> = { ...read.record };
+  delete record.feedError;
+  return withFlags(record, { reason: LOST_CHANNEL_REASON, at }, read.noChannel);
 }
 
 export function withNoChannel(raw: string, at: string): string {
