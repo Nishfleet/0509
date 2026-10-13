@@ -19,6 +19,7 @@ async function isTesterSubscription(subscriptionId: string): Promise<boolean | n
   try {
     return (await client.subscriptions.retrieve(subscriptionId)).product_id === testerProductId();
   } catch (error) {
+    if (error instanceof DodoPayments.NotFoundError) return false;
     const status =
       error instanceof DodoPayments.APIError && typeof error.status === "number" ? String(error.status) : "none";
     console.error(JSON.stringify({ event: "billing.returning_lookup_failed", status }));
