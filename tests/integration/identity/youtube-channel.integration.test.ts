@@ -36,26 +36,67 @@ describe("lookupYoutubeChannel", () => {
   ])("reads a page that redirects to %s as unresolved and never fetches the target", async (_label, target, handle) => {
     const fetchMock = vi.fn(() => Promise.resolve(new Response(null, { status: 302, headers: { location: target } })));
     vi.stubGlobal("fetch", fetchMock);
-    await expect(lookupYoutubeChannel(identityFor(handle))).resolves.toEqual({ status: "unresolved" });
+    await expect(lookupYoutubeChannel(identityFor(handle))).resolves.toMatchObject({ status: "unresolved" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it.each([
-    ["an http link", { platform: "youtube", url: "http://www.youtube.com/@plainhttp0509" }],
-    ["a link labelled otherwise", { platform: "video", url: "https://www.youtube.com/@otherlabel0509" }],
-  ])("reads %s to YouTube as unresolved, not as no channel", async (_label, social) => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-    await expect(lookupYoutubeChannel(JSON.stringify({ socials: [social] }))).resolves.toEqual({
-      status: "unresolved",
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
+  it.each([["a link labelled otherwise", { platform: "video", url: "https://www.youtube.com/@otherlabel0509" }]])(
+    "reads %s to YouTube as unresolved, not as no channel",
+    async (_label, social) => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      await expect(lookupYoutubeChannel(JSON.stringify({ socials: [social] }))).resolves.toEqual({
+        status: "unresolved",
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     ["no socials", {}],
     ["only non-YouTube socials", { socials: [{ platform: "x", url: "https://x.com/brand0509" }] }],
   ])("reads a card with %s as no-url", async (_label, card) => {
     await expect(lookupYoutubeChannel(JSON.stringify(card))).resolves.toEqual({ status: "no-url" });
+  });
+
+  it.each([
+    ["an http user link", "http://youtube.com/user/Fabletics0509", "https://www.youtube.com/user/Fabletics0509"],
+    ["a legacy custom url without a prefix", "https://www.youtube.com/puma0509/", "https://www.youtube.com/puma0509"],
+    ["a bare http legacy url", "http://youtube.com/reebok0509", "https://www.youtube.com/reebok0509"],
+  ])("reads %s from the youtube page it normalises to", async (_label, href, fetched) => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        new Response(`<link rel="canonical" href="https://www.youtube.com/channel/${CHANNEL_ID}">`, { status: 200 }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      lookupYoutubeChannel(JSON.stringify({ socials: [{ platform: "youtube", url: href }] })),
+    ).resolves.toEqual({ status: "id", channelId: CHANNEL_ID });
+    expect(String((fetchMock.mock.calls[0] as unknown[])[0])).toBe(fetched);
+  });
+
+  it.each([
+    "https://www.youtube.com/watch?v=abc123",
+    "https://www.youtube.com/playlist?list=PL1",
+    "https://www.youtube.com/",
+  ])("does not read %s as a channel", async (href) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      lookupYoutubeChannel(JSON.stringify({ socials: [{ platform: "youtube", url: href }] })),
+    ).resolves.toEqual({ status: "no-url" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("says why a youtube page gave no channel id", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response("consent", { status: 200 }))),
+    );
+    await expect(lookupYoutubeChannel(identityFor("consentwall0509"))).resolves.toEqual({
+      status: "unresolved",
+      reason: "youtube page had no channel id (200, 7 chars)",
+    });
   });
 });

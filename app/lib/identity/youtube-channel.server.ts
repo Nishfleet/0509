@@ -7,9 +7,10 @@ import {
   channelIdFromUrl,
   identityHasYoutubeUrl,
   isYoutubeChannelId,
+  youtubePageUrl,
   youtubeUrlFromIdentity,
 } from "../mentions/youtube-channel";
-import { normaliseSubject } from "./normalise";
+import type { Subject } from "./normalise";
 import { cachedProbe } from "./probe-cache.server";
 
 const cachedChannel = z.object({
@@ -17,7 +18,7 @@ const cachedChannel = z.object({
 });
 
 export type YoutubeChannelLookup =
-  { status: "id"; channelId: string } | { status: "no-url" } | { status: "unresolved" };
+  { status: "id"; channelId: string } | { status: "no-url" } | { status: "unresolved"; reason?: string };
 
 const MAX_PAGE_BYTES = 5 * 1024 * 1024;
 
@@ -49,7 +50,10 @@ async function readYoutubeChannelPage(pageUrl: string): Promise<{ channelId: str
   const html = await cappedText(response, MAX_PAGE_BYTES);
   if (html === null) throw new YoutubePageMiss("youtube page too large");
   const id = channelIdFromHtml(html);
-  if (id === null) throw new YoutubePageMiss("youtube page had no channel id");
+  if (id === null)
+    throw new YoutubePageMiss(
+      `youtube page had no channel id (${String(response.status)}, ${String(html.length)} chars)`,
+    );
   return { channelId: id };
 }
 
@@ -58,18 +62,22 @@ export async function lookupYoutubeChannel(identityJson: string): Promise<Youtub
   if (url === null) return { status: identityHasYoutubeUrl(identityJson) ? "unresolved" : "no-url" };
   const fromUrl = channelIdFromUrl(url);
   if (fromUrl !== null) return { status: "id", channelId: fromUrl };
-  const normalised = normaliseSubject(url);
-  if (!normalised.ok || normalised.subject.platform !== "youtube") return { status: "unresolved" };
-  const pageUrl = normalised.subject.url;
-  if (!pageUrl?.startsWith("https://www.youtube.com/")) return { status: "unresolved" };
+  const pageUrl = youtubePageUrl(url);
+  if (pageUrl === null) return { status: "no-url" };
+  const subject: Subject = {
+    kind: "channel",
+    platform: "youtube",
+    registrable: (pageUrl.split("/").pop() ?? "").replace(/^@/, "").toLowerCase(),
+    url: pageUrl,
+  };
   try {
-    const found = await cachedProbe(normalised.subject, "youtube-channel", {
+    const found = await cachedProbe(subject, "youtube-channel", {
       schema: cachedChannel,
       run: () => readYoutubeChannelPage(pageUrl),
     });
     return { status: "id", channelId: found.channelId };
   } catch (error) {
-    if (error instanceof YoutubePageMiss) return { status: "unresolved" };
+    if (error instanceof YoutubePageMiss) return { status: "unresolved", reason: error.message };
     throw error;
   }
 }
