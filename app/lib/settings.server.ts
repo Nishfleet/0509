@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { RouterContextProvider } from "react-router";
 
 import { deleteAccount } from "./account-delete.server";
+import { cancelPlanForDelete } from "./billing/cancel.server";
 import { oauthHelpersContext } from "./agent/context.server";
 import { removeSignedInPasskey, requestEmailChange, signOut } from "./auth.server";
 import { nextBriefAt } from "./brief-schedule";
@@ -32,6 +33,8 @@ const SLACK_INVALID = "That is not a Slack webhook address. It starts with https
 const SLACK_FAILED = "Slack did not accept a test message. Check the address and try again.";
 const SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then delete your account.";
 const PASSKEY_SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then remove your passkey.";
+const PLAN_NOT_CANCELLED =
+  "We couldn't cancel your plan, so we haven't deleted anything and you won't be charged for the account. Try again in a minute.";
 const PASSKEY_FAILED = "The passkey wasn't removed. Try again.";
 
 const alertSwitchForm = z.object({ value: z.enum(["on", "off"]) });
@@ -189,6 +192,9 @@ async function removeAccount(
   const parsed = deleteAccountForm.safeParse(Object.fromEntries(form));
   const typed = parsed.success ? parsed.data.confirm.trim().toLowerCase() : "";
   if (typed !== user.email.toLowerCase()) return result({ deleteError: MISMATCH });
+  const workspaceId = await readWorkspaceIdForOwner(user.id);
+  if (workspaceId !== null && !(await cancelPlanForDelete(workspaceId)))
+    return result({ deleteError: PLAN_NOT_CANCELLED });
   const deleted = await deleteAccount(call.context.get(oauthHelpersContext), call.request, user.id);
   if (deleted === null) return result({ deleteError: SIGN_IN_AGAIN });
   throw redirect(`/login?deleted=${encodeURIComponent(deleted.instanceId)}`, { headers: deleted.headers });
