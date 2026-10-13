@@ -95,4 +95,17 @@ describe("planLine when a payment did not go through", () => {
       "Your payment for Starter didn't go through, so you're on Scout.",
     );
   });
+
+  it("does not say a Scout plan drops to Scout", () => {
+    expect(planLine({ ...base, tier: "scout" }, new Date("2026-10-13T00:00:00.000Z"))).toBe(
+      "Your last payment for Scout didn't go through, so it's paused. Update your card to switch it back on.",
+    );
+    expect(planLine({ ...base, tier: "scout", status: "failed" }, new Date("2026-10-13T00:00:00.000Z"))).toBe(
+      "Your payment for Scout didn't go through.",
+    );
+  });
+
+  it("shows the on-hold line even when the plan was a trial", () => {
+    expect(planLine({ ...base, trialing: true }, new Date("2026-10-13T00:00:00.000Z"))).toContain("paused");
+  });
 });
