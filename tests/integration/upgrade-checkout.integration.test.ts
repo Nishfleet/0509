@@ -165,9 +165,7 @@ describe("upgrade checkout when the workspace already has a plan (#7228)", () =>
     });
   });
 
-  it("keeps the trial when Dodo cannot say what the old subscription was", async () => {
-    expect(await checkoutBodyAfterLookup("cancelled", null)).toMatchObject({
-      subscription_data: { trial_period_days: 7 },
-    });
+  it("starts no checkout when Dodo cannot say whether the customer paid before", async () => {
+    expect(await checkoutBodyAfterLookup("cancelled", null)).toBeUndefined();
   });
 });

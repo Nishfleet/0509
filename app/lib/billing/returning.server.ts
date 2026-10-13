@@ -8,8 +8,8 @@ import { testerProductId } from "./products.server";
 
 const NEVER_STARTED = new Set(["failed", "pending"]);
 
-async function isTesterOrUnknown(subscriptionId: string): Promise<boolean> {
-  if (env.DODO_PAYMENTS_API_KEY === "") return true;
+async function isTesterSubscription(subscriptionId: string): Promise<boolean | null> {
+  if (env.DODO_PAYMENTS_API_KEY === "") return null;
   const client = new DodoPayments({
     bearerToken: env.DODO_PAYMENTS_API_KEY,
     environment: env.DODO_ENVIRONMENT,
@@ -19,16 +19,22 @@ async function isTesterOrUnknown(subscriptionId: string): Promise<boolean> {
   try {
     return (await client.subscriptions.retrieve(subscriptionId)).product_id === testerProductId();
   } catch (error) {
-    const status = error instanceof DodoPayments.APIError ? String(error.status) : "none";
+    const status =
+      error instanceof DodoPayments.APIError && typeof error.status === "number" ? String(error.status) : "none";
     console.error(JSON.stringify({ event: "billing.returning_lookup_failed", status }));
-    return true;
+    return null;
   }
 }
 
-export async function isReturningCustomer(plan: PlanSubscription | null): Promise<boolean> {
+export async function returningLookup(plan: PlanSubscription | null): Promise<boolean | null> {
   const subscriptionId = plan?.subscriptionId ?? null;
   if (plan === null || subscriptionId === null || NEVER_STARTED.has(plan.status)) return false;
-  return !(await isTesterOrUnknown(subscriptionId));
+  const tester = await isTesterSubscription(subscriptionId);
+  return tester === null ? null : !tester;
+}
+
+export async function isReturningCustomer(plan: PlanSubscription | null): Promise<boolean> {
+  return (await returningLookup(plan)) === true;
 }
 
 export async function returningForGate(workspaceId: string, plan: PlanSummary): Promise<boolean> {
