@@ -17,6 +17,7 @@ const PLATFORM_NAMES: Readonly<Record<string, string>> = {
   snap: "Snapchat",
   tiktok: "TikTok",
   workable: "Workable",
+  web: "Website",
   x: "X",
   youtube: "YouTube",
 };
@@ -36,9 +37,8 @@ export function sourceName(kind: string, platform: string): string {
   return brand === undefined ? `Your ${noun} source` : `${brand} ${noun}`;
 }
 
-export function platformName(platform: string): string | null {
-  if (platform === "web") return "Website";
-  return PLATFORM_NAMES[platform] ?? null;
+export function platformName(platform: string): string {
+  return PLATFORM_NAMES[platform] ?? "other sources";
 }
 
 export function sourceKindNoun(kind: string): string {

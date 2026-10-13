@@ -87,7 +87,7 @@ export async function readCompetitorPage(
     weekCount: changes.filter((change) => change.observedAt >= weekStart).length,
     biggestMove: move === null ? null : biggestMoveView(move, now),
     quiet: quietWeekSentence(
-      [...new Set(sources.map((row) => platformName(row.source.platform)).filter((name) => name !== null))],
+      [...new Set(sources.map((row) => platformName(row.source.platform)))],
       watch.lastPolledAt === null ? null : captureLabel(watch.lastPolledAt),
       sweepClock,
     ),
