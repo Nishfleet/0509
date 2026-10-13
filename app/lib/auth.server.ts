@@ -269,13 +269,11 @@ export async function requestEmailChange(
   env: AuthEnv & { CHANGE_EMAIL_LIMIT: RateLimit },
   request: Request,
   newEmail: string,
-): Promise<"sent" | "limited"> {
+): Promise<"sent" | "limited" | "stale"> {
   const auth = createAuth(env);
   const session = await auth.api.getSession({ headers: request.headers, query: FRESH });
-  if (!session) throw new Error("no session");
-  if (Date.now() - new Date(session.session.createdAt).getTime() >= FRESH_SESSION_SECONDS * 1000) {
-    throw new Error("session not fresh");
-  }
+  if (!session) return "stale";
+  if (Date.now() - new Date(session.session.createdAt).getTime() >= FRESH_SESSION_SECONDS * 1000) return "stale";
   if (!(await changeEmailAllowed(env.CHANGE_EMAIL_LIMIT, session.user.id, newEmail))) return "limited";
   await auth.api.changeEmail({
     body: { newEmail, callbackURL: "/app/settings" },
