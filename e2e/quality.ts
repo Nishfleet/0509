@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, type TestInfo } from "@playwright/test";
 
-import { consoleFailures, watchConsole } from "./inbox";
+import { consoleFailures, watchConsole, watchRequests } from "./inbox";
 
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const MAX_TAB_STOPS = 60;
@@ -23,18 +23,7 @@ export async function startQuality(page: Page): Promise<Quality> {
       }
     }).observe({ type: "layout-shift", buffered: true });
   });
-  const failedRequests: string[] = [];
-  page.on("requestfailed", (request) => {
-    const reason = request.failure()?.errorText ?? "";
-    if (reason === "net::ERR_ABORTED") return;
-    failedRequests.push(`${request.method()} ${request.url()} ${reason}`);
-  });
-  page.on("response", (response) => {
-    if (response.status() < 400) return;
-    if (response.headers()["cf-speculation-refused"]) return;
-    if (response.request().resourceType() === "document") return;
-    failedRequests.push(`${String(response.status())} ${response.request().method()} ${response.url()}`);
-  });
+  const failedRequests = watchRequests(page);
   return { watched: watchConsole(page), failedRequests };
 }
 

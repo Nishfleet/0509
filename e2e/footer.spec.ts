@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 // This spec traces to the `/`, `/login`, `/pricing`, `/privacy` and `/terms` rows in
 // .agents/skills/verify/feature-map.md: each route's footer carries the Privacy
