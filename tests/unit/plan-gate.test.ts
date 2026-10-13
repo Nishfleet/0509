@@ -36,12 +36,12 @@ vi.mock("react-router", async (importOriginal) => {
   return { ...actual, useFetcher: () => ({ state: fetcher.value.state, data: fetcher.value.data, Form }) };
 });
 
-function renderPlanGate(): string {
+function renderPlanGate(returning = false): string {
   const Stub = createRoutesStub([
     {
       id: "plan-gate",
       path: "/",
-      Component: () => createElement(PlanGate, { planId: "starter" }),
+      Component: () => createElement(PlanGate, { planId: "starter", returning }),
     },
   ]);
   const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
@@ -71,6 +71,13 @@ describe("PlanGate", () => {
     const paragraph = paragraphWrapping(html, "available right now");
     expect(paragraph).toContain('role="alert"');
     expect(paragraph).not.toContain('role="status"');
+  });
+
+  it("promises the trial to a new customer and not to one who has had it", () => {
+    expect(renderPlanGate()).toContain("7-day trial");
+    const returning = renderPlanGate(true);
+    expect(returning).not.toContain("7-day trial");
+    expect(returning).toContain("already had your free trial");
   });
 
   it("renders no message paragraph and no alert while the fetcher holds nothing", () => {
