@@ -122,6 +122,6 @@ describe("the freshness line", () => {
     expect(html).toContain('data-state="live"');
     expect(html).toContain('data-state="degraded"');
     expect(html.match(/<li\b/g)).toHaveLength(2);
-    expect(html).not.toContain(" · ");
+    expect(html).toContain("</li><li");
   });
 });
