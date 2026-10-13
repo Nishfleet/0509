@@ -1,3 +1,4 @@
+import { getDomainWithoutSuffix } from "tldts";
 import { z } from "zod";
 
 import { extractPageText } from "../site/extract-text";
@@ -189,25 +190,24 @@ function inlineSocialLinks(html: string): string[] {
   return links;
 }
 
-const RAW_YOUTUBE_LINK = /https?:\/\/(?:www\.|m\.)?youtube\.com\/(?:@|c\/|user\/)([\w.-]+)/gi;
+const RAW_YOUTUBE_LINK = /https?:\/\/(?:www\.|m\.)?youtube\.com\/(?:@|c\/|user\/)(\w+(?:[.-]\w+)*)/gi;
 
-function brandLabel(pageUrl: string): string {
-  const labels = socialHost(new URL(pageUrl).hostname).split(".");
-  return (labels.at(-2) ?? labels[0] ?? "").replaceAll(/[^a-z0-9]/g, "");
+function simplified(value: string): string {
+  return value.toLowerCase().replaceAll(/[^a-z0-9]/g, "");
 }
 
 function rawYoutubeLinks(html: string, pageUrl: string, ldBlocks: readonly string[]): string[] {
-  const label = brandLabel(pageUrl);
+  const label = simplified(getDomainWithoutSuffix(new URL(pageUrl).hostname) ?? "");
   if (label.length < 3) return [];
   const text = ldBlocks.reduce((rest, block) => rest.replaceAll(block, ""), html).replaceAll(/\\u002f|\\\//gi, "/");
   return [...text.matchAll(RAW_YOUTUBE_LINK)]
-    .filter(([, name]) =>
-      (name ?? "")
-        .toLowerCase()
-        .replaceAll(/[^a-z0-9]/g, "")
-        .includes(label),
-    )
+    .filter(([, name]) => simplified(name ?? "") === label)
     .map(([link]) => link);
+}
+
+function withScriptYoutube(socials: SocialLink[], scripted: readonly string[]): SocialLink[] {
+  if (socials.some((social) => social.platform === "youtube")) return socials;
+  return [...socials, ...collectSocials(scripted, [])];
 }
 
 const YOUTUBE_CHANNEL_PATH = /^\/(?:channel\/UC[0-9A-Za-z_-]{22}|@[^/]+)\/?$/;
@@ -393,9 +393,9 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
     ldOrganizationLogo: organization.logo,
     appleTouchIcon: state.appleTouchIcon,
     manifestUrl: state.manifestUrl,
-    socials: collectSocials(
-      [...organization.sameAs, ...inlineSocialLinks(html)],
-      [...anchors, ...rawYoutubeLinks(html, pageUrl, state.ldBlocks)],
+    socials: withScriptYoutube(
+      collectSocials([...organization.sameAs, ...inlineSocialLinks(html)], anchors),
+      rawYoutubeLinks(html, pageUrl, state.ldBlocks),
     ),
     navLinks,
     navPages,
