@@ -202,13 +202,11 @@ function rawYoutubeLinks(html: string, pageUrl: string): string[] {
   if (label.length < 3) return [];
   const text = html.replaceAll(LD_JSON_BLOCK, "").replaceAll(/\\u002f|\\\//gi, "/");
   return [...text.matchAll(RAW_YOUTUBE_LINK)]
-    .filter(
-      ([, name]) =>
-        name !== undefined &&
-        name
-          .toLowerCase()
-          .replaceAll(/[^a-z0-9]/g, "")
-          .includes(label),
+    .filter(([, name]) =>
+      (name ?? "")
+        .toLowerCase()
+        .replaceAll(/[^a-z0-9]/g, "")
+        .includes(label),
     )
     .map(([link]) => link);
 }
