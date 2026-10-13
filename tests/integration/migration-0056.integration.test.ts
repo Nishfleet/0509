@@ -103,8 +103,7 @@ describe("the 0056 re-read UPDATE", () => {
         expect(now, card.id).toBe(card.identity);
         continue;
       }
-      const expected: Record<string, unknown> = JSON.parse(card.identity);
-      delete expected.socialsReadAt;
+      const { socialsReadAt: _read, ...expected } = JSON.parse(card.identity) as Record<string, unknown>;
       expect(JSON.parse(now ?? "null"), card.id).toEqual(expected);
     }
   });
