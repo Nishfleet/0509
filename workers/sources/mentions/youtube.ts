@@ -28,6 +28,7 @@ export interface OkYoutubeFeed {
 
 interface LostYoutubeFeed {
   feedState: "stale" | "error";
+  status: number;
   items: [];
   canaryCount: 0;
   rawBody: string;
@@ -35,7 +36,7 @@ interface LostYoutubeFeed {
 
 type YoutubeFeed = OkYoutubeFeed | LostYoutubeFeed;
 
-function lostFeed(feedState: "stale" | "error", rawBody: string): LostYoutubeFeed {
+function lostFeed(feedState: "stale" | "error", rawBody: string, status: number): LostYoutubeFeed {
   const parsed = mentionsResultSchema.parse({
     items: [],
     canaryCount: 0,
@@ -43,9 +44,9 @@ function lostFeed(feedState: "stale" | "error", rawBody: string): LostYoutubeFee
     feedState,
   });
   if (feedState === "stale") {
-    return { feedState: "stale", items: [], canaryCount: 0, rawBody: parsed.rawBody };
+    return { feedState: "stale", status, items: [], canaryCount: 0, rawBody: parsed.rawBody };
   }
-  return { feedState: "error", items: [], canaryCount: 0, rawBody: parsed.rawBody };
+  return { feedState: "error", status, items: [], canaryCount: 0, rawBody: parsed.rawBody };
 }
 
 function okFeed(items: MentionItem[], canaryCount: number, rawBody: string): OkYoutubeFeed {
@@ -64,18 +65,18 @@ function okFeed(items: MentionItem[], canaryCount: number, rawBody: string): OkY
 }
 
 export async function youtubeAdapter(target: MentionsTarget, _cursor: MentionsCursor): Promise<YoutubeFeed> {
-  if (!isYoutubeChannelId(target.query)) return lostFeed("error", "");
+  if (!isYoutubeChannelId(target.query)) return lostFeed("error", "", 0);
   const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(target.query)}`;
   const response = await fetchUpstream(url);
   const rawBody = await response.text();
 
-  if (response.status === 404) return lostFeed("stale", rawBody);
-  if (!response.ok) return lostFeed("error", rawBody);
+  if (response.status === 404) return lostFeed("stale", rawBody, response.status);
+  if (!response.ok) return lostFeed("error", rawBody, response.status);
 
   const entries = readAtomEntries(rawBody, (data) => ({
     videoId: VIDEO_ID.safeParse(data["yt:videoId"] ?? data.videoId).data ?? null,
   }));
-  if (entries === null) return lostFeed("stale", rawBody);
+  if (entries === null) return lostFeed("stale", rawBody, response.status);
 
   const items = entries.flatMap((entry) => {
     const parsed = ENTRY_SCHEMA.safeParse(entry);

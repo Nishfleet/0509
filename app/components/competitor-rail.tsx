@@ -95,7 +95,7 @@ function Peers({ entityId, peers }: { entityId: string; peers: readonly RailPeer
                 {peer.name}
               </span>
             ) : (
-              <Link to={`/app/competitors/${peer.entityId}`} prefetch="intent">
+              <Link to={`/app/competitors/${peer.entityId}`} prefetch="intent" viewTransition>
                 {peer.name}
               </Link>
             )}

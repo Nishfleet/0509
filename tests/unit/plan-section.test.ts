@@ -74,6 +74,48 @@ describe("PlanSection", () => {
     expect(html).toContain("€46/mo");
   });
 
+  it("offers the next plan again, and keeps billing history, once a paid plan has ended", () => {
+    const html = render({
+      tier: "scout",
+      status: "cancelled",
+      currentPeriodEnd: "2026-09-15T00:00:00.000Z",
+      trialing: false,
+      billed: true,
+    });
+    expect(html).toContain("Your paid plan ended on 15 September 2026. You&#x27;re on Scout.");
+    expect(html).toContain("Upgrade to Starter");
+    expect(html).toContain("See billing history");
+    expect(html).not.toContain("Manage or cancel plan");
+  });
+
+  it("offers to update the card, not an upgrade, when a renewal payment is on hold", () => {
+    const html = render({ ...BILLED, status: "on_hold", currentPeriodEnd: "2026-10-20T00:00:00.000Z" });
+    expect(html).toContain("Update payment method");
+    expect(html).toContain("paused");
+    expect(html).not.toContain("Upgrade to");
+    expect(html).not.toContain("Manage or cancel plan");
+  });
+
+  it("offers the next plan again, with billing history, after a first payment failed", () => {
+    const html = render({ ...BILLED, status: "failed" });
+    expect(html).toContain("Upgrade to Agency");
+    expect(html).toContain("See billing history");
+  });
+
+  it("offers the card update and no drop-to-Scout wording when a Scout plan is on hold", () => {
+    const html = render({ ...BILLED, tier: "scout", status: "on_hold", currentPeriodEnd: "2026-10-20T00:00:00.000Z" });
+    expect(html).toContain("Update payment method");
+    expect(html).toContain("paused");
+    expect(html).not.toContain("you&#x27;re on Scout");
+    expect(html).not.toContain("Upgrade to");
+  });
+
+  it("offers Starter again after a failed Scout payment", () => {
+    const html = render({ ...BILLED, tier: "scout", status: "failed" });
+    expect(html).toContain("Upgrade to Starter");
+    expect(html).toContain("See billing history");
+  });
+
   it("offers manage or cancel, not an upgrade, to a subscriber", () => {
     const html = render(BILLED);
     expect(html).toContain("Manage or cancel plan");

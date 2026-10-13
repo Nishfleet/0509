@@ -43,7 +43,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           <SlackAlertsSetting connected={loaderData.slackConnected} error={actionData?.slackError ?? null} />
           <DismissedBrands dismissed={loaderData.dismissed} />
           <AgentsSection />
-          <PlanSection plan={loaderData.plan} />
+          <PlanSection plan={loaderData.plan} returning={loaderData.returning} />
           <AccountSection
             email={loaderData.email}
             delivery={loaderData.delivery}
