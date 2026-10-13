@@ -44,6 +44,7 @@ import {
   readWatchConfig,
   withFeedError,
   withLostChannel,
+  withPageMiss,
   withNoChannel,
   withoutLostChannel,
   withoutNoChannel,
@@ -601,6 +602,13 @@ async function flagLostChannel(watchId: string, now: string): Promise<void> {
   if (flagged !== current) await writeWatchConfigJson(watchId, flagged);
 }
 
+async function notePageMiss(watchId: string, reason: string | undefined, now: string): Promise<void> {
+  if (reason === undefined) return;
+  const current = await requireWatchConfigJson(watchId);
+  const noted = withPageMiss(current, reason, now);
+  if (noted !== current) await writeWatchConfigJson(watchId, noted);
+}
+
 async function clearNoChannel(watchId: string): Promise<void> {
   const current = await requireWatchConfigJson(watchId);
   const cleared = withoutNoChannel(current);
@@ -693,6 +701,7 @@ async function resolveYoutubeChannel(
       return { found: false, outcome: { items: 0, stored: 0, unjudged: 0, skipped: 0 } };
     case "unresolved":
       await flagLostChannel(watch.watch_id, now);
+      await notePageMiss(watch.watch_id, lookup.reason, now);
       await markWatchPolled(watch.watch_id, now);
       return { found: false, outcome: { items: 0, stored: 0, unjudged: 0, skipped: 0 } };
   }

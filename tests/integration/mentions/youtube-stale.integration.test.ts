@@ -113,7 +113,7 @@ async function snapshotCount(watchId: string): Promise<number> {
 
 afterEach(async () => {
   vi.unstubAllGlobals();
-  await env.IDENTITY_CACHE.delete("identity:gymshark:youtube-channel");
+  await env.IDENTITY_CACHE.delete("identity:@gymshark:youtube-channel");
 });
 
 describe("YouTube sweep stale channel", () => {
@@ -165,6 +165,7 @@ describe("YouTube sweep stale channel", () => {
 
     expect(JSON.parse(await configOf(watchId))).toEqual({
       degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: NOW },
+      pageMiss: { reason: "youtube page 404", at: NOW },
     });
   });
 
@@ -444,6 +445,7 @@ describe("YouTube sweep stale channel", () => {
     expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
     expect(JSON.parse(await configOf(watchId))).toEqual({
       degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: NOW },
+      pageMiss: { reason: "youtube page 404", at: NOW },
     });
     expect(await snapshotCount(watchId)).toBe(0);
   });
@@ -551,6 +553,7 @@ describe("YouTube sweep stale channel", () => {
     expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
     expect(JSON.parse(await configOf(watchId))).toEqual({
       degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: NOW },
+      pageMiss: { reason: expect.any(String), at: NOW },
     });
     expect(await snapshotCount(watchId)).toBe(0);
   });

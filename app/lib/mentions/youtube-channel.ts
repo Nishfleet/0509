@@ -139,11 +139,54 @@ function readFlagSlot(
   return { ok: true, flag: { reason: parsed.data.reason, at: parsed.data.at } };
 }
 
+const RESERVED_YOUTUBE_PATHS = new Set([
+  "about",
+  "c",
+  "channel",
+  "signin",
+  "trending",
+  "user",
+  "account",
+  "attribution_link",
+  "embed",
+  "feed",
+  "gaming",
+  "hashtag",
+  "howyoutubeworks",
+  "kids",
+  "live",
+  "music",
+  "playlist",
+  "podcasts",
+  "post",
+  "premium",
+  "redirect",
+  "results",
+  "shorts",
+  "t",
+  "tv",
+  "watch",
+  "yt",
+]);
+
+const BARE_YOUTUBE_NAME = /^https?:\/\/(?:www\.|m\.)?youtube\.com\/([^/?#]+)\/?(?:[?#].*)?$/i;
+
+export function youtubePageUrl(href: string): string | null {
+  const normalised = normaliseSubject(href);
+  if (normalised.ok) {
+    const { platform, url } = normalised.subject;
+    return platform === "youtube" && url?.startsWith("https://www.youtube.com/") ? url : null;
+  }
+  const name = BARE_YOUTUBE_NAME.exec(href)?.[1];
+  if (name === undefined || RESERVED_YOUTUBE_PATHS.has(name.toLowerCase())) return null;
+  return `https://www.youtube.com/${name}`;
+}
+
 export function youtubeUrlFromIdentity(raw: string): string | null {
   const value: unknown = JSON.parse(raw);
   const card = identitySchema.parse(value);
   for (const social of card.socials ?? []) {
-    if (social.platform === "youtube" && social.url.startsWith("https://")) return social.url;
+    if (social.platform === "youtube" && /^https?:\/\//.test(social.url)) return social.url;
   }
   return null;
 }
@@ -151,10 +194,7 @@ export function youtubeUrlFromIdentity(raw: string): string | null {
 export function identityHasYoutubeUrl(raw: string): boolean {
   const value: unknown = JSON.parse(raw);
   const card = identitySchema.parse(value);
-  return (card.socials ?? []).some((social) => {
-    const normalised = normaliseSubject(social.url);
-    return normalised.ok && normalised.subject.platform === "youtube";
-  });
+  return (card.socials ?? []).some((social) => youtubePageUrl(social.url) !== null);
 }
 
 export function identitySocialsUnread(raw: string): boolean {
@@ -197,7 +237,9 @@ export function withNoChannel(raw: string, at: string): string {
   const read = readWatchConfig(raw);
   if (read.status !== "ok") throw new Error("watch config_json is unreadable");
   if (read.noChannel !== null) return raw;
-  return withFlags(read.record, read.lostChannel, { reason: NO_CHANNEL_REASON, at });
+  const record: Record<string, unknown> = { ...read.record };
+  delete record.pageMiss;
+  return withFlags(record, read.lostChannel, { reason: NO_CHANNEL_REASON, at });
 }
 
 export function withoutLostChannel(raw: string): string {
@@ -221,8 +263,17 @@ export function withResolvedChannel(raw: string, channelId: string): string {
   delete next.degraded;
   delete next.noChannel;
   delete next.pendingChannelId;
+  delete next.pageMiss;
   delete next.feedError;
   return JSON.stringify(next);
+}
+
+export function withPageMiss(raw: string, reason: string, at: string): string {
+  const read = readWatchConfig(raw);
+  if (read.status !== "ok") throw new Error("watch config_json is unreadable");
+  const held = read.record.pageMiss;
+  if (typeof held === "object" && held !== null && "reason" in held && held.reason === reason) return raw;
+  return JSON.stringify({ ...read.record, pageMiss: { reason, at } });
 }
 
 export function withFeedError(raw: string, status: number, at: string): string {

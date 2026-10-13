@@ -13,6 +13,7 @@ import {
   readWatchConfig,
   withLostChannel,
   withNoChannel,
+  withPageMiss,
   withPendingChannel,
   withFeedError,
   withResolvedChannel,
@@ -195,6 +196,15 @@ describe("stale YouTube channel", () => {
     const resolvedRead = readWatchConfig(resolved);
     expect(resolvedRead.status).toBe("ok");
     if (resolvedRead.status === "ok") expect(resolvedRead.degraded).toBeNull();
+  });
+
+  it("keeps the first page-miss record while the reason is unchanged and drops it when the brand has no channel", () => {
+    const first = withPageMiss("{}", "youtube page 404", "2026-10-01T19:00:00.000Z");
+    expect(withPageMiss(first, "youtube page 404", "2026-10-02T19:00:00.000Z")).toBe(first);
+    expect(JSON.parse(withPageMiss(first, "youtube page 503", "2026-10-02T19:00:00.000Z"))).toEqual({
+      pageMiss: { reason: "youtube page 503", at: "2026-10-02T19:00:00.000Z" },
+    });
+    expect(JSON.parse(withNoChannel(first, "2026-10-03T19:00:00.000Z"))).not.toHaveProperty("pageMiss");
   });
 });
 
