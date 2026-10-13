@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 test("the share picture sends a signed-out visitor to the login page @smoke", async ({ request }) => {
   const response = await request.get("/app/share.png", { maxRedirects: 0 });
