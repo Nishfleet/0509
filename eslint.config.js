@@ -1669,6 +1669,29 @@ export default tseslint.config(
     },
   },
 
+  // 0509#7423 and the coordinator's ask of 2026-10-13: every e2e spec gets the
+  // console-error and failed-request guard from ./test, so `test` is never
+  // imported from @playwright/test in a spec. Setup and teardown files import
+  // it under another name and are not specs.
+  {
+    files: ["e2e/**/*.spec.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@playwright/test",
+              importNames: ["test"],
+              message:
+                'Import { test } from "./test": it fails any test that logs a console error or a failed request (0509#7423).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // 0509#7229: e2e gets full strictTypeChecked. Number interpolation is the
   // one relaxation: a report label like `step ${i}` is safe and the #7183
   // comment named timeout numbers as the reason this rule was off. Every

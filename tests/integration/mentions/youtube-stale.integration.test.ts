@@ -442,7 +442,7 @@ describe("YouTube sweep stale channel", () => {
     expect(await snapshotCount(watchId)).toBe(0);
   });
 
-  it("leaves the watch unmarked when the feed fails with 503", async () => {
+  it("does not flag the channel lost when the feed fails with 503, and notes the failure", async () => {
     const { watchId, watch } = await seed("{}", JSON.stringify({ channelId: "UCzzzzzzzzzzzzzzzzzzzzzz" }));
     stubFeeds();
 
@@ -458,7 +458,10 @@ describe("YouTube sweep stale channel", () => {
       null,
     );
 
-    expect(JSON.parse(await configOf(watchId))).toEqual({ channelId: "UCzzzzzzzzzzzzzzzzzzzzzz" });
+    expect(JSON.parse(await configOf(watchId))).toEqual({
+      channelId: "UCzzzzzzzzzzzzzzzzzzzzzz",
+      feedError: { status: 503, at: NOW },
+    });
     expect(await snapshotCount(watchId)).toBe(0);
   });
 
@@ -544,5 +547,33 @@ describe("YouTube sweep stale channel", () => {
       degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: NOW },
     });
     expect(await snapshotCount(watchId)).toBe(0);
+  });
+});
+
+describe("YouTube sweep failed feed", () => {
+  it("records the status and night on the watch, writes no snapshot, and clears when the feed answers", async () => {
+    const downId = "UCbbbbbbbbbbbbbbbbbbbbbb";
+    const { watchId, watch } = await seed('{"description":"x"}', JSON.stringify({ channelId: downId }));
+    stubFeeds();
+    const target = {
+      sourceId: watch.source_id,
+      pluginKey: watch.plugin_key,
+      query: watch.target_key,
+      minIntervalSeconds: watch.min_interval_seconds,
+      watches: [watch],
+    };
+
+    await sweepTarget(target, NOW, null);
+
+    expect(JSON.parse(await configOf(watchId))).toEqual({
+      channelId: downId,
+      feedError: { status: 503, at: NOW },
+    });
+    expect(await snapshotCount(watchId)).toBe(0);
+
+    await writeWatchConfigJson(watchId, JSON.stringify({ channelId: LIVE_ID, feedError: { status: 503, at: NOW } }));
+    await sweepTarget(target, NOW, null);
+
+    expect(JSON.parse(await configOf(watchId))).toEqual({ channelId: LIVE_ID });
   });
 });

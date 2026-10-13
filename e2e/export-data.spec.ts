@@ -1,6 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { onboardedStatePath } from "../playwright.config";
+import { isLocalLane, run, seedPreviewSession } from "./inbox";
 
 test("the data export sends a signed-out visitor to the login page @smoke", async ({ request }) => {
   const response = await request.get("/app/settings/export", { maxRedirects: 0 });
@@ -43,5 +44,44 @@ test.describe("a signed-in export", () => {
         briefs: expect.any(Array),
       }),
     );
+  });
+});
+
+test.describe("a signed-in export on the preview Worker", () => {
+  test.skip(!isLocalLane(), "production covers the export with the kept onboarded account above");
+
+  test("returns a JSON file with the account, the workspace and the brand it holds", async ({ page, baseURL }) => {
+    const { cookie } = await seedPreviewSession("export", ({ db, suffix, userId }) => {
+      const stamp = "2026-10-12T00:00:00.000Z";
+      run(
+        db,
+        "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?, ?, ?, 'UTC', 1, 8, ?)",
+        `ws-${suffix}`,
+        "Export Preview",
+        userId,
+        stamp,
+      );
+      run(
+        db,
+        "INSERT INTO entity (id, workspace_id, role, domain, name, created_at) VALUES (?, ?, 'self', ?, 'Export Brand', ?)",
+        `ent-self-${suffix}`,
+        `ws-${suffix}`,
+        `export-${suffix}.example`,
+        stamp,
+      );
+    });
+    await page.context().addCookies(
+      cookie.split("; ").map((pair) => {
+        const [name, ...value] = pair.split("=");
+        return { name, value: value.join("="), url: baseURL ?? "" };
+      }),
+    );
+    const response = await page.request.get("/app/settings/export");
+    expect(response.ok()).toBe(true);
+    expect(response.headers()["content-type"]).toMatch(/application\/json/);
+    expect(response.headers()["content-disposition"]).toMatch(/attachment; filename="five-to-nine-export-/);
+    const body = (await response.json()) as { brands: { name?: string }[]; account: { signInEmail: string } };
+    expect(body.account.signInEmail).toMatch(/^export-[0-9a-f]{8}@0509\.io$/);
+    expect(body.brands.map((brand) => brand.name)).toContain("Export Brand");
   });
 });

@@ -33,6 +33,18 @@ describe("planLine", () => {
     ).toBe("You're on Agency until 15 October 2026, then it stops.");
   });
 
+  it("says a lapsed plan has ended and what the customer is on now", () => {
+    expect(
+      planLine({
+        tier: "scout",
+        status: "cancelled",
+        currentPeriodEnd: "2026-09-15T00:00:00.000Z",
+        trialing: false,
+        billed: true,
+      }),
+    ).toBe("Your paid plan ended on 15 September 2026. You're on Scout.");
+  });
+
   const trialing = {
     tier: "starter",
     status: "active",
@@ -60,5 +72,40 @@ describe("planLine", () => {
 
   it.each(["on_hold", "failed", "cancelled"])("does not claim a running trial when the status is %s", (status) => {
     expect(planLine({ ...trialing, status }, before)).not.toContain("trial");
+  });
+});
+
+describe("planLine when a payment did not go through", () => {
+  const base = {
+    tier: "starter",
+    status: "on_hold",
+    currentPeriodEnd: "2026-10-20T00:00:00.000Z",
+    trialing: false,
+    billed: true,
+  } as const;
+
+  it("says the plan is paused and what to do, instead of promising a renewal", () => {
+    expect(planLine(base, new Date("2026-10-13T00:00:00.000Z"))).toBe(
+      "Your last payment for Starter didn't go through, so it's paused and you're on Scout. Update your card to switch it back on.",
+    );
+  });
+
+  it("says a failed first payment left the customer on Scout", () => {
+    expect(planLine({ ...base, status: "failed" }, new Date("2026-10-13T00:00:00.000Z"))).toBe(
+      "Your payment for Starter didn't go through, so you're on Scout.",
+    );
+  });
+
+  it("does not say a Scout plan drops to Scout", () => {
+    expect(planLine({ ...base, tier: "scout" }, new Date("2026-10-13T00:00:00.000Z"))).toBe(
+      "Your last payment for Scout didn't go through, so it's paused. Update your card to switch it back on.",
+    );
+    expect(planLine({ ...base, tier: "scout", status: "failed" }, new Date("2026-10-13T00:00:00.000Z"))).toBe(
+      "Your payment for Scout didn't go through.",
+    );
+  });
+
+  it("shows the on-hold line even when the plan was a trial", () => {
+    expect(planLine({ ...base, trialing: true }, new Date("2026-10-13T00:00:00.000Z"))).toContain("paused");
   });
 });

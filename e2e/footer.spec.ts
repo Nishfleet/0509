@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 // This spec traces to the `/`, `/login`, `/pricing`, `/privacy` and `/terms` rows in
 // .agents/skills/verify/feature-map.md: each route's footer carries the Privacy
@@ -11,7 +11,7 @@ import { expect, test } from "@playwright/test";
 // is the contract - the link exists, is visible, is labelled and points at the
 // right destination - plus the source order, which is what "same order" means
 // here.
-const PUBLIC_ROUTES = ["/", "/login", "/pricing", "/privacy", "/terms"] as const;
+const PUBLIC_ROUTES = ["/", "/login", "/pricing", "/privacy", "/terms", "/security"] as const;
 
 const PRIVACY_HREF = 'a[href="/privacy"]';
 const TERMS_HREF = 'a[href="/terms"]';
@@ -34,10 +34,12 @@ for (const route of PUBLIC_ROUTES) {
     await expect(support).toBeVisible();
     await expect(support).toHaveAccessibleName(/\S/);
 
+    await expect(footer.locator('a[href="/security"]')).toHaveCount(route === "/security" ? 1 : 0);
+
     if (route !== "/") {
       await expect(footer.locator('a[href="/pricing"]')).toBeVisible();
       await expect(footer.locator('a[href="/api/docs"]')).toBeVisible();
-      await expect(footer.locator('a[href="/status"]')).toHaveCount(0);
+      await expect(footer.locator('a[href="/status"]')).toHaveCount(route === "/security" ? 1 : 0);
     }
 
     // The anchors sit in the footer's own source order, compared without

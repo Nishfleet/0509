@@ -25,9 +25,12 @@ import {
 vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn(), captureMessage: vi.fn() }));
 
 function fakeEnv(existing = new Set<string>()) {
-  const createBatch = vi.fn((batch: { id: string }[]) =>
-    Promise.resolve(existing.has(batch[0]?.id ?? "") ? [] : [...batch]),
-  );
+  const createBatch = vi.fn((batch: { id: string }[]) => {
+    const id = batch[0]?.id ?? "";
+    if (existing.has(id)) return Promise.resolve([]);
+    existing.add(id);
+    return Promise.resolve([...batch]);
+  });
   const bindings = {
     MENTIONS: { createBatch },
     SITE_SWEEP: { createBatch },
@@ -40,11 +43,22 @@ function fakeEnv(existing = new Set<string>()) {
 }
 
 describe("startScheduledWorkflow", () => {
-  it("creates the snapshot-backup instance under an id fixed by the day", async () => {
+  it("creates the snapshot-backup instance under an id fixed by the hour", async () => {
     const { createBatch, env } = fakeEnv();
     const id = await startScheduledWorkflow(env, "0 5 * * *", Date.UTC(2026, 8, 30, 5, 0, 0));
-    expect(id).toBe("snapshot-backup-2026-09-30");
+    expect(id).toBe("snapshot-backup-2026-09-30T05");
     expect(createBatch).toHaveBeenCalledExactlyOnceWith([{ id }]);
+  });
+
+  it("gives a moved schedule a new id on the day it moves, so the old slot cannot swallow the new one (10-08 sweeps)", async () => {
+    const { env } = fakeEnv(new Set(["mentions-sweep-2026-10-08"]));
+    const id = await startScheduledWorkflow(env, MENTIONS_SWEEP_CRON, Date.UTC(2026, 9, 8, 19, 0, 0));
+    expect(id).toBe("mentions-sweep-2026-10-08T19");
+    const started = await startMissedDailyWorkflows(env, Date.UTC(2026, 9, 8, 20, 0, 0));
+    expect(started).toContainEqual({
+      status: "fulfilled",
+      value: { cron: MENTIONS_SWEEP_CRON, id: "mentions-sweep-2026-10-08T19", created: false },
+    });
   });
 
   it("builds an id Workflows accepts: letters, digits, dash and underscore only", async () => {
@@ -85,11 +99,11 @@ describe("startScheduledWorkflow", () => {
     // the catch-up covers the previous evening's sweeps and today's feed sweep
     // (0509#7191). Tonight's 19:00 slots are not due yet.
     expect(createBatch.mock.calls.flat().flat()).toEqual([
-      { id: "mentions-sweep-2026-10-01" },
-      { id: "site-sweep-2026-10-01" },
-      { id: "hiring-sweep-2026-10-01" },
-      { id: "feed-sweep-2026-10-02" },
-      { id: "snapshot-backup-2026-10-01" },
+      { id: "mentions-sweep-2026-10-01T19" },
+      { id: "site-sweep-2026-10-01T21" },
+      { id: "hiring-sweep-2026-10-01T23" },
+      { id: "feed-sweep-2026-10-02T01" },
+      { id: "snapshot-backup-2026-10-01T05" },
     ]);
   });
 
@@ -97,17 +111,17 @@ describe("startScheduledWorkflow", () => {
     const { createBatch, env } = fakeEnv();
     await startMissedDailyWorkflows(env, Date.UTC(2026, 9, 2, 1, 0, 0));
     expect(createBatch.mock.calls.flat().flat()).toEqual([
-      { id: "mentions-sweep-2026-10-01" },
-      { id: "site-sweep-2026-10-01" },
-      { id: "hiring-sweep-2026-10-01" },
-      { id: "snapshot-backup-2026-10-01" },
+      { id: "mentions-sweep-2026-10-01T19" },
+      { id: "site-sweep-2026-10-01T21" },
+      { id: "hiring-sweep-2026-10-01T23" },
+      { id: "snapshot-backup-2026-10-01T05" },
     ]);
   });
 
   it("leaves a daily slot less than five minutes old to its own cron trigger, so a late tick cannot report it as missed", async () => {
     const { createBatch, env } = fakeEnv();
     await startMissedDailyWorkflows(env, Date.UTC(2026, 9, 10, 1, 0, 59));
-    expect(createBatch.mock.calls.flat().flat()).not.toContainEqual({ id: "feed-sweep-2026-10-10" });
+    expect(createBatch.mock.calls.flat().flat()).not.toContainEqual({ id: "feed-sweep-2026-10-10T01" });
   });
 
   it("never starts a sweep whose refresh has already gone out, so a late catch-up cannot become the overrun", async () => {
@@ -126,7 +140,7 @@ describe("startScheduledWorkflow", () => {
         .flat()
         .flat()
         .map((entry) => entry.id),
-    ).toContain("site-sweep-2026-10-01");
+    ).toContain("site-sweep-2026-10-01T21");
     expect(NIGHTLY_CRON).toBe("0 3 * * *");
   });
 
@@ -142,7 +156,7 @@ describe("startScheduledWorkflow", () => {
   it("gives the catch-up the same id as the cron tick, so a normal day starts each job once", async () => {
     const { createBatch, env } = fakeEnv();
     const tick = await startScheduledWorkflow(env, MENTIONS_SWEEP_CRON, Date.UTC(2026, 9, 1, 19, 0, 23));
-    expect(tick).toBe("mentions-sweep-2026-10-01");
+    expect(tick).toBe("mentions-sweep-2026-10-01T19");
     const catchUp = Date.UTC(2026, 9, 1, 21, 0, 0);
     await startMissedDailyWorkflows(env, catchUp);
     const ids = createBatch.mock.calls.flat().flat();
@@ -150,14 +164,14 @@ describe("startScheduledWorkflow", () => {
   });
 
   it("reports only the instances the catch-up really created, and leaves a failed or running one alone", async () => {
-    const { env } = fakeEnv(new Set(["mentions-sweep-2026-10-01", "site-sweep-2026-10-01"]));
+    const { env } = fakeEnv(new Set(["mentions-sweep-2026-10-01T19", "site-sweep-2026-10-01T21"]));
     const results = await startMissedDailyWorkflows(env, Date.UTC(2026, 9, 2, 2, 10, 0));
     expect(results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []))).toEqual([
-      { cron: MENTIONS_SWEEP_CRON, id: "mentions-sweep-2026-10-01", created: false },
-      { cron: SITE_SWEEP_CRON, id: "site-sweep-2026-10-01", created: false },
-      { cron: HIRING_SWEEP_CRON, id: "hiring-sweep-2026-10-01", created: true },
-      { cron: FEED_SWEEP_CRON, id: "feed-sweep-2026-10-02", created: true },
-      { cron: SNAPSHOT_BACKUP_CRON, id: "snapshot-backup-2026-10-01", created: true },
+      { cron: MENTIONS_SWEEP_CRON, id: "mentions-sweep-2026-10-01T19", created: false },
+      { cron: SITE_SWEEP_CRON, id: "site-sweep-2026-10-01T21", created: false },
+      { cron: HIRING_SWEEP_CRON, id: "hiring-sweep-2026-10-01T23", created: true },
+      { cron: FEED_SWEEP_CRON, id: "feed-sweep-2026-10-02T01", created: true },
+      { cron: SNAPSHOT_BACKUP_CRON, id: "snapshot-backup-2026-10-01T05", created: true },
     ]);
   });
 
@@ -207,26 +221,26 @@ describe("reportMissedWorkflows", () => {
 
   it("reports a real catch-up under a message and fingerprint fixed by the cron, with the instance id in extra", () => {
     reportMissedWorkflows([
-      { status: "fulfilled", value: { cron: MENTIONS_SWEEP_CRON, id: "mentions-sweep-2026-10-02", created: true } },
+      { status: "fulfilled", value: { cron: MENTIONS_SWEEP_CRON, id: "mentions-sweep-2026-10-02T19", created: true } },
     ]);
     expect(captureMessage).toHaveBeenCalledExactlyOnceWith("Missed Workflow started: mentions-sweep", {
       level: "warning",
       fingerprint: ["missed-workflow", MENTIONS_SWEEP_CRON],
-      extra: { id: "mentions-sweep-2026-10-02" },
+      extra: { id: "mentions-sweep-2026-10-02T19" },
     });
   });
 
   it("never puts the instance id or its date into the message, so a daily miss stays one Sentry group", () => {
     reportMissedWorkflows([
-      { status: "fulfilled", value: { cron: MENTIONS_SWEEP_CRON, id: "mentions-sweep-2026-10-02", created: true } },
-      { status: "fulfilled", value: { cron: MENTIONS_SWEEP_CRON, id: "mentions-sweep-2026-10-03", created: true } },
+      { status: "fulfilled", value: { cron: MENTIONS_SWEEP_CRON, id: "mentions-sweep-2026-10-02T19", created: true } },
+      { status: "fulfilled", value: { cron: MENTIONS_SWEEP_CRON, id: "mentions-sweep-2026-10-03T19", created: true } },
     ]);
     expect(new Set(vi.mocked(captureMessage).mock.calls.map((call) => call[0])).size).toBe(1);
   });
 
   it("leaves a start the catch-up did not perform alone", () => {
     reportMissedWorkflows([
-      { status: "fulfilled", value: { cron: MENTIONS_SWEEP_CRON, id: "mentions-sweep-2026-10-02", created: false } },
+      { status: "fulfilled", value: { cron: MENTIONS_SWEEP_CRON, id: "mentions-sweep-2026-10-02T19", created: false } },
     ]);
     expect(captureMessage).not.toHaveBeenCalled();
   });

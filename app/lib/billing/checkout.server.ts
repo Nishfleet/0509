@@ -40,12 +40,12 @@ async function startCheckout(input: CheckoutInput & { product: string; planId: P
 }
 
 export function createCheckoutUrl(
-  input: CheckoutInput & { planId: PlanId; interval?: BillingInterval },
+  input: CheckoutInput & { planId: PlanId; interval?: BillingInterval; returning?: boolean },
 ): Promise<string | null> {
   return startCheckout({
     ...input,
     product: productIdFor(input.planId, input.interval ?? "monthly"),
-    trialDays: TRIAL_DAYS,
+    trialDays: input.returning === true ? undefined : TRIAL_DAYS,
   });
 }
 

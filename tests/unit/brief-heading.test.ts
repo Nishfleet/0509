@@ -92,12 +92,12 @@ function briefHtml(): Promise<string> {
   return htmlPromise;
 }
 
-describe("the brief page's Previous briefs heading", () => {
+describe("the brief page's Your briefs heading", () => {
   it("wears the house row-name type, never the old text-lg font-semibold", async () => {
     expect(meta()).toEqual([{ title: "Your brief · Five to Nine" }]);
     const html = await briefHtml();
     expect(html).toContain('<h2 class="font-display text-row-name font-bold [overflow-wrap:anywhere]">');
-    expect(html).toContain(">Previous briefs</h2>");
+    expect(html).toContain(">Your briefs</h2>");
     expect(html).not.toContain("text-lg font-semibold");
   });
 });
@@ -105,10 +105,10 @@ describe("the brief page's Previous briefs heading", () => {
 // `min-h-11` is the unit of 44px in this repo (tests/unit/onboarding-competitors.test.ts).
 // The display that makes the box real is asserted with it, so dropping
 // `inline-flex` does not leave a gate that still passes.
-describe("the brief page's Previous briefs links", () => {
+describe("the brief page's Your briefs links", () => {
   it("keeps aria-current and gives each Week of link a 44px-tall tap target", async () => {
     const html = await briefHtml();
-    const navStart = html.indexOf('aria-label="Previous briefs"');
+    const navStart = html.indexOf('aria-label="Your briefs"');
     expect(navStart).toBeGreaterThan(-1);
     const navEnd = html.indexOf("</nav>", navStart);
     expect(navEnd).toBeGreaterThan(navStart);
@@ -120,6 +120,21 @@ describe("the brief page's Previous briefs links", () => {
       expect(link).toContain("items-center");
     }
     expect(links[0]).toContain('aria-current="page"');
+  });
+});
+
+describe("the brief page's list of weeks", () => {
+  it("says which week you are reading instead of repeating its send line", async () => {
+    const html = await briefHtml();
+    expect(html).toContain("You are reading this one");
+    expect(html).not.toContain(": Sent 21 September");
+  });
+
+  it("keeps the send line on the weeks you are not reading", async () => {
+    const other = { id: "dig_0", weekLabel: "Week of 7 Sept", line: "Sent 14 September" };
+    const html = await renderBrief({ weeks: [WEEK, other], selected: LOADER_DATA.selected });
+    expect(html).toContain("You are reading this one");
+    expect(html).toContain(": Sent 14 September");
   });
 });
 

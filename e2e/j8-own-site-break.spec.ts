@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { SITE_SWEEP_UTC_HOUR } from "../app/lib/cadence";
 import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
@@ -182,8 +183,9 @@ for (const { mode, kind, waitMs, account, host } of MODES) {
 
     const token = requireInboxToken();
     const { email } = account;
-    const openSubject = `${host} looks broken: ${kind}`;
-    const fixedSubject = `${host} looks fixed: ${kind}`;
+    const tail = kind === "breakage" ? "" : `: ${kind}`;
+    const openSubject = `${host} looks broken${tail}`;
+    const fixedSubject = `${host} looks fixed${tail}`;
 
     try {
       await setMode(host, "off");

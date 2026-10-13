@@ -1,10 +1,18 @@
 import { useEffect, useState } from "react";
 import { useFetcher, useRevalidator } from "react-router";
 
-import { monthlyPrice, PLANS, TRIAL_TERMS, type PlanId } from "../lib/billing/plans";
+import { monthlyPrice, NO_TRIAL_TERMS, PLANS, TRIAL_TERMS, type PlanId } from "../lib/billing/plans";
 import { Button } from "./ui/button";
 
-export function PlanGate({ planId, action = "/app/upgrade" }: { planId: PlanId; action?: string }) {
+export function PlanGate({
+  planId,
+  action = "/app/upgrade",
+  returning = false,
+}: {
+  planId: PlanId;
+  action?: string;
+  returning?: boolean;
+}) {
   const fetcher = useFetcher<{ message: string }>();
   const plan = PLANS.find((entry) => entry.id === planId);
   if (plan === undefined) return null;
@@ -21,7 +29,7 @@ export function PlanGate({ planId, action = "/app/upgrade" }: { planId: PlanId; 
           {monthlyPrice(plan.monthlyPriceEur)}
         </span>
       </Button>
-      <p className="mt-2 text-body-sm text-ink-soft">{TRIAL_TERMS}</p>
+      <p className="mt-2 text-body-sm text-ink-soft">{returning ? NO_TRIAL_TERMS : TRIAL_TERMS}</p>
       {fetcher.data?.message ? (
         <p role="alert" className="mt-2 text-[0.95rem]">
           {fetcher.data.message}

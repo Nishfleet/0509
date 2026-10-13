@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 // The four headers the launch audit (V16) could not find on `/` come from
 // public/_headers, which Workers applies to static-asset responses only. `/`
