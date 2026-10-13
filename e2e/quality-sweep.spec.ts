@@ -3,7 +3,13 @@ import type { DatabaseSync } from "node:sqlite";
 import { test, type Page } from "@playwright/test";
 
 import { isLocalLane, run, seedPreviewSession } from "./inbox";
-import { expectKeyboardReachesVisibleFocus, expectNoSeriousAxe, expectQuiet, startQuality } from "./quality";
+import {
+  expectKeyboardReachesVisibleFocus,
+  expectNoSeriousAxe,
+  expectQuiet,
+  resetQuality,
+  startQuality,
+} from "./quality";
 
 test.skip(
   !isLocalLane(),
@@ -76,8 +82,9 @@ async function signIn(page: Page, baseURL: string | undefined, cookie: string): 
 }
 
 async function sweep(page: Page, testInfo: Parameters<typeof expectQuiet>[1], paths: string[]): Promise<void> {
+  const quality = await startQuality(page);
   for (const path of paths) {
-    const quality = await startQuality(page);
+    resetQuality(quality);
     for (const colorScheme of SCHEMES) {
       await page.emulateMedia({ colorScheme });
       await page.goto(path);

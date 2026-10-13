@@ -38,6 +38,13 @@ export async function startQuality(page: Page): Promise<Quality> {
   return { watched: watchConsole(page), failedRequests };
 }
 
+export function resetQuality(quality: Quality): void {
+  quality.failedRequests.length = 0;
+  quality.watched.consoleErrors.length = 0;
+  quality.watched.pageErrors.length = 0;
+  quality.watched.prefetchRefused.length = 0;
+}
+
 export async function expectNoSeriousAxe(page: Page, testInfo: TestInfo, label: string): Promise<void> {
   const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
   await testInfo.attach(`axe ${label}`, {
