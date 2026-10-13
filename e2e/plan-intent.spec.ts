@@ -2,12 +2,8 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { expect, test } from "@playwright/test";
 
+import { PLANS } from "../app/lib/billing/plans";
 import { isLocalLane, run, seedPreviewSession } from "./inbox";
-
-test.skip(
-  !isLocalLane(),
-  "signs in through a seeded session on the preview Worker; production sign-in sends a real email",
-);
 
 const STAMP = "2026-10-12T00:00:00.000Z";
 
@@ -42,16 +38,16 @@ function seedUnpaid({ db, suffix, userId }: { db: DatabaseSync; suffix: string; 
 
 test("each plan on the pricing page starts sign-in with that plan", async ({ page }) => {
   await page.goto("/pricing");
-  for (const [id, name] of [
-    ["scout", "Scout"],
-    ["starter", "Starter"],
-    ["agency", "Agency"],
-  ]) {
+  for (const { id, name } of PLANS) {
     await expect(page.getByRole("link", { name: `Start with ${name}` })).toHaveAttribute("href", `/login?plan=${id}`);
   }
 });
 
 test("a plan picked on the pricing page comes first on the plan step", async ({ page, baseURL, playwright }) => {
+  test.skip(
+    !isLocalLane(),
+    "signs in through a seeded session on the preview Worker; production sign-in sends a real email",
+  );
   const { cookie } = await seedPreviewSession("plan-intent", seedUnpaid, { livePlan: false });
   const origin = baseURL ?? "";
   await page.context().addCookies([
