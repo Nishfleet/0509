@@ -26,3 +26,10 @@ test("the guard lets an error the test names through @smoke", async ({ page }) =
   await logError(page, "Planted Noise from the test");
   await expect(page.locator("main")).toBeVisible();
 });
+
+test("the guard passes a test that closes a clean page it opened @smoke", async ({ context }) => {
+  const page = await context.newPage();
+  await page.goto("/");
+  await expect(page.locator("main")).toBeVisible();
+  await page.close();
+});
