@@ -127,7 +127,7 @@ describe("upgrade checkout when the workspace already has a plan (#7228)", () =>
 
   async function checkoutBodyAfterLookup(
     status: string,
-    productOnFile: string,
+    productOnFile: string | null,
   ): Promise<Record<string, unknown> | undefined> {
     await seedPlan(status, "2020-01-01T00:00:00Z");
     await env.DB.prepare(
@@ -138,7 +138,9 @@ describe("upgrade checkout when the workspace already has a plan (#7228)", () =>
       .mockImplementation((input) =>
         Promise.resolve(
           String(input).includes("/subscriptions/")
-            ? Response.json({ product_id: productOnFile })
+            ? productOnFile === null
+              ? new Response("boom", { status: 500 })
+              : Response.json({ product_id: productOnFile })
             : Response.json(checkoutSession, { status: 200 }),
         ),
       );
@@ -159,6 +161,12 @@ describe("upgrade checkout when the workspace already has a plan (#7228)", () =>
 
   it("still gives the trial when the first checkout failed before it began", async () => {
     expect(await checkoutBodyAfterLookup("failed", "pdt_test_starter")).toMatchObject({
+      subscription_data: { trial_period_days: 7 },
+    });
+  });
+
+  it("keeps the trial when Dodo cannot say what the old subscription was", async () => {
+    expect(await checkoutBodyAfterLookup("cancelled", null)).toMatchObject({
       subscription_data: { trial_period_days: 7 },
     });
   });
