@@ -18,7 +18,9 @@ async function isTesterOrUnknown(subscriptionId: string): Promise<boolean> {
   });
   try {
     return (await client.subscriptions.retrieve(subscriptionId)).product_id === testerProductId();
-  } catch {
+  } catch (error) {
+    const status = error instanceof DodoPayments.APIError ? String(error.status) : "none";
+    console.error(JSON.stringify({ event: "billing.returning_lookup_failed", status }));
     return true;
   }
 }
