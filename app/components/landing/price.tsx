@@ -1,7 +1,8 @@
 import { type PlanId, PLANS, TRIAL_TERMS } from "../../lib/billing/plans";
 import { type CoverageId, isLive } from "../../lib/coverage";
-import type { StartSource } from "../../lib/pricing-page";
+import { planStartHref, type StartSource } from "../../lib/pricing-page";
 import { cn } from "../../lib/utils";
+import { buttonVariants } from "../ui/button";
 import { eyebrow, Section } from "./section";
 import { StartButton } from "./start-button";
 
@@ -60,6 +61,12 @@ export function Price({ source = null }: { source?: StartSource | null }) {
                 </li>
               ))}
             </ul>
+            <a
+              href={planStartHref(plan.id, source)}
+              className={cn(buttonVariants({ variant: "secondary" }), "mt-5 w-full")}
+            >
+              Start with {plan.name}
+            </a>
           </li>
         ))}
       </ul>

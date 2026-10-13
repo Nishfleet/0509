@@ -1,4 +1,4 @@
-import { PLANS, TRIAL_SUMMARY } from "./billing/plans";
+import { PLANS, TRIAL_SUMMARY, type PlanId } from "./billing/plans";
 import { FAQ } from "./faq";
 import {
   SITE_URL,
@@ -19,6 +19,12 @@ export type StartSource = (typeof START_SOURCES)[number];
 export function startSource(url: URL): StartSource | null {
   const value = url.searchParams.get("utm_source");
   return START_SOURCES.find((source) => source === value) ?? null;
+}
+
+export function planStartHref(plan: PlanId, source: StartSource | null): string {
+  const params = new URLSearchParams({ plan });
+  if (source !== null) params.set("utm_source", source);
+  return `/login?${params.toString()}`;
 }
 
 export function planNames(): string {

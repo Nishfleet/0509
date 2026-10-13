@@ -141,6 +141,7 @@ export const PRIVACY: LegalDocument = {
         "A session cookie that keeps you signed in, and a short-lived copy of your session that saves a database lookup.",
         "A time zone cookie, so the brief arrives on your Monday morning.",
         "A short-lived cookie set while you delete your account, so the sign-in page can show when your files are gone.",
+        "A short-lived cookie that remembers which plan you chose on the pricing page, so the plan step can show it first.",
       ],
       closing: ["We use no advertising or tracking cookies, so there is no cookie banner."],
     },
