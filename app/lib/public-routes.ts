@@ -23,13 +23,14 @@ export const SITEMAP_LASTMOD: Readonly<Record<string, string>> = {
 export const DISALLOWED_PREFIXES = [
   "/app",
   "/api",
-  "/u",
-  "/v",
+  "/u/",
+  "/v/",
   "/login",
   "/onboarding",
   "/oauth",
   "/design",
   "/status",
+  "/security",
 ] as const;
 export const AGENT_PATHS = ["/mcp", "/api/v1/openapi.json", "/.well-known/http-message-signatures-directory"] as const;
 export const MCP_URL = `${SITE_URL}/mcp`;

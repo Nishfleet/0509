@@ -81,8 +81,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         </>
       )}
       {loaderData.weeks.length > 0 ? (
-        <nav aria-label="Previous briefs" className={PREVIOUS_LIST}>
-          <h2 className={PREVIOUS_HEADING}>Previous briefs</h2>
+        <nav aria-label="Your briefs" className={PREVIOUS_LIST}>
+          <h2 className={PREVIOUS_HEADING}>Your briefs</h2>
           <ul className="mt-3">
             {loaderData.weeks.map((w) => (
               <li key={w.id} className="mt-2 leading-[1.65]">
@@ -94,7 +94,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                   {w.weekLabel}
                 </Link>
                 {": "}
-                {w.line}
+                {w.id === loaderData.selected?.id ? "You are reading this one" : w.line}
               </li>
             ))}
           </ul>

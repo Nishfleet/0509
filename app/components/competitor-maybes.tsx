@@ -78,9 +78,11 @@ function MaybeRow({ maybe }: { maybe: Maybe }): ReactElement {
 export function AddCompetitor({
   message,
   upgradePlanId,
+  returning,
 }: {
   message: string | null | undefined;
   upgradePlanId?: PlanId | null | undefined;
+  returning?: boolean | undefined;
 }): ReactElement {
   const navigation = useNavigation();
   const adding = navigation.state !== "idle" && navigation.formData?.get("intent") === "add";
@@ -115,7 +117,7 @@ export function AddCompetitor({
           </p>
         ) : null}
       </Form>
-      {upgradePlanId ? <PlanGate planId={upgradePlanId} /> : null}
+      {upgradePlanId ? <PlanGate planId={upgradePlanId} returning={returning === true} /> : null}
     </div>
   );
 }

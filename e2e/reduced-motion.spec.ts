@@ -1,4 +1,5 @@
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { type Page, type TestInfo } from "@playwright/test";
+import { expect, test } from "./test";
 import type { RouteConfigEntry } from "@react-router/dev/routes";
 import routes from "../app/routes";
 

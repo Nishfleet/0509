@@ -5,7 +5,8 @@ import { nameFromDomain } from "./competitor/domain-name";
 import { readCompetitorName } from "./competitor/site-name.server";
 import { addManualCompetitor, countOtherOnCompetitors, readCompetitor, setCompetitorState } from "./data/entity.server";
 import { nextPlan, type PlanId } from "./billing/plans";
-import { readEntitlements, readPlanTier } from "./data/plan.server";
+import { isReturningCustomer } from "./billing/returning.server";
+import { readEntitlements, readPlanSubscription, readPlanTier } from "./data/plan.server";
 import { withinProbeLimit } from "./identity/card.server";
 import {
   acceptSuggestion,
@@ -20,11 +21,15 @@ import { normaliseSubject } from "./identity/normalise";
 export interface CompetitorActionResult {
   message: string | null;
   upgradePlanId?: PlanId | null;
+  returning?: boolean;
 }
 
 const DONE: CompetitorActionResult = { message: null };
 const COULD_NOT_READ: CompetitorActionResult = {
   message: "We couldn't read that. Try their main website, like brand.com.",
+};
+const EMPTY: CompetitorActionResult = {
+  message: "Enter their website address, like brand.com.",
 };
 const UNRESOLVED: CompetitorActionResult = {
   message: "We couldn't find that brand's website. Try their main website, like brand.com.",
@@ -51,6 +56,7 @@ async function capRefusal(workspaceId: string, cap: number): Promise<CompetitorA
   return {
     message: `Your plan watches up to ${String(cap)} competitors. Switch one off to add another.`,
     upgradePlanId: await upgradePlanIdFor(workspaceId),
+    returning: await isReturningCustomer(await readPlanSubscription(workspaceId)),
   };
 }
 
@@ -72,7 +78,7 @@ async function workspaceOwnerId(workspaceId: string): Promise<string | null> {
 
 function unreadableAdd(normalised: ReturnType<typeof normaliseSubject>): CompetitorActionResult | null {
   if (normalised.ok) return normalised.subject.kind === "domain" ? null : COULD_NOT_READ;
-  return normalised.reason === "empty" ? COULD_NOT_READ : null;
+  return normalised.reason === "empty" ? EMPTY : null;
 }
 
 async function refusedBeforeFetch(

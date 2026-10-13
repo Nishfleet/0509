@@ -5,12 +5,12 @@ import { LEGAL_UPDATED } from "../lib/legal/document";
 
 const body = "text-ink-soft mt-4 leading-[1.65]";
 
-const updatedLabel = new Intl.DateTimeFormat("en-GB", {
+const dateFormat = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "long",
   year: "numeric",
   timeZone: "UTC",
-}).format(new Date(`${LEGAL_UPDATED}T00:00:00Z`));
+});
 
 function Paragraphs({ items }: { items: readonly string[] | undefined }) {
   return items?.map((paragraph) => (
@@ -97,6 +97,7 @@ function OnThisPage({ sections }: { sections: readonly LegalSection[] }) {
 }
 
 export function LegalPage({ doc }: { doc: LegalDocument }) {
+  const updated = doc.updated ?? LEGAL_UPDATED;
   return (
     <div className="mx-auto w-full max-w-[46rem] bg-bone px-6 py-16 text-ink sm:py-24">
       <SkipLink />
@@ -108,7 +109,7 @@ export function LegalPage({ doc }: { doc: LegalDocument }) {
           {doc.title}
         </h1>
         <p className="mt-4 font-mono text-[0.72rem] tracking-[0.06em] text-ink-soft">
-          Last updated <time dateTime={LEGAL_UPDATED}>{updatedLabel}</time>
+          Last updated <time dateTime={updated}>{dateFormat.format(new Date(`${updated}T00:00:00Z`))}</time>
         </p>
         <p className="mt-6 leading-[1.65] text-ink-soft">{doc.intro}</p>
         <OnThisPage sections={doc.sections} />
@@ -124,7 +125,7 @@ export function LegalPage({ doc }: { doc: LegalDocument }) {
           </p>
         </section>
       </main>
-      <Footer />
+      <Footer walled={doc.walled === true} />
     </div>
   );
 }

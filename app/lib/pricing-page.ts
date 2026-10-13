@@ -1,11 +1,14 @@
-import { PLANS, TRIAL_TERMS } from "./billing/plans";
+import { PLANS, TRIAL_SUMMARY } from "./billing/plans";
+import { FAQ } from "./faq";
 import {
   SITE_URL,
   breadcrumbJsonLd,
+  faqPageJsonLd,
   jsonLdGraph,
   organizationJsonLd,
   shareImageMeta,
   softwareApplicationJsonLd,
+  websiteJsonLd,
 } from "./structured-data";
 
 const PRICING_PATH = "/pricing";
@@ -28,7 +31,7 @@ export function planPriceList(): string {
 
 export function pricingMeta() {
   const title = "Pricing · Five to Nine";
-  const description = `Five to Nine pricing: ${planPriceList()}. ${TRIAL_TERMS}`;
+  const description = `Five to Nine pricing: ${planPriceList()}. ${TRIAL_SUMMARY}`;
   const url = `${SITE_URL}${PRICING_PATH}`;
   return [
     { title },
@@ -44,11 +47,13 @@ export function pricingMeta() {
     {
       "script:ld+json": jsonLdGraph([
         organizationJsonLd(),
+        websiteJsonLd(),
         breadcrumbJsonLd([
           { name: "Five to Nine", path: "/" },
           { name: "Pricing", path: PRICING_PATH },
         ]),
-        softwareApplicationJsonLd([]),
+        softwareApplicationJsonLd([], PRICING_PATH),
+        faqPageJsonLd(FAQ),
       ]),
     },
   ];

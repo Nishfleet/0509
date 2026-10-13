@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { onboardedStatePath } from "../playwright.config";
 import { consoleFailures, isLocalLane, run, seedPreviewSession, watchConsole } from "./inbox";

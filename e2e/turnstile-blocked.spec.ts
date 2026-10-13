@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, expectNoise } from "./test";
 
 // 0509#6621: a content blocker, a corporate proxy or an offline moment makes
 // the Turnstile script fail to load. The widget used to swallow that rejection
@@ -24,6 +24,7 @@ const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
 const BLOCKED_NOTICE = "We couldn't load the check that stops bots";
 
 test("the blocked bot check tells the person on /login instead of asking them to confirm @smoke", async ({ page }) => {
+  expectNoise(/turnstile\.load_failed/);
   // Before navigation: the abort has to be in place for the subresource the
   // page loads on mount.
   await page.route(`${TURNSTILE_ORIGIN}/**`, (route) => route.abort());

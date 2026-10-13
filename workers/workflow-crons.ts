@@ -39,7 +39,7 @@ function entryFor(cron: WorkflowCron) {
 
 function instanceId(cron: WorkflowCron, scheduledTime: number) {
   const instant = new Date(scheduledTime).toISOString();
-  return `${entryFor(cron).name}-${cron === OWN_SITE_CHECK_CRON ? instant.slice(0, 13) : instant.slice(0, 10)}`;
+  return `${entryFor(cron).name}-${instant.slice(0, 13)}`;
 }
 
 async function createOnce(workflow: Pick<Env["OWN_SITE_CHECK"], "createBatch">, id: string) {
