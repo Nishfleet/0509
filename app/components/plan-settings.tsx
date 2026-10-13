@@ -24,7 +24,7 @@ function BillingButton({ label }: { label: string }) {
   );
 }
 
-export function PlanSection({ plan }: { plan: PlanSummary | null }) {
+export function PlanSection({ plan, returning = false }: { plan: PlanSummary | null; returning?: boolean }) {
   if (plan === null) return null;
   const lapsed = isPlanLapsed(plan, new Date());
   const upgrade = nextPlan(plan.tier);
@@ -37,7 +37,7 @@ export function PlanSection({ plan }: { plan: PlanSummary | null }) {
       {plan.billed ? <BillingButton label={lapsed ? "See billing history" : "Manage or cancel plan"} /> : null}
       {plan.billed && !lapsed ? null : (
         <>
-          {upgrade === null ? null : <PlanGate planId={upgrade.id} />}
+          {upgrade === null ? null : <PlanGate planId={upgrade.id} returning={returning} />}
           <Link
             to="/app/competitors"
             className="mt-3 inline-flex min-h-11 items-center gap-2 font-display font-bold underline decoration-1 underline-offset-4"

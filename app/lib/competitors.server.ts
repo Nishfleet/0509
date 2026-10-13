@@ -5,7 +5,8 @@ import { nameFromDomain } from "./competitor/domain-name";
 import { readCompetitorName } from "./competitor/site-name.server";
 import { addManualCompetitor, countOtherOnCompetitors, readCompetitor, setCompetitorState } from "./data/entity.server";
 import { nextPlan, type PlanId } from "./billing/plans";
-import { readEntitlements, readPlanTier } from "./data/plan.server";
+import { isReturningCustomer } from "./billing/returning.server";
+import { readEntitlements, readPlanSubscription, readPlanTier } from "./data/plan.server";
 import { withinProbeLimit } from "./identity/card.server";
 import {
   acceptSuggestion,
@@ -20,6 +21,7 @@ import { normaliseSubject } from "./identity/normalise";
 export interface CompetitorActionResult {
   message: string | null;
   upgradePlanId?: PlanId | null;
+  returning?: boolean;
 }
 
 const DONE: CompetitorActionResult = { message: null };
@@ -54,6 +56,7 @@ async function capRefusal(workspaceId: string, cap: number): Promise<CompetitorA
   return {
     message: `Your plan watches up to ${String(cap)} competitors. Switch one off to add another.`,
     upgradePlanId: await upgradePlanIdFor(workspaceId),
+    returning: await isReturningCustomer(await readPlanSubscription(workspaceId)),
   };
 }
 
