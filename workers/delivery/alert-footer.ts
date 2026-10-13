@@ -1,3 +1,4 @@
+import { SUPPORT_ADDRESS } from "../../app/components/footer";
 import { escapeHtml } from "../../app/lib/html";
 import { FONT, postalLine } from "./email-shell";
 
@@ -9,6 +10,15 @@ export interface AlertFooterContext {
 }
 
 const LINE = `margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;`;
+
+export function supportLineText(): string {
+  return `Questions? Write to ${SUPPORT_ADDRESS}.`;
+}
+
+export function supportLineHtml(): string {
+  const address = escapeHtml(SUPPORT_ADDRESS);
+  return `<p class="brief-muted" style="${LINE}">Questions? Write to <a class="brief-muted" href="mailto:${address}">${address}</a>.</p>`;
+}
 
 export function unsubscribeHeaders(unsubscribeUrl: string): Record<string, string> {
   return {
@@ -25,11 +35,13 @@ export function renderAlertFooter(ctx: AlertFooterContext): { html: string; text
     html: [
       `<p class="brief-muted" style="${LINE}">Choose which alerts you get in <a class="brief-muted" href="${settings}">Settings</a>.</p>`,
       `<p class="brief-muted" style="${LINE}"><a class="brief-muted" href="${unsubscribe}">Unsubscribe</a></p>`,
+      supportLineHtml(),
       postal?.html ?? "",
     ].join(""),
     text: [
       `Choose which alerts you get in Settings: ${ctx.settings_link}`,
       `Unsubscribe: ${ctx.unsubscribe_url}`,
+      supportLineText(),
       ...(postal === null ? [] : [postal.text]),
     ].join("\n"),
   };

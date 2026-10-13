@@ -3,7 +3,7 @@ import { escapeHtml } from "../../app/lib/html";
 import { countPhrase } from "../../app/lib/quiet-week";
 import { UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
 import { EYEBROW, FONT, MONO, emailDocument, postalLine } from "./email-shell";
-import { SETTINGS_LINK } from "./alert-footer";
+import { SETTINGS_LINK, supportLineHtml, supportLineText } from "./alert-footer";
 
 const COPY = {
   subject: (rank: number, total: number) => `You're #${n(rank)} of ${n(total)} this week`,
@@ -318,6 +318,7 @@ function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { h
       ? escapeHtml(COPY.noUnsubscribe)
       : `<a class="brief-muted" href="${unsubscribeHref}">${escapeHtml(COPY.unsubscribe)}</a>`,
     `</p>`,
+    supportLineHtml(),
     postal?.html ?? "",
     `</div>`,
   ].join("");
@@ -327,6 +328,7 @@ function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { h
     nextAt,
     `${COPY.settings}: ${SETTINGS_LINK}`,
     unsubscribeUrl === null ? COPY.noUnsubscribe : `${COPY.unsubscribe}: ${unsubscribeUrl}`,
+    supportLineText(),
     ...(postal === null ? [] : [postal.text]),
   ].join("\n");
 
