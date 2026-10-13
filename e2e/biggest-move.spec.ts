@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
 import { requireInboxToken, signInWithMagicLink } from "./inbox";

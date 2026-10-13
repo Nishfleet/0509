@@ -1,4 +1,5 @@
-import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { accessStatePath } from "../playwright.config";
 import {

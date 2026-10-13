@@ -36,6 +36,8 @@ const SESSION_GATE_ALLOWLIST: Readonly<Record<string, string>> = {
   "/login": "sign-in must load without a session",
   "/api/health": "liveness probe has no cookie",
   "/api/docs": "public OpenAPI explorer",
+  "/status": "public status page; walled by Access until LAUNCH, listed in robots Disallow until then",
+  "/security": "public security page; walled by Access until LAUNCH, listed in robots Disallow until then",
   "/design/landing": "public marketing page",
   "/onboarding": "first-run flow after sign-in, not under /app layouts",
   "/onboarding/competitors": "first-run flow after sign-in, not under /app layouts",
@@ -88,8 +90,7 @@ function unguardedDisallowed(entries: RouteConfigEntry[], layouts: readonly stri
 
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
-const isDisallowed = (urlPath: string) =>
-  DISALLOWED_PREFIXES.some((prefix) => urlPath === prefix || urlPath.startsWith(`${prefix}/`));
+const isDisallowed = (urlPath: string) => DISALLOWED_PREFIXES.some((prefix) => urlPath.startsWith(prefix));
 
 // A robots directive is a robots <meta> tag in a document, and a string
 // literal in a module: a JSX attribute value, a template literal, or a plain
@@ -171,6 +172,8 @@ describe("public-route manifest", () => {
     const body = robotsTxt("https://0509.io");
     expect(body).toContain("Disallow: /app");
     expect(body).toContain("Disallow: /api");
+    expect(body).toContain("Disallow: /u/");
+    expect(body).toContain("Disallow: /v/");
     expect(body).toContain("Allow: /mcp");
     expect(body).toContain("Allow: /api/v1/openapi.json");
     expect(body).not.toContain("Disallow: /mcp");

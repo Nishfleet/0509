@@ -31,3 +31,16 @@ describe("emailDocument's html shell (0509#6525)", () => {
     expect(doc).toContain('<meta name="color-scheme" content="light dark">');
   });
 });
+
+describe("emailDocument's preview text", () => {
+  it("hides the preheader and escapes it, ahead of the card", () => {
+    const doc = emailDocument("Daily brief", BODY, 'Two <moves> & "one" gap');
+
+    expect(doc).toContain("Two &lt;moves&gt; &amp; &quot;one&quot; gap");
+    expect(doc.indexOf("display:none")).toBeLessThan(doc.indexOf('class="brief-card"'));
+  });
+
+  it("adds nothing when there is no preheader", () => {
+    expect(emailDocument("Daily brief", BODY)).not.toContain("display:none");
+  });
+});

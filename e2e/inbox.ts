@@ -390,7 +390,7 @@ export async function settleSignInWidget(page: Page): Promise<void> {
     await expect(field).toHaveCount(1, { timeout: 30_000 });
     return;
   }
-  await expect(field).toHaveValue(/\S/);
+  await expect(field).toHaveValue(/\S/, { timeout: 30_000 });
 }
 
 export async function turnstileToken(page: Page): Promise<string> {
@@ -450,6 +450,27 @@ export function watchConsole(page: Page): {
     prefetchRefused.push(response.url());
   });
   return { consoleErrors, pageErrors, prefetchRefused };
+}
+
+function withoutQuery(url: string): string {
+  const parsed = new URL(url);
+  return `${parsed.origin}${parsed.pathname}`;
+}
+
+export function watchRequests(page: Page): string[] {
+  const failed: string[] = [];
+  page.on("requestfailed", (request) => {
+    const reason = request.failure()?.errorText ?? "";
+    if (reason === "net::ERR_ABORTED") return;
+    failed.push(`${request.method()} ${withoutQuery(request.url())} ${reason}`);
+  });
+  page.on("response", (response) => {
+    if (response.status() < 400) return;
+    if (response.headers()["cf-speculation-refused"]) return;
+    if (response.request().resourceType() === "document") return;
+    failed.push(`${String(response.status())} ${response.request().method()} ${withoutQuery(response.url())}`);
+  });
+  return failed;
 }
 
 // Same-origin entries fail the test as "text @ url"; the excluded cross-origin
@@ -769,7 +790,7 @@ export function run(db: DatabaseSync, sql: string, ...values: (string | number |
   db.prepare(sql).run(...values);
 }
 
-export async function seedPreviewSession<T = void>(
+async function seedPreviewSessionOnce<T>(
   prefix: string,
   seed: (context: { db: DatabaseSync; suffix: string; userId: string }) => T,
   options: { livePlan: boolean } = { livePlan: true },
@@ -814,6 +835,19 @@ export async function seedPreviewSession<T = void>(
   } finally {
     db.close();
   }
+}
+
+export async function seedPreviewSession<T = void>(
+  prefix: string,
+  seed: (context: { db: DatabaseSync; suffix: string; userId: string }) => T,
+  options: { livePlan: boolean } = { livePlan: true },
+): Promise<{ cookie: string; seeded: T }> {
+  let seeded: { cookie: string; seeded: T } | undefined;
+  await expect(async () => {
+    seeded = await seedPreviewSessionOnce(prefix, seed, options);
+  }).toPass({ intervals: [250, 500, 1000], timeout: 20_000 });
+  if (seeded === undefined) throw new Error("seedPreviewSession finished without a session");
+  return seeded;
 }
 
 export function readPreview<T>(read: (db: DatabaseSync) => T): T {

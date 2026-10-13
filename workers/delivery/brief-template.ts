@@ -2,8 +2,8 @@ import type { BriefContext, BriefPayload, RenderedBrief } from "../../app/lib/br
 import { escapeHtml } from "../../app/lib/html";
 import { countPhrase } from "../../app/lib/quiet-week";
 import { UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
-import { SETTINGS_LINK } from "./alert-footer";
 import { EYEBROW, FONT, MONO, emailDocument, postalLine } from "./email-shell";
+import { SETTINGS_LINK } from "./alert-footer";
 
 const COPY = {
   subject: (rank: number, total: number) => `You're #${n(rank)} of ${n(total)} this week`,
@@ -29,7 +29,7 @@ const COPY = {
   next: "Next brief",
   noNext: "Next brief date not set yet",
   unsubscribe: "Unsubscribe",
-  settings: "Settings",
+  settings: "Choose when your brief arrives in Settings",
   noUnsubscribe: "Unsubscribe is not available right now. Reply to this email and we will stop sending.",
   degraded: (count: number) =>
     `${n(count)} ${count === 1 ? "source" : "sources"} could not be reached this week, so these counts may be low.`,
@@ -312,7 +312,7 @@ function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { h
     `<p class="brief-muted" style="${EYEBROW}">${escapeHtml(COPY.footerTitle)}</p>`,
     `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(`${checked}${across}.${degraded}`)}</p>`,
     `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(nextAt)}</p>`,
-    `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;"><a class="brief-muted" href="${SETTINGS_LINK}">${escapeHtml(COPY.settings)}</a></p>`,
+    `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;"><a class="brief-muted" href="${SETTINGS_LINK}">${escapeHtml(COPY.settings)}</a>.</p>`,
     `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">`,
     unsubscribeHref === null
       ? escapeHtml(COPY.noUnsubscribe)
@@ -368,6 +368,7 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
     [headline.html, ...(quiet ? [] : [block(marks.html)]), block(brands.html), block(ownSite.html), footer.html].join(
       "",
     ),
+    whyLine,
   );
 
   const text = [

@@ -310,7 +310,7 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
     expect(openDelivery.outcome).toBe("sent");
     expect(openDelivery.idempotency_key).toBe(`incident:${incident.id}:open`);
     expect(rec.sent).toHaveLength(1);
-    expect(rec.sent[0].subject).toBe("fixture.0509.in looks broken: breakage");
+    expect(rec.sent[0].subject).toBe("fixture.0509.in looks broken");
     const promised = formatDate(recheckAt, "UTC", true);
     expect(rec.sent[0].text).toContain(`We re-check at ${promised} and email you once when it is fixed.`);
     expect(rec.sent[0].text).not.toContain("soon");
@@ -349,7 +349,7 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
     expect(fixedDelivery.outcome).toBe("sent");
     expect(fixedDelivery.idempotency_key).toBe(`incident:${incident.id}:fixed`);
     expect(rec.sent).toHaveLength(2);
-    expect(rec.sent[1].subject).toBe("fixture.0509.in looks fixed: breakage");
+    expect(rec.sent[1].subject).toBe("fixture.0509.in looks fixed");
     expect(rec.sent[1].text).toContain("We re-checked fixture.0509.in at");
     expect(rec.sent[1].text).toContain("looks fixed");
 

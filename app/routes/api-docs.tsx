@@ -13,8 +13,11 @@ export function meta() {
 
 export function loader({ request }: Route.LoaderArgs) {
   const origin = new URL(request.url).origin;
+  const document = openApiDocument(origin);
+  const first = Object.keys(document.paths ?? {}).find((path) => !path.includes("{"));
   return {
-    document: openApiDocument(origin),
+    document,
+    exampleUrl: first === undefined ? null : `${origin}${first}`,
     mcpUrl: `${origin}${MCP_PATH}`,
     settingsHref: "/app/settings/agents",
   };

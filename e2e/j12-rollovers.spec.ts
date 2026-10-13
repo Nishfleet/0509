@@ -1,4 +1,5 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { type Locator, type Page } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
 import { requireInboxToken, signInWithMagicLink } from "./inbox";
@@ -76,7 +77,7 @@ async function rotate(page: Page): Promise<string> {
 
 async function briefLinks(page: Page): Promise<string[]> {
   await page.goto("/app/brief");
-  const links = page.getByRole("navigation", { name: "Previous briefs" }).getByRole("link");
+  const links = page.getByRole("navigation", { name: "Your briefs" }).getByRole("link");
   const hrefs = await links.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("href") ?? ""));
   return hrefs.filter((href) => href !== "");
 }

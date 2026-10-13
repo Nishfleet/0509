@@ -26,6 +26,19 @@ describe("landing price", () => {
     }
   });
 
+  it("opens each higher plan with what it builds on, so the lists do not repeat", () => {
+    const cards = new Map(
+      section(markup())
+        .split("<h3")
+        .slice(1)
+        .map((card) => [card.slice(card.indexOf(">") + 1, card.indexOf("</h3>")), card]),
+    );
+    const cardOf = (id: string) => cards.get(PLANS.find((plan) => plan.id === id)?.name ?? "");
+    expect(cardOf("scout")).not.toContain("Everything in");
+    expect(cardOf("starter")).toContain("Everything in Scout, plus");
+    expect(cardOf("agency")).toContain("Everything in Starter, plus");
+  });
+
   it("shows the trial line from the module", () => {
     const html = markup();
     expect(html).toContain(TRIAL_TERMS);

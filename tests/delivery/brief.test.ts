@@ -774,3 +774,21 @@ describe("every string field carries the injection probe escaped, never raw (050
     expectNoHtmlInjection(html, field);
   });
 });
+
+describe("inbox preview and the Settings link (Mobbin benchmark)", () => {
+  it("hides the why line as the preview text under the opening tag, before the wordmark", () => {
+    const { html } = renderBrief(payload(), CONTEXT);
+    const preview = html.indexOf("Kindred is the mover");
+
+    expect(html).toContain("display:none");
+    expect(preview).toBeGreaterThan(html.indexOf("<body"));
+    expect(preview).toBeLessThan(html.indexOf('brief-marker" style="padding'));
+  });
+
+  it("links Settings in the footer, in html and in the text alternative", () => {
+    const { html, text } = renderBrief(payload(), CONTEXT);
+
+    expect(html).toContain('href="https://0509.io/app/settings"');
+    expect(text).toContain("Choose when your brief arrives in Settings: https://0509.io/app/settings");
+  });
+});

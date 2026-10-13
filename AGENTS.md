@@ -189,8 +189,8 @@ rejection**, not a review comment. The row format is asserted by
 
 ## What gates a merge
 
-One required check on the `main-merge-queue` ruleset (id 21391031), **empty
-bypass list**: `ci-ok`. It is a job in `ci.yml` that needs the six gate jobs
+Three required checks on the `main-merge-queue` ruleset (id 21391031), **empty
+bypass list**: `ci-ok`, `base-fresh` and `ratchet / ratchet`. `ci-ok` is a job in `ci.yml` that needs the six gate jobs
 
 ```
 codex-node-checks   vitest-shard   Gitleaks   semgrep   preview-assert   base-fresh
@@ -202,6 +202,8 @@ never for a list of bad results: a job no runner picked up matched neither
 four-way matrix (`vitest-shard (1)` … `(4)`, vitest's own `--shard`); its
 result in `needs` is `success` only when every shard succeeded (0509#7163).
 `base-fresh` fails a PR whose head lacks the newest `main` commit that touched a gate file, and `stale-base-retest.yml` reruns it on every open PR when one lands (`docs/incidents/2026-10-07-stale-base-queue-ejections.md`).
+
+`ratchet / ratchet` (2026-10-12) is the fleet's no-glue gate: a PR's net added lines under `.github/workflows`, `.github/actions`, `scripts` and `bin` must be 0 or fewer. `.github/workflows/ratchet.yml` only calls `Nishfleet/fleet-ops/.github/workflows/ratchet.yml@main` (a SHA pin would queue forever on the runner group), so the rule is fleet-ops' main copy and a PR cannot loosen it; a PR that edits the caller's `ratchet` job fails. Ruleset before: required `ci-ok`, `base-fresh`; after: those plus `ratchet / ratchet`; nothing else changed. Bypass list: `gh api repos/Nishfleet/0509/rulesets/21391031 --jq '.bypass_actors, .current_user_can_bypass'` prints `[]` and `"never"`; it was already empty (admin `always` existed 2026-09-21 17:07 to 17:08 IST, one direct push by nish3451 in that window, none since), and no workflow or script here merges through the REST API. Undo (Nish only): `gh api repos/Nishfleet/0509/rulesets/21391031 | jq '{name,target,enforcement,bypass_actors,conditions,rules:(.rules|map(if .type=="required_status_checks" then .parameters.required_status_checks|=map(select(.context!="ratchet / ratchet")) else . end))}' | gh api -X PUT repos/Nishfleet/0509/rulesets/21391031 --input -`.
 
 Renaming `ci-ok` is not cosmetic. A required check that never reports fails
 closed and nothing can merge again, including the PR that renamed it. A

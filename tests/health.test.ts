@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { healthResponse } from "../app/lib/observability/health.server";
+import { d1Reachable, healthResponse } from "../app/lib/observability/health.server";
 
 const COMMIT = "0123456789abcdef0123456789abcdef01234567";
 
@@ -65,5 +65,13 @@ describe("/api/health", () => {
   it("names an empty commit when the version carries no tag", async () => {
     const response = await healthResponse(dbReturning({ ok: 1 }), "");
     await expect(response.json()).resolves.toMatchObject({ status: "ok", commit: "" });
+  });
+});
+
+describe("d1Reachable", () => {
+  it("is true after D1 returns 1 and false on a wrong row or a rejection", async () => {
+    expect(await d1Reachable(dbReturning({ ok: 1 }))).toBe(true);
+    expect(await d1Reachable(dbReturning({ ok: 0 }))).toBe(false);
+    expect(await d1Reachable(dbRejecting(new Error("down")))).toBe(false);
   });
 });

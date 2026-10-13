@@ -88,5 +88,13 @@ export default async function handleRequest(
   headers.set("Content-Type", "text/html");
   const reference = errorReferences.get(request);
   if (reference !== undefined) headers.set("X-Error-Reference", reference);
-  return withCompressedDocument(request, new Response(body, { headers, status }));
+  const settled = await Promise.race([
+    body.allReady.then(() => true),
+    new Promise<boolean>((resolve) => {
+      setTimeout(() => {
+        resolve(false);
+      }, 0);
+    }),
+  ]);
+  return withCompressedDocument(request, new Response(body, { headers, status }), settled);
 }

@@ -160,15 +160,29 @@ describe("RankedRow", () => {
     expect(render(rowFor("ent_kindred"))).toContain(">#1</span>");
   });
 
-  it("prints a none source as label · nothing new and a degraded source as label · not answering", () => {
+  it("collapses a quiet row's none sources into one line and keeps a degraded source as label · not answering", () => {
     const html = render(rowFor("ent_casetta"));
-    expect(html).toContain("Website checks · nothing new");
+    expect(html).toContain("Nothing new this week");
+    expect(html).not.toContain("Website checks · nothing new");
     expect(html).toContain("Reddit mentions · not answering");
   });
 
-  it("prints a source that produced nothing as label · nothing new", () => {
+  it("shows one line and no source chips for a row where every source is quiet and answering", () => {
     const html = render(rowFor("ent_casetta", { ...PAYLOAD, checked: { ...PAYLOAD.checked, degraded_sources: [] } }));
-    expect(html).toContain("Reddit mentions · nothing new");
+    expect(html).toContain("Nothing new this week");
+    expect(html).not.toContain("Reddit mentions");
+  });
+
+  it("keeps a none source's own chip beside a live one so the row explains itself", () => {
+    const html = render(rowFor("ent_kindred", { ...PAYLOAD, checked: { ...PAYLOAD.checked, degraded_sources: [] } }));
+    expect(html).not.toContain("Nothing new this week");
+    expect(html).toContain("· nothing new");
+  });
+
+  it("says nothing about the week when the workspace has no sources to check", () => {
+    const html = render({ ...rowFor("ent_casetta"), pills: [] });
+    expect(html).not.toContain("Nothing new this week");
+    expect(html).toMatch(/<ul[^>]*data-slot="row-pills"[^>]*>\s*<\/ul>/);
   });
 
   it("prints a live source with its count", () => {

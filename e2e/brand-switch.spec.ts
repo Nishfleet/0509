@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { consoleFailures, isLocalLane, watchConsole } from "./inbox";
 import { seedRankedHomeSession } from "./ranked-home";
@@ -107,6 +107,35 @@ test("a row's switch is square and paints the card fill when off @smoke", async 
     expect(paint.thumbLeft - paint.trackLeft, JSON.stringify(paint)).toBeLessThanOrEqual(2);
     expect(paint.thumbRight, JSON.stringify(paint)).toBeLessThanOrEqual(paint.trackRight);
   }).toPass({ timeout: 3000 });
+
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
+});
+
+test("the Competitors list says what a switch does once, not under every brand @smoke", async ({ page }, testInfo) => {
+  test.skip(!isLocalLane(), "pauses a brand, so it runs only on the workspace seeded for this run");
+  const watched = watchConsole(page);
+
+  const cookie = await seedRankedHomeSession("switch-note-once");
+  await page.setExtraHTTPHeaders({ cookie });
+
+  await page.goto("/app/competitors");
+  const toggle = page.getByRole("switch", { name: "Kindred tracking" });
+  await expect(toggle).toBeVisible();
+
+  const noteId = await toggle.getAttribute("aria-describedby");
+  const note = page.locator(`[id="${noteId ?? ""}"]`);
+  await expect(note).toContainText("Turn off to stop watching and alerts");
+  const box = await note.boundingBox();
+  expect(box === null || box.width <= 1, "the consequence stays for screen readers only").toBe(true);
+
+  await toggle.click();
+  await expect(toggle).not.toBeChecked();
+  await expect(note).toContainText(/Paused .*history kept/);
+  const pausedBox = await note.boundingBox();
+  expect(pausedBox?.width ?? 0, "a paused row still prints its date").toBeGreaterThan(1);
+
+  await toggle.click();
+  await expect(toggle).toBeChecked();
 
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
