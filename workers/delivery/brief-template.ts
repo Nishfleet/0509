@@ -2,7 +2,7 @@ import type { BriefContext, BriefPayload, RenderedBrief } from "../../app/lib/br
 import { escapeHtml } from "../../app/lib/html";
 import { countPhrase } from "../../app/lib/quiet-week";
 import { UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
-import { EYEBROW, FONT, MONO, emailDocument } from "./email-shell";
+import { EYEBROW, FONT, MONO, emailDocument, postalLine } from "./email-shell";
 import { SETTINGS_LINK } from "./alert-footer";
 
 const COPY = {
@@ -306,6 +306,7 @@ function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { h
       : "";
 
   const unsubscribeHref = unsubscribeUrl === null ? null : safeUrl(unsubscribeUrl);
+  const postal = postalLine();
   const html = [
     `<div class="brief-rule" style="padding:16px 0 0;">`,
     `<p class="brief-muted" style="${EYEBROW}">${escapeHtml(COPY.footerTitle)}</p>`,
@@ -317,6 +318,7 @@ function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { h
       ? escapeHtml(COPY.noUnsubscribe)
       : `<a class="brief-muted" href="${unsubscribeHref}">${escapeHtml(COPY.unsubscribe)}</a>`,
     `</p>`,
+    postal?.html ?? "",
     `</div>`,
   ].join("");
 
@@ -325,6 +327,7 @@ function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { h
     nextAt,
     `${COPY.settings}: ${SETTINGS_LINK}`,
     unsubscribeUrl === null ? COPY.noUnsubscribe : `${COPY.unsubscribe}: ${unsubscribeUrl}`,
+    ...(postal === null ? [] : [postal.text]),
   ].join("\n");
 
   return { html, text };

@@ -7,8 +7,10 @@ import { OnboardingFrame } from "../components/onboarding-frame";
 import { PlanGate, UpgradeStatus } from "../components/plan-gate";
 import { createCheckoutUrl } from "../lib/billing/checkout.server";
 import { isWorkspacePaid } from "../lib/billing/entitlements";
-import { isBillingInterval, isPlanId, PLANS, TRIAL_TERMS } from "../lib/billing/plans";
+import { isBillingInterval, isPlanId, TRIAL_TERMS } from "../lib/billing/plans";
 import { readPlanSubscription, readPlanTier } from "../lib/data/plan.server";
+import { readPlanIntent } from "../lib/plan-intent.server";
+import { inPickedOrder, planName } from "../lib/plan-order";
 import { requireFreshSession, requireSession, signOutToLogin } from "../lib/require-session.server";
 import { ONBOARDING_PLAN, workspaceLandingForRequest } from "../lib/workspace.server";
 
@@ -42,7 +44,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const wanted = isPlanId(wantedRaw) ? wantedRaw : null;
   const [tier, subscription] = await Promise.all([readPlanTier(workspaceId), readPlanSubscription(workspaceId)]);
   if (isWorkspacePaid(subscription, new Date())) throw redirect("/app");
-  return data({ tier, wanted, checkoutPath: ONBOARDING_PLAN });
+  return data({ tier, wanted, picked: await readPlanIntent(request), checkoutPath: ONBOARDING_PLAN });
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -66,7 +68,12 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
     <OnboardingFrame step={4} heading="Start your trial">
       <p className="mt-3 max-w-prose leading-[1.55] text-ink-soft">{TRIAL_TERMS}</p>
       <div className="mt-8">
-        {PLANS.map((plan) => (
+        {loaderData.picked === null ? null : (
+          <p data-slot="picked-plan" className="text-body-sm text-ink">
+            You picked {planName(loaderData.picked)} on the pricing page. It is first below.
+          </p>
+        )}
+        {inPickedOrder(loaderData.picked).map((plan) => (
           <PlanGate key={plan.id} planId={plan.id} action={loaderData.checkoutPath} />
         ))}
       </div>
