@@ -22,6 +22,7 @@ import {
   readAccountDeleteInstanceId,
   readAccountDeleteProgress,
 } from "../lib/account-delete.server";
+import { planIntentHeaders } from "../lib/plan-intent.server";
 import { usePasskeySignIn } from "../lib/use-passkey-sign-in";
 import { useTimezoneCookie } from "../lib/use-timezone-cookie";
 
@@ -45,9 +46,12 @@ export async function loader({ request }: Route.LoaderArgs) {
   const search = new URL(request.url).searchParams;
   const linkError = deadLinkMessage(search);
   const id = search.get("deleted");
-  if (id === null && linkError === null && (await hasSession(request))) throw redirect(signInTarget(search));
+  const planHeaders = await planIntentHeaders(search);
+  if (id === null && linkError === null && (await hasSession(request))) {
+    throw redirect(signInTarget(search), { headers: planHeaders });
+  }
   if (id === null || id === "" || (await readAccountDeleteInstanceId(request)) !== id) {
-    return data({ turnstileSiteKey, linkError, id: null, progress: null });
+    return data({ turnstileSiteKey, linkError, id: null, progress: null }, { headers: planHeaders });
   }
   const progress = await readAccountDeleteProgress(id);
   const finished = progress?.files === "removed";

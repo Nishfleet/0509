@@ -1,6 +1,6 @@
 import { SUPPORT_ADDRESS } from "../../app/components/footer";
 import { escapeHtml } from "../../app/lib/html";
-import { FONT } from "./email-shell";
+import { FONT, postalLine } from "./email-shell";
 
 export const SETTINGS_LINK = "https://0509.io/app/settings";
 
@@ -30,16 +30,19 @@ export function unsubscribeHeaders(unsubscribeUrl: string): Record<string, strin
 export function renderAlertFooter(ctx: AlertFooterContext): { html: string; text: string } {
   const settings = escapeHtml(ctx.settings_link);
   const unsubscribe = escapeHtml(ctx.unsubscribe_url);
+  const postal = postalLine();
   return {
     html: [
       `<p class="brief-muted" style="${LINE}">Choose which alerts you get in <a class="brief-muted" href="${settings}">Settings</a>.</p>`,
       `<p class="brief-muted" style="${LINE}"><a class="brief-muted" href="${unsubscribe}">Unsubscribe</a></p>`,
       supportLineHtml(),
+      postal?.html ?? "",
     ].join(""),
     text: [
       `Choose which alerts you get in Settings: ${ctx.settings_link}`,
       `Unsubscribe: ${ctx.unsubscribe_url}`,
       supportLineText(),
+      ...(postal === null ? [] : [postal.text]),
     ].join("\n"),
   };
 }

@@ -25,6 +25,17 @@ export const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetic
 export const MONO = "ui-monospace,'SF Mono',Menlo,Consolas,monospace";
 export const EYEBROW = `margin:0 0 8px;font-family:${MONO};font-size:12px;line-height:16px;letter-spacing:0.16em;text-transform:uppercase;font-weight:500;`;
 
+export const POSTAL_ADDRESS: string | null = null;
+
+export function postalLine(address: string | null = POSTAL_ADDRESS): { html: string; text: string } | null {
+  if (address === null) return null;
+  const line = `Five to Nine, ${address}`;
+  return {
+    html: `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(line)}</p>`,
+    text: line,
+  };
+}
+
 function emailStyle(): string {
   return [
     `<style>`,

@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import { useEffect, useRef, type ReactElement } from "react";
 import { Form, useNavigation } from "react-router";
 
 import type { PlanId } from "../lib/billing/plans";
@@ -75,6 +75,19 @@ function MaybeRow({ maybe }: { maybe: Maybe }): ReactElement {
   );
 }
 
+function useClearedAfterAdd(adding: boolean, message: string | null | undefined) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const wasAdding = useRef(false);
+  useEffect(() => {
+    if (adding) wasAdding.current = true;
+    else if (wasAdding.current) {
+      wasAdding.current = false;
+      if (!message) formRef.current?.reset();
+    }
+  }, [adding, message]);
+  return formRef;
+}
+
 export function AddCompetitor({
   message,
   upgradePlanId,
@@ -86,9 +99,10 @@ export function AddCompetitor({
 }): ReactElement {
   const navigation = useNavigation();
   const adding = navigation.state !== "idle" && navigation.formData?.get("intent") === "add";
+  const formRef = useClearedAfterAdd(adding, message);
   return (
     <div className="mt-12">
-      <Form method="post">
+      <Form method="post" ref={formRef}>
         <input type="hidden" name="intent" value="add" />
         <label htmlFor="add-competitor" className={BLOCK_HEADING}>
           Add a competitor we missed

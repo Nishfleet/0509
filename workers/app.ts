@@ -18,6 +18,7 @@ import { cronMonitor } from "./cron-monitors";
 import { handleBatch } from "./delivery/consumer";
 import { handleDlqBatch } from "./delivery/dlq-consumer";
 import { sweepPending } from "./delivery/sweeper";
+import { sendTrialReminders } from "./delivery/trial-reminder";
 import { sentryOptions } from "./sentry";
 import { runNightlyStanding } from "./standing/nightly";
 import { IdentityTail } from "./identity-tail-workflow";
@@ -72,6 +73,7 @@ const handler = {
         const results = await Promise.allSettled([
           runNightlyStanding(env, now),
           sweepPending(env, now),
+          sendTrialReminders(env, now),
           startNightlyDiscovery(now),
           deleteExpiredAuthRows(env.DB, now),
           deleteExpiredJevFailures(env.DB, now),

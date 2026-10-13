@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { markWebhookEventProcessed, recordWebhookEvent } from "../data/dodo_webhook_event.server";
 import { readPlanSubscription, readWorkspaceIdBySubscription, upsertSubscriptionPlan } from "../data/plan.server";
+import { tryFirstLook } from "../site/first-look.server";
 import { isCheckoutProof } from "./checkout-proof.server";
 import { isSubscriptionLive } from "./entitlements";
 import { planIdForProduct, testerProductId } from "./products.server";
@@ -70,6 +71,9 @@ async function displacement(input: {
   return Date.parse(input.timestamp) > since ? "same" : "stale";
 }
 
+const firstLookWhenActive = (type: string, workspaceId: string): Promise<void> =>
+  type === "subscription.active" ? tryFirstLook(workspaceId) : Promise.resolve();
+
 async function applySubscription(body: unknown, type: string, timestamp: string): Promise<"done" | "retry"> {
   const parsed = subscriptionEvent.safeParse(body);
   if (!parsed.success) {
@@ -115,6 +119,7 @@ async function applySubscription(body: unknown, type: string, timestamp: string)
     updatedAt: timestamp,
     replace: change === "takeover",
   });
+  await firstLookWhenActive(type, workspaceId);
   return "done";
 }
 

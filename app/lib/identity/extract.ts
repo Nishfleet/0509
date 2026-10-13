@@ -163,12 +163,30 @@ function readOrganization(blocks: readonly string[]): {
     }
   }
   const organization = nodes.find((node) => typeIncludesOrganization(node["@type"]));
-  if (!organization) return { name: null, logo: null, sameAs: [] };
+  const sameAs = nodes
+    .filter((node) => typeIncludesOrganization(node["@type"]))
+    .flatMap((node) => sameAsField(node.sameAs));
+  if (!organization) return { name: null, logo: null, sameAs };
   return {
     name: stringField(organization.name),
     logo: logoField(organization.logo),
-    sameAs: sameAsField(organization.sameAs),
+    sameAs,
   };
+}
+
+const INLINE_SOCIAL_OBJECT = /\{[^{}]*"classification"\s*:\s*"(?:youtube|facebook|instagram|twitter|tiktok)"[^{}]*\}/g;
+
+function inlineSocialLinks(html: string): string[] {
+  const links: string[] = [];
+  for (const [object] of html.matchAll(INLINE_SOCIAL_OBJECT)) {
+    try {
+      const parsed: unknown = JSON.parse(object);
+      if (isRecord(parsed) && parsed.type === "link" && typeof parsed.url === "string") links.push(parsed.url);
+    } catch {
+      continue;
+    }
+  }
+  return links;
 }
 
 const YOUTUBE_CHANNEL_PATH = /^\/(?:channel\/UC[0-9A-Za-z_-]{22}|@[^/]+)\/?$/;
@@ -354,7 +372,7 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
     ldOrganizationLogo: organization.logo,
     appleTouchIcon: state.appleTouchIcon,
     manifestUrl: state.manifestUrl,
-    socials: collectSocials(organization.sameAs, anchors),
+    socials: collectSocials([...organization.sameAs, ...inlineSocialLinks(html)], anchors),
     navLinks,
     navPages,
     adLibraryHints,

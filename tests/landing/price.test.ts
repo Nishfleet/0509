@@ -39,6 +39,12 @@ describe("landing price", () => {
     expect(cardOf("agency")).toContain("Everything in Starter, plus");
   });
 
+  it("draws every plan card the same, with no plan marked as the one to pick", () => {
+    const cards = section(markup()).match(/<li class="min-w-0[^"]*"/g) ?? [];
+    expect(cards).toHaveLength(PLANS.length);
+    expect(new Set(cards).size).toBe(1);
+  });
+
   it("shows the trial line from the module", () => {
     const html = markup();
     expect(html).toContain(TRIAL_TERMS);
