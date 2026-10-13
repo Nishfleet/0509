@@ -84,7 +84,7 @@ export function ErrorBoundary({ error, loaderData }: Route.ErrorBoundaryProps) {
       detail={copy.detail}
       actionHref={signedIn ? "/app" : "/"}
       actionLabel="Back to home"
-      retryHref={copy.retry ? loaderData?.pathname : undefined}
+      retry={copy.retry}
     />
   );
 }

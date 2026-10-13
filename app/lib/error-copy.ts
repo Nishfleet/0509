@@ -15,7 +15,14 @@ export function errorCopy(error: unknown, pathname: string): ErrorCopy {
       retry: false,
     };
   }
-  if (status === 401 || status === 403) {
+  if (status === 401) {
+    return {
+      title: "Sign in to continue",
+      detail: "You need to be signed in to open this page. Sign in, then open it again.",
+      retry: false,
+    };
+  }
+  if (status === 403) {
     return {
       title: "You cannot open this page",
       detail: "This page belongs to another account. Sign in with the right one, or go back to the home page.",

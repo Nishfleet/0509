@@ -15,7 +15,7 @@ export function AppRouteError({ error }: { error: unknown }): ReactElement {
         detail={copy.detail}
         actionHref="/app"
         actionLabel="Back to home"
-        retryHref={copy.retry ? pathname : undefined}
+        retry={copy.retry}
       />
     </AppShell>
   );

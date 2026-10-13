@@ -26,7 +26,7 @@ describe("error page by cause", () => {
 
   it.each([
     [403, "You cannot open this page", false],
-    [401, "You cannot open this page", false],
+    [401, "Sign in to continue", false],
     [429, "Too many requests", true],
     [500, "Something went wrong", true],
     [503, "Something went wrong", true],
@@ -36,7 +36,8 @@ describe("error page by cause", () => {
     expect(html).not.toContain(LEAK);
     expect(html).not.toContain(String(status));
     expect(html).not.toContain("!");
-    expect(html.includes('href="/app/alerts"')).toBe(retry);
+    expect(html).not.toContain("/app/alerts");
+    expect(html.includes('href=""')).toBe(retry);
     expect(html.includes("Try again")).toBe(retry);
     expect(html).toContain("Back to home");
   });
@@ -111,7 +112,8 @@ describe("error page", () => {
     expect(html).not.toContain(LEAK);
     expect(html).not.toContain("<pre");
     expect(html).toContain('href="/"');
-    expect(html).toContain('href="/blow-up"');
+    expect(html).not.toContain("blow-up");
+    expect(html).toContain('href=""');
     expect(html.match(/<a /g)).toHaveLength(2);
   });
 

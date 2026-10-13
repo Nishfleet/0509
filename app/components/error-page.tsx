@@ -3,13 +3,13 @@ export function ErrorPage({
   detail,
   actionHref,
   actionLabel,
-  retryHref,
+  retry,
 }: {
   title: string;
   detail: string;
   actionHref: string;
   actionLabel: string;
-  retryHref?: string;
+  retry?: boolean;
 }) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[40rem] min-w-0 flex-col justify-center px-6 py-12">
@@ -21,20 +21,20 @@ export function ErrorPage({
         {detail}
       </p>
       <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-3">
-        {retryHref === undefined ? null : (
+        {retry === true ? (
           <a
-            href={retryHref}
+            href=""
             className="inline-flex min-h-11 items-center rounded-none bg-ink px-4 font-display text-base font-bold text-bone"
           >
             Try again
           </a>
-        )}
+        ) : null}
         <a
           href={actionHref}
           className={
-            retryHref === undefined
-              ? "inline-flex min-h-11 items-center rounded-none bg-ink px-4 font-display text-base font-bold text-bone"
-              : "inline-flex min-h-11 items-center text-ink-soft underline decoration-1 underline-offset-4 hover:text-ink"
+            retry === true
+              ? "inline-flex min-h-11 items-center text-ink-soft underline decoration-1 underline-offset-4 hover:text-ink"
+              : "inline-flex min-h-11 items-center rounded-none bg-ink px-4 font-display text-base font-bold text-bone"
           }
         >
           {actionLabel}
