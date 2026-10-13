@@ -21,6 +21,7 @@ const degradedSchema = z.object({
 
 const identitySchema = z.object({
   socials: z.array(socialSchema).optional(),
+  socialsReadAt: z.string().nullish(),
 });
 
 const jsonObject = z.record(z.string(), z.unknown());
@@ -154,6 +155,12 @@ export function identityHasYoutubeUrl(raw: string): boolean {
     const normalised = normaliseSubject(social.url);
     return normalised.ok && normalised.subject.platform === "youtube";
   });
+}
+
+export function identitySocialsUnread(raw: string): boolean {
+  const value: unknown = JSON.parse(raw);
+  const card = identitySchema.parse(value);
+  return card.socialsReadAt == null && (card.socials ?? []).length === 0;
 }
 
 export function channelIdFromIdentity(raw: string): string | null {
