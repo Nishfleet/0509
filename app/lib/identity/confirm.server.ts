@@ -4,6 +4,7 @@ import { insertSelfEntity, readWorkspaceSelfId } from "../data/entity.server";
 import { insertFieldEdits, type FieldEdit } from "../data/user_decision.server";
 import { readCachedSiteValues } from "./card.server";
 import { readLogo } from "./logo-store.server";
+import { creatorSite } from "./creator-site";
 import { normaliseSubject, type Subject } from "./normalise";
 import { startIdentityTail } from "./tail.server";
 
@@ -24,14 +25,6 @@ function socialsFrom(entries: Record<string, FormDataEntryValue>): { platform: s
   return Object.entries(entries)
     .filter(([key]) => key.startsWith(SOCIAL_PREFIX))
     .map(([key, url]) => ({ platform: key.slice(SOCIAL_PREFIX.length), url }));
-}
-
-function creatorSite(socials: { platform: string; url: string }[]): Subject | null {
-  const entry = socials.find((social) => social.platform === "site");
-  if (entry === undefined) return null;
-  const normalised = normaliseSubject(entry.url);
-  if (!normalised.ok || normalised.subject.kind !== "domain") return null;
-  return normalised.subject;
 }
 
 export async function confirmCard(workspaceId: string, userId: string, form: FormData): Promise<boolean> {
