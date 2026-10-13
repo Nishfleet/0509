@@ -36,6 +36,11 @@ export function sourceName(kind: string, platform: string): string {
   return brand === undefined ? `Your ${noun} source` : `${brand} ${noun}`;
 }
 
+export function platformName(platform: string): string | null {
+  if (platform === "web") return "Website";
+  return PLATFORM_NAMES[platform] ?? null;
+}
+
 export function sourceKindNoun(kind: string): string {
   return KIND_NOUNS[kind] ?? kind;
 }
