@@ -108,7 +108,7 @@ describe("the freshness line", () => {
     expect(line([])).toBe("");
   });
 
-  it("names each entry with its state and separates them", () => {
+  it("names each entry with its state, one line each", () => {
     const entries = freshnessEntries(
       [
         { kind: "mentions", source: reddit, snapshot: freshSnapshot },
@@ -121,6 +121,7 @@ describe("the freshness line", () => {
     expect(html).toContain('data-home="freshness"');
     expect(html).toContain('data-state="live"');
     expect(html).toContain('data-state="degraded"');
-    expect(html).toContain(" · ");
+    expect(html.match(/<li\b/g)).toHaveLength(2);
+    expect(html).not.toContain(" · ");
   });
 });
