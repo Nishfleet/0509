@@ -162,4 +162,28 @@ describe("extractIdentity", () => {
     const card = await extractIdentity(html, pageUrl);
     expect(card.socials).toEqual([{ platform: "youtube", url: "https://www.youtube.com/user/rival" }]);
   });
+
+  it("finds a YouTube channel link inside script state when no anchor renders it", async () => {
+    const html = `<html><script id="__NEXT_DATA__">{"footer":{"youtube":"https:\\u002F\\u002Fwww.youtube.com\\u002F@gymsharkhq"}}</script></html>`;
+    const card = await extractIdentity(html, pageUrl);
+    expect(card.socials).toEqual([{ platform: "youtube", url: "https://www.youtube.com/@gymsharkhq" }]);
+  });
+
+  it("ignores YouTube embed and watch links in script text", async () => {
+    const html = `<html><script>var v="https://www.youtube.com/embed/abc123"; var w="https://www.youtube.com/watch?v=abc123"</script></html>`;
+    const card = await extractIdentity(html, pageUrl);
+    expect(card.socials).toEqual([]);
+  });
+
+  it("ignores a script-state YouTube link that is not named after the brand", async () => {
+    const html = `<html><script>{"by":"https://www.youtube.com/@someoneelse"}</script></html>`;
+    const card = await extractIdentity(html, pageUrl);
+    expect(card.socials).toEqual([]);
+  });
+
+  it("prefers a rendered channel anchor over a script-state user link", async () => {
+    const html = `<html><script>{"u":"https://www.youtube.com/user/gymshark-old"}</script><a href="https://www.youtube.com/@gymshark">YT</a></html>`;
+    const card = await extractIdentity(html, pageUrl);
+    expect(card.socials).toEqual([{ platform: "youtube", url: "https://www.youtube.com/@gymshark" }]);
+  });
 });
