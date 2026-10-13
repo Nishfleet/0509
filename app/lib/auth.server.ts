@@ -234,12 +234,15 @@ async function silenceWorkspace(db: D1Database, userId: string): Promise<void> {
   await cancelPendingDigests(db, workspaceId);
 }
 
+export async function hasFreshSession(env: AuthEnv, request: Request, now: Date): Promise<boolean> {
+  const session = await createAuth(env).api.getSession({ headers: request.headers, query: FRESH });
+  if (!session) return false;
+  return now.getTime() - new Date(session.session.createdAt).getTime() < FRESH_SESSION_SECONDS * 1000;
+}
+
 export async function deleteSignedInUser(env: AuthEnv, request: Request, now: Date): Promise<Headers | null> {
+  if (!(await hasFreshSession(env, request, now))) return null;
   const auth = createAuth(env);
-  const session = await auth.api.getSession({ headers: request.headers, query: FRESH });
-  if (!session) return null;
-  const age = now.getTime() - new Date(session.session.createdAt).getTime();
-  if (age >= FRESH_SESSION_SECONDS * 1000) return null;
   const { apiKeys } = await auth.api.listApiKeys({ headers: request.headers });
   await Promise.all(
     apiKeys.map((key) => auth.api.deleteApiKey({ body: { keyId: key.id }, headers: request.headers, query: FRESH })),

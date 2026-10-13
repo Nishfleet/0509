@@ -23,8 +23,8 @@ export const SITEMAP_LASTMOD: Readonly<Record<string, string>> = {
 export const DISALLOWED_PREFIXES = [
   "/app",
   "/api",
-  "/u",
-  "/v",
+  "/u/",
+  "/v/",
   "/login",
   "/onboarding",
   "/oauth",
