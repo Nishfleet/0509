@@ -116,6 +116,13 @@ describe("PlanSection", () => {
     expect(html).toContain("See billing history");
   });
 
+  it("does not offer to cancel a plan that is already cancelled but still paid for", () => {
+    const html = render({ ...BILLED, status: "cancelled", currentPeriodEnd: "2099-10-20T00:00:00.000Z" });
+    expect(html).toContain("then it stops");
+    expect(html).toContain("Manage billing");
+    expect(html).not.toContain("Manage or cancel plan");
+  });
+
   it("offers manage or cancel, not an upgrade, to a subscriber", () => {
     const html = render(BILLED);
     expect(html).toContain("Manage or cancel plan");
