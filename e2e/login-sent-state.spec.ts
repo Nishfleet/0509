@@ -6,7 +6,6 @@ let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
   if (createdEmail === "") return;
   testInfo.setTimeout(testInfo.timeout + 60_000);
-  await page.clock.resume();
   // The delete failing is a test failure, not a reason to keep the address:
   // clearing in finally means the next test in this worker cannot try to
   // delete an account that is already gone.
@@ -21,6 +20,7 @@ test.afterEach(async ({ page }, testInfo) => {
 test("the sent state lands in place and the resend waits 30 seconds with a visible count @own-signin", async ({
   page,
 }, testInfo) => {
+  testInfo.setTimeout(120_000);
   const watched = watchConsole(page);
 
   const response = await page.goto("/login");
@@ -30,9 +30,11 @@ test("the sent state lands in place and the resend waits 30 seconds with a visib
   createdEmail = email;
   await page.locator('input[name="email"]').fill(email);
   await settleSignInWidget(page);
-  // Fake timers after Turnstile has minted. Installing before navigation makes
-  // the widget's own scripts throw, and those pageerrors have no URL to exclude.
-  await page.clock.install();
+  // Real time, not page.clock: the sent state mounts a second Turnstile widget
+  // after submit (startOn="mount"), and its iframe runs on whatever clock the
+  // page has. Fake timers starve its scripts and they throw uncaught
+  // pageerrors ("reading 'call'", "setting 'rqvo8'", 2026-10-11 run
+  // 38146870606), which carry no URL to exclude. The 30 s wait is the real one.
   await page.locator('button[type="submit"]').click();
 
   await expect(page).toHaveURL(/\/login$/);
@@ -43,8 +45,7 @@ test("the sent state lands in place and the resend waits 30 seconds with a visib
   await expect(resend).toBeDisabled();
   await expect(resend).toHaveText(/\d+s/);
 
-  await page.clock.runFor(31_000);
-  await expect(resend).toBeEnabled();
+  await expect(resend).toBeEnabled({ timeout: 40_000 });
   await expect(resend).not.toHaveText(/\d+s/);
 
   await page.getByRole("button", { name: "Use a different email" }).click();

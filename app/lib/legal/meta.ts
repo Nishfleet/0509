@@ -6,7 +6,7 @@ export function legalMeta(doc: LegalDocument) {
   return [
     { title },
     { name: "description", content: doc.description },
-    { name: "robots", content: "index, follow" },
+    { name: "robots", content: doc.walled === true ? "noindex, nofollow" : "index, follow" },
     { tagName: "link", rel: "canonical", href: `${SITE_URL}${doc.path}` },
     { property: "og:type", content: "website" },
     { property: "og:site_name", content: "Five to Nine" },
