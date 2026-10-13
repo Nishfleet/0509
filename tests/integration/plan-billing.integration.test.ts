@@ -63,6 +63,28 @@ describe("plan billing readers", () => {
     });
   });
 
+  it("stops treating a cancelled plan as billed once its paid period has passed, but not before", async () => {
+    const lapsed = await seed("e", "cus_lapsed");
+    await env.DB.prepare(
+      "UPDATE plan SET status = 'cancelled', current_period_end = '2026-09-15T00:00:00.000Z' WHERE workspace_id = ?",
+    )
+      .bind(lapsed.workspaceId)
+      .run();
+    expect(await readPlanSummary(lapsed.workspaceId)).toMatchObject({
+      tier: "scout",
+      status: "cancelled",
+      billed: false,
+    });
+
+    const paidUp = await seed("f", "cus_paid_up");
+    await env.DB.prepare("UPDATE plan SET status = 'cancelled' WHERE workspace_id = ?").bind(paidUp.workspaceId).run();
+    expect(await readPlanSummary(paidUp.workspaceId)).toMatchObject({
+      tier: "starter",
+      status: "cancelled",
+      billed: true,
+    });
+  });
+
   it("finds no workspace for a user who does not own one", async () => {
     await env.DB.prepare(
       'INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, 1, ?, ?)',

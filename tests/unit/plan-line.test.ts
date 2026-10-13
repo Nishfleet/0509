@@ -33,6 +33,18 @@ describe("planLine", () => {
     ).toBe("You're on Agency until 15 October 2026, then it stops.");
   });
 
+  it("says a lapsed plan has ended and what the customer is on now", () => {
+    expect(
+      planLine({
+        tier: "scout",
+        status: "cancelled",
+        currentPeriodEnd: "2026-09-15T00:00:00.000Z",
+        trialing: false,
+        billed: false,
+      }),
+    ).toBe("Your paid plan ended on 15 September 2026. You're on Scout.");
+  });
+
   const trialing = {
     tier: "starter",
     status: "active",
