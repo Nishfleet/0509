@@ -29,4 +29,9 @@ describe("trial ending email", () => {
   it("escapes anything it is handed", () => {
     expectNoHtmlInjection(renderTrialEnding({ ...CTX, plan: PROBE }).html, "plan");
   });
+
+  it("opens with a hidden inbox preview of the end date and the charge", () => {
+    const { html } = renderTrialEnding(CTX);
+    expect(html).toMatch(/display:none[^>]*>Your free trial of Starter ends on /);
+  });
 });

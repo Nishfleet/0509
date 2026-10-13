@@ -110,4 +110,9 @@ describe("every string field carries the injection probe escaped, never raw (050
     });
     expectNoHtmlInjection(html, `renderChangeOverflow ${field}`);
   });
+
+  it("opens with a hidden inbox preview of when it was seen and what changed", () => {
+    const { html } = renderChange(CTX);
+    expect(html).toMatch(/display:none[^>]*>Seen at [^<]*Pro \$12 a month[^<]*Pro \$15 a month</);
+  });
 });
