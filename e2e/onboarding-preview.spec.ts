@@ -97,6 +97,7 @@ test("a new account lands on the one input and an empty answer is refused", asyn
 
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page).toHaveURL(/\/onboarding$/);
+  await expect(page.getByText("We couldn't find a website or username in that.")).toBeVisible();
   await expect(input).toBeVisible();
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
@@ -122,6 +123,8 @@ test("the competitors step lists who is watched and who is a maybe, then moves o
   await expect(watching.getByRole("listitem")).toHaveCount(1);
   await expect(watching).toContainText("Zephyrwear");
   await expect(page.getByText("Northloop", { exact: true })).toBeVisible();
+  await expect(page.getByText("Sells the same running kit to the same buyers.")).toBeVisible();
+  await expect(page.getByText(/\b0\.7\b|\b70\s?%/)).toHaveCount(0);
   expect(await horizontalOverflow(page)).toBe(0);
 
   await page.getByRole("button", { name: "Start watching" }).click();
