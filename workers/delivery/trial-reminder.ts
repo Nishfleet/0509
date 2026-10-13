@@ -20,7 +20,9 @@ async function reminderPlan(env: Env, trial: TrialEnding, isTester: TesterCheck)
   const plan = PLANS.find((entry) => entry.id === trial.tier);
   if (plan === undefined || trial.subscription_id === null) return null;
   if (await hasReminderAttempt(env.DB, trialReminderKey(trial))) return null;
-  if ((await isTester(trial.subscription_id)) !== false) return null;
+  const tester = await isTester(trial.subscription_id);
+  if (tester === null) console.error(JSON.stringify({ event: "delivery.trial_reminder_tester_unknown" }));
+  if (tester !== false) return null;
   if (await isAddressSuppressed(trial.target_value, env.DB)) return null;
   return plan;
 }
@@ -67,7 +69,11 @@ export async function sendTrialReminders(
 ): Promise<number> {
   let sent = 0;
   for (const trial of await readTrialsEnding(env.DB, now)) {
-    if (await remind(env, trial, isTester)) sent += 1;
+    const done = await remind(env, trial, isTester).catch((error: unknown) => {
+      console.error(JSON.stringify({ event: "delivery.trial_reminder_failed", error: String(error) }));
+      return false;
+    });
+    if (done) sent += 1;
   }
   return sent;
 }

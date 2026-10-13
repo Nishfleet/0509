@@ -40,6 +40,7 @@ export async function readTrialsEnding(db: D1Database, now: Date): Promise<Trial
   for (const row of z.array(z.unknown()).parse(results)) {
     const parsed = trialEndingRow.safeParse(row);
     if (parsed.success) trials.push(parsed.data);
+    else console.error(JSON.stringify({ event: "billing.trial_reminder_row_skipped" }));
   }
   return trials;
 }
@@ -60,5 +61,5 @@ export async function hasReminderAttempt(db: D1Database, key: string): Promise<b
 }
 
 export function trialReminderKey(trial: Pick<TrialEnding, "workspace_id" | "current_period_end">): string {
-  return `trial-ending:${trial.workspace_id}:${trial.current_period_end}`;
+  return `trial-ending:${trial.workspace_id}:${new Date(trial.current_period_end).toISOString()}`;
 }
