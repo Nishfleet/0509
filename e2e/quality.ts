@@ -30,14 +30,14 @@ export async function startQuality(page: Page): Promise<Quality> {
   return { watched: watchConsole(page), failedRequests };
 }
 
-export function resetQuality(quality: Quality): void {
+function resetQuality(quality: Quality): void {
   quality.failedRequests.length = 0;
   quality.watched.consoleErrors.length = 0;
   quality.watched.pageErrors.length = 0;
   quality.watched.prefetchRefused.length = 0;
 }
 
-export async function expectNoSeriousAxe(page: Page, testInfo: TestInfo, label: string): Promise<void> {
+async function expectNoSeriousAxe(page: Page, testInfo: TestInfo, label: string): Promise<void> {
   const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
   await testInfo.attach(`axe ${label}`, {
     body: JSON.stringify(results.violations, null, 2),
@@ -56,7 +56,7 @@ export async function expectNoSeriousAxe(page: Page, testInfo: TestInfo, label: 
     .toEqual([]);
 }
 
-export async function expectKeyboardReachesVisibleFocus(page: Page, label: string): Promise<void> {
+async function expectKeyboardReachesVisibleFocus(page: Page, label: string): Promise<void> {
   await page.evaluate(() => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   });
@@ -88,7 +88,7 @@ export async function expectKeyboardReachesVisibleFocus(page: Page, label: strin
   expect.soft(problems, `${label}: ${String(stops)} tab stops`).toEqual([]);
 }
 
-export async function expectQuiet(page: Page, testInfo: TestInfo, quality: Quality, label: string): Promise<void> {
+async function expectQuiet(page: Page, testInfo: TestInfo, quality: Quality, label: string): Promise<void> {
   await page.waitForLoadState("load");
   const shift = await page.evaluate(() => Number(Reflect.get(window, "__cls")));
   expect.soft(shift, `${label}: layout shift on load`).toBeLessThan(MAX_LAYOUT_SHIFT);
@@ -98,7 +98,7 @@ export async function expectQuiet(page: Page, testInfo: TestInfo, quality: Quali
 
 export const SCHEMES = ["light", "dark"] as const;
 
-export async function animationsSettled(page: Page): Promise<void> {
+async function animationsSettled(page: Page): Promise<void> {
   await page.evaluate(() =>
     Promise.allSettled(
       document
