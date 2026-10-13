@@ -1,6 +1,6 @@
 import { Link, useFetcher } from "react-router";
 
-import { isPlanLapsed } from "../lib/billing/entitlements";
+import { isPaymentFailed, isPaymentHeld, isPlanLapsed } from "../lib/billing/entitlements";
 import { planLine } from "../lib/billing/plan-line";
 import { nextPlan, type PlanSummary } from "../lib/billing/plans";
 import { BLOCK_HEADING } from "./page-heading";
@@ -24,9 +24,14 @@ function BillingButton({ label }: { label: string }) {
   );
 }
 
+function billingLabel(plan: PlanSummary, retryable: boolean): string {
+  if (isPaymentHeld(plan)) return "Update payment method";
+  return retryable ? "See billing history" : "Manage or cancel plan";
+}
+
 export function PlanSection({ plan, returning = false }: { plan: PlanSummary | null; returning?: boolean }) {
   if (plan === null) return null;
-  const lapsed = isPlanLapsed(plan, new Date());
+  const retryable = isPlanLapsed(plan, new Date()) || isPaymentFailed(plan);
   const upgrade = nextPlan(plan.tier);
   return (
     <section aria-labelledby="settings-plan" className="mt-10 border-t border-line pt-4">
@@ -34,8 +39,8 @@ export function PlanSection({ plan, returning = false }: { plan: PlanSummary | n
         Your plan
       </h2>
       <p className="mt-2 max-w-prose leading-[1.55]">{planLine(plan)}</p>
-      {plan.billed ? <BillingButton label={lapsed ? "See billing history" : "Manage or cancel plan"} /> : null}
-      {plan.billed && !lapsed ? null : (
+      {plan.billed ? <BillingButton label={billingLabel(plan, retryable)} /> : null}
+      {plan.billed && !retryable ? null : (
         <>
           {upgrade === null ? null : <PlanGate planId={upgrade.id} returning={returning} />}
           <Link
