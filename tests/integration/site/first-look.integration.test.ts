@@ -53,6 +53,23 @@ describe("first look at rivals", () => {
     expect(sent.bodies.map((body) => body.entityId)).toEqual([`ent-${WS}`]);
   });
 
+  it("counts a trialing workspace as paid", async () => {
+    await seedWorkspace(WS, "u-first-look", "active");
+    await env.DB.exec("UPDATE plan SET trialing = 1");
+    expect(await enqueueFirstLook(WS, NOW)).toBe(1);
+  });
+
+  it("queues only the rival just added when given its domain", async () => {
+    await seedWorkspace(WS, "u-first-look", "active");
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at) VALUES ('ent-second', ?, 'competitor', 'second.com', '{}', 'manual', 'on', ?)`,
+    )
+      .bind(WS, NOW)
+      .run();
+    expect(await enqueueFirstLook(WS, NOW, "second.com")).toBe(1);
+    expect(sent.bodies.map((body) => body.entityId)).toEqual(["ent-second"]);
+  });
+
   it("queues nothing for a workspace that has not paid", async () => {
     await seedWorkspace(WS, "u-first-look", "none");
     expect(await enqueueFirstLook(WS, NOW)).toBe(0);

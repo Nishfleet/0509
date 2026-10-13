@@ -118,7 +118,7 @@ async function addCompetitor(workspaceId: string, raw: string, now: string): Pro
     cap,
   });
   if (outcome === "at_cap") return capRefusal(workspaceId, cap);
-  await tryFirstLook(workspaceId);
+  await tryFirstLook(workspaceId, domain);
   return DONE;
 }
 
