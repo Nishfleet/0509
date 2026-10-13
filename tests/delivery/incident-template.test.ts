@@ -219,4 +219,11 @@ describe("every string field carries the injection probe escaped, never raw (050
     const { html } = renderIncidentFixed({ ...FIXED, ...patch });
     expectNoHtmlInjection(html, `renderIncidentFixed ${field}`);
   });
+
+  it("opens each email with a hidden inbox preview that is not the headline", () => {
+    const open = renderIncidentOpen(OPEN).html;
+    const fixed = renderIncidentFixed(FIXED).html;
+    expect(open).toMatch(/display:none[^>]*>Seen /);
+    expect(fixed).toMatch(/display:none[^>]*>[^<]*shop\.example/);
+  });
 });

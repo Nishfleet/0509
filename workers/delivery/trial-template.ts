@@ -39,6 +39,7 @@ export function renderTrialEnding(ctx: TrialEndingContext): RenderedBrief {
         ...lines.map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`),
         `<p style="${BODY}">Manage or cancel your plan: <a class="brief-ink" href="${href}">${href}</a></p>`,
       ].join(""),
+      lines[0],
     ),
   };
 }
