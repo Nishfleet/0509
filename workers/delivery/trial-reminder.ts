@@ -1,3 +1,4 @@
+import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { PLANS } from "../../app/lib/billing/plans";
 import { isTesterSubscription } from "../../app/lib/billing/returning.server";
 import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
@@ -39,7 +40,7 @@ async function remind(env: Env, trial: TrialEnding, isTester: TesterCheck): Prom
   if (claim === null) return false;
   const result = await deliver(env, trial, plan).catch((error: unknown) => ({
     outcome: "failed" as const,
-    error: error instanceof Error ? error.message : "render failed",
+    error: redactEmailShaped(error instanceof Error ? error.message : "render failed"),
   }));
   await resolveSendAttempt(env.DB, { attemptId: claim.id, outcome: result.outcome, error: result.error });
   return result.outcome === "sent";
@@ -70,7 +71,9 @@ export async function sendTrialReminders(
   let sent = 0;
   for (const trial of await readTrialsEnding(env.DB, now)) {
     const done = await remind(env, trial, isTester).catch((error: unknown) => {
-      console.error(JSON.stringify({ event: "delivery.trial_reminder_failed", error: String(error) }));
+      console.error(
+        JSON.stringify({ event: "delivery.trial_reminder_failed", error: redactEmailShaped(String(error)) }),
+      );
       return false;
     });
     if (done) sent += 1;
