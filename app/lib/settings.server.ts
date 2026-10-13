@@ -6,7 +6,7 @@ import type { RouterContextProvider } from "react-router";
 import { deleteAccount } from "./account-delete.server";
 import { cancelPlanForDelete } from "./billing/cancel.server";
 import { oauthHelpersContext } from "./agent/context.server";
-import { removeSignedInPasskey, requestEmailChange, signOut } from "./auth.server";
+import { hasFreshSession, removeSignedInPasskey, requestEmailChange, signOut } from "./auth.server";
 import { nextBriefAt } from "./brief-schedule";
 import { formatBriefAt, parseBriefSchedule } from "./brief-settings";
 import { readPlanSummary } from "./data/plan.server";
@@ -192,6 +192,7 @@ async function removeAccount(
   const parsed = deleteAccountForm.safeParse(Object.fromEntries(form));
   const typed = parsed.success ? parsed.data.confirm.trim().toLowerCase() : "";
   if (typed !== user.email.toLowerCase()) return result({ deleteError: MISMATCH });
+  if (!(await hasFreshSession(env, call.request, new Date()))) return result({ deleteError: SIGN_IN_AGAIN });
   const workspaceId = await readWorkspaceIdForOwner(user.id);
   if (workspaceId !== null && !(await cancelPlanForDelete(workspaceId)))
     return result({ deleteError: PLAN_NOT_CANCELLED });

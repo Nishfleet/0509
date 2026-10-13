@@ -3,7 +3,7 @@ import { env, introspectWorkflowInstance } from "cloudflare:test";
 import { RouterContextProvider } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createAuth, deleteSignedInUser } from "../../app/lib/auth.server";
+import { createAuth, deleteSignedInUser, hasFreshSession } from "../../app/lib/auth.server";
 import { nextBriefAt, rolloverInstance } from "../../app/lib/brief-schedule";
 import { readBriefScheduleForOwner } from "../../app/lib/data/workspace.server";
 import { firstWorkspaceId } from "../../app/lib/workspace.server";
@@ -199,6 +199,14 @@ describe("delete my account", () => {
 
     expect(await deleteSignedInUser(authEnv, settingsRequest(cookie), twoDaysOn)).toBeNull();
     expect(await count('SELECT COUNT(*) AS n FROM "user" WHERE id = ?', userId)).toBe(1);
+  });
+
+  it("reports a session older than a day as not fresh, so a paid plan is never cancelled for it", async () => {
+    const { cookie } = await signIn("fresh-check@0509.io");
+    const twoDaysOn = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+
+    expect(await hasFreshSession(authEnv, settingsRequest(cookie), new Date())).toBe(true);
+    expect(await hasFreshSession(authEnv, settingsRequest(cookie), twoDaysOn)).toBe(false);
   });
 
   it("the Workflow empties the account's stored files and leaves everyone else's", async () => {

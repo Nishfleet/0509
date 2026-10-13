@@ -18,8 +18,17 @@ export async function cancelPlanForDelete(workspaceId: string): Promise<boolean>
     });
     return true;
   } catch (error) {
+    if (await endedAtDodo(client, subscriptionId)) return true;
     const status = error instanceof DodoPayments.APIError ? String(error.status) : "none";
     console.error(JSON.stringify({ event: "billing.cancel_on_delete_failed", status }));
+    return false;
+  }
+}
+
+async function endedAtDodo(client: DodoPayments, subscriptionId: string): Promise<boolean> {
+  try {
+    return ENDED.has((await client.subscriptions.retrieve(subscriptionId)).status);
+  } catch {
     return false;
   }
 }

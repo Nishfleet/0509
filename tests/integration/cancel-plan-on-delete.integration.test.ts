@@ -58,6 +58,18 @@ describe("cancelling the plan when an account is deleted", () => {
     expect(await cancelPlanForDelete("ws-leave-refused")).toBe(false);
   });
 
+  it("lets the delete go ahead when Dodo refuses the cancel because the plan already ended there", async () => {
+    await seedPlan("ws-leave-stale", "active");
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(Response.json({ message: "already cancelled" }, { status: 422 }))
+      .mockResolvedValueOnce(Response.json({ status: "cancelled" }, { status: 200 }));
+
+    expect(await cancelPlanForDelete("ws-leave-stale")).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
   it("does not call Dodo for a plan that already ended or a workspace that never paid", async () => {
     await seedPlan("ws-leave-ended", "cancelled");
     await seedWorkspace("ws-leave-free");
