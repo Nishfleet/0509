@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { PLANS } from "../app/lib/billing/plans";
 import { isLocalLane, run, seedPreviewSession } from "./inbox";
