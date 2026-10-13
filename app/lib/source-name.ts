@@ -17,7 +17,6 @@ const PLATFORM_NAMES: Readonly<Record<string, string>> = {
   snap: "Snapchat",
   tiktok: "TikTok",
   workable: "Workable",
-  web: "Website",
   x: "X",
   youtube: "YouTube",
 };
@@ -37,10 +36,18 @@ export function sourceName(kind: string, platform: string): string {
   return brand === undefined ? `Your ${noun} source` : `${brand} ${noun}`;
 }
 
+export const OTHER_SOURCES = "other sources";
+
 export function platformName(platform: string): string {
-  return PLATFORM_NAMES[platform] ?? "other sources";
+  if (platform === "web") return "Website";
+  return PLATFORM_NAMES[platform] ?? OTHER_SOURCES;
 }
 
 export function sourceKindNoun(kind: string): string {
   return KIND_NOUNS[kind] ?? kind;
+}
+
+export function watchedNames(platforms: readonly string[]): string[] {
+  const names = [...new Set(platforms.map(platformName))];
+  return [...names.filter((name) => name !== OTHER_SOURCES), ...names.filter((name) => name === OTHER_SOURCES)];
 }
