@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 test("the brief page sends a signed-out visitor to the login page @smoke", async ({ request }) => {
   for (const path of ["/app/brief", "/app/brief/dg-missing"]) {

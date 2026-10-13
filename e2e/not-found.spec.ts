@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { consoleFailures, ownDocument404For, watchConsole } from "./inbox";
 

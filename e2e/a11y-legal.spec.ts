@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 // The /privacy, /terms and /security WCAG 2.2 AA proof (0509#5288). The three routes are
 // public pages (/security sits behind the Access wall until LAUNCH, which the

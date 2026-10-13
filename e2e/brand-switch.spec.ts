@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { consoleFailures, isLocalLane, watchConsole } from "./inbox";
 import { seedRankedHomeSession } from "./ranked-home";
