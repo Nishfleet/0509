@@ -182,8 +182,9 @@ for (const { mode, kind, waitMs, account, host } of MODES) {
 
     const token = requireInboxToken();
     const { email } = account;
-    const openSubject = `${host} looks broken: ${kind}`;
-    const fixedSubject = `${host} looks fixed: ${kind}`;
+    const tail = kind === "breakage" ? "" : `: ${kind}`;
+    const openSubject = `${host} looks broken${tail}`;
+    const fixedSubject = `${host} looks fixed${tail}`;
 
     try {
       await setMode(host, "off");

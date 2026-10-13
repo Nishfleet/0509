@@ -45,6 +45,10 @@ describe("open incident email", () => {
     expect(renderIncidentOpen(OPEN).subject).toBe("shop.example looks broken: pricing section missing");
   });
 
+  it("leaves the kind off when it is only the generic breakage label", () => {
+    expect(renderIncidentOpen({ ...OPEN, kind: "breakage" }).subject).toBe("shop.example looks broken");
+  });
+
   it("says when it was seen and when the re-check lands", () => {
     const { text } = renderIncidentOpen(OPEN);
     expect(text).toContain("Seen at Wed 23 Sept, 04:52.");
@@ -78,6 +82,10 @@ describe("open incident email", () => {
 describe("fixed incident email", () => {
   it("subjects it as the site plus what is fixed", () => {
     expect(renderIncidentFixed(FIXED).subject).toBe("shop.example looks fixed: pricing section missing");
+  });
+
+  it("leaves the kind off when it is only the generic breakage label", () => {
+    expect(renderIncidentFixed({ ...FIXED, kind: "breakage" }).subject).toBe("shop.example looks fixed");
   });
 
   it("is one line of news before the footer", () => {
