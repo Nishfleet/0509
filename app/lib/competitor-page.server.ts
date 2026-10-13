@@ -19,6 +19,7 @@ import { captureLabel } from "./site-change";
 import { daysBefore, readSiteChangeViews } from "./site-changes.server";
 import type { BiggestMoveView } from "./biggest-move";
 import { biggestMoveView, pickBiggestMove, quietWeekSentence } from "./biggest-move";
+import { watchedNames } from "./source-name";
 import { siteSweepLabel } from "./cadence";
 import { historyAnchor } from "./competitor-history";
 import { readWorkspaceTimezone } from "./data/workspace.server";
@@ -86,7 +87,7 @@ export async function readCompetitorPage(
     weekCount: changes.filter((change) => change.observedAt >= weekStart).length,
     biggestMove: move === null ? null : biggestMoveView(move, now),
     quiet: quietWeekSentence(
-      [...new Set(sources.map((row) => row.source.platform))],
+      watchedNames(sources.map((row) => row.source.platform)),
       watch.lastPolledAt === null ? null : captureLabel(watch.lastPolledAt),
       sweepClock,
     ),

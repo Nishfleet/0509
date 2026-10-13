@@ -76,7 +76,7 @@ async function rotate(page: Page): Promise<string> {
 
 async function briefLinks(page: Page): Promise<string[]> {
   await page.goto("/app/brief");
-  const links = page.getByRole("navigation", { name: "Previous briefs" }).getByRole("link");
+  const links = page.getByRole("navigation", { name: "Your briefs" }).getByRole("link");
   const hrefs = await links.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("href") ?? ""));
   return hrefs.filter((href) => href !== "");
 }
