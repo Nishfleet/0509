@@ -1,14 +1,15 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-// The /privacy and /terms WCAG 2.2 AA proof (0509#5288). Both routes are
-// public, so no `test.skip`: the spec runs in preview mode and against
-// production alike. The two pages share the legal layout in
+// The /privacy, /terms and /security WCAG 2.2 AA proof (0509#5288). The three routes are
+// public pages (/security sits behind the Access wall until LAUNCH, which the
+// production run passes with its service token): the spec runs in preview mode and against
+// production alike. The pages share the legal layout in
 // `app/components/legal-page.tsx`, which exposes banner, main and contentinfo
 // as sibling landmarks after #5287, and a footer link class driven from
 // `--ink` / `--ink-soft` so neither route paints meaningful text in
 // `--ink-faint`.
-for (const path of ["/privacy", "/terms"]) {
+for (const path of ["/privacy", "/terms", "/security"]) {
   test(`${path} passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and 390 in light and dark (#4156) @smoke`, async ({
     page,
   }, testInfo) => {

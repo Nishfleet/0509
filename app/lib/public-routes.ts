@@ -30,6 +30,7 @@ export const DISALLOWED_PREFIXES = [
   "/oauth",
   "/design",
   "/status",
+  "/security",
 ] as const;
 export const AGENT_PATHS = ["/mcp", "/api/v1/openapi.json", "/.well-known/http-message-signatures-directory"] as const;
 export const MCP_URL = `${SITE_URL}/mcp`;

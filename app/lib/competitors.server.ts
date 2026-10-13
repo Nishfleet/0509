@@ -26,6 +26,9 @@ const DONE: CompetitorActionResult = { message: null };
 const COULD_NOT_READ: CompetitorActionResult = {
   message: "We couldn't read that. Try their main website, like brand.com.",
 };
+const EMPTY: CompetitorActionResult = {
+  message: "Enter their website address, like brand.com.",
+};
 const UNRESOLVED: CompetitorActionResult = {
   message: "We couldn't find that brand's website. Try their main website, like brand.com.",
 };
@@ -72,7 +75,7 @@ async function workspaceOwnerId(workspaceId: string): Promise<string | null> {
 
 function unreadableAdd(normalised: ReturnType<typeof normaliseSubject>): CompetitorActionResult | null {
   if (normalised.ok) return normalised.subject.kind === "domain" ? null : COULD_NOT_READ;
-  return normalised.reason === "empty" ? COULD_NOT_READ : null;
+  return normalised.reason === "empty" ? EMPTY : null;
 }
 
 async function refusedBeforeFetch(
