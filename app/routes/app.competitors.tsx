@@ -14,10 +14,10 @@ import { RetireQuestions } from "../components/retire-questions";
 import { isPlanId } from "../lib/billing/plans";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import type { CompetitorRow } from "../lib/data/entity.server";
-import { cn } from "../lib/utils";
 import { readCompetitors } from "../lib/data/entity.server";
 import { readPlanTier } from "../lib/data/plan.server";
 import { onboardedContext } from "../lib/require-onboarded.server";
+import { cn } from "../lib/utils";
 
 export function meta() {
   return [{ title: "Competitors · Five to Nine" }];
@@ -98,7 +98,11 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       )}
       <RetireQuestions questions={questions} />
       <CompetitorMaybes maybes={maybes} />
-      <AddCompetitor message={actionData?.message} upgradePlanId={actionData?.upgradePlanId} />
+      <AddCompetitor
+        message={actionData?.message}
+        upgradePlanId={actionData?.upgradePlanId}
+        returning={actionData?.returning}
+      />
     </main>
   );
 }

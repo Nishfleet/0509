@@ -15,6 +15,7 @@ import {
   withNoChannel,
   withPageMiss,
   withPendingChannel,
+  withFeedError,
   withResolvedChannel,
   withoutLostChannel,
   withoutNoChannel,
@@ -204,5 +205,27 @@ describe("stale YouTube channel", () => {
       pageMiss: { reason: "youtube page 503", at: "2026-10-02T19:00:00.000Z" },
     });
     expect(JSON.parse(withNoChannel(first, "2026-10-03T19:00:00.000Z"))).not.toHaveProperty("pageMiss");
+  });
+});
+
+describe("a failed feed fetch leaves its status and night on the watch", () => {
+  it("records the status, keeps the channel and clears when the channel resolves again", () => {
+    const base = JSON.stringify({ channelId: CHANNEL_ID });
+    const failed = withFeedError(base, 503, "2026-10-10T19:00:03.000Z");
+
+    expect(JSON.parse(failed)).toEqual({
+      channelId: CHANNEL_ID,
+      feedError: { status: 503, at: "2026-10-10T19:00:03.000Z" },
+    });
+    expect(readWatchConfig(failed)).toMatchObject({ status: "ok", channelId: CHANNEL_ID, degraded: null });
+    expect(JSON.parse(withResolvedChannel(failed, CHANNEL_ID))).toEqual({ channelId: CHANNEL_ID });
+  });
+
+  it("drops a stale feed error when the channel is flagged lost", () => {
+    const held = JSON.stringify({
+      channelId: "UCma7hhYJ3bfEhZgw3xl77ww",
+      feedError: { status: 503, at: "2026-10-10T19:00:03.000Z" },
+    });
+    expect(JSON.parse(withLostChannel(held, "2026-10-11T19:00:00.000Z"))).not.toHaveProperty("feedError");
   });
 });

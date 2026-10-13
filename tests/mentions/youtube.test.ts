@@ -94,6 +94,7 @@ describe("youtubeAdapter", () => {
     const result = await youtubeAdapter({ query: CHANNEL_ID }, null);
 
     expect(result.feedState).toBe("error");
+    expect(result).toMatchObject({ status: 503 });
     expect(result.items).toEqual([]);
     expect(result.canaryCount).toBe(0);
   });

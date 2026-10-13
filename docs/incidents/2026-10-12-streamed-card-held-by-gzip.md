@@ -26,4 +26,4 @@ J4 in the production e2e, dispatched after #7341 deployed. It failed waiting for
 
 1. Code: a test in `tests/document-compression.test.ts` that a streaming body delivers its first chunk before the second exists.
 2. Check: J4 in the production suite holds the first field to 30 s from submit, so a held-back stream fails it.
-3. Open: the reviewer bot listed that `allReady` rejecting inside the tick would throw, that `status` is now read after the await, and that HEAD does not pass `settled`. None changes what a customer sees today; they are listed for a follow-up.
+3. Open: the reviewer bot listed that `allReady` rejecting inside the tick would throw, that `status` is now read after the await, and that HEAD does not pass `settled`. Not yet checked against a customer-visible case: a rejected `allReady` is the one that could surface as an error page. They are listed for a follow-up.
