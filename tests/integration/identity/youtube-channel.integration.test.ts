@@ -62,5 +62,8 @@ describe("lookupYoutubeChannel", () => {
   it("reads a card whose homepage has not been read yet as unread, so it is not called channel-less", async () => {
     await expect(lookupYoutubeChannel(JSON.stringify({ description: "x" }))).resolves.toEqual({ status: "unread" });
     await expect(lookupYoutubeChannel(JSON.stringify({ socials: [] }))).resolves.toEqual({ status: "unread" });
+    await expect(lookupYoutubeChannel(JSON.stringify({ socials: [], socialsReadAt: null }))).resolves.toEqual({
+      status: "unread",
+    });
   });
 });

@@ -574,4 +574,23 @@ describe("YouTube sweep before the homepage was read", () => {
     expect(await configOf(watchId)).toBe("{}");
     expect(await snapshotCount(watchId)).toBe(0);
   });
+  it("clears a no-channel flag set before the card was known to be unread", async () => {
+    const stale = { noChannel: { state: "degraded", reason: NO_CHANNEL_REASON, at: "2026-09-23T00:00:00.000Z" } };
+    const { watchId, watch } = await seed('{"description":"not read yet","socialsReadAt":null}', JSON.stringify(stale));
+    stubFeeds();
+
+    await sweepTarget(
+      {
+        sourceId: watch.source_id,
+        pluginKey: watch.plugin_key,
+        query: watch.target_key,
+        minIntervalSeconds: watch.min_interval_seconds,
+        watches: [watch],
+      },
+      NOW,
+      null,
+    );
+
+    expect(JSON.parse(await configOf(watchId))).toEqual({});
+  });
 });
