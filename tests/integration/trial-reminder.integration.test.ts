@@ -130,4 +130,37 @@ describe("trial ending reminder", () => {
     expect(await sendTrialReminders(envWith(sent), NOW, isTester)).toBe(1);
     expect(sent).toHaveLength(1);
   });
+
+  it("does not ask Dodo again once the reminder went out", async () => {
+    await seedPlan({ status: "active", trialing: 1, periodEnd: IN_36_HOURS });
+    const asked: string[] = [];
+    const counting = (id: string) => {
+      asked.push(id);
+      return Promise.resolve(false as boolean | null);
+    };
+    const sent: EmailMessageBuilder[] = [];
+
+    await sendTrialReminders(envWith(sent), NOW, counting);
+    await sendTrialReminders(envWith(sent), new Date("2026-10-14T03:00:00.000Z"), counting);
+
+    expect(asked).toEqual(["sub_1"]);
+  });
+
+  it("skips a trial with no verified email and still sends the others", async () => {
+    await seedPlan({ status: "active", trialing: 1, periodEnd: IN_36_HOURS });
+    await env.DB.exec("UPDATE send_target SET is_verified = 0");
+    const sent: EmailMessageBuilder[] = [];
+
+    expect(await sendTrialReminders(envWith(sent), NOW, isTester)).toBe(0);
+    expect(sent).toHaveLength(0);
+  });
+
+  it("skips a plan with no subscription id", async () => {
+    await seedPlan({ status: "active", trialing: 1, periodEnd: IN_36_HOURS });
+    await env.DB.exec("UPDATE plan SET provider_subscription_id = NULL");
+    const sent: EmailMessageBuilder[] = [];
+
+    expect(await sendTrialReminders(envWith(sent), NOW, isTester)).toBe(0);
+    expect(sent).toHaveLength(0);
+  });
 });

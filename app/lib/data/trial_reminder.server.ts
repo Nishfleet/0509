@@ -36,7 +36,27 @@ const TRIAL_REMINDER_LEAD_MS = 2 * 86_400_000;
 export async function readTrialsEnding(db: D1Database, now: Date): Promise<TrialEnding[]> {
   const until = new Date(now.getTime() + TRIAL_REMINDER_LEAD_MS);
   const { results } = await db.prepare(SELECT_TRIALS_ENDING).bind(now.toISOString(), until.toISOString()).all();
-  return trialEndingRow.array().parse(results);
+  const trials: TrialEnding[] = [];
+  for (const row of z.array(z.unknown()).parse(results)) {
+    const parsed = trialEndingRow.safeParse(row);
+    if (parsed.success) trials.push(parsed.data);
+  }
+  return trials;
+}
+
+const reminderAttemptRow = z.object({ id: z.string() });
+
+export async function hasReminderAttempt(db: D1Database, key: string): Promise<boolean> {
+  return (
+    reminderAttemptRow
+      .nullable()
+      .parse(
+        await db
+          .prepare("SELECT id FROM send_attempt WHERE idempotency_key = ?1 AND status IN ('sent', 'pending') LIMIT 1")
+          .bind(key)
+          .first(),
+      ) !== null
+  );
 }
 
 export function trialReminderKey(trial: Pick<TrialEnding, "workspace_id" | "current_period_end">): string {
