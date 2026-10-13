@@ -190,17 +190,16 @@ function inlineSocialLinks(html: string): string[] {
 }
 
 const RAW_YOUTUBE_LINK = /https?:\/\/(?:www\.|m\.)?youtube\.com\/(?:@|c\/|user\/)([\w.-]+)/gi;
-const LD_JSON_BLOCK = /<script[^>]*application\/ld\+json[^>]*>[\s\S]*?<\/script>/gi;
 
 function brandLabel(pageUrl: string): string {
   const labels = socialHost(new URL(pageUrl).hostname).split(".");
-  return (labels.length > 1 ? labels[labels.length - 2] : (labels[0] ?? "")).replaceAll(/[^a-z0-9]/g, "");
+  return (labels.at(-2) ?? labels[0] ?? "").replaceAll(/[^a-z0-9]/g, "");
 }
 
-function rawYoutubeLinks(html: string, pageUrl: string): string[] {
+function rawYoutubeLinks(html: string, pageUrl: string, ldBlocks: readonly string[]): string[] {
   const label = brandLabel(pageUrl);
   if (label.length < 3) return [];
-  const text = html.replaceAll(LD_JSON_BLOCK, "").replaceAll(/\\u002f|\\\//gi, "/");
+  const text = ldBlocks.reduce((rest, block) => rest.replaceAll(block, ""), html).replaceAll(/\\u002f|\\\//gi, "/");
   return [...text.matchAll(RAW_YOUTUBE_LINK)]
     .filter(([, name]) =>
       (name ?? "")
@@ -396,7 +395,7 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
     manifestUrl: state.manifestUrl,
     socials: collectSocials(
       [...organization.sameAs, ...inlineSocialLinks(html)],
-      [...anchors, ...rawYoutubeLinks(html, pageUrl)],
+      [...anchors, ...rawYoutubeLinks(html, pageUrl, state.ldBlocks)],
     ),
     navLinks,
     navPages,
