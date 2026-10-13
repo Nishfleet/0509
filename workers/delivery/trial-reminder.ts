@@ -2,7 +2,6 @@ import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { PLANS } from "../../app/lib/billing/plans";
 import { isTesterSubscription } from "../../app/lib/billing/returning.server";
 import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
-import { claimSendAttempt, resolveSendAttempt } from "../../app/lib/data/send_attempt.server";
 import {
   hasReminderAttempt,
   readTrialsEnding,
@@ -10,7 +9,7 @@ import {
   type TrialEnding,
 } from "../../app/lib/data/trial_reminder.server";
 
-import { BRIEF_SENDER, sendMessage } from "./send";
+import { sendOnce } from "./send-once";
 import { renderTrialEnding } from "./trial-template";
 
 const SETTINGS_LINK = "https://0509.io/app/settings";
@@ -31,35 +30,19 @@ async function reminderPlan(env: Env, trial: TrialEnding, isTester: TesterCheck)
 async function remind(env: Env, trial: TrialEnding, isTester: TesterCheck): Promise<boolean> {
   const plan = await reminderPlan(env, trial, isTester);
   if (plan === null) return false;
-  const claim = await claimSendAttempt(env.DB, {
-    idempotencyKey: trialReminderKey(trial),
+  return sendOnce(env, {
+    key: trialReminderKey(trial),
     workspaceId: trial.workspace_id,
     targetId: trial.target_id,
-    digestId: null,
-  });
-  if (claim === null) return false;
-  const result = await deliver(env, trial, plan).catch((error: unknown) => ({
-    outcome: "failed" as const,
-    error: redactEmailShaped(error instanceof Error ? error.message : "render failed"),
-  }));
-  await resolveSendAttempt(env.DB, { attemptId: claim.id, outcome: result.outcome, error: result.error });
-  return result.outcome === "sent";
-}
-
-async function deliver(env: Env, trial: TrialEnding, plan: NonNullable<Awaited<ReturnType<typeof reminderPlan>>>) {
-  const rendered = renderTrialEnding({
-    plan: plan.name,
-    monthly_price_eur: plan.monthlyPriceEur,
-    ends_at: trial.current_period_end,
-    timezone: trial.timezone,
-    link: SETTINGS_LINK,
-  });
-  return sendMessage(env.EMAIL, {
     to: trial.target_value,
-    from: BRIEF_SENDER,
-    subject: rendered.subject,
-    html: rendered.html,
-    text: rendered.text,
+    render: () =>
+      renderTrialEnding({
+        plan: plan.name,
+        monthly_price_eur: plan.monthlyPriceEur,
+        ends_at: trial.current_period_end,
+        timezone: trial.timezone,
+        link: SETTINGS_LINK,
+      }),
   });
 }
 
