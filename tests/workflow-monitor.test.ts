@@ -5,10 +5,16 @@ vi.mock("@sentry/cloudflare", () => ({
   captureCheckIn: vi.fn(() => "check-in-1"),
 }));
 
+vi.mock("../app/lib/healthcheck.server", () => ({
+  pingCheck: vi.fn(() => Promise.resolve(null)),
+}));
+
 import { captureCheckIn } from "@sentry/cloudflare";
-import { withStepCheckIn } from "../workers/workflow-monitor";
+import { pingCheck } from "../app/lib/healthcheck.server";
+import { withCheckPings, withStepCheckIn } from "../workers/workflow-monitor";
 
 const checkIn = vi.mocked(captureCheckIn);
+const ping = vi.mocked(pingCheck);
 
 const MONITOR = {
   slug: "feed-sweep",
@@ -38,6 +44,39 @@ function memoStep(): WorkflowStep {
 describe("withStepCheckIn", () => {
   beforeEach(() => {
     checkIn.mockClear();
+    ping.mockClear();
+  });
+
+  it("pings the sweep's healthcheck at start and at the end, once each", async () => {
+    await withStepCheckIn(memoStep(), MONITOR, async () => ({ failed: 0 }));
+    expect(ping.mock.calls).toEqual([
+      ["feed-sweep", "start"],
+      ["feed-sweep", "ok"],
+    ]);
+  });
+
+  it("pings fail, never ok, when the sweep throws", async () => {
+    await expect(
+      withStepCheckIn(memoStep(), MONITOR, async () => {
+        throw new Error("plan down");
+      }),
+    ).rejects.toThrow("plan down");
+    expect(ping.mock.calls).toEqual([
+      ["feed-sweep", "start"],
+      ["feed-sweep", "fail"],
+    ]);
+  });
+
+  it("does not ping a second start when run() replays after hibernation", async () => {
+    const step = memoStep();
+    void withStepCheckIn(step, MONITOR, () => new Promise(() => undefined));
+    await vi.waitFor(() => {
+      expect(checkIn).toHaveBeenCalledTimes(1);
+    });
+    expect(ping.mock.calls).toEqual([["feed-sweep", "start"]]);
+    ping.mockClear();
+    await withStepCheckIn(step, MONITOR, async () => ({ failed: 0 }));
+    expect(ping.mock.calls).toEqual([["feed-sweep", "ok"]]);
   });
 
   it("opens in_progress inside monitor start and closes ok inside monitor ok", async () => {
@@ -75,5 +114,36 @@ describe("withStepCheckIn", () => {
       { monitorSlug: "feed-sweep", status: "in_progress" },
       { checkInId: "check-in-1", monitorSlug: "feed-sweep", status: "error" },
     ]);
+  });
+});
+
+describe("withCheckPings", () => {
+  beforeEach(() => {
+    ping.mockClear();
+  });
+
+  it("pings start then ok around a daily cron", async () => {
+    const work = vi.fn(() => Promise.resolve());
+    await withCheckPings("nightly", true, work);
+    expect(ping.mock.calls).toEqual([
+      ["nightly", "start"],
+      ["nightly", "ok"],
+    ]);
+    expect(work).toHaveBeenCalledTimes(1);
+  });
+
+  it("pings fail and rethrows when the cron throws", async () => {
+    await expect(withCheckPings("nightly", true, () => Promise.reject(new Error("boom")))).rejects.toThrow("boom");
+    expect(ping.mock.calls).toEqual([
+      ["nightly", "start"],
+      ["nightly", "fail"],
+    ]);
+  });
+
+  it("only runs the work for a cron that has no daily check", async () => {
+    const work = vi.fn(() => Promise.resolve());
+    await withCheckPings("weekly-refresh", false, work);
+    expect(work).toHaveBeenCalledTimes(1);
+    expect(ping).not.toHaveBeenCalled();
   });
 });
