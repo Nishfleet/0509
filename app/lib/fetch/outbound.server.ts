@@ -89,7 +89,9 @@ export async function fetchOutbound(url: string, init: OutboundInit): Promise<Re
     await res.body?.cancel();
     request = afterRedirect(request, redirectTarget(location, request.url, init.schemes), res.status);
   }
-  throw new BlockedRedirectError(`more than ${String(MAX_REDIRECTS)} redirects`);
+  throw new BlockedRedirectError(
+    `more than ${String(MAX_REDIRECTS)} redirects, last at ${new URL(request.url).host}${new URL(request.url).pathname}`,
+  );
 }
 
 export async function cappedBody(res: Response, capBytes: number): Promise<Uint8Array | null> {

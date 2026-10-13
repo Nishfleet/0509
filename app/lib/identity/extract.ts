@@ -163,12 +163,20 @@ function readOrganization(blocks: readonly string[]): {
     }
   }
   const organization = nodes.find((node) => typeIncludesOrganization(node["@type"]));
-  if (!organization) return { name: null, logo: null, sameAs: [] };
+  const sameAs = nodes.flatMap((node) => sameAsField(node.sameAs));
+  if (!organization) return { name: null, logo: null, sameAs };
   return {
     name: stringField(organization.name),
     logo: logoField(organization.logo),
-    sameAs: sameAsField(organization.sameAs),
+    sameAs,
   };
+}
+
+const INLINE_SOCIAL_LINK =
+  /"classification":"(?:youtube|facebook|instagram|linkedin|twitter|x|tiktok)"[^{}]{0,400}?"url":"([^"]+)"/g;
+
+function inlineSocialLinks(html: string): string[] {
+  return [...html.matchAll(INLINE_SOCIAL_LINK)].map((match) => (match[1] ?? "").replaceAll("\\/", "/"));
 }
 
 const YOUTUBE_CHANNEL_PATH = /^\/(?:channel\/UC[0-9A-Za-z_-]{22}|@[^/]+)\/?$/;
@@ -354,7 +362,7 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
     ldOrganizationLogo: organization.logo,
     appleTouchIcon: state.appleTouchIcon,
     manifestUrl: state.manifestUrl,
-    socials: collectSocials(organization.sameAs, anchors),
+    socials: collectSocials([...organization.sameAs, ...inlineSocialLinks(html)], anchors),
     navLinks,
     navPages,
     adLibraryHints,

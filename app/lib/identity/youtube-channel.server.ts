@@ -33,7 +33,7 @@ async function readYoutubeChannelPage(pageUrl: string): Promise<{ channelId: str
   let response: Response;
   try {
     response = await fetchOutbound(pageUrl, {
-      headers: { "user-agent": CRAWLER_USER_AGENT },
+      headers: { "user-agent": CRAWLER_USER_AGENT, cookie: "SOCS=CAI" },
       signal: AbortSignal.timeout(8_000),
     });
   } catch (error) {

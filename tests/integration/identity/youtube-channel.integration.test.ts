@@ -29,6 +29,49 @@ describe("lookupYoutubeChannel", () => {
     });
   });
 
+  it("follows YouTube's consent detour and sends the consent cookie", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string, init: RequestInit) => {
+        seen.push(`${url} ${new Headers(init.headers).get("cookie") ?? ""}`);
+        if (url.startsWith("https://www.youtube.com/@consenthandle0509") && !url.includes("cbrd")) {
+          return Promise.resolve(
+            new Response(null, { status: 302, headers: { location: "https://consent.youtube.com/m?continue=x" } }),
+          );
+        }
+        if (url.startsWith("https://consent.youtube.com/")) {
+          return Promise.resolve(
+            new Response(null, {
+              status: 303,
+              headers: { location: "https://www.youtube.com/@consenthandle0509?cbrd=1&ucbcb=1" },
+            }),
+          );
+        }
+        return Promise.resolve(new Response(`"externalId":"${CHANNEL_ID}"`, { status: 200 }));
+      }),
+    );
+    await expect(lookupYoutubeChannel(identityFor("consenthandle0509"))).resolves.toEqual({
+      status: "id",
+      channelId: CHANNEL_ID,
+    });
+    expect(seen).toHaveLength(3);
+    expect(seen[0]).toContain("SOCS=CAI");
+  });
+
+  it("names the last hop when a redirect chain never ends", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve(new Response(null, { status: 302, headers: { location: "https://www.youtube.com/loop" } })),
+      ),
+    );
+    await expect(lookupYoutubeChannel(identityFor("loophandle0509"))).resolves.toEqual({
+      status: "unresolved",
+      reason: "more than 5 redirects, last at www.youtube.com/loop",
+    });
+  });
+
   it.each([
     ["loopback", "http://127.0.0.1/admin", "loopbackhandle0509"],
     ["the metadata IP", "http://169.254.169.254/latest", "metadatahandle0509"],

@@ -130,4 +130,25 @@ describe("extractIdentity", () => {
     const card = await extractIdentity(html, pageUrl);
     expect(card.socials.map((s) => s.url)).toEqual(["https://www.youtube.com/watch?v=one"]);
   });
+  it("reads sameAs from a second Organization inside @graph", async () => {
+    const ld = JSON.stringify({
+      "@context": "https://schema.org",
+      "@graph": [
+        { "@type": "WebSite", name: "Rival" },
+        { "@type": "Organization", name: "Rival" },
+        { "@type": "Organization", sameAs: ["https://www.youtube.com/channel/UCoSvlWS5XcwaSzIcbuJ-Ysg"] },
+      ],
+    });
+    const card = await extractIdentity(`<html><script type="application/ld+json">${ld}</script></html>`, pageUrl);
+    expect(card.socials).toEqual([
+      { platform: "youtube", url: "https://www.youtube.com/channel/UCoSvlWS5XcwaSzIcbuJ-Ysg" },
+    ]);
+  });
+
+  it("reads a social link from an inline footer JSON blob but not a CSP host", async () => {
+    const html = `<html><script>{"classification":"youtube","label":"YouTube","type":"link","url":"https:\\/\\/www.youtube.com\\/user\\/rival"}</script>
+<meta http-equiv="Content-Security-Policy" content="frame-src https://www.youtube.com"></html>`;
+    const card = await extractIdentity(html, pageUrl);
+    expect(card.socials).toEqual([{ platform: "youtube", url: "https://www.youtube.com/user/rival" }]);
+  });
 });
