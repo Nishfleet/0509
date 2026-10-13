@@ -667,6 +667,9 @@ async function resolveYoutubeChannel(
   switch (lookup.status) {
     case "id":
       return { found: true, channelId: lookup.channelId };
+    case "unread":
+      await markWatchPolled(watch.watch_id, now);
+      return { found: false, outcome: { items: 0, stored: 0, unjudged: 0, skipped: 0 } };
     case "no-url":
       await flagNoChannel(watch.watch_id, now);
       await markWatchPolled(watch.watch_id, now);

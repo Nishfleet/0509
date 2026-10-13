@@ -6,6 +6,7 @@ import {
   channelIdFromHtml,
   channelIdFromUrl,
   identityHasYoutubeUrl,
+  identitySocialsUnread,
   isYoutubeChannelId,
   youtubeUrlFromIdentity,
 } from "../mentions/youtube-channel";
@@ -17,7 +18,7 @@ const cachedChannel = z.object({
 });
 
 export type YoutubeChannelLookup =
-  { status: "id"; channelId: string } | { status: "no-url" } | { status: "unresolved" };
+  { status: "id"; channelId: string } | { status: "no-url" } | { status: "unread" } | { status: "unresolved" };
 
 const MAX_PAGE_BYTES = 5 * 1024 * 1024;
 
@@ -53,9 +54,14 @@ async function readYoutubeChannelPage(pageUrl: string): Promise<{ channelId: str
   return { channelId: id };
 }
 
+function missingUrlStatus(identityJson: string): "unresolved" | "unread" | "no-url" {
+  if (identityHasYoutubeUrl(identityJson)) return "unresolved";
+  return identitySocialsUnread(identityJson) ? "unread" : "no-url";
+}
+
 export async function lookupYoutubeChannel(identityJson: string): Promise<YoutubeChannelLookup> {
   const url = youtubeUrlFromIdentity(identityJson);
-  if (url === null) return { status: identityHasYoutubeUrl(identityJson) ? "unresolved" : "no-url" };
+  if (url === null) return { status: missingUrlStatus(identityJson) };
   const fromUrl = channelIdFromUrl(url);
   if (fromUrl !== null) return { status: "id", channelId: fromUrl };
   const normalised = normaliseSubject(url);

@@ -53,9 +53,14 @@ describe("lookupYoutubeChannel", () => {
   });
 
   it.each([
-    ["no socials", {}],
+    ["a read that found no socials", { socials: [], socialsReadAt: "2026-10-10T21:05:00.000Z" }],
     ["only non-YouTube socials", { socials: [{ platform: "x", url: "https://x.com/brand0509" }] }],
   ])("reads a card with %s as no-url", async (_label, card) => {
     await expect(lookupYoutubeChannel(JSON.stringify(card))).resolves.toEqual({ status: "no-url" });
+  });
+
+  it("reads a card whose homepage has not been read yet as unread, so it is not called channel-less", async () => {
+    await expect(lookupYoutubeChannel(JSON.stringify({ description: "x" }))).resolves.toEqual({ status: "unread" });
+    await expect(lookupYoutubeChannel(JSON.stringify({ socials: [] }))).resolves.toEqual({ status: "unread" });
   });
 });
