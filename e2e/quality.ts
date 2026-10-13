@@ -84,7 +84,7 @@ export async function expectKeyboardReachesVisibleFocus(page: Page, label: strin
       const focused = ring();
       if (element instanceof HTMLElement) element.blur();
       const resting = ring();
-      if (element instanceof HTMLElement) element.focus({ focusVisible: true });
+      if (element instanceof HTMLElement) element.focus();
       const described = `${element.tagName.toLowerCase()}${element.id === "" ? "" : `#${element.id}`} "${(element.textContent ?? "").trim().slice(0, 30)}"`;
       return { described, sized: box.width > 0 && box.height > 0, ringed: focused !== resting };
     });
