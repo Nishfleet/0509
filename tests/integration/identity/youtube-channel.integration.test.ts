@@ -96,7 +96,7 @@ describe("lookupYoutubeChannel", () => {
   );
 
   it.each([
-    ["no socials", {}],
+    ["a read that found no socials", { socials: [], socialsReadAt: "2026-10-10T21:05:00.000Z" }],
     ["only non-YouTube socials", { socials: [{ platform: "x", url: "https://x.com/brand0509" }] }],
   ])("reads a card with %s as no-url", async (_label, card) => {
     await expect(lookupYoutubeChannel(JSON.stringify(card))).resolves.toEqual({ status: "no-url" });
@@ -122,6 +122,9 @@ describe("lookupYoutubeChannel", () => {
   it.each([
     "https://www.youtube.com/watch?v=abc123",
     "https://www.youtube.com/playlist?list=PL1",
+    "https://www.youtube.com/trending",
+    "https://www.youtube.com/channel",
+    "https://www.youtube.com/signin",
     "https://www.youtube.com/",
   ])("does not read %s as a channel", async (href) => {
     const fetchMock = vi.fn();
@@ -139,7 +142,15 @@ describe("lookupYoutubeChannel", () => {
     );
     await expect(lookupYoutubeChannel(identityFor("consentwall0509"))).resolves.toEqual({
       status: "unresolved",
-      reason: "youtube page had no channel id (200, 7 chars)",
+      reason: "youtube page had no channel id (200)",
+    });
+  });
+
+  it("reads a card whose homepage has not been read yet as unread, so it is not called channel-less", async () => {
+    await expect(lookupYoutubeChannel(JSON.stringify({ description: "x" }))).resolves.toEqual({ status: "unread" });
+    await expect(lookupYoutubeChannel(JSON.stringify({ socials: [] }))).resolves.toEqual({ status: "unread" });
+    await expect(lookupYoutubeChannel(JSON.stringify({ socials: [], socialsReadAt: null }))).resolves.toEqual({
+      status: "unread",
     });
   });
 });

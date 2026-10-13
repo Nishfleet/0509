@@ -609,6 +609,12 @@ async function notePageMiss(watchId: string, reason: string | undefined, now: st
   if (noted !== current) await writeWatchConfigJson(watchId, noted);
 }
 
+async function clearNoChannel(watchId: string): Promise<void> {
+  const current = await requireWatchConfigJson(watchId);
+  const cleared = withoutNoChannel(current);
+  if (cleared !== current) await writeWatchConfigJson(watchId, cleared);
+}
+
 async function flagNoChannel(watchId: string, now: string): Promise<void> {
   const current = await requireWatchConfigJson(watchId);
   const flagged = withNoChannel(withoutLostChannel(current), now);
@@ -685,6 +691,10 @@ async function resolveYoutubeChannel(
   switch (lookup.status) {
     case "id":
       return { found: true, channelId: lookup.channelId };
+    case "unread":
+      await clearNoChannel(watch.watch_id);
+      await markWatchPolled(watch.watch_id, now);
+      return { found: false, outcome: { items: 0, stored: 0, unjudged: 0, skipped: 0 } };
     case "no-url":
       await flagNoChannel(watch.watch_id, now);
       await markWatchPolled(watch.watch_id, now);

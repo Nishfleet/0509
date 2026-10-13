@@ -21,6 +21,7 @@ const degradedSchema = z.object({
 
 const identitySchema = z.object({
   socials: z.array(socialSchema).optional(),
+  socialsReadAt: z.string().nullish(),
 });
 
 const jsonObject = z.record(z.string(), z.unknown());
@@ -140,6 +141,11 @@ function readFlagSlot(
 
 const RESERVED_YOUTUBE_PATHS = new Set([
   "about",
+  "c",
+  "channel",
+  "signin",
+  "trending",
+  "user",
   "account",
   "attribution_link",
   "embed",
@@ -189,6 +195,12 @@ export function identityHasYoutubeUrl(raw: string): boolean {
   const value: unknown = JSON.parse(raw);
   const card = identitySchema.parse(value);
   return (card.socials ?? []).some((social) => youtubePageUrl(social.url) !== null);
+}
+
+export function identitySocialsUnread(raw: string): boolean {
+  const value: unknown = JSON.parse(raw);
+  const card = identitySchema.parse(value);
+  return card.socialsReadAt == null && (card.socials ?? []).length === 0;
 }
 
 export function channelIdFromIdentity(raw: string): string | null {
