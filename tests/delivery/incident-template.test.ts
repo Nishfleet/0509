@@ -88,9 +88,9 @@ describe("fixed incident email", () => {
     expect(renderIncidentFixed({ ...FIXED, kind: "breakage" }).subject).toBe("shop.example looks fixed");
   });
 
-  it("is one line of news before the footer", () => {
+  it("is one line of news before the footer and support line", () => {
     const { text } = renderIncidentFixed(FIXED);
-    expect(text.split("\n")).toHaveLength(3);
+    expect(text.split("\n")).toHaveLength(4);
     expect(text).toContain("We re-checked shop.example at Wed 23 Sept, 05:52 and it looks fixed.");
     expect(text).toContain("https://0509.io/site/inc_1");
   });

@@ -392,6 +392,12 @@ describe("footer", () => {
     expect(text).toContain("Unsubscribe: https://0509.io/u/opaque-token");
   });
 
+  it("ends with a support address in html and text", () => {
+    const { html, text } = renderBrief(payload(), CONTEXT);
+    expect(html).toContain('href="mailto:support@0509.io"');
+    expect(text.trimEnd().endsWith("Questions? Write to support@0509.io.")).toBe(true);
+  });
+
   it("says a source did not answer rather than calling the week quiet", () => {
     const { html, text } = renderBrief(
       payload({ checked: { ...payload().checked, degraded_source_keys: ["reddit"] } }),
