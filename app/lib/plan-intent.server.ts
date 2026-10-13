@@ -13,7 +13,7 @@ function planIntentCookie() {
   });
 }
 
-export function planFromSearch(search: URLSearchParams): PlanId | null {
+function planFromSearch(search: URLSearchParams): PlanId | null {
   const value = search.get("plan");
   return isPlanId(value) ? value : null;
 }
