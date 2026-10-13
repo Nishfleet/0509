@@ -16,6 +16,10 @@ export function checkUrl(key: string | null, slug: string, signal: CheckSignal):
 
 export async function pingCheck(slug: string, signal: CheckSignal): Promise<null> {
   const url = checkUrl(blankEnvString(Reflect.get(env, "HEALTHCHECKS_PING_KEY")), slug, signal);
-  await pingLiveness(url ?? undefined);
+  try {
+    await pingLiveness(url ?? undefined);
+  } catch (error) {
+    console.error(JSON.stringify({ event: "healthcheck.ping_failed", slug, signal, kind: String(error).slice(0, 40) }));
+  }
   return null;
 }
