@@ -22,14 +22,20 @@ export interface IncidentFixedContext extends AlertFooterContext {
   timezone: string;
 }
 
+const GENERIC_KIND = "breakage";
+
+function kindTail(kind: string): string {
+  return kind === GENERIC_KIND ? "" : `: ${kind}`;
+}
+
 const COPY = {
-  openSubject: (site: string, kind: string) => `${site} looks broken: ${kind}`,
+  openSubject: (site: string, kind: string) => `${site} looks broken${kindTail(kind)}`,
   seen: (opened_at: string, timezone: string) => `Seen at ${formatDate(opened_at, timezone, true)}.`,
   mark: (mark: string) => `What changed: ${mark}`,
   recheck: (recheck_at: string, timezone: string) =>
     `We re-check at ${formatDate(recheck_at, timezone, true)} and email you once when it is fixed.`,
   openLink: (link: string) => `See it in Five to Nine: ${link}`,
-  fixedSubject: (site: string, kind: string) => `${site} looks fixed: ${kind}`,
+  fixedSubject: (site: string, kind: string) => `${site} looks fixed${kindTail(kind)}`,
   fixedLine: (site: string, closed_at: string, timezone: string) =>
     `We re-checked ${site} at ${formatDate(closed_at, timezone, true)} and it looks fixed.`,
 } as const;
