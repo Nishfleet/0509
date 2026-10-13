@@ -36,7 +36,7 @@ export function sourceName(kind: string, platform: string): string {
   return brand === undefined ? `Your ${noun} source` : `${brand} ${noun}`;
 }
 
-export const OTHER_SOURCES = "other sources";
+const OTHER_SOURCES = "other sources";
 
 export function platformName(platform: string): string {
   if (platform === "web") return "Website";
