@@ -76,11 +76,17 @@ export async function expectKeyboardReachesVisibleFocus(page: Page, label: strin
       const element = document.activeElement;
       if (element === null || element === document.body) return null;
       const box = element.getBoundingClientRect();
-      const style = getComputedStyle(element);
-      const outlined = style.outlineStyle !== "none" && Number.parseFloat(style.outlineWidth) > 0;
-      const shadowed = style.boxShadow !== "none";
+      const ring = () => {
+        const style = getComputedStyle(element);
+        const outlined = style.outlineStyle !== "none" && Number.parseFloat(style.outlineWidth) > 0;
+        return `${outlined ? `${style.outlineWidth} ${style.outlineColor}` : "none"}|${style.boxShadow}`;
+      };
+      const focused = ring();
+      if (element instanceof HTMLElement) element.blur();
+      const resting = ring();
+      if (element instanceof HTMLElement) element.focus({ focusVisible: true });
       const described = `${element.tagName.toLowerCase()}${element.id === "" ? "" : `#${element.id}`} "${(element.textContent ?? "").trim().slice(0, 30)}"`;
-      return { described, sized: box.width > 0 && box.height > 0, ringed: outlined || shadowed };
+      return { described, sized: box.width > 0 && box.height > 0, ringed: focused !== resting };
     });
     if (stop === null) break;
     stops += 1;

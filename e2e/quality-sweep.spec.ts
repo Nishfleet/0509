@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-import { test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { isLocalLane, run, seedPreviewSession } from "./inbox";
 import {
@@ -15,6 +15,8 @@ test.skip(
   !isLocalLane(),
   "the preview Worker signs in through a seeded session; production has the dedicated a11y specs",
 );
+
+test.setTimeout(180_000);
 
 const STAMP = "2026-10-12T00:00:00.000Z";
 const SCHEMES = ["light", "dark"] as const;
@@ -84,15 +86,15 @@ async function signIn(page: Page, baseURL: string | undefined, cookie: string): 
 async function sweep(page: Page, testInfo: Parameters<typeof expectQuiet>[1], paths: string[]): Promise<void> {
   const quality = await startQuality(page);
   for (const path of paths) {
-    resetQuality(quality);
     for (const colorScheme of SCHEMES) {
       await page.emulateMedia({ colorScheme });
-      await page.goto(path);
-      await expectNoSeriousAxe(page, testInfo, `${path} ${colorScheme} ${testInfo.project.name}`);
-      if (colorScheme === "light") {
-        await expectQuiet(page, testInfo, quality, `${path} ${testInfo.project.name}`);
-        await expectKeyboardReachesVisibleFocus(page, `${path} ${testInfo.project.name}`);
-      }
+      const response = await page.goto(path);
+      const label = `${path} ${colorScheme} ${testInfo.project.name}`;
+      expect.soft(response?.status(), `${label}: status`).toBe(200);
+      await expectNoSeriousAxe(page, testInfo, label);
+      await expectQuiet(page, testInfo, quality, label);
+      if (colorScheme === "light") await expectKeyboardReachesVisibleFocus(page, label);
+      resetQuality(quality);
     }
   }
 }
