@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { consoleFailures, isLocalLane, run, seedPreviewSession, watchConsole } from "./inbox";
 

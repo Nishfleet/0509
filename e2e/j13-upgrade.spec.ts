@@ -1,7 +1,8 @@
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
+import { expect, test } from "./test";
 import { Webhook } from "standardwebhooks";
 
 import { checkoutProofMessage } from "../app/lib/billing/checkout-proof";

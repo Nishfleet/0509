@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { PLANS, TRIAL_TERMS } from "../app/lib/billing/plans";
 import { consoleFailures, watchConsole } from "./inbox";
