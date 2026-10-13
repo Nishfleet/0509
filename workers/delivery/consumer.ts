@@ -31,7 +31,7 @@ import { renderBrief } from "./brief-template";
 import { SETTINGS_LINK, unsubscribeHeaders, type AlertFooterContext } from "./alert-footer";
 import { renderChange, renderChangeOverflow } from "./change-template";
 import { renderIncidentFixed, renderIncidentOpen } from "./incident-template";
-import { errorText, sendMessage, type SendResult } from "./send";
+import { BRIEF_SENDER, errorText, sendMessage, type SendResult } from "./send";
 
 class PayloadError extends Error {
   constructor(message: string) {
@@ -206,8 +206,6 @@ async function ensureUnsubscribeToken(env: Env, target: TargetRow): Promise<stri
 }
 
 const UNSUBSCRIBE_BASE_URL = "https://0509.io/u/";
-
-const BRIEF_SENDER = { email: "brief@0509.io", name: "Five to Nine" };
 
 function briefOf(message: MessageRow): BriefPayload {
   try {

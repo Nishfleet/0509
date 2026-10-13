@@ -8,7 +8,7 @@ import { testerProductId } from "./products.server";
 
 const NEVER_STARTED = new Set(["failed", "pending"]);
 
-async function isTesterSubscription(subscriptionId: string): Promise<boolean | null> {
+export async function isTesterSubscription(subscriptionId: string): Promise<boolean | null> {
   if (env.DODO_PAYMENTS_API_KEY === "") return null;
   const client = new DodoPayments({
     bearerToken: env.DODO_PAYMENTS_API_KEY,

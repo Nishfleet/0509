@@ -3,6 +3,8 @@ export interface SendResult {
   error: string | null;
 }
 
+export const BRIEF_SENDER = { email: "brief@0509.io", name: "Five to Nine" };
+
 const MAX_ERROR_CHARS = 2_000;
 
 function errorText(end: unknown): string {
