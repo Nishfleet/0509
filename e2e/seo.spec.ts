@@ -73,6 +73,40 @@ test("every sitemap url is served as an indexable 200, not noindex", async ({ ba
   await anonymous.dispose();
 });
 
+test("every public html page has one h1, no skipped heading level, a canonical, parseable json-ld and a link to another public page @smoke", async ({
+  page,
+}) => {
+  const htmlPaths = SITEMAP_PATHS.filter((path) => !path.endsWith(".txt"));
+  for (const path of htmlPaths) {
+    await page.goto(path);
+    await expect(page.locator("h1"), `${path} must have exactly one h1`).toHaveCount(1);
+    const levels = await page
+      .locator("h1, h2, h3, h4, h5, h6")
+      .evaluateAll((nodes) => nodes.map((node) => Number(node.tagName.slice(1))));
+    levels.forEach((level, index) => {
+      const previous = levels[index - 1] ?? 0;
+      expect(level - previous, `${path} jumps from h${String(previous)} to h${String(level)}`).toBeLessThanOrEqual(1);
+    });
+    await expect(page.locator('link[rel="canonical"]'), `${path} canonical`).toHaveCount(1);
+    await expect(page.locator('meta[name="description"]'), `${path} description`).toHaveCount(1);
+    const blocks = await page.locator('script[type="application/ld+json"]').allTextContents();
+    expect(blocks.length, `${path} has no json-ld`).toBeGreaterThan(0);
+    for (const block of blocks) {
+      expect(() => {
+        JSON.parse(block);
+      }, `${path} json-ld parses`).not.toThrow();
+    }
+    const others = htmlPaths.filter((other) => other !== path);
+    const hrefs = await page
+      .locator("a[href]")
+      .evaluateAll((nodes) => nodes.map((node) => new URL((node as HTMLAnchorElement).href).pathname));
+    expect(
+      others.some((other) => hrefs.includes(other)),
+      `${path} links to no other public page`,
+    ).toBe(true);
+  }
+});
+
 test("GET /llms.txt serves the manifest-generated summary @smoke", async ({ request }) => {
   const response = await request.get("/llms.txt");
   expect(response.status()).toBe(200);
