@@ -239,7 +239,7 @@ describe("classifyNavPages under load", () => {
     expect(peak).toBeLessThanOrEqual(JEV_BATCH_SIZE);
   });
 
-  it("keeps the verdicts that landed and stops asking once rate limited", async () => {
+  it("keeps the verdicts that landed, stops asking once rate limited and reports the page set as unfinished", async () => {
     let calls = 0;
     const run = vi.fn(() => {
       calls += 1;
@@ -249,9 +249,8 @@ describe("classifyNavPages under load", () => {
     });
     Reflect.set(env, "AI", { run });
 
-    const rows = await classifyNavPages({ workspaceId, entity: ENTITY, pages, now: NOW });
+    await expect(classifyNavPages({ workspaceId, entity: ENTITY, pages, now: NOW })).rejects.toThrow(/Rate limit/);
 
-    expect(rows).toHaveLength(JEV_BATCH_SIZE - 1);
     expect(run).toHaveBeenCalledTimes(JEV_BATCH_SIZE);
     expect(await readPages()).toHaveLength(JEV_BATCH_SIZE - 1);
   });
