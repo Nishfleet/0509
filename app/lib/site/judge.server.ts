@@ -116,6 +116,7 @@ export interface HistoryEntry {
   kind: string | null;
   at: string;
   change?: string;
+  customer_said?: "useful" | "not_useful";
 }
 
 export interface ChangeState<H = HistoryEntry> {
@@ -195,7 +196,11 @@ async function readHistory30d(entityId: string, since: string): Promise<HistoryE
   const changes = await readRecentChangeDiffs(entityId, since, HISTORY_LIMIT);
   return Promise.all(
     changes.map(async (row, index) => {
-      const entry = { kind: row.aspect, at: row.observedAt };
+      const entry: HistoryEntry = {
+        kind: row.aspect,
+        at: row.observedAt,
+        ...(row.customerSaid === null ? {} : { customer_said: row.customerSaid }),
+      };
       if (index >= HISTORY_WORDED) return entry;
       const hunks = await readStoredHunks(row.diffKey);
       const change = wordingOf(markFromHunks(hunks.map((hunk) => hunk.lines)));

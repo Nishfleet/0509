@@ -478,6 +478,31 @@ describe("judgeChange", () => {
     expect(sent.history_30d[5]).not.toHaveProperty("change");
   });
 
+  it("case g4: history_30d carries what the customer said about an earlier change, and nothing when they said nothing", async () => {
+    jevAnswers.noul.set("noteworthy_change", 0.95);
+    jevAnswers.choice.set("change_kind", "copy");
+    for (const index of [0, 1]) {
+      const at = new Date(Date.now() - index * 3_600_000).toISOString();
+      await env.DB.prepare(
+        `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, url, payload_json, dedup_key, observed_at, last_seen_at)
+         VALUES (?, 'ws-mine', 'rival', 'src_site_web', 'change', 'home', 'https://rival.example/', '{}', ?, ?, ?)`,
+      )
+        .bind(`sig-fb-${String(index)}`, `dedup-fb-${String(index)}`, at, at)
+        .run();
+    }
+    await env.DB.prepare(
+      `INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at)
+       SELECT 'ud-fb', 'ws-mine', owner_user_id, 'sig-fb-0', 'rival', 'change_feedback:not_useful', NULL, '2026-10-14T00:00:00Z'
+       FROM workspace WHERE id = 'ws-mine'`,
+    ).run();
+
+    await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
+
+    const sent = jevAnswers.states[0] as { history_30d: { customer_said?: string }[] };
+    expect(sent.history_30d.map((entry) => entry.customer_said)).toEqual(["not_useful", undefined]);
+    expect(sent.history_30d[1]).not.toHaveProperty("customer_said");
+  });
+
   it("case g2: history_30d leaves out signals that are not changes", async () => {
     jevAnswers.noul.set("noteworthy_change", 0.95);
     jevAnswers.choice.set("change_kind", "pricing");
