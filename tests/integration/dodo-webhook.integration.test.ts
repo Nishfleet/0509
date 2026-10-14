@@ -211,6 +211,31 @@ describe("Dodo webhook (J13)", () => {
     expect((await planRow())?.status).toBe("on_hold");
   });
 
+  it("does not let a late subscription.active undo a cancel that already landed", async () => {
+    const cancelled = eventBody({
+      type: "subscription.cancelled",
+      timestamp: "2026-09-30T00:00:00Z",
+      data: { status: "cancelled", cancel_at_next_billing_date: false },
+    });
+    await deliver(signedRequest("evt_cancel_first", cancelled));
+    await deliver(signedRequest("evt_active_late", eventBody({ timestamp: "2026-09-29T10:00:05Z" })));
+
+    expect((await planRow())?.status).toBe("cancelled");
+    expect((await readEntitlements(WORKSPACE)).competitors).toBe(5);
+  });
+
+  it("settles on the same plan when the same webhook-id is delivered twice at once", async () => {
+    const body = eventBody({});
+    const responses = await Promise.all([
+      deliver(signedRequest("evt_twice", body)),
+      deliver(signedRequest("evt_twice", body)),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    expect((await planRow())?.status).toBe("active");
+    expect((await eventRow("evt_twice"))?.processed_at).not.toBeNull();
+  });
+
   it("finds the workspace by subscription id when the event carries no metadata", async () => {
     await deliver(signedRequest("evt_meta", eventBody({})));
 
