@@ -28,12 +28,17 @@ export async function readTeammates(workspaceId: string) {
   );
 }
 
-async function takeDailyInvite(workspaceId: string, now: Date): Promise<boolean> {
-  const key = `teammate-invites:${workspaceId}:${now.toISOString().slice(0, 10)}`;
-  const used = Number(await env.IDENTITY_CACHE.get(key)) || 0;
-  if (used >= INVITES_PER_DAY) return false;
-  await env.IDENTITY_CACHE.put(key, String(used + 1), { expirationTtl: INVITE_COUNTER_TTL_SECONDS });
-  return true;
+const inviteKey = (workspaceId: string, now: Date) =>
+  `teammate-invites:${workspaceId}:${now.toISOString().slice(0, 10)}`;
+
+async function invitesUsedToday(workspaceId: string, now: Date): Promise<number> {
+  return Number(await env.IDENTITY_CACHE.get(inviteKey(workspaceId, now))) || 0;
+}
+
+async function countInvite(workspaceId: string, now: Date, used: number): Promise<void> {
+  await env.IDENTITY_CACHE.put(inviteKey(workspaceId, now), String(used + 1), {
+    expirationTtl: INVITE_COUNTER_TTL_SECONDS,
+  });
 }
 
 export async function addTeammateByOwner(input: {
@@ -50,9 +55,12 @@ export async function addTeammateByOwner(input: {
   const { success } = await env.SIGN_IN_EMAIL_LIMIT.limit({ key: `teammate:${workspaceId}` });
   if (!success) return RATE_LIMITED;
   if (await isAddressSuppressed(address)) return UNSUBSCRIBED;
-  if (!(await takeDailyInvite(workspaceId, new Date()))) return DAILY_LIMIT;
-  const targetId = await addTeammate(env.DB, { workspaceId, address, now: new Date().toISOString() });
+  const now = new Date();
+  const used = await invitesUsedToday(workspaceId, now);
+  if (used >= INVITES_PER_DAY) return DAILY_LIMIT;
+  const targetId = await addTeammate(env.DB, { workspaceId, address, now: now.toISOString() });
   if (targetId === null) return CANT_ADD;
+  await countInvite(workspaceId, now, used);
   return sendTeammateInvite({ email: input.email, workspaceId, targetId, address, addedBy: input.signInEmail });
 }
 

@@ -67,9 +67,7 @@ export default function Unsubscribe({ actionData }: Route.ComponentProps) {
           one.
         </p>
         {actionData.teammate ? (
-          <p className="mt-4 leading-[1.65] text-ink-soft">
-            Changed your mind? Ask the person who added you to send the invitation again.
-          </p>
+          <p className="mt-4 leading-[1.65] text-ink-soft">Changed your mind? Email us and we will sort it out.</p>
         ) : (
           <p className="mt-4 leading-[1.65] text-ink-soft">
             Changed your mind? Sign in, open{" "}
