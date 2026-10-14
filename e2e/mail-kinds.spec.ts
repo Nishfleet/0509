@@ -27,8 +27,9 @@ test.describe("choosing which emails reach the delivery address", () => {
     const section = page.getByRole("region", { name: "Emails to this address" });
     await expect(section.getByLabel("The weekly brief")).toBeChecked();
     await section.getByLabel("The weekly brief").uncheck();
+    const saved = page.waitForResponse((response) => response.request().method() === "POST");
     await section.getByRole("button", { name: "Save" }).click();
-    await expect(section.getByRole("button", { name: "Save" })).toBeEnabled();
+    await saved;
 
     await page.goto("/app/settings");
     const again = page.getByRole("region", { name: "Emails to this address" });

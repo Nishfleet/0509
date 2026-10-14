@@ -34,7 +34,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
 
 export async function action({ params, request }: Route.ActionArgs) {
   const teammate = await isTeammateUnsubscribeToken(params.token);
-  const form = await request.formData();
+  const form = await request.formData().catch(() => new FormData());
   const widened = widenForm.safeParse(Object.fromEntries(form));
   const scope = widened.success && widened.data.scope === "all" ? "all" : linkScope(request);
   if ((await unsubscribe(params.token, scope)) === "invalid_token") {
