@@ -33,7 +33,7 @@ export function CompetitorNote({ note, error }: CompetitorNoteProps): ReactEleme
           rows={4}
           maxLength={NOTE_MAX}
           defaultValue={note}
-          placeholder="They discount every Q4. Ask Sam about their enterprise tier."
+          placeholder="They discount every Q4. Raise their enterprise tier at renewal."
           aria-invalid={error === null ? undefined : true}
           aria-describedby={error === null ? undefined : "competitor-note-error"}
           className="min-h-24 w-full border border-ink bg-transparent p-3 text-body"

@@ -35,7 +35,7 @@ export const PRIVACY: LegalDocument = {
         "Your account: your email address, and a name if you give one.",
         "Your sign-in: the public half of a passkey, if you set one up. Your fingerprint or face never leaves your device, and we store no passwords.",
         "Your sessions: when you signed in, and the IP address and browser you used, so you stay signed in and we can spot someone else using your account.",
-        "Your workspace: your brand, the competitors you watch, your settings and time zone, and the choices you make, such as dismissing a suggestion or turning a brand off.",
+        "Your workspace: your brand, the competitors you watch, your settings and time zone, and the choices you make, such as dismissing a suggestion or turning a brand off, and any private notes you write about a competitor. Notes are for your workspace only and are never emailed or shown to anyone else.",
         "Your agent access: the apps you approved, and a scrambled copy of each key you create, with when it was last used.",
         "Billing: your plan and whether it is paid. Your card details go to Dodo Payments and never reach us.",
         "Emails you send us, so we can answer them.",
