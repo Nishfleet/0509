@@ -74,10 +74,10 @@ export async function addTeammateByOwner(input: {
   if (!success) return RATE_LIMITED;
   const current = await listTeammates(env.DB, workspaceId);
   if (current.some((mate) => mate.target_value === address)) return CANT_ADD;
-  if (!(await takeRecipientSlot(address))) return RECIPIENT_CAPPED;
   const now = new Date();
   const used = await invitesUsedToday(workspaceId, now);
   if (used >= INVITES_PER_DAY) return DAILY_LIMIT;
+  if (!(await takeRecipientSlot(address))) return RECIPIENT_CAPPED;
   const targetId = await addTeammate(env.DB, { workspaceId, address, now: now.toISOString() });
   if (targetId === null) return CANT_ADD;
   return inviteAndCount({ ...input, workspaceId, targetId, address, now, used });
