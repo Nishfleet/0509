@@ -1,3 +1,4 @@
+import type { CompetitorFormErrors } from "../lib/competitor-form-errors";
 import { CompetitorForget } from "./competitor-forget";
 import { CompetitorNote } from "./competitor-note";
 import { CompetitorRename } from "./competitor-rename";
@@ -10,16 +11,7 @@ export function CompetitorFoot(props: {
   note: string;
   youtubeUrl: string | null;
   siteUrl: string | null;
-  errors:
-    | {
-        forgetError: string | null;
-        youtubeError: string | null;
-        siteError: string | null;
-        nameError: string | null;
-        noteError: string | null;
-        renamed: boolean;
-      }
-    | undefined;
+  errors: CompetitorFormErrors | undefined;
 }) {
   return (
     <>

@@ -1,6 +1,7 @@
 import { redirect } from "react-router";
 import { z } from "zod";
 
+import type { CompetitorFormErrors } from "./competitor-form-errors";
 import { forgetCompetitor } from "./competitor-forget.server";
 import { saveCompetitorName } from "./competitor-name.server";
 import { saveCompetitorNote } from "./competitor-note.server";
@@ -9,15 +10,6 @@ import { saveCompetitorYoutube } from "./competitor-youtube.server";
 import { handleCompetitorIntent } from "./competitors.server";
 
 const FORGET_MISMATCH = "That doesn't match the name. Type it exactly as shown.";
-
-interface CompetitorFormErrors {
-  forgetError: string | null;
-  youtubeError: string | null;
-  siteError: string | null;
-  nameError: string | null;
-  noteError: string | null;
-  renamed: boolean;
-}
 
 const NO_ERRORS: CompetitorFormErrors = {
   forgetError: null,
