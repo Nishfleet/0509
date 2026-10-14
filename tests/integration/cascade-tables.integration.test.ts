@@ -69,6 +69,7 @@ describe("workspace cascade coverage", () => {
       "suggestion",
       "user_decision",
       "watch",
+      "workspace_visit",
     ]);
   });
 
