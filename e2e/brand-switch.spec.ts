@@ -64,9 +64,15 @@ test("a row's switch is square and paints the card fill when off @smoke", async 
       const style = getComputedStyle(element);
       const thumb = element.querySelector<HTMLElement>('[data-slot="switch-thumb"]');
       if (thumb === null) throw new Error("the switch renders no thumb");
+      const probe = document.createElement("span");
+      probe.style.backgroundColor = "var(--card)";
+      document.body.append(probe);
+      const card = getComputedStyle(probe).backgroundColor;
+      probe.remove();
       return {
         radius: style.borderRadius,
         background: style.backgroundColor,
+        card,
         width: element.getBoundingClientRect().width,
         thumbLeft: thumb.getBoundingClientRect().left,
         thumbRight: thumb.getBoundingClientRect().right,
@@ -76,8 +82,7 @@ test("a row's switch is square and paints the card fill when off @smoke", async 
     });
 
     expect(paint.radius, JSON.stringify(paint)).toBe("0px");
-
-    expect(paint.background, JSON.stringify(paint)).toBe("rgb(255, 253, 246)");
+    expect(paint.background, JSON.stringify(paint)).toBe(paint.card);
     expect(paint.width).toBe(38);
 
     expect(paint.thumbLeft - paint.trackLeft, JSON.stringify(paint)).toBeGreaterThanOrEqual(1);
