@@ -27,19 +27,21 @@ const acknowledgeForm = z.object({
   alertId: z.string(),
 });
 
-async function readLatestBrief(workspaceId: string | null) {
-  return workspaceId === null ? undefined : (await listWorkspaceBriefs(workspaceId))[0];
+async function readBriefs(workspaceId: string | null) {
+  return workspaceId === null ? [] : listWorkspaceBriefs(workspaceId);
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const { workspaceId } = context.get(onboardedContext);
-  const [page, latest] = await Promise.all([
+  const [page, briefs] = await Promise.all([
     loadAlertsPage(workspaceId, parseAlertChip(new URL(request.url).searchParams.get("kind"))),
-    readLatestBrief(workspaceId),
+    readBriefs(workspaceId),
   ]);
+  const latest = briefs[0];
+  const lastSent = briefs.find((brief) => brief.status === "sent");
   const failedBrief = latest?.status === "failed" ? { id: latest.id } : null;
   const times = page.groups.flatMap((group) => group.items.map((item) => item.at));
-  return { ...page, failedBrief, newSince: newSinceBriefLine(times, latest?.period_end) };
+  return { ...page, failedBrief, newSince: newSinceBriefLine(times, lastSent?.period_end) };
 }
 
 export async function action({ request }: Route.ActionArgs) {
