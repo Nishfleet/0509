@@ -9,6 +9,7 @@ import { PlanSection } from "../components/plan-settings";
 import { PageHeading } from "../components/page-heading";
 import { AccountSection, AgentsSection, BriefSection, SettingsJumps } from "../components/settings-sections";
 import { sessionContext } from "../lib/require-session.server";
+import { readDeviceList } from "../lib/devices.server";
 import { readPasskeys } from "../lib/passkeys.server";
 import { readSettings, runSettingsIntent } from "../lib/settings.server";
 
@@ -18,8 +19,12 @@ export function meta() {
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const session = context.get(sessionContext);
-  const [settings, passkeys] = await Promise.all([readSettings(session.user), readPasskeys(request)]);
-  return { ...settings, passkeys };
+  const [settings, passkeys, devices] = await Promise.all([
+    readSettings(session.user),
+    readPasskeys(request),
+    readDeviceList(session.user.id, session.session.id),
+  ]);
+  return { ...settings, passkeys, devices };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -49,6 +54,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
             delivery={loaderData.delivery}
             teammates={loaderData.teammates}
             passkeys={loaderData.passkeys}
+            devices={loaderData.devices}
             result={actionData}
           />
           <ExportData />
