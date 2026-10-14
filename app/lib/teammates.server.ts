@@ -16,7 +16,7 @@ const NO_WORKSPACE = "Finish setting up first, then add a teammate.";
 const RATE_LIMITED = "Too many invitations. Wait a minute, then try again.";
 const RECENTLY_INVITED = "That address was invited in the last day. Try again tomorrow.";
 const DAILY_LIMIT = "You have sent a lot of invitations today. Try again tomorrow.";
-const CANT_ADD = `You can add up to ${String(MAX_TEAMMATES)} teammates, and each address only once.`;
+const CANT_ADD = `We can't add that address. You can add up to ${String(MAX_TEAMMATES)} teammates, each address only once.`;
 
 export async function readTeammates(workspaceId: string) {
   const mates = await listTeammates(env.DB, workspaceId);
