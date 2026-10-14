@@ -3,13 +3,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { readCompetitorSnapshot } from "../../app/lib/competitor-snapshot.server";
 
-/**
- * One brand's last 7 days as the brief sees it: the counted signals joined to
- * their verdicts, its newest frozen rank, and which of its sources answered
- * in the window (0509#5032, parent #4106). The reader only joins what the
- * standing worker already counted — it must never recompute a judgment.
- */
-
 const NOW = new Date("2026-09-24T12:00:00.000Z");
 
 async function seedOwner(ws: string, user: string): Promise<void> {

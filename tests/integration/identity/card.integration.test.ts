@@ -211,8 +211,7 @@ describe("startCard", () => {
 
   it("re-probes past a stale icon entry that holds a URL the guarded fetch refuses", async () => {
     stubAi(0.95);
-    // 0509#5890: a v1 entry cached the raw-fetch winner, so a URL storeLogo
-    // refuses pinned a logo-less card for the probe TTL. v2 must not parse it.
+
     const staleUrl = "http://insecure.example/og.png";
     await env.IDENTITY_CACHE.put(probeKey(subjectFor("example.com"), "icon"), JSON.stringify({ url: staleUrl }));
     const duckUrl = "https://icons.duckduckgo.com/ip3/example.com.ico";
@@ -550,9 +549,6 @@ describe("startCard", () => {
   });
 });
 
-// The four unreached lines carry the subject's hash, never the subject itself:
-// #5786 took the `subject` key out, and the registrable domain still reached
-// the same lines through the error message (0509#5847).
 describe("the unreached log lines", () => {
   async function logged(run: () => Promise<unknown>): Promise<Record<string, unknown>[]> {
     const lines: string[] = [];
@@ -568,8 +564,6 @@ describe("the unreached log lines", () => {
   }
 
   it("names the subject only as a hash, on a failed site probe", async () => {
-    // A host tldts is not ICANN for is an invalid-url failure whose detail is
-    // the hostname itself: the exact string #5786's name-based gate missed.
     const domain = "unreachablenotin-icann.invalid";
 
     const rows = await logged(() => startCard("ws-1", subjectFor(domain), []).site);
@@ -615,9 +609,6 @@ describe("the unreached log lines", () => {
   });
 
   it("names the reason, never the message, when the probe throws something else", async () => {
-    // A readable page that carries no name, description or socials is not a
-    // readUrl failure, so probeSite throws a plain Error: the branch the
-    // reason classifier is there to name.
     const domain = "throwselsewhere.com";
     const anonymous = `<!doctype html>
 <html><head><meta name="generator" content="none"></head>

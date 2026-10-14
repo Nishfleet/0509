@@ -6,24 +6,10 @@ import { ESLint } from "eslint";
 import type { Linter } from "eslint";
 import { describe, expect, it } from "vitest";
 
-// 0509#7022: RAW_DML_WRITER only proves DML sits somewhere under
-// app/lib/data/. These probes prove each data file may write only its own
-// table. lintText with a real data-file path needs no probe file on disk,
-// so the readdirSync in eslint.config.js never races a temp file. The
-// real-file sweep lists tracked files only for the same reason: an untracked
-// probe file under app/lib/data/ would otherwise be swept as if it were real
-// (tests/eslint-writer-rule.test.ts wrote one until 971f926cc).
-
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_DIR = path.join(REPO_ROOT, "app/lib/data");
 const FOREIGN_MESSAGE = "Foreign-table write";
 
-// #7266 reads the per-file blocks and the assembled config out of the real
-// eslint.config.js at run time, so the survival test checks the real ones and
-// not a hand-rolled copy. The specifier is a run-time value on purpose: a
-// static import puts eslint.config.js into tsconfig.test.json's program, and
-// `checkJs` then rejects the many implicitly-typed plugin callbacks the config
-// has always had (0509#7266 rework).
 interface ConfigModule {
   default: Linter.Config[];
   TABLE_WRITER_BLOCKS: Linter.Config[];
@@ -31,7 +17,7 @@ interface ConfigModule {
 
 async function loadConfig(): Promise<ConfigModule> {
   const url = pathToFileURL(path.join(REPO_ROOT, "eslint.config.js")).href;
-  return (await import(/* @vite-ignore */ url)) as ConfigModule;
+  return (await import(url)) as ConfigModule;
 }
 
 const PROBES: { file: string; statement: string; foreign: boolean }[] = [
@@ -104,19 +90,10 @@ describe("eslint one-table-per-data-file rule (#7022)", () => {
   });
 });
 
-// #7266: flat config replaces a rule's option array wholesale per matching
-// block, so a later block that sets no-restricted-syntax on app/lib/data/**
-// silently drops the per-file foreignTableWriter selector from TABLE_WRITER_BLOCKS.
-// These probes prove that re-placing the exported TABLE_WRITER_BLOCKS after such
-// a block restores the rule — the pattern #7266 enforces by keeping
-// ...TABLE_WRITER_BLOCKS last in eslint.config.js.
 describe("table writer survives a later clobbering block (#7266)", () => {
   const FOREIGN_DELETE =
     'const PROBE = "DELETE FROM watch WHERE id = ?1";\nexport function runProbe(): string {\n  return PROBE;\n}\n';
 
-  // A future developer might add a block for app/lib/data/** that sets
-  // no-restricted-syntax — flat config replaces the array, so this drops
-  // every TABLE_WRITER_BLOCKS entry including foreignTableWriter.
   const CLOBBERING_BLOCK: Linter.Config = {
     files: ["app/lib/data/**"],
     rules: {
@@ -133,8 +110,7 @@ describe("table writer survives a later clobbering block (#7266)", () => {
       filePath: path.join(DATA_DIR, "page.server.ts"),
     });
     const messages = results.flatMap((result) => result.messages.map((m) => m.message));
-    // The clobbering block overrides TABLE_WRITER_BLOCKS from the real config,
-    // so the foreignTableWriter selector is dropped.
+
     expect(messages.some((m) => m.includes(FOREIGN_MESSAGE))).toBe(false);
   });
 
@@ -151,18 +127,14 @@ describe("table writer survives a later clobbering block (#7266)", () => {
         filePath: path.join(DATA_DIR, "page.server.ts"),
       });
       const messages = results.flatMap((result) => result.messages.map((m) => m.message));
-      // TABLE_WRITER_BLOCKS, placed after the clobbering block, restores the
-      // rule — the foreign write is still flagged.
+
       expect(messages.some((m) => m.includes(FOREIGN_MESSAGE))).toBe(true);
     },
   );
 
   it("keeps TABLE_WRITER_BLOCKS as the last entries of the real config", { timeout: 60_000 }, async () => {
     const { default: config, TABLE_WRITER_BLOCKS } = await loadConfig();
-    // Flat config applies matching blocks in order, so the guard survives a
-    // later app/lib/data/** block only while nothing follows it. This is the
-    // assertion that fails when ...TABLE_WRITER_BLOCKS is moved back into the
-    // body of the array.
+
     expect(config.slice(-TABLE_WRITER_BLOCKS.length)).toEqual(TABLE_WRITER_BLOCKS);
   });
 });

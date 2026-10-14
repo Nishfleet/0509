@@ -3,12 +3,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { readHomeStandingInputs, SELECT_HOME_STANDING } from "../../app/lib/home-standing.server";
 
-/**
- * Home's standing reader against real local D1: the owner's workspace, its
- * entities and the newest weekly digest, which is the same frozen week the
- * brief emailed, so Home and the email agree (docs/REBUILD-STANDING.md).
- */
-
 let runs = 0;
 let WS = "";
 let USER = "";
