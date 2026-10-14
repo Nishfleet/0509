@@ -4,7 +4,7 @@ import { redirect } from "react-router";
 
 import { createTesterCheckoutUrl } from "../lib/billing/checkout.server";
 import { isTester } from "../lib/billing/tester.server";
-import { isSubscriptionLive } from "../lib/billing/entitlements";
+import { isSubscriptionLive } from "../lib/billing/subscription-state";
 import { readPlanSubscription } from "../lib/data/plan.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { requireFreshSession } from "../lib/require-session.server";

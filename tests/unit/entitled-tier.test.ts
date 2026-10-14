@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { entitledTier, isWorkspacePaid } from "../../app/lib/billing/entitlements";
+import { entitledTier, isWorkspacePaid } from "../../app/lib/billing/subscription-state";
 
 const NOW = new Date("2026-09-29T12:00:00Z");
 const plan = (status: string, currentPeriodEnd: string | null) => ({ tier: "agency", status, currentPeriodEnd });

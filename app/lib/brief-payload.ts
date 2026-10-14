@@ -98,6 +98,11 @@ const briefPayloadSchema = z.object({
   headline_total: count,
   headline_movement: numberOrNull,
   headline_is_new: flag,
+  headline_earlier: z
+    .object({ rank: z.number().int().positive(), weeks: z.number().int().positive() })
+    .nullable()
+    .optional()
+    .catch(undefined),
   why_line: text,
   is_quiet_week: flag,
   is_unjudged: flag,
@@ -110,12 +115,6 @@ const briefPayloadSchema = z.object({
 });
 
 export type BriefPayload = z.output<typeof briefPayloadSchema>;
-
-export function sinceStartedLine(checked: BriefPayload["checked"]): string | null {
-  const running = checked.total_change_count ?? 0;
-  if (running <= checked.site_change_count) return null;
-  return `${String(running)} site ${running === 1 ? "change" : "changes"} caught since you started`;
-}
 
 export interface BriefContext {
   unsubscribe_url: string | null;

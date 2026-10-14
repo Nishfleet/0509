@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 
-import { isSubscriptionLive } from "../billing/entitlements";
+import { isSubscriptionLive } from "../billing/subscription-state";
 import { isDiscoveryDay } from "../cadence";
 import { readDiscoverableWorkspaces, readOnboardingCompetitors } from "../data/entity.server";
 import { discoveryStateFor, type DiscoveryState } from "./state";
