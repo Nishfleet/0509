@@ -129,6 +129,8 @@ export function provenanceNote(source: { viaArchive: boolean; seenOn: string | n
   return parts.length === 0 ? null : parts.join(" · ");
 }
 
+export type ChangeFeedback = "useful" | "not_useful";
+
 export interface SiteChangeView {
   id: string;
   entityId: string;
@@ -146,6 +148,7 @@ export interface SiteChangeView {
   before: ChangeShot;
   after: ChangeShot;
   whyFlagged: WhyFlagged | null;
+  feedback?: ChangeFeedback | null;
 }
 
 export interface PairedSiteChange extends SiteChangeView {

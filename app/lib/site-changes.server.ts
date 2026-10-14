@@ -20,6 +20,11 @@ import {
 
 export type ShotSide = "before" | "after";
 
+const FEEDBACK_VALUE = {
+  "change_feedback:useful": "useful",
+  "change_feedback:not_useful": "not_useful",
+} as const;
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function daysBefore(now: Date, days: number): string {
@@ -75,6 +80,7 @@ async function toView(row: SiteChangeRow, payload: SiteChangePayload): Promise<S
     wordsChanged: payload.wordsAdded + payload.wordsRemoved,
     provenance: provenanceNote({ viaArchive: payload.viaArchive === true, seenOn: seenOn(row, payload) }),
     sentence: wordsSentence(payload.wordsAdded, payload.wordsRemoved),
+    feedback: row.feedback === null ? null : FEEDBACK_VALUE[row.feedback],
     mark,
     detailsUnavailable: unavailable,
     before: shot(row.id, "before", { key: payload.before.screenshotKey, at: row.before_at }),
