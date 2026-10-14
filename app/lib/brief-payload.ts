@@ -66,7 +66,7 @@ const checkedSchema = z
     mention_count: count,
     site_change_count: count,
     new_ad_count: count,
-    total_change_count: z.number().optional().catch(undefined),
+    total_change_count: z.number().int().nonnegative().optional().catch(undefined),
     source_keys: keepValid(z.string()),
     degraded_source_keys: keepValid(z.string()),
     degraded_sources: keepValid(degradedSourceSchema),
