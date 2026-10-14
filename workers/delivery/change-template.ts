@@ -4,7 +4,7 @@ import type { ChangeMark } from "../../app/lib/site-change";
 import { neutralizeBareUrls } from "../../app/lib/slack-webhook";
 import { renderAlertFooter, type AlertFooterContext } from "./alert-footer";
 import { formatDate } from "./brief-template";
-import { EYEBROW, FONT, emailDocument } from "./email-shell";
+import { BODY, EYEBROW, HEADLINE, emailDocument, linkParagraph } from "./email-shell";
 
 export interface ChangeContext extends AlertFooterContext {
   headline: string;
@@ -13,9 +13,6 @@ export interface ChangeContext extends AlertFooterContext {
   link: string;
   timezone: string;
 }
-
-const HEADLINE = `margin:0;font-family:${FONT};font-size:24px;line-height:30px;font-weight:800;letter-spacing:-0.02em;`;
-const BODY = `margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;`;
 
 function markLines(mark: ChangeMark | null): string[] {
   if (mark === null) return [];
@@ -41,7 +38,6 @@ export function renderChangeOverflow(ctx: ChangeOverflowContext): RenderedBrief 
     `Every change is still in Alerts and in your Monday brief.`,
   ];
   const footer = renderAlertFooter(ctx);
-  const href = escapeHtml(ctx.link);
   return {
     subject,
     text: [subject, ...lines, `See them in Five to Nine: ${ctx.link}`, footer.text].join("\n"),
@@ -51,7 +47,7 @@ export function renderChangeOverflow(ctx: ChangeOverflowContext): RenderedBrief 
         `<p class="brief-muted" style="${EYEBROW}">Price or plan changes</p>`,
         `<p style="${HEADLINE}">${escapeHtml(subject)}</p>`,
         paragraphs(lines),
-        `<p style="${BODY}">See them in Five to Nine: <a class="brief-ink" href="${href}">${href}</a></p>`,
+        linkParagraph("See them in Five to Nine", ctx.link),
         footer.html,
       ].join(""),
       lines[0],
@@ -64,7 +60,6 @@ const SO_WHAT = "Worth a look today: does your own pricing page still hold up ne
 export function renderChange(ctx: ChangeContext): RenderedBrief {
   const seen = `Seen at ${formatDate(ctx.observed_at, ctx.timezone, true)}.`;
   const lines = [seen, ...markLines(ctx.mark)];
-  const href = escapeHtml(ctx.link);
   const footer = renderAlertFooter(ctx);
   return {
     subject: ctx.headline,
@@ -78,7 +73,7 @@ export function renderChange(ctx: ChangeContext): RenderedBrief {
         `<p style="${HEADLINE}">${escapeHtml(ctx.headline)}</p>`,
         paragraphs(lines),
         paragraphs([SO_WHAT]),
-        `<p style="${BODY}">See the before and after in Five to Nine: <a class="brief-ink" href="${href}">${href}</a></p>`,
+        linkParagraph("See the before and after in Five to Nine", ctx.link),
         footer.html,
       ].join(""),
       lines.join(" "),

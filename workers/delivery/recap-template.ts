@@ -1,7 +1,7 @@
 import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
 import { renderAlertFooter, type AlertFooterContext } from "./alert-footer";
-import { EYEBROW, FONT, emailDocument } from "./email-shell";
+import { BODY, EYEBROW, HEADLINE, emailDocument, linkParagraph } from "./email-shell";
 
 export interface RecapContext {
   change_count: number;
@@ -10,8 +10,6 @@ export interface RecapContext {
   footer: AlertFooterContext;
 }
 
-const HEADLINE = `margin:0;font-family:${FONT};font-size:24px;line-height:30px;font-weight:800;letter-spacing:-0.02em;`;
-const BODY = `margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;`;
 const SUBJECT = "What Five to Nine has caught so far";
 
 function lines(ctx: RecapContext): string[] {
@@ -24,7 +22,6 @@ function lines(ctx: RecapContext): string[] {
 
 export function renderRecap(ctx: RecapContext): RenderedBrief {
   const body = lines(ctx);
-  const href = escapeHtml(ctx.link);
   const footer = renderAlertFooter(ctx.footer);
   return {
     subject: SUBJECT,
@@ -35,7 +32,7 @@ export function renderRecap(ctx: RecapContext): RenderedBrief {
         `<p class="brief-muted" style="${EYEBROW}">So far</p>`,
         `<p style="${HEADLINE}">${escapeHtml(SUBJECT)}</p>`,
         ...body.map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`),
-        `<p style="${BODY}">See everything: <a class="brief-ink" href="${href}">${href}</a></p>`,
+        linkParagraph("See everything", ctx.link),
         footer.html,
       ].join(""),
       body[0],
