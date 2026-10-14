@@ -11,10 +11,12 @@ export function RivalOnePager(props: OnePagerInput): ReactElement {
   const text = rivalOnePager(props);
 
   async function copy() {
-    const written = await navigator.clipboard.writeText(text).then(
-      () => true,
-      () => false,
-    );
+    const written = await Promise.resolve()
+      .then(() => navigator.clipboard.writeText(text))
+      .then(
+        () => true,
+        () => false,
+      );
     setState(written ? "copied" : "failed");
   }
 
