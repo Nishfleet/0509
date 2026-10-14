@@ -20,8 +20,8 @@ describe("ChangeFeedback", () => {
   it("names the Yes and No group by its question for a screen reader", () => {
     const html = render(null);
     expect(html).toContain('role="group"');
-    expect(html).toContain('aria-labelledby="feedback-sig-1"');
-    expect(html).toContain('id="feedback-sig-1"');
+    expect(html).toContain('aria-label="Was this worth telling you?"');
+    expect(html).not.toContain(" id=");
   });
 
   it("thanks the customer and marks the chosen answer", () => {

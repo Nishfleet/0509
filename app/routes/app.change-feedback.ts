@@ -12,7 +12,7 @@ const FALLBACK = "/app/alerts";
 
 function backPath(request: Request, signalId: string): string {
   const referer = request.headers.get("referer");
-  if (referer === null) return `${FALLBACK}#${encodeURIComponent(signalId)}`;
+  if (referer === null || !URL.canParse(referer)) return `${FALLBACK}#${encodeURIComponent(signalId)}`;
   const from = new URL(referer);
   const sameSite = from.origin === new URL(request.url).origin && from.pathname.startsWith("/app");
   return sameSite ? `${from.pathname}${from.search}#${encodeURIComponent(signalId)}` : FALLBACK;

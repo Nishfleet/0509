@@ -129,6 +129,13 @@ describe("the feedback route", () => {
     expect(await feedbackOf("ws-fb", "ent-fb")).toEqual(["change_feedback:useful"]);
   });
 
+  it("saves the answer and falls back to Alerts when the Referer is not a URL", async () => {
+    const response = await post({ signalId: "sig-fb", value: "useful" }, "not a url");
+    expect(response.status).toBe(303);
+    expect(response.headers.get("Location")).toBe("/app/alerts#sig-fb");
+    expect(await feedbackOf("ws-fb", "ent-fb")).toEqual(["change_feedback:useful"]);
+  });
+
   it("never redirects off the site, and ignores a bad answer", async () => {
     const away = await post({ signalId: "sig-fb", value: "not_useful" }, "https://evil.example/app/x");
     expect(away.headers.get("Location")).toBe("/app/alerts");

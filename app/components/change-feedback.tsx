@@ -20,12 +20,12 @@ export function ChangeFeedback({
       method="post"
       action="/app/changes/feedback"
       role="group"
-      aria-labelledby={`feedback-${signalId}`}
+      aria-label="Was this worth telling you?"
       data-testid="change-feedback"
       className="mt-3 flex flex-wrap items-center gap-x-4"
     >
       <input type="hidden" name="signalId" value={signalId} />
-      <span id={`feedback-${signalId}`} className="font-mono text-meta text-ink-soft uppercase">
+      <span className="font-mono text-meta text-ink-soft uppercase">
         {feedback == null ? "Was this worth telling you?" : "Thanks, noted."}
       </span>
       {CHOICES.map((choice) => (
