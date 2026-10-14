@@ -10,12 +10,12 @@ export interface WinbackContext {
   footer: AlertFooterContext;
 }
 
-const SUBJECT = "What your rivals did while you were away";
+const SUBJECT = "What your competitors did while you were away";
 const OPEN = "Catch up in Five to Nine";
 
 function lines(ctx: WinbackContext): string[] {
   const noun = ctx.change_count === 1 ? "change" : "changes";
-  const counted = `Since you last opened Five to Nine we've caught ${String(ctx.change_count)} ${noun} across your rivals.`;
+  const counted = `Since you last opened Five to Nine we've caught ${String(ctx.change_count)} ${noun} across your competitors.`;
   return ctx.latest === null ? [counted] : [counted, `Most recent: ${ctx.latest.rival}, ${ctx.latest.what}`];
 }
 

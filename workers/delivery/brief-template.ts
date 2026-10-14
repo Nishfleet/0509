@@ -5,6 +5,7 @@ import { countPhrase } from "../../app/lib/quiet-week";
 import { NOTHING_FIRST_LINE, UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
 import { EYEBROW, FONT, MONO, emailDocument, linkParagraph, postalLine, siteName } from "./email-shell";
 import { SETTINGS_LINK, supportLineHtml, supportLineText } from "./alert-footer";
+import { APP_LOCALE } from "../../app/lib/locale";
 
 const COPY = {
   open: "Open in Five to Nine",
@@ -61,7 +62,7 @@ export function formatDate(iso: string, timezone: string, withTime: boolean): st
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
   try {
-    return new Intl.DateTimeFormat("en-GB", {
+    return new Intl.DateTimeFormat(APP_LOCALE, {
       timeZone: timezone,
       ...(withTime
         ? {
