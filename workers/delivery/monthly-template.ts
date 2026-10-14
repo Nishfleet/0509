@@ -12,7 +12,7 @@ export interface MonthlyContext {
 }
 
 const SUBJECT = "Your month in rivals";
-const OPEN = "See everything in Five to Nine";
+const OPEN = "See everything in Alerts";
 
 function lines(ctx: MonthlyContext): string[] {
   const noun = ctx.change_count === 1 ? "change" : "changes";
