@@ -165,6 +165,14 @@ describe("/u/:token (0509#5761)", () => {
     expect(data).toEqual({ unsubscribed: true, scope: "brief", teammate: false });
   });
 
+  it("treats a link with no type as everything", async () => {
+    holder.outcome = "unsubscribed";
+
+    const data = await action(postOf("a".repeat(64), "https://0509.io/u/t"));
+
+    expect(data).toEqual({ unsubscribed: true, scope: "all", teammate: false });
+  });
+
   it("lets the second step widen a brief-only unsubscribe to everything", async () => {
     holder.outcome = "unsubscribed";
     const body = new URLSearchParams({ scope: "all" });
