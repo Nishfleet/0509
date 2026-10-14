@@ -86,12 +86,12 @@ jobs:
 
       - name: Deploy the Worker
         id: deploy
-        # GIT_SHA is the commit /api/health names (#7187). `--var KEY:VALUE`
-        # overrides the empty default in wrangler.jsonc's vars:
-        # https://developers.cloudflare.com/workers/wrangler/commands/#deploy
+        # GIT_SHA is the commit /api/health names (#7187), set by --var over wrangler.jsonc's empty default.
         uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
-          timeout_minutes: 3
+          timeout_minutes: 5
+          max_attempts: 2
+          retry_on: error
           command: npm run deploy -- --var "GIT_SHA:$GITHUB_SHA"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -95,11 +95,11 @@ describe("deploy-production does not repeat the merge queue (0509#7004)", () => 
 });
 
 describe("deploy-production retries a Cloudflare API error and still fails when every try fails", () => {
-  it("runs the deploy through the pinned retry action, with a bounded per-try timeout", () => {
+  it("runs the deploy through the pinned retry action, retries only an error exit, never a slow upload (slowest real deploy: 23 s)", () => {
     const deploy = job.steps.find((candidate) => candidate.id === "deploy") as Step & { uses?: string };
     expect(deploy.uses).toMatch(/^nick-fields\/retry@[0-9a-f]{40} # v\d+\.\d+\.\d+$|^nick-fields\/retry@[0-9a-f]{40}$/);
     expect(deploy.with?.command).toContain("npm run deploy");
-    expect(deploy.with).toMatchObject({ timeout_minutes: 3 });
+    expect(deploy.with).toMatchObject({ timeout_minutes: 5, max_attempts: 2, retry_on: "error" });
     expect(deploy.with).not.toHaveProperty("continue_on_error");
     expect(deploy).not.toHaveProperty("continue-on-error");
   });
