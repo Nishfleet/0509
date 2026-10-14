@@ -145,10 +145,6 @@ describe("one-click unsubscribe (0509#4358, 0509#4593, 0509#5761)", () => {
     expect(await isUnsubscribeTokenKnown(TOKEN)).toBe(true);
     expect(await isUnsubscribeTokenKnown(UNKNOWN_TOKEN)).toBe(false);
 
-    // changeEmailTarget sets unsubscribe_token back to NULL, which is how a
-    // link in an already-delivered brief goes dead. The token then has to read
-    // as invalid, or the route tells a reader they are unsubscribed and mail
-    // keeps arriving.
     await env.DB.prepare(`UPDATE send_target SET unsubscribe_token = NULL WHERE id = ?`).bind(TARGET_ID).run();
 
     expect(await isUnsubscribeTokenKnown(TOKEN)).toBe(false);

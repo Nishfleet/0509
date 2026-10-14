@@ -3,11 +3,6 @@ import { describe, expect, it } from "vitest";
 
 import { readOnboardingCompetitors } from "../../app/lib/data/entity.server";
 
-/**
- * Screen 3's read (0509#4409): ON competitors with their one-line reason, and
- * pending maybes with reason and probability, against the migrated local D1.
- */
-
 let seededRuns = 0;
 
 async function seedUser(id: string, email: string): Promise<void> {
