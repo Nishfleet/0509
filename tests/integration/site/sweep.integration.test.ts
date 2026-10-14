@@ -233,6 +233,7 @@ describe("nightly site sweep", () => {
     const stored = await env.SNAPSHOTS.get(diffKey);
     const diff: unknown = JSON.parse((await stored?.text()) ?? "null");
     expect(diff).toMatchObject({ hunks: [expect.objectContaining({ lines: expect.any(Array) })] });
+    expect(payload).toMatchObject({ excerpt: [expect.objectContaining({ lines: expect.any(Array) })] });
 
     const polled = await env.DB.prepare("SELECT last_polled_at FROM watch WHERE id = ?")
       .bind(rival.watchId)
