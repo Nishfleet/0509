@@ -532,7 +532,7 @@ export const TABLE_WRITER_BLOCKS = readdirSync(new URL("./app/lib/data/", import
     rules: {
       "no-restricted-syntax": [
         "error",
-        ...BANNED_SYNTAX,
+        ...BANNED_SYNTAX.filter((rule) => rule !== RIVAL_COPY),
         ...NO_USER_DATA_IN_LOGS,
         FEED_STATE_LITERAL,
         D1_ROW_TYPE_ARGUMENT,

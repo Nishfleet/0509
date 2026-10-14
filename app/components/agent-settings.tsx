@@ -1,9 +1,8 @@
-import { useState } from "react";
 import type { ReactElement } from "react";
 import { Form, useNavigation } from "react-router";
 
 import type { AgentKey, ConnectedApp } from "../lib/agent/access";
-import { copyToClipboard } from "../lib/copy-to-clipboard";
+import { useCopyState, type CopyState } from "../lib/use-copy-state";
 import { BLOCK_HEADING } from "./page-heading";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -19,7 +18,7 @@ function day(iso: string): string {
   return Number.isNaN(ms) ? "date unknown" : DAY.format(new Date(ms));
 }
 
-export function copyKeyLabel(state: "idle" | "copied" | "failed"): string {
+export function copyKeyLabel(state: CopyState): string {
   return state === "copied" ? "Copied" : "Copy key";
 }
 
@@ -32,7 +31,7 @@ export function CopyFailureNote({ subject }: { subject: string }): ReactElement 
 }
 
 function CopyField({ label, value }: { label: string; value: string }) {
-  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const [state, copy] = useCopyState();
   return (
     <div className="mt-3 flex flex-col gap-2 sm:flex-row">
       <Input
@@ -49,7 +48,7 @@ function CopyField({ label, value }: { label: string; value: string }) {
         variant="secondary"
         size="lg"
         onClick={() => {
-          void copyToClipboard(value).then(setState);
+          void copy(value);
         }}
       >
         {state === "copied" ? "Copied" : "Copy"}
@@ -258,14 +257,14 @@ export function AgentKeys({
 }
 
 export function CopyKey({ value }: { value: string }) {
-  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const [state, copy] = useCopyState();
   return (
     <div className="mt-3">
       <Button
         type="button"
         variant="secondary"
         onClick={() => {
-          void copyToClipboard(value).then(setState);
+          void copy(value);
         }}
       >
         {copyKeyLabel(state)}

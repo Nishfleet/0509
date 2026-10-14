@@ -59,7 +59,8 @@ function noteElement(html: string): { id: string; text: string } | undefined {
 }
 
 const OWN_SITE_NOTE = "Off stops the email when your site looks broken. The alert still shows in Alerts.";
-const CHANGE_NOTE = "Off stops the email. The change still shows in Alerts and in your Monday brief.";
+const CHANGE_NOTE =
+  "Off stops the email and the Slack post. The change still shows in Alerts and in your Monday brief.";
 
 beforeEach(() => {
   harness.formData = undefined;
