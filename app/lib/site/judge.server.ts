@@ -171,6 +171,7 @@ function verdictRow(input: {
   p: number | null;
   choice: string | null;
   decidedAt: string;
+  sharedHash?: string;
 }): VerdictRow {
   return {
     workspaceId: input.workspaceId,
@@ -182,6 +183,7 @@ function verdictRow(input: {
     choice: input.choice,
     reason: null,
     decidedAt: input.decidedAt,
+    sharedHash: input.sharedHash,
   };
 }
 
@@ -268,7 +270,7 @@ async function judgeNoteworthy(
 ): Promise<{ noteworthy: NonNullable<JudgedChange["noteworthy"]>; rows: VerdictRow[] } | null> {
   let mixed: MixedVerdict;
   try {
-    mixed = await askMixed(input.workspaceId, { noul: D3_NOTEWORTHY, choice: D3_KIND }, state);
+    mixed = await askMixed(input.workspaceId, { noul: D3_NOTEWORTHY, choice: D3_KIND, shared: !input.isSelf }, state);
   } catch (error) {
     return degradeUnlessRateLimited(error, input.stopOnUnavailable);
   }
@@ -279,8 +281,22 @@ async function judgeNoteworthy(
   return {
     noteworthy: { p, kind, band: noteworthyBandOf(p, kind) },
     rows: [
-      verdictRow({ ...base, questionId: D3_NOTEWORTHY_QID, inputHash: noul.inputHash, p, choice: null }),
-      verdictRow({ ...base, questionId: D3_KIND_QID, inputHash: choice.inputHash, p: null, choice: kind }),
+      verdictRow({
+        ...base,
+        questionId: D3_NOTEWORTHY_QID,
+        inputHash: noul.inputHash,
+        sharedHash: noul.sharedHash,
+        p,
+        choice: null,
+      }),
+      verdictRow({
+        ...base,
+        questionId: D3_KIND_QID,
+        inputHash: choice.inputHash,
+        sharedHash: choice.sharedHash,
+        p: null,
+        choice: kind,
+      }),
     ],
   };
 }

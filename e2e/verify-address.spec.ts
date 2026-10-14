@@ -16,6 +16,7 @@ test("clicking Confirm email address reaches the confirmation page (0509#5811)",
   await page.goto(`/v/${unknownToken()}`);
   await page.getByRole("button", { name: "Confirm email address" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Email address confirmed" })).toBeVisible();
+  await expect(page.getByText("every one has an unsubscribe link")).toBeVisible();
 });
 
 test("a raw POST to /v/<unknown> answers 200 (0509#5811)", async ({ request }) => {

@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { saveSlackTarget } from "../../app/lib/data/send_target.server";
+import { readSlackDisconnected, readSlackTarget, saveSlackTarget } from "../../app/lib/data/send_target.server";
 import { CHANGE_DAILY_CAP, deliverChange, handleBatch } from "../../workers/delivery/consumer";
 
 const USER = "user-change-lane";
@@ -92,7 +92,7 @@ describe("rival change email lane (0509#6375)", () => {
     expect(second.outcome).toBe("duplicate");
     expect(sent).toHaveLength(1);
     expect(sent[0].to).toBe(TARGET);
-    expect(sent[0].subject).toBe("Rival changed its pricing page");
+    expect(sent[0].subject).toBe("Rival changed its pricing page: Pro $12 a month → Pro $15 a month");
     expect(sent[0].text).toContain("Before: Pro $12 a month");
     expect(sent[0].text).toContain("After: Pro $15 a month");
     expect(sent[0].text).toContain("https://0509.io/app/settings");
@@ -112,7 +112,7 @@ describe("rival change email lane (0509#6375)", () => {
 
     const results = await Promise.all(ids.map((id) => deliverChange(envWith(sent), { signal_id: id })));
 
-    const changeEmails = sent.filter((message) => message.subject === "Rival changed its pricing page");
+    const changeEmails = sent.filter((message) => message.subject.startsWith("Rival changed its pricing page"));
     const notices = sent.filter((message) => message.subject === "More rivals changed price or plan today");
     expect(changeEmails).toHaveLength(CHANGE_DAILY_CAP);
     expect(notices).toHaveLength(1);
@@ -145,7 +145,7 @@ describe("rival change email lane (0509#6375)", () => {
     expect(sent).toHaveLength(CHANGE_DAILY_CAP + 1);
     expect(sent.at(-1)?.subject).toBe("More rivals changed price or plan today");
     expect(
-      sent.slice(0, CHANGE_DAILY_CAP).every((message) => message.subject === "Rival changed its pricing page"),
+      sent.slice(0, CHANGE_DAILY_CAP).every((message) => message.subject.startsWith("Rival changed its pricing page")),
     ).toBe(true);
   });
 
@@ -237,7 +237,7 @@ describe("rival change email lane (0509#6375)", () => {
     });
 
     it("reports a failed post for retry, without sending the email twice", async () => {
-      await connect(404);
+      await connect(500);
       const sent: EmailMessageBuilder[] = [];
 
       expect((await deliverChange(envWith(sent), { signal_id: SIGNAL })).outcome).toBe("failed");
@@ -246,8 +246,20 @@ describe("rival change email lane (0509#6375)", () => {
       expect(sent).toHaveLength(1);
     });
 
+    it("stops posting and disconnects Slack when the webhook is revoked, and still emails", async () => {
+      const posts = await connect(404);
+      const sent: EmailMessageBuilder[] = [];
+
+      expect((await deliverChange(envWith(sent), { signal_id: SIGNAL })).outcome).toBe("sent");
+
+      expect(sent).toHaveLength(1);
+      expect(posts).toHaveLength(1);
+      expect(await readSlackTarget(env.DB, WS)).toBeNull();
+      expect(await readSlackDisconnected(env.DB, WS)).toBe(true);
+    });
+
     it("re-posts once when Slack recovers on retry, never repeats the email and then stays quiet", async () => {
-      await connect(404);
+      await connect(500);
       const sent: EmailMessageBuilder[] = [];
       expect((await deliverChange(envWith(sent), { signal_id: SIGNAL })).outcome).toBe("failed");
 

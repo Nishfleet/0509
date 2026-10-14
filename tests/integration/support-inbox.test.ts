@@ -3,21 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import worker from "../../workers/support-inbox";
 
-/**
- * The support-inbox Email Worker (0509#4229 child 2): a delivered mail is
- * stored in support_report, forwarded to Nish, and opened as a GitHub issue
- * whose body carries only the report id, receipt time, 0509.io paths and the
- * mail client's user agent — never a line of the customer's text. Runs in
- * real workerd against real local D1 with migrations/ applied.
- */
 type EmailMessage = Parameters<typeof worker.email>[0];
 type InboxEnv = Parameters<typeof worker.email>[1];
 
-/**
- * The runtime always hands a handler an ExecutionContext. The module's own
- * export type keeps each handler at the parameters it declares, so these
- * aliases carry the third argument the runtime passes and the handler ignores.
- */
 const callFetch = worker.fetch as unknown as (
   request: Request,
   env: InboxEnv,

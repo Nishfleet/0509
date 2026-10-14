@@ -289,7 +289,7 @@ describe("screenOnboardingSubject", () => {
     const { userId, workspaceId } = await seedWorkspace();
     Reflect.set(env, "AI", { run: vi.fn(() => Promise.reject(new Error("2021: Insufficient credits"))) });
     const subject = `credits-${String(runs)}.example`;
-    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const log = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
     try {
       const result = await screenOnboardingSubject({

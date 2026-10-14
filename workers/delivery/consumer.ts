@@ -10,7 +10,12 @@ import {
   readUnrecordedSend,
   resolveSendAttempt,
 } from "../../app/lib/data/send_attempt.server";
-import { readConfirmedTeammates, readSlackTarget, writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
+import {
+  disconnectSlackTarget,
+  readConfirmedTeammates,
+  readSlackTarget,
+  writeUnsubscribeToken,
+} from "../../app/lib/data/send_target.server";
 import { insertSignalDeliveries } from "../../app/lib/data/signal_delivery.server";
 import { localDay, startOfLocalDay } from "../../app/lib/alert-day";
 import { canonicalTimezone } from "../../app/lib/timezone";
@@ -18,7 +23,7 @@ import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
 import { nextHour } from "../../app/lib/home-standing";
 import { neutralizeBareUrls, slackEscape } from "../../app/lib/slack-webhook";
-import { postToSlack } from "../../app/lib/slack.server";
+import { postToSlackOutcome } from "../../app/lib/slack.server";
 import {
   changeHeadline,
   markFromHunks,
@@ -195,7 +200,10 @@ function newUnsubscribeToken(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function ensureUnsubscribeToken(env: Env, target: TargetRow): Promise<string> {
+export async function ensureUnsubscribeToken(
+  env: Env,
+  target: Pick<TargetRow, "id" | "unsubscribe_token">,
+): Promise<string> {
   if (target.unsubscribe_token !== null) return target.unsubscribe_token;
   await writeUnsubscribeToken(env.DB, { targetId: target.id, token: newUnsubscribeToken() });
   const row = await env.DB.prepare(`SELECT unsubscribe_token FROM send_target WHERE id = ?`)
@@ -207,7 +215,7 @@ async function ensureUnsubscribeToken(env: Env, target: TargetRow): Promise<stri
   return row.unsubscribe_token;
 }
 
-const UNSUBSCRIBE_BASE_URL = "https://0509.io/u/";
+export const UNSUBSCRIBE_BASE_URL = "https://0509.io/u/";
 
 function briefOf(message: MessageRow): BriefPayload {
   try {
@@ -218,10 +226,17 @@ function briefOf(message: MessageRow): BriefPayload {
   }
 }
 
-function render(message: MessageRow, to: string, token: string): EmailMessageBuilder {
+const BRIEF_OPEN_URL = "https://0509.io/app/brief";
+
+function render(message: MessageRow, recipient: { to: string; token: string; owner: boolean }): EmailMessageBuilder {
+  const { to, token, owner } = recipient;
   const payload = briefOf(message);
   const unsubscribeUrl = `${UNSUBSCRIBE_BASE_URL}${token}`;
-  const rendered = renderBrief(payload, { unsubscribe_url: unsubscribeUrl, asset_base_url: null });
+  const rendered = renderBrief(payload, {
+    unsubscribe_url: unsubscribeUrl,
+    asset_base_url: null,
+    open_url: owner ? BRIEF_OPEN_URL : null,
+  });
   return {
     to,
     from: BRIEF_SENDER,
@@ -245,14 +260,24 @@ async function sendAndResolve(env: Env, input: SendAndResolveInput): Promise<Del
   try {
     const result = await send();
     sent = result.outcome === "sent";
-    await resolveSendAttempt(env.DB, { attemptId: claimId, outcome: result.outcome, error: result.error });
+    await resolveSendAttempt(env.DB, {
+      attemptId: claimId,
+      idempotencyKey,
+      outcome: result.outcome,
+      error: result.error,
+    });
     if (onSent !== undefined && result.outcome === "sent") {
       await onSent();
     }
     return { outcome: result.outcome, attempt_id: claimId, idempotency_key: idempotencyKey };
   } catch (cause) {
     if (sent) throw cause;
-    await resolveSendAttempt(env.DB, { attemptId: claimId, outcome: "failed", error: errorText(cause) });
+    await resolveSendAttempt(env.DB, {
+      attemptId: claimId,
+      idempotencyKey,
+      outcome: "failed",
+      error: errorText(cause),
+    });
     return { outcome: "failed", attempt_id: claimId, idempotency_key: idempotencyKey };
   }
 }
@@ -291,7 +316,7 @@ async function deliverToOwner(env: Env, message: DigestMessage): Promise<Deliver
     idempotencyKey,
     send: async () => {
       const token = await ensureUnsubscribeToken(env, target);
-      const email = render(digest, target.target_value, token);
+      const email = render(digest, { to: target.target_value, token, owner: true });
       return sendMessage(env.EMAIL, email);
     },
     onSent: () => recordBriefSent(env, { digest, target, attemptId: claim.id }),
@@ -313,7 +338,7 @@ async function sendToTeammate(env: Env, digest: MessageRow, mate: TargetRow): Pr
     idempotencyKey,
     send: async () => {
       const token = await ensureUnsubscribeToken(env, mate);
-      return sendMessage(env.EMAIL, render(digest, mate.target_value, token));
+      return sendMessage(env.EMAIL, render(digest, { to: mate.target_value, token, owner: false }));
     },
   });
 }
@@ -608,8 +633,14 @@ async function postChangeToSlack(
     idempotencyKey,
     send: async () => {
       const text = slackText(change, payload, await readChangeMark(env, payload.diffKey));
-      const posted = await postToSlack(target.target_value, text);
-      return posted ? { outcome: "sent", error: null } : { outcome: "failed", error: "slack did not accept the post" };
+      const posted = await postToSlackOutcome(target.target_value, text);
+      if (posted === "revoked") {
+        await disconnectSlackTarget(env.DB, target.id);
+        return { outcome: "sent", error: "slack webhook revoked; target disconnected" };
+      }
+      return posted === "sent"
+        ? { outcome: "sent", error: null }
+        : { outcome: "failed", error: "slack did not accept the post" };
     },
   });
 }

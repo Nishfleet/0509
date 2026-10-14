@@ -103,10 +103,6 @@ describe("magic-link captcha", () => {
   });
 });
 
-// The Access pre-clearance path (#4702, #5631): a request carrying a verified
-// service-token assertion is already authenticated at the edge, so the
-// captcha does not apply to it. Everything else — a forged header, a
-// user-session assertion, no header — is still checked.
 const ACCESS_AUD = "aud-tag-test";
 let accessIssuerSeq = 0;
 function freshAccessIssuer() {
@@ -222,11 +218,6 @@ describe("magic-link captcha access pre-clearance", () => {
   });
 });
 
-// #5640: the e2e lane drives the route action, and React Router submits
-// <Form> posts to `/login.data` — a path Access does not front. The only
-// credential on that request is the CF_Authorization cookie (the same JWT
-// Access would inject as cf-access-jwt-assertion). The action must still
-// reach {sent}; a forged or user-session cookie must still refuse.
 describe("login form action access pre-clearance", () => {
   const keys = ["ACCESS_TEAM_DOMAIN", "ACCESS_AUD", "EMAIL"] as const;
   const saved = new Map<string, unknown>();

@@ -4,16 +4,6 @@ import { BRAND_LINES_QUERY, parseBriefPayload, type BriefPayload } from "../../a
 import { PROBE, URL_PROBE, expectNoHtmlInjection } from "../email-html-injection";
 import { renderBrief } from "../../workers/delivery/brief-template";
 
-/**
- * The P7.3 slice: render and order, not send. These tests hold the four
- * properties docs/engines/delivery.md §4b makes non-negotiable — the brief
- * never re-ranks, never re-judges, keeps the contract's block order, and keeps
- * the quiet week — and the three the contract's rule list makes non-negotiable
- * — off brands absent, screenshots linked, dates in the workspace timezone.
- * The send itself, the one-click unsubscribe route and the delivered-once
- * constraint are the other three P7.x packets, and their proofs are theirs.
- */
-
 const CONTEXT = {
   unsubscribe_url: "https://0509.io/u/opaque-token",
   asset_base_url: "https://assets.0509.io",
@@ -111,6 +101,21 @@ function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
     ...overrides,
   };
 }
+
+describe("a mark without a title", () => {
+  it("links the source's host, never the raw address", () => {
+    const { html } = renderBrief(
+      payload({
+        read_this_first: [
+          { ...payload().read_this_first[0], title: "", url: "https://www.kindred.example/pricing?x=1" },
+        ],
+      }),
+      CONTEXT,
+    );
+    expect(html).toContain(">kindred.example</a>");
+    expect(html).not.toContain(">https://www.kindred.example");
+  });
+});
 
 describe("brief block order", () => {
   it("renders the five blocks in the contract's order", () => {
@@ -662,12 +667,6 @@ describe("the subject line", () => {
   });
 });
 
-/**
- * 0509#7020: the brief escapes about 27 sites by hand. This table plants the
- * injection probe in every string field that reaches the html, one row per
- * field, so a missed escapeHtml anywhere in the template turns CI red — no
- * new renderer, the plain template modules stay.
- */
 function injectionPayload(): BriefPayload {
   return {
     workspace_id: "ws_probe",
@@ -746,7 +745,7 @@ describe("every string field carries the injection probe escaped, never raw (050
   });
   const quietWithDegraded = (patch: Partial<BriefPayload["checked"]["degraded_sources"][number]>): BriefPayload => ({
     ...base,
-    // The degraded-source names reach the html only in the quiet-week line.
+
     is_quiet_week: true,
     read_this_first: [],
     checked: { ...base.checked, degraded_sources: [{ ...base.checked.degraded_sources[0], ...patch }] },
@@ -840,5 +839,31 @@ describe("the rank-over-time line", () => {
   ])("is left out of the email for %s, as it is in the app", (_name, change) => {
     const { text } = renderBrief(payload({ headline_earlier: { rank: 5, weeks: 6 }, ...change }), CONTEXT);
     expect(text).not.toContain("Up from");
+  });
+});
+
+describe("the one action", () => {
+  const OPEN = { ...CONTEXT, open_url: "https://0509.io/app/brief" };
+
+  it("is a single Open in Five to Nine button right under the headline, in both parts", () => {
+    const { html, text } = renderBrief(payload(), OPEN);
+    expect(html).toContain(">Open in Five to Nine</a>");
+    expect(html.match(/Open in Five to Nine/g)).toHaveLength(1);
+    expect(html.indexOf("Open in Five to Nine")).toBeLessThan(html.indexOf("Your tracked brands"));
+    expect(text).toContain("Open in Five to Nine: https://0509.io/app/brief");
+  });
+
+  it("is left out when there is no link, as for a teammate who has no account", () => {
+    const { html, text } = renderBrief(payload(), CONTEXT);
+    expect(html).not.toContain("Open in Five to Nine");
+    expect(text).not.toContain("Open in Five to Nine");
+  });
+
+  it("never shows a raw address as link text for an untitled mark", () => {
+    const base = payload();
+    const mark = { ...base.read_this_first[0], title: "", url: "https://social.example/ads/abc123" };
+    const { html } = renderBrief({ ...base, read_this_first: [mark as (typeof base.read_this_first)[number]] }, OPEN);
+    expect(html).toContain(">social.example</a>");
+    expect(html).not.toMatch(/>\s*https?:\/\/[^<]*</);
   });
 });
