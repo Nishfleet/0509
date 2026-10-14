@@ -130,6 +130,6 @@ export async function classifyNavPages({
 
   await insertVerdicts(verdictRows);
   await upsertJudgedPages(rows);
-  if (judged.length < stale.length) throw refusal;
+  if (judged.length < stale.length) throw refusal ?? new Error("page_role left pages unanswered");
   return rows;
 }

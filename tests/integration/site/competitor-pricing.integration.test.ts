@@ -132,6 +132,33 @@ describe("a competitor's pricing page", () => {
     expect(await classifyCompetitorSites("2026-10-06T02:00:00Z")).toBe(0);
   });
 
+  it("keeps the verdicts that landed when Jev refuses the pricing link, defers the home page, and retries it later", async () => {
+    Reflect.set(env, "AI", {
+      run(_model: string, request: { questions: Record<string, { type: string }> }) {
+        if (JSON.stringify(request).includes("/plans")) return Promise.reject(new Error("2003: Rate limit exceeded"));
+        return Promise.resolve({ answers: { page_role: { type: "choice", choice: "other" } } });
+      },
+    });
+    const pages = async (): Promise<string[]> => {
+      const rows = await env.DB.prepare("SELECT url, role, links_read_at FROM page WHERE entity_id = ?1 ORDER BY url")
+        .bind(RIVAL)
+        .all<{ url: string; role: string; links_read_at: string | null }>();
+      return rows.results.map((row) => `${row.url}:${row.role}:${row.links_read_at === null ? "unread" : "read"}`);
+    };
+
+    expect(await classifyCompetitorSites(NOW)).toBe(1);
+    expect(await pages()).toEqual([`${HOME}:home:unread`, `https://rival-shop.com/about:other:unread`]);
+
+    installJev();
+    expect(await classifyCompetitorSites("2026-10-03T02:00:00Z")).toBe(0);
+    expect(await classifyCompetitorSites("2026-10-06T02:00:00Z")).toBe(1);
+    expect(await pages()).toEqual([
+      `${HOME}:home:read`,
+      `https://rival-shop.com/about:other:unread`,
+      `${PLANS}:pricing:unread`,
+    ]);
+  });
+
   it("marks the home page as read after a pass that finds no pricing page, so it is not read again", async () => {
     const quiet = HOME_HTML.replace("/plans", "/team");
     vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
