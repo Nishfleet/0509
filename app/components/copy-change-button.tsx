@@ -3,7 +3,6 @@ import type { ReactElement } from "react";
 
 import { changeSummary, type SummarisableChange } from "../lib/change-summary";
 import { copyToClipboard } from "../lib/copy-to-clipboard";
-import { toastSaved } from "./toaster";
 import { Button } from "./ui/button";
 
 export function CopyChangeButton({ change }: { change: SummarisableChange }): ReactElement {
@@ -17,7 +16,10 @@ export function CopyChangeButton({ change }: { change: SummarisableChange }): Re
         onClick={() => {
           void copyToClipboard(changeSummary(change)).then((result) => {
             setState(result);
-            if (result === "copied") toastSaved("Copied for the team");
+            if (result === "copied")
+              void import("./toaster").then((module) => {
+                module.toastSaved("Copied for the team");
+              });
           });
         }}
       >

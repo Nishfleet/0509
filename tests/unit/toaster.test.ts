@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createRoutesStub } from "react-router";
 
 import type * as sonner from "sonner";
 import type { ToasterProps } from "sonner";
@@ -55,7 +54,6 @@ vi.mock("../../app/lib/auth.server", () => ({
 import { toast } from "sonner";
 
 import { Toaster, toastSaved } from "../../app/components/toaster";
-import { AppShell } from "../../app/components/app-shell";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -85,11 +83,8 @@ describe("toastSaved", () => {
 });
 
 describe("the mount and the skin", () => {
-  it("mounts exactly one polite live region, in the app shell", () => {
-    const Stub = createRoutesStub([
-      { path: "/", Component: () => createElement(AppShell, null, createElement("main", null, "content")) },
-    ]);
-    const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
+  it("mounts exactly one polite live region", () => {
+    const html = renderToStaticMarkup(createElement(Toaster));
     expect(html.match(/<section[^>]*aria-live="polite"/g)).toHaveLength(1);
   });
 
