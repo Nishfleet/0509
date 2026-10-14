@@ -1,12 +1,11 @@
-import { useState } from "react";
 import type { ReactElement } from "react";
 
 import { changeSummary, type SummarisableChange } from "../lib/change-summary";
-import { copyToClipboard } from "../lib/copy-to-clipboard";
+import { useCopyState } from "../lib/use-copy-state";
 import { Button } from "./ui/button";
 
 export function CopyChangeButton({ change }: { change: SummarisableChange }): ReactElement {
-  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const [state, copy] = useCopyState();
   return (
     <div className="mt-3">
       <Button
@@ -14,8 +13,7 @@ export function CopyChangeButton({ change }: { change: SummarisableChange }): Re
         data-testid="copy-change"
         variant="secondary"
         onClick={() => {
-          void copyToClipboard(changeSummary(change)).then((result) => {
-            setState(result);
+          void copy(changeSummary(change)).then((result) => {
             if (result === "copied")
               void import("./toaster").then((module) => {
                 module.toastSaved("Copied for the team");
