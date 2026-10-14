@@ -5,7 +5,7 @@ import { ErrorPage } from "./components/error-page";
 import { hasSessionCookie } from "./lib/auth.server";
 import { errorCopy } from "./lib/error-copy";
 import { FACES_SCRIPT } from "./lib/faces-script";
-import "./app.css";
+import appStylesheet from "./app.css?url";
 
 const SERVER_ONLY_ROUTES: ReadonlySet<string> = new Set([
   "routes/landing",
@@ -31,9 +31,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <link rel="icon" href="/logo.svg" type="image/svg+xml" />
         <link rel="icon" href="/favicon.ico" sizes="48x48" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="stylesheet" href={appStylesheet} precedence="default" />
         {serverOnly ? null : (
           <>
-            <link rel="stylesheet" href="/app-faces.css" />
+            <link rel="stylesheet" href="/app-faces.css" precedence="default" />
             <link
               rel="preload"
               href="/fonts/bricolage-hero.woff2"
