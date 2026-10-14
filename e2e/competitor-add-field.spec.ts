@@ -16,4 +16,5 @@ test("after adding a competitor the field is empty and the new brand is listed",
 
   await expect(page.getByRole("list", { name: "Competitors" }).getByText("example.com")).toBeVisible();
   await expect(field).toHaveValue("");
+  await expect(page.getByRole("status").filter({ hasText: "Added. We're reading their site now." })).toBeVisible();
 });

@@ -88,14 +88,32 @@ function useClearedAfterAdd(adding: boolean, message: string | null | undefined)
   return formRef;
 }
 
+function AddNotice({ message, added }: { message: string | null | undefined; added: boolean }): ReactElement | null {
+  if (message) {
+    return (
+      <p id="add-competitor-error" role="alert" className="mt-3 text-[0.95rem]">
+        {message}
+      </p>
+    );
+  }
+  if (!added) return null;
+  return (
+    <p role="status" className="mt-3 text-body-sm text-ink-soft">
+      Added. We're reading their site now.
+    </p>
+  );
+}
+
 export function AddCompetitor({
   message,
   upgradePlanId,
   returning,
+  added,
 }: {
   message: string | null | undefined;
   upgradePlanId?: PlanId | null | undefined;
   returning?: boolean | undefined;
+  added?: boolean | undefined;
 }): ReactElement {
   const navigation = useNavigation();
   const adding = navigation.state !== "idle" && navigation.formData?.get("intent") === "add";
@@ -125,11 +143,7 @@ export function AddCompetitor({
             {adding ? "Adding…" : "Add"}
           </Button>
         </div>
-        {message ? (
-          <p id="add-competitor-error" role="alert" className="mt-3 text-[0.95rem]">
-            {message}
-          </p>
-        ) : null}
+        <AddNotice message={message} added={added === true && !adding} />
       </Form>
       {upgradePlanId ? <PlanGate planId={upgradePlanId} returning={returning === true} /> : null}
     </div>

@@ -6,7 +6,7 @@ import { pausedSentence } from "../../workers/standing/compose-brief";
 
 /**
  * The quiet week is the one block the brief is allowed to drop: an empty
- * read-this-first would render as "Nothing this week needed reading first.",
+ * read-this-first would render as "the nothing-needed-reading line",
  * which is a lie on a week D4 had nothing to say. And when engine 5's
  * canaries are red the brief must not claim a quiet week at all — it names
  * the blind sources and when they last landed, per docs/engines/standing-home.md §7.
