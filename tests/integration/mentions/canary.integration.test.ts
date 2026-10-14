@@ -23,13 +23,6 @@ const ONE_ARTICLE = {
 
 let runs = 0;
 
-/**
- * A dedicated mentions source row for the canary cases: a distinct platform
- * keeps it clear of the seeded rows' UNIQUE (platform, kind, plugin_key), and
- * is_enabled = 0 keeps readActiveWatches from auto-watching it, so the sibling
- * sweep suite's target counts are untouched. It still routes to the real gdelt
- * adapter through plugin_key.
- */
 async function seedCanarySource(slot: string): Promise<CanarySource> {
   const sourceId = `src_canary_${slot}`;
   await env.DB.prepare(

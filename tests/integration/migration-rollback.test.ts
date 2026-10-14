@@ -1,19 +1,6 @@
 import { applyD1Migrations, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
-/**
- * docs/REBUILD-SCHEMA.md "When a migration is wrong" — the additive half,
- * proven in real workerd against real local D1. D1 migrations are
- * forward-only and tracked by filename in d1_migrations, so the way back
- * from a wrong additive file is a newer file that undoes it, never an
- * un-apply. The setup file has already applied the real chain, so the
- * "before" snapshot below is the intended production schema.
- *
- * Issue #4180. The file carries no `.integration.` infix because the
- * issue's acceptance names `tests/integration/migration-rollback.test.ts`
- * verbatim; vitest.config.ts lists it in the workers project explicitly.
- */
-
 const SCHEMA_DUMP = `SELECT type, name, tbl_name, sql FROM sqlite_master
   WHERE name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name != 'd1_migrations'
   ORDER BY type, name`;
