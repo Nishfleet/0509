@@ -23,7 +23,15 @@ test("pricing opens on one headline and shows the plan buttons without scrolling
   const headline = page.getByRole("heading", { level: 1 });
   await expect(headline).toHaveCount(1);
   await expect(headline).toHaveText("Pick how closely you watch.");
-  await expect(page.locator("main h2").first()).not.toHaveText("Pick how closely you watch.");
+  await expect(page.getByRole("heading", { level: 2, name: "Pick how closely you watch." })).toHaveCount(0);
+
+  const levels = await page
+    .locator("h1, h2, h3, h4, h5, h6")
+    .evaluateAll((els) => els.map((el) => Number(el.tagName.slice(1))));
+  expect(levels[0]).toBe(1);
+  for (let i = 1; i < levels.length; i += 1) {
+    expect(levels[i] - levels[i - 1]).toBeLessThanOrEqual(1);
+  }
 
   const buttons = page.getByRole("link", { name: /^Start with / });
   await expect(buttons).toHaveCount(3);
