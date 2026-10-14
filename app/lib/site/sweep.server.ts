@@ -382,7 +382,7 @@ async function fileUnlessDiscarded(change: SiteChangeInput, payloadJson: string,
   const { target } = change;
   const competitorJudgment = await judgeCompetitorChange(change);
   if (competitorJudgment?.noteworthy?.band === "discard") {
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "site.change_discarded",
         pageId: target.pageId,
