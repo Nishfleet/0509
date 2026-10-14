@@ -6,16 +6,6 @@ import { COUNT_BUCKETS } from "../../../app/lib/standing-score.server";
 import type { RefreshInput } from "../../../workers/standing/refresh";
 import { refreshWorkspaceScores } from "../../../workers/standing/refresh";
 
-/**
- * The nightly refresh against the real D1 the deploy ships.
- *
- * One call recomputes every ON entity's score for one workspace and one week:
- * the bucket counts run as the COUNT_BUCKETS SQL, the weights resolve as of the
- * week, and the upsert writes only score and computed_at in a single batch. The
- * seed pins the arithmetic (A = 3.9, B = 3.4, C = 0) and the EXPLAIN test pins
- * the index the counting query must use.
- */
-
 const WINDOW_START = "2026-09-15T00:00:00.000Z";
 const WINDOW_END = "2026-09-22T00:00:00.000Z";
 const WEEK_START = "2026-09-21T00:00:00.000Z";

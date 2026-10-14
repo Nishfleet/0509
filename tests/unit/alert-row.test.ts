@@ -1,10 +1,15 @@
-import { createElement } from "react";
+import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { AlertFeedRow, type AlertFeedItem } from "../../app/components/alert-row";
 import { buttonVariants } from "../../app/components/ui/button";
 import type { BriefPayload } from "../../app/lib/brief-payload";
+
+function inRouter(element: ReactElement): string {
+  return renderToStaticMarkup(createElement(MemoryRouter, null, element));
+}
 
 const ROW_NAME_TITLE = '<h3 class="font-display text-row-name font-bold [overflow-wrap:anywhere]">';
 const META_WHEN = 'class="mt-2 block font-mono text-meta text-ink-soft uppercase"';
@@ -158,7 +163,7 @@ const CONTENT_ITEM: AlertFeedItem = {
 };
 
 function render(item: AlertFeedItem): string {
-  return renderToStaticMarkup(createElement(AlertFeedRow, { item, eager: false }));
+  return inRouter(createElement(AlertFeedRow, { item, eager: false }));
 }
 
 describe("an alert feed row", () => {
@@ -243,7 +248,7 @@ describe("an alert feed row", () => {
 
 describe("hiring row", () => {
   it("links the role out safely, names the brand with its place and team, and shows the age", () => {
-    const html = renderToStaticMarkup(createElement(AlertFeedRow, { item: HIRING_ITEM, eager: false }));
+    const html = inRouter(createElement(AlertFeedRow, { item: HIRING_ITEM, eager: false }));
     expect(html).toContain('data-testid="hiring-row"');
     expect(html).toContain('href="https://boards.greenhouse.io/zephyr/jobs/1"');
     expect(html).toContain('rel="noopener noreferrer nofollow"');
@@ -255,7 +260,7 @@ describe("hiring row", () => {
   it("leaves out the place and team when the posting has none", () => {
     const item: AlertFeedItem =
       HIRING_ITEM.kind === "hiring" ? { ...HIRING_ITEM, hiring: { ...HIRING_ITEM.hiring, detail: null } } : HIRING_ITEM;
-    const html = renderToStaticMarkup(createElement(AlertFeedRow, { item, eager: false }));
+    const html = inRouter(createElement(AlertFeedRow, { item, eager: false }));
     expect(html).toContain("Zephyrwear is hiring<");
   });
 });
@@ -298,7 +303,7 @@ describe("new-tab link a11y", () => {
   }
 
   function renderItem(item: AlertFeedItem): string {
-    return renderToStaticMarkup(createElement(AlertFeedRow, { item, eager: false }));
+    return inRouter(createElement(AlertFeedRow, { item, eager: false }));
   }
 
   for (const [kind, item, linkClass] of [

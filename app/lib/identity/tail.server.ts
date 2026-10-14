@@ -9,10 +9,11 @@ import { insertWatches, readEntityWatches } from "../data/watch.server";
 import type { EntityWatch, NewWatch } from "../data/watch.server";
 import { readOrArchive } from "../fetch/archive.server";
 import { readUrl, probeFailureReason, type ReadUrlResult } from "../fetch/transport.server";
+import { findHiddenPricing } from "../site/pricing-probe.server";
 import { discoverBoard } from "../hiring/discover-board.server";
 import { sha256Hex } from "../sha256";
 import { brandBudget, readCachedSiteProof, readSiteCard } from "./card.server";
-import { extractIdentity } from "./extract";
+import { extractIdentity, type IdentityExtract } from "./extract";
 import { normaliseSubject, type Subject } from "./normalise";
 import { classifyNavPages } from "./page-role.server";
 import { identityTailInstanceId } from "./tail-instance.server";
@@ -65,6 +66,41 @@ async function readHome(
   return readOrArchive(live, { url: homepageUrl, ...archive });
 }
 
+async function learnFromHome(
+  params: IdentityTailParams,
+  home: { url: string; extract: IdentityExtract },
+  now: string,
+): Promise<void> {
+  const { extract } = home;
+  await fillCompetitorSocials({
+    workspaceId: params.workspaceId,
+    entityId: params.entityId,
+    socialsJson: JSON.stringify(extract.socials),
+    readAt: now,
+  });
+  const entity = { id: params.entityId, domain: params.domain };
+  await classifyNavPages({ workspaceId: params.workspaceId, entity, pages: extract.navPages, now });
+  try {
+    await findHiddenPricing({
+      workspaceId: params.workspaceId,
+      entity,
+      homepageUrl: home.url,
+      homeTitle: extract.nameSources.title,
+      navPages: extract.navPages,
+      now,
+    });
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "identity.pricing_probe_failed",
+        error: String(error)
+          .replace(/https?:\/\/\S+/g, "<url>")
+          .slice(0, 300),
+      }),
+    );
+  }
+}
+
 export async function classifyTailPages(
   params: IdentityTailParams,
   now: string,
@@ -78,7 +114,7 @@ export async function classifyTailPages(
     });
     if (!page.ok) {
       const subjectSha256 = await sha256Hex(params.domain);
-      console.log(
+      console.warn(
         JSON.stringify({
           event: "identity-page-role-skipped",
           workspaceId: params.workspaceId,
@@ -89,22 +125,11 @@ export async function classifyTailPages(
       return false;
     }
     const extract = await extractIdentity(page.html, params.homepageUrl);
-    await fillCompetitorSocials({
-      workspaceId: params.workspaceId,
-      entityId: params.entityId,
-      socialsJson: JSON.stringify(extract.socials),
-      readAt: now,
-    });
-    await classifyNavPages({
-      workspaceId: params.workspaceId,
-      entity: { id: params.entityId, domain: params.domain },
-      pages: extract.navPages,
-      now,
-    });
+    await learnFromHome(params, { url: params.homepageUrl, extract }, now);
     return true;
   } catch (error) {
     const subjectSha256 = await sha256Hex(params.domain);
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "identity-page-role-skipped",
         workspaceId: params.workspaceId,

@@ -1,25 +1,37 @@
 import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
 import { formatDate } from "./brief-template";
-import { EYEBROW, FONT, emailDocument } from "./email-shell";
+import { supportLineHtml, supportLineText } from "./alert-footer";
+import { BODY, EYEBROW, HEADLINE, emailDocument, linkParagraph } from "./email-shell";
 
 export interface WelcomeContext {
   rivals: readonly string[];
   rival_count: number;
   first_brief_at: string | null;
   timezone: string;
-  alerts_link: string;
+  home_link: string;
 }
 
-const HEADLINE = `margin:0;font-family:${FONT};font-size:24px;line-height:30px;font-weight:800;letter-spacing:-0.02em;`;
-const BODY = `margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;`;
-
-function watching(ctx: WelcomeContext): string {
-  if (ctx.rival_count === 0)
-    return "Add the rivals you want to keep an eye on and we'll start reading their sites straight away.";
+function rivalNames(ctx: WelcomeContext): string {
   const more = ctx.rival_count - ctx.rivals.length;
-  const names = ctx.rivals.join(", ") + (more > 0 ? ` and ${String(more)} more` : "");
-  return `We're watching ${names}. We're reading their sites now, so anything that changes from here shows up as a before and after.`;
+  return ctx.rivals.join(", ") + (more > 0 ? ` and ${String(more)} more` : "");
+}
+
+function watching(ctx: WelcomeContext, namedInSubject: boolean): string {
+  if (ctx.rival_count === 0) return "Add the rivals you want to keep an eye on and we'll start reading their sites.";
+  if (namedInSubject) return "We read each site every night. Anything that changes is kept as a before and after.";
+  return `We're watching ${rivalNames(ctx)}. Anything that changes on their sites from here is kept as a before and after.`;
+}
+
+const SUBJECT_MAX = 70;
+
+function subjectFor(ctx: WelcomeContext): string {
+  if (ctx.rival_count === 0 || ctx.rivals.length === 0) return "Welcome to Five to Nine";
+  const shown = ctx.rivals.slice(0, 2);
+  const more = ctx.rival_count - shown.length;
+  const names = more > 0 ? `${shown.join(", ")} and ${String(more)} more` : shown.join(" and ");
+  const subject = `We're watching ${names}`;
+  return subject.length <= SUBJECT_MAX ? subject : "Welcome to Five to Nine";
 }
 
 function copy(ctx: WelcomeContext) {
@@ -27,11 +39,12 @@ function copy(ctx: WelcomeContext) {
     ctx.first_brief_at === null
       ? "Your first ranking arrives with your weekly brief."
       : `Your first ranking arrives with your weekly brief on ${formatDate(ctx.first_brief_at, ctx.timezone, false)}.`;
+  const subject = subjectFor(ctx);
   return {
-    subject: "Welcome to Five to Nine",
+    subject,
     lines: [
-      watching(ctx),
-      "Pricing changes and site breakages email you the same day. Everything else waits for the brief.",
+      watching(ctx, subject.startsWith("We're watching") && ctx.rivals.length <= 2),
+      "A pricing change gets its own email after our nightly read, and so does a problem with your own site. Everything else waits for the brief.",
       brief,
     ],
   };
@@ -39,17 +52,17 @@ function copy(ctx: WelcomeContext) {
 
 export function renderWelcome(ctx: WelcomeContext): RenderedBrief {
   const { subject, lines } = copy(ctx);
-  const href = escapeHtml(ctx.alerts_link);
   return {
     subject,
-    text: [subject, ...lines, `See what changed: ${ctx.alerts_link}`].join("\n\n"),
+    text: [subject, ...lines, `Open your first look: ${ctx.home_link}`, supportLineText()].join("\n\n"),
     html: emailDocument(
       subject,
       [
         `<p class="brief-muted" style="${EYEBROW}">You're in</p>`,
         `<p style="${HEADLINE}">${escapeHtml(subject)}</p>`,
         ...lines.map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`),
-        `<p style="${BODY}"><a class="brief-ink" href="${href}">See what changed</a></p>`,
+        linkParagraph("Open your first look", ctx.home_link),
+        supportLineHtml(),
       ].join(""),
       lines[0],
     ),

@@ -2,15 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { lintTextAt } from "./eslint-lint-text";
 
-// #4313: the one-writer-per-table lint rule used to match kysely call shapes
-// (insertInto/updateTable/deleteFrom) that no longer exist after the raw-D1
-// rebuild, so a second workspace writer sat in app/lib/workspace.server.ts
-// while `eslint .` stayed green. The rule now matches the DML statement text
-// itself — in a module constant or an inline prepare() argument — everywhere
-// under app/** and workers/** except the paved path app/lib/data/**. These
-// probes boot the real eslint.config.js (same rig as eslint-ignores.test.ts)
-// so a restated copy cannot drift from the gate.
-
 const WRITER_MESSAGE = "One writer per table";
 
 const CONST_DML = `interface ProbeDb {
@@ -29,8 +20,6 @@ const INLINE_DML = `export async function runProbe(
 }
 `;
 
-// Found in review of #4336: a leading anchor alone let these through. Each one is
-// a write the gate must still see.
 const WRITE_VARIANTS: { name: string; code: string }[] = [
   {
     name: "INSERT OR IGNORE INTO",
@@ -73,17 +62,12 @@ export function runProbe(): string {
   },
 ];
 
-// A WITH-led read is not a write; the gate must leave it alone.
 const READ_CTE = `const PROBE = "WITH n AS (SELECT 1 AS one) SELECT one FROM n";
 export function runProbe(): string {
   return PROBE;
 }
 `;
 
-// The B note on #4336: the leading anchor alone let a bare `UPDATE\s` match
-// prose that merely starts with "Update " (a toast copy like "Update saved").
-// A statement needs the table-then-SET tail (or the end of an interpolated
-// quasi above), so this copy must stay unblocked. 0509#4383.
 const PROSE_UPDATE = `export function savedCopy(): string {
   return "Update saved";
 }
