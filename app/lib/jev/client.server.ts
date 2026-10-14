@@ -6,8 +6,9 @@ import { JEV_CALLS_PER_DAY, takeAiCall, takeJevWorkspaceShare } from "../ai/dail
 import { aiGatewayId } from "../ai/gateway.server";
 import { AiSpendOffError, refuseWhenAiSpendOff } from "../ai/spend.server";
 import { insertJevFailure } from "../data/jev_failure.server";
-import { readCachedChoice, readCachedNoul } from "../data/jev_verdict.server";
+import { readCachedChoice, readCachedNoul, readSharedChoice, readSharedNoul } from "../data/jev_verdict.server";
 import { sha256Hex } from "../sha256";
+import { noteSharedOutcome, sharedChecksOn } from "../shared-checks.server";
 import { classifyJevFailure, RATE_LIMITED } from "./failure";
 import { isBillingRefusal } from "./refusal";
 import type { AttemptPolicy, NoulQuestion } from "./thresholds";
@@ -25,6 +26,7 @@ export const CHOICE_RETRIES: AttemptPolicy = { maxAttempts: 2, retryDelayMs: 300
 export interface NoulVerdict {
   questionId: string;
   inputHash: string;
+  sharedHash?: string;
   p: number;
   cached: boolean;
 }
@@ -39,6 +41,7 @@ export interface ChoiceQuestion {
 export interface ChoiceVerdict {
   questionId: string;
   inputHash: string;
+  sharedHash?: string;
   choice: string;
   cached: boolean;
 }
@@ -82,6 +85,7 @@ interface MixedReply {
 export interface MixedQuestions {
   noul: NoulQuestion;
   choice: ChoiceQuestion;
+  shared?: boolean;
 }
 
 export interface MixedVerdict {
@@ -196,7 +200,7 @@ function missing(what: string, raw: unknown, issues: readonly ParseIssue[]): Jev
   return new JevUnavailableError(new Error(`answer missing its ${what}; ${shapeOf(raw, issues)}`));
 }
 
-function inputHash(workspaceId: string, question: NoulQuestion, state: unknown): Promise<string> {
+function inputHash(workspaceId: string | null, question: NoulQuestion, state: unknown): Promise<string> {
   return sha256Hex(
     JSON.stringify({ workspace: workspaceId, question: question.id, instructions: question.instructions, state }),
   );
@@ -218,7 +222,7 @@ function choiceAsk(question: ChoiceQuestion): {
   return { type: "choice", instructions: question.instructions, criteria: question.options };
 }
 
-function choiceHash(workspaceId: string, question: ChoiceQuestion, state: unknown): Promise<string> {
+function choiceHash(workspaceId: string | null, question: ChoiceQuestion, state: unknown): Promise<string> {
   return sha256Hex(
     JSON.stringify({
       workspace: workspaceId,
@@ -401,31 +405,68 @@ function choiceOf(reply: MixedReply, question: ChoiceQuestion): string {
   return answer.choice;
 }
 
+interface MixedHashes {
+  noul: string;
+  choice: string;
+  noulShared?: string;
+  choiceShared?: string;
+}
+
+async function mixedHashes(workspaceId: string, questions: MixedQuestions, state: unknown): Promise<MixedHashes> {
+  const scoped = {
+    noul: await inputHash(workspaceId, questions.noul, state),
+    choice: await choiceHash(workspaceId, questions.choice, state),
+  };
+  if (questions.shared !== true || !sharedChecksOn()) return scoped;
+  return {
+    ...scoped,
+    noulShared: await inputHash(null, questions.noul, state),
+    choiceShared: await choiceHash(null, questions.choice, state),
+  };
+}
+
+async function sharedAnswer<T>(hash: string | undefined, read: (hash: string) => Promise<T | null>): Promise<T | null> {
+  if (hash === undefined) return null;
+  const found = await read(hash);
+  noteSharedOutcome("verdict", found === null ? "no_match" : "hit");
+  return found;
+}
+
+async function cachedMixed(questions: MixedQuestions, hashes: MixedHashes) {
+  const noul =
+    (await readCachedNoul(questions.noul.id, hashes.noul)) ??
+    (await sharedAnswer(hashes.noulShared, (hash) => readSharedNoul(questions.noul.id, hash)));
+  const choice =
+    (await readCachedChoice(questions.choice.id, hashes.choice)) ??
+    (await sharedAnswer(hashes.choiceShared, (hash) => readSharedChoice(questions.choice.id, hash)));
+  return { noul, choice };
+}
+
 export async function askMixed(workspaceId: string, questions: MixedQuestions, state: unknown): Promise<MixedVerdict> {
-  const noulInput = await inputHash(workspaceId, questions.noul, state);
-  const choiceInput = await choiceHash(workspaceId, questions.choice, state);
-  const cachedNoul = await readCachedNoul(questions.noul.id, noulInput);
-  const cachedChoice = await readCachedChoice(questions.choice.id, choiceInput);
-  if (cachedNoul === null || cachedChoice === null) {
+  const hashes = await mixedHashes(workspaceId, questions, state);
+  const cached = await cachedMixed(questions, hashes);
+  if (cached.noul === null || cached.choice === null) {
     await takeShare(workspaceId, `${questions.noul.id},${questions.choice.id}`);
   }
   const reply = await answerMixed(
-    mixedAsk(questions, { noul: cachedNoul === null, choice: cachedChoice === null }),
+    mixedAsk(questions, { noul: cached.noul === null, choice: cached.choice === null }),
     state,
-    cachedChoice === null ? (questions.choice.retries ?? CHOICE_RETRIES) : undefined,
+    cached.choice === null ? (questions.choice.retries ?? CHOICE_RETRIES) : undefined,
   );
   return {
     noul: {
       questionId: questions.noul.id,
-      inputHash: noulInput,
-      p: cachedNoul ?? noulOf(reply, questions.noul),
-      cached: cachedNoul !== null,
+      inputHash: hashes.noul,
+      ...(hashes.noulShared === undefined ? {} : { sharedHash: hashes.noulShared }),
+      p: cached.noul ?? noulOf(reply, questions.noul),
+      cached: cached.noul !== null,
     },
     choice: {
       questionId: questions.choice.id,
-      inputHash: choiceInput,
-      choice: cachedChoice ?? choiceOf(reply, questions.choice),
-      cached: cachedChoice !== null,
+      inputHash: hashes.choice,
+      ...(hashes.choiceShared === undefined ? {} : { sharedHash: hashes.choiceShared }),
+      choice: cached.choice ?? choiceOf(reply, questions.choice),
+      cached: cached.choice !== null,
     },
   };
 }
