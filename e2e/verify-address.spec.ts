@@ -12,10 +12,12 @@ test("an unknown confirm link is a 200 no-store page that asks to confirm (0509#
   await expect(page.getByRole("heading", { level: 1, name: "Email address confirmed" })).toHaveCount(0);
 });
 
-test("clicking Confirm email address reaches the confirmation page (0509#5811)", async ({ page }) => {
+test("clicking Confirm email address tells an unknown link it has expired (0509#5811)", async ({ page }) => {
   await page.goto(`/v/${unknownToken()}`);
   await page.getByRole("button", { name: "Confirm email address" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Email address confirmed" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "This link has expired or was already used" }),
+  ).toBeVisible();
 });
 
 test("a raw POST to /v/<unknown> answers 200 (0509#5811)", async ({ request }) => {

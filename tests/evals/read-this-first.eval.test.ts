@@ -17,14 +17,6 @@ import {
   type NoulEvalRow,
 } from "./harness";
 
-/**
- * The weekly "read this first" question, scored on the shipped wording.
- *
- * The question constant and the state builder come from app/lib, which is what
- * workers/standing/read-this-first.ts itself asks, so a wording edit and the
- * eval that measures it move together (0509#6163).
- */
-
 interface ReadThisFirstCase extends NoulEvalRow {
   self: { name: string; domain: string } | null;
   subject: ReadThisFirstEntity;

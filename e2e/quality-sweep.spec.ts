@@ -11,7 +11,17 @@ test.skip(
 
 test.setTimeout(180_000);
 
-const PUBLIC_PAGES = ["/", "/pricing", "/privacy", "/terms", "/security", "/status", "/login", "/api/docs"];
+const PUBLIC_PAGES = [
+  "/",
+  "/pricing",
+  "/privacy",
+  "/terms",
+  "/security",
+  "/status",
+  "/login",
+  "/api/docs",
+  "/v/probe-token",
+];
 
 async function sweep(page: Page, testInfo: TestInfo, paths: string[]): Promise<void> {
   const quality = await startQuality(page);

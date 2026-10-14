@@ -8,6 +8,7 @@ import { renderIncidentFixed, renderIncidentOpen } from "../../workers/delivery/
 import { renderRecap } from "../../workers/delivery/recap-template";
 import { renderTrialEnding } from "../../workers/delivery/trial-template";
 import { renderWelcome } from "../../workers/delivery/welcome-template";
+import { renderWinback } from "../../workers/delivery/winback-template";
 
 export interface LifecycleEmail {
   readonly name: string;
@@ -187,6 +188,21 @@ export function lifecycleEmails(): readonly LifecycleEmail[] {
     email(
       "renderRecap, one change and no latest",
       renderRecap({ change_count: 1, latest: null, link: ALERTS, footer: FOOTER }),
+      [ALERTS],
+    ),
+    email(
+      "renderWinback",
+      renderWinback({
+        change_count: 3,
+        latest: { rival: "Kindred", what: "changed its pricing page" },
+        link: ALERTS,
+        footer: FOOTER,
+      }),
+      [ALERTS],
+    ),
+    email(
+      "renderWinback, one change and no latest",
+      renderWinback({ change_count: 1, latest: null, link: ALERTS, footer: FOOTER }),
       [ALERTS],
     ),
     email(

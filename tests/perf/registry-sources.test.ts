@@ -3,13 +3,6 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { SELECT_REGISTRY_SOURCES } from "../../app/lib/data/source.server";
 
-/**
- * The registry read is one indexed source scan over the denormalized
- * source.latest_* facts (parent #5722): no watch or snapshot rows are
- * touched per call, so rows_read stays under 200 at the parent's finish
- * line.
- */
-
 const USER = "user_regperf";
 const WS = "ws_regperf";
 const ENTITY = "ent_regperf";
@@ -69,15 +62,14 @@ async function seed(): Promise<void> {
         kind,
         "gdelt",
         sourceId,
-        // Every third source carries denormalized facts; the rest stay NULL
-        // like a source that has never been fetched.
+
         s % 3 === 0 ? `2026-09-${String(10 + (s % 10)).padStart(2, "0")}T00:00:00Z` : null,
         s % 3 === 0 ? s : null,
         s % 3 === 0 ? s % 5 : null,
       ),
     );
   }
-  // 130 watches spread over the 30 sources, ~15 snapshots per watch.
+
   for (let w = 0; w < WATCH_COUNT; w += 1) {
     const sourceIndex = w % SOURCE_COUNT;
     const sourceId = `src_regperf_${String(sourceIndex).padStart(2, "0")}`;

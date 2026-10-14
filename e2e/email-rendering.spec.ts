@@ -40,17 +40,13 @@ function findings(minimum: number): { overflow: number; low: Finding[] } {
 }
 
 for (const email of lifecycleEmails()) {
-  test(`${email.name} draws without sideways scroll and stays readable in light and dark`, async ({
-    page,
-  }, testInfo) => {
+  test(`${email.name} draws without sideways scroll and stays readable in light and dark`, async ({ page }) => {
     for (const scheme of SCHEMES) {
       await page.emulateMedia({ colorScheme: scheme });
       await page.setContent(email.html);
       const result = await page.evaluate(findings, MIN_CONTRAST);
       expect(result.overflow, `${scheme}: sideways scroll`).toBeLessThanOrEqual(0);
       expect(result.low, `${scheme}: text under ${String(MIN_CONTRAST)}:1`).toEqual([]);
-      const shot = await page.screenshot({ fullPage: true });
-      await testInfo.attach(`${email.name}-${scheme}`, { body: shot, contentType: "image/png" });
     }
   });
 }
