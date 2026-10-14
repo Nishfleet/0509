@@ -287,13 +287,23 @@ describe("one-click unsubscribe (0509#4358, 0509#4593, 0509#5761)", () => {
     expect((await suppressionRows()).map((row) => row.reason)).toEqual(["unsubscribed"]);
   });
 
-  it("(q) confirming an address lifts only the brief stop and keeps an alerts stop", async () => {
+  it("(q) confirming an address keeps an alerts-only stop and drops a full stop the owner resumed", async () => {
+    await unsubscribe(TOKEN, "alerts");
+    await clearBriefSuppression(ADDRESS);
+    expect(await readMailKinds(ADDRESS)).toEqual({ brief: true, alerts: false });
+    expect(await isAddressSuppressed(ADDRESS, "alerts")).toBe(true);
+
     await unsubscribe(TOKEN, "all");
+    await clearBriefSuppression(ADDRESS);
+    expect(await suppressionRows()).toEqual([]);
+  });
+
+  it("(q2) confirming an address lifts a brief-only stop and removes the spent row", async () => {
+    await unsubscribe(TOKEN, "brief");
 
     await clearBriefSuppression(ADDRESS);
 
-    expect(await readMailKinds(ADDRESS)).toEqual({ brief: true, alerts: false });
-    expect(await isAddressSuppressed(ADDRESS, "alerts")).toBe(true);
+    expect(await suppressionRows()).toEqual([]);
   });
 
   it("(r) confirming an address drops a bounce row and a spent opt-out row", async () => {

@@ -44,8 +44,11 @@ const DELETE_SUPPRESSION = `DELETE FROM email_suppression WHERE lower(trim(addre
 const LIFT_BRIEF_STOP = `UPDATE email_suppression SET stops_brief = 0
  WHERE lower(trim(address)) = lower(trim(?)) AND reason = 'unsubscribed'`;
 
-const DELETE_NON_OPT_OUT_SUPPRESSION = `DELETE FROM email_suppression
- WHERE lower(trim(address)) = lower(trim(?1)) AND (reason != 'unsubscribed' OR (stops_brief = 0 AND stops_alerts = 0))`;
+const DELETE_RESUMED_SUPPRESSION = `DELETE FROM email_suppression
+ WHERE lower(trim(address)) = lower(trim(?)) AND (reason != 'unsubscribed' OR (stops_brief = 1 AND stops_alerts = 1))`;
+
+const DELETE_SPENT_SUPPRESSION = `DELETE FROM email_suppression
+ WHERE lower(trim(address)) = lower(trim(?)) AND stops_brief = 0 AND stops_alerts = 0`;
 
 const DELETE_UNSUBSCRIBED_SUPPRESSION = `DELETE FROM email_suppression WHERE lower(trim(address)) = lower(trim(?)) AND reason = 'unsubscribed'`;
 
@@ -116,8 +119,9 @@ export async function clearSuppression(address: string): Promise<void> {
 
 export async function clearBriefSuppression(address: string): Promise<void> {
   await env.DB.batch([
+    env.DB.prepare(DELETE_RESUMED_SUPPRESSION).bind(address),
     env.DB.prepare(LIFT_BRIEF_STOP).bind(address),
-    env.DB.prepare(DELETE_NON_OPT_OUT_SUPPRESSION).bind(address),
+    env.DB.prepare(DELETE_SPENT_SUPPRESSION).bind(address),
   ]);
 }
 
