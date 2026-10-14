@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { saveSlackTarget } from "../../app/lib/data/send_target.server";
+import { readSlackDisconnected, readSlackTarget, saveSlackTarget } from "../../app/lib/data/send_target.server";
 import { CHANGE_DAILY_CAP, deliverChange, handleBatch } from "../../workers/delivery/consumer";
 
 const USER = "user-change-lane";
@@ -237,7 +237,7 @@ describe("rival change email lane (0509#6375)", () => {
     });
 
     it("reports a failed post for retry, without sending the email twice", async () => {
-      await connect(404);
+      await connect(500);
       const sent: EmailMessageBuilder[] = [];
 
       expect((await deliverChange(envWith(sent), { signal_id: SIGNAL })).outcome).toBe("failed");
@@ -246,8 +246,20 @@ describe("rival change email lane (0509#6375)", () => {
       expect(sent).toHaveLength(1);
     });
 
+    it("stops posting and disconnects Slack when the webhook is revoked, and still emails", async () => {
+      const posts = await connect(404);
+      const sent: EmailMessageBuilder[] = [];
+
+      expect((await deliverChange(envWith(sent), { signal_id: SIGNAL })).outcome).toBe("sent");
+
+      expect(sent).toHaveLength(1);
+      expect(posts).toHaveLength(1);
+      expect(await readSlackTarget(env.DB, WS)).toBeNull();
+      expect(await readSlackDisconnected(env.DB, WS)).toBe(true);
+    });
+
     it("re-posts once when Slack recovers on retry, never repeats the email and then stays quiet", async () => {
-      await connect(404);
+      await connect(500);
       const sent: EmailMessageBuilder[] = [];
       expect((await deliverChange(envWith(sent), { signal_id: SIGNAL })).outcome).toBe("failed");
 
