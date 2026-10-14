@@ -82,6 +82,7 @@ describe("DeleteAccount", () => {
       "Every screenshot",
       "Your shared ranking image",
       "Your send history and every brief",
+      "The days you used 0509",
       "Your account, its API keys and connected AI apps",
     ]);
     expect(html).toContain("The emails stop. This can&#x27;t be undone.");
