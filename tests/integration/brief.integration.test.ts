@@ -355,3 +355,32 @@ describe("a zero canary never counts as a source answering, through real D1", ()
     expect(healthyPayload.checked.degraded_source_keys).toEqual([]);
   });
 });
+
+describe("each brand's biggest move reaches its brief line, through real D1", () => {
+  const compose = (workspaceId: string) =>
+    composeBrief(env.DB, {
+      workspaceId,
+      schedule: { timezone: "UTC", weekday: 1, hour: 8 },
+      week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
+      readThisFirst: { picks: [], judged: 0, unjudged: false },
+    });
+
+  it("names the week's highest-weighted signal on the brand that has one, and nothing on a quiet brand", async () => {
+    const { workspaceId } = await seedHiring();
+    const payload = await compose(workspaceId);
+
+    expect(payload.brands.find((b) => b.entity_id.startsWith("ent_hiring_"))?.biggest_move).toBe("Growth Lead");
+    expect(payload.brands.find((b) => b.entity_id.startsWith("ent_idle_"))?.biggest_move).toBeNull();
+  });
+
+  it("prints it on that brand's line in the brief", async () => {
+    const { workspaceId } = await seedHiring();
+    const { text } = renderBrief(parseBriefPayload(JSON.stringify(await compose(workspaceId))), {
+      unsubscribe_url: "https://0509.io/u/token",
+      asset_base_url: "https://assets.0509.io",
+    });
+
+    expect(brandLine(text, "Hiring Brand")).toContain("Growth Lead");
+    expect(brandLine(text, "Quiet Brand")).not.toContain("Growth Lead");
+  });
+});
