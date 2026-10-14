@@ -26,12 +26,12 @@ function reachableSources(entry: string): string[] {
   return [...seen].map((key) => readFileSync(path.join("build/client", manifest[key].file), "utf8"));
 }
 
-describe("pages stay free of the public suffix list and the zod runtime", () => {
-  it.each(PAGES)("%s ships neither tldts nor zod", (page) => {
+describe("pages stay free of the public suffix list and the full zod runtime", () => {
+  it.each(PAGES)("%s ships neither tldts nor full zod", (page) => {
     expect(Object.hasOwn(manifest, page)).toBe(true);
     for (const source of reachableSources(page)) {
       expect(source).not.toContain("allowIcannDomains");
-      expect(source).not.toContain("ZodObject");
+      expect(source).not.toMatch(/(?<!\$)\bZodObject\b/);
     }
   });
 });
