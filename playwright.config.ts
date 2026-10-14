@@ -31,7 +31,7 @@ const productionLane = Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL && process.e
 // listed here stays in the signed-in projects. Source: 0509 spec dispatch that
 // ran onboarded-setup for an SEO spec, 2026-10-04.
 const publicSpecs =
-  /(?:^|\/)(?:a11y-legal|api-docs|footer|landing|not-found|pricing|privacy|quiet-guard|security-headers|seo|share-image|smoke|terms|turnstile-blocked|unsubscribe|verify-address)\.spec\.ts$/;
+  /(?:^|\/)(?:a11y-legal|api-docs|email-rendering|footer|landing|not-found|pricing|privacy|quiet-guard|security-headers|seo|share-image|smoke|terms|turnstile-blocked|unsubscribe|verify-address)\.spec\.ts$/;
 const accessDependency = process.env.CF_ACCESS_CLIENT_ID ? ["setup"] : [];
 
 export default defineConfig({
