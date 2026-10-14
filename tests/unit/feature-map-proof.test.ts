@@ -14,6 +14,7 @@ import { registeredToolDescriptors } from "../../app/lib/agent/mcp-tools";
 // hand-written on purpose; this test reads it, it does not generate it.
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const MAP_DIR = path.join(REPO_ROOT, ".agents", "skills", "verify", "feature-map");
+const MAP_INDEX = path.join(REPO_ROOT, ".agents", "skills", "verify", "feature-map.md");
 // The same pattern the gardener sweeps used, so this gate fails on exactly
 // the references a human sweep would report.
 const SPEC_REF = /e2e\/[A-Za-z0-9_./-]+\.spec\.ts/g;
@@ -42,8 +43,12 @@ async function mapFiles(dir: string = MAP_DIR): Promise<MapFile[]> {
   return found;
 }
 
+async function allMapFiles(): Promise<MapFile[]> {
+  return [{ name: "feature-map.md", text: await readFile(MAP_INDEX, "utf8") }, ...(await mapFiles())];
+}
+
 async function readMap(): Promise<string> {
-  return (await mapFiles()).map((file) => file.text).join("\n");
+  return (await allMapFiles()).map((file) => file.text).join("\n");
 }
 
 function routeRows(text: string): string[][] {
@@ -109,7 +114,7 @@ describe("feature map proof coverage", () => {
     const map = await readMap();
     const seen = new Map<string, string>();
     const duplicates: string[] = [];
-    for (const file of await mapFiles()) {
+    for (const file of await allMapFiles()) {
       for (const cells of routeRows(file.text)) {
         const key = `${cells[0]}\t${cells[1]}`;
         const first = seen.get(key);
