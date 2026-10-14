@@ -23,7 +23,7 @@ describe("welcome email", () => {
 
   it("asks for rivals when none are watched and drops the date when it is unknown", () => {
     const { text } = renderWelcome({ ...CTX, rivals: [], rival_count: 0, first_brief_at: null });
-    expect(text).toContain("Add the rivals you want to keep an eye on");
+    expect(text).toContain("Add the competitors you want to keep an eye on");
     expect(text).toContain("Your first ranking arrives with your weekly brief.");
   });
 

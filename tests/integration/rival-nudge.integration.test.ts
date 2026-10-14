@@ -76,7 +76,7 @@ describe("add-a-rival nudge", () => {
     expect(await sendRivalNudges(envWith(sent), new Date("2026-10-14T12:00:00.000Z"), isTester)).toBe(0);
     expect(sent).toHaveLength(1);
     expect(sent[0]?.to).toBe(TARGET);
-    expect(sent[0]?.subject).toBe("Your brief compares you with one rival so far");
+    expect(sent[0]?.subject).toBe("Your brief compares you with one competitor so far");
     expect(sent[0]?.text).toContain("You are watching Rival 1");
     expect(sent[0]?.headers?.["List-Unsubscribe"]).toContain("?type=brief");
   });

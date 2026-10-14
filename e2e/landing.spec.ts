@@ -132,10 +132,10 @@ test("the agents section hands a visitor's agent the MCP address and the API doc
 test("the landing's action names its price and leads to sign-in @smoke", async ({ page }) => {
   await page.goto(PATH);
   const hero = page.locator("#hero");
-  await expect(hero.getByRole("button", { name: /€\d+\/mo/ })).toBeVisible();
+  await expect(hero.getByRole("button", { name: /€\d+\/month/ })).toBeVisible();
   await expect(hero.locator("form")).toHaveAttribute("action", "/login");
   await expect(hero.locator("form")).toHaveAttribute("method", "get");
-  await expect(page.locator("#price").getByRole("link", { name: /€\d+\/mo/ })).toHaveAttribute("href", "/login");
+  await expect(page.locator("#price").getByRole("link", { name: /€\d+\/month/ })).toHaveAttribute("href", "/login");
 });
 
 test("the hero's first viewport holds the outcome and the one priced input @smoke", async ({ page }, testInfo) => {
@@ -156,7 +156,7 @@ test("the hero's first viewport holds the outcome and the one priced input @smok
     hero.getByRole("heading", { level: 1, name: "Know where you stand. And who’s gaining on you." }),
     hero.getByText(/we find your competitors for you, so you do not need to know who they are/i),
     hero.getByRole("textbox", { name: /your website address or social username/i }),
-    hero.getByRole("button", { name: /€\d+\/mo/ }),
+    hero.getByRole("button", { name: /€\d+\/month/ }),
     hero.getByText("One box to fill in. About a minute to see who’s gaining on you."),
   ];
   for (const piece of pieces) {
@@ -232,7 +232,7 @@ test("the hero input carries what you typed to sign-in @smoke", async ({ page })
     .fill("example.com");
   await page
     .locator("#hero")
-    .getByRole("button", { name: /€\d+\/mo/ })
+    .getByRole("button", { name: /€\d+\/month/ })
     .click();
   await expect(page).toHaveURL(/\/login\?subject=example\.com$/);
 });

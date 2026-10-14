@@ -13,7 +13,7 @@ const CTX = {
 describe("win-back email", () => {
   it("counts the changes since the last visit and names the latest", () => {
     const { subject, text } = renderWinback(CTX);
-    expect(subject).toBe("What your rivals did while you were away");
+    expect(subject).toBe("What your competitors did while you were away");
     expect(text).toContain("caught 3 changes");
     expect(text).toContain("Most recent: Acme, Homepage headline changed");
     expect(text).toContain("https://0509.io/app/alerts");
