@@ -17,6 +17,7 @@ test("a customer fixes a wrong rival name and sees it everywhere, with the domai
     .getByRole("link", { name: /Kindred/ })
     .first()
     .click();
+  await expect(page.getByText("We'll search for mentions under the new name from tonight.")).toBeVisible();
   const field = page.getByLabel("Show this competitor as");
   await expect(field).toHaveValue("Kindred");
   await field.fill("Kindred Goods");

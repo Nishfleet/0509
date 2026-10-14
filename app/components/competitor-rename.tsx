@@ -41,6 +41,7 @@ export function CompetitorRename({ name, domain, result }: CompetitorRenameProps
       <p className="text-meta text-ink-soft">
         Wrong name? Change how we show it. We keep watching {domain} either way.
       </p>
+      <p className="text-meta text-ink-soft">{"We'll search for mentions under the new name from tonight."}</p>
       <Form method="post" className="mt-3 flex flex-col gap-3">
         <input type="hidden" name="intent" value="rename" />
         <label htmlFor="competitor-rename-name" className="text-meta">
