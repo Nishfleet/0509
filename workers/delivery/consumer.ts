@@ -218,10 +218,17 @@ function briefOf(message: MessageRow): BriefPayload {
   }
 }
 
-function render(message: MessageRow, to: string, token: string): EmailMessageBuilder {
+const BRIEF_OPEN_URL = "https://0509.io/app/brief";
+
+function render(message: MessageRow, recipient: { to: string; token: string; owner: boolean }): EmailMessageBuilder {
+  const { to, token, owner } = recipient;
   const payload = briefOf(message);
   const unsubscribeUrl = `${UNSUBSCRIBE_BASE_URL}${token}`;
-  const rendered = renderBrief(payload, { unsubscribe_url: unsubscribeUrl, asset_base_url: null });
+  const rendered = renderBrief(payload, {
+    unsubscribe_url: unsubscribeUrl,
+    asset_base_url: null,
+    open_url: owner ? BRIEF_OPEN_URL : null,
+  });
   return {
     to,
     from: BRIEF_SENDER,
@@ -291,7 +298,7 @@ async function deliverToOwner(env: Env, message: DigestMessage): Promise<Deliver
     idempotencyKey,
     send: async () => {
       const token = await ensureUnsubscribeToken(env, target);
-      const email = render(digest, target.target_value, token);
+      const email = render(digest, { to: target.target_value, token, owner: true });
       return sendMessage(env.EMAIL, email);
     },
     onSent: () => recordBriefSent(env, { digest, target, attemptId: claim.id }),
@@ -313,7 +320,7 @@ async function sendToTeammate(env: Env, digest: MessageRow, mate: TargetRow): Pr
     idempotencyKey,
     send: async () => {
       const token = await ensureUnsubscribeToken(env, mate);
-      return sendMessage(env.EMAIL, render(digest, mate.target_value, token));
+      return sendMessage(env.EMAIL, render(digest, { to: mate.target_value, token, owner: false }));
     },
   });
 }

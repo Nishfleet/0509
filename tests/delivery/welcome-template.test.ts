@@ -50,6 +50,12 @@ describe("welcome email", () => {
     expect(text).toContain("Open your first look: https://0509.io/app");
   });
 
+  it("closes with the support line in both parts", () => {
+    const { html, text } = renderWelcome(CTX);
+    expect(html).toContain("mailto:support@0509.io");
+    expect(text).toContain("Questions? Write to support@0509.io.");
+  });
+
   it("escapes anything it is handed", () => {
     expectNoHtmlInjection(renderWelcome({ ...CTX, rivals: [PROBE] }).html, "rivals");
   });

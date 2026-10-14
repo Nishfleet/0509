@@ -1,6 +1,7 @@
 import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
 import { formatDate } from "./brief-template";
+import { supportLineHtml, supportLineText } from "./alert-footer";
 import { BODY, EYEBROW, HEADLINE, emailDocument, linkParagraph } from "./email-shell";
 
 export interface WelcomeContext {
@@ -48,7 +49,7 @@ export function renderWelcome(ctx: WelcomeContext): RenderedBrief {
   const { subject, lines } = copy(ctx);
   return {
     subject,
-    text: [subject, ...lines, `Open your first look: ${ctx.home_link}`].join("\n\n"),
+    text: [subject, ...lines, `Open your first look: ${ctx.home_link}`, supportLineText()].join("\n\n"),
     html: emailDocument(
       subject,
       [
@@ -56,6 +57,7 @@ export function renderWelcome(ctx: WelcomeContext): RenderedBrief {
         `<p style="${HEADLINE}">${escapeHtml(subject)}</p>`,
         ...lines.map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`),
         linkParagraph("Open your first look", ctx.home_link),
+        supportLineHtml(),
       ].join(""),
       lines[0],
     ),
