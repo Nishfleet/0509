@@ -98,6 +98,11 @@ const briefPayloadSchema = z.object({
   headline_total: count,
   headline_movement: numberOrNull,
   headline_is_new: flag,
+  headline_earlier: z
+    .object({ rank: z.number().int().positive(), weeks: z.number().int().positive() })
+    .nullable()
+    .optional()
+    .catch(undefined),
   why_line: text,
   is_quiet_week: flag,
   is_unjudged: flag,
@@ -115,6 +120,16 @@ export function sinceStartedLine(checked: BriefPayload["checked"]): string | nul
   const running = checked.total_change_count ?? 0;
   if (running <= checked.site_change_count) return null;
   return `${String(running)} site ${running === 1 ? "change" : "changes"} caught since you started`;
+}
+
+export function rankTrendLine(payload: BriefPayload): string | null {
+  const earlier = payload.headline_earlier;
+  const rank = payload.headline_rank;
+  if (earlier === null || earlier === undefined || rank === null) return null;
+  const when = `${String(earlier.weeks)} weeks ago`;
+  if (rank < earlier.rank) return `Up from #${String(earlier.rank)} ${when}`;
+  if (rank > earlier.rank) return `Down from #${String(earlier.rank)} ${when}`;
+  return `Holding at #${String(rank)} since ${when}`;
 }
 
 export interface BriefContext {
