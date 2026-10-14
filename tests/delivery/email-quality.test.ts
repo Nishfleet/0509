@@ -38,8 +38,14 @@ function preview(html: string): string {
 }
 
 function stripTags(value: string): string {
-  const next = value.replace(/<[^>]*>/g, "");
-  return next === value ? next : stripTags(next);
+  let depth = 0;
+  let text = "";
+  for (const character of value) {
+    if (character === "<") depth += 1;
+    else if (character === ">" && depth > 0) depth -= 1;
+    else if (depth === 0) text += character;
+  }
+  return text;
 }
 
 function visibleBlocks(html: string): string[] {
