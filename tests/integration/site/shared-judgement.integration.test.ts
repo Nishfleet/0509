@@ -128,7 +128,7 @@ describe("the same public change judged for two workspaces", () => {
   it("never shares a verdict about the owner's own site", async () => {
     await judgeFor("ws-a", "self-a", true);
     await judgeFor("ws-b", "self-b", true);
-    expect(calls.count).toBeGreaterThanOrEqual(2);
+    expect(calls.count).toBe(2);
     expect(await rowsOf("ws-b")).not.toEqual([]);
   });
 

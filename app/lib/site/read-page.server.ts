@@ -50,21 +50,36 @@ async function readLive(target: SiteSweepTarget, now: string, options: ReadPageO
   return readOrArchive(live, { url: target.url, now: new Date(now), allowed: target.entityRole !== "self" });
 }
 
+async function keepSharedPageSafely(
+  url: string,
+  now: string,
+  read: Extract<ReadUrlResult, { ok: true }>,
+): Promise<void> {
+  try {
+    await keepSharedPage(url, now, read);
+  } catch (error) {
+    console.error(JSON.stringify({ event: "site.shared_read_keep_failed", error: String(error) }));
+  }
+}
+
 export async function readPage(
   target: SiteSweepTarget,
   now: string,
   options: ReadPageOptions = {},
 ): Promise<ReadUrlResult> {
   const isRival = target.entityRole !== "self";
-  const shared = isRival ? await readSharedPage(target.url, now.slice(0, 10)) : null;
-  if (shared !== null) return shared;
+  const shared = isRival ? await readSharedPage(target.url, now) : null;
+  if (shared !== null) {
+    if (!learnedBrowser(target, now)) await rememberTransport(target, shared, now);
+    return shared;
+  }
   const read = await readLive(target, now, options);
   if (!read.ok) {
     if (read.reason === "deferred") await markPageDeferred(target.pageId, now);
     return read;
   }
   if (read.fromArchive === true) return read;
-  if (isRival) await keepSharedPage(target.url, now.slice(0, 10), read);
+  if (isRival) await keepSharedPageSafely(target.url, now, read);
   if (!learnedBrowser(target, now)) await rememberTransport(target, read, now);
   return read;
 }

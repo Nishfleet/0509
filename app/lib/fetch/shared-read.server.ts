@@ -18,20 +18,20 @@ const sharedRead = z.object({
   ms: z.number(),
 });
 
-async function keyFor(url: string, day: string): Promise<string> {
-  return `${SHARED_READ_PREFIX}${day}:${await sha256Hex(url)}`;
+async function keyFor(url: string, sweep: string): Promise<string> {
+  return `${SHARED_READ_PREFIX}${sweep}:${await sha256Hex(url)}`;
 }
 
-export async function readSharedPage(url: string, day: string): Promise<SharedRead | null> {
-  const stored = await env.IDENTITY_CACHE.get(await keyFor(url, day));
+export async function readSharedPage(url: string, sweep: string): Promise<SharedRead | null> {
+  const stored = await env.IDENTITY_CACHE.get(await keyFor(url, sweep));
   if (stored === null) return null;
   const parsed = sharedRead.safeParse(JSON.parse(stored));
   return parsed.success ? { ...parsed.data, escalated: false } : null;
 }
 
-export async function keepSharedPage(url: string, day: string, read: SharedRead): Promise<void> {
+export async function keepSharedPage(url: string, sweep: string, read: SharedRead): Promise<void> {
   const { html, transport, status, ms } = read;
-  await env.IDENTITY_CACHE.put(await keyFor(url, day), JSON.stringify({ ok: true, html, transport, status, ms }), {
+  await env.IDENTITY_CACHE.put(await keyFor(url, sweep), JSON.stringify({ ok: true, html, transport, status, ms }), {
     expirationTtl: SHARED_READ_SECONDS,
   });
 }

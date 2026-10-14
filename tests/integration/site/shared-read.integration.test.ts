@@ -5,6 +5,7 @@ import type { SiteSweepTarget } from "../../../app/lib/data/watch.server";
 import { readPage } from "../../../app/lib/site/read-page.server";
 
 const NIGHT_ONE = "2026-10-14T21:00:00Z";
+const SAME_NIGHT_LATER = "2026-10-14T23:30:00Z";
 const NIGHT_TWO = "2026-10-15T21:00:00Z";
 const URL_OF_RIVAL = "https://shared-rival.com/";
 const PAGE =
@@ -45,6 +46,7 @@ describe("a rival's public page, read for several workspaces", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     Reflect.deleteProperty(env, "BROWSER");
   });
 
@@ -64,6 +66,19 @@ describe("a rival's public page, read for several workspaces", () => {
     await readPage(targetFor("ws-a", "competitor"), NIGHT_ONE);
     await readPage(targetFor("ws-a", "competitor"), NIGHT_TWO);
     expect(fetched.filter((url) => url === URL_OF_RIVAL)).toHaveLength(2);
+  });
+
+  it("is fetched again by a later run the same day, so a catch-up run never sees stale text", async () => {
+    await readPage(targetFor("ws-a", "competitor"), NIGHT_ONE);
+    await readPage(targetFor("ws-a", "competitor"), SAME_NIGHT_LATER);
+    expect(fetched.filter((url) => url === URL_OF_RIVAL)).toHaveLength(2);
+  });
+
+  it("still returns the page when the shared copy cannot be stored", async () => {
+    vi.spyOn(env.IDENTITY_CACHE, "put").mockRejectedValue(new Error("KV PUT failed: 429"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const read = await readPage(targetFor("ws-a", "competitor"), NIGHT_ONE);
+    expect(read).toMatchObject({ ok: true, transport: "fetch", status: 200 });
   });
 
   it("is never shared for the owner's own page, which each workspace reads for itself", async () => {
