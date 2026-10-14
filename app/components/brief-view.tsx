@@ -1,5 +1,6 @@
 import { Fragment, type ReactElement } from "react";
 
+import { ledgerSummary } from "../lib/work-ledger";
 import { ReadThisFirst } from "./read-this-first";
 import type { BriefPayload } from "../lib/brief-payload";
 import { rankTrendLine, sinceStartedLine } from "../lib/brief-since";
@@ -100,9 +101,11 @@ function ownSiteBlock(payload: BriefPayload): ReactElement {
 
 function checkedBlock(payload: BriefPayload): ReactElement {
   const since = sinceStartedLine(payload.checked);
+  const work = ledgerSummary(payload.checked.ledger, "This week we");
   return (
     <section data-brief-block="checked" className={SECTION}>
       <h3 className={HEAD}>What was checked</h3>
+      {work === null ? null : <p className={BODY}>{work}</p>}
       <p className="mt-2 font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft">
         {countLabel(payload.checked.mention_count, "mention", "mentions")} ·{" "}
         {countLabel(payload.checked.site_change_count, "site change", "site changes")}

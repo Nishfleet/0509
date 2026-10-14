@@ -62,12 +62,26 @@ const degradedSourceSchema = z.object({
   last_landed_at: optionalText,
 });
 
+const ledgerSchema = z
+  .object({
+    rivals: count,
+    pages_read: count,
+    changes_seen: count,
+    changes_told: count,
+    changes_set_aside: count,
+    mentions_read: count,
+    mentions_kept: count,
+  })
+  .optional()
+  .catch(undefined);
+
 const checkedSchema = z
   .object({
     mention_count: count,
     site_change_count: count,
     new_ad_count: count,
     total_change_count: z.number().int().nonnegative().optional().catch(undefined),
+    ledger: ledgerSchema,
     source_keys: keepValid(z.string()),
     degraded_source_keys: keepValid(z.string()),
     degraded_sources: keepValid(degradedSourceSchema),
