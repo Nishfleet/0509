@@ -169,6 +169,11 @@ test("signed-in Home, competitors, brief, alerts, settings and agents, with 25 r
     await emulate4g(page);
     const response = await page.goto(path, { waitUntil: "load" });
     expect(response?.status(), path).toBe(200);
+    const html = (await response?.text()) ?? "";
+    const sheet = html.search(/<link[^>]*rel="stylesheet"/);
+    const firstScript = html.search(/<link[^>]*rel="modulepreload"/);
+    expect(sheet, `${path} links its stylesheet`).toBeGreaterThan(-1);
+    expect(sheet, `${path} links its stylesheet before the script preloads`).toBeLessThan(firstScript);
     measured[path] = await settledVitals(page);
     if (path === "/app/alerts") {
       tapMs = await chipTapDurations(page, [
