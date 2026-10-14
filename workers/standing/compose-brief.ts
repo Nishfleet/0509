@@ -38,7 +38,7 @@ GROUP BY s.entity_id`;
 
 const TOTAL_CHANGES = `SELECT count(*) AS total
 FROM signal s
-JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
+JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1
 WHERE s.workspace_id = ?1 AND s.kind = 'change' AND s.observed_at < ?2 AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL`;
 
 const SOURCE_COVERAGE = `SELECT src.key AS key,
