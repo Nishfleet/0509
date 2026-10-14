@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router";
 
 const CLOCK = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
 
@@ -49,12 +50,12 @@ function Action({ action }: { action: EmptyStateAction }): ReactNode {
     );
   }
   return (
-    <a
+    <Link
       className="mt-1 inline-flex min-h-11 items-center font-display text-[1.02rem] uppercase"
-      href={href(action.href)}
+      to={href(action.href)}
     >
       {action.label}
-    </a>
+    </Link>
   );
 }
 

@@ -112,6 +112,21 @@ function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
   };
 }
 
+describe("a mark without a title", () => {
+  it("links the source's host, never the raw address", () => {
+    const { html } = renderBrief(
+      payload({
+        read_this_first: [
+          { ...payload().read_this_first[0], title: "", url: "https://www.kindred.example/pricing?x=1" },
+        ],
+      }),
+      CONTEXT,
+    );
+    expect(html).toContain(">kindred.example</a>");
+    expect(html).not.toContain(">https://www.kindred.example");
+  });
+});
+
 describe("brief block order", () => {
   it("renders the five blocks in the contract's order", () => {
     const { html } = renderBrief(payload(), CONTEXT);
@@ -872,5 +887,31 @@ describe("the rival-you-may-be-missing block", () => {
     );
     expect(html).not.toContain("<b>x</b>");
     expect(html).toContain("&lt;b&gt;x&lt;/b&gt;");
+  });
+});
+
+describe("the one action", () => {
+  const OPEN = { ...CONTEXT, open_url: "https://0509.io/app/brief" };
+
+  it("is a single Open in Five to Nine button right under the headline, in both parts", () => {
+    const { html, text } = renderBrief(payload(), OPEN);
+    expect(html).toContain(">Open in Five to Nine</a>");
+    expect(html.match(/Open in Five to Nine/g)).toHaveLength(1);
+    expect(html.indexOf("Open in Five to Nine")).toBeLessThan(html.indexOf("Your tracked brands"));
+    expect(text).toContain("Open in Five to Nine: https://0509.io/app/brief");
+  });
+
+  it("is left out when there is no link, as for a teammate who has no account", () => {
+    const { html, text } = renderBrief(payload(), CONTEXT);
+    expect(html).not.toContain("Open in Five to Nine");
+    expect(text).not.toContain("Open in Five to Nine");
+  });
+
+  it("never shows a raw address as link text for an untitled mark", () => {
+    const base = payload();
+    const mark = { ...base.read_this_first[0], title: "", url: "https://social.example/ads/abc123" };
+    const { html } = renderBrief({ ...base, read_this_first: [mark as (typeof base.read_this_first)[number]] }, OPEN);
+    expect(html).toContain(">social.example</a>");
+    expect(html).not.toMatch(/>\s*https?:\/\/[^<]*</);
   });
 });

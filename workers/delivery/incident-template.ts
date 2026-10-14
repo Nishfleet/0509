@@ -65,7 +65,7 @@ export function renderIncidentOpen(ctx: IncidentOpenContext): RenderedBrief {
         linkLine(ctx.link),
         footer.html,
       ].join(""),
-      lines[1],
+      lines.slice(1).join(" "),
     ),
   };
 }

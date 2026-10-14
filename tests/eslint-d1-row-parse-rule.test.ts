@@ -5,18 +5,6 @@ import { describe, expect, it } from "vitest";
 
 import { REPO_ROOT, lintExisting, lintTextAt } from "./eslint-lint-text";
 
-// #7299: D1_ROW_TYPE_ARGUMENT only rejects a type argument. A writer can
-// return `await stmt.first()` with no type argument and no parse, which is
-// the convention's first sentence unenforced. row-rules/d1-row-parse requires
-// `.first` / `.all` / `.raw` in app/lib/data/ to be parsed with a zod schema
-// before the row leaves the function, as a wrap or as a later parse of the
-// binding. These probes boot the real eslint.config.js against a real data
-// file — the rig 971f926cc put in place of probe files written to disk — so
-// they do not race tests/docs-paths.test.ts (docs/incidents/2026-10-08-
-// docs-paths-scratch-dir-race.md). The probe file is one whose live source
-// already parses every read, so a bulk suppression for this rule cannot
-// swallow the planted violation.
-
 const D1_ROW_PARSE_MESSAGE = "0509#7299";
 
 const DATA_MODULE = "app/lib/data/dodo_webhook_event.server.ts";

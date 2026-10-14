@@ -126,6 +126,7 @@ export type BriefPayload = z.output<typeof briefPayloadSchema>;
 export interface BriefContext {
   unsubscribe_url: string | null;
   asset_base_url: string | null;
+  open_url?: string | null;
 }
 
 export interface RenderedBrief {

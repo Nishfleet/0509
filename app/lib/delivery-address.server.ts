@@ -23,8 +23,8 @@ const IS_TEAMMATE = "That address already gets the brief as a teammate. Remove t
 const NO_WORKSPACE = "Finish setting up first, then choose where the brief goes.";
 const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const RATE_LIMITED = "Too many confirmation emails. Wait a minute, then save again.";
-const INVITE_FAILED = "We could not send the invitation. Remove the teammate and add them again.";
-const SEND_FAILED = "We could not send the confirmation email. Save again to retry.";
+const INVITE_FAILED = "We couldn't send the invitation. Remove the teammate and add them again.";
+const SEND_FAILED = "We couldn't send the confirmation email. Save again to retry.";
 
 function newVerifyToken(): string {
   const bytes = new Uint8Array(32);

@@ -2,12 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { lintTextAt } from "./eslint-lint-text";
 
-// 0509#6999: the route rule's selector was
-// CallExpression[callee.object.name='env'][callee.property.name='DB'], which
-// only matches a call env.DB(...). Five routes passed env.DB to helpers while
-// `eslint .` stayed green. These probes boot the real eslint.config.js so a
-// restated copy cannot drift from the gate.
-
 const MESSAGE = "Routes do not touch env.DB";
 
 const ROUTE_PROBES: { name: string; code: string }[] = [

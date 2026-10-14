@@ -1,6 +1,6 @@
 import { createElement, Fragment, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MemoryRouter } from "react-router";
+import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { CompetitorFrame, type CompetitorFrameProps, developmentsEmpty } from "../../app/components/competitor-frame";
@@ -15,7 +15,8 @@ import {
 } from "../../app/components/competitor-header";
 
 function render(element: ReactElement): string {
-  return renderToStaticMarkup(createElement(MemoryRouter, null, element));
+  const Stub = createRoutesStub([{ path: "/", Component: () => element }]);
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
 }
 
 const change: SiteChangeItemData = {
