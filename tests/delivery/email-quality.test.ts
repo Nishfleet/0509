@@ -37,6 +37,11 @@ function preview(html: string): string {
   return hidden === null ? "" : squash(hidden[1].replace(/(&#847;|&zwnj;|&nbsp;)+/g, " "));
 }
 
+function stripTags(value: string): string {
+  const next = value.replace(/<[^>]*>/g, "");
+  return next === value ? next : stripTags(next);
+}
+
 function visibleBlocks(html: string): string[] {
   const body = html
     .replace(/<head>.*?<\/head>/s, "")
@@ -45,7 +50,7 @@ function visibleBlocks(html: string): string[] {
   return body
     .replace(/<p class="brief-muted" style="[^"]*letter-spacing:0\.16em[^"]*">.*?<\/p>/gs, "")
     .split(/<\/(?:p|h1|h2|li|td)>/)
-    .map((chunk) => squash(chunk.replace(/<br\s*\/?>/g, " ").replace(/<[^>]+>/g, "")))
+    .map((chunk) => squash(stripTags(chunk.replace(/<br\s*\/?>/g, " "))))
     .filter((block) => block !== "" && !PAGE_CHROME.has(block));
 }
 
