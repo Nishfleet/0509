@@ -240,6 +240,35 @@ describe("nightly site sweep", () => {
     expect(polled?.last_polled_at).not.toBeNull();
   });
 
+  it("reads a rival once for every workspace that watches it when they share one sweep tick", async () => {
+    await env.DB.prepare(
+      `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
+       VALUES ('ws-second', 'Second', ?, 'UTC', 1, 8, ?)`,
+    )
+      .bind(USER, NOW)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES ('plan-second', 'ws-second', 'starter', 'active', ?)`,
+    )
+      .bind(NOW)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
+       VALUES ('ent-rival-second', 'ws-second', 'competitor', 'rival.com', '{}', 'manual', 'on', ?)`,
+    )
+      .bind(NOW)
+      .run();
+
+    const rivals = (await planSiteSweep(NOW)).filter((t) => t.url === "https://rival.com/");
+    expect(rivals).toHaveLength(2);
+    const tick = await nextTick("shared-night");
+    const reads = [];
+    for (const rival of rivals) reads.push(await checkSitePage(rival, tick));
+
+    expect(reads.map((read) => read.outcome)).toEqual(["first", "first"]);
+    expect(calls.filter((call) => call === "GET https://rival.com/")).toHaveLength(1);
+  });
+
   it("judges the filed change signal, and a retried publish judges the same signal", async () => {
     Reflect.set(env, "AI", {
       async run(_model: string, request: { questions: Record<string, { type: string }> }) {
