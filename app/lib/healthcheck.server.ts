@@ -19,7 +19,13 @@ export async function pingCheck(slug: string, signal: CheckSignal): Promise<null
   try {
     await pingLiveness(url ?? undefined);
   } catch (error) {
-    console.error(JSON.stringify({ event: "healthcheck.ping_failed", signal, kind: String(error).slice(0, 40) }));
+    console.error(
+      JSON.stringify({
+        event: "healthcheck.ping_failed",
+        signal,
+        kind: error instanceof Error ? error.name : "unknown",
+      }),
+    );
   }
   return null;
 }

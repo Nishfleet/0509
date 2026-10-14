@@ -210,8 +210,14 @@ describe("extractIdentity", () => {
   });
 
   it("prefers a rendered channel anchor over a script-state user link", async () => {
-    const html = `<html><script>{"u":"https://www.youtube.com/user/gymshark-old"}</script><a href="https://www.youtube.com/@gymshark">YT</a></html>`;
+    const html = `<html><script>{"u":"https://www.youtube.com/user/gymshark"}</script><a href="https://www.youtube.com/@gymshark">YT</a></html>`;
     const card = await extractIdentity(html, pageUrl);
     expect(card.socials).toEqual([{ platform: "youtube", url: "https://www.youtube.com/@gymshark" }]);
+  });
+
+  it("ignores script-state YouTube links on a social profile page", async () => {
+    const html = `<html><script>{"u":"https://www.youtube.com/@instagram"}</script></html>`;
+    const card = await extractIdentity(html, "https://www.instagram.com/someone/");
+    expect(card.socials).toEqual([]);
   });
 });

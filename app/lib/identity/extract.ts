@@ -197,6 +197,7 @@ function simplified(value: string): string {
 }
 
 function rawYoutubeLinks(html: string, pageUrl: string, ldBlocks: readonly string[]): string[] {
+  if (platformForUrl(pageUrl) !== null) return [];
   const label = simplified(getDomainWithoutSuffix(new URL(pageUrl).hostname) ?? "");
   if (label.length < 3) return [];
   const text = ldBlocks.reduce((rest, block) => rest.replaceAll(block, ""), html).replaceAll(/\\u002f|\\\//gi, "/");
