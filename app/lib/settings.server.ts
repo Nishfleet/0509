@@ -11,8 +11,8 @@ import { hasFreshSession, removeSignedInPasskey, requestEmailChange, signOut } f
 import { nextBriefAt } from "./brief-schedule";
 import { formatBriefAt, parseBriefSchedule } from "./brief-settings";
 import { competitorCountLine } from "./competitor-count";
-import { readEntitlements, readPlanSummary } from "./data/plan.server";
 import { readCompetitors } from "./data/entity.server";
+import { readEntitlements, readPlanSummary } from "./data/plan.server";
 import { readSlackTarget, removeSlackTarget, saveSlackTarget } from "./data/send_target.server";
 import { readUserDismissed, restoreSuggestion } from "./data/suggestion.server";
 import {
@@ -90,13 +90,20 @@ const NO_WORKSPACE_SETTINGS = {
   countLine: null,
 };
 
-async function readCountLine(workspaceId: string): Promise<string> {
-  const [{ competitors }, entitlements] = await Promise.all([
-    readCompetitors(workspaceId),
-    readEntitlements(workspaceId),
-  ]);
-  const watching = competitors.filter((competitor) => competitor.state === "on").length;
-  return competitorCountLine(watching, entitlements.competitors);
+async function readCountLine(workspaceId: string): Promise<string | null> {
+  try {
+    const [{ competitors }, entitlements] = await Promise.all([
+      readCompetitors(workspaceId),
+      readEntitlements(workspaceId),
+    ]);
+    const watching = competitors.filter((competitor) => competitor.state === "on").length;
+    return competitorCountLine(watching, entitlements.competitors);
+  } catch (error) {
+    console.log(
+      JSON.stringify({ event: "settings.count_line_failed", error: error instanceof Error ? error.name : "unknown" }),
+    );
+    return null;
+  }
 }
 
 async function readWorkspaceSettings(workspaceId: string) {

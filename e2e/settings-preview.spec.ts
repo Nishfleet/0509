@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { type Page } from "@playwright/test";
 import { expect, test } from "./test";
 
+import { PLANS } from "../app/lib/billing/plans";
 import { isLocalLane, run, seedPreviewSession } from "./inbox";
 
 test.skip(
@@ -94,5 +95,7 @@ test("a delivery address that is not an email is stopped and not saved", async (
 
 test("Your plan says how many competitors the plan is watching", async ({ page, baseURL }) => {
   await signIn(page, baseURL);
-  await expect(page.locator('[data-slot="plan-usage"]')).toHaveText("Watching 0 of 5 competitors on your plan.");
+  await expect(page.locator('[data-slot="plan-usage"]')).toHaveText(
+    `Watching 0 of ${String(PLANS[0].limits.competitors)} competitors on your plan.`,
+  );
 });
