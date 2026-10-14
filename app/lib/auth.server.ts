@@ -13,6 +13,7 @@ import { ensureWorkspaceForSignIn } from "./workspace.server";
 import { accessPrecleared } from "./auth/access-preclearance.server";
 import { changeEmailEmail } from "./auth/change-email-email";
 import { changeEmailAllowed } from "./auth/change-email-limit";
+import { withEmailLanding } from "./email-change-landing";
 import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email";
 import { MAGIC_LINK_PATH } from "./auth/magic-link-path";
 import { redactEmailShaped } from "./auth/redact-email-shaped";
@@ -58,7 +59,11 @@ function sendChangeEmailMessage(
   email: SendEmail,
   input: { kind: "approve" | "confirm"; to: string; named: string; url: string },
 ): Promise<void> {
-  const message = changeEmailEmail({ kind: input.kind, email: input.named, url: input.url });
+  const message = changeEmailEmail({
+    kind: input.kind,
+    email: input.named,
+    url: withEmailLanding(input.url, input.kind),
+  });
   return sendOrThrow(email, {
     to: input.to,
     from: { email: "hello@0509.io", name: "Five to Nine" },

@@ -11,7 +11,7 @@ function formData(intent: string): FormData {
   return data;
 }
 
-function render(navigation: { state: string; formData?: FormData }): string {
+function render(navigation: { state: string; formData?: FormData }, entry = "/app/settings"): string {
   const Stub = createRoutesStub([
     {
       id: "settings",
@@ -24,7 +24,7 @@ function render(navigation: { state: string; formData?: FormData }): string {
         ),
     },
   ]);
-  return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/app/settings"] }));
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: [entry] }));
 }
 
 function button(html: string): string {
@@ -62,5 +62,25 @@ describe("the change-sign-in-email button (0509#6566)", () => {
 
     expect(html).toContain("Send confirmation link");
     expect(html).not.toContain('disabled=""');
+  });
+});
+
+describe("the line after an email-change link lands on Settings", () => {
+  it("says the approval went through and one more link is coming", () => {
+    const html = render({ state: "idle" }, "/app/settings?email=approved");
+
+    expect(html).toContain('role="status"');
+    expect(html).toContain("We sent a confirmation link to the new address.");
+  });
+
+  it("says the new address is the sign-in email now", () => {
+    expect(render({ state: "idle" }, "/app/settings?email=changed")).toContain(
+      "This is the email you sign in with now.",
+    );
+  });
+
+  it("says nothing without the flag, and nothing for a made-up one", () => {
+    expect(render({ state: "idle" })).not.toContain('role="status"');
+    expect(render({ state: "idle" }, "/app/settings?email=whatever")).not.toContain('role="status"');
   });
 });
