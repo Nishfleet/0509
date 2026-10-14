@@ -4,16 +4,6 @@ import { BRAND_LINES_QUERY, parseBriefPayload, type BriefPayload } from "../../a
 import { PROBE, URL_PROBE, expectNoHtmlInjection } from "../email-html-injection";
 import { renderBrief } from "../../workers/delivery/brief-template";
 
-/**
- * The P7.3 slice: render and order, not send. These tests hold the four
- * properties docs/engines/delivery.md §4b makes non-negotiable — the brief
- * never re-ranks, never re-judges, keeps the contract's block order, and keeps
- * the quiet week — and the three the contract's rule list makes non-negotiable
- * — off brands absent, screenshots linked, dates in the workspace timezone.
- * The send itself, the one-click unsubscribe route and the delivered-once
- * constraint are the other three P7.x packets, and their proofs are theirs.
- */
-
 const CONTEXT = {
   unsubscribe_url: "https://0509.io/u/opaque-token",
   asset_base_url: "https://assets.0509.io",
@@ -679,12 +669,6 @@ describe("the subject line", () => {
   });
 });
 
-/**
- * 0509#7020: the brief escapes about 27 sites by hand. This table plants the
- * injection probe in every string field that reaches the html, one row per
- * field, so a missed escapeHtml anywhere in the template turns CI red — no
- * new renderer, the plain template modules stay.
- */
 function injectionPayload(): BriefPayload {
   return {
     workspace_id: "ws_probe",
@@ -763,7 +747,7 @@ describe("every string field carries the injection probe escaped, never raw (050
   });
   const quietWithDegraded = (patch: Partial<BriefPayload["checked"]["degraded_sources"][number]>): BriefPayload => ({
     ...base,
-    // The degraded-source names reach the html only in the quiet-week line.
+
     is_quiet_week: true,
     read_this_first: [],
     checked: { ...base.checked, degraded_sources: [{ ...base.checked.degraded_sources[0], ...patch }] },
