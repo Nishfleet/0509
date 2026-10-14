@@ -2,6 +2,9 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { isTeammateUnsubscribeToken, suppressByUnsubscribeToken } from "../../app/lib/data/email_suppression.server";
+import { takeRecipientSlot } from "../../app/lib/recipient-cap.server";
+import { clearRecipientCap } from "./clear-recipient-cap";
+
 import {
   changeEmailTarget,
   ensureOwnerEmailTarget,
@@ -39,6 +42,7 @@ const emailedToken = (): string => {
 
 describe("teammates on the brief", () => {
   beforeEach(async () => {
+    await clearRecipientCap();
     USER_ID = `user-mates-${crypto.randomUUID()}`;
     sentMail.length = 0;
     await env.DB.exec("DELETE FROM email_suppression");
@@ -88,6 +92,14 @@ describe("teammates on the brief", () => {
     expect(await add("b@0509.io")).toBeNull();
     expect(await add("c@0509.io")).toMatch(/up to 2 teammates/);
     expect(sentMail).toHaveLength(2);
+  });
+
+  it("stops inviting one address once it has had three emails from us in a day", async () => {
+    for (let round = 0; round < 3; round += 1) expect(await takeRecipientSlot("loop@0509.io")).toBe(true);
+
+    expect(await add("loop@0509.io")).toMatch(/several emails/);
+    expect(sentMail).toHaveLength(0);
+    expect(await add("other@0509.io")).toBeNull();
   });
 
   it("refuses a malformed address and sends nothing", async () => {

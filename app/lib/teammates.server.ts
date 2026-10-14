@@ -5,6 +5,7 @@ import { addTeammate, listTeammates, removeTeammate } from "./data/send_target.s
 import { readWorkspaceIdForOwner } from "./data/workspace.server";
 import { sendTeammateInvite } from "./delivery-address.server";
 import { looksLikeEmailAddress, normalizeEmailAddress } from "./email-address";
+import { RECIPIENT_CAPPED, takeRecipientSlot } from "./recipient-cap.server";
 import { sha256Hex } from "./sha256";
 import { MAX_TEAMMATES } from "./teammate-limit";
 
@@ -81,6 +82,7 @@ export async function addTeammateByOwner(input: {
   const current = await listTeammates(env.DB, workspaceId);
   if (current.some((mate) => mate.target_value === address)) return CANT_ADD;
   if ((await env.IDENTITY_CACHE.get(await reinviteKey(workspaceId, address))) !== null) return RECENTLY_INVITED;
+  if (!(await takeRecipientSlot(address))) return RECIPIENT_CAPPED;
   const now = new Date();
   const used = await invitesUsedToday(workspaceId, now);
   if (used >= INVITES_PER_DAY) return DAILY_LIMIT;

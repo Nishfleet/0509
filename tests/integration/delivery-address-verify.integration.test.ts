@@ -1,6 +1,8 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { clearRecipientCap } from "./clear-recipient-cap";
+
 import { readDeliveryAddress, saveDeliveryAddress } from "../../app/lib/delivery-address.server";
 import { confirmDeliveryAddress } from "../../app/lib/verify-delivery-address.server";
 import { ensureWorkspaceForSignIn, firstWorkspaceId } from "../../app/lib/workspace.server";
@@ -71,6 +73,7 @@ const save = (rec: Recorder, address: string) =>
 
 describe("confirm a changed delivery address (0509#5811)", () => {
   beforeEach(async () => {
+    await clearRecipientCap();
     USER_ID = `user-dav-${crypto.randomUUID()}`;
     await env.DB.exec("DELETE FROM email_suppression");
     await env.DB.exec("DELETE FROM send_target");
