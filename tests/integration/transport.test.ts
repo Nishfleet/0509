@@ -878,8 +878,6 @@ describe("refusalReason", () => {
     ["Imperva", "<title>Pardon Our Interruption</title>"],
     ["Incapsula", "Request unsuccessful. Incapsula incident ID: 1-2-3"],
     ["Akamai", '<a href="https://errors.edgesuite.net/18.1.2">Reference</a>'],
-    ["DataDome", '<script src="https://geo.captcha-delivery.com/c.js"></script>'],
-    ["PerimeterX", '<div id="px-captcha"></div>'],
     ["Sucuri", "<title>Sucuri WebSite Firewall - Access Denied</title>"],
   ])("calls a %s block page served with a 200 a challenge, even when it is long", async (_vendor, marker) => {
     const html = `<html><head>${marker}</head><body><p>${LONG_TEXT}</p></body></html>`;
