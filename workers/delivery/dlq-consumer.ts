@@ -111,6 +111,16 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
       continue;
     }
 
+    if ("target_id" in parsed) {
+      captureException(
+        digestDeadLetterError({ message_id: item.id, digest_id: parsed.digest_id, reason: "teammate send gave up" }),
+        { tags: { queue: "send-email-dlq", lane: "teammates", digest_id: parsed.digest_id } },
+      );
+      console.error(JSON.stringify({ event: "delivery.teammate_dead_lettered", digest_id: parsed.digest_id }));
+      item.ack();
+      continue;
+    }
+
     if ("incident_id" in parsed) {
       const deadLettered = await deadLetteredIncident(env, item.id, parsed.incident_id);
       item.ack();
