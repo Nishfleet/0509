@@ -4,6 +4,8 @@ import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server
 import { readTrialRecaps, recapKey, type TrialRecap } from "../../app/lib/data/recap.server";
 import { hasReminderAttempt } from "../../app/lib/data/trial_reminder.server";
 
+import { SETTINGS_LINK, unsubscribeHeaders } from "./alert-footer";
+import { UNSUBSCRIBE_BASE_URL, ensureUnsubscribeToken } from "./consumer";
 import { renderRecap } from "./recap-template";
 import { sendOnce } from "./send-once";
 
@@ -20,12 +22,23 @@ async function eligible(env: Env, recap: TrialRecap, isTester: TesterCheck): Pro
 
 async function recapOne(env: Env, recap: TrialRecap, isTester: TesterCheck): Promise<boolean> {
   if (!(await eligible(env, recap, isTester))) return false;
+  const unsubscribeUrl = `${UNSUBSCRIBE_BASE_URL}${await ensureUnsubscribeToken(env, {
+    id: recap.target_id,
+    unsubscribe_token: recap.unsubscribe_token,
+  })}`;
   return sendOnce(env, {
     key: recapKey(recap),
     workspaceId: recap.workspace_id,
     targetId: recap.target_id,
     to: recap.target_value,
-    render: () => renderRecap({ change_count: recap.change_count, latest: recap.latest, link: ALERTS_LINK }),
+    headers: unsubscribeHeaders(unsubscribeUrl),
+    render: () =>
+      renderRecap({
+        change_count: recap.change_count,
+        latest: recap.latest,
+        link: ALERTS_LINK,
+        footer: { unsubscribe_url: unsubscribeUrl, settings_link: SETTINGS_LINK },
+      }),
   });
 }
 

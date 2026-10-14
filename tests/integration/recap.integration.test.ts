@@ -112,6 +112,48 @@ describe("trial recap email", () => {
     expect(sent.map((mail) => mail.to)).toEqual([TARGET]);
   });
 
+  it("counts only changes on rivals that are switched on", async () => {
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, origin, state, created_at)
+         VALUES ('ent-self', ?, 'self', 'mine.com', 'Mine', '{}', 'manual', 'on', '2026-10-09T09:00:00Z')`,
+      ).bind(WS),
+      env.DB.prepare(
+        `INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, origin, state, created_at)
+         VALUES ('ent-off', ?, 'competitor', 'off.com', 'Off', '{}', 'manual', 'off', '2026-10-09T09:00:00Z')`,
+      ).bind(WS),
+    ]);
+    await seedPlan();
+    await seedChange("sig-1", "Rival change", "2026-10-10T10:00:00Z");
+    for (const [id, entity] of [
+      ["sig-self", "ent-self"],
+      ["sig-off", "ent-off"],
+    ]) {
+      await env.DB.prepare(
+        `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, aspect, dedup_key, observed_at)
+         VALUES (?1, ?2, ?3, 'src-recap', 'change', 'Not a live rival', 'pricing', ?1, '2026-10-11T10:00:00Z')`,
+      )
+        .bind(id, WS, entity)
+        .run();
+    }
+    const sent: EmailMessageBuilder[] = [];
+
+    await sendRecaps(envWith(sent), NOW, isTester);
+
+    expect(sent[0]?.text).toContain("caught 1 change across");
+  });
+
+  it("carries an unsubscribe link and header", async () => {
+    await seedPlan();
+    await seedChange("sig-1", "Something", "2026-10-12T10:00:00Z");
+    const sent: EmailMessageBuilder[] = [];
+
+    await sendRecaps(envWith(sent), NOW, isTester);
+
+    expect(sent[0]?.text).toMatch(/Unsubscribe: https:\/\/0509\.io\/u\/[0-9a-f]{64}/);
+    expect(sent[0]?.headers?.["List-Unsubscribe"]).toMatch(/^<https:\/\/0509\.io\/u\/[0-9a-f]{64}>$/);
+  });
+
   it("never mentions money or the end of the trial", async () => {
     await seedPlan();
     await seedChange("sig-1", "Pricing page now lists a free tier", "2026-10-10T10:00:00Z");

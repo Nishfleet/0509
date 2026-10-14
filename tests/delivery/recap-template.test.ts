@@ -7,6 +7,7 @@ const CTX = {
   change_count: 3,
   latest: { rival: "Acme", what: "Homepage headline changed" },
   link: "https://0509.io/app/alerts",
+  footer: { unsubscribe_url: "https://0509.io/u/tok", settings_link: "https://0509.io/app/settings" },
 };
 
 describe("recap email", () => {
@@ -28,6 +29,12 @@ describe("recap email", () => {
     expect(renderRecap(CTX).html).toMatch(
       /display:none[^>]*>In your first days we(?:'|&#39;)ve caught 3 changes across your rivals\./,
     );
+  });
+
+  it("ends with an unsubscribe link", () => {
+    const { html, text } = renderRecap(CTX);
+    expect(html).toContain('href="https://0509.io/u/tok"');
+    expect(text).toContain("Unsubscribe: https://0509.io/u/tok");
   });
 
   it("escapes anything it is handed", () => {

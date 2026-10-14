@@ -10,6 +10,7 @@ export interface SendOnceInput {
   targetId: string;
   to: string;
   render: () => RenderedBrief;
+  headers?: Record<string, string>;
 }
 
 export async function sendOnce(env: Env, input: SendOnceInput): Promise<boolean> {
@@ -29,6 +30,7 @@ export async function sendOnce(env: Env, input: SendOnceInput): Promise<boolean>
         subject: rendered.subject,
         html: rendered.html,
         text: rendered.text,
+        ...(input.headers === undefined ? {} : { headers: input.headers }),
       });
     })
     .catch((error: unknown) => ({

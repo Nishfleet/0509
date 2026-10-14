@@ -6,7 +6,9 @@ const SELECT_RECAPS = `SELECT p.workspace_id,
        p.provider_subscription_id AS subscription_id,
        st.id AS target_id,
        st.target_value,
+       st.unsubscribe_token,
        (SELECT count(*) FROM signal s
+          JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.role = 'competitor' AND e.state = 'on'
          WHERE s.workspace_id = p.workspace_id AND s.kind = 'change' AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL
            AND s.observed_at >= strftime('%Y-%m-%dT%H:%M:%SZ', p.current_period_end, '-' || ?3 || ' days')) AS change_count,
        (SELECT json_object(
@@ -37,6 +39,7 @@ const recapRow = z.object({
   subscription_id: z.string().nullable(),
   target_id: z.string(),
   target_value: z.string(),
+  unsubscribe_token: z.string().nullable(),
   change_count: z.number(),
   latest: z
     .string()
