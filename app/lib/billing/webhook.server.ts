@@ -6,7 +6,7 @@ import { markWebhookEventProcessed, recordWebhookEvent } from "../data/dodo_webh
 import { readPlanSubscription, readWorkspaceIdBySubscription, upsertSubscriptionPlan } from "../data/plan.server";
 import { tryFirstLook } from "../site/first-look.server";
 import { isCheckoutProof } from "./checkout-proof.server";
-import { isSubscriptionLive } from "./entitlements";
+import { isSubscriptionLive } from "./subscription-state";
 import { planIdForProduct, testerProductId } from "./products.server";
 import { isTrialing } from "./trial";
 

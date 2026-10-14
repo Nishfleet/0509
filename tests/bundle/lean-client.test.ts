@@ -10,6 +10,9 @@ const PAGES = [
   "app/routes/app.competitor.tsx?__react-router-build-client-route",
   "app/routes/app.alerts.tsx?__react-router-build-client-route",
   "app/routes/app.home.tsx?__react-router-build-client-route",
+  "app/routes/app.settings.tsx?__react-router-build-client-route",
+  "app/routes/app.brief.tsx?__react-router-build-client-route",
+  "app/routes/landing.tsx?__react-router-build-client-route",
 ];
 
 function reachableSources(entry: string): string[] {
@@ -23,9 +26,12 @@ function reachableSources(entry: string): string[] {
   return [...seen].map((key) => readFileSync(path.join("build/client", manifest[key].file), "utf8"));
 }
 
-describe("signed-in pages stay free of the public suffix list", () => {
-  it.each(PAGES)("%s does not ship tldts", (page) => {
+describe("pages stay free of the public suffix list and the full zod runtime", () => {
+  it.each(PAGES)("%s ships neither tldts nor full zod", (page) => {
     expect(Object.hasOwn(manifest, page)).toBe(true);
-    for (const source of reachableSources(page)) expect(source).not.toContain("allowIcannDomains");
+    for (const source of reachableSources(page)) {
+      expect(source).not.toContain("allowIcannDomains");
+      expect(source).not.toMatch(/(?<!\$)\bZodObject\b/);
+    }
   });
 });
