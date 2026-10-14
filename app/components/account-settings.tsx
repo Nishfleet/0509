@@ -25,7 +25,7 @@ export function ExportData() {
       </h2>
       <p className="mt-2 max-w-prose leading-[1.55]">
         One file with your account, sign-in sessions, passkeys, connected keys, plan, workspace, brands, the choices you
-        made, incidents, everything we found, and your brief history.
+        made, incidents, everything we found, your brief history, and the days you used 0509.
       </p>
       <a
         href="/app/settings/export"
