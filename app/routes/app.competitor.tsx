@@ -6,6 +6,7 @@ import { BrandSwitchField } from "../components/brand-switch";
 import { CompetitorForget } from "../components/competitor-forget";
 import { CompetitorFrame } from "../components/competitor-frame";
 import { CompetitorHeader, dayMonthLabel } from "../components/competitor-header";
+import { CompetitorRename } from "../components/competitor-rename";
 import { CompetitorSite } from "../components/competitor-site";
 import { CompetitorYoutube } from "../components/competitor-youtube";
 import { CompetitorSnapshot } from "../components/competitor-snapshot";
@@ -51,12 +52,14 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 
 function CompetitorFoot(props: {
   name: string;
+  domain: string;
   youtubeUrl: string | null;
   siteUrl: string | null;
   errors: CompetitorFormErrors | undefined;
 }) {
   return (
     <>
+      <CompetitorRename name={props.name} domain={props.domain} result={props.errors} />
       <CompetitorSite url={props.siteUrl} error={props.errors?.siteError ?? null} />
       <CompetitorYoutube url={props.youtubeUrl} error={props.errors?.youtubeError ?? null} />
       <CompetitorForget name={props.name} error={props.errors?.forgetError ?? null} />
@@ -105,6 +108,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       />
       <CompetitorFoot
         name={competitor.name}
+        domain={competitor.domain}
         youtubeUrl={loaderData.youtubeUrl}
         siteUrl={loaderData.watch.customerSite}
         errors={actionData}
