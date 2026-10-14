@@ -4,19 +4,10 @@ import { expect, test } from "./test";
 import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
 import { consoleFailures, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
 
-// J7 from docs/REBUILD-DONE.md §A (0509#4123): the fixture site is the tracked
-// competitor, its Pro price is flipped through the token-guarded /__price
-// route, and once a nightly site sweep has read the flip, Alerts shows it as a
-// before-and-after mark of the right kind with both screenshots and the
-// fixture URL as its source. No forced sweep and no seeded row: the spec asserts
-// a flip the real 02:00 UTC sweep already caught, and otherwise flips the price
-// for the next tick. The account is FIXTURE_ACCOUNTS.j7, kept between runs, so
-// the state that carries the journey survives; it is never deleted.
-// Production only: the preview Worker has no inbox to sign in through.
 test.skip(!process.env.PLAYWRIGHT_TEST_BASE_URL, "J7 needs the production sweep, the fixture Worker and the mail path");
 
 const FIXTURE_ORIGIN = "https://fixture.0509.in";
-// The Competitors list shows the registrable domain, so the fixture row reads 0509.in.
+
 const FIXTURE_ROW = "0509.in";
 const SWEEP_UTC_HOUR = 2;
 const SETTLE_MS = 60 * 60 * 1000;

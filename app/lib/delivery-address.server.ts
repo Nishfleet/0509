@@ -19,7 +19,7 @@ import { teammateInviteEmail, verifyAddressEmail } from "./verify-address-email"
 
 const INVALID = "Enter an email address, like you@company.com.";
 const SUPPRESSED =
-  'This address unsubscribed from the brief. Tick "Send the brief to this address again" and save to resume.';
+  'This address unsubscribed from the brief and alerts. Tick "Send the brief and alerts to this address again" and save to resume.';
 const IS_TEAMMATE = "That address already gets the brief as a teammate. Remove them first, or choose another address.";
 const NO_WORKSPACE = "Finish setting up first, then choose where the brief goes.";
 const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;

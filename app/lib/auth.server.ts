@@ -9,6 +9,7 @@ import { API_KEY_PREFIX, READ_SCOPE } from "./agent/paths";
 import { cancelPendingDigests } from "./data/digest.server";
 import { suppressWorkspaceTargets } from "./data/email_suppression.server";
 import { readWorkspaceIdForOwner } from "./data/workspace.server";
+import { withEmailLanding } from "./email-change-landing";
 import { ensureWorkspaceForSignIn } from "./workspace.server";
 import { accessPrecleared } from "./auth/access-preclearance.server";
 import { changeEmailEmail } from "./auth/change-email-email";
@@ -58,7 +59,11 @@ function sendChangeEmailMessage(
   email: SendEmail,
   input: { kind: "approve" | "confirm"; to: string; named: string; url: string },
 ): Promise<void> {
-  const message = changeEmailEmail({ kind: input.kind, email: input.named, url: input.url });
+  const message = changeEmailEmail({
+    kind: input.kind,
+    email: input.named,
+    url: withEmailLanding(input.url, input.kind),
+  });
   return sendOrThrow(email, {
     to: input.to,
     from: { email: "hello@0509.io", name: "Five to Nine" },
