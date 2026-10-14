@@ -5,6 +5,7 @@ import { addTeammate, listTeammates, removeTeammate } from "./data/send_target.s
 import { readWorkspaceIdForOwner } from "./data/workspace.server";
 import { sendTeammateInvite } from "./delivery-address.server";
 import { looksLikeEmailAddress, normalizeEmailAddress } from "./email-address";
+import { sha256Hex } from "./sha256";
 import { MAX_TEAMMATES } from "./teammate-limit";
 
 const INVITES_PER_DAY = 4;
@@ -36,14 +37,15 @@ async function invitesUsedToday(workspaceId: string, now: Date): Promise<number>
   return Number(await env.IDENTITY_CACHE.get(inviteKey(workspaceId, now))) || 0;
 }
 
-const reinviteKey = (workspaceId: string, address: string) => `teammate-invited:${workspaceId}:${address}`;
+const reinviteKey = async (workspaceId: string, address: string) =>
+  `teammate-invited:${workspaceId}:${await sha256Hex(address)}`;
 
 async function countInvite(input: { workspaceId: string; address: string; now: Date; used: number }): Promise<void> {
   const { workspaceId, address, now, used } = input;
   await env.IDENTITY_CACHE.put(inviteKey(workspaceId, now), String(used + 1), {
     expirationTtl: INVITE_COUNTER_TTL_SECONDS,
   });
-  await env.IDENTITY_CACHE.put(reinviteKey(workspaceId, address), "1", { expirationTtl: REINVITE_WAIT_SECONDS });
+  await env.IDENTITY_CACHE.put(await reinviteKey(workspaceId, address), "1", { expirationTtl: REINVITE_WAIT_SECONDS });
 }
 
 export async function addTeammateByOwner(input: {
@@ -61,7 +63,7 @@ export async function addTeammateByOwner(input: {
   if (!success) return RATE_LIMITED;
   const current = await listTeammates(env.DB, workspaceId);
   if (current.some((mate) => mate.target_value === address)) return CANT_ADD;
-  if ((await env.IDENTITY_CACHE.get(reinviteKey(workspaceId, address))) !== null) return RECENTLY_INVITED;
+  if ((await env.IDENTITY_CACHE.get(await reinviteKey(workspaceId, address))) !== null) return RECENTLY_INVITED;
   const now = new Date();
   const used = await invitesUsedToday(workspaceId, now);
   if (used >= INVITES_PER_DAY) return DAILY_LIMIT;
