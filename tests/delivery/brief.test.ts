@@ -709,6 +709,19 @@ describe("the subject line", () => {
     );
   });
 
+  it("calls the first brief a first ranking, not a quiet week, and drops 'no last week' from every line", () => {
+    const base = payload({ read_this_first: [], is_quiet_week: true, headline_movement: null, headline_is_new: false });
+    const first = {
+      ...base,
+      brands: base.brands.map((brand) => ({ ...brand, movement: null, is_new: false })),
+    };
+    const { subject, text } = renderBrief(first, CONTEXT);
+    expect(subject).toBe("Your first ranking: you're #3 of 8");
+    expect(text).toContain("You're #3 of 8 this week — your first ranking");
+    expect(text).not.toContain("no last week to compare");
+    expect(text).toContain("Kindred — #1\n");
+  });
+
   it("promises nothing about timing and never shouts", () => {
     const { subject } = renderBrief(payload(), CONTEXT);
     expect(subject).not.toMatch(/[!]|breaking|now|today|just/i);

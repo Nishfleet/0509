@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ledgerSummary, quietLedgerLine, type WorkLedger } from "../../app/lib/work-ledger";
+import { ledgerFooter, ledgerSummary, quietLedgerLine, type WorkLedger } from "../../app/lib/work-ledger";
 
 const BASE: WorkLedger = {
   rivals: 5,
@@ -55,5 +55,16 @@ describe("the work ledger", () => {
         "This month we",
       ),
     ).toBe("This month we read 1 page across 1 rival; saw 1 change, 1 worth your time; read 1 mention and kept 1.");
+  });
+
+  it("does not say the week twice when the headline already did", () => {
+    const quiet: WorkLedger = { ...BASE, changes_told: 0 };
+    const headline = quietLedgerLine(quiet) ?? "";
+    expect(ledgerFooter(quiet, headline)).toBe("3 changes judged too small to interrupt you stayed off the brief.");
+    expect(ledgerFooter({ ...quiet, changes_set_aside: 0 }, headline)).toBeNull();
+    expect(ledgerFooter(BASE, "2 of 4 changes worth reading this week, led by Acme.")).toBe(
+      ledgerSummary(BASE, "This week we"),
+    );
+    expect(ledgerFooter(undefined, headline)).toBeNull();
   });
 });

@@ -161,8 +161,7 @@ describe("the work ledger against real D1", () => {
       unsubscribe_url: "https://0509.io/u/t",
       asset_base_url: "https://assets.0509.io",
     });
-    expect(text).toContain(
-      "This week we read 2 pages across 1 rival; saw 1 change, none worth your time. 1 change judged too small to interrupt you stayed off the brief.",
-    );
+    expect(text).toContain("1 change judged too small to interrupt you stayed off the brief.");
+    expect(text).not.toContain("This week we read 2 pages");
   });
 });

@@ -1,10 +1,10 @@
 import { type BriefContext, type BriefPayload, type RenderedBrief } from "../../app/lib/brief-payload";
-import { briefPreheader, briefSubject } from "../../app/lib/brief-subject";
+import { briefPreheader, briefSubject, isFirstRanking } from "../../app/lib/brief-subject";
 import { nextStepLine } from "../../app/lib/next-step";
 import { rankTrendLine, sinceStartedLine } from "../../app/lib/brief-since";
 import { escapeHtml } from "../../app/lib/html";
 import { countPhrase } from "../../app/lib/quiet-week";
-import { ledgerSummary } from "../../app/lib/work-ledger";
+import { ledgerFooter } from "../../app/lib/work-ledger";
 import { NOTHING_FIRST_LINE, UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
 import { EYEBROW, FONT, MONO, emailDocument, postalLine } from "./email-shell";
 import { SETTINGS_LINK, supportLineHtml, supportLineText } from "./alert-footer";
@@ -117,7 +117,8 @@ function renderHeadline(payload: BriefPayload, whyLine: string): { html: string;
     };
   }
 
-  const movement = payload.headline_is_new ? COPY.firstRanking : movementText(headline_movement, false);
+  const movement =
+    payload.headline_is_new || isFirstRanking(payload) ? COPY.firstRanking : movementText(headline_movement, false);
   const period = COPY.weekOf(formatDate(payload.period_start, payload.timezone, false));
   const trend = rankTrendLine(payload);
 
@@ -230,7 +231,7 @@ function renderReadThisFirst(payload: BriefPayload, assetBaseUrl: string | null)
   return { html, text };
 }
 
-function renderBrandLine(line: BriefPayload["brands"][number]): { html: string; text: string } {
+function renderBrandLine(line: BriefPayload["brands"][number], first: boolean): { html: string; text: string } {
   const counts = [
     countPhrase(line.ad_delta, "new ad", "new ads"),
     countPhrase(line.mention_delta, "mention", "mentions"),
@@ -239,14 +240,15 @@ function renderBrandLine(line: BriefPayload["brands"][number]): { html: string; 
   ];
 
   const rankLabel = line.rank === null ? "unranked" : `#${n(line.rank)}`;
-  const movement = movementText(line.movement, line.is_new);
+  const movement = first ? "" : movementText(line.movement, line.is_new);
+  const standing = movement === "" ? rankLabel : `${rankLabel}, ${movement}`;
   const baseline = line.baseline ?? [];
 
   const html = [
     `<div class="brief-rule" style="padding:10px 0;">`,
     `<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">`,
     `<strong>${escapeHtml(line.name)}</strong>`,
-    ` <span class="brief-muted">${escapeHtml(rankLabel)}, ${escapeHtml(movement)}</span>`,
+    ` <span class="brief-muted">${escapeHtml(standing)}</span>`,
     `</p>`,
     line.biggest_move !== null
       ? `<p style="margin:2px 0 0;font-family:${FONT};font-size:15px;line-height:22px;">${escapeHtml(line.biggest_move)}</p>`
@@ -259,7 +261,7 @@ function renderBrandLine(line: BriefPayload["brands"][number]): { html: string; 
     `</div>`,
   ].join("");
 
-  const text = [`${line.name} — ${rankLabel}, ${movement}`, line.biggest_move, counts.join(" · "), ...baseline]
+  const text = [`${line.name} — ${standing}`, line.biggest_move, counts.join(" · "), ...baseline]
     .filter((v): v is string => v !== null)
     .join("\n");
 
@@ -276,7 +278,7 @@ function renderBrands(payload: BriefPayload): { html: string; text: string } {
     };
   }
 
-  const rendered = payload.brands.map((line) => renderBrandLine(line));
+  const rendered = payload.brands.map((line) => renderBrandLine(line, isFirstRanking(payload)));
 
   return {
     html: heading(COPY.yourBrands) + rendered.map((r) => r.html).join(""),
@@ -324,8 +326,8 @@ function sinceSentence(checked: BriefPayload["checked"]): string {
   return since === null ? "" : ` ${since}.`;
 }
 
-function renderWork(checked: BriefPayload["checked"]): { html: string; text: string[] } {
-  const work = ledgerSummary(checked.ledger, "This week we");
+function renderWork(payload: BriefPayload): { html: string; text: string[] } {
+  const work = ledgerFooter(payload.checked.ledger, payload.why_line);
   if (work === null) return { html: "", text: [] };
   return {
     html: `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(work)}</p>`,
@@ -351,7 +353,7 @@ function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { h
 
   const unsubscribeHref = unsubscribeUrl === null ? null : safeUrl(unsubscribeUrl);
   const postal = postalLine();
-  const work = renderWork(payload.checked);
+  const work = renderWork(payload);
   const html = [
     `<div class="brief-rule" style="padding:16px 0 0;">`,
     `<p class="brief-muted" style="${EYEBROW}">${escapeHtml(COPY.footerTitle)}</p>`,
