@@ -20,7 +20,8 @@ test("a customer who removes every competitor still gets working pages and a way
       .click();
     await page.getByLabel(`Type ${name} to confirm`).fill(name);
     await page.getByRole("button", { name: `Remove and forget ${name}` }).click();
-    await expect(page).toHaveURL(/\/app\/competitors$/);
+    await expect(page).toHaveURL(/\/app\/competitors\?removed=1$/);
+    await expect(page.getByRole("status").filter({ hasText: "Removed." })).toBeVisible();
   }
 
   await expect(page.getByText("Add a competitor to see where you stand.")).toBeVisible();
