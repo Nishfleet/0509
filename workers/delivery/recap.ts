@@ -5,7 +5,7 @@ import { readTrialRecaps, recapKey, type TrialRecap } from "../../app/lib/data/r
 import { hasReminderAttempt } from "../../app/lib/data/trial_reminder.server";
 
 import { SETTINGS_LINK, unsubscribeHeaders } from "./alert-footer";
-import { UNSUBSCRIBE_BASE_URL, ensureUnsubscribeToken } from "./consumer";
+import { ensureUnsubscribeToken, unsubscribeUrlFor } from "./consumer";
 import { renderRecap } from "./recap-template";
 import { sendOnce } from "./send-once";
 
@@ -17,15 +17,13 @@ async function eligible(env: Env, recap: TrialRecap, isTester: TesterCheck): Pro
   if (recap.subscription_id === null || recap.change_count === 0) return false;
   if (await hasReminderAttempt(env.DB, recapKey(recap))) return false;
   if ((await isTester(recap.subscription_id)) !== false) return false;
-  return !(await isAddressSuppressed(recap.target_value, env.DB));
+  return !(await isAddressSuppressed(recap.target_value, "brief", env.DB));
 }
 
 async function recapOne(env: Env, recap: TrialRecap, isTester: TesterCheck): Promise<boolean> {
   if (!(await eligible(env, recap, isTester))) return false;
-  const unsubscribeUrl = `${UNSUBSCRIBE_BASE_URL}${await ensureUnsubscribeToken(env, {
-    id: recap.target_id,
-    unsubscribe_token: recap.unsubscribe_token,
-  })}`;
+  const token = await ensureUnsubscribeToken(env, { id: recap.target_id, unsubscribe_token: recap.unsubscribe_token });
+  const unsubscribeUrl = unsubscribeUrlFor(token, "brief");
   return sendOnce(env, {
     key: recapKey(recap),
     workspaceId: recap.workspace_id,

@@ -1,7 +1,12 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { isUnsubscribeTokenKnown } from "../../app/lib/data/email_suppression.server";
+import {
+  isAddressSuppressed,
+  isUnsubscribeTokenKnown,
+  readMailKinds,
+  writeMailKinds,
+} from "../../app/lib/data/email_suppression.server";
 import { unsubscribe } from "../../app/lib/unsubscribe.server";
 import { deliver } from "../../workers/delivery/consumer";
 
@@ -97,7 +102,7 @@ describe("one-click unsubscribe (0509#4358, 0509#4593, 0509#5761)", () => {
   });
 
   it("(a) reports unsubscribed and suppresses the address behind a valid token", async () => {
-    const outcome = await unsubscribe(TOKEN);
+    const outcome = await unsubscribe(TOKEN, "all");
 
     expect(outcome).toBe("unsubscribed");
     const rows = await suppressionRows();
@@ -108,10 +113,10 @@ describe("one-click unsubscribe (0509#4358, 0509#4593, 0509#5761)", () => {
   });
 
   it("(b) keeps one row and the first created_at on a second click", async () => {
-    expect(await unsubscribe(TOKEN)).toBe("unsubscribed");
+    expect(await unsubscribe(TOKEN, "all")).toBe("unsubscribed");
     const first = await suppressionRows();
 
-    expect(await unsubscribe(TOKEN)).toBe("unsubscribed");
+    expect(await unsubscribe(TOKEN, "all")).toBe("unsubscribed");
     const rows = await suppressionRows();
 
     expect(rows).toHaveLength(1);
@@ -119,15 +124,15 @@ describe("one-click unsubscribe (0509#4358, 0509#4593, 0509#5761)", () => {
   });
 
   it("(c) says invalid_token and writes nothing for unknown and missing tokens", async () => {
-    expect(await unsubscribe(UNKNOWN_TOKEN)).toBe("invalid_token");
-    expect(await unsubscribe(undefined)).toBe("invalid_token");
-    expect(await unsubscribe("")).toBe("invalid_token");
+    expect(await unsubscribe(UNKNOWN_TOKEN, "all")).toBe("invalid_token");
+    expect(await unsubscribe(undefined, "all")).toBe("invalid_token");
+    expect(await unsubscribe("", "all")).toBe("invalid_token");
 
     expect(await suppressionRows()).toHaveLength(0);
   });
 
   it("(d) makes the next send suppressed with no attempt row", async () => {
-    await unsubscribe(TOKEN);
+    await unsubscribe(TOKEN, "all");
     await seedDigest();
 
     const rec = recorder();
@@ -148,7 +153,61 @@ describe("one-click unsubscribe (0509#4358, 0509#4593, 0509#5761)", () => {
     await env.DB.prepare(`UPDATE send_target SET unsubscribe_token = NULL WHERE id = ?`).bind(TARGET_ID).run();
 
     expect(await isUnsubscribeTokenKnown(TOKEN)).toBe(false);
-    expect(await unsubscribe(TOKEN)).toBe("invalid_token");
+    expect(await unsubscribe(TOKEN, "all")).toBe("invalid_token");
     expect(await suppressionRows()).toHaveLength(0);
+  });
+
+  it("(f) stops only the brief when the link was the brief's, and alerts keep going", async () => {
+    expect(await unsubscribe(TOKEN, "brief")).toBe("unsubscribed");
+
+    expect(await isAddressSuppressed(ADDRESS, "brief")).toBe(true);
+    expect(await isAddressSuppressed(ADDRESS, "alerts")).toBe(false);
+    expect(await isAddressSuppressed(ADDRESS, "all")).toBe(false);
+    expect(await readMailKinds(ADDRESS)).toEqual({ brief: false, alerts: true });
+  });
+
+  it("(g) stops everything when the second step asks for it, keeping one row", async () => {
+    await unsubscribe(TOKEN, "alerts");
+    expect(await isAddressSuppressed(ADDRESS, "brief")).toBe(false);
+
+    await unsubscribe(TOKEN, "all");
+
+    expect(await isAddressSuppressed(ADDRESS, "brief")).toBe(true);
+    expect(await isAddressSuppressed(ADDRESS, "alerts")).toBe(true);
+    expect(await suppressionRows()).toHaveLength(1);
+  });
+
+  it("(h) lets Settings switch each kind back on, and drops the row once both are on", async () => {
+    await unsubscribe(TOKEN, "all");
+
+    await writeMailKinds(ADDRESS, { brief: true, alerts: false });
+    expect(await readMailKinds(ADDRESS)).toEqual({ brief: true, alerts: false });
+    expect(await isAddressSuppressed(ADDRESS, "alerts")).toBe(true);
+    expect(await isAddressSuppressed(ADDRESS, "brief")).toBe(false);
+
+    await writeMailKinds(ADDRESS, { brief: true, alerts: true });
+    expect(await suppressionRows()).toHaveLength(0);
+  });
+
+  it("(i) treats a row written before the kinds existed as stopping both", async () => {
+    await env.DB.prepare(`INSERT INTO email_suppression (address, reason, created_at) VALUES (?, 'unsubscribed', ?)`)
+      .bind("older@0509.io", "2026-09-01T00:00:00Z")
+      .run();
+
+    expect(await readMailKinds("older@0509.io")).toEqual({ brief: false, alerts: false });
+    expect(await isAddressSuppressed("older@0509.io", "all")).toBe(true);
+  });
+
+  it("(j) still tries the brief for someone who stopped only alerts", async () => {
+    await unsubscribe(TOKEN, "alerts");
+    await seedDigest();
+
+    const rec = recorder();
+    const result = await deliver({ ...env, EMAIL: bindingFor(rec) } as Env, {
+      digest_id: "digest-unsubscribe",
+    });
+
+    expect(result.outcome).not.toBe("suppressed");
+    expect(result.attempt_id).not.toBeNull();
   });
 });

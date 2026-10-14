@@ -151,7 +151,7 @@ describe("trial recap email", () => {
     await sendRecaps(envWith(sent), NOW, isTester);
 
     expect(sent[0]?.text).toMatch(/Unsubscribe: https:\/\/0509\.io\/u\/[0-9a-f]{64}/);
-    expect(sent[0]?.headers?.["List-Unsubscribe"]).toMatch(/^<https:\/\/0509\.io\/u\/[0-9a-f]{64}>$/);
+    expect(sent[0]?.headers?.["List-Unsubscribe"]).toMatch(/^<https:\/\/0509\.io\/u\/[0-9a-f]{64}\?type=brief>$/);
   });
 
   it("our own copy never mentions money or the end of the trial", async () => {

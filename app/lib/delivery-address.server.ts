@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { sendMessage } from "../../workers/delivery/send";
 import { redactEmailShaped } from "./auth/redact-email-shaped";
 import { looksLikeEmailAddress, normalizeEmailAddress } from "./email-address";
-import { clearSuppression, isAddressSuppressed } from "./data/email_suppression.server";
+import { clearSuppression, isAddressSuppressed, writeMailKinds } from "./data/email_suppression.server";
 import {
   changeEmailTarget,
   ensureOwnerEmailTarget,
@@ -102,7 +102,7 @@ async function refuseOrResumeSuppressed(
   address: string,
   input: { signInEmail: string; resume: boolean },
 ): Promise<boolean> {
-  if (!(await isAddressSuppressed(address))) return false;
+  if (!(await isAddressSuppressed(address, "brief"))) return false;
   if (!input.resume) return true;
   if (address === normalizeEmailAddress(input.signInEmail)) await clearSuppression(address);
   return false;
@@ -117,6 +117,16 @@ export async function readDeliveryAddress(
   const target = await readEmailTarget(env.DB, workspaceId);
   if (target === null) return { address: signInEmail, verified: true };
   return { address: target.target_value, verified: target.is_verified === 1 };
+}
+
+export async function saveMailKinds(input: {
+  userId: string;
+  signInEmail: string;
+  brief: boolean;
+  alerts: boolean;
+}): Promise<void> {
+  const { address } = await readDeliveryAddress(input.userId, input.signInEmail);
+  await writeMailKinds(normalizeEmailAddress(address), { brief: input.brief, alerts: input.alerts });
 }
 
 export async function saveDeliveryAddress(input: {

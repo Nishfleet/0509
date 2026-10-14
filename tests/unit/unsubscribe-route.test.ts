@@ -13,9 +13,15 @@ vi.mock("../../app/lib/data/email_suppression.server", () => ({
 
 vi.mock("../../app/lib/unsubscribe.server", () => ({
   unsubscribe: () => Promise.resolve(holder.outcome),
+  unsubscribeScope: (value: unknown) => (value === "brief" || value === "alerts" ? value : "all"),
 }));
 
 import Unsubscribe, { ErrorBoundary, action, loader } from "../../app/routes/u.$token";
+
+function postOf(token: string, url: string, body = new URLSearchParams("List-Unsubscribe=One-Click")) {
+  const request = new Request(url, { method: "POST", body });
+  return { params: { token }, request } as never;
+}
 
 async function statusOf(run: () => Promise<unknown>): Promise<number> {
   const outcome = await run().then(
@@ -33,14 +39,14 @@ function renderBoundary(error: unknown): string {
   return renderToStaticMarkup(createElement(ErrorBoundary, { error } as never));
 }
 
-function renderConfirm(unsubscribed: boolean): string {
+function renderConfirm(unsubscribed: boolean, scope = "all"): string {
   const Stub = createRoutesStub([{ id: "routes/u.$token", path: "/u/:token", Component: Unsubscribe }]);
   return renderToStaticMarkup(
     createElement(Stub, {
       initialEntries: ["/u/t"],
       hydrationData: {
-        loaderData: { "routes/u.$token": { link: "confirm" } },
-        ...(unsubscribed ? { actionData: { "routes/u.$token": { unsubscribed: true } } } : {}),
+        loaderData: { "routes/u.$token": { link: "confirm", scope } },
+        ...(unsubscribed ? { actionData: { "routes/u.$token": { unsubscribed: true, scope } } } : {}),
       },
     }),
   );
@@ -98,7 +104,7 @@ function renderFormAt(state: Navigation["state"]): string {
         createElement(
           UNSAFE_DataRouterNavigationContext.Provider,
           { value: { navigation: navigationAt(state), revalidation: "idle" } },
-          createElement(Unsubscribe, { actionData: undefined } as never),
+          createElement(Unsubscribe, { actionData: undefined, loaderData: { link: "confirm", scope: "all" } } as never),
         ),
     },
   ]);
@@ -121,23 +127,52 @@ describe("/u/:token (0509#5761)", () => {
   it("serves the confirm page for a live token", async () => {
     holder.known = true;
 
-    const data = await loader({ params: { token: "a".repeat(64) } } as never);
+    const request = new Request("https://0509.io/u/t");
+    const data = await loader({ params: { token: "a".repeat(64) }, request } as never);
 
-    expect(data).toEqual({ link: "confirm" });
+    expect(data).toEqual({ link: "confirm", scope: "all" });
+  });
+
+  it("reads which email the link is for from its type", async () => {
+    holder.known = true;
+    const params = { token: "a".repeat(64) };
+
+    const brief = await loader({ params, request: new Request("https://0509.io/u/t?type=brief") } as never);
+    const alerts = await loader({ params, request: new Request("https://0509.io/u/t?type=alerts") } as never);
+    const odd = await loader({ params, request: new Request("https://0509.io/u/t?type=nope") } as never);
+
+    expect([brief, alerts, odd]).toEqual([
+      { link: "confirm", scope: "brief" },
+      { link: "confirm", scope: "alerts" },
+      { link: "confirm", scope: "all" },
+    ]);
   });
 
   it("answers a POST with a bogus token as a 404 instead of claiming success", async () => {
     holder.outcome = "invalid_token";
 
-    expect(await statusOf(() => action({ params: { token: "deadbeef" } } as never))).toBe(404);
+    expect(await statusOf(() => action(postOf("deadbeef", "https://0509.io/u/deadbeef")))).toBe(404);
   });
 
   it("answers a POST with a live token as success", async () => {
     holder.outcome = "unsubscribed";
 
-    const data = await action({ params: { token: "a".repeat(64) } } as never);
+    const data = await action(postOf("a".repeat(64), "https://0509.io/u/t?type=brief"));
 
+<<<<<<< HEAD
     expect(data).toEqual({ unsubscribed: true, teammate: false });
+=======
+    expect(data).toEqual({ unsubscribed: true, scope: "brief" });
+  });
+
+  it("lets the second step widen a brief-only unsubscribe to everything", async () => {
+    holder.outcome = "unsubscribed";
+    const body = new URLSearchParams({ scope: "all" });
+
+    const data = await action(postOf("a".repeat(64), "https://0509.io/u/t?type=brief", body));
+
+    expect(data).toEqual({ unsubscribed: true, scope: "all" });
+>>>>>>> 73f4c440c (Let people stop the brief or alerts on their own)
   });
 
   it("renders 'This link is not valid' with no unsubscribe claim in it", () => {
@@ -165,6 +200,19 @@ describe("/u/:token (0509#5761)", () => {
 
     expect(html).toContain("Unsubscribe from Five to Nine emails?");
     expect(html).not.toContain("This link is not valid");
+  });
+
+  it("names the one email a brief or alerts link stops, and offers everything as a second step", () => {
+    const confirm = renderConfirm(false, "brief");
+    expect(confirm).toContain("Stop the weekly brief?");
+    expect(confirm).toContain("Alerts keep coming.");
+
+    const done = renderConfirm(true, "alerts");
+    expect(done).toContain("The weekly brief keeps coming.");
+    expect(done).toContain("Stop everything instead");
+    expect(done).toContain('name="scope"');
+
+    expect(renderConfirm(true, "all")).not.toContain("Stop everything instead");
   });
 
   it("renders the confirmation after a POST that suppressed the address", () => {

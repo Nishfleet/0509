@@ -1,11 +1,20 @@
 import type { Route } from "./+types/u.$token";
-import { Form, isRouteErrorResponse, useNavigation } from "react-router";
+import { isRouteErrorResponse, useNavigation } from "react-router";
+
+import { z } from "zod";
 
 import { ErrorPage } from "../components/error-page";
+<<<<<<< HEAD
 import { Footer, SUPPORT_ADDRESS } from "../components/footer";
 import { Button } from "../components/ui/button";
 import { isTeammateUnsubscribeToken, isUnsubscribeTokenKnown } from "../lib/data/email_suppression.server";
 import { unsubscribe } from "../lib/unsubscribe.server";
+=======
+import { Footer } from "../components/footer";
+import { UnsubscribeConfirm, UnsubscribeDone } from "../components/unsubscribe-page";
+import { isUnsubscribeTokenKnown } from "../lib/data/email_suppression.server";
+import { unsubscribe, unsubscribeScope } from "../lib/unsubscribe.server";
+>>>>>>> 73f4c440c (Let people stop the brief or alerts on their own)
 
 const INVALID_LINK = "This link is not valid";
 
@@ -17,19 +26,36 @@ export function headers(_: Route.HeadersArgs) {
   return { "Cache-Control": "no-store" };
 }
 
-export async function loader({ params }: Route.LoaderArgs) {
+const widenForm = z.object({ scope: z.literal("all").optional() });
+
+function linkScope(request: Request) {
+  return unsubscribeScope(new URL(request.url).searchParams.get("type"));
+}
+
+export async function loader({ params, request }: Route.LoaderArgs) {
   if (!(await isUnsubscribeTokenKnown(params.token))) {
     throw new Response(INVALID_LINK, { status: 404 });
   }
-  return { link: "confirm" as const };
+  return { link: "confirm" as const, scope: linkScope(request) };
 }
 
+<<<<<<< HEAD
 export async function action({ params }: Route.ActionArgs) {
   const teammate = await isTeammateUnsubscribeToken(params.token);
   if ((await unsubscribe(params.token)) === "invalid_token") {
     throw new Response(INVALID_LINK, { status: 404 });
   }
   return { unsubscribed: true as const, teammate };
+=======
+export async function action({ params, request }: Route.ActionArgs) {
+  const form = await request.formData();
+  const widened = widenForm.safeParse(Object.fromEntries(form));
+  const scope = widened.success && widened.data.scope === "all" ? "all" : linkScope(request);
+  if ((await unsubscribe(params.token, scope)) === "invalid_token") {
+    throw new Response(INVALID_LINK, { status: 404 });
+  }
+  return { unsubscribed: true as const, scope };
+>>>>>>> 73f4c440c (Let people stop the brief or alerts on their own)
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
@@ -55,6 +81,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   );
 }
 
+<<<<<<< HEAD
 function ChangedYourMind({ teammate }: { teammate: boolean }) {
   if (teammate) {
     return (
@@ -113,4 +140,11 @@ export default function Unsubscribe({ actionData }: Route.ComponentProps) {
       <Footer />
     </main>
   );
+=======
+export default function Unsubscribe({ loaderData, actionData }: Route.ComponentProps) {
+  const navigation = useNavigation();
+  const busy = navigation.state !== "idle";
+  if (actionData?.unsubscribed) return <UnsubscribeDone scope={actionData.scope} busy={busy} />;
+  return <UnsubscribeConfirm scope={loaderData.scope} busy={busy} />;
+>>>>>>> 73f4c440c (Let people stop the brief or alerts on their own)
 }

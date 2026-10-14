@@ -72,11 +72,15 @@ export async function addTeammateByOwner(input: {
   if (workspaceId === null) return NO_WORKSPACE;
   const { success } = await env.SIGN_IN_EMAIL_LIMIT.limit({ key: `teammate:${workspaceId}` });
   if (!success) return RATE_LIMITED;
+<<<<<<< HEAD
   const current = await listTeammates(env.DB, workspaceId);
   if (current.some((mate) => mate.target_value === address)) return CANT_ADD;
   const now = new Date();
   const used = await invitesUsedToday(workspaceId, now);
   if (used >= INVITES_PER_DAY) return DAILY_LIMIT;
+=======
+  if (await isAddressSuppressed(address, "brief")) return CANT_ADD;
+>>>>>>> 73f4c440c (Let people stop the brief or alerts on their own)
   if (!(await takeRecipientSlot(address))) return RECIPIENT_CAPPED;
   const targetId = await addTeammate(env.DB, { workspaceId, address, now: now.toISOString() });
   if (targetId === null) return CANT_ADD;
