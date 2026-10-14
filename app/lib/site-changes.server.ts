@@ -38,7 +38,10 @@ function shot(id: string, side: ShotSide, capture: { key: string | null; at: str
   return { src: shotPath(id, side), capturedAt: captureLabel(at) };
 }
 
-type MarkRead = { mark: ChangeMark | null; unavailable: boolean };
+interface MarkRead {
+  mark: ChangeMark | null;
+  unavailable: boolean;
+}
 
 async function readMark(diffKey: string | null): Promise<MarkRead> {
   if (diffKey === null) return { mark: null, unavailable: false };
