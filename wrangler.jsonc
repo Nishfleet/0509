@@ -336,6 +336,11 @@
   // within a day and a live one is never started twice.
   "workflows": [
     {
+      "name": "billing-reconcile",
+      "binding": "BILLING_RECONCILE",
+      "class_name": "BillingReconcileWorkflow",
+    },
+    {
       "name": "standing-rollover",
       "binding": "STANDING_ROLLOVER",
       "class_name": "StandingRolloverWorkflow",

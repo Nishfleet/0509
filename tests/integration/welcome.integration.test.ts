@@ -22,13 +22,13 @@ const envWith = (sent: EmailMessageBuilder[]): Env =>
     },
   }) as Env;
 
-const seedPlan = (input: { status?: string; trialing?: number; updatedAt?: string }) =>
+const seedPlan = (input: { status?: string; trialing?: number; periodEnd?: string }) =>
   env.DB.prepare(
     `INSERT OR REPLACE INTO plan
        (id, workspace_id, tier, status, provider_customer_id, provider_subscription_id, current_period_end, trialing, updated_at)
-     VALUES ('plan-welcome', ?, 'starter', ?, 'cus_1', 'sub_1', '2026-10-20T00:00:00Z', ?, ?)`,
+     VALUES ('plan-welcome', ?, 'starter', ?, 'cus_1', 'sub_1', ?, ?, '2026-10-13T10:00:00Z')`,
   )
-    .bind(WS, input.status ?? "active", input.trialing ?? 1, input.updatedAt ?? "2026-10-13T10:00:00Z")
+    .bind(WS, input.status ?? "active", input.periodEnd ?? "2026-10-20T00:00:00Z", input.trialing ?? 1)
     .run();
 
 describe("welcome email", () => {
@@ -94,10 +94,40 @@ describe("welcome email", () => {
     expect(sent.map((mail) => mail.to)).toEqual([TARGET]);
   });
 
+  it("names the first three rivals and counts the rest, even when a name has a comma or bar", async () => {
+    await seedPlan({});
+    await env.DB.batch(
+      [
+        ["ent-w2", "b.com", "Beta | Co, Ltd"],
+        ["ent-w3", "c.com", "Gamma"],
+        ["ent-w4", "d.com", "Delta"],
+      ].map(([id, domain, name], index) =>
+        env.DB.prepare(
+          `INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, origin, state, created_at)
+           VALUES (?, ?, 'competitor', ?, ?, '{}', 'manual', 'on', ?)`,
+        ).bind(id, WS, domain, name, `2026-10-13T09:0${String(index + 1)}:00Z`),
+      ),
+    );
+    const sent: EmailMessageBuilder[] = [];
+
+    await sendWelcomes(envWith(sent), NOW, isTester);
+
+    expect(sent[0]?.text).toContain("We're watching Acme, Beta | Co, Ltd, Gamma and 1 more.");
+  });
+
+  it("sends nothing when the workspace has no confirmed address", async () => {
+    await seedPlan({});
+    await env.DB.exec("UPDATE send_target SET is_verified = 0");
+    const sent: EmailMessageBuilder[] = [];
+
+    expect(await sendWelcomes(envWith(sent), NOW, isTester)).toBe(0);
+    expect(sent).toHaveLength(0);
+  });
+
   it.each([
     ["a customer who already paid", { trialing: 0 }],
     ["a cancelled plan", { status: "cancelled" }],
-    ["a trial that began days ago", { updatedAt: "2026-10-08T00:00:00Z" }],
+    ["a trial that began days ago", { periodEnd: "2026-10-15T00:00:00Z" }],
   ])("sends nothing for %s", async (_name, plan) => {
     await seedPlan(plan);
     const sent: EmailMessageBuilder[] = [];
