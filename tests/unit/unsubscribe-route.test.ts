@@ -176,9 +176,6 @@ describe("/u/:token (0509#5761)", () => {
     expect(html).not.toContain("This link is not valid");
   });
 
-  // DESIGN.md: tap targets are 44px minimum. min-h-11 is 44px in this repo
-  // (tests/unit/onboarding-competitors.test.ts); inline-flex and items-center
-  // are what make the line box reach that height.
   it("gives the Settings link a 44px-tall tap target", () => {
     const html = renderConfirm(true);
 

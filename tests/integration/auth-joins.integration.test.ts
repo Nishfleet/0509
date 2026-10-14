@@ -4,13 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createAuth } from "../../app/lib/auth.server";
 
-// 0509#5780: REBUILD-STACK.md §2.3 point 2 names advanced.database.joins: true
-// mandatory — the session read is the per-request hot path — and createAuth
-// had never set it, so every related-row read paid a second query. This pins
-// the SQL shape on real D1 through the same adapter layer better-auth's
-// /get-session uses: with joins on, the session+user read is one query with a
-// LEFT JOIN; with joins off, the factory strips the join clause and the
-// adapter falls back to separate queries.
 const AUTH_ENV = {
   DB: env.DB,
   EMAIL: {

@@ -2,17 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
-// #7173: REBUILD-TRUST.md C1 question 1. `zod`'s `.catch()` reads like a schema
-// statement ("this row can be malformed") when what it does is "a row that
-// violates the schema is silently repaired with a fallback". #7167 shipped that
-// shape on `siteFillRow` in app/lib/data/entity.server.ts and the rule it needed
-// was out of scope, so this rule lands it. It is row-rules/zod-row-catch in
 // eslint.config.js, armed on app/lib/data/** only, and it matches the receiver
-// by TypeScript type so a schema held in a variable is caught too. These probes
-// boot the real eslint.config.js (same rig as tests/eslint-form-get-rule.test.ts)
-// and hold both halves: a zod `.catch()` on a row schema fails, and the
-// near-miss shapes — a plain parse, a Promise `.catch()`, and a schema outside
-// the data layer — stay unblocked.
 
 const ZOD_ROW_CATCH_MESSAGE = "row-parse contract";
 

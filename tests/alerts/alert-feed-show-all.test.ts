@@ -48,8 +48,7 @@ describe("alert feed reveal button", () => {
 
   it("keeps the reveal button mounted with aria-expanded=false and the Show all label while collapsed", () => {
     const html = feed(mentions);
-    // Assert on the reveal button itself, not any other aria-expanded on the
-    // page (the "Why we flagged" dialog trigger also carries aria-expanded).
+
     expect(html).toMatch(
       /<button[^>]*data-testid="mentions-show-all"[^>]*aria-expanded="false"[^>]*>\s*Show all, including \d+ we think (?:do|does) not matter\s*<\/button>/,
     );

@@ -72,11 +72,6 @@ describe("the daily cap notice", () => {
   });
 });
 
-/**
- * 0509#7020: the change email escapes its sites by hand. This table plants the
- * injection probe in every string field, one row per field, so a missed
- * escapeHtml turns CI red — the plain template module stays.
- */
 describe("every string field carries the injection probe escaped, never raw (0509#7020)", () => {
   const rows: [string, Partial<typeof CTX>][] = [
     ["headline", { headline: PROBE }],

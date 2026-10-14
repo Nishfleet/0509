@@ -8,15 +8,6 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { CompetitorSite } from "../../app/components/competitor-site";
 import { CompetitorYoutube } from "../../app/components/competitor-youtube";
 
-// Both competitor forms post to the same route, so the pending state has to be
-// scoped to the form that owns the in-flight intent. The harness stands in for
-// the router's own navigation so each state is rendered for real.
-//
-// The router keeps the submission's formData from "submitting" through the
-// "loading" that follows it, and drops it only when the navigation returns to
-// "idle" (getSubmittingNavigation/getLoadingNavigation in
-// node_modules/react-router/dist/development/lib/router/router.js), so the
-// harness keeps formData for both states that carry a submission.
 const harness = vi.hoisted(() => ({
   state: "idle" as Navigation["state"],
   intent: null as string | null,
@@ -37,7 +28,6 @@ vi.mock("react-router", async (importOriginal) => {
 });
 
 function render(element: ReactElement): string {
-  // Form needs a data router, so each form is rendered on its own route stub.
   const Stub = createRoutesStub([{ path: "/app/competitors/:entityId", Component: () => element }]);
   return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/app/competitors/ent-1"] }));
 }
@@ -54,8 +44,6 @@ function label(html: string): string {
   return block[1];
 }
 
-// The button's own class list carries `disabled:pointer-events-none`, so the
-// attribute is matched on its own and not as a substring of the class string.
 function isDisabled(tag: string): boolean {
   return /(?:^|\s)disabled(?:\s|>|=|$)/.test(tag);
 }

@@ -1745,15 +1745,23 @@ export default tseslint.config(
   },
 
   // 0509#7073 / #7233: type-aware lint is on for e2e, tests and *.config.ts.
-  // The comment exemption used to live on the disableTypeChecked block that
-  // also listed those globs; keep it here so inline comments in specs,
-  // configs and tests stay allowed (AGENTS.md: config files and tests are
-  // exempt).
+  // Only config files are exempt from the comment rules; tests are not
+  // (0509#7469, Nish 2026-10-14).
   {
-    files: ["e2e/**/*.ts", "tests/**/*.ts", "*.config.ts"],
+    files: ["*.config.ts"],
     rules: {
       "no-inline-comments": "off",
       "no-warning-comments": "off",
+    },
+  },
+
+  {
+    files: ["e2e/**/*.ts", "tests/**/*.{ts,tsx}"],
+    plugins: { "no-comments": noComments },
+    rules: {
+      "no-comments/disallowComments": ["error", { allow: ["eslint", "global", "@ts-", "/\\s*<reference"] }],
+      "no-inline-comments": "error",
+      "no-warning-comments": ["error", { terms: WORKAROUND_TERMS, location: "anywhere" }],
     },
   },
 

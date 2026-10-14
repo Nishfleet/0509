@@ -2,17 +2,6 @@ import { applyD1Migrations, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { D1Migration } from "./entity-workspace-fk";
 
-/**
- * 0509#4965. Applies every migration numbered before 0032, stores a connected
- * set of rows, then applies the rebuild. A later file must not run first.
- * A user_decision row that pairs another workspace's entity aborts the rebuild
- * before any table is dropped, and the stored rows are still there.
- * After that row is removed, the rebuild keeps every stored row, a null
- * entity_id still inserts on both tables, a cross-workspace insert fails on
- * both tables, and deleting an entity still clears suggestion.entity_id
- * (SET NULL) while cascading the user_decision row.
- */
-
 const MIGRATION = "0032_user_decision_suggestion_workspace_fk.sql";
 const PRIOR_LAST = "0031_send_target_verify_token.sql";
 const NOW = "2026-09-30T00:00:00.000Z";
@@ -211,9 +200,6 @@ describe("entity workspace foreign key on user_decision and suggestion (0509#496
         .run(),
     ).rejects.toThrow(/FOREIGN KEY constraint failed/);
 
-    // suggestion keeps SET NULL and user_decision keeps CASCADE on entity
-    // delete: the suggestion row survives with entity_id cleared, the
-    // decision row is gone — the same actions the bare entity_id keys had.
     await env.DB.prepare("DELETE FROM entity WHERE id = ?").bind(ENTITY).run();
     expect(
       await env.DB.prepare("SELECT workspace_id, entity_id, status FROM suggestion WHERE id = ?")
@@ -222,8 +208,6 @@ describe("entity workspace foreign key on user_decision and suggestion (0509#496
     ).toEqual({ workspace_id: WS, entity_id: null, status: "pending" });
     expect(await env.DB.prepare("SELECT id FROM user_decision WHERE id = ?").bind(DECISION).first()).toBeNull();
 
-    // The takedown trigger is rebuilt with the table: a suggestion for a
-    // taken-down domain is silently ignored.
     await env.DB.prepare(
       "INSERT INTO takedown (subject, requested_at, actioned_at, actioned_by) VALUES ('blocked-fk-4965.example', ?, ?, 'test')",
     )

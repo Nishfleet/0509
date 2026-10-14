@@ -11,19 +11,6 @@ import type { ToasterProps } from "sonner";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// #4116: toasts exist for exactly two moments — "saved" and "undo" — and
-// nothing else in the product may raise one. eslint.config.js holds that lock
-// on the changed file itself: SONNER_IMPORT bans the import and BARE_TOAST the
-// call shape outside app/components/toaster.tsx (tests/eslint-toast-rule.test.ts,
-// 0509#7007). sonner is mocked
-// partially: toast is a vi.fn() so toastSaved's calls are observable, while
-// Toaster stays real so the render tests below produce the markup the axe run
-// checks on production.
-//
-// The stubbed document exists so sonner's module-init __insertCSS actually
-// fires (it no-ops when document is undefined) and hands the suite the exact
-// stylesheet the browser gets — the prefers-reduced-motion pin asserts what
-// reaches the DOM, not the contents of a dist file nothing may load.
 const injectedStyleSheet = vi.hoisted(() => ({ cssText: undefined as string | undefined }));
 const toasterProps = vi.hoisted(() => ({ current: undefined as ToasterProps | undefined }));
 
@@ -38,9 +25,7 @@ vi.mock("sonner", async (importOriginal) => {
   return {
     ...real,
     toast: vi.fn(),
-    // sonner's store subscription lives in an effect, so SSR markup can never
-    // show a seeded toast; capturing the props our Toaster passes is the render
-    // boundary the skin and the position are asserted on instead.
+
     Toaster: (props: ToasterProps) => {
       toasterProps.current = props;
       return createElement(real.Toaster, props);
@@ -135,9 +120,6 @@ describe("the mounted toaster", () => {
 
 describe("upstream accessibility guarantees", () => {
   it("injects a stylesheet carrying the reduced-motion cutoff on import", () => {
-    // __insertCSS ran against the stubbed document when the real module
-    // evaluated inside the mock factory; cssText is the exact stylesheet
-    // sonner appends to document.head in the browser.
     expect(injectedStyleSheet.cssText).toContain("@media (prefers-reduced-motion)");
   });
 });

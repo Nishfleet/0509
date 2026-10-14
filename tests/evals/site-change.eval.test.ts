@@ -14,8 +14,6 @@ import {
   type SiteRow,
 } from "./harness";
 
-// The shipped production state builder, fed the same fields a site sweep hands
-// judgeChange, so the judged state is the state production judges.
 function stateFor(row: SiteRow<boolean | string>): unknown {
   const input: ChangeStateInput = {
     isSelf: row.isSelf,

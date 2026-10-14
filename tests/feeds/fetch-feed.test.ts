@@ -7,12 +7,6 @@ import { fetchFeed, fetchHomepage } from "../../app/lib/feeds/fetch-feed.server"
 import { parseFeed } from "../../app/lib/feeds/parse-feed";
 import { CRAWLER_USER_AGENT } from "../../app/lib/fetch/robots.server";
 
-// 0509#6476: fetch-feed.server.ts held about 12 untested branches with no test
-// of its own. The only network edge is fetchOutbound and the only policy edge
-// is robotsAllows, so mocking those two (cappedText stays real) makes every
-// branch of requestHeaders, classify, fetchFeed and fetchHomepage reachable
-// without a live network.
-
 const FEED_URL = "https://rival.com/feed.xml";
 const HOME_URL = "https://rival.com/";
 
@@ -103,7 +97,6 @@ describe("requestHeaders sends the stored validators to fetchOutbound", () => {
 
 describe("classify maps the response to a FeedFetch outcome", () => {
   it("reads a 304 as not-modified", async () => {
-    // A 304 carries no body, so this one cannot go through feedResponse.
     fetchOutboundMock.mockResolvedValue(new Response(null, { status: 304 }));
     await expect(fetchFeed(FEED_URL, null)).resolves.toEqual({ outcome: "not-modified" });
   });

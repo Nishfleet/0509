@@ -5,16 +5,6 @@ import { previousBriefAt } from "../app/lib/brief-schedule";
 import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
 import { decodedBodies, laneOrigin, readRawMessage, requireInboxToken, signInWithMagicLink } from "./inbox";
 
-// J11 from docs/REBUILD-DONE.md §A. Of the three lanes — local, merge-queue
-// Preview and production — J11 runs in production only. One project — the
-// phone project would send a second brief, and the check the contract asks
-// for is the HTML at 600 px.
-// The account is FIXTURE_ACCOUNTS.j11, kept between runs with a complimentary
-// plan row (migration 0048, #7225): a per-run address stops at
-// /onboarding/plan since #7061. A kept workspace gets a catch-up brief only
-// when its last one is 6 or more days old (rescheduleRollover), so J11 is
-// @scheduled and runs weekly from e2e-scheduled.yml. It ends by unsubscribing,
-// so it opens by re-subscribing.
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL || laneOrigin() !== "https://0509.io",
   "J11 proves the production mail path: the brief is sent by the send-email queue consumer on the production Worker. The local Worker cannot mail, and a merge-queue Preview cannot consume queues (https://developers.cloudflare.com/workers/previews/resources/#queue-consumers)",
@@ -299,8 +289,6 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   expect(Date.now() - followUpClose.getTime()).toBeLessThan(HOUR_MS);
   await saveSchedule(page, followUp);
 
-  // A poll that succeeds on the first read cannot prove the next send was
-  // skipped. Wait the window the first brief used, then read again.
   const suppressDeadline = Date.now() + SUPPRESS_WAIT_MS;
   await expect
     .poll(() => Date.now(), {

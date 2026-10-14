@@ -6,15 +6,6 @@ import { renderBrief } from "../../workers/delivery/brief-template";
 import { composeBrief } from "../../workers/standing/compose-brief";
 import { refreshWorkspaceScores } from "../../workers/standing/refresh";
 
-/**
- * The per-brand query and the render, against the real D1 the deploy ships.
- *
- * A unit test over a restated query cannot prove the OFF rule: the claim
- * "OFF brands are absent, not zeroed" is a claim about the SQL, so the proof has
- * to run the SQL. This applies migrations/0001_rebuild.sql to real local D1,
- * inserts a workspace with one ON and one OFF brand, and reads the brief's own
- * brand-block input back.
- */
 let seededRuns = 0;
 
 async function seed(): Promise<{ workspaceId: string; weekStart: string; onEntity: string }> {
@@ -117,11 +108,6 @@ describe("the brief's per-brand read, against real D1", () => {
   });
 });
 
-/**
- * The brand's own block of the brief's text: its name line, its biggest_move
- * line and its counts line, up to the next brand. The counts live on the line
- * after the name, so a test that wants the counts has to take the block.
- */
 function brandLine(text: string, name: string): string {
   const lines = text.split("\n");
   const start = lines.findIndex((l) => l.startsWith(`${name} —`));
@@ -171,9 +157,6 @@ async function seedHiring(): Promise<{ workspaceId: string; hiredEntity: string 
     ).bind(`st_idle_${run}`, workspaceId, idleEntity, weekStart, now),
   ]);
 
-  // Two hiring signals in the window on Hiring Brand, and one before the window
-  // so the SUM cannot be counting the whole table: only the in-window pair may
-  // reach the brief.
   await env.DB.batch([
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, ?6, ?7)",
@@ -214,9 +197,6 @@ async function seedHiring(): Promise<{ workspaceId: string; hiredEntity: string 
 }
 
 describe("new job posts reach the brief's brand line, through real D1", () => {
-  // #4728: the count has to survive the real SIGNAL_COUNTS query, not a
-  // restated one, so each case seeds real hiring rows and runs composeBrief
-  // against the real D1 the deploy ships.
   it("counts only the week's hiring signals on that brand", async () => {
     const { workspaceId } = await seedHiring();
     const payload = await composeBrief(env.DB, {
@@ -269,9 +249,7 @@ describe("new job posts reach the brief's brand line, through real D1", () => {
 
   it("leaves the standing score alone — the two roles still score through the existing weight", async () => {
     const { workspaceId, hiredEntity } = await seedHiring();
-    // Recompute the week's scores from the same real rows. The brief change
-    // adds no weight, so two hiring roles must land at exactly
-    // 2 x hiring_new_role(1) x reliability_official_api(1) = 2, unchanged.
+
     const scores = await refreshWorkspaceScores(env.DB, {
       workspaceId,
       weekStartAt: "2026-09-14T12:00:00.000Z",
@@ -283,13 +261,6 @@ describe("new job posts reach the brief's brand line, through real D1", () => {
   });
 });
 
-/**
- * The brief's quiet-week claim rests on source coverage: a source that did not
- * answer this week lands in degraded_source_keys, and the template refuses to
- * vouch for a quiet week while one is there. A canary of zero on the snapshot
- * means the source is degraded, so it must not count as having answered. These
- * cases run the real SOURCE_COVERAGE query against real D1.
- */
 let canaryRuns = 0;
 
 async function seedCanary(canaryCount: number | null): Promise<{ workspaceId: string; sourceKey: string }> {

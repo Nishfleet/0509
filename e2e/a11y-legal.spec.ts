@@ -1,14 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "./test";
 
-// The /privacy, /terms and /security WCAG 2.2 AA proof (0509#5288). The three routes are
-// public pages (/security sits behind the Access wall until LAUNCH, which the
-// production run passes with its service token): the spec runs in preview mode and against
-// production alike. The pages share the legal layout in
-// `app/components/legal-page.tsx`, which exposes banner, main and contentinfo
-// as sibling landmarks after #5287, and a footer link class driven from
-// `--ink` / `--ink-soft` so neither route paints meaningful text in
-// `--ink-faint`.
 for (const path of ["/privacy", "/terms", "/security"]) {
   test(`${path} passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and 390 in light and dark (#4156) @smoke`, async ({
     page,
@@ -41,9 +33,6 @@ for (const path of ["/privacy", "/terms", "/security"]) {
           expect(levels[i] - levels[i - 1]).toBeLessThanOrEqual(1);
         }
 
-        // DESIGN.md:473: 44px minimum. The legal logo carries the same wordmark
-        // markup as /login (0509#6531), and with no height class it is one text
-        // line, about 19px. Measured, at every width this spec already walks.
         const logoBox = await page.getByRole("link", { name: "Five to Nine" }).boundingBox();
         if (logoBox === null) throw new Error("the legal logo has no box");
         expect(logoBox.height).toBeGreaterThanOrEqual(44);

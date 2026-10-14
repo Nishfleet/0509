@@ -6,9 +6,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChangeAlertsSetting, OwnSiteAlertsSetting } from "../../app/components/own-site-alerts-setting";
 
-// A static render never holds a live fetcher submission, so the harness stands
-// in for the pending formData the switch reads, the way
-// competitor-pending-buttons.test.ts fakes the in-flight navigation.
 const harness = vi.hoisted(() => ({
   formData: undefined as FormData | undefined,
 }));
@@ -40,9 +37,6 @@ function isChecked(tag: string): boolean {
   return /(?:^|\s)aria-checked="true"(?:\s|>|$)/.test(tag);
 }
 
-// The switch is a base-ui `role="switch"` span. The description must sit on that
-// element, not on the `<label>` that wraps it, or a screen reader reads the
-// label text and stops.
 function switchTag(html: string): string {
   const tag = /<span[^>]*role="switch"[^>]*>/.exec(html)?.[0];
   expect(tag).toBeDefined();

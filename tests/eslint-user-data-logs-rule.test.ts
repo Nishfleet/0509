@@ -2,15 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
-// #5786 (privacy rule from #5776): logs and Sentry never carry customer data
-// or prompt input. NO_USER_DATA_IN_LOGS is a set of `no-restricted-syntax`
-// selectors over `console.*` and the Sentry capture*/set* sinks, bare or on a
-// namespace. These probes boot the real eslint.config.js (same rig as
 // eslint-catch-null-rule.test.ts) and hold both directions: a value named like
-// user data is flagged as a key, a value, a property read, a template
-// interpolation, a nested call argument, a spread, a member read, a wrapped
-// expression and each Sentry receiver form; the ids an operator needs,
-// `workspaceId` and a capped error message, stay clean.
 
 const USER_DATA_MESSAGE = "never carry customer data or prompt input";
 
@@ -80,8 +72,6 @@ describe("eslint no-user-data-in-logs rule (#5786)", () => {
   });
 
   it("flags a member read off a user-data binding", { timeout: 60_000 }, async () => {
-    // The shape this rule exists for: the log line dropped the `subject` key,
-    // so a renamed key or a bare read is how the domain would get back in.
     expect(flagged(await lintProbe(`console.log(subject.registrable);\n`))).toBe(true);
     expect(flagged(await lintProbe(`console.log({ registrable: subject.registrable });\n`))).toBe(true);
     expect(flagged(await lintProbe(`console.log(email.trim());\n`))).toBe(true);

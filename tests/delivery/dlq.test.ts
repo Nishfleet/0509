@@ -178,15 +178,13 @@ describe("handleDlqBatch", () => {
     expect(inserts[0]?.args[1]).toBe("ws_1");
     expect(inserts[0]?.args[2]).toBe(DELIVERY_FAILED_KIND);
     expect(inserts[0]?.args).not.toContain("invalid recipient");
-    // The digest branch must stay out of the incident branch's way.
+
     expect(recorded.some((row) => row.sql.includes("FROM digest"))).toBe(false);
     expect(recorded.some((row) => row.sql.startsWith("UPDATE digest"))).toBe(false);
     expect(ack).toHaveBeenCalledOnce();
     expect(retry).not.toHaveBeenCalled();
     expect(ids).toEqual([`${DLQ_INCIDENT_PREFIX}inc_1`]);
 
-    // The finding: before this, this message died on "unparseable message" and
-    // reached nobody. Now Sentry carries it, naming the incident and why.
     expect(capturedReasons()).toHaveLength(1);
     expect(capturedReasons()[0]).toContain("inc_1");
     expect(capturedReasons()[0]).toContain("invalid recipient");

@@ -4,9 +4,6 @@ import { describe, expect, it } from "vitest";
 import { createAuth } from "../../app/lib/auth.server";
 import { MAGIC_LINK_TTL_SECONDS } from "../../app/lib/auth/magic-link-email";
 
-// The email promises an expiry; better-auth enforces one. They are the same
-// number only if createAuth passes MAGIC_LINK_TTL_SECONDS as the plugin's
-// expiresIn, so this reads the expiry better-auth actually stored.
 const ORIGIN = "http://localhost:8787";
 const EMAIL = "ttl@test.dev";
 

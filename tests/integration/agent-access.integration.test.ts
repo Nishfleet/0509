@@ -29,8 +29,7 @@ const auth = createAuth({
 });
 
 const NOW = "2026-09-21T12:00:00.000Z";
-// Always inside the trailing-week window readCompetitorPage measures against
-// Date.now(); a fixed date goes stale the way NOW did on 2026-09-28.
+
 const CHANGE_SEEN_AT = new Date().toISOString();
 
 const PAYLOAD = {
@@ -452,11 +451,6 @@ describe("agent access, scoped to one workspace", () => {
     expect(own.status).toBe(204);
   });
 
-  // #5757: no test in this file runs without a cf-connecting-ip header after
-  // this one — the loop drains the shared unidentified bucket (AGENT_LIMIT,
-  // 120/min), so anything after it sending no IP would 429 with no visible
-  // cause. Tests that want their own budget send a per-IP key like
-  // "203.0.113.<unique>".
   it("limits a request that carries no client IP, never waving it through", async () => {
     const bare = new Request("http://localhost/api/v1/brief");
     expect(clientIp(bare)).toBeNull();
@@ -479,8 +473,6 @@ describe("agent access, scoped to one workspace", () => {
     expect(statuses.slice(0, first).every((status) => status === 401)).toBe(true);
     expect(await withinLimit(env.AGENT_LIMIT, null)).toBe(false);
 
-    // A caller the edge did identify spends its own bucket, not the one the
-    // flood above emptied.
     expect(await withinLimit(env.AGENT_LIMIT, "203.0.113.210")).toBe(true);
   });
 });
