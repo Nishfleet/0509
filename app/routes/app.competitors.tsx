@@ -97,7 +97,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
     <main className={PAGE}>
       <PageHeading
         title="Competitors"
-        lede="Each competitor has one switch. Turn it off to stop watching and alerts. Your history stays."
+        lede="Each competitor has one switch. Turn it off to stop watching and alerts. Your history stays. To delete one for good, open it and choose Remove and forget."
       />
       <CompetitorCount line={countLine} full={planFull} />
       <UpgradeStatus tier={tier} wanted={wanted} />

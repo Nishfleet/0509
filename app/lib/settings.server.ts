@@ -7,7 +7,7 @@ import { deleteAccount } from "./account-delete.server";
 import { cancelPlanForDelete } from "./billing/cancel.server";
 import { returningForGate } from "./billing/returning.server";
 import { oauthHelpersContext } from "./agent/context.server";
-import { hasFreshSession, removeSignedInPasskey, requestEmailChange, signOut } from "./auth.server";
+import { hasFreshSession, removeSignedInPasskey, requestEmailChange, signOut, signOutEverywhere } from "./auth.server";
 import { nextBriefAt } from "./brief-schedule";
 import { formatBriefAt } from "./brief-settings";
 import { parseBriefSchedule } from "./brief-schedule-input";
@@ -277,6 +277,10 @@ async function removeAccount(
   throw redirect(`/login?deleted=${encodeURIComponent(deleted.instanceId)}`, { headers: deleted.headers });
 }
 
+async function leaveEverywhere(request: Request): Promise<never> {
+  throw redirect("/login", { headers: await signOutEverywhere(env, request) });
+}
+
 async function removePasskey(request: Request, form: FormData): Promise<SettingsResult> {
   const parsed = passkeyForm.safeParse(Object.fromEntries(form));
   const id = parsed.success ? parsed.data.passkeyId : "";
@@ -327,6 +331,7 @@ const INTENTS = new Map<string, (call: IntentCall) => Promise<SettingsResult>>([
   ["teammate-add", (c) => inviteTeammate(c.user, c.form)],
   ["teammate-remove", (c) => dropTeammate(c.user.id, c.form)],
   ["change-email", (c) => changeEmail(c.request, c.form)],
+  ["sign-out-everywhere", (c) => leaveEverywhere(c.request)],
   ["delete-account", (c) => removeAccount(c.user, c.form, c)],
   ["passkey-remove", (c) => removePasskey(c.request, c.form)],
   ["restore-suggestion", (c) => restore(c.user.id, c.form)],
