@@ -153,9 +153,9 @@ const CATCH_RETURNS_NULL = {
 // clause, must use console.warn or console.error. Source: 0509#7501.
 const QUIET_LOG_LEVEL = "[callee.object.name='console'][callee.property.name=/^(log|info|debug)$/]";
 const FAILURE_EVENT_LOGGED_QUIETLY = {
-  selector: `CallExpression${QUIET_LOG_LEVEL}:has(Property[key.name='event'] > Literal[value=/(failed|discarded|unavailable|dead_lettered|unreadable|unreached)$/])`,
+  selector: `CallExpression${QUIET_LOG_LEVEL}:has(Property[key.name='event'] > Literal[value=/(failed|discarded|unavailable|dead_lettered|unreadable|unreached|skipped)$/])`,
   message:
-    "An event named for a failure (_failed, _discarded, _unavailable, _dead_lettered, _unreadable, _unreached) logged with console.log, console.info or console.debug never reaches Sentry. Use console.warn or console.error. Source: 0509#7501 (site.change_discarded, site.check_failed and archive.read_failed went unseen on 2026-10-13).",
+    "An event named for a failure (_failed, _discarded, _unavailable, _dead_lettered, _unreadable, _unreached, _skipped) logged with console.log, console.info or console.debug never reaches Sentry. Use console.warn or console.error. Source: 0509#7501 (site.change_discarded, site.check_failed and archive.read_failed went unseen on 2026-10-13).",
 };
 const LOG_IN_CATCH_LOGGED_QUIETLY = {
   selector: `CatchClause CallExpression${QUIET_LOG_LEVEL}`,

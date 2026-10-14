@@ -19,6 +19,7 @@ const FAILED_AT_LOG = probe(`  console.log(JSON.stringify({ event: "site.check_f
 const FAILED_AT_INFO = probe(`  console.info(JSON.stringify({ event: "archive.read_failed" }));`);
 const DISCARDED_AT_LOG = probe(`  console.log(JSON.stringify({ event: "site.change_discarded" }));`);
 const DEAD_LETTERED_AT_DEBUG = probe(`  console.debug({ event: "queue.dead_lettered" });`);
+const SKIPPED_AT_LOG = probe(`  console.log(JSON.stringify({ event: "identity-page-role-skipped" }));`);
 const FAILED_AT_WARN = probe(`  console.warn(JSON.stringify({ event: "site.check_failed", pageId: "p" }));`);
 const FAILED_AT_ERROR = probe(`  console.error(JSON.stringify({ event: "site.check_failed", pageId: "p" }));`);
 const PLAIN_INFO = probe(`  console.log(JSON.stringify({ event: "site.sweep_started", pages: 3 }));`);
@@ -40,6 +41,7 @@ describe("eslint failure logs must reach Sentry (#7501)", () => {
     ["console.info with a _failed event", FAILED_AT_INFO],
     ["console.log with a _discarded event", DISCARDED_AT_LOG],
     ["console.debug with a _dead_lettered event", DEAD_LETTERED_AT_DEBUG],
+    ["console.log with a _skipped event", SKIPPED_AT_LOG],
   ])("rejects %s", { timeout: 60_000 }, async (_name, code) => {
     expect((await messagesFor(code)).some((message) => message.includes(QUIET))).toBe(true);
   });
