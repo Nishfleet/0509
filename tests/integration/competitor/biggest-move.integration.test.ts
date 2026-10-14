@@ -3,12 +3,6 @@ import { describe, expect, it } from "vitest";
 
 import { readScoredSignals } from "../../../app/lib/data/signal.server";
 
-/**
- * The biggest-move week slice against the real D1 the deploy ships: one
- * competitor's signals in one window, each with the bucket the nightly score
- * would count it under, its source's platform and reliability, newest first.
- */
-
 const SINCE = "2026-09-15T00:00:00.000Z";
 const UNTIL = "2026-09-22T00:00:00.000Z";
 const SEEDED_AT = "2026-09-21T00:00:00.000Z";

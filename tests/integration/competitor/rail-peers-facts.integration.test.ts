@@ -4,17 +4,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { readSignalCounts } from "../../../app/lib/data/signal.server";
 import { readLatestPeers } from "../../../app/lib/data/standing.server";
 
-/**
- * The competitor rail's two reads against the real local D1 the deploy ships.
- *
- * `readLatestPeers` is a claim about the SQL: the latest week is the newest
- * week that has ranks frozen, not the newest standing row, and a brand's name
- * falls back to its domain. `readSignalCounts` is a claim about the window,
- * the workspace and the tombstone. A restated query cannot prove either, so
- * both reads run here against rows seeded through the schema's own NOT NULL
- * and CHECK constraints.
- */
-
 const NOW = "2026-09-24T12:00:00.000Z";
 const WEEK_OLD = "2026-09-07T12:00:00.000Z";
 const WEEK_LATEST = "2026-09-14T12:00:00.000Z";

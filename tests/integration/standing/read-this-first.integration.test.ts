@@ -4,15 +4,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { READ_THIS_FIRST } from "../../../app/lib/read-this-first";
 import { toSignalRow } from "../../../workers/mentions/map";
 import { judgeWeek } from "../../../workers/standing/read-this-first";
-/**
- * The weekly D4 pass against the real D1 schema the deploy ships.
- *
- * judgeWeek reads only the items that D3 or D6 already passed, packs
- * `{ self, subject, competitor_set, item }`, batches askNoul in chunks of ten,
- * and writes every uncached verdict through insertVerdict. The stub answers by
- * title so we can pin pick order, cache hits and the tombstone filter without
- * touching the real model.
- */
 
 const STARTS_AT = "2026-09-15T00:00:00.000Z";
 const CLOSES_AT = "2026-09-22T00:00:00.000Z";
