@@ -167,7 +167,7 @@
     // 0509#7497: the shared rival check switch. "on" lets workspaces that watch the
     // same rival URL reuse one nightly read and one judge answer. Any other value,
     // unset or blank included, keeps every workspace reading and judging for
-    // itself, so sharing can be turned off with a var change and no deploy of code.
+    // itself. Changing the value takes a deploy of this file, with no code change.
     // Off until the site-change eval passes.
     "SHARED_RIVAL_CHECKS": "off",
     "ACCESS_TEAM_DOMAIN": "https://nish345.cloudflareaccess.com",
