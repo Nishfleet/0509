@@ -126,10 +126,11 @@ export function rankTrendLine(payload: BriefPayload): string | null {
   const earlier = payload.headline_earlier;
   const rank = payload.headline_rank;
   if (earlier === null || earlier === undefined || rank === null) return null;
+  if (payload.is_unjudged || payload.headline_total < 2) return null;
   const when = `${String(earlier.weeks)} weeks ago`;
   if (rank < earlier.rank) return `Up from #${String(earlier.rank)} ${when}`;
   if (rank > earlier.rank) return `Down from #${String(earlier.rank)} ${when}`;
-  return `Holding at #${String(rank)} since ${when}`;
+  return `Holding at #${String(rank)} for ${String(earlier.weeks)} weeks`;
 }
 
 export interface BriefContext {
