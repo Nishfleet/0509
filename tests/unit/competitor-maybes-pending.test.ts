@@ -15,7 +15,11 @@ const NEVER = () => new Promise(() => undefined);
 const MAYBE_A = { suggestionId: "sug-a", name: "Acme", domain: "acme.example", reason: null };
 const MAYBE_B = { suggestionId: "sug-b", name: "Beta", domain: "beta.example", reason: "same buyer" };
 
-function render(element: ReactElement, submission: { suggestionId: string; intent: string } | null): string {
+function render(
+  element: ReactElement,
+  submission: { suggestionId: string; intent: string } | null,
+  fetcherKey: string | null = null,
+): string {
   const router = createMemoryRouter(
     [
       { path: "/", element: createElement("div", null, "home") },
@@ -27,13 +31,15 @@ function render(element: ReactElement, submission: { suggestionId: string; inten
     const formData = new FormData();
     formData.set("suggestionId", submission.suggestionId);
     formData.set("intent", submission.intent);
-    void router.navigate("/app/competitors", { formMethod: "post", formData });
+    const options = { formMethod: "post", formData } as const;
+    if (fetcherKey === null) void router.navigate("/app/competitors", options);
+    else void router.fetch(`${fetcherKey}${submission.suggestionId}`, "1", "/app/competitors", options);
   }
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
 
 function maybes(submission: { suggestionId: string; intent: string } | null): string {
-  return render(createElement(CompetitorMaybes, { maybes: [MAYBE_A, MAYBE_B] }), submission);
+  return render(createElement(CompetitorMaybes, { maybes: [MAYBE_A, MAYBE_B] }), submission, "maybe-");
 }
 
 function questions(submission: { suggestionId: string; intent: string } | null): string {

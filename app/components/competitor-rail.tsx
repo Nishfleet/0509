@@ -59,6 +59,7 @@ export interface CompetitorRailProps {
   lastChecked: string | null;
   now: number;
   sweepClock?: string;
+  unreadable?: boolean;
 }
 
 export function verdictWords(choice: string): string | null {
@@ -126,12 +127,22 @@ function Sources({
   lastChecked,
   now,
   sweepClock = SITE_SWEEP_UTC_LABEL,
+  unreadable = false,
 }: {
   sources: readonly RailSource[];
   lastChecked: string | null;
   now: number;
   sweepClock?: string;
+  unreadable?: boolean;
 }): ReactElement {
+  if (sources.length === 0 && unreadable) {
+    return (
+      <>
+        <p className="font-display text-[1.02rem]">Website</p>
+        <p className="text-meta text-ink-soft">We couldn't read the homepage. We try again every night.</p>
+      </>
+    );
+  }
   if (sources.length === 0) {
     return (
       <>
@@ -180,6 +191,7 @@ export function CompetitorRail({
   lastChecked,
   now,
   sweepClock = SITE_SWEEP_UTC_LABEL,
+  unreadable = false,
 }: CompetitorRailProps): ReactElement {
   return (
     <aside data-slot="competitor-rail" className="flex min-w-0 flex-col gap-10">
@@ -199,7 +211,13 @@ export function CompetitorRail({
         <h2 id="competitor-sources" className={HEADING}>
           What we watch here
         </h2>
-        <Sources sources={sources} lastChecked={lastChecked} now={now} sweepClock={sweepClock} />
+        <Sources
+          sources={sources}
+          lastChecked={lastChecked}
+          now={now}
+          sweepClock={sweepClock}
+          unreadable={unreadable}
+        />
       </section>
       <section data-section="still-competitor" aria-labelledby="competitor-still" className="min-w-0">
         <h2 id="competitor-still" className={HEADING}>

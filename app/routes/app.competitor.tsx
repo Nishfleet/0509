@@ -3,6 +3,7 @@ import type { Route } from "./+types/app.competitor";
 import { redirect, useFetcher } from "react-router";
 
 import { BrandSwitchField } from "../components/brand-switch";
+import { CapRefusal } from "../components/cap-refusal";
 import { CompetitorForget } from "../components/competitor-forget";
 import { CompetitorFrame } from "../components/competitor-frame";
 import { CompetitorHeader, dayMonthLabel } from "../components/competitor-header";
@@ -81,11 +82,28 @@ function OnePager({ data }: { data: Route.ComponentProps["loaderData"] }) {
   );
 }
 
+function CompetitorControl(props: { name: string; state: "on" | "off"; stateChangedAt: string | null }) {
+  const fetcher = useFetcher<typeof action>();
+  const pending = fetcher.formData?.get("intent");
+  const state = pending === "on" || pending === "off" ? pending : props.state;
+  const pausedAt = props.state === "off" ? props.stateChangedAt : null;
+  return (
+    <>
+      <BrandSwitchField
+        state={state}
+        brandName={props.name}
+        pausedOn={pausedAt === null ? null : new Date(pausedAt)}
+        onCheckedChange={(checked) => {
+          void fetcher.submit({ intent: checked ? "on" : "off" }, { method: "post" });
+        }}
+      />
+      <CapRefusal result={fetcher.data} />
+    </>
+  );
+}
+
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   const { competitor } = loaderData;
-  const fetcher = useFetcher();
-  const pending = fetcher.formData?.get("intent");
-  const state = pending === "on" || pending === "off" ? pending : competitor.state;
   const pausedAt = competitor.state === "off" ? competitor.stateChangedAt : null;
   return (
     <main className="mx-auto flex max-w-6xl min-w-0 flex-col gap-10 px-4 py-10">
@@ -96,13 +114,10 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         stateChangedAt={competitor.stateChangedAt}
         stateReason={competitor.stateReason}
         control={
-          <BrandSwitchField
-            state={state}
-            brandName={competitor.name}
-            pausedOn={pausedAt === null ? null : new Date(pausedAt)}
-            onCheckedChange={(checked) => {
-              void fetcher.submit({ intent: checked ? "on" : "off" }, { method: "post" });
-            }}
+          <CompetitorControl
+            name={competitor.name}
+            state={competitor.state}
+            stateChangedAt={competitor.stateChangedAt}
           />
         }
       />
