@@ -22,6 +22,7 @@ const COPY = {
   down: (count: number) => `down ${n(count)}`,
   same: "holding steady",
   new: "new",
+  firstRanking: "your first ranking",
   readThisFirst: "Read this first",
   nothingFirst: "Nothing this week needed reading first.",
   unjudged: UNJUDGED_WEEK_LINE,
@@ -118,7 +119,7 @@ function renderHeadline(payload: BriefPayload, whyLine: string): { html: string;
     };
   }
 
-  const movement = movementText(headline_movement, payload.headline_is_new);
+  const movement = payload.headline_is_new ? COPY.firstRanking : movementText(headline_movement, false);
   const period = COPY.weekOf(formatDate(payload.period_start, payload.timezone, false));
 
   const html = [

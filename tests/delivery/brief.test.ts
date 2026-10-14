@@ -151,10 +151,10 @@ describe("brief block order", () => {
     expect(text).toContain("Add a competitor to see where you stand");
   });
 
-  it("says a brand-new workspace has no last week to compare", () => {
+  it("calls a brand-new workspace's headline its first ranking", () => {
     const { html, text } = renderBrief(payload({ headline_movement: null, headline_is_new: true }), CONTEXT);
-    expect(html).toContain("new");
-    expect(text).toContain("You're #3 of 8 this week — new");
+    expect(html).toContain("your first ranking");
+    expect(text).toContain("You're #3 of 8 this week — your first ranking");
   });
 });
 
