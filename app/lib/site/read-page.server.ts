@@ -43,16 +43,20 @@ function learnedBrowser(target: SiteSweepTarget, now: string): boolean {
   );
 }
 
+function startMode(target: SiteSweepTarget, now: string): "fetch" | "browser" {
+  return learnedBrowser(target, now) ? "browser" : "fetch";
+}
+
 async function readLive(target: SiteSweepTarget, now: string, options: ReadPageOptions): Promise<ReadUrlResult> {
   const live = await readUrl(target.url, {
-    startWith: learnedBrowser(target, now) ? "browser" : "fetch",
+    startWith: startMode(target, now),
     mayEscalate: escalation(options, target, now.slice(0, 10)),
   });
   return readOrArchive(live, { url: target.url, now: new Date(now), allowed: target.entityRole !== "self" });
 }
 
 function sharedKey(target: SiteSweepTarget, now: string): SharedReadKey {
-  return { url: target.url, sweep: now, startWith: learnedBrowser(target, now) ? "browser" : "fetch" };
+  return { url: target.url, sweep: now, startWith: startMode(target, now) };
 }
 
 async function keepSharedPageSafely(key: SharedReadKey, read: Extract<ReadUrlResult, { ok: true }>): Promise<void> {
