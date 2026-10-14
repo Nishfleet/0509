@@ -154,6 +154,7 @@ describe("teammates on the brief", () => {
 
     expect(await add("loop@0509.io")).toMatch(/lot of invitations today/);
     expect(sentMail).toHaveLength(4);
+  });
 
   it("shows a teammate who unsubscribed, and tells their link apart from the owner's", async () => {
     const workspaceId = firstWorkspaceId(USER_ID);
