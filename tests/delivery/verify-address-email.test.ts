@@ -38,11 +38,6 @@ describe("verifyAddressEmail (0509#6554)", () => {
   });
 });
 
-/**
- * 0509#7020: the confirm-delivery email escapes both fields by hand. This
- * table plants the injection probe in every string field, one row per field,
- * so a missed escapeHtml turns CI red — the plain template module stays.
- */
 describe("every string field carries the injection probe escaped, never raw (0509#7020)", () => {
   it.each([
     ["email", { email: PROBE, url: LINK }],

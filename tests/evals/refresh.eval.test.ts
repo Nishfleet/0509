@@ -51,8 +51,6 @@ vi.mock("../../app/lib/data/signal.server", () => ({
   readRecentSignals: () => Promise.resolve([]),
 }));
 
-// The shipped production state builder, fed exactly what a refresh target
-// carries, so the judged state is the state the 30-day refresh judges.
 function stateFor(row: StillFields & { id: string }): unknown {
   const context: DiscoveryContext = {
     self: {

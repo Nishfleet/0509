@@ -106,6 +106,26 @@ describe("extractIdentity", () => {
     expect(card.navPages).toEqual([{ url: "https://www.gymshark.com/shop", title: "Shop" }]);
   });
 
+  it("also collects same-origin pages linked from the header, the footer and a navigation role, nav first", async () => {
+    const card = await extractIdentity(
+      [
+        '<header><a href="/shop">Shop</a></header>',
+        '<nav><a href="/men">Men</a></nav>',
+        '<div role="navigation"><a href="/plans">Our <span>plans</span></a></div>',
+        '<footer><a href="/pricing">Pricing</a><a href="/men">Men again</a><a href="https://other.example/x">Off</a></footer>',
+      ].join(""),
+      pageUrl,
+    );
+
+    expect(card.navPages).toEqual([
+      { url: "https://www.gymshark.com/men", title: "Men" },
+      { url: "https://www.gymshark.com/shop", title: "Shop" },
+      { url: "https://www.gymshark.com/plans", title: "Our plans" },
+      { url: "https://www.gymshark.com/pricing", title: "Pricing" },
+    ]);
+    expect(card.navLinks).toEqual(["https://www.gymshark.com/men"]);
+  });
+
   it("skips in-page fragment links in the nav", async () => {
     const card = await extractIdentity('<nav><a href="#top">Top</a><a href="/men">Men</a></nav>', pageUrl);
 
