@@ -25,6 +25,7 @@ test("Settings says what happened after each change-email link and nothing for a
     "Approved. We sent a confirmation link to the new address. Nothing changes until you open it.",
   );
   await scanPage(page, testInfo, quality, `/app/settings email approved ${testInfo.project.name}`, {
+    screen: /^settings$/i,
     keyboard: true,
   });
 
