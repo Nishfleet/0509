@@ -10,5 +10,5 @@ const NEXT_STEP: Readonly<Record<string, string>> = {
 
 export function nextStepLine(kind: string | null | undefined): string | null {
   if (kind === null || kind === undefined) return null;
-  return Object.hasOwn(NEXT_STEP, kind) ? NEXT_STEP[kind] : null;
+  return Object.hasOwn(NEXT_STEP, kind) ? (NEXT_STEP[kind] ?? null) : null;
 }
