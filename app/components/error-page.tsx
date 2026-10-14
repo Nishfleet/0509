@@ -1,3 +1,5 @@
+import { SupportLink } from "./footer";
+
 export function ErrorPage({
   title,
   detail,
@@ -20,6 +22,11 @@ export function ErrorPage({
       <p className="mt-7 max-w-full text-[clamp(1rem,1.3vw,1.1rem)] leading-[1.65] [overflow-wrap:anywhere] text-ink-soft">
         {detail}
       </p>
+      {retry === true ? (
+        <p className="mt-4 max-w-full text-[clamp(1rem,1.3vw,1.1rem)] leading-[1.65] text-ink-soft">
+          Still not working? Write to <SupportLink />.
+        </p>
+      ) : null}
       <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-3">
         {retry === true ? (
           <a
