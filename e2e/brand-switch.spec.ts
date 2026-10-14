@@ -66,7 +66,7 @@ test("a row's switch is square and paints the card fill when off @smoke", async 
       if (thumb === null) throw new Error("the switch renders no thumb");
       const probe = document.createElement("span");
       probe.style.backgroundColor = "var(--card)";
-      document.body.append(probe);
+      document.body.appendChild(probe);
       const card = getComputedStyle(probe).backgroundColor;
       probe.remove();
       return {
