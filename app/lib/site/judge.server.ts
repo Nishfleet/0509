@@ -7,7 +7,7 @@ import {
   readVerdictIds,
   type VerdictRow,
 } from "../data/jev_verdict.server";
-import { readRecentSignals, readUnjudgedChanges, type UnjudgedChange } from "../data/signal.server";
+import { readRecentChangeDiffs, readUnjudgedChanges, type UnjudgedChange } from "../data/signal.server";
 import {
   askMixed,
   askNoul,
@@ -26,7 +26,7 @@ import {
   PRICING_ACT_AT,
   REJECT_AT,
 } from "../jev/thresholds";
-import { parseDiffHunks, parseSiteChangePayload, type SiteChangePayload } from "../site-change";
+import { markFromHunks, parseDiffHunks, parseSiteChangePayload, type SiteChangePayload } from "../site-change";
 import { daysBefore } from "../site-changes.server";
 import { computeBreakageEvidence, type BreakageEvidence } from "./breakage-evidence";
 import { openLateBreakage } from "./late-breakage.server";
@@ -38,6 +38,8 @@ const JEV_BREAKAGE_PER_BRAND_PER_DAY = 6;
 const HISTORY_DAYS = 30;
 
 const HISTORY_LIMIT = 20;
+
+const HISTORY_WORDED = 5;
 
 const PUBLISH_P = ACT_AT;
 
@@ -113,6 +115,7 @@ export interface ChangeStateInput {
 export interface HistoryEntry {
   kind: string | null;
   at: string;
+  change?: string;
 }
 
 export interface ChangeState<H = HistoryEntry> {
@@ -183,12 +186,24 @@ function verdictRow(input: {
   };
 }
 
+function wordingOf(mark: ReturnType<typeof markFromHunks>): string | undefined {
+  if (mark === null) return undefined;
+  if (mark.removed !== null && mark.added !== null) return `${mark.removed} \u2192 ${mark.added}`;
+  if (mark.added !== null) return `added: ${mark.added}`;
+  return mark.removed === null ? undefined : `removed: ${mark.removed}`;
+}
+
 async function readHistory30d(entityId: string, since: string): Promise<HistoryEntry[]> {
-  const recent = await readRecentSignals(entityId, since);
-  return recent
-    .filter((row) => row.kind === "change")
-    .slice(0, HISTORY_LIMIT)
-    .map((row) => ({ kind: row.aspect, at: row.observedAt }));
+  const changes = await readRecentChangeDiffs(entityId, since, HISTORY_LIMIT);
+  return Promise.all(
+    changes.map(async (row, index) => {
+      const entry = { kind: row.aspect, at: row.observedAt };
+      if (index >= HISTORY_WORDED) return entry;
+      const hunks = await readStoredHunks(row.diffKey);
+      const change = wordingOf(markFromHunks(hunks.map((hunk) => hunk.lines)));
+      return change === undefined ? entry : { ...entry, change };
+    }),
+  );
 }
 
 function logJevUnavailable(error: JevUnavailableError): null {

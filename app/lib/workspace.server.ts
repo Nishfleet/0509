@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 
-import { isWorkspacePaid } from "./billing/entitlements";
+import { isWorkspacePaid } from "./billing/subscription-state";
 import { clearWorkspaceDeletedSuppression } from "./data/email_suppression.server";
 import { ensureOwnerEmailTarget } from "./data/send_target.server";
 import { isPerRunFixtureEmail } from "./fixture-accounts";

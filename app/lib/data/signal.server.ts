@@ -482,6 +482,35 @@ export async function readRecentSignals(entityId: string, since: string): Promis
     }));
 }
 
+const SELECT_RECENT_CHANGE_DIFFS = `SELECT aspect, observed_at, json_extract(CASE WHEN json_valid(payload_json) THEN payload_json ELSE '{}' END, '$.diffKey') AS diff_key
+FROM signal
+WHERE entity_id = ? AND kind = 'change' AND observed_at >= ? AND is_tombstoned = 0 AND duplicate_of IS NULL
+ORDER BY observed_at DESC LIMIT ?`;
+
+const recentChangeDiffRow = z.object({
+  aspect: z.string().nullable(),
+  observed_at: z.string(),
+  diff_key: z.string().nullable(),
+});
+
+export interface RecentChangeDiff {
+  aspect: string | null;
+  observedAt: string;
+  diffKey: string | null;
+}
+
+export async function readRecentChangeDiffs(
+  entityId: string,
+  since: string,
+  limit: number,
+): Promise<RecentChangeDiff[]> {
+  const { results } = await env.DB.prepare(SELECT_RECENT_CHANGE_DIFFS).bind(entityId, since, limit).all();
+  return z
+    .array(recentChangeDiffRow)
+    .parse(results)
+    .map((row) => ({ aspect: row.aspect, observedAt: row.observed_at, diffKey: row.diff_key }));
+}
+
 const SELECT_WEEK_EVIDENCE = `SELECT s.id, ${effectiveKindSql("src")} AS source_kind, s.title, s.summary, s.url, s.evidence_url, s.observed_at
 FROM signal s JOIN source src ON src.id = s.source_id
 WHERE s.workspace_id = ?1 AND s.entity_id = ?2 AND s.observed_at >= ?3 AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL
