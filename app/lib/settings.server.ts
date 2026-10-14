@@ -11,7 +11,9 @@ import { hasFreshSession, removeSignedInPasskey, requestEmailChange, signOut } f
 import { nextBriefAt } from "./brief-schedule";
 import { formatBriefAt } from "./brief-settings";
 import { parseBriefSchedule } from "./brief-schedule-input";
-import { readPlanSummary } from "./data/plan.server";
+import { competitorCountLine } from "./competitor-count";
+import { readCompetitors } from "./data/entity.server";
+import { readEntitlements, readPlanSummary } from "./data/plan.server";
 import { readSlackDisconnected, readSlackTarget, removeSlackTarget, saveSlackTarget } from "./data/send_target.server";
 import { readUserDismissed, restoreSuggestion } from "./data/suggestion.server";
 import {
@@ -93,18 +95,37 @@ const NO_WORKSPACE_SETTINGS = {
   teammates: [],
   plan: null,
   returning: false,
+  countLine: null,
 };
 
+async function readCountLine(workspaceId: string): Promise<string | null> {
+  try {
+    const [{ competitors }, entitlements] = await Promise.all([
+      readCompetitors(workspaceId),
+      readEntitlements(workspaceId),
+    ]);
+    const watching = competitors.filter((competitor) => competitor.state === "on").length;
+    return competitorCountLine(watching, entitlements.competitors);
+  } catch (error) {
+    console.log(
+      JSON.stringify({ event: "settings.count_line_failed", error: error instanceof Error ? error.name : "unknown" }),
+    );
+    return null;
+  }
+}
+
 async function readWorkspaceSettings(workspaceId: string) {
-  const [ownSiteAlerts, changeAlerts, slackTarget, slackRevoked, dismissed, plan, teammates] = await Promise.all([
-    readOwnSiteAlerts(workspaceId),
-    readChangeAlerts(workspaceId),
-    readSlackTarget(env.DB, workspaceId),
-    readSlackDisconnected(env.DB, workspaceId),
-    readUserDismissed(workspaceId),
-    readPlanSummary(workspaceId),
-    readTeammates(workspaceId),
-  ]);
+  const [ownSiteAlerts, changeAlerts, slackTarget, slackRevoked, dismissed, plan, teammates, countLine] =
+    await Promise.all([
+      readOwnSiteAlerts(workspaceId),
+      readChangeAlerts(workspaceId),
+      readSlackTarget(env.DB, workspaceId),
+      readSlackDisconnected(env.DB, workspaceId),
+      readUserDismissed(workspaceId),
+      readPlanSummary(workspaceId),
+      readTeammates(workspaceId),
+      readCountLine(workspaceId),
+    ]);
   const returning = await returningForGate(workspaceId, plan);
   return {
     ownSiteAlerts,
@@ -115,6 +136,7 @@ async function readWorkspaceSettings(workspaceId: string) {
     teammates,
     plan,
     returning,
+    countLine,
   };
 }
 
@@ -132,8 +154,17 @@ export async function readSettings(user: SettingsUser) {
           nextLine: formatBriefAt(nextBriefAt(owned.schedule, new Date()), owned.schedule.timezone),
         };
   const workspace = workspaceId === null ? null : await readWorkspaceSettings(workspaceId);
-  const { ownSiteAlerts, changeAlerts, slackConnected, slackRevoked, dismissed, teammates, plan, returning } =
-    workspace ?? NO_WORKSPACE_SETTINGS;
+  const {
+    ownSiteAlerts,
+    changeAlerts,
+    slackConnected,
+    slackRevoked,
+    dismissed,
+    teammates,
+    plan,
+    returning,
+    countLine,
+  } = workspace ?? NO_WORKSPACE_SETTINGS;
   return {
     email: user.email,
     schedule,
@@ -146,6 +177,7 @@ export async function readSettings(user: SettingsUser) {
     teammates,
     plan,
     returning,
+    countLine,
   };
 }
 
