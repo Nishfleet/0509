@@ -5,15 +5,6 @@ import { fileURLToPath } from "node:url";
 import { compile } from "tailwindcss";
 import { describe, expect, it } from "vitest";
 
-// #4309: the privacy wordmark, now drawn by the shared legal page and its site header, used
-// `bg-accent` / `text-on-accent` after #3984 retired those tokens. Tailwind emits no rule for an unregistered colour, so
-// the `09` span painted as a transparent box while a string assertion stayed
-// green. This compiles the page's colour and type utilities against the real
-// `app/app.css` and fails when one of them emits nothing.
-//
-// The scan reads static className="..." strings only. A className={...}
-// expression, a template, or a class on an imported component is not seen.
-
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PAGE_FILES = ["legal-page.tsx", "site-header.tsx", "wordmark.tsx"].map((file) =>
   path.join(REPO_ROOT, "app/components", file),
@@ -40,9 +31,6 @@ function colourAndTypeClasses(source: string): string[] {
   return names;
 }
 
-// Tailwind's selector escapes every character outside [A-Za-z0-9_-]. The
-// space before `{` is how `build()` prints a rule, and it keeps `text-ink`
-// from matching `text-ink-soft`.
 function hasRule(css: string, className: string): boolean {
   let escaped = "";
   for (const char of className) {

@@ -12,23 +12,12 @@ import type { APIRequestContext } from "@playwright/test";
 import { FIXTURE_ACCOUNTS } from "../../app/lib/fixture-accounts";
 import { classifySettingsDeleteRedirect, deleteAccountViaRequest, isKeptAccount } from "../../e2e/inbox";
 
-// #5985: an e2e spec that mints an `e2e+` address creates a real user row in
-// production, and deleteCreatedAccount in e2e/inbox.ts is the only path that
-// removes it. A spec that mints and never calls the helper leaks a row per
-// run. The shape is the toaster.test.ts one by copy (0509#4116): REPO_ROOT
-// from import.meta.url, a recursive readdir, pure-regex probes, then the
-// clean-tree sweep.
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-// A prefix before the interpolation is still a per-run mint:
-// `e2e+onboarded-${lane}-…` and `e2e+${tag}-…` leaked rows the bare
-// `e2e+${` probe never saw (0509#6968).
+
 const MINT = /e2e\+[\w-]*\$\{/;
-// J14 drives the delete flow inline and asserts the mid-flow progress, so it
-// cannot call the helper; it is the flow's proof.
+
 const ALLOWED = new Set(["e2e/j14-delete-workspace.spec.ts"]);
 
-// The accounts the journey specs keep on purpose (0509#5688,
-// fleet-manager): exact addresses, never a pattern.
 const KEPT_JOURNEY_ACCOUNTS = [
   "e2e+j7@0509.io",
   "e2e+j8-hard@0509.io",
@@ -45,9 +34,6 @@ const KEPT_JOURNEY_ACCOUNTS = [
   "e2e+j11@0509.io",
 ];
 
-// A setup project that mints is cleaned up by its `teardown:` project, not by
-// the helper. The lighthouse sign-in is the one exception: the lighthouse job
-// runs lhci-teardown as its own step after the audit (0509#5767).
 const SETUP_TEARDOWN_ELSEWHERE = new Set(["e2e/lhci-session.setup.ts"]);
 
 const WORKFLOW = ".github/workflows/e2e-scheduled.yml";
@@ -95,8 +81,7 @@ describe("e2e fixture teardown detector", () => {
 
   it("ignores the fixed journey addresses and a non-e2e seed", () => {
     for (const email of KEPT_JOURNEY_ACCOUNTS) expect(MINT.test(email)).toBe(false);
-    // j6-keyboard.spec.ts's preview-lane seed: a j6-prefixed address against
-    // local D1, never the e2e+ shape.
+
     expect(MINT.test("const email = `j6-keyboard-${suffix}@0509.io`;")).toBe(false);
   });
 
@@ -230,9 +215,6 @@ describe("e2e fixture teardown detector", () => {
   });
 });
 
-// #7186: the e2e-scheduled dispatch rules that live in the workflow file. Each
-// shell step is run for real in bash with the runner's default flags, so a
-// test passes on what the step does, not on how it is spelled.
 const PRINT_STEP = "Print what the page showed when it failed";
 const SPEC_STEP = "Accept one spec file and no flags";
 const MAIN_ONLY_JOBS = ["j12", "signin", "j8", "backup-proof", "jev-failures", "soak-report"];
