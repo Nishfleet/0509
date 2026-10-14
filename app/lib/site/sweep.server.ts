@@ -18,6 +18,7 @@ import type { SiteSweepTarget } from "../data/watch.server";
 import { readPaidWorkspaceIds } from "../data/plan.server";
 import { insertWatches, markWatchPolled, readSiteSweepTargets, readUnwatchedEntities } from "../data/watch.server";
 import { robotsAllows } from "../fetch/robots.server";
+import { decodeHtmlEntities } from "../html";
 import { normaliseSubject } from "../identity/normalise";
 import { takeBrowserScreenshot } from "./browser-budget.server";
 import { computeBreakageEvidence } from "./breakage-evidence";
@@ -43,6 +44,15 @@ function wordCount(value: string): number {
 async function readText(key: string): Promise<string | null> {
   const object = await env.SNAPSHOTS.get(key);
   return object === null ? null : object.text();
+}
+
+function sameVisibleText(changed: ChangedPage, before: string | null, after: string | null): boolean {
+  return changed.previousTextKey !== changed.textKey && before !== null && before === after;
+}
+
+async function readVisibleText(key: string): Promise<string | null> {
+  const raw = await readText(key);
+  return raw === null ? null : decodeHtmlEntities(raw).replace(/\s+/g, " ").trim();
 }
 
 function enteredHomeUrl(entity: { domain: string; url: string | null }): string | null {
@@ -399,7 +409,14 @@ async function fileUnlessDiscarded(change: SiteChangeInput, payloadJson: string,
 }
 
 export async function publishSiteChange(target: SiteSweepTarget, changed: ChangedPage): Promise<string> {
-  const [before, after] = await Promise.all([readText(changed.previousTextKey), readText(changed.textKey)]);
+  const [before, after] = await Promise.all([
+    readVisibleText(changed.previousTextKey),
+    readVisibleText(changed.textKey),
+  ]);
+  if (sameVisibleText(changed, before, after)) {
+    console.log(JSON.stringify({ event: "site.change_same_text", pageId: target.pageId }));
+    return changed.snapshotId;
+  }
   const diff = pageTextDiff(before, after, changed);
   const diffKey = `snapshot/site/${target.watchId}/${changed.snapshotId}.diff.json`;
   await storeDiff(diffKey, diff);
