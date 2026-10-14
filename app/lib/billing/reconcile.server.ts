@@ -135,7 +135,9 @@ export async function reconcileCheckoutReturn(workspaceId: string, email: string
       await reconcileOne(sub, current?.updatedAt ?? null);
     }
   } catch (error) {
-    say("billing.reconcile_failed", { kind: error instanceof Error ? error.name : "unknown" });
+    console.warn(
+      JSON.stringify({ event: "billing.reconcile_failed", kind: error instanceof Error ? error.name : "unknown" }),
+    );
   }
 }
 
