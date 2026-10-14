@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "./test";
 
 import { onboardedStatePath } from "../playwright.config";
+import { signInOnLocalLane } from "./quality";
 
 test.use({
   storageState: async ({}, use, testInfo) => {
@@ -12,10 +13,9 @@ test.use({
     );
   },
 });
-test.skip(
-  !process.env.PLAYWRIGHT_TEST_BASE_URL,
-  "the Alerts page needs a real session; the local preview Worker cannot mint one",
-);
+test.beforeEach(async ({ page, baseURL }) => {
+  await signInOnLocalLane(page, baseURL, "a11y-alerts");
+});
 
 test("the Alerts page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and 390 in light and dark (#4153)", async ({
   page,
@@ -61,10 +61,6 @@ test("the Alerts page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440
         "outline-style",
         "solid",
       );
-
-      await page.screenshot({
-        path: test.info().outputPath(`alerts-focus-${String(viewport.width)}-${colorScheme}.png`),
-      });
 
       expect(results.violations).toEqual([]);
     }
