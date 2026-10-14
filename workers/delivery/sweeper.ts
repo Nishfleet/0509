@@ -9,7 +9,8 @@ export const SELECT_STALE_PENDING_ATTEMPTS = `SELECT DISTINCT a.digest_id FROM s
 const SELECT_RETRYABLE_TEAMMATE_ATTEMPTS = `SELECT DISTINCT a.digest_id FROM send_attempt a
      JOIN send_target t ON t.id = a.send_target_id
      JOIN digest d ON d.id = a.digest_id
-     WHERE a.status = 'failed' AND t.role = 'teammate' AND a.attempt_count < ?
+     WHERE a.status = 'failed' AND t.role = 'teammate' AND t.is_verified = 1 AND a.attempt_count < ?
+       AND NOT EXISTS (SELECT 1 FROM email_suppression s WHERE lower(trim(s.address)) = lower(trim(t.target_value)))
        AND a.attempted_at < ? AND d.status = 'sent' AND d.period_end >= ?`;
 
 export interface SweepResult {

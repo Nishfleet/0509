@@ -130,6 +130,11 @@ describe("delivery sweeper (0509#4353)", () => {
     await env.DB.exec("DELETE FROM send_attempt");
     await seedMateAttempt("due", 2, "2026-09-23T01:00:00.000Z");
     expect(await sweep()).toEqual([{ digest_id: "d-mate" }]);
+
+    await env.DB.prepare("INSERT INTO email_suppression (address, reason, created_at) VALUES (?, 'unsubscribed', ?)")
+      .bind("mate@0509.io", "2026-09-23T02:00:00.000Z")
+      .run();
+    expect(await sweep()).toEqual([]);
   });
 
   it("does not enqueue an attempt that has been pending for 30 minutes", async () => {
