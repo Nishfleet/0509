@@ -105,6 +105,20 @@ describe("rival change email lane (0509#6375)", () => {
     });
   });
 
+  it("never emails a rival change to a confirmed teammate, only to the owner", async () => {
+    await env.DB.prepare(
+      `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at, role)
+       VALUES ('mate-change', ?, 'chan-email', 'mate@0509.io', 1, '2026-09-23T00:00:02Z', 'teammate')`,
+    )
+      .bind(WS)
+      .run();
+    const sent: EmailMessageBuilder[] = [];
+
+    await deliverChange(envWith(sent), { signal_id: SIGNAL });
+
+    expect(sent.map((mail) => mail.to)).toEqual([TARGET]);
+  });
+
   it("never sends more than the cap when consumers race for the last slots", async () => {
     const ids = Array.from({ length: CHANGE_DAILY_CAP + 4 }, (_, index) => `sig-race-${String(index)}`);
     await env.DB.batch(ids.map((id) => insertSignal(id, RIVAL)));

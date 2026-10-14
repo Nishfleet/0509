@@ -115,6 +115,7 @@ test("signed-in Home, competitors, brief, alerts, settings and agents hold LCP a
     await emulate4g(page);
     const response = await page.goto(path, { waitUntil: "load" });
     expect(response?.status(), path).toBe(200);
+    expect(new URL(page.url()).pathname, `${path} landed on another page`).toBe(path);
     measured[path] = await settledVitals(page);
     await context.close();
   }
