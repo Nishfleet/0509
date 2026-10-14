@@ -15,6 +15,7 @@ import { withTransportSecurityHeaders } from "../app/lib/security-headers";
 import { runNightlyCostGuard } from "../app/lib/observability/run-cost-guard.server";
 import { pingLiveness } from "../app/lib/liveness-ping.server";
 import { cronMonitor } from "./cron-monitors";
+import { withCheckPings } from "./workflow-monitor";
 import { handleBatch } from "./delivery/consumer";
 import { handleDlqBatch } from "./delivery/dlq-consumer";
 import { sweepPending } from "./delivery/sweeper";
@@ -109,7 +110,7 @@ const handler = {
       await run();
       return;
     }
-    await withMonitor(monitor.slug, run, {
+    await withMonitor(monitor.slug, () => withCheckPings(monitor.slug, controller.cron === NIGHTLY_CRON, run), {
       schedule: { type: "crontab", value: monitor.schedule },
       checkinMargin: monitor.checkinMargin,
       maxRuntime: monitor.maxRuntime,
