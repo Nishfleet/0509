@@ -10,8 +10,7 @@ import { MAX_TEAMMATES } from "./teammate-limit";
 const INVALID = "Enter an email address, like colleague@company.com.";
 const NO_WORKSPACE = "Finish setting up first, then add a teammate.";
 const RATE_LIMITED = "Too many invitations. Wait a minute, then try again.";
-const UNSUBSCRIBED = "We can't send the brief to that address, so it can't be added.";
-const CANT_ADD = `You can add up to ${String(MAX_TEAMMATES)} teammates, and each address only once.`;
+const CANT_ADD = `We can't add that address. You can add up to ${String(MAX_TEAMMATES)} teammates, each address only once.`;
 
 export async function readTeammates(workspaceId: string) {
   const mates = await listTeammates(env.DB, workspaceId);
@@ -31,7 +30,7 @@ export async function addTeammateByOwner(input: {
   if (workspaceId === null) return NO_WORKSPACE;
   const { success } = await env.SIGN_IN_EMAIL_LIMIT.limit({ key: `teammate:${workspaceId}` });
   if (!success) return RATE_LIMITED;
-  if (await isAddressSuppressed(address)) return UNSUBSCRIBED;
+  if (await isAddressSuppressed(address)) return CANT_ADD;
   const targetId = await addTeammate(env.DB, { workspaceId, address, now: new Date().toISOString() });
   if (targetId === null) return CANT_ADD;
   return sendTeammateInvite({ email: input.email, workspaceId, targetId, address, addedBy: input.signInEmail });
