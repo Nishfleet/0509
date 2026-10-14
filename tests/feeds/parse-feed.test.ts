@@ -144,10 +144,6 @@ describe("parseFeed", () => {
   });
 
   it("decodes numeric entities and turns an out-of-range one into a replacement character", () => {
-    // &#8217; and &#x41; decode; &#99999999; is past U+10FFFF, so the XML parser
-    // emits U+FFFD. The old hand-rolled decoder silently deleted the
-    // out-of-range entity; the library's reading is the spec's, and a U+FFFD in
-    // a title is visible where a missing character would hide a broken feed.
     const [item] =
       parseFeed(
         rss(`<item><title>A&#8217;s &#x41; &#99999999; plan</title><link>https://rival.com/e</link></item>`),
@@ -329,10 +325,6 @@ describe("parseFeed on hostile input", () => {
   });
 
   it("ignores an item whose tags are upper case, because XML tags are case-sensitive", () => {
-    // The old scanner lower-cased the document before it looked for <item>, so
-    // it read a malformed feed the XML spec says has no items. fast-xml-parser
-    // matches tag names exactly, which is the correct reading; the old test
-    // that asserted the upper-case item was read is deleted with the scanner.
     const xml = rss(`<ITEM><TITLE>Upper case tags</TITLE><LINK>https://rival.com/upper</LINK></ITEM>`);
 
     expect(parseFeed(xml, BASE, { now: NOW })).toEqual([]);

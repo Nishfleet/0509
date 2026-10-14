@@ -8,27 +8,9 @@ import { changeState, D3S_BREAKAGE } from "../../app/lib/site/judge.server";
 import { FIXTURE_HEALTHY_TEXT, FIXTURE_SOFT_TEXT } from "../fixtures/fixture-page-texts";
 import { formatReport, jevKeyPresent, makeNoulAsk, noulScore, runEval, type NoulEvalRow } from "./harness";
 
-// 0509#7340's measurement: the shipped D3S_BREAKAGE question, fed the exact
-// judged state the nightly sweep produces for the J8 soft fixture, must answer
-// alert (p >= 0.5), and the healthy page must stay clear. The old soft break (a
-// 200 with only the pricing section gone) swung 0.58 -> 0.173 across nights
-// because the judge read a tidy one-section removal as a deliberate redesign;
-// the fixture now keeps nothing visible but its title. The two texts are
-// extractPageText's output for the fixture's healthy and soft pages, shared
-// with tests/integration/fixture-site.test.ts from
-// tests/fixtures/fixture-page-texts.ts — that test fails if the fixture's
-// visible text ever changes, and the eval's input is regenerated with it. The
-// eval runtime is node: it has no HTMLRewriter to re-run the extraction, and
-// the fixture module itself extends DurableObject, so neither step can be
-// re-derived here — which is why the walk is pinned in the workers project
-// instead.
 const SUBJECT = { name: "Five to Nine", domain: "0509.in" };
 const PAGE_URL = "https://j8-soft.fixture.0509.in/";
 
-// The same builders the sweep hands judgeChange, on the texts the integration
-// test proves production extracts: sha256Hex is extractPageText's own hash, so
-// the ExtractedPageText pair and the hunks and evidence out of diffPageText and
-// computeBreakageEvidence are what production would judge.
 async function extracted(text: string) {
   return { text, hash: await sha256Hex(text), charCount: text.length };
 }
@@ -61,9 +43,7 @@ async function fixtureStates(): Promise<Record<string, unknown>> {
     "fixture-healthy": changeState(
       {
         ...base,
-        // An unchanged page never reaches the judge in production (the sweep
-        // short-circuits on the hash); the control asks the question what it
-        // would say if it saw the healthy page with no diff at all.
+
         hunks: [],
         evidence: computeBreakageEvidence({
           status: 200,
@@ -76,12 +56,6 @@ async function fixtureStates(): Promise<Record<string, unknown>> {
   };
 }
 
-// A two-state probe of one fixture's judged state, not the scored case set:
-// the labeled case set for this question stays
-// tests/evals/cases/site-change.json (scored by site-change.eval.test.ts). One
-// row in each split is what lets this file run under both defaults — bare
-// `npm run eval` (EVAL_SPLIT=all) and the evals.yml dispatch
-// (EVAL_SPLIT=test) — where runEval throws on an empty split.
 const rows: NoulEvalRow[] = [
   {
     id: "fixture-soft-broken",
@@ -91,8 +65,7 @@ const rows: NoulEvalRow[] = [
   },
   {
     id: "fixture-healthy",
-    // The control: the healthy page was not touched by 0509#7340's fixture
-    // change, so it scores under the default test split.
+
     split: "test",
     label: false,
     why: "the healthy fixture page: hero line, priced plans, checkout link all present",

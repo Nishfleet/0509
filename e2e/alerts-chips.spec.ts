@@ -307,8 +307,11 @@ test("alert type chips filter one feed with honest counts", async ({ page }, tes
   await expect(page.getByTestId("alert-chip-ads")).toContainText(String(counts.ads));
   await expect(page.getByTestId("alert-chip-mentions")).toContainText(String(counts.mentions));
   await expect(page.getByTestId("alert-chip-hiring")).toContainText(String(counts.hiring));
-  await expect(page.getByTestId("alert-chip-site-changes")).toBeDisabled();
+  await expect(page.getByTestId("alert-chip-site-changes")).toHaveCount(0);
 
+  await page.goto("/app/alerts?kind=site-changes");
+  await expect(page.getByTestId("alert-chip-site-changes")).toHaveAttribute("aria-pressed", "true");
+  await page.goto("/app/alerts");
   await page.getByTestId("alert-chip-ads").click();
   await expect(page).toHaveURL(/[?&]kind=ads/);
   await expect(page.getByText("Zephyrwear ran ad 1")).toBeVisible();

@@ -35,7 +35,7 @@ const competitorForm = z.object({
 
 async function forget(workspaceId: string, entityId: string, confirm: string): Promise<CompetitorFormErrors> {
   const outcome = await forgetCompetitor(workspaceId, entityId, confirm);
-  if (outcome === "forgotten") throw redirect("/app/competitors");
+  if (outcome === "forgotten") throw redirect("/app/competitors?removed=1");
   if (outcome === "missing") throw new Response("We don't track that competitor.", { status: 404 });
   return { ...NO_ERRORS, forgetError: FORGET_MISMATCH };
 }
