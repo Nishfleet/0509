@@ -12,7 +12,7 @@ import {
   seedPreviewSession,
   signInWithMagicLink,
 } from "./inbox";
-import { seedCompetitor, seedWorkspace, signIn } from "./quality";
+import { seedBareWorkspace, seedCompetitor, seedWorkspace, signIn } from "./quality";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -34,15 +34,7 @@ function seedStep(db: DatabaseSync, suffix: string, userId: string, step: Step):
     run(db, "UPDATE onboarding_run SET watching_started_at = NULL WHERE workspace_id = ?", workspaceId);
     return;
   }
-  const workspaceId = `ws-${suffix}`;
-  run(
-    db,
-    "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?, ?, ?, 'UTC', 1, 8, ?)",
-    workspaceId,
-    "Onboarding",
-    userId,
-    STAMP,
-  );
+  const workspaceId = seedBareWorkspace(db, suffix, userId);
   run(
     db,
     "INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at) VALUES (?, ?, ?, NULL, NULL, 'public_subject:confirmed', 'example.com', ?)",

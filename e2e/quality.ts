@@ -112,8 +112,12 @@ export async function scanPage(
   testInfo: TestInfo,
   quality: Quality,
   label: string,
-  options: { keyboard: boolean } = { keyboard: true },
+  options: { screen: RegExp; keyboard: boolean },
 ): Promise<void> {
+  await expect(
+    page.getByRole("heading", { name: options.screen }).first(),
+    `${label}: the screen under test`,
+  ).toBeVisible();
   await animationsSettled(page);
   await expectNoAxeViolations(page, testInfo, label);
   await expectQuiet(page, testInfo, quality, label);
@@ -137,6 +141,19 @@ export function seedWorkspace(db: DatabaseSync, suffix: string, userId: string, 
     `ent-self-${suffix}`,
     workspaceId,
     `self-${suffix}.example`,
+    STAMP,
+  );
+  return workspaceId;
+}
+
+export function seedBareWorkspace(db: DatabaseSync, suffix: string, userId: string): string {
+  const workspaceId = `ws-${suffix}`;
+  run(
+    db,
+    "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?, ?, ?, 'UTC', 1, 8, ?)",
+    workspaceId,
+    "Onboarding",
+    userId,
     STAMP,
   );
   return workspaceId;
