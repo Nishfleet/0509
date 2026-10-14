@@ -859,6 +859,18 @@ export function readPreview<T>(read: (db: DatabaseSync) => T): T {
   }
 }
 
+export function writePreview(write: (db: DatabaseSync) => void): void {
+  const db = new DatabaseSync(previewDatabasePath(), { timeout: 15_000 });
+  db.exec("PRAGMA busy_timeout = 15000");
+  db.exec("PRAGMA foreign_keys = ON");
+  try {
+    write(db);
+    db.exec("PRAGMA wal_checkpoint(PASSIVE)");
+  } finally {
+    db.close();
+  }
+}
+
 const SEED_LIVE_PLAN = `INSERT INTO plan (id, workspace_id, tier, status, current_period_end, updated_at)
   SELECT 'plan-' || id, id, 'scout', 'trialing', ?, '2026-01-01T00:00:00.000Z' FROM workspace WHERE owner_user_id = ?
   ON CONFLICT(workspace_id) DO NOTHING`;
