@@ -42,6 +42,12 @@ const SELECT_UNSUBSCRIBE_TOKEN = `SELECT 1 AS present FROM send_target WHERE uns
 
 const DELETE_SUPPRESSION = `DELETE FROM email_suppression WHERE lower(trim(address)) = lower(trim(?))`;
 
+const LIFT_BRIEF_STOP = `UPDATE email_suppression SET stops_brief = 0
+ WHERE lower(trim(address)) = lower(trim(?)) AND reason = 'unsubscribed'`;
+
+const DELETE_NON_OPT_OUT_SUPPRESSION = `DELETE FROM email_suppression
+ WHERE lower(trim(address)) = lower(trim(?1)) AND (reason != 'unsubscribed' OR (stops_brief = 0 AND stops_alerts = 0))`;
+
 const DELETE_UNSUBSCRIBED_SUPPRESSION = `DELETE FROM email_suppression WHERE lower(trim(address)) = lower(trim(?)) AND reason = 'unsubscribed'`;
 
 const DELETE_WORKSPACE_DELETED_SUPPRESSION = `DELETE FROM email_suppression WHERE lower(trim(address)) = lower(trim(?)) AND reason = 'workspace_deleted'`;
@@ -107,6 +113,13 @@ export async function writeMailKinds(address: string, on: { brief: boolean; aler
 
 export async function clearSuppression(address: string): Promise<void> {
   await env.DB.prepare(DELETE_SUPPRESSION).bind(address).run();
+}
+
+export async function clearBriefSuppression(address: string): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(LIFT_BRIEF_STOP).bind(address),
+    env.DB.prepare(DELETE_NON_OPT_OUT_SUPPRESSION).bind(address),
+  ]);
 }
 
 export async function clearWorkspaceDeletedSuppression(address: string, db: WorkspaceDb = env.DB): Promise<void> {

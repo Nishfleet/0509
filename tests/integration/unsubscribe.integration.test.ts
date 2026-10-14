@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  clearBriefSuppression,
   isAddressSuppressed,
   isUnsubscribeTokenKnown,
   readMailKinds,
@@ -284,5 +285,26 @@ describe("one-click unsubscribe (0509#4358, 0509#4593, 0509#5761)", () => {
 
     expect(await readMailKinds(ADDRESS)).toEqual({ brief: false, alerts: false });
     expect((await suppressionRows()).map((row) => row.reason)).toEqual(["workspace_deleted"]);
+  });
+
+  it("(q) confirming an address lifts only the brief stop and keeps an alerts stop", async () => {
+    await unsubscribe(TOKEN, "all");
+
+    await clearBriefSuppression(ADDRESS);
+
+    expect(await readMailKinds(ADDRESS)).toEqual({ brief: true, alerts: false });
+    expect(await isAddressSuppressed(ADDRESS, "alerts")).toBe(true);
+  });
+
+  it("(r) confirming an address drops a bounce row and a spent opt-out row", async () => {
+    await env.DB.prepare(
+      "INSERT INTO email_suppression (address, reason, created_at) VALUES (?, 'bounce', '2026-10-10T00:00:00Z')",
+    )
+      .bind(ADDRESS)
+      .run();
+
+    await clearBriefSuppression(ADDRESS);
+
+    expect(await suppressionRows()).toEqual([]);
   });
 });
