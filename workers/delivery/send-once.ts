@@ -35,6 +35,11 @@ export async function sendOnce(env: Env, input: SendOnceInput): Promise<boolean>
       outcome: "failed" as const,
       error: redactEmailShaped(error instanceof Error ? error.message : "render failed"),
     }));
-  await resolveSendAttempt(env.DB, { attemptId: claim.id, outcome: result.outcome, error: result.error });
+  await resolveSendAttempt(env.DB, {
+    attemptId: claim.id,
+    idempotencyKey: input.key,
+    outcome: result.outcome,
+    error: result.error,
+  });
   return result.outcome === "sent";
 }

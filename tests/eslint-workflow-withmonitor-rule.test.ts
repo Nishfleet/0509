@@ -1,10 +1,3 @@
-// #7001: withMonitor around Workflow run() opens check-ins that never close
-// because Cloudflare replays run() after hibernation. The gate is a
-// no-restricted-imports ban on withMonitor under workers/workflows/. These
-// probes boot the real eslint.config.js (same rig as eslint-writer-rule.test.ts)
-// and hold the pass/fail pair: a fresh withMonitor import fails, captureCheckIn
-// and the scheduled handler stay clean.
-
 import { describe, expect, it } from "vitest";
 
 import { lintExisting, lintTextAt } from "./eslint-lint-text";
