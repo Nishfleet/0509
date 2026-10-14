@@ -52,7 +52,7 @@ beforeEach(() => {
   fetchOutboundMock.mockReset();
   robotsAllowsMock.mockReset();
   robotsAllowsMock.mockResolvedValue(true);
-  vi.spyOn(console, "log").mockImplementation(() => undefined);
+  vi.spyOn(console, "warn").mockImplementation(() => undefined);
 });
 
 afterEach(() => {
@@ -172,7 +172,7 @@ describe("fetchFeed guards the fetch and logs a failure", () => {
 
   it("returns unreadable and logs one feed.fetch_failed line with no URL when fetchOutbound throws", async () => {
     fetchOutboundMock.mockRejectedValue(new TypeError("connect ETIMEDOUT"));
-    const logSpy = vi.spyOn(console, "log");
+    const logSpy = vi.spyOn(console, "warn");
 
     await expect(fetchFeed(FEED_URL, null)).resolves.toEqual({ outcome: "unreadable" });
     expect(logSpy).toHaveBeenCalledTimes(1);
@@ -201,7 +201,7 @@ describe("fetchHomepage reads the page under the same guards", () => {
 
   it("returns null and logs one feed.homepage_failed line with no URL when fetchOutbound throws", async () => {
     fetchOutboundMock.mockRejectedValue(new TypeError("connect ETIMEDOUT"));
-    const logSpy = vi.spyOn(console, "log");
+    const logSpy = vi.spyOn(console, "warn");
 
     await expect(fetchHomepage(HOME_URL)).resolves.toBeNull();
     expect(logSpy).toHaveBeenCalledTimes(1);
