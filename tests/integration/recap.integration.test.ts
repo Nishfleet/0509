@@ -97,6 +97,21 @@ describe("trial recap email", () => {
     expect(sent[0]?.text).toContain("Most recent: Acme, Homepage headline changed");
   });
 
+  it("recaps the owner, never an older confirmed teammate", async () => {
+    await env.DB.prepare(
+      `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at, role)
+       VALUES ('mate-old', ?, 'chan-email', 'mate@0509.io', 1, '2000-01-01T00:00:00Z', 'teammate')`,
+    )
+      .bind(WS)
+      .run();
+    await seedPlan();
+    await seedChange("sig-1", "Something", "2026-10-12T10:00:00Z");
+    const sent: EmailMessageBuilder[] = [];
+
+    expect(await sendRecaps(envWith(sent), NOW, isTester)).toBe(1);
+    expect(sent.map((mail) => mail.to)).toEqual([TARGET]);
+  });
+
   it("never mentions money or the end of the trial", async () => {
     await seedPlan();
     await seedChange("sig-1", "Pricing page now lists a free tier", "2026-10-10T10:00:00Z");

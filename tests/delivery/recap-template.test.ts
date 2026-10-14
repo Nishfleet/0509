@@ -24,6 +24,12 @@ describe("recap email", () => {
     expect(text).not.toContain("Most recent");
   });
 
+  it("leads the inbox preview with the count", () => {
+    expect(renderRecap(CTX).html).toMatch(
+      /display:none[^>]*>In your first days we(?:'|&#39;)ve caught 3 changes across your rivals\./,
+    );
+  });
+
   it("escapes anything it is handed", () => {
     expectNoHtmlInjection(renderRecap({ ...CTX, latest: { rival: PROBE, what: PROBE } }).html, "latest");
   });

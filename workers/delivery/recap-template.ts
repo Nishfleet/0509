@@ -34,6 +34,7 @@ export function renderRecap(ctx: RecapContext): RenderedBrief {
         ...body.map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`),
         `<p style="${BODY}">See everything: <a class="brief-ink" href="${href}">${href}</a></p>`,
       ].join(""),
+      body[0],
     ),
   };
 }
