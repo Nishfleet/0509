@@ -457,6 +457,13 @@ describe("the connect block on /app/settings/agents", () => {
     expect(markup()).toContain(`href="${ORIGIN}/api/docs"`);
   });
 
+  it("offers three things to ask once an app is connected", () => {
+    const html = markup();
+    const prompts = [...html.matchAll(/<li[^>]*data-testid="agent-prompt"[^>]*>(.*?)<\/li>/g)].map((match) => match[1]);
+    expect(prompts).toHaveLength(3);
+    expect(prompts[0]).toContain("Where do I stand this week, and what changed?");
+  });
+
   it("names its clients as text-only pills, Claude then ChatGPT then Cursor", () => {
     const html = markup();
     const pills = [...html.matchAll(/<li[^>]*data-testid="agent-client"[^>]*>(.*?)<\/li>/g)].map((match) => match[1]);

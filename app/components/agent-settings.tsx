@@ -12,6 +12,11 @@ const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", y
 const BLOCK = "mt-10 border-t border-line pt-4";
 const ROW = "flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-line py-3";
 const CLIENTS = ["Claude", "ChatGPT", "Cursor"];
+const PROMPTS = [
+  "Where do I stand this week, and what changed?",
+  "Which competitor changed their pricing page lately?",
+  "What should I read first from this week's brief?",
+];
 
 function day(iso: string): string {
   const ms = Date.parse(iso);
@@ -75,7 +80,15 @@ export function ConnectDetails({ mcpUrl, origin }: { mcpUrl: string; origin: str
         ))}
       </ul>
       <CopyField label="Connector address" value={mcpUrl} />
-      <p className="mt-3 text-body-sm text-ink-soft">Connecting with a key instead? Send it in this header.</p>
+      <p className="mt-4 text-body-sm text-ink-soft">Once it's connected, try asking:</p>
+      <ul aria-label="Try asking" className="mt-2 grid gap-1 font-mono text-[0.9rem]">
+        {PROMPTS.map((prompt) => (
+          <li key={prompt} data-testid="agent-prompt">
+            “{prompt}”
+          </li>
+        ))}
+      </ul>
+      <p className="mt-4 text-body-sm text-ink-soft">Connecting with a key instead? Send it in this header.</p>
       <CopyField label="Authorization header" value="Authorization: Bearer <your key>" />
       <p className="mt-3 text-body-sm text-ink-soft">
         Writing your own code? Make a key below and read the{" "}
