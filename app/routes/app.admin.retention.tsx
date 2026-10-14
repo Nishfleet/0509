@@ -14,7 +14,7 @@ export function headers() {
 }
 
 export async function loader({ context }: Route.LoaderArgs) {
-  await requireAdmin(context.get(sessionContext).user.email);
+  await requireAdmin(context.get(sessionContext).user);
   return { board: await readRetentionBoard(new Date()) };
 }
 

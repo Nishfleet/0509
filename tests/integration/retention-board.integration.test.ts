@@ -112,7 +112,12 @@ describe("the admin check", () => {
   });
 
   it("answers anyone else with a plain 404", async () => {
-    await expect(requireAdmin("someone@0509.io")).rejects.toMatchObject({ status: 404 });
-    await expect(requireAdmin("admin@0509.io")).resolves.toBeUndefined();
+    await expect(requireAdmin({ email: "someone@0509.io", emailVerified: true })).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(requireAdmin({ email: "admin@0509.io", emailVerified: false })).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(requireAdmin({ email: "admin@0509.io", emailVerified: true })).resolves.toBeUndefined();
   });
 });
