@@ -141,7 +141,7 @@ async function onboard(page: Page): Promise<void> {
 
 async function resubscribe(page: Page): Promise<void> {
   await page.goto("/app/settings");
-  const resume = page.getByLabel("Send the brief to this address again");
+  const resume = page.getByLabel("Send the brief and alerts to this address again");
   if ((await resume.count()) === 0) return;
   await resume.check();
   await page.getByRole("button", { name: "Save" }).click();

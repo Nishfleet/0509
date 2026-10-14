@@ -26,7 +26,7 @@ export async function robotsAllows(url: string): Promise<boolean> {
     if (body === null) return true;
     return robotsParser(robotsUrl, body).isDisallowed(url, ROBOTS_AGENT) !== true;
   } catch (error) {
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "robots.read_failed",
         error: error instanceof Error ? error.name : typeof error,

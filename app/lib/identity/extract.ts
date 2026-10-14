@@ -159,7 +159,7 @@ function readOrganization(blocks: readonly string[]): {
     try {
       flattenLd(JSON.parse(block) as unknown, nodes);
     } catch (error) {
-      console.log(JSON.stringify({ event: "identity-ld-json-unreadable", error: String(error) }));
+      console.warn(JSON.stringify({ event: "identity-ld-json-unreadable", error: String(error) }));
       continue;
     }
   }

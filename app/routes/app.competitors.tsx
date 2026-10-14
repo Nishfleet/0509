@@ -6,6 +6,8 @@ import { redirect, useFetcher } from "react-router";
 
 import { BrandChip } from "../components/brand-chip";
 import { BrandSwitch, brandSwitchNote } from "../components/brand-switch";
+import { CompetitorCount } from "../components/competitor-count";
+import { CompetitorRemoved } from "../components/competitor-removed";
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
 import { UpgradeStatus } from "../components/plan-gate";
 import { EmptyState } from "../components/empty-state";
@@ -45,7 +47,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     ...competitors,
     tier,
     countLine: competitorCountLine(watching, entitlements.competitors),
+    planFull: watching >= entitlements.competitors,
     wanted: isPlanId(wanted) ? wanted : null,
+    removed: new URL(request.url).searchParams.get("removed") === "1",
   };
 }
 
@@ -90,16 +94,15 @@ function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
-  const { competitors, maybes, questions, tier, wanted, countLine } = loaderData;
+  const { competitors, maybes, questions, tier, wanted, countLine, planFull, removed } = loaderData;
   return (
     <main className={PAGE}>
       <PageHeading
         title="Competitors"
-        lede="Each competitor has one switch. Turn it off to stop watching and alerts. Your history stays."
+        lede="Each competitor has one switch. Turn it off to stop watching and alerts. Your history stays. Open one to fix its name, or to delete it for good with Remove and forget."
       />
-      <p data-slot="competitor-count" className="mt-2 text-body-sm text-ink-soft">
-        {countLine}
-      </p>
+      <CompetitorCount line={countLine} full={planFull} />
+      {removed ? <CompetitorRemoved /> : null}
       <UpgradeStatus tier={tier} wanted={wanted} />
       {competitors.length === 0 ? (
         <div className="mt-8">

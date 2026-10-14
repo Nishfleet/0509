@@ -79,19 +79,22 @@ export function renderChangeOverflow(ctx: ChangeOverflowContext): RenderedBrief 
   };
 }
 
+const SO_WHAT = "Worth a look today: does your own pricing page still hold up next to this?";
+
 export function renderChange(ctx: ChangeContext): RenderedBrief {
   const seen = `Seen at ${formatDate(ctx.observed_at, ctx.timezone, true)}.`;
   const lines = [...markLines(ctx.mark), seen];
   const footer = renderAlertFooter(ctx);
   return {
     subject: subjectFor(ctx.headline, ctx.mark),
-    text: [ctx.headline, ...lines, `${OPEN}: ${ctx.link}`, footer.text].join("\n"),
+    text: [ctx.headline, ...lines, SO_WHAT, `${OPEN}: ${ctx.link}`, footer.text].join("\n"),
     html: emailDocument(
       ctx.headline,
       [
         `<p class="brief-muted" style="${EYEBROW}">Price or plan change</p>`,
         `<p style="${HEADLINE}">${escapeHtml(ctx.headline)}</p>`,
         paragraphs(lines),
+        paragraphs([SO_WHAT]),
         linkParagraph(OPEN, ctx.link),
         footer.html,
       ].join(""),

@@ -145,6 +145,24 @@ const CATCH_RETURNS_NULL = {
     "A catch whose only statement is `return null` swallows the error, so a thrown fetch or a bug fails as silently as a real 'not found'. Give the clause an error binding and a logged failure path (or rethrow). Source: 0509#4462.",
 };
 
+// console.log, console.info and console.debug reach Workers Logs but never
+// Sentry, so a failure logged at that level is invisible to the alerting that
+// watches console.warn and console.error. 2026-10-13: site.change_discarded,
+// site.check_failed and archive.read_failed all logged at info level and
+// nobody was paged. An event named for a failure, or any log inside a catch
+// clause, must use console.warn or console.error. Source: 0509#7501.
+const QUIET_LOG_LEVEL = "[callee.object.name='console'][callee.property.name=/^(log|info|debug)$/]";
+const FAILURE_EVENT_LOGGED_QUIETLY = {
+  selector: `CallExpression${QUIET_LOG_LEVEL}:has(Property[key.name='event'] > Literal[value=/(failed|discarded|unavailable|dead_lettered|unreadable|unreached|skipped)$/])`,
+  message:
+    "An event named for a failure (_failed, _discarded, _unavailable, _dead_lettered, _unreadable, _unreached, _skipped) logged with console.log, console.info or console.debug never reaches Sentry. Use console.warn or console.error. Source: 0509#7501 (site.change_discarded, site.check_failed and archive.read_failed went unseen on 2026-10-13).",
+};
+const LOG_IN_CATCH_LOGGED_QUIETLY = {
+  selector: `CatchClause CallExpression${QUIET_LOG_LEVEL}`,
+  message:
+    "A log written inside a catch clause records a failure, and console.log, console.info and console.debug never reach Sentry. Use console.warn or console.error. Source: 0509#7501.",
+};
+
 const SCORE_NAME = "/^(points|weight|multiplier|score|total)$/";
 
 const RAW_SCORE_STRING = {
@@ -407,6 +425,8 @@ const BANNED_SYNTAX = [
   GOOGLE_FONTS_BAN,
   CRAWLER_USER_AGENT_BAN,
   CATCH_RETURNS_NULL,
+  FAILURE_EVENT_LOGGED_QUIETLY,
+  LOG_IN_CATCH_LOGGED_QUIETLY,
   RAW_SCORE_STRING,
   XML_PARSER_CONSTRUCTOR,
   DOMAIN_HOSTNAME_BAN,
