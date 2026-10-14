@@ -15,6 +15,8 @@ describe("next step line", () => {
   it("says nothing for noise, an unknown kind or no kind", () => {
     expect(nextStepLine("noise")).toBeNull();
     expect(nextStepLine("mystery")).toBeNull();
+    expect(nextStepLine("constructor")).toBeNull();
+    expect(nextStepLine("toString")).toBeNull();
     expect(nextStepLine(null)).toBeNull();
     expect(nextStepLine(undefined)).toBeNull();
   });
