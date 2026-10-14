@@ -32,11 +32,12 @@ describe("pricingTimeline", () => {
     const steps = pricingTimeline([
       change({ id: "late", observedAt: "2026-10-05T21:00:00.000Z", mark: { removed: "€46", added: "€52" } }),
       change({ id: "early" }),
+      change({ id: "same-day-later", observedAt: "2026-09-01T23:00:00.000Z" }),
       change({ id: "blog", page: "blog" }),
       change({ id: "mine", isSelf: true }),
       change({ id: "one-sided", mark: { removed: null, added: "New plan" } }),
     ]);
-    expect(steps.map((step) => step.id)).toEqual(["early", "late"]);
+    expect(steps.map((step) => step.id)).toEqual(["early", "same-day-later", "late"]);
     expect(steps[0]).toMatchObject({ day: "2026-09-01", from: "Starter €40", to: "Starter €46" });
   });
 
