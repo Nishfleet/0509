@@ -1,7 +1,6 @@
 import { captureException } from "@sentry/cloudflare";
 import { z } from "zod";
 
-import { deferredByTimeout } from "../../app/lib/fetch/transport.server";
 import { readFailureReasonForWatch } from "../../app/lib/data/page.server";
 import { readSiteSweepTarget } from "../../app/lib/data/watch.server";
 import { checkSitePage, publishSiteChange, type SweepTick } from "../../app/lib/site/sweep.server";
@@ -74,7 +73,7 @@ async function collectWatch(message: FetchSweepMessage, tick: SweepTick): Promis
   if (result.outcome === "gone") return "not_collectable";
   if (result.outcome !== "failed") return result.outcome;
   if (result.reason === "robots") return "disallowed";
-  if (result.reason === "deferred") return deferredByTimeout(result.detail) ? "failed" : "deferred";
+  if (result.reason === "deferred") return result.escalation === "timeout" ? "failed" : "deferred";
 
   captureException(
     new Error(
@@ -131,7 +130,7 @@ export async function handleFetchSweepBatch(batch: MessageBatch): Promise<FetchS
 export async function handleFetchSweepDlqBatch(batch: MessageBatch): Promise<void> {
   for (const item of batch.messages) {
     const parsed = parseFetchSweepMessage(item.body);
-    const reason = parsed === null ? null : await readFailureReasonForWatch(parsed.watchId);
+    const reason = parsed === null ? null : await readFailureReasonForWatch(parsed.watchId).catch(() => null);
     captureException(
       new Error(
         JSON.stringify({

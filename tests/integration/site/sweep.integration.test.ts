@@ -426,6 +426,23 @@ describe("nightly site sweep", () => {
     expect(fetched).not.toContain("https://rival.com/robots.txt");
   });
 
+  it("logs a failed check without the brand's address, as a URL or a bare host", async () => {
+    vi.stubGlobal("fetch", () =>
+      Promise.reject(new Error("getaddrinfo ENOTFOUND www.rival.com via https://www.rival.com/")),
+    );
+    const [target] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
+    if (target === undefined) throw new Error("expected the rival homepage");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    expect((await checkSitePage(target, await nextTick("redact"))).outcome).toBe("failed");
+
+    const lines = warn.mock.calls.map((call) => String(call[0]));
+    warn.mockRestore();
+    const failed = lines.find((line) => line.includes('"event":"site.check_failed"'));
+    expect(failed).toContain("<host>");
+    expect(failed).not.toContain("rival.com");
+  });
+
   it("stops planning a brand once it is turned off", async () => {
     await planSiteSweep(NOW);
     await env.DB.prepare("UPDATE entity SET state = 'off' WHERE id = 'ent-rival'").run();

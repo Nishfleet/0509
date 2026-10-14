@@ -31,7 +31,7 @@ type ReadUrlFailure =
   | { ok: false; reason: "invalid-url"; detail: string }
   | { ok: false; reason: "unreachable"; detail: string }
   | { ok: false; reason: "too-large"; detail: string }
-  | { ok: false; reason: "deferred"; detail: string }
+  | { ok: false; reason: "deferred"; detail: string; escalation?: EscalationReason }
   | { ok: false; reason: "escalation-failed"; detail: string };
 
 export type ReadUrlResult = ReadUrlSuccess | ReadUrlFailure;
@@ -143,16 +143,17 @@ function logEscalation(browserMsUsed: number | null, reason: EscalationReason) {
   );
 }
 
-export function deferredByTimeout(detail: string): boolean {
-  return detail.endsWith("(timeout)");
-}
-
 async function deferUnlessAllowed(options: ReadUrlOptions, reason: EscalationReason): Promise<ReadUrlFailure | null> {
   if (!options.mayEscalate) {
-    return { ok: false, reason: "deferred", detail: `no browser budget callback wired (${reason})` };
+    return {
+      ok: false,
+      reason: "deferred",
+      detail: `no browser budget callback wired (${reason})`,
+      escalation: reason,
+    };
   }
   if (await options.mayEscalate(reason)) return null;
-  return { ok: false, reason: "deferred", detail: `browser budget refused escalation (${reason})` };
+  return { ok: false, reason: "deferred", detail: `browser budget refused escalation (${reason})`, escalation: reason };
 }
 
 function parseBrowserMs(res: Response): number | null {

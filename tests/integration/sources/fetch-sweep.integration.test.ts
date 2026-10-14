@@ -202,9 +202,11 @@ describe("fetch-sweep consumer (0509#5261)", () => {
     const stub = browserHolder.current;
     if (stub === undefined) throw new Error("expected the browser stub");
 
-    const results = await handleFetchSweepBatch(batchFor([message()]).batch);
+    const { batch, calls } = batchFor([message()]);
+    const results = await handleFetchSweepBatch(batch);
 
     expect(results).toEqual(["deferred"]);
+    expect(calls).toEqual({ acked: [0], retried: [] });
     expect(stub.calls).toEqual([]);
     expect(stub.closed).toBe(0);
     expect(captureException).not.toHaveBeenCalled();

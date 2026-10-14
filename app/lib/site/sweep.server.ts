@@ -123,6 +123,13 @@ export interface CheckSitePageOptions {
   browser?: boolean;
 }
 
+const URL_PATTERN = /https?:\/\/\S+/g;
+const HOST_PATTERN = /\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi;
+
+function redactedDetail(detail: string): string {
+  return detail.replace(URL_PATTERN, "<url>").replace(HOST_PATTERN, "<host>").slice(0, 300);
+}
+
 export async function checkSitePage(
   target: SiteSweepTarget,
   tick: SweepTick,
@@ -158,7 +165,7 @@ export async function checkSitePage(
         event: "site.check_failed",
         pageId: target.pageId,
         reason: result.reason,
-        detail: result.detail.replace(/https?:\/\/\S+/g, "<url>").slice(0, 300),
+        detail: redactedDetail(result.detail),
       }),
     );
     return result;
