@@ -56,11 +56,20 @@ function sharedKey(target: SiteSweepTarget, now: string): SharedReadKey {
 }
 
 async function keepSharedPageSafely(key: SharedReadKey, read: Extract<ReadUrlResult, { ok: true }>): Promise<void> {
+  if (read.transport !== key.startWith) return;
   try {
     await keepSharedPage(key, read);
   } catch (error) {
     console.error(JSON.stringify({ event: "site.shared_read_keep_failed", error: String(error) }));
   }
+}
+
+async function rememberUnlessLearned(
+  target: SiteSweepTarget,
+  read: Extract<ReadUrlResult, { ok: true }>,
+  now: string,
+): Promise<void> {
+  if (!learnedBrowser(target, now)) await rememberTransport(target, read, now);
 }
 
 export async function readPage(
@@ -72,7 +81,7 @@ export async function readPage(
   const key = sharedKey(target, now);
   const shared = isRival ? await readSharedPage(key) : null;
   if (shared !== null) {
-    if (!learnedBrowser(target, now)) await rememberTransport(target, shared, now);
+    await rememberUnlessLearned(target, shared, now);
     return shared;
   }
   const read = await readLive(target, now, options);
@@ -81,7 +90,7 @@ export async function readPage(
     return read;
   }
   if (read.fromArchive === true) return read;
-  if (isRival && read.transport === key.startWith) await keepSharedPageSafely(key, read);
-  if (!learnedBrowser(target, now)) await rememberTransport(target, read, now);
+  if (isRival) await keepSharedPageSafely(key, read);
+  await rememberUnlessLearned(target, read, now);
   return read;
 }
