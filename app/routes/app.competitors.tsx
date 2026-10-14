@@ -93,7 +93,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
     <main className={PAGE}>
       <PageHeading
         title="Competitors"
-        lede="Each competitor has one switch. Turn it off to stop watching and alerts. Your history stays."
+        lede="Each competitor has one switch. Turn it off to stop watching and alerts. Your history stays. To delete one for good, open it and choose Remove and forget."
       />
       <p data-slot="competitor-count" className="mt-2 text-body-sm text-ink-soft">
         {countLine}

@@ -8,7 +8,7 @@ import { ChangeSignInEmail } from "./change-sign-in-email";
 import { DeliveryAddress } from "./delivery-address";
 import { Teammates } from "./teammates";
 import { MAX_TEAMMATES } from "../lib/teammate-limit";
-import { SignOut } from "./account-settings";
+import { SignOut, SignOutEverywhere } from "./account-settings";
 import type { ComponentProps } from "react";
 
 const BLOCK = "mt-10 border-t border-line pt-4";
@@ -133,6 +133,7 @@ export function AccountSection({
       <div className="mt-2 flex flex-wrap items-start gap-x-6">
         <AddPasskey />
         <SignOut />
+        <SignOutEverywhere />
       </div>
     </section>
   );

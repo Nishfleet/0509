@@ -227,6 +227,11 @@ export async function signOut(env: AuthEnv, request: Request): Promise<Headers> 
   return headers;
 }
 
+export async function signOutEverywhere(env: AuthEnv, request: Request): Promise<Headers> {
+  await createAuth(env).api.revokeSessions({ headers: request.headers });
+  return signOut(env, request);
+}
+
 async function silenceWorkspace(db: D1Database, userId: string): Promise<void> {
   const workspaceId = await readWorkspaceIdForOwner(userId);
   if (workspaceId === null) return;
