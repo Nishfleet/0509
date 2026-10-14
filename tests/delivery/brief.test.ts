@@ -814,3 +814,23 @@ describe("the since-you-started line", () => {
     expect(text).not.toContain("since you started");
   });
 });
+
+describe("the rank-over-time line", () => {
+  it.each([
+    [5, "Up from #5 6 weeks ago"],
+    [3, "Holding at #3 since 6 weeks ago"],
+    [2, "Down from #2 6 weeks ago"],
+  ])("compares today's #3 with an earlier #%i", (earlierRank, line) => {
+    const { html, text } = renderBrief(payload({ headline_earlier: { rank: earlierRank, weeks: 6 } }), CONTEXT);
+    expect(text).toContain(line);
+    expect(html).toContain(line);
+  });
+
+  it.each([
+    ["no history", undefined],
+    ["an explicit none", null],
+  ])("is left out for %s", (_name, earlier) => {
+    const { text } = renderBrief(payload({ headline_earlier: earlier }), CONTEXT);
+    expect(text).not.toMatch(/weeks ago|since \d+ weeks/);
+  });
+});
