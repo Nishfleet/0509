@@ -4,7 +4,7 @@ import { useFetcher } from "react-router";
 import { HOURS, WEEKDAYS, hourLabel } from "../lib/brief-settings";
 import { sameTimezone } from "../lib/timezone";
 import { BriefPauseSetting } from "./brief-pause-setting";
-import { Toaster, toastSaved } from "./toaster";
+import { toastSaved } from "./toaster";
 import { Button } from "./ui/button";
 
 const SELECT =
@@ -102,7 +102,6 @@ export function BriefScheduleSettings({ schedule }: { schedule: ScheduleView }):
 
   return (
     <div className="mt-3">
-      <Toaster />
       <div className="flex flex-wrap items-end gap-3">
         <ScheduleSelect
           label="Day"

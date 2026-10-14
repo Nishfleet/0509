@@ -14,6 +14,27 @@ export interface ChangeContext extends AlertFooterContext {
   timezone: string;
 }
 
+const SUBJECT_MAX = 78;
+const SIDE_MAX = 30;
+const OPEN = "See the before and after in Five to Nine";
+
+function oneLine(value: string | null): string | null {
+  const flat =
+    value
+      ?.replace(/\s+/g, " ")
+      .replace(/[\p{Cf}\p{Cc}]/gu, "")
+      .trim() ?? "";
+  return flat === "" || flat.length > SIDE_MAX ? null : flat;
+}
+
+function subjectFor(headline: string, mark: ChangeMark | null): string {
+  const before = oneLine(mark?.removed ?? null);
+  const after = oneLine(mark?.added ?? null);
+  if (before === null || after === null) return headline;
+  const subject = `${headline}: ${before} → ${after}`;
+  return subject.length <= SUBJECT_MAX ? subject : headline;
+}
+
 function markLines(mark: ChangeMark | null): string[] {
   if (mark === null) return [];
   return [
@@ -59,13 +80,11 @@ const SO_WHAT = "Worth a look today: does your own pricing page still hold up ne
 
 export function renderChange(ctx: ChangeContext): RenderedBrief {
   const seen = `Seen at ${formatDate(ctx.observed_at, ctx.timezone, true)}.`;
-  const lines = [seen, ...markLines(ctx.mark)];
+  const lines = [...markLines(ctx.mark), seen];
   const footer = renderAlertFooter(ctx);
   return {
-    subject: ctx.headline,
-    text: [ctx.headline, ...lines, SO_WHAT, `See the before and after in Five to Nine: ${ctx.link}`, footer.text].join(
-      "\n",
-    ),
+    subject: subjectFor(ctx.headline, ctx.mark),
+    text: [ctx.headline, ...lines, SO_WHAT, `${OPEN}: ${ctx.link}`, footer.text].join("\n"),
     html: emailDocument(
       ctx.headline,
       [
@@ -73,7 +92,7 @@ export function renderChange(ctx: ChangeContext): RenderedBrief {
         `<p style="${HEADLINE}">${escapeHtml(ctx.headline)}</p>`,
         paragraphs(lines),
         paragraphs([SO_WHAT]),
-        linkParagraph("See the before and after in Five to Nine", ctx.link),
+        linkParagraph(OPEN, ctx.link),
         footer.html,
       ].join(""),
       lines.join(" "),

@@ -7,21 +7,6 @@ import { SELECT_RUN } from "../../app/lib/workspace.server";
 import { SELECT_LATEST_ATTEMPT_ERROR } from "../../workers/delivery/dlq-consumer";
 import { SELECT_STALE_PENDING_ATTEMPTS, SELECT_STALE_PENDING_DIGESTS } from "../../workers/delivery/sweeper";
 
-/**
- * 0509#5755, audit §V26: five hot or scheduled statements full-scanned their
- * table because the column they filter on had no child index. The setup file
- * applies migrations/ to this D1, so what is checked here is the chain the
- * deploy ships, not a fixture.
- *
- * This is the class gate, in its two halves. Every statement below is imported
- * from the module that runs it, so a rewrite that drops an indexed predicate
- * turns the row red here; a migration that drops or never writes the index
- * turns it red too. A new scheduled or request-path statement gets a row naming
- * the covering index it must read through. The schema half is generic: any
- * `*_id` column in the applied chain with no leading-column index fails unless
- * LEGACY_UNINDEXED_ID_COLUMNS names it, so the next unindexed child column is
- * caught at write time, not at the next audit.
- */
 interface HotStatement {
   readonly source: string;
   readonly sql: string;
@@ -93,19 +78,6 @@ async function liveIndexColumns(name: string): Promise<string[]> {
   return (columns.results ?? []).map((row) => row.name);
 }
 
-/**
- * `*_id` columns the applied chain already had without a leading-column index
- * when this gate landed (0509#5755, audit §V26 named only the five hot reads).
- * A new migration that adds an `*_id` column this list does not name fails
- * until the column ships its index.
- * These are FK children whose parents DO get deleted on live paths — account
- * delete cascades through `workspace`, and competitor forget
- * (`app/lib/data/entity.server.ts` deleteCompetitor) deletes `entity` — so
- * deleting a parent still scans them unless a leading-column index exists.
- * 0055_cascade_child_indexes.sql (#7080) indexes the remaining allowlisted
- * columns, so this list is empty. A new unindexed `*_id` still fails the gate
- * below.
- */
 const LEGACY_UNINDEXED_ID_COLUMNS: readonly string[] = [];
 
 async function unindexedIdColumns(): Promise<string[]> {

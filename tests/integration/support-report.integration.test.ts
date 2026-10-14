@@ -3,14 +3,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { deleteExpiredSupportReports, insertSupportReport } from "../../app/lib/data/support_report.server";
 
-/**
- * support_report writer module (0509#4229 child 1).
- *
- * The table stores raw inbound support mail for 90 days; the writer module
- * inserts a report and deletes rows older than the retention window, which is
- * measured from the caller's `now` so the test can pin it.
- */
-
 const DAY_MS = 24 * 60 * 60 * 1000;
 const NOW = new Date("2026-09-23T00:00:00.000Z");
 
