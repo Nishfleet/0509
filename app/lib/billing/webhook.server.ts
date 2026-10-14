@@ -74,7 +74,7 @@ async function displacement(input: {
 const firstLookWhenActive = (type: string, workspaceId: string): Promise<void> =>
   type === "subscription.active" ? tryFirstLook(workspaceId) : Promise.resolve();
 
-async function applySubscription(body: unknown, type: string, timestamp: string): Promise<"done" | "retry"> {
+export async function applySubscription(body: unknown, type: string, timestamp: string): Promise<"done" | "retry"> {
   const parsed = subscriptionEvent.safeParse(body);
   if (!parsed.success) {
     log("billing.webhook_unparsed", { type });

@@ -1,11 +1,17 @@
 import { captureException } from "@sentry/cloudflare";
 
+import { reconcileBilling } from "../app/lib/billing/reconcile.server";
 import { checkStuckWebhooks } from "../app/lib/billing/stuck-webhooks.server";
 import { deleteExpiredAuthRows } from "../app/lib/data/auth_expiry.server";
 import { deleteExpiredJevFailures } from "../app/lib/data/jev_failure.server";
 
 export function nightlyDataChecks(db: D1Database, now: Date): Promise<unknown>[] {
-  return [deleteExpiredAuthRows(db, now), deleteExpiredJevFailures(db, now), checkStuckWebhooks(db, now)];
+  return [
+    deleteExpiredAuthRows(db, now),
+    deleteExpiredJevFailures(db, now),
+    checkStuckWebhooks(db, now),
+    reconcileBilling(now),
+  ];
 }
 
 export function reportNightlyResults(results: readonly PromiseSettledResult<unknown>[]): void {

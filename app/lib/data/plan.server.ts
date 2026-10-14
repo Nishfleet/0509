@@ -221,3 +221,19 @@ export async function upsertSubscriptionPlan(input: SubscriptionPlan): Promise<v
     )
     .run();
 }
+
+const reconcilablePlanRow = z.object({ workspace_id: z.string(), provider_subscription_id: z.string() });
+
+const SELECT_RECONCILABLE = `SELECT workspace_id, provider_subscription_id FROM plan
+WHERE provider_subscription_id IS NOT NULL AND status IN ('pending', 'trialing', 'active', 'past_due', 'on_hold', 'failed')
+ORDER BY updated_at ASC LIMIT ?`;
+
+export async function readReconcilablePlans(
+  limit: number,
+): Promise<readonly { workspaceId: string; subscriptionId: string }[]> {
+  const rows = await env.DB.prepare(SELECT_RECONCILABLE).bind(limit).all();
+  return reconcilablePlanRow
+    .array()
+    .parse(rows.results)
+    .map((row) => ({ workspaceId: row.workspace_id, subscriptionId: row.provider_subscription_id }));
+}
