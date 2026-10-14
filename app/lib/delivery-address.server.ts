@@ -2,17 +2,18 @@ import { env } from "cloudflare:workers";
 
 import { sendMessage } from "../../workers/delivery/send";
 import { redactEmailShaped } from "./auth/redact-email-shaped";
-import { normalizeEmailAddress } from "./email-address";
+import { looksLikeEmailAddress, normalizeEmailAddress } from "./email-address";
 import { clearSuppression, isAddressSuppressed } from "./data/email_suppression.server";
 import {
   changeEmailTarget,
   ensureOwnerEmailTarget,
   markEmailTargetVerified,
   readEmailTarget,
+  writeTeammateVerifyToken,
   writeVerifyToken,
 } from "./data/send_target.server";
 import { readWorkspaceIdForOwner } from "./data/workspace.server";
-import { verifyAddressEmail } from "./verify-address-email";
+import { teammateInviteEmail, verifyAddressEmail } from "./verify-address-email";
 
 const INVALID = "Enter an email address, like you@company.com.";
 const SUPPRESSED =
@@ -20,6 +21,7 @@ const SUPPRESSED =
 const NO_WORKSPACE = "Finish setting up first, then choose where the brief goes.";
 const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const RATE_LIMITED = "Too many confirmation emails. Wait a minute, then save again.";
+const INVITE_FAILED = "We could not send the invitation. Remove the teammate and add them again.";
 const SEND_FAILED = "We could not send the confirmation email. Save again to retry.";
 
 function newVerifyToken(): string {
@@ -59,6 +61,40 @@ async function sendVerifyConfirmation(email: SendEmail, workspaceId: string, add
   return null;
 }
 
+export async function sendTeammateInvite(input: {
+  email: SendEmail;
+  workspaceId: string;
+  targetId: string;
+  address: string;
+  addedBy: string;
+}): Promise<string | null> {
+  const token = newVerifyToken();
+  const expiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_MS).toISOString();
+  await writeTeammateVerifyToken(env.DB, {
+    workspaceId: input.workspaceId,
+    targetId: input.targetId,
+    token,
+    expiresAt,
+  });
+  const message = teammateInviteEmail({
+    email: input.address,
+    url: `https://0509.io/v/${token}`,
+    addedBy: input.addedBy,
+  });
+  const outcome = await sendMessage(input.email, {
+    to: input.address,
+    from: { email: "hello@0509.io", name: "Five to Nine" },
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+  });
+  if (outcome.outcome === "sent") return null;
+  console.error(
+    JSON.stringify({ event: "delivery.teammate_invite_failed", error: redactEmailShaped(outcome.error ?? "") }),
+  );
+  return INVITE_FAILED;
+}
+
 async function refuseOrResumeSuppressed(
   address: string,
   input: { signInEmail: string; resume: boolean },
@@ -88,10 +124,7 @@ export async function saveDeliveryAddress(input: {
   email: SendEmail;
 }): Promise<{ error: string | null; suppressed: boolean }> {
   const address = normalizeEmailAddress(input.address);
-  const at = address.indexOf("@");
-  if (at < 1 || at !== address.lastIndexOf("@") || at === address.length - 1) {
-    return { error: INVALID, suppressed: false };
-  }
+  if (!looksLikeEmailAddress(address)) return { error: INVALID, suppressed: false };
 
   const workspaceId = await readWorkspaceIdForOwner(input.userId);
   if (workspaceId === null) return { error: NO_WORKSPACE, suppressed: false };

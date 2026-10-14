@@ -1,0 +1,108 @@
+import { env } from "cloudflare:test";
+import { beforeEach, describe, expect, it } from "vitest";
+
+import { readEmailTarget, removeTeammate } from "../../app/lib/data/send_target.server";
+import { readDeliveryAddress } from "../../app/lib/delivery-address.server";
+import { addTeammateByOwner, readTeammates, removeTeammateByOwner } from "../../app/lib/teammates.server";
+import { confirmDeliveryAddress } from "../../app/lib/verify-delivery-address.server";
+import { ensureWorkspaceForSignIn, firstWorkspaceId } from "../../app/lib/workspace.server";
+
+let USER_ID = "user-mates";
+const SIGN_IN_EMAIL = "owner@0509.io";
+const NOW = "2026-10-14T00:00:00Z";
+
+const sentMail: EmailMessageBuilder[] = [];
+
+const binding: SendEmail = {
+  send(message: EmailMessage | EmailMessageBuilder) {
+    sentMail.push(message as EmailMessageBuilder);
+    return Promise.resolve({ messageId: "test-message" });
+  },
+};
+
+const add = (address: string) =>
+  addTeammateByOwner({ userId: USER_ID, signInEmail: SIGN_IN_EMAIL, address, email: binding });
+
+const emailedToken = (): string => {
+  const link = /https:\/\/0509\.io\/v\/([0-9a-f]{64})/.exec(sentMail.at(-1)?.text ?? "");
+  if (link === null) throw new Error("expected a confirmation link in the sent email");
+  return link[1];
+};
+
+describe("teammates on the brief", () => {
+  beforeEach(async () => {
+    USER_ID = `user-mates-${crypto.randomUUID()}`;
+    sentMail.length = 0;
+    await env.DB.exec("DELETE FROM email_suppression");
+    await env.DB.exec("DELETE FROM send_target");
+    await env.DB.exec("DELETE FROM channel");
+    await env.DB.exec("DELETE FROM workspace");
+    await env.DB.exec('DELETE FROM "user"');
+    await env.DB.prepare(
+      `INSERT INTO channel (id, key, is_enabled, config_json) VALUES ('chan-email', 'email', 1, '{}')`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, 'Owner', ?, 1, ?, ?)`,
+    )
+      .bind(USER_ID, SIGN_IN_EMAIL, NOW, NOW)
+      .run();
+    await ensureWorkspaceForSignIn(env.DB, { userId: USER_ID, request: null, now: NOW });
+  });
+
+  it("invites by email, lists the teammate as waiting, and confirms with the link", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+
+    expect(await add("Mate@0509.io")).toBeNull();
+
+    expect(sentMail).toHaveLength(1);
+    expect(sentMail[0].to).toBe("mate@0509.io");
+    expect(sentMail[0].subject).toContain(SIGN_IN_EMAIL);
+    expect(await readTeammates(workspaceId)).toMatchObject([{ address: "mate@0509.io", confirmed: false }]);
+
+    await confirmDeliveryAddress(emailedToken());
+
+    expect(await readTeammates(workspaceId)).toMatchObject([{ address: "mate@0509.io", confirmed: true }]);
+  });
+
+  it("leaves the owner's own delivery address alone", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    await add("mate@0509.io");
+    await confirmDeliveryAddress(emailedToken());
+
+    expect(await readEmailTarget(env.DB, workspaceId)).toEqual({ target_value: SIGN_IN_EMAIL, is_verified: 1 });
+    expect(await readDeliveryAddress(USER_ID, SIGN_IN_EMAIL)).toEqual({ address: SIGN_IN_EMAIL, verified: true });
+  });
+
+  it("allows two teammates and each address once, and refuses the owner's own address", async () => {
+    expect(await add("a@0509.io")).toBeNull();
+    expect(await add("A@0509.io")).toMatch(/up to 2 teammates/);
+    expect(await add(SIGN_IN_EMAIL)).toMatch(/up to 2 teammates/);
+    expect(await add("b@0509.io")).toBeNull();
+    expect(await add("c@0509.io")).toMatch(/up to 2 teammates/);
+    expect(sentMail).toHaveLength(2);
+  });
+
+  it("refuses an address that unsubscribed, and a malformed one, and sends nothing", async () => {
+    await env.DB.prepare("INSERT INTO email_suppression (address, reason, created_at) VALUES (?, 'unsubscribed', ?)")
+      .bind("gone@0509.io", NOW)
+      .run();
+
+    expect(await add("gone@0509.io")).toMatch(/unsubscribed/);
+    expect(await add("not an address")).toMatch(/Enter an email address/);
+    expect(sentMail).toHaveLength(0);
+    expect(await readTeammates(firstWorkspaceId(USER_ID))).toEqual([]);
+  });
+
+  it("removes a teammate, but never the owner's row", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    await add("mate@0509.io");
+    const [mate] = await readTeammates(workspaceId);
+    const owner = await env.DB.prepare("SELECT id FROM send_target WHERE role = 'owner'").first<{ id: string }>();
+
+    await removeTeammate(env.DB, { workspaceId, targetId: owner?.id ?? "none" });
+    expect(await readEmailTarget(env.DB, workspaceId)).not.toBeNull();
+
+    await removeTeammateByOwner(USER_ID, mate.id);
+    expect(await readTeammates(workspaceId)).toEqual([]);
+  });
+});
