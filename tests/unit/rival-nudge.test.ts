@@ -8,7 +8,9 @@ import { nudgeLine } from "../../app/lib/rival-nudge";
 
 describe("rival nudge line", () => {
   it("says one competitor or none, calmly", () => {
-    expect(nudgeLine(1)).toBe("You are watching one competitor. Add another and your ranking has more to compare you with.");
+    expect(nudgeLine(1)).toBe(
+      "You are watching one competitor. Add another and your ranking has more to compare you with.",
+    );
     expect(nudgeLine(0)).toContain("not watching a competitor yet");
   });
 
