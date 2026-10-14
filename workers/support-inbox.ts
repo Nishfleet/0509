@@ -1,3 +1,4 @@
+import { SUPPORT_ADDRESS } from "../app/components/footer";
 import {
   claimIssueSlot,
   countRecentIssues,
@@ -5,13 +6,18 @@ import {
   releaseIssueSlot,
 } from "../app/lib/data/support_issue.server";
 import { deleteExpiredSupportReports, insertSupportReport } from "../app/lib/data/support_report.server";
+import { claimAutoReply, deleteExpiredAutoReplies, releaseAutoReply } from "../app/lib/data/support_autoreply.server";
 import { fetchOutbound } from "../app/lib/fetch/outbound.server";
 import { sha256Hex } from "../app/lib/sha256";
+import { autoReplySkip } from "../app/lib/support-autoreply";
+
+import { renderSupportReply } from "./delivery/support-reply-template";
 
 const FORWARD_TO = "nishant345@gmail.com";
 const ISSUES_URL = "https://api.github.com/repos/Nishfleet/0509/issues";
 const SITE_HOSTS = new Set(["0509.io", "www.0509.io"]);
 const TOKEN_PATH_PREFIXES = ["/u/", "/v/", "/api/auth/"];
+const REPLY_FROM = { email: SUPPORT_ADDRESS, name: "Five to Nine" };
 const MAX_PATHS = 10;
 const MAX_UA = 200;
 
@@ -89,6 +95,30 @@ async function createIssue(db: D1Database, token: string, report: ReportMail): P
 async function sweep(db: D1Database, now: Date): Promise<void> {
   await deleteExpiredSupportReports(db, now);
   await deleteExpiredIssues(db, now);
+  await deleteExpiredAutoReplies(db, now);
+}
+
+async function autoReply(message: ForwardableEmailMessage, db: D1Database): Promise<void> {
+  const skip = autoReplySkip(message.headers, message.from);
+  if (skip !== null) {
+    console.log(JSON.stringify({ event: "support_inbox.autoreply_skipped", reason: skip }));
+    return;
+  }
+  const sender = await sha256Hex(message.from.toLowerCase());
+  if (!(await claimAutoReply(db, sender, new Date()))) return;
+  try {
+    const rendered = renderSupportReply();
+    await message.reply({
+      from: REPLY_FROM,
+      subject: rendered.subject,
+      text: rendered.text,
+      html: rendered.html,
+      headers: { "Auto-Submitted": "auto-replied", "X-Auto-Response-Suppress": "All" },
+    });
+  } catch (error) {
+    await releaseAutoReply(db, sender);
+    console.error(JSON.stringify({ event: "support_inbox.autoreply_failed", error: String(error) }));
+  }
 }
 
 export default {
@@ -109,6 +139,7 @@ export default {
       raw,
     });
     await message.forward(FORWARD_TO);
+    await autoReply(message, env.DB);
     const token = env.SUPPORT_INBOX_GITHUB_TOKEN;
     if (!token) {
       console.error("support-inbox: SUPPORT_INBOX_GITHUB_TOKEN is not set", id);

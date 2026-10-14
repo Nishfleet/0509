@@ -52,10 +52,24 @@ const issueBody = (fetchSpy: ReturnType<typeof vi.spyOn>) => {
   return JSON.parse(String(init?.body)) as { title: string; body: string; labels: string[] };
 };
 
+const AUTHENTICATED = { "authentication-results": "mx.cloudflare.net; dkim=pass; spf=pass; dmarc=pass" };
+
+const deliverAuthenticated = async (extra: Record<string, string> = {}, reply = vi.fn(() => Promise.resolve())) => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 201 }));
+  const message = fakeMessage(vi.fn(() => Promise.resolve())) as unknown as { headers: Headers; reply: unknown };
+  message.headers = new Headers({ subject: "Refund please", ...AUTHENTICATED, ...extra });
+  message.reply = reply;
+  const ctx = createExecutionContext();
+  await callEmail(message as unknown as EmailMessage, env, ctx);
+  await waitOnExecutionContext(ctx);
+  return reply;
+};
+
 describe("0509-support-inbox-v2", () => {
   beforeEach(async () => {
     await env.DB.exec("DELETE FROM support_report");
     await env.DB.exec("DELETE FROM support_issue");
+    await env.DB.exec("DELETE FROM support_autoreply");
   });
 
   afterEach(() => {
@@ -374,5 +388,62 @@ describe("0509-support-inbox-v2", () => {
     const response = await callFetch(new Request("https://inbox.example/"), env, ctx);
     await waitOnExecutionContext(ctx);
     expect(response.status).toBe(404);
+  });
+
+  it("answers an authenticated person once, as an auto-reply that says so", async () => {
+    const reply = await deliverAuthenticated();
+
+    expect(reply).toHaveBeenCalledTimes(1);
+    const sent = (reply.mock.calls[0] as unknown as [{ subject: string; headers: Record<string, string> }])[0];
+    expect(sent.subject).toBe("We got your message");
+    expect(sent.headers["Auto-Submitted"]).toBe("auto-replied");
+  });
+
+  it("answers the same sender at most once in 24 hours", async () => {
+    const reply = await deliverAuthenticated();
+    await deliverAuthenticated({}, reply);
+
+    expect(reply).toHaveBeenCalledTimes(1);
+  });
+
+  it("answers again once the 24 hours are up", async () => {
+    const reply = await deliverAuthenticated();
+    await env.DB.exec("UPDATE support_autoreply SET sent_at = '2020-01-01T00:00:00.000Z'");
+    await deliverAuthenticated({}, reply);
+
+    expect(reply).toHaveBeenCalledTimes(2);
+  });
+
+  it("stores only a hash of the sender, never the address", async () => {
+    await deliverAuthenticated();
+
+    const rows = await env.DB.prepare("SELECT sender_sha256 FROM support_autoreply").all<{ sender_sha256: string }>();
+    expect(rows.results).toHaveLength(1);
+    expect(rows.results[0]?.sender_sha256).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("does not answer machine-made mail, and still stores and forwards it", async () => {
+    const reply = await deliverAuthenticated({ "auto-submitted": "auto-generated" });
+
+    expect(reply).not.toHaveBeenCalled();
+    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM support_report").first<{ n: number }>();
+    expect(count?.n).toBe(1);
+  });
+
+  it("does not answer mail that did not pass DMARC", async () => {
+    const reply = await deliverAuthenticated({ "authentication-results": "mx; dmarc=fail" });
+
+    expect(reply).not.toHaveBeenCalled();
+  });
+
+  it("frees the sender's slot when the reply fails, so the next mail is answered", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await deliverAuthenticated(
+      {},
+      vi.fn(() => Promise.reject(new Error("send refused"))),
+    );
+    const reply = await deliverAuthenticated();
+
+    expect(reply).toHaveBeenCalledTimes(1);
   });
 });
