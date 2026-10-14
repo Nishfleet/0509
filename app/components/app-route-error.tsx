@@ -13,8 +13,8 @@ export function AppRouteError({ error }: { error: unknown }): ReactElement {
       <ErrorPage
         title={copy.title}
         detail={copy.detail}
-        actionHref="/app"
-        actionLabel="Back to home"
+        actionHref={copy.action?.href ?? "/app"}
+        actionLabel={copy.action?.label ?? "Back to home"}
         retry={copy.retry}
       />
     </AppShell>
