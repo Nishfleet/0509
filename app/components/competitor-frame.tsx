@@ -3,11 +3,13 @@ import type { CSSProperties, ReactElement } from "react";
 import { BiggestMove } from "./biggest-move";
 import { DevelopmentsFeed } from "./developments-feed";
 import { EmptyState } from "./empty-state";
+import { PricingTimeline } from "./pricing-timeline";
 import { CompetitorRail, type CompetitorRailProps } from "./competitor-rail";
 import type { SiteChangeItemData } from "./site-change-item";
 import { SITE_SWEEP_UTC_LABEL } from "../lib/cadence";
 import type { BiggestMoveView } from "../lib/biggest-move";
 import type { DevelopmentItem } from "../lib/developments";
+import { pricingTimeline } from "../lib/pricing-timeline";
 
 const HEADING = "mb-3 font-mono text-eyebrow text-ink-soft uppercase";
 
@@ -134,6 +136,7 @@ export function CompetitorFrame({
       <div className="flex min-w-0 flex-col gap-10">
         <SnapshotSection weekCount={weekCount} pages={pages} lastChecked={lastChecked} />
         <BiggestMoveSection biggestMove={biggestMove} quiet={quiet} changes={changes} />
+        <PricingTimeline steps={pricingTimeline(changes)} />
         <DevelopmentsSection
           changes={changes}
           developments={developments}
