@@ -11,4 +11,14 @@ describe("one locale for dates, times and numbers", () => {
     expect(format("UTC")).toBe(format("Europe/London"));
     expect(format("UTC")).toMatch(/^14 Sept?$/);
   });
+
+  it("prints the incident re-check time on the 24-hour clock, as the list times are", () => {
+    const recheck = new Intl.DateTimeFormat(APP_LOCALE, {
+      timeZone: "UTC",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    }).format(new Date("2026-10-14T15:30:00Z"));
+    expect(recheck).toBe("15:30 UTC");
+  });
 });
