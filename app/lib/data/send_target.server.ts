@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { normalizeEmailAddress } from "../email-address";
+import { MAX_TEAMMATES } from "../teammate-limit";
 import {
   decryptSlackWebhookWithKeys,
   encryptSlackWebhook,
@@ -16,7 +17,7 @@ const WRITE_UNSUBSCRIBE_TOKEN = `UPDATE send_target SET unsubscribe_token = ? WH
 
 const SELECT_EMAIL_TARGET = `SELECT st.target_value, st.is_verified FROM send_target st
 JOIN channel c ON c.id = st.channel_id
-WHERE st.workspace_id = ? AND c.key = 'email'
+WHERE st.workspace_id = ? AND c.key = 'email' AND st.role = 'owner'
 ORDER BY st.created_at ASC
 LIMIT 1`;
 
@@ -24,7 +25,7 @@ const WRITE_VERIFY_TOKEN = `UPDATE send_target SET verify_token = ?, verify_toke
 WHERE id = (
   SELECT st.id FROM send_target st
   JOIN channel c ON c.id = st.channel_id
-  WHERE st.workspace_id = ? AND c.key = 'email'
+  WHERE st.workspace_id = ? AND c.key = 'email' AND st.role = 'owner'
   ORDER BY st.created_at ASC
   LIMIT 1
 )`;
@@ -33,7 +34,7 @@ const MARK_EMAIL_TARGET_VERIFIED = `UPDATE send_target SET is_verified = 1, veri
 WHERE id = (
   SELECT st.id FROM send_target st
   JOIN channel c ON c.id = st.channel_id
-  WHERE st.workspace_id = ? AND c.key = 'email'
+  WHERE st.workspace_id = ? AND c.key = 'email' AND st.role = 'owner'
   ORDER BY st.created_at ASC
   LIMIT 1
 )`;
@@ -41,6 +42,7 @@ WHERE id = (
 const CHANGE_EMAIL_TARGET = `UPDATE send_target
 SET target_value = ?, is_verified = 0, unsubscribe_token = NULL, verify_token = NULL, verify_token_expires_at = NULL
 WHERE workspace_id = ?
+  AND role = 'owner'
   AND channel_id = (SELECT id FROM channel WHERE key = 'email')
   AND lower(trim(target_value)) <> lower(trim(?))`;
 
@@ -57,7 +59,7 @@ SELECT 'st-email-' || w.id, w.id, c.id, lower(trim(u.email)), u.emailVerified, ?
   JOIN channel c ON c.key = 'email'
  WHERE w.id = ?
    AND NOT EXISTS (
-     SELECT 1 FROM send_target st WHERE st.workspace_id = w.id AND st.channel_id = c.id
+     SELECT 1 FROM send_target st WHERE st.workspace_id = w.id AND st.channel_id = c.id AND st.role = 'owner'
    )`;
 
 interface TargetDb {
@@ -310,4 +312,70 @@ export async function saveSlackTarget(
     db.prepare(DELETE_SLACK_TARGET).bind(input.workspaceId),
     db.prepare(INSERT_SLACK_TARGET).bind(crypto.randomUUID(), input.workspaceId, sealed, input.now),
   ]);
+}
+
+const SELECT_TEAMMATES = `SELECT st.id, st.workspace_id, st.channel_id, st.target_value, st.is_verified, st.unsubscribe_token FROM send_target st
+JOIN channel c ON c.id = st.channel_id
+WHERE st.workspace_id = ? AND c.key = 'email' AND st.role = 'teammate'
+ORDER BY st.created_at ASC`;
+
+const INSERT_TEAMMATE = `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at, role)
+SELECT ?1, ?2, c.id, ?3, 0, ?4, 'teammate'
+  FROM channel c
+ WHERE c.key = 'email'
+   AND (SELECT count(*) FROM send_target t WHERE t.workspace_id = ?2 AND t.channel_id = c.id AND t.role = 'teammate') < ?5
+   AND NOT EXISTS (
+     SELECT 1 FROM send_target t WHERE t.workspace_id = ?2 AND t.channel_id = c.id AND lower(trim(t.target_value)) = ?3
+   )`;
+
+const WRITE_TEAMMATE_VERIFY_TOKEN = `UPDATE send_target SET verify_token = ?, verify_token_expires_at = ?
+WHERE id = ? AND workspace_id = ? AND role = 'teammate'`;
+
+const DELETE_TEAMMATE = `DELETE FROM send_target WHERE id = ? AND workspace_id = ? AND role = 'teammate'`;
+
+const teammateRow = z.object({
+  id: z.string(),
+  workspace_id: z.string(),
+  channel_id: z.string(),
+  target_value: z.string(),
+  is_verified: z.number(),
+  unsubscribe_token: z.string().nullable(),
+});
+
+export type Teammate = z.infer<typeof teammateRow>;
+
+export async function listTeammates(db: D1Database, workspaceId: string): Promise<Teammate[]> {
+  const { results } = await db.prepare(SELECT_TEAMMATES).bind(workspaceId).all();
+  return z.array(teammateRow).parse(results);
+}
+
+export async function readConfirmedTeammates(db: D1Database, workspaceId: string): Promise<Teammate[]> {
+  return (await listTeammates(db, workspaceId)).filter((mate) => mate.is_verified === 1);
+}
+
+export async function addTeammate(
+  db: D1Database,
+  input: { workspaceId: string; address: string; now: string },
+): Promise<string | null> {
+  const id = `st-mate-${crypto.randomUUID()}`;
+  const added = await db
+    .prepare(INSERT_TEAMMATE)
+    .bind(id, input.workspaceId, normalizeEmailAddress(input.address), input.now, MAX_TEAMMATES)
+    .run();
+  return added.meta.changes === 1 ? id : null;
+}
+
+export async function writeTeammateVerifyToken(
+  db: D1Database,
+  input: { workspaceId: string; targetId: string; token: string; expiresAt: string },
+): Promise<void> {
+  const tokenHash = await sha256Hex(input.token);
+  await db
+    .prepare(WRITE_TEAMMATE_VERIFY_TOKEN)
+    .bind(tokenHash, input.expiresAt, input.targetId, input.workspaceId)
+    .run();
+}
+
+export async function removeTeammate(db: D1Database, input: { workspaceId: string; targetId: string }): Promise<void> {
+  await db.prepare(DELETE_TEAMMATE).bind(input.targetId, input.workspaceId).run();
 }

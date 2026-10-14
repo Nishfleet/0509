@@ -213,6 +213,92 @@ describe("send lane (0509#3979)", () => {
     expect(rows[0].status).toBe("sent");
   });
 
+  const seedTeammate = (id: string, address: string, confirmed: boolean) =>
+    env.DB.prepare(
+      `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at, role)
+       VALUES (?, ?, ?, ?, ?, '2026-09-22T00:00:02Z', 'teammate')`,
+    )
+      .bind(id, WS, CHANNEL, address, confirmed ? 1 : 0)
+      .run();
+
+  it("(teammates) sends the brief to each confirmed teammate once, and never twice on a re-enqueue", async () => {
+    const rec = recorder();
+    const digestId = await seedDigest("pending");
+    await seedTeammate("mate-1", "mate@0509.io", true);
+    await seedTeammate("mate-2", "waiting@0509.io", false);
+    await seedTeammate("mate-3", "gone@0509.io", true);
+    await env.DB.prepare("INSERT INTO email_suppression (address, reason, created_at) VALUES (?, 'unsubscribed', ?)")
+      .bind("gone@0509.io", "2026-09-23T00:00:00Z")
+      .run();
+
+    const first = await deliver(envWith(bindingFor(rec)), message(digestId));
+    const second = await deliver(envWith(bindingFor(rec)), message(digestId));
+
+    expect(first.outcome).toBe("sent");
+    expect(second.outcome).toBe("duplicate");
+    expect(rec.sent.map((mail) => mail.to).sort()).toEqual(["mate@0509.io", TARGET]);
+    const rows = await readAttempts();
+    expect(rows.map((row) => row.idempotency_key).sort()).toEqual(
+      [`digest:${digestId}:${TARGET_ID}`, `digest:${digestId}:mate-1`].sort(),
+    );
+    const mail = rec.sent.find((sent) => sent.to === "mate@0509.io");
+    expect(mail?.text).toMatch(/https:\/\/0509\.io\/u\/[0-9a-f]{64}/);
+    const tokenIn = (to: string) =>
+      /\/u\/([0-9a-f]{64})/.exec(rec.sent.find((sent) => sent.to === to)?.text ?? "")?.[1];
+    expect(tokenIn("mate@0509.io")).not.toBe(tokenIn(TARGET));
+  });
+
+  it("(teammates) a failing teammate send never undoes the owner's brief", async () => {
+    const digestId = await seedDigest("pending");
+    await seedTeammate("mate-1", "mate@0509.io", true);
+    const ownerOnly = recorder();
+    const flaky: SendEmail = {
+      send(mail: EmailMessage | EmailMessageBuilder) {
+        if ((mail as EmailMessageBuilder).to === "mate@0509.io") throw new Error("mailbox full");
+        ownerOnly.sent.push(mail as EmailMessageBuilder);
+        return Promise.resolve({ messageId: "stub-send-email" });
+      },
+    };
+
+    const result = await deliver(envWith(flaky), message(digestId));
+
+    expect(result.outcome).toBe("sent");
+    expect((await digestStatus(digestId))?.status).toBe("sent");
+    expect(ownerOnly.sent.map((mail) => mail.to)).toEqual([TARGET]);
+    const mate = (await readAttempts()).find((row) => row.send_target_id === "mate-1");
+    expect(mate?.status).toBe("failed");
+  });
+
+  it("(teammates) a teammate waits while another worker still holds the owner's send", async () => {
+    const rec = recorder();
+    const digestId = await seedDigest("pending");
+    await seedTeammate("mate-1", "mate@0509.io", true);
+    await env.DB.prepare(
+      `INSERT INTO send_attempt (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at)
+       VALUES ('held', ?, ?, ?, ?, 'pending', ?)`,
+    )
+      .bind(WS, TARGET_ID, digestId, `digest:${digestId}:${TARGET_ID}`, new Date().toISOString())
+      .run();
+
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
+
+    expect(result.outcome).toBe("duplicate");
+    expect(rec.sent).toHaveLength(0);
+  });
+
+  it("(teammates) nobody else gets the brief when the owner's send fails", async () => {
+    const rec = recorder();
+    rec.fail = new Error("smtp down");
+    const digestId = await seedDigest("pending");
+    await seedTeammate("mate-1", "mate@0509.io", true);
+
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
+
+    expect(result.outcome).toBe("failed");
+    expect(rec.sent).toHaveLength(0);
+    expect((await readAttempts()).map((row) => row.send_target_id)).toEqual([TARGET_ID]);
+  });
+
   it("(stale) re-claims a pending attempt older than 1 hour and sends once", async () => {
     const rec = recorder();
     const digestId = await seedDigest("pending");
@@ -438,6 +524,24 @@ describe("send lane (0509#3979)", () => {
     const lines = log.mock.calls.map((call) => JSON.parse(String(call[0])) as Record<string, unknown>);
     log.mockRestore();
     expect(lines).toContainEqual({ event: "delivery.no_target", digest_id: digestId, workspace_id: WS, reason });
+  });
+
+  it("(teammates) an older confirmed teammate never stands in for an unverified owner", async () => {
+    const rec = recorder();
+    await env.DB.prepare(`UPDATE send_target SET is_verified = 0 WHERE id = ?`).bind(TARGET_ID).run();
+    await env.DB.prepare(
+      `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at, role)
+       VALUES ('mate-old', ?, ?, 'mate@0509.io', 1, '2000-01-01T00:00:00Z', 'teammate')`,
+    )
+      .bind(WS, CHANNEL)
+      .run();
+    const digestId = await seedDigest("pending");
+
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
+
+    expect(result.outcome).toBe("no_target");
+    expect(rec.sent).toHaveLength(0);
+    expect(await readAttempts()).toHaveLength(0);
   });
 
   it("reports no_target when the only email target is unverified", async () => {

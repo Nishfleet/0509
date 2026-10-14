@@ -20,7 +20,7 @@ const SELECT_NEW_TRIALS = `SELECT p.workspace_id,
     SELECT t.id
       FROM send_target t
       JOIN channel c ON c.id = t.channel_id
-     WHERE t.workspace_id = p.workspace_id AND c.key = 'email' AND c.is_enabled = 1 AND t.is_verified = 1
+     WHERE t.workspace_id = p.workspace_id AND c.key = 'email' AND c.is_enabled = 1 AND t.is_verified = 1 AND t.role = 'owner'
      ORDER BY t.created_at ASC
      LIMIT 1
   )
