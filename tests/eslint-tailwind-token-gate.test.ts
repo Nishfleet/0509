@@ -2,15 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
-// DESIGN.md rule 8: the accent is one colour, and nothing else is coloured.
-// A colour class that is not a `@theme` token in app/app.css used to be a
-// review comment; the eslint-plugin-better-tailwindcss block on `app/**` in
-// eslint.config.js makes it a lint failure (0509#5871). These probes boot the
-// real config (same rig as eslint-catch-null-rule.test.ts): each one writes a
-// component under app/, lints it with the project's own ESLint, and removes it.
-// The negative cases are load-bearing — a gate that fires on every class list
-// is a gate someone turns off.
-
 const PROBE = "app/components/share-button.tsx";
 const UI_PROBE = "app/components/ui/button.tsx";
 

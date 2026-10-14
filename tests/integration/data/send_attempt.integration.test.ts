@@ -112,7 +112,12 @@ describe("send_attempt claim readers (0509#7146)", () => {
 
     expect(await claimSendAttempt(env.DB, input)).toBeNull();
 
-    await resolveSendAttempt(env.DB, { attemptId: claimed?.id ?? "", outcome: "failed", error: "smtp 550" });
+    await resolveSendAttempt(env.DB, {
+      attemptId: claimed?.id ?? "",
+      idempotencyKey: input.idempotencyKey,
+      outcome: "failed",
+      error: "smtp 550",
+    });
     expect(await claimSendAttempt(env.DB, input)).toEqual({ id: claimed?.id });
   });
 

@@ -1,4 +1,4 @@
-import { agoLabel } from "./ticker";
+import { agoLabel } from "./ago-label";
 
 export interface FirstLookRival {
   id: string;

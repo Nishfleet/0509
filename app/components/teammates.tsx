@@ -11,6 +11,8 @@ interface Teammate {
 }
 
 function TeammateRow({ mate }: { mate: Teammate }) {
+  const navigation = useNavigation();
+  const removing = navigation.state !== "idle" && navigation.formData?.get("targetId") === mate.id;
   return (
     <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-line py-2">
       <span className="min-w-0 [overflow-wrap:anywhere]">
@@ -23,8 +25,8 @@ function TeammateRow({ mate }: { mate: Teammate }) {
       <Form method="post" action="/app/settings">
         <input type="hidden" name="intent" value="teammate-remove" />
         <input type="hidden" name="targetId" value={mate.id} />
-        <Button type="submit" variant="secondary" size="lg" aria-label={`Remove ${mate.address}`}>
-          Remove
+        <Button type="submit" variant="secondary" size="lg" aria-label={`Remove ${mate.address}`} disabled={removing}>
+          {removing ? "Removing…" : "Remove"}
         </Button>
       </Form>
     </li>

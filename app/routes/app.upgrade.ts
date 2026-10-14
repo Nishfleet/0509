@@ -4,7 +4,7 @@ import { redirect } from "react-router";
 import { z } from "zod";
 
 import { createCheckoutUrl } from "../lib/billing/checkout.server";
-import { isSubscriptionLive } from "../lib/billing/entitlements";
+import { isSubscriptionLive } from "../lib/billing/subscription-state";
 import { returningLookup } from "../lib/billing/returning.server";
 import { isBillingInterval, isPlanId } from "../lib/billing/plans";
 import { readPlanSubscription } from "../lib/data/plan.server";

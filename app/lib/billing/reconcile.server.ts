@@ -3,7 +3,7 @@ import { captureMessage } from "@sentry/cloudflare";
 import DodoPayments from "dodopayments";
 
 import { readPlanSubscription, readReconcilablePlans, readWorkspaceIdBySubscription } from "../data/plan.server";
-import { isSubscriptionLive } from "./entitlements";
+import { isSubscriptionLive } from "./subscription-state";
 import { planIdForProduct } from "./products.server";
 import { applySubscription } from "./webhook.server";
 
@@ -135,7 +135,9 @@ export async function reconcileCheckoutReturn(workspaceId: string, email: string
       await reconcileOne(sub, current?.updatedAt ?? null);
     }
   } catch (error) {
-    say("billing.reconcile_failed", { kind: error instanceof Error ? error.name : "unknown" });
+    console.warn(
+      JSON.stringify({ event: "billing.reconcile_failed", kind: error instanceof Error ? error.name : "unknown" }),
+    );
   }
 }
 

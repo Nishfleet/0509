@@ -567,6 +567,46 @@ describe("send lane (0509#3979)", () => {
     expect(third.outcome).toBe("duplicate");
   });
 
+  it("never sends a brief twice when the sent-write fails and the claim goes stale", async () => {
+    const digestId = await seedDigest("pending");
+    const rec = recorder();
+
+    const realPrepare = env.DB.prepare.bind(env.DB);
+    const failing = new Proxy(env, {
+      get(target, property) {
+        if (property === "DB") {
+          return new Proxy(target.DB, {
+            get(dbTarget, dbProperty) {
+              if (dbProperty === "prepare") {
+                return (query: string) => {
+                  if (query.startsWith("UPDATE send_attempt SET status = ?")) {
+                    throw new Error("D1 unavailable while resolving the attempt");
+                  }
+                  return realPrepare(query);
+                };
+              }
+              return Reflect.get(dbTarget, dbProperty) as unknown;
+            },
+          }) as D1Database;
+        }
+        if (property === "EMAIL") return bindingFor(rec);
+        return Reflect.get(target, property) as unknown;
+      },
+    }) as Env;
+
+    await expect(deliver(failing, message(digestId))).rejects.toThrow("D1 unavailable while resolving the attempt");
+    expect(rec.sent).toHaveLength(1);
+    expect((await readAttempts())[0].status).toBe("pending");
+
+    await env.DB.prepare("UPDATE send_attempt SET attempted_at = '2000-01-01T00:00:00Z'").run();
+    const retry = await deliver(envWith(bindingFor(rec)), message(digestId));
+
+    expect(rec.sent).toHaveLength(1);
+    expect(retry.outcome).toBe("sent");
+    expect((await readAttempts())[0].status).toBe("sent");
+    expect((await digestStatus(digestId))?.status).toBe("sent");
+  });
+
   it("returns no_digest for a work item whose digest row is gone", async () => {
     const rec = recorder();
     const result = await deliver(envWith(bindingFor(rec)), message("digest-does-not-exist"));

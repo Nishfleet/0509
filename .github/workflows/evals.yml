@@ -1,6 +1,8 @@
 name: evals
 
 on:
+  schedule:
+    - cron: "17 6 * * 1"
   workflow_dispatch:
     inputs:
       split:
@@ -15,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 # Dispatches queue, they do not stack (0509#7249). A run already in progress is never
 # cancelled: its neurons are spent, so cancelling saves nothing and loses the report.
@@ -26,13 +29,7 @@ jobs:
   evals:
     name: evals
     runs-on: ubuntu-latest
-    # One live-AI job at a time: they share the account's Clef call rate (about 60
-    # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
-    # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
-    # every workflow in the repo. One run waits per group; a newer waiting run
-    # replaces an older one (actionlint 1.7.12 rejects `queue: max`).
-    # Left out: nothing else in this file. The workflow-level group `evals` queues
-    # runs and never cancels one in progress.
+    # One live-AI job at a time: they share the account's Clef call rate with customers (2003 failed two sign-ups on 2026-10-04).
     concurrency:
       group: live-ai
       cancel-in-progress: false
@@ -51,16 +48,18 @@ jobs:
         run: npm run eval -- ${FILTER:+"$FILTER"} 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
         env:
           EVAL_SPLIT: ${{ inputs.split || 'test' }}
-          # Per-run ceiling on estimated Workers AI neurons (0509#7249). 2,000 is about 117
-          # Clef calls or 33 gpt-oss calls, so each run is at most 2,000 and four runs a day make 8,000.
-          # Nothing counts runs per day; only a gateway limit could (needs a token scope).
-          # Past it the run fails with "neuron ceiling". To switch it off, delete this line.
           EVAL_MAX_NEURONS: "2000"
-          # Per-day ceiling (0509#7249): before its first call the harness reads today's UTC
-          # neurons from GraphQL with CLOUDFLARE_API_TOKEN (needs Account Analytics read) and
-          # refuses to start when today plus EVAL_MAX_NEURONS would pass this. It also refuses
-          # when that read fails. Deleting this line leaves the default of 9000 in harness.ts.
           EVAL_DAILY_NEURON_CEILING: "9000"
-          FILTER: ${{ inputs.filter }}
+          FILTER: ${{ github.event_name == 'schedule' && 'read-this-first' || inputs.filter }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Open or update the issue that says evals are red
+        if: failure()
+        uses: JasonEtco/create-an-issue@1b14a70e4d8dc185e5cc76d3bec9eab20257b2c5 # v2.9.2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          filename: .github/red-main/evals.md
+          update_existing: true
+          search_existing: open
