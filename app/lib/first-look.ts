@@ -6,6 +6,7 @@ export interface FirstLookRival {
   name: string;
   pages: number;
   checkedAt: string | null;
+  blocked: boolean;
 }
 
 export interface FirstLookRow {
@@ -16,7 +17,11 @@ export interface FirstLookRow {
 }
 
 function firstLookLine(rival: FirstLookRival, now: Date): string {
-  if (rival.checkedAt === null || rival.pages === 0) return "Reading its site now";
+  if (rival.checkedAt === null || rival.pages === 0) {
+    return rival.blocked
+      ? "Its site didn't open for us yet. We try again on the next nightly read"
+      : "Reading its site now";
+  }
   const noun = rival.pages === 1 ? "page" : "pages";
   return `Read ${String(rival.pages)} ${noun}, ${agoLabel(rival.checkedAt, now)}`;
 }

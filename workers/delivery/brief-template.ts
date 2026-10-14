@@ -22,6 +22,8 @@ const COPY = {
   readThisFirst: "Read this first",
   nothingFirst: NOTHING_FIRST_LINE,
   unjudged: UNJUDGED_WEEK_LINE,
+  unjudgedNext: "The changes we have seen so far are in Alerts.",
+  unjudgedOpen: "Open Alerts",
   yourBrands: "Your tracked brands",
   ownSiteOk: "Your site looks fine.",
   ownSiteBroken: (count: number) => `Your site looks broken (${count === 1 ? "1 page" : `${n(count)} pages`}):`,
@@ -42,6 +44,8 @@ const COPY = {
   blindNever: (source: string) =>
     `We have not been able to reach ${source} yet, so we cannot say this was a quiet week.`,
 } as const;
+
+const ALERTS_LINK = "https://0509.io/app/alerts";
 
 function n(value: number): string {
   return String(value);
@@ -197,8 +201,8 @@ function renderReadThisFirst(payload: BriefPayload, assetBaseUrl: string | null)
 
   if (payload.is_unjudged) {
     return {
-      html: `${heading(COPY.readThisFirst)}<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(COPY.unjudged)}</p>`,
-      text: `${COPY.readThisFirst}\n${COPY.unjudged}`,
+      html: `${heading(COPY.readThisFirst)}<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(COPY.unjudged)} ${escapeHtml(COPY.unjudgedNext)} <a class="brief-ink" href="${ALERTS_LINK}">${escapeHtml(COPY.unjudgedOpen)}</a></p>`,
+      text: `${COPY.readThisFirst}\n${COPY.unjudged} ${COPY.unjudgedNext}\n${COPY.unjudgedOpen}: ${ALERTS_LINK}`,
     };
   }
 

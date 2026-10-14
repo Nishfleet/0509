@@ -52,9 +52,18 @@ describe("first look reader", () => {
 
   it("lists each tracked rival once with distinct pages read and the latest read", async () => {
     expect(await readFirstLook(WS)).toEqual([
-      { id: "ent-a", name: "Acme", pages: 2, checkedAt: "2026-10-14T11:00:00Z" },
-      { id: "ent-b", name: "ent-b.example", pages: 0, checkedAt: null },
+      { id: "ent-a", name: "Acme", pages: 2, checkedAt: "2026-10-14T11:00:00Z", blocked: false },
+      { id: "ent-b", name: "ent-b.example", pages: 0, checkedAt: null, blocked: false },
     ]);
+  });
+
+  it("marks a rival whose home page was refused a read", async () => {
+    await env.DB.prepare(
+      `INSERT INTO page (id, entity_id, url, role, discovered_at, deferred_at) VALUES ('pg-b', 'ent-b', 'https://b.example/', 'home', '2026-10-14T10:00:00Z', '2026-10-14T10:30:00Z')`,
+    ).run();
+    const rows = await readFirstLook(WS);
+    expect(rows.find((row) => row.id === "ent-b")?.blocked).toBe(true);
+    expect(rows.find((row) => row.id === "ent-a")?.blocked).toBe(false);
   });
 
   it("never lists another workspace's rivals", async () => {

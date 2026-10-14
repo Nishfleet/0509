@@ -5,7 +5,8 @@ import type { FirstLookRival } from "../first-look";
 
 const SELECT_FIRST_LOOK = `SELECT e.id, COALESCE(NULLIF(e.name, ''), e.domain) AS name,
        COUNT(DISTINCT sn.page_id) AS pages,
-       MAX(sn.fetched_at) AS checked_at
+       MAX(sn.fetched_at) AS checked_at,
+       EXISTS (SELECT 1 FROM page hp WHERE hp.entity_id = e.id AND hp.role = 'home' AND hp.deferred_at IS NOT NULL) AS deferred
   FROM entity e
   LEFT JOIN watch w ON w.entity_id = e.id AND w.is_active = 1
   LEFT JOIN snapshot sn ON sn.watch_id = w.id
@@ -19,6 +20,7 @@ const firstLookRow = z.object({
   name: z.string(),
   pages: z.number(),
   checked_at: z.string().nullable(),
+  deferred: z.number(),
 });
 
 export async function readFirstLook(workspaceId: string): Promise<FirstLookRival[]> {
@@ -26,5 +28,11 @@ export async function readFirstLook(workspaceId: string): Promise<FirstLookRival
   return z
     .array(firstLookRow)
     .parse(results)
-    .map((row) => ({ id: row.id, name: row.name, pages: row.pages, checkedAt: row.checked_at }));
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      pages: row.pages,
+      checkedAt: row.checked_at,
+      blocked: row.deferred === 1,
+    }));
 }

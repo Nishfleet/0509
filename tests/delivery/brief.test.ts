@@ -652,6 +652,15 @@ describe("inline styles survive the attribute they sit in", () => {
   });
 });
 
+describe("an unjudged week", () => {
+  it("says so and points to Alerts for what we have seen", () => {
+    const { html, text } = renderBrief(payload({ is_unjudged: true, read_this_first: [] }), CONTEXT);
+    expect(text).toContain("The changes we have seen so far are in Alerts.");
+    expect(text).toContain("Open Alerts: https://0509.io/app/alerts");
+    expect(html).toContain('href="https://0509.io/app/alerts">Open Alerts</a>');
+  });
+});
+
 describe("the subject line", () => {
   it("names the rank when there is one", () => {
     expect(renderBrief(payload(), CONTEXT).subject).toBe("You're #3 of 8 this week, up 2");
