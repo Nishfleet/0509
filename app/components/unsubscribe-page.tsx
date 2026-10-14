@@ -25,13 +25,21 @@ const TITLE: Record<SuppressionScope, string> = {
 const HEADING = "font-display text-2xl font-semibold tracking-[-0.02em]";
 const BODY = "mt-4 leading-[1.65] text-ink-soft";
 
-export function UnsubscribeConfirm({ scope, busy }: { scope: SuppressionScope; busy: boolean }) {
+export function UnsubscribeConfirm({
+  scope,
+  teammate,
+  busy,
+}: {
+  scope: SuppressionScope;
+  teammate: boolean;
+  busy: boolean;
+}) {
   return (
     <main className="mx-auto max-w-xl px-4 py-16">
       <h1 className={HEADING}>{TITLE[scope]}</h1>
       <p className={BODY}>
-        You will stop getting {WHAT[scope]} from Five to Nine at this address. {STILL[scope]} Sign-in links still arrive
-        when you ask for one.
+        You will stop getting {WHAT[scope]} from Five to Nine at this address. {teammate ? "" : STILL[scope]} Sign-in
+        links still arrive when you ask for one.
       </p>
       <Form method="post" className="mt-8">
         <Button type="submit" size="lg" disabled={busy}>
@@ -82,7 +90,7 @@ export function UnsubscribeDone({
     <main className="mx-auto max-w-xl px-4 py-16">
       <h1 className={HEADING}>You're unsubscribed</h1>
       <p className={BODY}>
-        We won't send {WHAT[scope]} to this address any more. {STILL[scope]}
+        We won't send {WHAT[scope]} to this address any more. {teammate ? "" : STILL[scope]}
         {teammate ? "" : " Sign-in links still arrive when you ask for one."}
       </p>
       {scope === "all" || teammate ? null : (

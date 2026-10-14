@@ -29,7 +29,11 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   if (!(await isUnsubscribeTokenKnown(params.token))) {
     throw new Response(INVALID_LINK, { status: 404 });
   }
-  return { link: "confirm" as const, scope: linkScope(request) };
+  return {
+    link: "confirm" as const,
+    scope: linkScope(request),
+    teammate: await isTeammateUnsubscribeToken(params.token),
+  };
 }
 
 export async function action({ params, request }: Route.ActionArgs) {
@@ -73,5 +77,5 @@ export default function Unsubscribe({ loaderData, actionData }: Route.ComponentP
   if (actionData?.unsubscribed) {
     return <UnsubscribeDone scope={actionData.scope} teammate={actionData.teammate} busy={busy} />;
   }
-  return <UnsubscribeConfirm scope={loaderData.scope} busy={busy} />;
+  return <UnsubscribeConfirm scope={loaderData.scope} teammate={loaderData.teammate} busy={busy} />;
 }

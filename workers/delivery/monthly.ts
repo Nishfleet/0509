@@ -17,10 +17,7 @@ async function eligible(env: Env, monthly: Monthly, isTester: TesterCheck): Prom
   if (monthly.subscription_id === null || monthly.change_count === 0) return false;
   if (await hasReminderAttempt(env.DB, monthly.key)) return false;
   if ((await isTester(monthly.subscription_id)) !== false) return false;
-  return (
-    !(await isAddressSuppressed(monthly.target_value, "brief", env.DB)) &&
-    !(await isAddressSuppressed(monthly.target_value, "alerts", env.DB))
-  );
+  return !(await isAddressSuppressed(monthly.target_value, "brief", env.DB));
 }
 
 async function monthlyOne(env: Env, monthly: Monthly, isTester: TesterCheck): Promise<boolean> {
@@ -29,7 +26,7 @@ async function monthlyOne(env: Env, monthly: Monthly, isTester: TesterCheck): Pr
     id: monthly.target_id,
     unsubscribe_token: monthly.unsubscribe_token,
   });
-  const unsubscribeUrl = unsubscribeUrlFor(token, "all");
+  const unsubscribeUrl = unsubscribeUrlFor(token, "brief");
   return sendOnce(env, {
     key: monthly.key,
     workspaceId: monthly.workspace_id,

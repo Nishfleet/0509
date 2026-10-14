@@ -3,11 +3,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createRoutesStub, NavigationType, UNSAFE_DataRouterNavigationContext, type Navigation } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
-const holder = vi.hoisted(() => ({ known: false, outcome: "invalid_token" as string }));
+const holder = vi.hoisted(() => ({ known: false, teammate: false, outcome: "invalid_token" as string }));
 
 vi.mock("../../app/lib/data/email_suppression.server", () => ({
   isUnsubscribeTokenKnown: () => Promise.resolve(holder.known),
-  isTeammateUnsubscribeToken: () => Promise.resolve(false),
+  isTeammateUnsubscribeToken: () => Promise.resolve(holder.teammate),
   suppressByUnsubscribeToken: () => Promise.resolve(),
 }));
 
@@ -39,14 +39,14 @@ function renderBoundary(error: unknown): string {
   return renderToStaticMarkup(createElement(ErrorBoundary, { error } as never));
 }
 
-function renderConfirm(unsubscribed: boolean, scope = "all"): string {
+function renderConfirm(unsubscribed: boolean, scope = "all", teammate = false): string {
   const Stub = createRoutesStub([{ id: "routes/u.$token", path: "/u/:token", Component: Unsubscribe }]);
   return renderToStaticMarkup(
     createElement(Stub, {
       initialEntries: ["/u/t"],
       hydrationData: {
-        loaderData: { "routes/u.$token": { link: "confirm", scope } },
-        ...(unsubscribed ? { actionData: { "routes/u.$token": { unsubscribed: true, scope } } } : {}),
+        loaderData: { "routes/u.$token": { link: "confirm", scope, teammate } },
+        ...(unsubscribed ? { actionData: { "routes/u.$token": { unsubscribed: true, scope, teammate } } } : {}),
       },
     }),
   );
@@ -104,7 +104,10 @@ function renderFormAt(state: Navigation["state"]): string {
         createElement(
           UNSAFE_DataRouterNavigationContext.Provider,
           { value: { navigation: navigationAt(state), revalidation: "idle" } },
-          createElement(Unsubscribe, { actionData: undefined, loaderData: { link: "confirm", scope: "all" } } as never),
+          createElement(Unsubscribe, {
+            actionData: undefined,
+            loaderData: { link: "confirm", scope: "all", teammate: false },
+          } as never),
         ),
     },
   ]);
@@ -130,7 +133,7 @@ describe("/u/:token (0509#5761)", () => {
     const request = new Request("https://0509.io/u/t");
     const data = await loader({ params: { token: "a".repeat(64) }, request } as never);
 
-    expect(data).toEqual({ link: "confirm", scope: "all" });
+    expect(data).toEqual({ link: "confirm", scope: "all", teammate: false });
   });
 
   it("reads which email the link is for from its type", async () => {
@@ -142,9 +145,9 @@ describe("/u/:token (0509#5761)", () => {
     const odd = await loader({ params, request: new Request("https://0509.io/u/t?type=nope") } as never);
 
     expect([brief, alerts, odd]).toEqual([
-      { link: "confirm", scope: "brief" },
-      { link: "confirm", scope: "alerts" },
-      { link: "confirm", scope: "all" },
+      { link: "confirm", scope: "brief", teammate: false },
+      { link: "confirm", scope: "alerts", teammate: false },
+      { link: "confirm", scope: "all", teammate: false },
     ]);
   });
 
@@ -209,6 +212,12 @@ describe("/u/:token (0509#5761)", () => {
     expect(done).toContain('name="scope"');
 
     expect(renderConfirm(true, "all")).not.toContain("Stop everything instead");
+  });
+
+  it("does not tell a teammate that alerts keep coming, before or after the stop", () => {
+    expect(renderConfirm(false, "brief", true)).not.toContain("Alerts keep coming.");
+    expect(renderConfirm(true, "brief", true)).not.toContain("Alerts keep coming.");
+    expect(renderConfirm(false, "brief", false)).toContain("Alerts keep coming.");
   });
 
   it("renders the confirmation after a POST that suppressed the address", () => {
