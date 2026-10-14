@@ -130,7 +130,11 @@ export function AccountSection({
       <p className="mt-2 leading-[1.55] [overflow-wrap:anywhere]">
         Signed in as <strong className="font-semibold">{email}</strong>
       </p>
-      <ChangeSignInEmail sent={result?.emailChangeSent ?? false} error={result?.emailChangeError ?? null} />
+      <ChangeSignInEmail
+        email={email}
+        sent={result?.emailChangeSent ?? false}
+        error={result?.emailChangeError ?? null}
+      />
       <DeliverySettings delivery={delivery} teammates={teammates} result={result} />
       <PasskeyList passkeys={passkeys} />
       <div className="mt-2 flex flex-wrap items-start gap-x-6">
