@@ -179,6 +179,36 @@ describe("a rival's public page, read for several workspaces", () => {
     expect(sharedOutcomes(log)).toEqual(["page:read_failed"]);
   });
 
+  it("does not share a copy a workspace only got by escalating to the browser on its own budget", async () => {
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      fetched.push(input instanceof Request ? input.url : String(input));
+      return Promise.resolve(
+        new Response('<!doctype html><html><body><div id="app"></div></body></html>', {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        }),
+      );
+    });
+    Object.defineProperty(env, "BROWSER", {
+      configurable: true,
+      get: () => ({
+        quickAction: () =>
+          Promise.resolve(
+            new Response(JSON.stringify({ success: true, result: PAGE, meta: { status: 200 } }), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            }),
+          ),
+        close: () => Promise.resolve(),
+      }),
+    });
+    const first = await readPage(targetFor("ws-a", "competitor"), NIGHT_ONE);
+    expect(first).toMatchObject({ ok: true, transport: "browser" });
+    await readPage(targetFor("ws-b", "competitor"), NIGHT_ONE);
+    expect(fetched.filter((url) => url === URL_OF_RIVAL)).toHaveLength(2);
+    expect((await env.IDENTITY_CACHE.list({ prefix: "shared-read:" })).keys).toHaveLength(0);
+  });
+
   it("never hands a fetch-only copy to a page that has learned it needs the browser", async () => {
     await readPage(targetFor("ws-a", "competitor"), NIGHT_ONE);
     const learned = { ...targetFor("ws-b", "competitor"), transport: "browser" as const, transportTestedAt: NIGHT_ONE };

@@ -81,7 +81,7 @@ export async function readPage(
     return read;
   }
   if (read.fromArchive === true) return read;
-  if (isRival) await keepSharedPageSafely(key, read);
+  if (isRival && read.transport === key.startWith) await keepSharedPageSafely(key, read);
   if (!learnedBrowser(target, now)) await rememberTransport(target, read, now);
   return read;
 }
