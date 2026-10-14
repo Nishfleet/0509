@@ -3,9 +3,11 @@ import { z } from "zod";
 
 const SELECT_VERDICT = "SELECT p FROM jev_verdict WHERE question_id = ?1 AND input_hash = ?2";
 
-const SELECT_SHARED_VERDICT = "SELECT p FROM jev_verdict WHERE question_id = ?1 AND shared_hash = ?2 ORDER BY decided_at, rowid LIMIT 1";
+const SELECT_SHARED_VERDICT =
+  "SELECT p FROM jev_verdict WHERE question_id = ?1 AND shared_hash = ?2 ORDER BY decided_at, rowid LIMIT 1";
 
-const SELECT_SHARED_CHOICE = "SELECT choice FROM jev_verdict WHERE question_id = ?1 AND shared_hash = ?2 ORDER BY decided_at, rowid LIMIT 1";
+const SELECT_SHARED_CHOICE =
+  "SELECT choice FROM jev_verdict WHERE question_id = ?1 AND shared_hash = ?2 ORDER BY decided_at, rowid LIMIT 1";
 
 const SELECT_CHOICE = "SELECT choice FROM jev_verdict WHERE question_id = ?1 AND input_hash = ?2";
 
