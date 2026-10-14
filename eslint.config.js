@@ -1780,7 +1780,7 @@ export default tseslint.config(
         "error",
         { allow: ["eslint-(?:disable|enable|env)", "global ", "@ts-", "@vite-ignore", "/\\s*<reference"] },
       ],
-      "no-inline-comments": "error",
+      "no-inline-comments": ["error", { ignorePattern: "@vite-ignore" }],
       "no-warning-comments": ["error", { terms: WORKAROUND_TERMS, location: "anywhere" }],
     },
   },
