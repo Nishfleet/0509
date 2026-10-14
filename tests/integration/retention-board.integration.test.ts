@@ -70,6 +70,18 @@ describe("retention board", () => {
     expect(lastSeen).toEqual({ week: 2, drifting: 0, away: 1, never: 0 });
   });
 
+  it("counts past-due and paid-through cancelled workspaces as live", async () => {
+    await env.DB.batch([
+      ...workspace("f", "2026-10-03T10:00:00Z", "2026-10-13T08:00:00Z"),
+      ...workspace("g", "2026-10-03T11:00:00Z", "2026-10-13T08:00:00Z"),
+      plan("f", "past_due", 0),
+      plan("g", "cancelled", 0),
+    ]);
+    await env.DB.exec("UPDATE plan SET current_period_end = '2026-11-01T00:00:00Z' WHERE workspace_id = 'g'");
+    const { lastSeen } = await readRetentionBoard(NOW);
+    expect(lastSeen).toEqual({ week: 4, drifting: 0, away: 1, never: 0 });
+  });
+
   it("counts cancellations by month", async () => {
     const { cancellations } = await readRetentionBoard(NOW);
     expect(cancellations).toEqual([{ month: "2026-10", cancelled: 1 }]);

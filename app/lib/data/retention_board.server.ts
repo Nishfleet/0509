@@ -6,8 +6,8 @@ import type { RetentionBoard } from "../retention-board";
 const FUNNEL = `SELECT date(w.created_at, 'weekday 0', '-6 days') AS week,
        count(*) AS signed_up,
        sum(CASE WHEN p.id IS NOT NULL THEN 1 ELSE 0 END) AS started,
-       sum(CASE WHEN p.status = 'active' AND p.trialing = 1 THEN 1 ELSE 0 END) AS trialing,
-       sum(CASE WHEN p.status = 'active' AND p.trialing = 0 THEN 1 ELSE 0 END) AS paying,
+       sum(CASE WHEN p.status IN ('active', 'trialing') AND p.trialing = 1 THEN 1 ELSE 0 END) AS trialing,
+       sum(CASE WHEN p.status IN ('active', 'past_due') AND p.trialing = 0 THEN 1 ELSE 0 END) AS paying,
        sum(CASE WHEN p.status IN ('cancelled', 'expired') THEN 1 ELSE 0 END) AS cancelled
   FROM workspace w
   LEFT JOIN plan p ON p.workspace_id = w.id
@@ -23,7 +23,9 @@ const LAST_SEEN = `SELECT CASE
        END AS bucket,
        count(*) AS workspaces
   FROM workspace w
-  JOIN plan p ON p.workspace_id = w.id AND p.status = 'active'
+  JOIN plan p ON p.workspace_id = w.id
+   AND (p.status IN ('trialing', 'active', 'past_due')
+        OR (p.status = 'cancelled' AND p.current_period_end > ?1))
  GROUP BY bucket`;
 
 const CANCELLATIONS = `SELECT substr(p.updated_at, 1, 7) AS month, count(*) AS cancelled

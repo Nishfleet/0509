@@ -155,6 +155,10 @@ export const PRIVACY: LegalDocument = {
           details: ["While your account is open, and removed when you delete it in Settings."],
         },
         {
+          term: "The days you used 0509",
+          details: ["400 days, then deleted. Removed with your workspace when you delete it."],
+        },
+        {
           term: "Sign-in links",
           details: ["Five minutes, and each works once."],
         },
