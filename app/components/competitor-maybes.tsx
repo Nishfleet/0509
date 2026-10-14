@@ -34,7 +34,9 @@ export function CompetitorMaybes({ maybes }: { maybes: readonly Maybe[] }): Reac
 }
 
 function MaybeRow({ maybe }: { maybe: Maybe }): ReactElement {
-  const fetcher = useFetcher<{ message: string | null; upgradePlanId?: string | null }>();
+  const fetcher = useFetcher<{ message: string | null; upgradePlanId?: string | null }>({
+    key: `maybe-${maybe.suggestionId}`,
+  });
   const busy = fetcher.state !== "idle";
   const watching = busy && fetcher.formData?.get("intent") === "accept";
   const dismissing = busy && fetcher.formData?.get("intent") === "dismiss";
