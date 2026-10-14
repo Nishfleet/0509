@@ -265,6 +265,25 @@ describe("send lane (0509#3979)", () => {
     const tokenIn = (to: string) =>
       /\/u\/([0-9a-f]{64})/.exec(rec.sent.find((sent) => sent.to === to)?.text ?? "")?.[1];
     expect(tokenIn("mate@0509.io")).not.toBe(tokenIn(TARGET));
+    const ownerMail = rec.sent.find((sent) => sent.to === TARGET);
+    expect(ownerMail?.text).toContain("/app/settings");
+    expect(mail?.text).not.toContain("/app/settings");
+    expect(mail?.html).not.toContain("/app/settings");
+  });
+
+  it("(teammates) a teammate removed while their message waits in the queue gets nothing", async () => {
+    const rec = recorder();
+    const digestId = await seedDigest("sent");
+    await seedTeammate("mate-1", "mate@0509.io", true);
+    const queued = batchFor([{ digest_id: digestId, target_id: "mate-1" }]);
+    await env.DB.prepare("DELETE FROM send_target WHERE id = 'mate-1'").run();
+
+    const results = await handleBatch(envWith(bindingFor(rec)), queued.batch);
+
+    expect(results.map((result) => result.outcome)).toEqual(["no_target"]);
+    expect(queued.acked).toEqual([0]);
+    expect(rec.sent).toHaveLength(0);
+    expect(await readAttempts()).toEqual([]);
   });
 
   const failingFor = (rec: Recorder, address: string): SendEmail => ({

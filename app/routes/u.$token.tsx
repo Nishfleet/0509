@@ -7,7 +7,7 @@ import { Button } from "../components/ui/button";
 import { isTeammateUnsubscribeToken, isUnsubscribeTokenKnown } from "../lib/data/email_suppression.server";
 import { unsubscribe } from "../lib/unsubscribe.server";
 
-const INVALID_LINK = "This link is not valid";
+const INVALID_LINK = "This unsubscribe link is no longer active";
 
 export function meta(_: Route.MetaArgs) {
   return [{ title: "Unsubscribe · Five to Nine" }, { name: "robots", content: "noindex, nofollow" }];
@@ -47,8 +47,9 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     <main className="mx-auto max-w-xl px-4 py-16">
       <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">{INVALID_LINK}</h1>
       <p className="mt-4 leading-[1.65] text-ink-soft">
-        This unsubscribe link has expired or is incorrect, so nothing was changed. Use the link in your most recent
-        weekly brief, or email us and we will do it for you.
+        If you were already unsubscribed, or the person who added you took you off their list, you will not get more
+        briefs from it and there is nothing to do. If you are still getting emails, use the link in the most recent one,
+        or write to us and we will stop them.
       </p>
       <Footer />
     </main>

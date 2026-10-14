@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 
 import { isAddressSuppressed } from "./data/email_suppression.server";
+import { readDiscoveryContext } from "./data/entity.server";
 import { addTeammate, listTeammates, removeTeammate } from "./data/send_target.server";
 import { readWorkspaceIdForOwner } from "./data/workspace.server";
 import { sendTeammateInvite } from "./delivery-address.server";
@@ -42,9 +43,16 @@ async function countInvite(input: { workspaceId: string; now: Date; used: number
   });
 }
 
+const UNKNOWN_INVITER = "A colleague";
+
+async function inviterName(workspaceId: string): Promise<string> {
+  const context = await readDiscoveryContext(workspaceId);
+  const name = context?.self.name.trim() ?? "";
+  return name === "" ? UNKNOWN_INVITER : name;
+}
+
 async function inviteAndCount(input: {
   email: SendEmail;
-  signInEmail: string;
   workspaceId: string;
   targetId: string;
   address: string;
@@ -54,7 +62,13 @@ async function inviteAndCount(input: {
   const { workspaceId, targetId, address, now, used } = input;
   const failure = (await isAddressSuppressed(address))
     ? null
-    : await sendTeammateInvite({ email: input.email, workspaceId, targetId, address, addedBy: input.signInEmail });
+    : await sendTeammateInvite({
+        email: input.email,
+        workspaceId,
+        targetId,
+        address,
+        addedBy: await inviterName(workspaceId),
+      });
   if (failure === null) await countInvite({ workspaceId, now, used });
   return failure;
 }
