@@ -382,8 +382,9 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
   const result = await deliverToOwner(env, message);
   if (result.outcome === "sent" || result.outcome === "duplicate") {
     await queueTeammates(env, message.digest_id).catch((cause: unknown) => {
-      captureException(cause, { tags: { lane: "teammates", digest_id: message.digest_id } });
-      console.error(JSON.stringify({ event: "delivery.teammates_failed", error: redactEmailShaped(errorText(cause)) }));
+      const error = redactEmailShaped(errorText(cause));
+      captureException(new Error(error), { tags: { lane: "teammates", digest_id: message.digest_id } });
+      console.error(JSON.stringify({ event: "delivery.teammates_failed", error }));
     });
   }
   return result;

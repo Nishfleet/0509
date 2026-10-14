@@ -85,6 +85,13 @@ describe("teammates on the brief", () => {
     expect(await readDeliveryAddress(USER_ID, SIGN_IN_EMAIL)).toEqual({ address: SIGN_IN_EMAIL, verified: true });
   });
 
+  it("refuses the owner's own sign-in address in any case, and sends nothing", async () => {
+    expect(await add(SIGN_IN_EMAIL)).toMatch(/We can't add that address/);
+    expect(await add(SIGN_IN_EMAIL.toUpperCase())).toMatch(/We can't add that address/);
+    expect(sentMail).toHaveLength(0);
+    expect(await readTeammates(firstWorkspaceId(USER_ID))).toEqual([]);
+  });
+
   it("allows two teammates and each address once, and refuses the owner's own address", async () => {
     expect(await add("a@0509.io")).toBeNull();
     expect(await add("A@0509.io")).toMatch(/up to 2 teammates/);
