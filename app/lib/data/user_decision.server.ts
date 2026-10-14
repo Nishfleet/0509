@@ -96,3 +96,31 @@ export async function readSubjectDecision(workspaceId: string, subject: string):
     .parse(await env.DB.prepare(SELECT_SUBJECT_DECISION).bind(workspaceId, subject).first());
   return row?.verdict ?? null;
 }
+
+const CLEAR_CHANGE_FEEDBACK = `DELETE FROM user_decision
+WHERE workspace_id = ?1 AND signal_id = ?2 AND verdict LIKE 'change_feedback:%'`;
+
+const INSERT_CHANGE_FEEDBACK = `INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at)
+SELECT ?1, s.workspace_id, ?3, s.id, s.entity_id, ?4, NULL, ?5
+FROM signal s
+WHERE s.id = ?2 AND s.workspace_id = ?6 AND s.kind = 'change' AND EXISTS (SELECT 1 FROM "user" WHERE id = ?3)`;
+
+export async function recordChangeFeedback(row: {
+  workspaceId: string;
+  userId: string;
+  signalId: string;
+  useful: boolean;
+  decidedAt: string;
+}): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(CLEAR_CHANGE_FEEDBACK).bind(row.workspaceId, row.signalId),
+    env.DB.prepare(INSERT_CHANGE_FEEDBACK).bind(
+      crypto.randomUUID(),
+      row.signalId,
+      row.userId,
+      row.useful ? "change_feedback:useful" : "change_feedback:not_useful",
+      row.decidedAt,
+      row.workspaceId,
+    ),
+  ]);
+}

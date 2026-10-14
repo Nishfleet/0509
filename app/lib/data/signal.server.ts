@@ -534,6 +534,7 @@ const siteChangeRow = z.object({
   verdict_p: z.number().nullable(),
   verdict_reason: z.string().nullable(),
   verdict_decided_at: z.string().nullable(),
+  feedback: z.enum(["change_feedback:useful", "change_feedback:not_useful"]).nullable(),
 });
 
 export type SiteChangeRow = z.infer<typeof siteChangeRow>;
@@ -541,7 +542,10 @@ export type SiteChangeRow = z.infer<typeof siteChangeRow>;
 const SELECT_SITE_CHANGES = `SELECT s.id, s.entity_id, e.name AS entity_name, e.domain AS entity_domain,
   e.role AS entity_role, s.url, s.payload_json, s.observed_at,
   b.fetched_at AS before_at, a.fetched_at AS after_at,
-  v.id AS verdict_id, v.p AS verdict_p, v.reason AS verdict_reason, v.decided_at AS verdict_decided_at
+  v.id AS verdict_id, v.p AS verdict_p, v.reason AS verdict_reason, v.decided_at AS verdict_decided_at,
+  (SELECT ud.verdict FROM user_decision ud
+   WHERE ud.signal_id = s.id AND ud.workspace_id = s.workspace_id AND ud.verdict LIKE 'change_feedback:%'
+   ORDER BY ud.decided_at DESC LIMIT 1) AS feedback
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id
 LEFT JOIN snapshot a ON a.id = s.snapshot_id

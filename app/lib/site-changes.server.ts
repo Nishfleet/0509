@@ -64,6 +64,7 @@ async function toView(row: SiteChangeRow, payload: SiteChangePayload): Promise<S
     wordsChanged: payload.wordsAdded + payload.wordsRemoved,
     provenance: provenanceNote({ viaArchive: payload.viaArchive === true, seenOn: seenOn(row, payload) }),
     sentence: wordsSentence(payload.wordsAdded, payload.wordsRemoved),
+    feedback: row.feedback === null ? null : row.feedback === "change_feedback:useful" ? "useful" : "not_useful",
     mark: await readMark(payload.diffKey),
     before: shot(row.id, "before", { key: payload.before.screenshotKey, at: row.before_at }),
     after: shot(row.id, "after", { key: payload.after.screenshotKey, at: row.after_at }),
