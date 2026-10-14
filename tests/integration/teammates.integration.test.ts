@@ -9,7 +9,7 @@ import {
   removeTeammate,
   writeVerifyToken,
 } from "../../app/lib/data/send_target.server";
-import { readDeliveryAddress } from "../../app/lib/delivery-address.server";
+import { readDeliveryAddress, saveDeliveryAddress } from "../../app/lib/delivery-address.server";
 import { addTeammateByOwner, readTeammates, removeTeammateByOwner } from "../../app/lib/teammates.server";
 import { confirmDeliveryAddress } from "../../app/lib/verify-delivery-address.server";
 import { ensureWorkspaceForSignIn, firstWorkspaceId } from "../../app/lib/workspace.server";
@@ -126,6 +126,21 @@ describe("teammates on the brief", () => {
       .bind(workspaceId)
       .all();
     expect(rows.results).toEqual([{ role: "owner" }, { role: "teammate" }]);
+  });
+
+  it("refuses to make a teammate's address the owner's delivery address", async () => {
+    await add("mate@0509.io");
+
+    const result = await saveDeliveryAddress({
+      userId: USER_ID,
+      signInEmail: SIGN_IN_EMAIL,
+      address: "Mate@0509.io",
+      resume: false,
+      email: binding,
+    });
+
+    expect(result.error).toMatch(/already gets the brief as a teammate/);
+    expect(await readDeliveryAddress(USER_ID, SIGN_IN_EMAIL)).toEqual({ address: SIGN_IN_EMAIL, verified: true });
   });
 
   it("removes a teammate, but never the owner's row", async () => {

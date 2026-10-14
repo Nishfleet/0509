@@ -7,6 +7,7 @@ import { clearSuppression, isAddressSuppressed } from "./data/email_suppression.
 import {
   changeEmailTarget,
   ensureOwnerEmailTarget,
+  listTeammates,
   markEmailTargetVerified,
   readEmailTarget,
   writeTeammateVerifyToken,
@@ -18,6 +19,7 @@ import { teammateInviteEmail, verifyAddressEmail } from "./verify-address-email"
 const INVALID = "Enter an email address, like you@company.com.";
 const SUPPRESSED =
   'This address unsubscribed from the brief. Tick "Send the brief to this address again" and save to resume.';
+const IS_TEAMMATE = "That address already gets the brief as a teammate. Remove them first, or choose another address.";
 const NO_WORKSPACE = "Finish setting up first, then choose where the brief goes.";
 const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const RATE_LIMITED = "Too many confirmation emails. Wait a minute, then save again.";
@@ -131,6 +133,11 @@ export async function saveDeliveryAddress(input: {
 
   const { success } = await env.SIGN_IN_EMAIL_LIMIT.limit({ key: `delivery-address:${workspaceId}` });
   if (!success) return { error: RATE_LIMITED, suppressed: false };
+
+  const mates = await listTeammates(env.DB, workspaceId);
+  if (mates.some((mate) => normalizeEmailAddress(mate.target_value) === address)) {
+    return { error: IS_TEAMMATE, suppressed: false };
+  }
 
   if (await refuseOrResumeSuppressed(address, input)) return { error: SUPPRESSED, suppressed: true };
 
