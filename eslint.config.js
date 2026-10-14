@@ -1778,7 +1778,7 @@ export default tseslint.config(
     rules: {
       "no-comments/disallowComments": [
         "error",
-        { allow: ["eslint-(?:disable|enable|env)", "global ", "@ts-", "/\\s*<reference"] },
+        { allow: ["eslint-(?:disable|enable|env)", "global ", "@ts-", "@vite-ignore", "/\\s*<reference"] },
       ],
       "no-inline-comments": "error",
       "no-warning-comments": ["error", { terms: WORKAROUND_TERMS, location: "anywhere" }],
