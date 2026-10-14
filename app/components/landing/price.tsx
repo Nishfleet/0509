@@ -1,7 +1,8 @@
 import { type PlanId, PLANS, TRIAL_TERMS } from "../../lib/billing/plans";
 import { type CoverageId, isLive } from "../../lib/coverage";
-import type { StartSource } from "../../lib/pricing-page";
+import { planStartHref, type StartSource } from "../../lib/pricing-page";
 import { cn } from "../../lib/utils";
+import { buttonVariants } from "../ui/button";
 import { eyebrow, Section } from "./section";
 import { StartButton } from "./start-button";
 
@@ -41,13 +42,7 @@ export function Price({ source = null }: { source?: StartSource | null }) {
     >
       <ul className="grid gap-4 md:grid-cols-3">
         {PLANS.map((plan) => (
-          <li
-            key={plan.id}
-            className={cn(
-              "min-w-0 border-[1.5px] p-6",
-              plan.id === "starter" ? "border-ink bg-card" : "border-line bg-card",
-            )}
-          >
+          <li key={plan.id} className="min-w-0 border-[1.5px] border-line bg-card p-6">
             <h3 className={`${eyebrow} text-ink-soft`}>{plan.name}</h3>
             <p className="mt-3 font-display text-[2.4rem] leading-none font-extrabold tracking-[-0.03em]">
               €{String(plan.monthlyPriceEur)}
@@ -60,6 +55,12 @@ export function Price({ source = null }: { source?: StartSource | null }) {
                 </li>
               ))}
             </ul>
+            <a
+              href={planStartHref(plan.id, source)}
+              className={cn(buttonVariants({ variant: "secondary" }), "mt-5 w-full")}
+            >
+              Start with {plan.name}
+            </a>
           </li>
         ))}
       </ul>

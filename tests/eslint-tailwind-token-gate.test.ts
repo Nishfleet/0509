@@ -97,11 +97,20 @@ describe("eslint DESIGN.md colour gate (#5871)", () => {
     expect(result.messages.some((m) => m.includes(UNKNOWN))).toBe(false);
   });
 
-  it("allows the stock shadcn and tw-animate tokens inside app/components/ui", { timeout: 60_000 }, async () => {
-    const result = await lintProbe(UI_PROBE, component("bg-muted data-open:animate-in"));
+  it("allows the stock shadcn tokens inside app/components/ui", { timeout: 60_000 }, async () => {
+    const result = await lintProbe(UI_PROBE, component("bg-muted data-starting-style:opacity-0"));
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(UNKNOWN))).toBe(false);
   });
+
+  it(
+    "rejects a tw-animate class inside app/components/ui, because the app never imports that package",
+    { timeout: 60_000 },
+    async () => {
+      const result = await lintProbe(UI_PROBE, component("bg-muted data-open:animate-in"));
+      expect(result.messages.some((m) => m.includes(UNKNOWN))).toBe(true);
+    },
+  );
 
   it("rejects an out-of-order class list", { timeout: 60_000 }, async () => {
     const result = await lintProbe(PROBE, component("text-ink-soft mt-2"));

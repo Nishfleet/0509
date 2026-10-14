@@ -8,7 +8,7 @@ export function SiteHeader() {
         <Wordmark />
         <nav aria-label="Site" className={`${eyebrow} flex gap-7`}>
           <a
-            className="flex min-h-11 items-center text-ink-soft transition-colors duration-140 hover:text-ink"
+            className="flex min-h-11 items-center text-ink-soft transition-colors duration-140 ease-push hover:text-ink"
             href="/"
           >
             Overview

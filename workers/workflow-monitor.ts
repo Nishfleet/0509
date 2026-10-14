@@ -1,6 +1,8 @@
 import type { WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { captureCheckIn } from "@sentry/cloudflare";
 
+import { pingCheck } from "../app/lib/healthcheck.server";
+
 type CronMonitorConfig = NonNullable<Parameters<typeof captureCheckIn>[1]>;
 
 const CHECK_IN_STEP: WorkflowStepConfig = {
@@ -18,14 +20,30 @@ export async function withStepCheckIn<T>(
   );
   try {
     const result = await work();
-    await step.do("monitor ok", CHECK_IN_STEP, () =>
-      Promise.resolve(captureCheckIn({ checkInId, monitorSlug: monitor.slug, status: "ok" }, monitor.config)),
-    );
+    await step.do("monitor ok", CHECK_IN_STEP, async () => {
+      await pingCheck(monitor.slug, "ok");
+      return captureCheckIn({ checkInId, monitorSlug: monitor.slug, status: "ok" }, monitor.config);
+    });
     return result;
   } catch (error) {
-    await step.do("monitor error", CHECK_IN_STEP, () =>
-      Promise.resolve(captureCheckIn({ checkInId, monitorSlug: monitor.slug, status: "error" }, monitor.config)),
-    );
+    await step.do("monitor error", CHECK_IN_STEP, async () => {
+      await pingCheck(monitor.slug, "fail");
+      return captureCheckIn({ checkInId, monitorSlug: monitor.slug, status: "error" }, monitor.config);
+    });
     throw error;
   }
+}
+
+export async function withCheckPings(slug: string, enabled: boolean, work: () => Promise<void>): Promise<void> {
+  if (!enabled) {
+    await work();
+    return;
+  }
+  try {
+    await work();
+  } catch (error) {
+    await pingCheck(slug, "fail");
+    throw error;
+  }
+  await pingCheck(slug, "ok");
 }

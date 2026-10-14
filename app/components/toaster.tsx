@@ -12,13 +12,14 @@ const TOASTER_STYLE: StyleVars = {
 };
 
 const UNDO_BUTTON_STYLE = { borderRadius: 0 } satisfies CSSProperties;
+const TOAST_STYLE = { boxShadow: "none" } satisfies CSSProperties;
 
 export function Toaster() {
   return (
     <SonnerToaster
       position="bottom-center"
       style={TOASTER_STYLE}
-      toastOptions={{ actionButtonStyle: UNDO_BUTTON_STYLE }}
+      toastOptions={{ actionButtonStyle: UNDO_BUTTON_STYLE, style: TOAST_STYLE }}
     />
   );
 }

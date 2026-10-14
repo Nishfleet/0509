@@ -69,6 +69,7 @@ export function renderIncidentOpen(ctx: IncidentOpenContext): RenderedBrief {
         linkLine(ctx.link),
         footer.html,
       ].join(""),
+      lines[1],
     ),
   };
 }
@@ -89,6 +90,7 @@ export function renderIncidentFixed(ctx: IncidentFixedContext): RenderedBrief {
         linkLine(ctx.link),
         footer.html,
       ].join(""),
+      line,
     ),
   };
 }

@@ -1,3 +1,4 @@
+import { getDomainWithoutSuffix } from "tldts";
 import { z } from "zod";
 
 import { extractPageText } from "../site/extract-text";
@@ -163,12 +164,51 @@ function readOrganization(blocks: readonly string[]): {
     }
   }
   const organization = nodes.find((node) => typeIncludesOrganization(node["@type"]));
-  if (!organization) return { name: null, logo: null, sameAs: [] };
+  const sameAs = nodes
+    .filter((node) => typeIncludesOrganization(node["@type"]))
+    .flatMap((node) => sameAsField(node.sameAs));
+  if (!organization) return { name: null, logo: null, sameAs };
   return {
     name: stringField(organization.name),
     logo: logoField(organization.logo),
-    sameAs: sameAsField(organization.sameAs),
+    sameAs,
   };
+}
+
+const INLINE_SOCIAL_OBJECT = /\{[^{}]*"classification"\s*:\s*"(?:youtube|facebook|instagram|twitter|tiktok)"[^{}]*\}/g;
+
+function inlineSocialLinks(html: string): string[] {
+  const links: string[] = [];
+  for (const [object] of html.matchAll(INLINE_SOCIAL_OBJECT)) {
+    try {
+      const parsed: unknown = JSON.parse(object);
+      if (isRecord(parsed) && parsed.type === "link" && typeof parsed.url === "string") links.push(parsed.url);
+    } catch {
+      continue;
+    }
+  }
+  return links;
+}
+
+const RAW_YOUTUBE_LINK = /https?:\/\/(?:www\.|m\.)?youtube\.com\/(?:@|c\/|user\/)(\w+(?:[.-]\w+)*)/gi;
+
+function simplified(value: string): string {
+  return value.toLowerCase().replaceAll(/[^a-z0-9]/g, "");
+}
+
+function rawYoutubeLinks(html: string, pageUrl: string, ldBlocks: readonly string[]): string[] {
+  if (platformForUrl(pageUrl) !== null) return [];
+  const label = simplified(getDomainWithoutSuffix(new URL(pageUrl).hostname) ?? "");
+  if (label.length < 3) return [];
+  const text = ldBlocks.reduce((rest, block) => rest.replaceAll(block, ""), html).replaceAll(/\\u002f|\\\//gi, "/");
+  return [...text.matchAll(RAW_YOUTUBE_LINK)]
+    .filter(([, name]) => simplified(name ?? "") === label)
+    .map(([link]) => link);
+}
+
+function withScriptYoutube(socials: SocialLink[], scripted: readonly string[]): SocialLink[] {
+  if (socials.some((social) => social.platform === "youtube")) return socials;
+  return [...socials, ...collectSocials(scripted, [])];
 }
 
 const YOUTUBE_CHANNEL_PATH = /^\/(?:channel\/UC[0-9A-Za-z_-]{22}|@[^/]+)\/?$/;
@@ -354,7 +394,10 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
     ldOrganizationLogo: organization.logo,
     appleTouchIcon: state.appleTouchIcon,
     manifestUrl: state.manifestUrl,
-    socials: collectSocials(organization.sameAs, anchors),
+    socials: withScriptYoutube(
+      collectSocials([...organization.sameAs, ...inlineSocialLinks(html)], anchors),
+      rawYoutubeLinks(html, pageUrl, state.ldBlocks),
+    ),
     navLinks,
     navPages,
     adLibraryHints,

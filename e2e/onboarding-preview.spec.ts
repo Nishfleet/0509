@@ -126,6 +126,7 @@ test("the competitors step lists who is watched and who is a maybe, then moves o
   await expect(page.getByText("Northloop", { exact: true })).toBeVisible();
   await expect(page.getByText("Sells the same running kit to the same buyers.")).toBeVisible();
   await expect(page.getByText(/\b0\.7\b|\b70\s?%/)).toHaveCount(0);
+  await expect(page.getByText(/Next you'll choose a plan and start your 7-day trial\./)).toBeVisible();
   expect(await horizontalOverflow(page)).toBe(0);
 
   await page.getByRole("button", { name: "Start watching" }).click();
@@ -163,5 +164,29 @@ test("the plan step offers every plan with the trial terms and says so when chec
   await upgrades.first().click();
   await expect(page.getByRole("alert").filter({ hasText: "Starting a trial isn't available right now" })).toBeVisible();
   await expect(page).toHaveURL(/\/onboarding\/plan/);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
+});
+
+test("while checkout is being confirmed the plan step shows only Almost there, with no plan buttons", async ({
+  page,
+  baseURL,
+}, testInfo) => {
+  const { cookie } = await seedPreviewSession(
+    "onboarding-confirming",
+    ({ db, suffix, userId }) => {
+      const workspaceId = seedWorkspace(db, suffix, userId, "Onboarding Confirming");
+      seedCompetitors(db, suffix, workspaceId, userId);
+      run(db, "UPDATE onboarding_run SET watching_started_at = ? WHERE workspace_id = ?", STAMP, workspaceId);
+    },
+    { livePlan: false },
+  );
+  await signIn(page, baseURL, cookie);
+  const watched = watchConsole(page);
+
+  await page.goto("/onboarding/plan?upgraded=agency");
+  await expect(page.getByRole("heading", { name: "Almost there" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Start your trial" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Upgrade to / })).toHaveCount(0);
+  expect(await horizontalOverflow(page)).toBe(0);
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

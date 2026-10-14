@@ -22,6 +22,7 @@ import {
   setOwnSiteAlerts,
 } from "./data/workspace.server";
 import { readDeliveryAddress, saveDeliveryAddress } from "./delivery-address.server";
+import { addTeammateByOwner, readTeammates, removeTeammateByOwner } from "./teammates.server";
 import { parseSlackWebhook } from "./slack-webhook";
 import { postToSlack } from "./slack.server";
 import { saveBriefSchedule } from "./standing/reschedule.server";
@@ -42,6 +43,8 @@ const PASSKEY_FAILED = "The passkey wasn't removed. Try again.";
 const alertSwitchForm = z.object({ value: z.enum(["on", "off"]) });
 const slackSaveForm = z.object({ webhook: z.string() });
 const deliveryForm = z.object({ address: z.string().optional(), resume: z.string().optional() });
+const teammateAddForm = z.object({ address: z.string() });
+const teammateRemoveForm = z.object({ targetId: z.string() });
 const emailChangeForm = z.object({ newEmail: z.string() });
 const deleteAccountForm = z.object({ confirm: z.string() });
 const passkeyForm = z.object({ passkeyId: z.string() });
@@ -58,6 +61,7 @@ export interface SettingsResult {
   deleteError: string | null;
   deliveryError: string | null;
   deliverySuppressed: boolean;
+  teammateError: string | null;
   emailChangeSent: boolean;
   emailChangeError: string | null;
   slackError: string | null;
@@ -70,6 +74,7 @@ function result(fields: Partial<SettingsResult>): SettingsResult {
     deleteError: null,
     deliveryError: null,
     deliverySuppressed: false,
+    teammateError: null,
     emailChangeSent: false,
     emailChangeError: null,
     slackError: null,
@@ -83,20 +88,22 @@ const NO_WORKSPACE_SETTINGS = {
   changeAlerts: true,
   slackConnected: false,
   dismissed: [],
+  teammates: [],
   plan: null,
   returning: false,
 };
 
 async function readWorkspaceSettings(workspaceId: string) {
-  const [ownSiteAlerts, changeAlerts, slackTarget, dismissed, plan] = await Promise.all([
+  const [ownSiteAlerts, changeAlerts, slackTarget, dismissed, plan, teammates] = await Promise.all([
     readOwnSiteAlerts(workspaceId),
     readChangeAlerts(workspaceId),
     readSlackTarget(env.DB, workspaceId),
     readUserDismissed(workspaceId),
     readPlanSummary(workspaceId),
+    readTeammates(workspaceId),
   ]);
   const returning = await returningForGate(workspaceId, plan);
-  return { ownSiteAlerts, changeAlerts, slackConnected: slackTarget !== null, dismissed, plan, returning };
+  return { ownSiteAlerts, changeAlerts, slackConnected: slackTarget !== null, dismissed, teammates, plan, returning };
 }
 
 export async function readSettings(user: SettingsUser) {
@@ -113,7 +120,7 @@ export async function readSettings(user: SettingsUser) {
           nextLine: formatBriefAt(nextBriefAt(owned.schedule, new Date()), owned.schedule.timezone),
         };
   const workspace = workspaceId === null ? null : await readWorkspaceSettings(workspaceId);
-  const { ownSiteAlerts, changeAlerts, slackConnected, dismissed, plan, returning } =
+  const { ownSiteAlerts, changeAlerts, slackConnected, dismissed, teammates, plan, returning } =
     workspace ?? NO_WORKSPACE_SETTINGS;
   return {
     email: user.email,
@@ -123,6 +130,7 @@ export async function readSettings(user: SettingsUser) {
     slackConnected,
     dismissed,
     delivery,
+    teammates,
     plan,
     returning,
   };
@@ -168,6 +176,23 @@ async function saveAddress(user: SettingsUser, form: FormData): Promise<Settings
     resume: parsed.success && parsed.data.resume === "yes",
   });
   return result({ deliveryError: saved.error, deliverySuppressed: saved.suppressed });
+}
+
+async function inviteTeammate(user: SettingsUser, form: FormData): Promise<SettingsResult> {
+  const parsed = teammateAddForm.safeParse(Object.fromEntries(form));
+  const teammateError = await addTeammateByOwner({
+    userId: user.id,
+    signInEmail: user.email,
+    address: parsed.success ? parsed.data.address : "",
+    email: env.EMAIL,
+  });
+  return result({ teammateError });
+}
+
+async function dropTeammate(userId: string, form: FormData): Promise<SettingsResult> {
+  const parsed = teammateRemoveForm.safeParse(Object.fromEntries(form));
+  if (parsed.success) await removeTeammateByOwner(userId, parsed.data.targetId);
+  return result({ saved: true });
 }
 
 async function changeEmail(request: Request, form: FormData): Promise<SettingsResult> {
@@ -254,6 +279,8 @@ const INTENTS = new Map<string, (call: IntentCall) => Promise<SettingsResult>>([
   ["slack-save", (c) => connectSlack(c.user.id, c.form)],
   ["slack-remove", (c) => disconnectSlack(c.user.id)],
   ["delivery-address", (c) => saveAddress(c.user, c.form)],
+  ["teammate-add", (c) => inviteTeammate(c.user, c.form)],
+  ["teammate-remove", (c) => dropTeammate(c.user.id, c.form)],
   ["change-email", (c) => changeEmail(c.request, c.form)],
   ["delete-account", (c) => removeAccount(c.user, c.form, c)],
   ["passkey-remove", (c) => removePasskey(c.request, c.form)],

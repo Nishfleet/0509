@@ -54,6 +54,7 @@ export function renderChangeOverflow(ctx: ChangeOverflowContext): RenderedBrief 
         `<p style="${BODY}">See them in Five to Nine: <a class="brief-ink" href="${href}">${href}</a></p>`,
         footer.html,
       ].join(""),
+      lines[0],
     ),
   };
 }
@@ -75,6 +76,7 @@ export function renderChange(ctx: ChangeContext): RenderedBrief {
         `<p style="${BODY}">See the before and after in Five to Nine: <a class="brief-ink" href="${href}">${href}</a></p>`,
         footer.html,
       ].join(""),
+      lines.join(" "),
     ),
   };
 }

@@ -11,6 +11,7 @@ import { PAGE, PageHeading } from "../components/page-heading";
 import { SourcePill } from "../components/source-pill";
 import { acknowledgeOwnSiteIncident, loadAlertsPage } from "../lib/alerts-page.server";
 import { parseAlertChip } from "../lib/alert-chips";
+import { newSinceBriefLine } from "../lib/alerts-new";
 import { listWorkspaceBriefs } from "../lib/data/digest.server";
 import { onboardedContext } from "../lib/require-onboarded.server";
 import { requireFreshSession } from "../lib/require-session.server";
@@ -26,18 +27,21 @@ const acknowledgeForm = z.object({
   alertId: z.string(),
 });
 
-async function readLatestBrief(workspaceId: string | null) {
-  return workspaceId === null ? undefined : (await listWorkspaceBriefs(workspaceId))[0];
+async function readBriefs(workspaceId: string | null) {
+  return workspaceId === null ? [] : listWorkspaceBriefs(workspaceId);
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const { workspaceId } = context.get(onboardedContext);
-  const [page, latest] = await Promise.all([
+  const [page, briefs] = await Promise.all([
     loadAlertsPage(workspaceId, parseAlertChip(new URL(request.url).searchParams.get("kind"))),
-    readLatestBrief(workspaceId),
+    readBriefs(workspaceId),
   ]);
+  const latest = briefs[0];
+  const lastSent = briefs.find((brief) => brief.status === "sent");
   const failedBrief = latest?.status === "failed" ? { id: latest.id } : null;
-  return { ...page, failedBrief };
+  const times = page.groups.flatMap((group) => group.items.map((item) => item.at));
+  return { ...page, failedBrief, newSince: newSinceBriefLine(times, lastSent?.period_end) };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -59,6 +63,15 @@ function BriefSendFailed({ failed }: { failed: { id: string } }) {
         Read it in the app
       </Link>
       .
+    </p>
+  );
+}
+
+function NewSince({ line }: { line: string | null }) {
+  if (line === null) return null;
+  return (
+    <p data-testid="alerts-new-since" className="mt-4 font-display font-bold">
+      {line}
     </p>
   );
 }
@@ -86,6 +99,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <p data-testid="alerts-contract" className="mt-2 leading-[1.65] text-ink-soft">
         We only email you right away when your own website breaks. Everything else waits here.
       </p>
+      <NewSince line={loaderData.newSince} />
       {loaderData.failedBrief === null ? null : <BriefSendFailed failed={loaderData.failedBrief} />}
       <IncidentSlot incident={loaderData.openIncident} />
       {loaderData.sources.length > 0 ? (

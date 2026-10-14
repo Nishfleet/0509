@@ -10,6 +10,10 @@ describe("entitledTier", () => {
     expect(entitledTier(plan(status, null), NOW)).toBe("agency");
   });
 
+  it("keeps an active plan paid after its billing date when the renewal webhook never arrived", () => {
+    expect(entitledTier(plan("active", "2026-09-01T00:00:00Z"), NOW)).toBe("agency");
+  });
+
   it.each(["pending", "on_hold", "paused", "failed", "expired"])("falls back to scout while %s", (status) => {
     expect(entitledTier(plan(status, "2099-01-01T00:00:00Z"), NOW)).toBe("scout");
   });

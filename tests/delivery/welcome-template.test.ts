@@ -1,0 +1,39 @@
+import { describe, expect, it } from "vitest";
+
+import { PROBE, expectNoHtmlInjection } from "../email-html-injection";
+import { renderWelcome } from "../../workers/delivery/welcome-template";
+
+const CTX = {
+  rivals: ["Acme", "Globex"],
+  rival_count: 5,
+  first_brief_at: "2026-10-19T08:00:00.000Z",
+  timezone: "UTC",
+  alerts_link: "https://0509.io/app/alerts",
+};
+
+describe("welcome email", () => {
+  it("names the rivals, how many more, and when the first brief lands", () => {
+    const { subject, text } = renderWelcome(CTX);
+    expect(subject).toBe("Welcome to Five to Nine");
+    expect(text).toContain("We're watching Acme, Globex and 3 more.");
+    expect(text).toContain("weekly brief on Monday 19 October");
+    expect(text).toContain("https://0509.io/app/alerts");
+  });
+
+  it("asks for rivals when none are watched and drops the date when it is unknown", () => {
+    const { text } = renderWelcome({ ...CTX, rivals: [], rival_count: 0, first_brief_at: null });
+    expect(text).toContain("Add the rivals you want to keep an eye on");
+    expect(text).toContain("Your first ranking arrives with your weekly brief.");
+  });
+
+  it("previews the rivals line and keeps paragraphs apart in plain text", () => {
+    const { html, text } = renderWelcome(CTX);
+    expect(html).toContain("display:none");
+    expect(html).toContain("We&#39;re watching Acme, Globex and 3 more.");
+    expect(text).toContain("\n\nWe're watching");
+  });
+
+  it("escapes anything it is handed", () => {
+    expectNoHtmlInjection(renderWelcome({ ...CTX, rivals: [PROBE] }).html, "rivals");
+  });
+});

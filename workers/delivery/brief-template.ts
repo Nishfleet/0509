@@ -1,9 +1,14 @@
-import type { BriefContext, BriefPayload, RenderedBrief } from "../../app/lib/brief-payload";
+import {
+  sinceStartedLine,
+  type BriefContext,
+  type BriefPayload,
+  type RenderedBrief,
+} from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
 import { countPhrase } from "../../app/lib/quiet-week";
 import { UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
-import { EYEBROW, FONT, MONO, emailDocument } from "./email-shell";
-import { SETTINGS_LINK } from "./alert-footer";
+import { EYEBROW, FONT, MONO, emailDocument, postalLine } from "./email-shell";
+import { SETTINGS_LINK, supportLineHtml, supportLineText } from "./alert-footer";
 
 const COPY = {
   subject: (rank: number, total: number) => `You're #${n(rank)} of ${n(total)} this week`,
@@ -17,6 +22,7 @@ const COPY = {
   down: (count: number) => `down ${n(count)}`,
   same: "holding steady",
   new: "new",
+  firstRanking: "your first ranking",
   readThisFirst: "Read this first",
   nothingFirst: "Nothing this week needed reading first.",
   unjudged: UNJUDGED_WEEK_LINE,
@@ -113,7 +119,7 @@ function renderHeadline(payload: BriefPayload, whyLine: string): { html: string;
     };
   }
 
-  const movement = movementText(headline_movement, payload.headline_is_new);
+  const movement = payload.headline_is_new ? COPY.firstRanking : movementText(headline_movement, false);
   const period = COPY.weekOf(formatDate(payload.period_start, payload.timezone, false));
 
   const html = [
@@ -290,7 +296,13 @@ function renderOwnSite(payload: BriefPayload): { html: string; text: string } {
   return { html, text: `${COPY.ownSiteBroken(open.length)}\n${lines}` };
 }
 
+function sinceSentence(checked: BriefPayload["checked"]): string {
+  const since = sinceStartedLine(checked);
+  return since === null ? "" : ` ${since}.`;
+}
+
 function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { html: string; text: string } {
+  const sinceTail = sinceSentence(payload.checked);
   const checked = countsSentence(payload.checked);
   const sourceCount = payload.checked.source_keys.length;
   const across = sourceCount === 0 ? "" : ` across ${COPY.sources(sourceCount)}`;
@@ -306,10 +318,11 @@ function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { h
       : "";
 
   const unsubscribeHref = unsubscribeUrl === null ? null : safeUrl(unsubscribeUrl);
+  const postal = postalLine();
   const html = [
     `<div class="brief-rule" style="padding:16px 0 0;">`,
     `<p class="brief-muted" style="${EYEBROW}">${escapeHtml(COPY.footerTitle)}</p>`,
-    `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(`${checked}${across}.${degraded}`)}</p>`,
+    `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(`${checked}${across}.${degraded}${sinceTail}`)}</p>`,
     `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(nextAt)}</p>`,
     `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;"><a class="brief-muted" href="${SETTINGS_LINK}">${escapeHtml(COPY.settings)}</a>.</p>`,
     `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">`,
@@ -317,14 +330,18 @@ function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { h
       ? escapeHtml(COPY.noUnsubscribe)
       : `<a class="brief-muted" href="${unsubscribeHref}">${escapeHtml(COPY.unsubscribe)}</a>`,
     `</p>`,
+    supportLineHtml(),
+    postal?.html ?? "",
     `</div>`,
   ].join("");
 
   const text = [
-    `${COPY.footerTitle}: ${checked}${across}.${degraded}`,
+    `${COPY.footerTitle}: ${checked}${across}.${degraded}${sinceTail}`,
     nextAt,
     `${COPY.settings}: ${SETTINGS_LINK}`,
     unsubscribeUrl === null ? COPY.noUnsubscribe : `${COPY.unsubscribe}: ${unsubscribeUrl}`,
+    supportLineText(),
+    ...(postal === null ? [] : [postal.text]),
   ].join("\n");
 
   return { html, text };

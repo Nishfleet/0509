@@ -65,7 +65,7 @@ Decisions recorded on 0509#3927 (2026-09-22):
 
 ## B. Quality gates (each is a number, measured on production)
 
-- Performance: LCP under 1.5 s on simulated 4G for landing and Home; Home JavaScript under 150 KB gzipped; no request over 500 ms on the Home loader at p95 over 100 loads.
+- Performance: LCP under 1.5 s on simulated 4G for landing and Home (signed-in Home, competitor, brief and Alerts are also guarded by `e2e/signed-in-speed.spec.ts`, an emulated lane: Chromium DevTools Fast 4G at 1.6 Mbps and 150 ms, CPU 4x slower, cold load, local Worker, CLS under 0.1; it is a regression guard on one machine, not a Lighthouse score, and first measured 2026-10-14 at 1.10 to 1.18 s); Home JavaScript under 150 KB gzipped; no request over 500 ms on the Home loader at p95 over 100 loads.
 - Accessibility: zero WCAG 2.2 AA violations on the seven screens (axe), full keyboard path through J3 and J6, contrast pass in light and dark.
 - Mobile: no horizontal scroll at 390 on any screen; bottom tab bar reachable; row expansion as a sheet.
 - Errors: zero console errors on the seven screens; error tracking shows zero unhandled exceptions over 7 days of the soak.

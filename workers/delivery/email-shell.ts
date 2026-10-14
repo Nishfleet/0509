@@ -1,4 +1,5 @@
 import { escapeHtml } from "../../app/lib/html";
+import { preheaderHtml } from "../../app/lib/preheader";
 
 const COLORS = {
   page: "#f4f1e8",
@@ -25,6 +26,17 @@ export const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetic
 export const MONO = "ui-monospace,'SF Mono',Menlo,Consolas,monospace";
 export const EYEBROW = `margin:0 0 8px;font-family:${MONO};font-size:12px;line-height:16px;letter-spacing:0.16em;text-transform:uppercase;font-weight:500;`;
 
+export const POSTAL_ADDRESS: string | null = null;
+
+export function postalLine(address: string | null = POSTAL_ADDRESS): { html: string; text: string } | null {
+  if (address === null) return null;
+  const line = `Five to Nine, ${address}`;
+  return {
+    html: `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(line)}</p>`,
+    text: line,
+  };
+}
+
 function emailStyle(): string {
   return [
     `<style>`,
@@ -49,13 +61,6 @@ function emailStyle(): string {
     `}`,
     `</style>`,
   ].join("");
-}
-
-const PREHEADER_STYLE =
-  "display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;";
-
-function preheaderHtml(preheader: string): string {
-  return preheader === "" ? "" : `<div style="${PREHEADER_STYLE}">${escapeHtml(preheader)}</div>`;
 }
 
 export function emailDocument(title: string, body: string, preheader = ""): string {

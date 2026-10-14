@@ -33,6 +33,10 @@ describe("emailDocument's html shell (0509#6525)", () => {
 });
 
 describe("emailDocument's preview text", () => {
+  it("pads the preheader so body copy never leaks into the inbox preview", () => {
+    expect(emailDocument("Daily brief", BODY, "Short")).toContain("&zwnj;&nbsp;&#847;");
+  });
+
   it("hides the preheader and escapes it, ahead of the card", () => {
     const doc = emailDocument("Daily brief", BODY, 'Two <moves> & "one" gap');
 
