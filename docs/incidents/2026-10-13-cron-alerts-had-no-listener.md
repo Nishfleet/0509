@@ -45,13 +45,14 @@ Found by the scheduled-run alerting audit on 2026-10-13, not by an alert.
 ## Fix
 
 Each sweep workflow and the nightly cron now also ping Healthchecks.io
-(`app/lib/healthcheck.server.ts`): start, ok or fail, per sweep slug. The check
+(`app/lib/healthcheck.server.ts`): ok or fail, per sweep slug. The check
 is created on first ping, the free tier covers 20 checks, and it emails on a
 missed or failed run. Sentry check-ins stay as they are. With no
 `HEALTHCHECKS_PING_KEY` set, the ping does nothing, so deploys stay safe.
 
 ## What stops a repeat
 
-- Tests pin the ping URL shape, one start and one ok per run, fail but never ok
-  on a throw, and no second start when a workflow replays.
+- Tests pin the ping URL shape, one ok per run, fail but never ok
+  on a throw, and no ping before the sweep ends. There is no start ping: Healthchecks
+  would apply its 1-hour grace to a sweep that may run up to 120 minutes.
 - Remaining gap: the secret itself. Until it is set the pings are off.
