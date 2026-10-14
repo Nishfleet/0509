@@ -4,20 +4,6 @@ import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
 import { accessStatePath, onboardedStatePath } from "../playwright.config";
 import { requireInboxToken, signInWithMagicLink } from "./inbox";
 
-// This setup mints one onboarded session per viewport lane (desktop + phone).
-// It exists because the parent issue (#6026) identifies a repeated magic-link
-// sign-in plus full J3 onboarding that two specs burn to reach a watched
-// competitor page. One shared session per lane replaces both.
-// Each lane signs in its own kept account (FIXTURE_ACCOUNTS.onboardedDesktop,
-// onboardedPhone), which holds a complimentary plan row (migration 0048,
-// #7225): a per-run address stops at /onboarding/plan since #7061, and these
-// specs need /app. The account is onboarded once and kept; later runs land on
-// /app and only make sure nike.com and adidas.com are ON. One address per lane
-// and the live-ai concurrency group keep two runs off one inbox (#6025).
-// Switch ownership: competitor-page.spec.ts owns the nike.com switch; the
-// reduced-motion.spec.ts toggle test owns the adidas.com switch; every other
-// consumer only reads.
-
 const LANES = [
   { lane: "desktop", email: FIXTURE_ACCOUNTS.onboardedDesktop.email },
   { lane: "phone", email: FIXTURE_ACCOUNTS.onboardedPhone.email },
@@ -33,11 +19,6 @@ async function waitForCompetitorsPost(page: Page): Promise<void> {
   expect(response.ok()).toBe(true);
 }
 
-// The kept account watches at most FIXTURE_ACCOUNTS.onboarded<Lane>.maxCompetitors
-// (2): before nike.com or adidas.com goes ON, one other rival goes OFF. The
-// switch flips optimistically, so the count drops before the server has turned
-// the rival off; adding before that write lands races the plan cap check and
-// the add is refused (0509 run 37431944962). Wait for the switch's own POST.
 async function switchOffOneOther(page: Page): Promise<void> {
   const other = page.getByRole("switch", { name: /^(?!Nike|Adidas).* tracking/, checked: true });
   const before = await other.count();
@@ -88,8 +69,6 @@ async function confirmCard(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
 }
 
-// First use, or a run cut short mid-onboarding: /onboarding resumes where the
-// account stopped, the card screen or the competitors screen.
 async function onboard(page: Page): Promise<void> {
   await page.goto("/onboarding");
   if (!new URL(page.url()).pathname.startsWith("/onboarding/competitors")) await confirmCard(page);

@@ -3,12 +3,6 @@ import { expect, test } from "./test";
 
 import { onboardedStatePath } from "../playwright.config";
 
-// Settings measured at each shape the product ships, the same production lane
-// and the same reason as e2e/a11y-alerts.spec.ts: the preview Worker has no
-// EMAIL binding and no inbox to read, so it cannot mint a session, and this
-// spec skips there rather than fake the journey. It reads only: it submits no
-// form, because it runs against production and a visit that wrote data would
-// put a row in a real workspace for a mailbox nobody owns.
 test.use({
   storageState: async ({}, use, testInfo) => {
     await use(

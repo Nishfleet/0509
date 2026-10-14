@@ -2,11 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { offBrandSite, ownHostUrls } from "../../app/lib/site/alternate-sources";
 
-// 0509#6490: app/lib/site/alternate-sources.ts is pure (tldts only), so it runs
-// in the node project. The workers copy under tests/unit/site/ stays where it
-// is; this file is the copy that counts toward the node branch floor. Every
-// branch of the module is pinned here: the three-label map, the null
-// registrable domain that yields no host, and both arms of the own-site check.
 describe("ownHostUrls", () => {
   it("proposes the brand's own news, newsroom and press hosts for a registrable domain", () => {
     expect(ownHostUrls("www.adidas.com")).toEqual([

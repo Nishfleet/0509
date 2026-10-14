@@ -3,16 +3,6 @@ import { expect, test } from "./test";
 
 import { onboardedStatePath } from "../playwright.config";
 
-// The Alerts page measured at each shape the product ships, the same production
-// lane and the same reason as e2e/a11y-competitors.spec.ts and
-// e2e/a11y-onboarding.spec.ts: the preview Worker has no EMAIL binding and no
-// inbox to read, so it cannot mint a session, and this spec skips there rather
-// than fake the journey. It runs in the `e2e-production` job after deploy.
-//
-// The Alerts journey only reads: it clicks no chip and opens no settings form,
-// because it runs against production and a visit that wrote data would put a
-// row in a real workspace for a mailbox nobody owns. It signs in nowhere: it
-// reuses the shared per-run session the `session` project saved.
 test.use({
   storageState: async ({}, use, testInfo) => {
     await use(
@@ -30,10 +20,6 @@ test.skip(
 test("the Alerts page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and 390 in light and dark (#4153)", async ({
   page,
 }, testInfo) => {
-  // Four shapes on the shared session, each a full page load, an axe scan, a
-  // reload, four Tab presses and a screenshot. Playwright's 30s default does
-  // not cover the loop: a production run read it as a timeout at page.reload(),
-  // before the gate.
   test.setTimeout(180_000);
 
   for (const viewport of [
@@ -45,13 +31,6 @@ test("the Alerts page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440
       await page.emulateMedia({ colorScheme });
       await page.goto("/app/alerts");
 
-      // The WCAG 2.2 AA scan: axe-core inside the existing Playwright suite, the
-      // same tag set the onboarding spec scans with, and the violations
-      // attached so a red run names the rule that failed. The gate that reads
-      // this array is the last statement in the shape, after the landmark,
-      // heading and focus asserts, so a page that fails the scan still reports
-      // whether it is operable: one missing rule cannot hide the other half of
-      // what this test claims.
       const results = await new AxeBuilder({ page })
         .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
         .analyze();
@@ -60,25 +39,17 @@ test("the Alerts page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440
         contentType: "application/json",
       });
 
-      // One landmark set: the page's own h1, exactly one `main`, and the
-      // "Places" navigation that carries the four places.
       await expect(page.getByRole("heading", { level: 1, name: "Alerts" })).toBeVisible();
       await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
       await expect(page.getByRole("main")).toHaveCount(1);
       await expect(page.getByRole("navigation", { name: "Primary" })).toBeVisible();
 
-      // Heading order: the first heading is the h1 and no level is skipped, so
-      // the page reads as an outline rather than a flat list of styled text.
       const levels = await page
         .locator("h1, h2, h3, h4, h5, h6")
         .evaluateAll((els) => els.map((el) => Number(el.tagName.slice(1))));
       expect(levels[0]).toBe(1);
       for (let i = 1; i < levels.length; i += 1) expect(levels[i] - levels[i - 1]).toBeLessThanOrEqual(1);
 
-      // Focus order from a fresh load: a reload pins the count from the top of
-      // the document, so Skip to content is first, then the four Places,
-      // before any other content on the page is reachable. The focused
-      // Settings link carries a visible outline.
       await page.reload();
       const order: string[] = [];
       for (let i = 0; i < 5; i += 1) {
@@ -95,9 +66,6 @@ test("the Alerts page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440
         path: test.info().outputPath(`alerts-focus-${String(viewport.width)}-${colorScheme}.png`),
       });
 
-      // The gate, last: zero violations at this shape. It is the same
-      // `toEqual([])` the onboarding spec asserts, on the same array the
-      // attachment above already carries in full.
       expect(results.violations).toEqual([]);
     }
   }

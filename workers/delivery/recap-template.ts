@@ -11,6 +11,16 @@ export interface RecapContext {
 }
 
 const SUBJECT = "What Five to Nine has caught so far";
+const OPEN = "See everything in Alerts";
+const SUBJECT_MAX = 70;
+
+function subjectFor(ctx: RecapContext): string {
+  const noun = ctx.change_count === 1 ? "change" : "changes";
+  const counted = `${String(ctx.change_count)} rival ${noun} caught so far`;
+  if (ctx.latest === null) return counted;
+  const subject = `${counted}, latest: ${ctx.latest.rival}`;
+  return subject.length <= SUBJECT_MAX ? subject : counted;
+}
 
 function lines(ctx: RecapContext): string[] {
   const noun = ctx.change_count === 1 ? "change" : "changes";
@@ -24,18 +34,18 @@ export function renderRecap(ctx: RecapContext): RenderedBrief {
   const body = lines(ctx);
   const footer = renderAlertFooter(ctx.footer);
   return {
-    subject: SUBJECT,
-    text: [SUBJECT, ...body, `See everything: ${ctx.link}`, footer.text].join("\n"),
+    subject: subjectFor(ctx),
+    text: [SUBJECT, ...body, `${OPEN}: ${ctx.link}`, footer.text].join("\n"),
     html: emailDocument(
       SUBJECT,
       [
         `<p class="brief-muted" style="${EYEBROW}">So far</p>`,
         `<p style="${HEADLINE}">${escapeHtml(SUBJECT)}</p>`,
         ...body.map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`),
-        linkParagraph("See everything", ctx.link),
+        linkParagraph(OPEN, ctx.link),
         footer.html,
       ].join(""),
-      body[0],
+      body[1] ?? body[0],
     ),
   };
 }

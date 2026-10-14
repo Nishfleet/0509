@@ -11,18 +11,11 @@ test.afterEach(async ({ page }, testInfo) => {
   createdEmail = "";
 });
 
-// Production only, for the reason e2e/onboarding-input.spec.ts gives: the
-// preview lane's wrangler dev has no EMAIL binding and no inbox to read, so a
-// spec that signs in through the real magic link skips there rather than fakes
-// a session. The three tests below are the WCAG 2.2 AA proof for #4149.
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "the onboarding screens need a signed-in session; the preview lane cannot read the magic-link inbox",
 );
 
-// The end-of-test screenshot is report evidence, not an assertion. Playwright's
-// recorder attaches it and drops a capture that fails instead of failing the
-// test; e2e/reduced-motion.spec.ts has the why.
 test.use({ screenshot: "on" });
 
 test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at both widths (#4149) @own-signin", async ({
