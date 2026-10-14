@@ -68,6 +68,19 @@ function CompetitorFoot(props: {
   );
 }
 
+function OnePager({ data }: { data: Route.ComponentProps["loaderData"] }) {
+  return (
+    <RivalOnePager
+      name={data.competitor.name}
+      domain={data.competitor.domain}
+      pages={data.watch.pages}
+      lastChecked={data.lastChecked}
+      changes={data.changes}
+      moves={data.developments}
+    />
+  );
+}
+
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   const { competitor } = loaderData;
   const fetcher = useFetcher();
@@ -94,14 +107,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         }
       />
       <CompetitorSnapshot cells={loaderData.snapshot} />
-      <RivalOnePager
-        name={competitor.name}
-        domain={competitor.domain}
-        pages={loaderData.watch.pages}
-        lastChecked={loaderData.lastChecked}
-        changes={loaderData.changes}
-        moves={loaderData.developments}
-      />
+      <OnePager data={loaderData} />
       <CompetitorFrame
         changes={loaderData.changes}
         developments={loaderData.developments}
