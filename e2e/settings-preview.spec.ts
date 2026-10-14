@@ -44,6 +44,13 @@ async function signIn(page: Page, baseURL: string | undefined): Promise<void> {
   await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
 }
 
+test("Settings lists where the account is signed in and marks this device", async ({ page, baseURL }) => {
+  await signIn(page, baseURL);
+  const list = page.getByRole("list", { name: "Where you're signed in" });
+  await expect(list).toBeVisible();
+  await expect(list.getByText("This device")).toHaveCount(1);
+});
+
 test("the brief day saves at once and is still there after a reload", async ({ page, baseURL }) => {
   await signIn(page, baseURL);
   const day = page.getByRole("combobox", { name: "Day", exact: true });
