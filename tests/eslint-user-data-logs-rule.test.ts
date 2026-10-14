@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
-// eslint-catch-null-rule.test.ts) and hold both directions: a value named like
-
 const USER_DATA_MESSAGE = "never carry customer data or prompt input";
 
 const PROBE = "app/lib/cadence.ts";

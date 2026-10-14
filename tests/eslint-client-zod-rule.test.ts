@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
-// eslint.config.js, placed on the app/components/** block that restates every
-
 const ZOD_MINI_MESSAGE = "zod/mini";
 
 const PROBE = "app/components/share-button.tsx";

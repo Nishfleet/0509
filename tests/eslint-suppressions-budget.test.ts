@@ -3,8 +3,6 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-// eslint-suppressions.json lists main's pre-existing lean-code violations
-
 const SUPPRESSION_CEILING = 111;
 
 type Suppressions = Record<string, Record<string, { count: number }>>;

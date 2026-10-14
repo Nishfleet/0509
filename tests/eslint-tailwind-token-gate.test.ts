@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
-// eslint.config.js makes it a lint failure (0509#5871). These probes boot the
-
 const PROBE = "app/components/share-button.tsx";
 const UI_PROBE = "app/components/ui/button.tsx";
 

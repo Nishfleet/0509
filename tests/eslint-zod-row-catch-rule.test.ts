@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
-// eslint.config.js, armed on app/lib/data/** only, and it matches the receiver
-
 const ZOD_ROW_CATCH_MESSAGE = "row-parse contract";
 
 const DATA_MODULE = "app/lib/data/entity.server.ts";

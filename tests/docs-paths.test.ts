@@ -8,8 +8,6 @@ import { describe, expect, it } from "vitest";
 const ENTRY_DOCS = ["AGENTS.md", "README.md"] as const;
 const PATH = /`((?:app|docs|workers|tests|e2e|migrations|\.agents)\/[\w./-]+[\w-])`/g;
 
-// eslint-plugin-functional until the violation count is measured. The bullet
-
 const RETIRED = [
   /\bhash-checked\b/,
   /\bFable\b/,

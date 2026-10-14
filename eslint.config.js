@@ -1759,7 +1759,10 @@ export default tseslint.config(
     files: ["e2e/**/*.ts", "tests/**/*.{ts,tsx}"],
     plugins: { "no-comments": noComments },
     rules: {
-      "no-comments/disallowComments": ["error", { allow: ["eslint", "global", "@ts-", "/\\s*<reference"] }],
+      "no-comments/disallowComments": [
+        "error",
+        { allow: ["eslint-(?:disable|enable|env)", "global ", "@ts-", "/\\s*<reference"] },
+      ],
       "no-inline-comments": "error",
       "no-warning-comments": ["error", { terms: WORKAROUND_TERMS, location: "anywhere" }],
     },

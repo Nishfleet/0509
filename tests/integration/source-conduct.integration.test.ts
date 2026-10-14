@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
-describe("collection conduct on every source row (#5147, P10.5a)", () => {
+describe("collection conduct on every source row (#5147, P10.5a, docs/engines/guardrails.md)", () => {
   it("leaves no source row without a robots policy", async () => {
     const missing = await env.DB.prepare(
       "SELECT key FROM source WHERE json_extract(config_json, '$.robots') IS NULL",

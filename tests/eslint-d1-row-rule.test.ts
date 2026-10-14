@@ -5,8 +5,6 @@ import { describe, expect, it } from "vitest";
 
 import { REPO_ROOT, lintTextAt } from "./eslint-lint-text";
 
-// eslint.config.js (0509#7266). These probes boot the real eslint.config.js
-
 const D1_ROW_MESSAGE = "0509#7031";
 const NO_USER_DATA_MESSAGE = "Logs and Sentry never carry customer data";
 

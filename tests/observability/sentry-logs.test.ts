@@ -266,8 +266,6 @@ describe("Sentry Logs (#6604)", () => {
   });
 
   it("keeps the #5786 gate firing on the log path a console line takes", { timeout: 60_000 }, async () => {
-    // eslint applies the gate through the `app/**` block, so the probe has to
-
     const scratch = await mkdtemp(path.join(REPO_ROOT, "app", "sentry-logs-probe-"));
     const probe = path.join(scratch, "probe.ts");
     await writeFile(probe, "declare const subject: { registrable: string };\nconsole.log(subject.registrable);\n");

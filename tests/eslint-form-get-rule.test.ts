@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
-// eslint.config.js, which reads the receiver's TypeScript type. Identifier
-
 const FORM_GET_MESSAGE = "formData.get by hand";
 
 const HAND_GET = `export function readField(formData: FormData): unknown {

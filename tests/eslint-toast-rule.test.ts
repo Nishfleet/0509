@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
-// eslint.config.js lints the changed file itself on the PR. These probes boot
-
 const TOAST_MESSAGE = "toast() is called in exactly one module";
 
 const PROBE = "app/components/share-button.tsx";

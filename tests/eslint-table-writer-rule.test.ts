@@ -10,8 +10,6 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const DATA_DIR = path.join(REPO_ROOT, "app/lib/data");
 const FOREIGN_MESSAGE = "Foreign-table write";
 
-// eslint.config.js at run time, so the survival test checks the real ones and
-
 interface ConfigModule {
   default: Linter.Config[];
   TABLE_WRITER_BLOCKS: Linter.Config[];

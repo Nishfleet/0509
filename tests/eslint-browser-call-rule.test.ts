@@ -2,10 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
-// eslint.config.js makes a new unbounded call site red instead of a review
-
-// eslint-fetch-rule.test.ts.
-
 const BROWSER_MESSAGE = "Browser Rendering calls go through app/lib/site/browser-budget.server.ts";
 
 const BARE_CALL = `import { env } from "cloudflare:workers";
