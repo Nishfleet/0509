@@ -38,10 +38,13 @@ export function isFirstRanking(payload: BriefPayload): boolean {
   );
 }
 
+const GENERIC_SUBJECT = "Your weekly brief";
+
 export function briefSubject(payload: BriefPayload, unjudgedLine: string): string {
   if (payload.is_unjudged) return unjudgedLine;
   const lead = payload.read_this_first[0];
   if (lead !== undefined) return moveSubject(lead, payload.read_this_first.length);
+  if (!payload.is_quiet_week) return GENERIC_SUBJECT;
   const { headline_rank: rank, headline_total: total } = payload;
   if (rank === null || total < 2) return "Quiet week: nothing needed your attention";
   if (isFirstRanking(payload)) return `Your first ranking: you're #${rank.toFixed(0)} of ${total.toFixed(0)}`;

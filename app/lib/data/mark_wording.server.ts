@@ -7,12 +7,14 @@ const SELECT_DIFF_KEYS = `SELECT s.id AS id, json_extract(s.payload_json, '$.dif
 FROM signal s
 WHERE s.workspace_id = ?1 AND s.kind = 'change' AND json_valid(s.payload_json) AND s.id IN (SELECT value FROM json_each(?2))`;
 
+const MAX_DIFF_BYTES = 512 * 1024;
+
 const diffKeyRows = z.array(z.object({ id: z.string(), diff_key: z.string().nullable() }));
 
 async function readMark(signalId: string, diffKey: string): Promise<[string, ChangeMark] | null> {
   try {
     const stored = await env.SNAPSHOTS.get(diffKey);
-    const hunks = stored === null ? null : parseDiffHunks(await stored.text());
+    const hunks = stored === null || stored.size > MAX_DIFF_BYTES ? null : parseDiffHunks(await stored.text());
     const mark = hunks === null ? null : markFromHunks(hunks);
     return mark === null ? null : [signalId, mark];
   } catch (error) {

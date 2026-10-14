@@ -709,6 +709,11 @@ describe("the subject line", () => {
     );
   });
 
+  it("does not call a week quiet when other activity filled it", () => {
+    const busy = payload({ read_this_first: [], is_quiet_week: false });
+    expect(renderBrief(busy, CONTEXT).subject).toBe("Your weekly brief");
+  });
+
   it("calls the first brief a first ranking, not a quiet week, and drops 'no last week' from every line", () => {
     const base = payload({ read_this_first: [], is_quiet_week: true, headline_movement: null, headline_is_new: false });
     const first = {
