@@ -47,6 +47,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           <AccountSection
             email={loaderData.email}
             delivery={loaderData.delivery}
+            teammates={loaderData.teammates}
             passkeys={loaderData.passkeys}
             result={actionData}
           />

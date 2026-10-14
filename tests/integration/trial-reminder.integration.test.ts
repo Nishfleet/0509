@@ -71,6 +71,20 @@ describe("trial ending reminder", () => {
     expect(sent[0]?.text).toContain("€46 a month");
   });
 
+  it("reminds the owner, never an older confirmed teammate", async () => {
+    await env.DB.prepare(
+      `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at, role)
+       VALUES ('mate-old', ?, 'chan-email', 'mate@0509.io', 1, '2000-01-01T00:00:00Z', 'teammate')`,
+    )
+      .bind(WS)
+      .run();
+    await seedPlan({ status: "active", trialing: 1, periodEnd: IN_36_HOURS });
+    const sent: EmailMessageBuilder[] = [];
+
+    expect(await sendTrialReminders(envWith(sent), NOW, isTester)).toBe(1);
+    expect(sent.map((mail) => mail.to)).toEqual([TARGET]);
+  });
+
   it.each([
     ["a trial more than two days away", { status: "active", trialing: 1, periodEnd: "2026-10-17T00:00:00.000Z" }],
     ["a customer who already paid", { status: "active", trialing: 0, periodEnd: IN_36_HOURS }],

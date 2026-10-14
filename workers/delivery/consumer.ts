@@ -1,3 +1,4 @@
+import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { isWorkspacePaid } from "../../app/lib/billing/entitlements";
 import { markDigestSentStatement } from "../../app/lib/data/digest.server";
 import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
@@ -9,7 +10,7 @@ import {
   readUnrecordedSend,
   resolveSendAttempt,
 } from "../../app/lib/data/send_attempt.server";
-import { readSlackTarget, writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
+import { readConfirmedTeammates, readSlackTarget, writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
 import { insertSignalDeliveries } from "../../app/lib/data/signal_delivery.server";
 import { localDay, startOfLocalDay } from "../../app/lib/alert-day";
 import { canonicalTimezone } from "../../app/lib/timezone";
@@ -46,6 +47,7 @@ interface MessageRow {
   kind: string;
   subject: string | null;
   payload_json: string;
+  status: string;
 }
 
 interface TargetRow {
@@ -97,7 +99,7 @@ export const CHANGE_DAILY_CAP = 5;
 
 async function readDigest(env: Env, digestId: string): Promise<MessageRow | null> {
   return env.DB.prepare(
-    `SELECT id, workspace_id, kind, subject, payload_json
+    `SELECT id, workspace_id, kind, subject, payload_json, status
        FROM digest
       WHERE id = ? AND status <> 'failed'`,
   )
@@ -147,7 +149,7 @@ async function readTarget(env: Env, workspaceId: string): Promise<TargetRow | nu
     `SELECT st.id, st.workspace_id, st.channel_id, st.target_value, st.unsubscribe_token
        FROM send_target st
        JOIN channel c ON c.id = st.channel_id
-      WHERE st.workspace_id = ? AND c.key = ? AND c.is_enabled = 1 AND st.is_verified = 1
+      WHERE st.workspace_id = ? AND c.key = ? AND c.is_enabled = 1 AND st.is_verified = 1 AND st.role = 'owner'
       ORDER BY st.created_at ASC
       LIMIT 1`,
   )
@@ -166,7 +168,7 @@ async function noTarget(
     `SELECT st.is_verified, c.is_enabled
        FROM send_target st
        JOIN channel c ON c.id = st.channel_id
-      WHERE st.workspace_id = ? AND c.key = ?
+      WHERE st.workspace_id = ? AND c.key = ? AND st.role = 'owner'
       ORDER BY st.created_at ASC
       LIMIT 1`,
   )
@@ -255,7 +257,7 @@ async function sendAndResolve(env: Env, input: SendAndResolveInput): Promise<Del
   }
 }
 
-export async function deliver(env: Env, message: DigestMessage): Promise<DeliveryResult> {
+async function deliverToOwner(env: Env, message: DigestMessage): Promise<DeliveryResult> {
   const digest = await readDigest(env, message.digest_id);
   if (!digest) {
     return { outcome: "no_digest", attempt_id: null, idempotency_key: null };
@@ -294,6 +296,46 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
     },
     onSent: () => recordBriefSent(env, { digest, target, attemptId: claim.id }),
   });
+}
+
+async function sendToTeammate(env: Env, digest: MessageRow, mate: TargetRow): Promise<void> {
+  if (await isAddressSuppressed(mate.target_value, env.DB)) return;
+  const idempotencyKey = `digest:${digest.id}:${mate.id}`;
+  const claim = await claimSendAttempt(env.DB, {
+    idempotencyKey,
+    workspaceId: digest.workspace_id,
+    targetId: mate.id,
+    digestId: digest.id,
+  });
+  if (!claim) return;
+  await sendAndResolve(env, {
+    claimId: claim.id,
+    idempotencyKey,
+    send: async () => {
+      const token = await ensureUnsubscribeToken(env, mate);
+      return sendMessage(env.EMAIL, render(digest, mate.target_value, token));
+    },
+  });
+}
+
+async function sendToTeammates(env: Env, digestId: string): Promise<void> {
+  const digest = await readDigest(env, digestId);
+  if (digest?.status !== "sent" || digest.kind !== "weekly") return;
+  for (const mate of await readConfirmedTeammates(env.DB, digest.workspace_id)) {
+    await sendToTeammate(env, digest, mate).catch((cause: unknown) => {
+      console.error(JSON.stringify({ event: "delivery.teammate_failed", error: redactEmailShaped(errorText(cause)) }));
+    });
+  }
+}
+
+export async function deliver(env: Env, message: DigestMessage): Promise<DeliveryResult> {
+  const result = await deliverToOwner(env, message);
+  if (result.outcome === "sent" || result.outcome === "duplicate") {
+    await sendToTeammates(env, message.digest_id).catch((cause: unknown) => {
+      console.error(JSON.stringify({ event: "delivery.teammates_failed", error: redactEmailShaped(errorText(cause)) }));
+    });
+  }
+  return result;
 }
 
 async function resumeSent(
