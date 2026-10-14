@@ -4,7 +4,7 @@ import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { isWorkspacePaid } from "../../app/lib/billing/subscription-state";
 import { markDigestSentStatement } from "../../app/lib/data/digest.server";
 import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
-import type { MailKind } from "../../app/lib/mail-kind";
+import type { SuppressionScope } from "../../app/lib/mail-kind";
 import { claimIncidentNotice, incidentWasAnnounced } from "../../app/lib/data/incident_notice.server";
 import { readEntitlements } from "../../app/lib/data/plan.server";
 import {
@@ -227,8 +227,8 @@ export async function ensureUnsubscribeToken(
 
 const UNSUBSCRIBE_BASE_URL = "https://0509.io/u/";
 
-export function unsubscribeUrlFor(token: string, kind: MailKind): string {
-  return `${UNSUBSCRIBE_BASE_URL}${token}?type=${kind}`;
+export function unsubscribeUrlFor(token: string, scope: SuppressionScope): string {
+  return `${UNSUBSCRIBE_BASE_URL}${token}?type=${scope}`;
 }
 
 function briefOf(message: MessageRow): BriefPayload {
