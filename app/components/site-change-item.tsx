@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import type { SiteChangeView } from "../lib/site-change";
 import { ChangeFeedback } from "./change-feedback";
 import { CapturePlate } from "./capture-plate";
+import { CopyChangeButton } from "./copy-change-button";
 import { Mark } from "./mark";
 import type { MarkSize } from "./mark";
 import { WhyFlaggedSheet } from "./why-flagged";
@@ -63,6 +64,7 @@ export function SiteChangeItem({
       <time dateTime={change.observedAt} className={WHEN_CLASS}>
         {change.when}
       </time>
+      <CopyChangeButton change={change} />
       {change.whyFlagged === null ? null : (
         <div className="mt-3">
           <WhyFlaggedSheet why={change.whyFlagged} />
