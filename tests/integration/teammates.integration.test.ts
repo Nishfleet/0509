@@ -1,6 +1,8 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { isTeammateUnsubscribeToken, suppressByUnsubscribeToken } from "../../app/lib/data/email_suppression.server";
+import { takeRecipientSlot } from "../../app/lib/recipient-cap.server";
 import { clearRecipientCap } from "./clear-recipient-cap";
 
 import {
@@ -13,7 +15,7 @@ import {
 } from "../../app/lib/data/send_target.server";
 import { readDeliveryAddress, saveDeliveryAddress } from "../../app/lib/delivery-address.server";
 import { addTeammateByOwner, readTeammates, removeTeammateByOwner } from "../../app/lib/teammates.server";
-import { confirmDeliveryAddress } from "../../app/lib/verify-delivery-address.server";
+import { confirmDeliveryAddress, readConfirmRole } from "../../app/lib/verify-delivery-address.server";
 import { ensureWorkspaceForSignIn, firstWorkspaceId } from "../../app/lib/workspace.server";
 
 let USER_ID = "user-mates";
@@ -66,12 +68,43 @@ describe("teammates on the brief", () => {
 
     expect(sentMail).toHaveLength(1);
     expect(sentMail[0].to).toBe("mate@0509.io");
-    expect(sentMail[0].subject).toContain(SIGN_IN_EMAIL);
+    expect(sentMail[0].subject).toBe("A colleague wants to send you the Five to Nine brief");
+    expect(sentMail[0].text).not.toContain(SIGN_IN_EMAIL);
     expect(await readTeammates(workspaceId)).toMatchObject([{ address: "mate@0509.io", confirmed: false }]);
 
-    await confirmDeliveryAddress(emailedToken());
+    const token = emailedToken();
+    expect(await readConfirmRole(token)).toBe("teammate");
+    await confirmDeliveryAddress(token);
 
+    expect(await readConfirmRole(token)).toBeNull();
     expect(await readTeammates(workspaceId)).toMatchObject([{ address: "mate@0509.io", confirmed: true }]);
+  });
+
+  it("stops a removed teammate's invitation link working at once", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    await add("gone@0509.io");
+    const token = emailedToken();
+    const [mate] = await readTeammates(workspaceId);
+    await removeTeammateByOwner(USER_ID, mate.id);
+
+    expect(await readConfirmRole(token)).toBeNull();
+    expect(await confirmDeliveryAddress(token)).toBe(false);
+    expect(await readTeammates(workspaceId)).toEqual([]);
+  });
+
+  it("names the owner's brand in the invitation, never their sign-in address", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, name, created_at) VALUES ('ent-self-mates', ?, 'self', 'acme.example', 'Acme', ?)`,
+    )
+      .bind(workspaceId, NOW)
+      .run();
+
+    expect(await add("brand@0509.io")).toBeNull();
+
+    expect(sentMail[0].subject).toBe("Acme wants to send you the Five to Nine brief");
+    expect(sentMail[0].text).toContain("Acme added brand@0509.io");
+    expect(`${sentMail[0].subject}${sentMail[0].text}${sentMail[0].html}`).not.toContain(SIGN_IN_EMAIL);
   });
 
   it("leaves the owner's own delivery address alone", async () => {
@@ -83,6 +116,13 @@ describe("teammates on the brief", () => {
     expect(await readDeliveryAddress(USER_ID, SIGN_IN_EMAIL)).toEqual({ address: SIGN_IN_EMAIL, verified: true });
   });
 
+  it("refuses the owner's own sign-in address in any case, and sends nothing", async () => {
+    expect(await add(SIGN_IN_EMAIL)).toMatch(/We can't add that address/);
+    expect(await add(SIGN_IN_EMAIL.toUpperCase())).toMatch(/We can't add that address/);
+    expect(sentMail).toHaveLength(0);
+    expect(await readTeammates(firstWorkspaceId(USER_ID))).toEqual([]);
+  });
+
   it("allows two teammates and each address once, and refuses the owner's own address", async () => {
     expect(await add("a@0509.io")).toBeNull();
     expect(await add("A@0509.io")).toMatch(/up to 2 teammates/);
@@ -92,25 +132,19 @@ describe("teammates on the brief", () => {
     expect(sentMail).toHaveLength(2);
   });
 
-  it("stops mailing one address after three invitations in a day, however often it is removed and added again", async () => {
-    for (let round = 0; round < 3; round += 1) {
-      expect(await add("loop@0509.io")).toBeNull();
-      await env.DB.exec("DELETE FROM send_target WHERE role = 'teammate'");
-    }
+  it("stops inviting one address once it has had three emails from us in a day", async () => {
+    for (let round = 0; round < 3; round += 1) expect(await takeRecipientSlot("loop@0509.io")).toBe(true);
 
     expect(await add("loop@0509.io")).toMatch(/several emails/);
-    expect(sentMail).toHaveLength(3);
+    expect(sentMail).toHaveLength(0);
     expect(await add("other@0509.io")).toBeNull();
   });
 
-  it("refuses an address we cannot mail, and a malformed one, and sends nothing", async () => {
+  it("refuses a malformed address and sends nothing", async () => {
     await env.DB.prepare("INSERT INTO email_suppression (address, reason, created_at) VALUES (?, 'unsubscribed', ?)")
       .bind("gone@0509.io", NOW)
       .run();
 
-    const refusal = await add(SIGN_IN_EMAIL);
-    expect(await add("gone@0509.io")).toBe(refusal);
-    expect(refusal).toMatch(/We can't add that address/);
     for (const bad of ["not an address", "a,b@0509.io", "a b@0509.io", "a@localhost", "a@@0509.io"]) {
       expect(await add(bad)).toMatch(/Enter an email address/);
     }
@@ -157,6 +191,73 @@ describe("teammates on the brief", () => {
 
     expect(result.error).toMatch(/already gets the brief as a teammate/);
     expect(await readDeliveryAddress(USER_ID, SIGN_IN_EMAIL)).toEqual({ address: SIGN_IN_EMAIL, verified: true });
+  });
+
+  it("stops sending invitations after a few a day, even when each one is removed again", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    for (let sent = 0; sent < 4; sent += 1) {
+      expect(await add(`loop${String(sent)}@0509.io`)).toBeNull();
+      const [mate] = await readTeammates(workspaceId);
+      await removeTeammateByOwner(USER_ID, mate.id);
+    }
+
+    expect(await add("loop4@0509.io")).toMatch(/lot of invitations today/);
+    expect(sentMail).toHaveLength(4);
+  });
+
+  it("does not use up a slot when the invitation fails to send", async () => {
+    const broken: SendEmail = { send: () => Promise.reject(new Error("down")) };
+    const failed = await addTeammateByOwner({
+      userId: USER_ID,
+      signInEmail: SIGN_IN_EMAIL,
+      address: "retry@0509.io",
+      email: broken,
+    });
+    expect(failed).not.toBeNull();
+    const [mate] = await readTeammates(firstWorkspaceId(USER_ID));
+    await removeTeammateByOwner(USER_ID, mate.id);
+
+    expect(await add("retry@0509.io")).toBeNull();
+    expect(sentMail).toHaveLength(1);
+  });
+
+  it("accepts an unsubscribed address like any other but sends it no invitation, so it cannot be probed", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    await env.DB.prepare("INSERT INTO email_suppression (address, reason, created_at) VALUES (?, 'unsubscribed', ?)")
+      .bind("quiet@0509.io", NOW)
+      .run();
+
+    expect(await add("quiet@0509.io")).toBeNull();
+    expect(await add("fresh@0509.io")).toBeNull();
+
+    expect(sentMail.map((mail) => mail.to)).toEqual(["fresh@0509.io"]);
+    expect(await readTeammates(workspaceId)).toEqual([
+      expect.objectContaining({ address: "quiet@0509.io", confirmed: false, unsubscribed: false }),
+      expect.objectContaining({ address: "fresh@0509.io", confirmed: false, unsubscribed: false }),
+    ]);
+  });
+
+  it("shows a teammate who unsubscribed, and tells their link apart from the owner's", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    await add("mate@0509.io");
+    await confirmDeliveryAddress(emailedToken());
+    await env.DB.prepare(
+      "UPDATE send_target SET unsubscribe_token = 'mate-token' WHERE workspace_id = ? AND role = 'teammate'",
+    )
+      .bind(workspaceId)
+      .run();
+    await env.DB.prepare(
+      "UPDATE send_target SET unsubscribe_token = 'owner-token' WHERE workspace_id = ? AND role = 'owner'",
+    )
+      .bind(workspaceId)
+      .run();
+
+    expect((await readTeammates(workspaceId))[0]?.unsubscribed).toBe(false);
+    await suppressByUnsubscribeToken("mate-token");
+
+    expect((await readTeammates(workspaceId))[0]?.unsubscribed).toBe(true);
+    expect(await isTeammateUnsubscribeToken("mate-token")).toBe(true);
+    expect(await isTeammateUnsubscribeToken("owner-token")).toBe(false);
   });
 
   it("removes a teammate, but never the owner's row", async () => {

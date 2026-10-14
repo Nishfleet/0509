@@ -7,9 +7,7 @@ test.afterEach(async ({ page }, testInfo) => {
   if (createdEmail === "") return;
   testInfo.setTimeout(testInfo.timeout + 60_000);
   await page.clock.resume();
-  // The delete failing is a test failure, not a reason to keep the address:
-  // clearing in finally means the next test in this worker cannot try to
-  // delete an account that is already gone.
+
   try {
     await deleteCreatedAccount(page, createdEmail);
   } finally {
@@ -17,9 +15,6 @@ test.afterEach(async ({ page }, testInfo) => {
   }
 });
 
-// #4148: the /login screens expose the three landmarks, the Tab order reaches
-// every action, the sent state moves focus to its heading, and the resend wait
-// is announced once, not every second.
 test("/login keyboard path, landmarks and the sent-state announcement (#4148) @own-signin", async ({ page }) => {
   await page.clock.install();
   await page.goto("/login");

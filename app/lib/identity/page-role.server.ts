@@ -67,7 +67,7 @@ async function judgeStale(
   workspaceId: string,
   domain: string,
   stale: readonly Target[],
-): Promise<(Target & { verdict: ChoiceVerdict })[]> {
+): Promise<{ judged: (Target & { verdict: ChoiceVerdict })[]; refusal: Error }> {
   const settled = await askChoices(
     workspaceId,
     PAGE_ROLE,
@@ -79,7 +79,8 @@ async function judgeStale(
   });
   const refusal = settled.find((result) => result.status === "rejected");
   if (judged.length === 0 && refusal?.status === "rejected") throw refusal.reason;
-  return judged;
+  const reason: unknown = refusal?.status === "rejected" ? refusal.reason : null;
+  return { judged, refusal: reason instanceof Error ? reason : new Error("page_role left pages unanswered") };
 }
 
 export async function classifyNavPages({
@@ -97,7 +98,7 @@ export async function classifyNavPages({
   const stale = targets.filter((target) => hashes.get(target.page.url) !== target.hash);
   if (stale.length === 0) return [];
 
-  const judged = await judgeStale(workspaceId, entity.domain, stale);
+  const { judged, refusal } = await judgeStale(workspaceId, entity.domain, stale);
   const verdicts = judged.map((entry) => entry.verdict);
 
   const rows: JudgedPage[] = judged.map(({ page, hash, verdict }) => ({
@@ -130,5 +131,6 @@ export async function classifyNavPages({
 
   await insertVerdicts(verdictRows);
   await upsertJudgedPages(rows);
+  if (judged.length < stale.length) throw refusal;
   return rows;
 }
