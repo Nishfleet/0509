@@ -111,6 +111,11 @@ describe("the mount and the skin", () => {
     });
   });
 
+  it("draws the toast without a shadow, as DESIGN.md section 3 requires", () => {
+    renderToStaticMarkup(createElement(Toaster));
+    expect(toasterProps.current?.toastOptions?.style).toMatchObject({ boxShadow: "none" });
+  });
+
   it("styles from tokens that are actually declared in app.css", async () => {
     const css = await readFile(path.join(REPO_ROOT, "app", "app.css"), "utf8");
     for (const token of ["--card", "--ink", "--line", "--font-sans"]) {
