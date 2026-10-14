@@ -83,8 +83,8 @@ export function ErrorBoundary({ error, loaderData }: Route.ErrorBoundaryProps) {
     <ErrorPage
       title={copy.title}
       detail={copy.detail}
-      actionHref={signedIn ? "/app" : "/"}
-      actionLabel="Back to home"
+      actionHref={copy.action?.href ?? (signedIn ? "/app" : "/")}
+      actionLabel={copy.action?.label ?? "Back to home"}
       retry={copy.retry}
     />
   );

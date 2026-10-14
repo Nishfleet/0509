@@ -1,6 +1,8 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { clearRecipientCap } from "./clear-recipient-cap";
+
 import {
   changeEmailTarget,
   ensureOwnerEmailTarget,
@@ -38,6 +40,7 @@ const emailedToken = (): string => {
 
 describe("teammates on the brief", () => {
   beforeEach(async () => {
+    await clearRecipientCap();
     USER_ID = `user-mates-${crypto.randomUUID()}`;
     sentMail.length = 0;
     await env.DB.exec("DELETE FROM email_suppression");
@@ -87,6 +90,17 @@ describe("teammates on the brief", () => {
     expect(await add("b@0509.io")).toBeNull();
     expect(await add("c@0509.io")).toMatch(/up to 2 teammates/);
     expect(sentMail).toHaveLength(2);
+  });
+
+  it("stops mailing one address after three invitations in a day, however often it is removed and added again", async () => {
+    for (let round = 0; round < 3; round += 1) {
+      expect(await add("loop@0509.io")).toBeNull();
+      await env.DB.exec("DELETE FROM send_target WHERE role = 'teammate'");
+    }
+
+    expect(await add("loop@0509.io")).toMatch(/several emails/);
+    expect(sentMail).toHaveLength(3);
+    expect(await add("other@0509.io")).toBeNull();
   });
 
   it("refuses an address we cannot mail, and a malformed one, and sends nothing", async () => {

@@ -154,7 +154,7 @@ async function readProfileCard(
     return { card, reached: true };
   } catch (error) {
     const subjectSha256 = await sha256Hex(subject.registrable);
-    console.log(
+    console.warn(
       JSON.stringify({
         event: unreachedEvent("creator", error),
         probe,
@@ -181,7 +181,7 @@ export async function readSiteCard(
     };
   } catch (error) {
     const subjectSha256 = await sha256Hex(subject.registrable);
-    console.log(
+    console.warn(
       JSON.stringify({
         event: unreachedEvent("site", error),
         reason: probeFailureReason(error),
@@ -310,7 +310,7 @@ export function startCard(
   const logo = read
     .then(({ card, reached }) => (reached ? logoDataUrl(subject, card) : null))
     .catch((error: unknown) => {
-      console.log(JSON.stringify({ event: "identity-logo-failed", workspaceId, error: String(error) }));
+      console.warn(JSON.stringify({ event: "identity-logo-failed", workspaceId, error: String(error) }));
       return null;
     });
   const settled = unbounded.then(

@@ -60,7 +60,7 @@ export function ShareButton(): ReactElement {
       ) : null}
       {state === "failed" ? (
         <p role="alert" className="mt-2 text-[0.95rem]">
-          We could not make the picture. Try again in a minute.
+          We couldn't make the picture. Try again in a minute.
         </p>
       ) : null}
     </div>
