@@ -35,7 +35,7 @@ ON CONFLICT(workspace_id) DO UPDATE SET
   current_period_end = excluded.current_period_end,
   trialing = excluded.trialing,
   updated_at = excluded.updated_at
-WHERE ? = 1 OR excluded.updated_at >= plan.updated_at`;
+WHERE (? = 1 OR excluded.updated_at >= plan.updated_at) AND (? IS NULL OR plan.updated_at = ?)`;
 
 async function readPlan(workspaceId: string, db: D1Database = env.DB): Promise<{ tier: string; row: PlanRow | null }> {
   const row = planRow.nullable().parse(await db.prepare(SELECT_PLAN).bind(workspaceId).first());
@@ -179,6 +179,7 @@ export async function readPlanSubscription(workspaceId: string): Promise<PlanSub
 export interface SubscriptionPlan {
   workspaceId: string;
   replace?: boolean;
+  expectedUpdatedAt?: string;
   tier: PlanId;
   status: string;
   customerId: string;
@@ -218,6 +219,27 @@ export async function upsertSubscriptionPlan(input: SubscriptionPlan): Promise<v
       input.updatedAt,
       input.workspaceId,
       input.replace === true ? 1 : 0,
+      input.expectedUpdatedAt ?? null,
+      input.expectedUpdatedAt ?? null,
     )
     .run();
+}
+
+const reconcilablePlanRow = z.object({ provider_subscription_id: z.string() });
+
+const SELECT_RECONCILABLE = `SELECT provider_subscription_id FROM plan
+WHERE provider_subscription_id IS NOT NULL
+  AND (status IN ('pending', 'trialing', 'active', 'past_due', 'on_hold', 'failed')
+    OR (status IN ('cancelled', 'expired') AND updated_at >= ?2))
+ORDER BY random() LIMIT ?1`;
+
+export async function readReconcilablePlans(
+  limit: number,
+  endedSince: string,
+): Promise<readonly { subscriptionId: string }[]> {
+  const rows = await env.DB.prepare(SELECT_RECONCILABLE).bind(limit, endedSince).all();
+  return reconcilablePlanRow
+    .array()
+    .parse(rows.results)
+    .map((row) => ({ subscriptionId: row.provider_subscription_id }));
 }

@@ -19,7 +19,7 @@ function watching(ctx: WelcomeContext): string {
     return "Add the rivals you want to keep an eye on and we'll start reading their sites straight away.";
   const more = ctx.rival_count - ctx.rivals.length;
   const names = ctx.rivals.join(", ") + (more > 0 ? ` and ${String(more)} more` : "");
-  return `We're watching ${names}. We read their sites when you joined, so anything that changes from here shows up as a before and after.`;
+  return `We're watching ${names}. We're reading their sites now, so anything that changes from here shows up as a before and after.`;
 }
 
 function copy(ctx: WelcomeContext) {
@@ -29,7 +29,11 @@ function copy(ctx: WelcomeContext) {
       : `Your first ranking arrives with your weekly brief on ${formatDate(ctx.first_brief_at, ctx.timezone, false)}.`;
   return {
     subject: "Welcome to Five to Nine",
-    lines: [watching(ctx), "Big moves email you the same day. Everything else waits for the brief.", brief],
+    lines: [
+      watching(ctx),
+      "Pricing changes and site breakages email you the same day. Everything else waits for the brief.",
+      brief,
+    ],
   };
 }
 
@@ -45,7 +49,7 @@ export function renderWelcome(ctx: WelcomeContext): RenderedBrief {
         `<p class="brief-muted" style="${EYEBROW}">You're in</p>`,
         `<p style="${HEADLINE}">${escapeHtml(subject)}</p>`,
         ...lines.map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`),
-        `<p style="${BODY}">See what changed: <a class="brief-ink" href="${href}">${href}</a></p>`,
+        `<p style="${BODY}"><a class="brief-ink" href="${href}">See what changed</a></p>`,
       ].join(""),
       lines[0],
     ),
