@@ -428,7 +428,7 @@ async function mixedHashes(workspaceId: string, questions: MixedQuestions, state
 async function sharedAnswer<T>(hash: string | undefined, read: (hash: string) => Promise<T | null>): Promise<T | null> {
   if (hash === undefined) return null;
   const found = await read(hash);
-  await noteSharedOutcome("verdict", found === null ? "no_match" : "hit", new Date().toISOString());
+  noteSharedOutcome("verdict", found === null ? "no_match" : "hit");
   return found;
 }
 

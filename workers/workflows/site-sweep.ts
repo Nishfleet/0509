@@ -6,7 +6,6 @@ import { recordSweepRun } from "../../app/lib/data/sweep_run.server";
 import { pingLiveness } from "../../app/lib/liveness-ping.server";
 import { classifyCompetitorSites } from "../../app/lib/site/classify-competitors.server";
 import { rejudgeUnjudgedChanges } from "../../app/lib/site/judge.server";
-import { logSharedChecks } from "../../app/lib/shared-checks.server";
 import { sweepRunReason, type SweepStepFailure } from "../../app/lib/site/sweep-run-reason";
 import {
   CHUNK_SIZE,
@@ -232,7 +231,6 @@ export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: 
     };
     console.log(JSON.stringify({ event: "site.sweep", ...summary }));
     await step.do("report", RETRY, async () => {
-      await logSharedChecks(tick.plannedAt);
       await pingLiveness(this.env.SITE_SWEEP_PING_URL);
       return null;
     });

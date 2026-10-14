@@ -1,9 +1,8 @@
 import { env } from "cloudflare:test";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { computeBreakageEvidence } from "../../../app/lib/site/breakage-evidence";
 import { askMixed } from "../../../app/lib/jev/client.server";
-import { summarizeSharedChecks } from "../../../app/lib/shared-checks.server";
 import { D3_KIND, D3_NOTEWORTHY, judgeChange } from "../../../app/lib/site/judge.server";
 
 const NOW = new Date().toISOString();
@@ -19,6 +18,13 @@ function installJev(): void {
       }
       return Promise.resolve({ answers });
     },
+  });
+}
+
+function sharedOutcomes(log: { mock: { calls: unknown[][] } }): string[] {
+  return log.mock.calls.flatMap(([line]) => {
+    const parsed = JSON.parse(String(line)) as { event?: string; kind?: string; result?: string };
+    return parsed.event === "site.shared_check" ? [`${parsed.kind ?? ""}:${parsed.result ?? ""}`] : [];
   });
 }
 
@@ -69,8 +75,6 @@ describe("the same public change judged for two workspaces", () => {
     await env.DB.exec('DELETE FROM "user"');
     calls.count = 0;
     Reflect.set(env, "SHARED_RIVAL_CHECKS", "on");
-    const noted = await env.IDENTITY_CACHE.list({ prefix: "shared-stats:" });
-    await Promise.all(noted.keys.map((key) => env.IDENTITY_CACHE.delete(key.name)));
     installJev();
     await seedWorkspace("ws-a", "self-a", "rival-a");
     await seedWorkspace("ws-b", "self-b", "rival-b");
@@ -78,6 +82,7 @@ describe("the same public change judged for two workspaces", () => {
 
   afterEach(() => {
     Reflect.deleteProperty(env, "AI");
+    vi.restoreAllMocks();
     Reflect.set(env, "SHARED_RIVAL_CHECKS", "on");
   });
 
@@ -148,6 +153,7 @@ describe("the same public change judged for two workspaces", () => {
     "asks for each workspace and stores no shared key unless the switch is on (%j)",
     async (value) => {
       Reflect.set(env, "SHARED_RIVAL_CHECKS", value);
+      const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
       await judgeFor("ws-a", "rival-a", false);
       await judgeFor("ws-b", "rival-b", false);
       expect(calls.count).toBe(2);
@@ -155,22 +161,20 @@ describe("the same public change judged for two workspaces", () => {
         n: number;
       }>();
       expect(shared?.n).toBe(0);
-      expect(await summarizeSharedChecks(NOW)).toMatchObject({ enabled: false, verdictHits: 0, verdictMisses: {} });
+      expect(sharedOutcomes(log)).toEqual([]);
     },
   );
 
-  it("counts the shared answers it found and the ones it did not", async () => {
+  it("logs the shared answers it found and the ones it did not", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     await judgeFor("ws-a", "rival-a", false);
     await judgeFor("ws-b", "rival-b", false);
-    expect(await summarizeSharedChecks(NOW)).toMatchObject({
-      enabled: true,
-      verdictHits: 2,
-      verdictMisses: { no_match: 2 },
-    });
+    expect(sharedOutcomes(log).sort()).toEqual(["verdict:hit", "verdict:hit", "verdict:no_match", "verdict:no_match"]);
   });
 
-  it("counts nothing for the owner's own site", async () => {
+  it("logs nothing for the owner's own site", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     await judgeFor("ws-a", "self-a", true);
-    expect(await summarizeSharedChecks(NOW)).toMatchObject({ verdictHits: 0, verdictMisses: {} });
+    expect(sharedOutcomes(log)).toEqual([]);
   });
 });

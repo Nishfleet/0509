@@ -33,11 +33,11 @@ export async function readSharedPage(key: SharedReadKey): Promise<SharedRead | n
   try {
     const stored = await env.IDENTITY_CACHE.get(await keyFor(key));
     const parsed = stored === null ? null : sharedRead.safeParse(JSON.parse(stored));
-    await noteSharedOutcome("page", parsed?.success === true ? "hit" : "no_copy", key.sweep);
+    noteSharedOutcome("page", parsed?.success === true ? "hit" : "no_copy");
     return parsed?.success === true ? { ...parsed.data, escalated: false } : null;
   } catch (error) {
     console.error(JSON.stringify({ event: "site.shared_read_failed", error: String(error) }));
-    await noteSharedOutcome("page", "read_failed", key.sweep);
+    noteSharedOutcome("page", "read_failed");
     return null;
   }
 }

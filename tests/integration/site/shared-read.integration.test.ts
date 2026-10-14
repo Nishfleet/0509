@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SiteSweepTarget } from "../../../app/lib/data/watch.server";
 import { readPage } from "../../../app/lib/site/read-page.server";
-import { logSharedChecks, summarizeSharedChecks } from "../../../app/lib/shared-checks.server";
 
 const NIGHT_ONE = "2026-10-14T21:00:00Z";
 const SAME_NIGHT_LATER = "2026-10-14T23:30:00Z";
@@ -39,6 +38,13 @@ const targetFor = (workspaceId: string, role: "competitor" | "self", url = URL_O
   transportTestedAt: null,
 });
 
+function sharedOutcomes(log: { mock: { calls: unknown[][] } }): string[] {
+  return log.mock.calls.flatMap(([line]) => {
+    const parsed = JSON.parse(String(line)) as { event?: string; kind?: string; result?: string };
+    return parsed.event === "site.shared_check" ? [`${parsed.kind ?? ""}:${parsed.result ?? ""}`] : [];
+  });
+}
+
 async function seedPage(workspaceId: string): Promise<void> {
   const at = "2026-10-01T00:00:00Z";
   await env.DB.batch([
@@ -62,8 +68,6 @@ describe("a rival's public page, read for several workspaces", () => {
   beforeEach(async () => {
     const { keys } = await env.IDENTITY_CACHE.list({ prefix: "shared-read:" });
     await Promise.all(keys.map((key) => env.IDENTITY_CACHE.delete(key.name)));
-    const noted = await env.IDENTITY_CACHE.list({ prefix: "shared-stats:" });
-    await Promise.all(noted.keys.map((key) => env.IDENTITY_CACHE.delete(key.name)));
     Reflect.set(env, "SHARED_RIVAL_CHECKS", "on");
     fetched.length = 0;
     stubWeb();
@@ -142,11 +146,12 @@ describe("a rival's public page, read for several workspaces", () => {
     "reads for every workspace itself and keeps no copy unless the switch is on (%j)",
     async (value) => {
       Reflect.set(env, "SHARED_RIVAL_CHECKS", value);
+      const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
       await readPage(targetFor("ws-a", "competitor"), NIGHT_ONE);
       await readPage(targetFor("ws-b", "competitor"), NIGHT_ONE);
       expect(fetched.filter((url) => url === URL_OF_RIVAL)).toHaveLength(2);
       expect((await env.IDENTITY_CACHE.list({ prefix: "shared-read:" })).keys).toHaveLength(0);
-      expect(await summarizeSharedChecks(NIGHT_ONE)).toMatchObject({ enabled: false, pageHits: 0, pageMisses: {} });
+      expect(sharedOutcomes(log)).toEqual([]);
     },
   );
 
@@ -157,42 +162,21 @@ describe("a rival's public page, read for several workspaces", () => {
     expect(fetched.filter((url) => url === URL_OF_RIVAL)).toHaveLength(2);
   });
 
-  it("counts hits and misses by reason for the night", async () => {
-    await readPage(targetFor("ws-a", "competitor"), NIGHT_ONE);
-    await readPage(targetFor("ws-b", "competitor"), NIGHT_ONE);
-    await readPage(targetFor("ws-c", "competitor"), NIGHT_ONE);
-    expect(await summarizeSharedChecks(NIGHT_ONE)).toMatchObject({
-      enabled: true,
-      pageHits: 2,
-      pageMisses: { no_copy: 1 },
-    });
-    expect(await summarizeSharedChecks(NIGHT_TWO)).toMatchObject({ pageHits: 0, pageMisses: {} });
-  });
-
-  it("counts a copy that could not be read as a miss with its own reason", async () => {
-    vi.spyOn(env.IDENTITY_CACHE, "get").mockRejectedValue(new Error("KV GET failed: 429"));
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
-    await readPage(targetFor("ws-a", "competitor"), NIGHT_ONE);
-    vi.restoreAllMocks();
-    expect(await summarizeSharedChecks(NIGHT_ONE)).toMatchObject({ pageHits: 0, pageMisses: { read_failed: 1 } });
-  });
-
-  it("logs one line for the sweep with counts only, nothing about a workspace or a rival", async () => {
+  it("logs one line per shared lookup, saying only whether it was a hit and why not", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     await readPage(targetFor("ws-secret", "competitor"), NIGHT_ONE);
     await readPage(targetFor("ws-other", "competitor"), NIGHT_ONE);
+    expect(sharedOutcomes(log)).toEqual(["page:no_copy", "page:hit"]);
+    const lines = log.mock.calls.map(([line]) => String(line)).filter((line) => line.includes("site.shared_check"));
+    expect(lines.join("\n")).not.toMatch(/ws-|shared-rival/);
+  });
+
+  it("logs a copy that could not be read as a miss with its own reason", async () => {
+    vi.spyOn(env.IDENTITY_CACHE, "get").mockRejectedValue(new Error("KV GET failed: 429"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
-    await logSharedChecks(NIGHT_ONE);
-    expect(log).toHaveBeenCalledTimes(1);
-    const line = String(log.mock.calls[0]?.[0]);
-    expect(JSON.parse(line)).toEqual({
-      event: "site.shared_checks",
-      enabled: true,
-      pageHits: 1,
-      pageMisses: { no_copy: 1 },
-      verdictHits: 0,
-      verdictMisses: {},
-    });
-    expect(line).not.toMatch(/ws-|shared-rival/);
+    await readPage(targetFor("ws-a", "competitor"), NIGHT_ONE);
+    expect(sharedOutcomes(log)).toEqual(["page:read_failed"]);
   });
 
   it("never hands a fetch-only copy to a page that has learned it needs the browser", async () => {
