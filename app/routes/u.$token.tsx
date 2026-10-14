@@ -70,7 +70,7 @@ export default function Unsubscribe({ actionData }: Route.ComponentProps) {
           <a className="inline-flex min-h-11 items-center underline underline-offset-4" href="/app/settings">
             Settings
           </a>
-          , tick "Send the brief to this address again" and save.
+          , tick "Send the brief and alerts to this address again" and save.
         </p>
         <Footer />
       </main>
