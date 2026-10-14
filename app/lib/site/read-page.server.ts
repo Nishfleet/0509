@@ -3,6 +3,7 @@ import type { SiteSweepTarget } from "../data/watch.server";
 import { readOrArchive } from "../fetch/archive.server";
 import type { ReadUrlResult } from "../fetch/transport.server";
 import { keepSharedPage, readSharedPage } from "../fetch/shared-read.server";
+import { sharedChecksOn } from "../shared-checks.server";
 import { readUrl } from "../fetch/transport.server";
 import { takeBrowserEscalation } from "./browser-budget.server";
 
@@ -67,7 +68,7 @@ export async function readPage(
   now: string,
   options: ReadPageOptions = {},
 ): Promise<ReadUrlResult> {
-  const isRival = target.entityRole !== "self";
+  const isRival = target.entityRole !== "self" && sharedChecksOn();
   const shared = isRival ? await readSharedPage(target.url, now) : null;
   if (shared !== null) return shared;
   const read = await readLive(target, now, options);

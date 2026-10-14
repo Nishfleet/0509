@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { computeBreakageEvidence } from "../../../app/lib/site/breakage-evidence";
 import { askMixed } from "../../../app/lib/jev/client.server";
+import { summarizeSharedChecks } from "../../../app/lib/shared-checks.server";
 import { D3_KIND, D3_NOTEWORTHY, judgeChange } from "../../../app/lib/site/judge.server";
 
 const NOW = new Date().toISOString();
@@ -67,6 +68,9 @@ describe("the same public change judged for two workspaces", () => {
     for (const table of ["jev_verdict", "entity", "workspace"]) await env.DB.exec(`DELETE FROM ${table}`);
     await env.DB.exec('DELETE FROM "user"');
     calls.count = 0;
+    Reflect.set(env, "SHARED_RIVAL_CHECKS", "on");
+    const noted = await env.IDENTITY_CACHE.list({ prefix: "shared-stats:" });
+    await Promise.all(noted.keys.map((key) => env.IDENTITY_CACHE.delete(key.name)));
     installJev();
     await seedWorkspace("ws-a", "self-a", "rival-a");
     await seedWorkspace("ws-b", "self-b", "rival-b");
@@ -74,6 +78,7 @@ describe("the same public change judged for two workspaces", () => {
 
   afterEach(() => {
     Reflect.deleteProperty(env, "AI");
+    Reflect.set(env, "SHARED_RIVAL_CHECKS", "on");
   });
 
   it("asks the judge once, and gives the second workspace the same answer under its own rows", async () => {
@@ -137,5 +142,35 @@ describe("the same public change judged for two workspaces", () => {
     const before = calls.count;
     await judgeFor("ws-b", "self-b", true);
     expect(calls.count).toBeGreaterThan(before);
+  });
+
+  it.each(["off", "", "yes"])(
+    "asks for each workspace and stores no shared key unless the switch is on (%j)",
+    async (value) => {
+      Reflect.set(env, "SHARED_RIVAL_CHECKS", value);
+      await judgeFor("ws-a", "rival-a", false);
+      await judgeFor("ws-b", "rival-b", false);
+      expect(calls.count).toBe(2);
+      const shared = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE shared_hash IS NOT NULL").first<{
+        n: number;
+      }>();
+      expect(shared?.n).toBe(0);
+      expect(await summarizeSharedChecks(NOW)).toMatchObject({ enabled: false, verdictHits: 0, verdictMisses: {} });
+    },
+  );
+
+  it("counts the shared answers it found and the ones it did not", async () => {
+    await judgeFor("ws-a", "rival-a", false);
+    await judgeFor("ws-b", "rival-b", false);
+    expect(await summarizeSharedChecks(NOW)).toMatchObject({
+      enabled: true,
+      verdictHits: 2,
+      verdictMisses: { no_match: 2 },
+    });
+  });
+
+  it("counts nothing for the owner's own site", async () => {
+    await judgeFor("ws-a", "self-a", true);
+    expect(await summarizeSharedChecks(NOW)).toMatchObject({ verdictHits: 0, verdictMisses: {} });
   });
 });

@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
+import { noteSharedOutcome } from "../shared-checks.server";
 import { sha256Hex } from "../sha256";
 import type { ReadUrlResult } from "./transport.server";
 
@@ -25,11 +26,12 @@ async function keyFor(url: string, sweep: string): Promise<string> {
 export async function readSharedPage(url: string, sweep: string): Promise<SharedRead | null> {
   try {
     const stored = await env.IDENTITY_CACHE.get(await keyFor(url, sweep));
-    if (stored === null) return null;
-    const parsed = sharedRead.safeParse(JSON.parse(stored));
-    return parsed.success ? { ...parsed.data, escalated: false } : null;
+    const parsed = stored === null ? null : sharedRead.safeParse(JSON.parse(stored));
+    await noteSharedOutcome("page", parsed?.success === true ? "hit" : "no_copy", sweep);
+    return parsed?.success === true ? { ...parsed.data, escalated: false } : null;
   } catch (error) {
     console.error(JSON.stringify({ event: "site.shared_read_failed", error: String(error) }));
+    await noteSharedOutcome("page", "read_failed", sweep);
     return null;
   }
 }

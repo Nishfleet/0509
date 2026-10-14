@@ -8,6 +8,7 @@ import { AiSpendOffError, refuseWhenAiSpendOff } from "../ai/spend.server";
 import { insertJevFailure } from "../data/jev_failure.server";
 import { readCachedChoice, readCachedNoul, readSharedChoice, readSharedNoul } from "../data/jev_verdict.server";
 import { sha256Hex } from "../sha256";
+import { noteSharedOutcome, sharedChecksOn } from "../shared-checks.server";
 import { classifyJevFailure, RATE_LIMITED } from "./failure";
 import { isBillingRefusal } from "./refusal";
 import type { AttemptPolicy, NoulQuestion } from "./thresholds";
@@ -416,7 +417,7 @@ async function mixedHashes(workspaceId: string, questions: MixedQuestions, state
     noul: await inputHash(workspaceId, questions.noul, state),
     choice: await choiceHash(workspaceId, questions.choice, state),
   };
-  if (questions.shared !== true) return scoped;
+  if (questions.shared !== true || !sharedChecksOn()) return scoped;
   return {
     ...scoped,
     noulShared: await inputHash(null, questions.noul, state),
@@ -424,13 +425,20 @@ async function mixedHashes(workspaceId: string, questions: MixedQuestions, state
   };
 }
 
+async function sharedAnswer<T>(hash: string | undefined, read: (hash: string) => Promise<T | null>): Promise<T | null> {
+  if (hash === undefined) return null;
+  const found = await read(hash);
+  await noteSharedOutcome("verdict", found === null ? "no_match" : "hit", new Date().toISOString());
+  return found;
+}
+
 async function cachedMixed(questions: MixedQuestions, hashes: MixedHashes) {
   const noul =
     (await readCachedNoul(questions.noul.id, hashes.noul)) ??
-    (hashes.noulShared === undefined ? null : await readSharedNoul(questions.noul.id, hashes.noulShared));
+    (await sharedAnswer(hashes.noulShared, (hash) => readSharedNoul(questions.noul.id, hash)));
   const choice =
     (await readCachedChoice(questions.choice.id, hashes.choice)) ??
-    (hashes.choiceShared === undefined ? null : await readSharedChoice(questions.choice.id, hashes.choiceShared));
+    (await sharedAnswer(hashes.choiceShared, (hash) => readSharedChoice(questions.choice.id, hash)));
   return { noul, choice };
 }
 
