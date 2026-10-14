@@ -5,6 +5,7 @@ import {
   isAddressSuppressed,
   isUnsubscribeTokenKnown,
   readMailKinds,
+  suppressWorkspaceTargets,
   writeMailKinds,
 } from "../../app/lib/data/email_suppression.server";
 import { saveMailKinds } from "../../app/lib/delivery-address.server";
@@ -260,5 +261,28 @@ describe("one-click unsubscribe (0509#4358, 0509#4593, 0509#5761)", () => {
 
     expect(saved).toBe(false);
     expect(await isAddressSuppressed(ADDRESS, "brief")).toBe(true);
+  });
+
+  it("(o) updates a legacy mixed-case row instead of adding a second one", async () => {
+    await env.DB.prepare(
+      `INSERT INTO email_suppression (address, reason, created_at, stops_brief, stops_alerts) VALUES ('Reader@0509.io', 'unsubscribed', '2026-09-01T00:00:00Z', 1, 0)`,
+    ).run();
+
+    await unsubscribe(TOKEN, "alerts");
+    expect(await suppressionRows()).toHaveLength(1);
+    expect(await readMailKinds(ADDRESS)).toEqual({ brief: false, alerts: false });
+
+    await writeMailKinds(ADDRESS, { brief: true, alerts: false });
+    expect(await suppressionRows()).toHaveLength(1);
+    expect(await readMailKinds(ADDRESS)).toEqual({ brief: true, alerts: false });
+  });
+
+  it("(p) turns a partial stop into a clearable deletion stop when the account is deleted", async () => {
+    await unsubscribe(TOKEN, "alerts");
+
+    await suppressWorkspaceTargets(WS);
+
+    expect(await readMailKinds(ADDRESS)).toEqual({ brief: false, alerts: false });
+    expect((await suppressionRows()).map((row) => row.reason)).toEqual(["workspace_deleted"]);
   });
 });

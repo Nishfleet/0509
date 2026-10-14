@@ -4,18 +4,22 @@ import { z } from "zod";
 import type { SuppressionScope } from "../mail-kind";
 import type { WorkspaceDb } from "./workspace.server";
 
-const SUPPRESS_BY_UNSUBSCRIBE_TOKEN = `INSERT INTO email_suppression (address, reason, created_at, stops_brief, stops_alerts)
+const WIDEN_BY_UNSUBSCRIBE_TOKEN = `UPDATE email_suppression
+   SET stops_brief = max(stops_brief, ?2), stops_alerts = max(stops_alerts, ?3)
+ WHERE lower(trim(address)) IN (SELECT lower(trim(target_value)) FROM send_target WHERE unsubscribe_token = ?4)`;
+
+const INSERT_BY_UNSUBSCRIBE_TOKEN = `INSERT INTO email_suppression (address, reason, created_at, stops_brief, stops_alerts)
 SELECT lower(trim(target_value)), 'unsubscribed', ?1, ?2, ?3
   FROM send_target
  WHERE unsubscribe_token = ?4
-ON CONFLICT(address) DO UPDATE SET
-  stops_brief = max(stops_brief, excluded.stops_brief),
-  stops_alerts = max(stops_alerts, excluded.stops_alerts)`;
+   AND NOT EXISTS (SELECT 1 FROM email_suppression WHERE lower(trim(address)) = lower(trim(target_value)))`;
 
-const SET_KINDS = `INSERT INTO email_suppression (address, reason, created_at, stops_brief, stops_alerts)
-VALUES (lower(trim(?1)), 'unsubscribed', ?2, ?3, ?4)
-ON CONFLICT(address) DO UPDATE SET stops_brief = excluded.stops_brief, stops_alerts = excluded.stops_alerts
- WHERE reason = 'unsubscribed'`;
+const UPDATE_KINDS = `UPDATE email_suppression SET stops_brief = ?3, stops_alerts = ?4
+ WHERE lower(trim(address)) = lower(trim(?1)) AND reason = 'unsubscribed'`;
+
+const INSERT_KINDS = `INSERT INTO email_suppression (address, reason, created_at, stops_brief, stops_alerts)
+SELECT lower(trim(?1)), 'unsubscribed', ?2, ?3, ?4
+ WHERE NOT EXISTS (SELECT 1 FROM email_suppression WHERE lower(trim(address)) = lower(trim(?1)))`;
 
 const SELECT_KINDS = `SELECT stops_brief, stops_alerts FROM email_suppression WHERE lower(trim(address)) = lower(trim(?)) LIMIT 1`;
 
@@ -24,7 +28,10 @@ SELECT lower(trim(t.target_value)), 'workspace_deleted', ?
   FROM send_target t
   JOIN channel c ON c.id = t.channel_id
  WHERE t.workspace_id = ? AND c.key = 'email' AND t.role = 'owner'
-ON CONFLICT(address) DO UPDATE SET stops_brief = 1, stops_alerts = 1`;
+ON CONFLICT(address) DO UPDATE SET
+  stops_brief = 1,
+  stops_alerts = 1,
+  reason = CASE WHEN stops_brief = 1 AND stops_alerts = 1 THEN reason ELSE 'workspace_deleted' END`;
 
 const SELECT_SUPPRESSION = `SELECT address FROM email_suppression
  WHERE lower(trim(address)) = lower(trim(?1))
@@ -40,9 +47,11 @@ const DELETE_UNSUBSCRIBED_SUPPRESSION = `DELETE FROM email_suppression WHERE low
 const DELETE_WORKSPACE_DELETED_SUPPRESSION = `DELETE FROM email_suppression WHERE lower(trim(address)) = lower(trim(?)) AND reason = 'workspace_deleted'`;
 
 export async function suppressByUnsubscribeToken(token: string, scope: SuppressionScope): Promise<void> {
-  await env.DB.prepare(SUPPRESS_BY_UNSUBSCRIBE_TOKEN)
-    .bind(new Date().toISOString(), scope === "alerts" ? 0 : 1, scope === "brief" ? 0 : 1, token)
-    .run();
+  const bind = [new Date().toISOString(), scope === "alerts" ? 0 : 1, scope === "brief" ? 0 : 1, token] as const;
+  await env.DB.batch([
+    env.DB.prepare(WIDEN_BY_UNSUBSCRIBE_TOKEN).bind(...bind),
+    env.DB.prepare(INSERT_BY_UNSUBSCRIBE_TOKEN).bind(...bind),
+  ]);
 }
 
 const isUnsubscribeTokenKnownRow = z.object({ present: z.number() });
@@ -92,9 +101,8 @@ export async function writeMailKinds(address: string, on: { brief: boolean; aler
     await env.DB.prepare(DELETE_UNSUBSCRIBED_SUPPRESSION).bind(address).run();
     return;
   }
-  await env.DB.prepare(SET_KINDS)
-    .bind(address, new Date().toISOString(), on.brief ? 0 : 1, on.alerts ? 0 : 1)
-    .run();
+  const bind = [address, new Date().toISOString(), on.brief ? 0 : 1, on.alerts ? 0 : 1] as const;
+  await env.DB.batch([env.DB.prepare(UPDATE_KINDS).bind(...bind), env.DB.prepare(INSERT_KINDS).bind(...bind)]);
 }
 
 export async function clearSuppression(address: string): Promise<void> {
