@@ -29,12 +29,21 @@ function moveSubject(lead: Mark, total: number): string {
   return clip(`${head}${more}`, SUBJECT_MAX);
 }
 
+export function isFirstRanking(payload: BriefPayload): boolean {
+  return (
+    payload.brands.length > 0 &&
+    payload.headline_movement === null &&
+    payload.brands.every((brand) => brand.movement === null && !brand.is_new)
+  );
+}
+
 export function briefSubject(payload: BriefPayload, unjudgedLine: string): string {
   if (payload.is_unjudged) return unjudgedLine;
   const lead = payload.read_this_first[0];
   if (lead !== undefined) return moveSubject(lead, payload.read_this_first.length);
   const { headline_rank: rank, headline_total: total } = payload;
   if (rank === null || total < 2) return "Quiet week: nothing needed your attention";
+  if (isFirstRanking(payload)) return `Your first ranking: you're #${rank.toFixed(0)} of ${total.toFixed(0)}`;
   return `Quiet week: you're #${rank.toFixed(0)} of ${total.toFixed(0)}`;
 }
 
