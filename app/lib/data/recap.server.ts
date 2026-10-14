@@ -43,7 +43,7 @@ export function parseLatest(json: string | null, ctx: z.RefinementCtx): z.infer<
     ctx.addIssue({ code: "custom", message: "latest is not JSON" });
     return z.NEVER;
   }
-  ctx.addIssue({ code: "custom", message: "latest has no rival or title" });
+  ctx.addIssue({ code: "custom", message: "latest has no name or title" });
   return z.NEVER;
 }
 
