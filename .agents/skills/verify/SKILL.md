@@ -137,4 +137,4 @@ npx chrome-devtools take_screenshot <pageId> --filePath /tmp/verify-proof/login-
 
 ## Reproduce a vague user report
 
-Map the words and the screenshot onto feature-map rows. The map is `feature-map.md` beside this skill. Drive those rows with `take_snapshot`, `click`, `fill` and `press_key`. Report the url, the snapshot lines you saw, console errors and failed requests. Quote what the page showed.
+Map the words and the screenshot onto feature-map rows. The map is `feature-map.md` beside this skill, and its rows are the files under `feature-map/`. Drive those rows with `take_snapshot`, `click`, `fill` and `press_key`. Report the url, the snapshot lines you saw, console errors and failed requests. Quote what the page showed.

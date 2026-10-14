@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "./test";
 
 import { onboardedStatePath } from "../playwright.config";
+import { signInOnLocalLane } from "./quality";
 
 test.use({
   storageState: async ({}, use, testInfo) => {
@@ -12,10 +13,9 @@ test.use({
     );
   },
 });
-test.skip(
-  !process.env.PLAYWRIGHT_TEST_BASE_URL,
-  "a competitor page needs a real session; the local preview Worker cannot mint one",
-);
+test.beforeEach(async ({ page, baseURL }) => {
+  await signInOnLocalLane(page, baseURL, "a11y-competitor");
+});
 
 test("a competitor page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and 390 in light and dark (#4152)", async ({
   page,
@@ -66,10 +66,6 @@ test("a competitor page passes axe at WCAG 2.2 AA and is keyboard-operable at 14
       });
       expect(ring).toBe(true);
       await expect(toggle).toHaveAttribute("aria-checked", /^(true|false)$/);
-
-      await page.screenshot({
-        path: testInfo.outputPath(`competitor-focus-${String(viewport.width)}-${colorScheme}.png`),
-      });
 
       expect(results.violations).toEqual([]);
     }

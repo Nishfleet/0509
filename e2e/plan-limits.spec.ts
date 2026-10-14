@@ -50,7 +50,10 @@ test("a full plan says so on Competitors and the See plans link opens pricing", 
 
   const meter = page.locator('[data-slot="competitor-count"]');
   await expect(meter).toContainText("Watching 5 of 5 competitors. Your plan is full.");
-  await scanPage(page, testInfo, quality, `/app/competitors plan full ${testInfo.project.name}`, { keyboard: true });
+  await scanPage(page, testInfo, quality, `/app/competitors plan full ${testInfo.project.name}`, {
+    screen: /^competitors$/i,
+    keyboard: true,
+  });
 
   await meter.getByRole("link", { name: "See plans" }).click();
   await expect(page).toHaveURL(/\/pricing$/);

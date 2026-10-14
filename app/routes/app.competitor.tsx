@@ -4,15 +4,13 @@ import { redirect, useFetcher } from "react-router";
 
 import { BrandSwitchField } from "../components/brand-switch";
 import { CapRefusal } from "../components/cap-refusal";
-import { CompetitorForget } from "../components/competitor-forget";
+import { CompetitorFoot } from "../components/competitor-foot";
 import { CompetitorFrame } from "../components/competitor-frame";
 import { CompetitorHeader, dayMonthLabel } from "../components/competitor-header";
-import { CompetitorRename } from "../components/competitor-rename";
-import { CompetitorSite } from "../components/competitor-site";
-import { CompetitorYoutube } from "../components/competitor-youtube";
 import { CompetitorSnapshot } from "../components/competitor-snapshot";
 import { RivalOnePager } from "../components/rival-one-pager";
-import { handleCompetitorForm, type CompetitorFormErrors } from "../lib/competitor-forms.server";
+import { handleCompetitorForm } from "../lib/competitor-forms.server";
+import { readEntityNote } from "../lib/data/entity_note.server";
 import { readCompetitorPage } from "../lib/competitor-page.server";
 import { snapshotCells } from "../lib/competitor-snapshot";
 import { readCompetitorSnapshot } from "../lib/competitor-snapshot.server";
@@ -33,9 +31,10 @@ export function meta({ loaderData }: Route.MetaArgs) {
 export async function loader({ params, context }: Route.LoaderArgs) {
   const workspaceId = workspaceFrom(context);
   const now = new Date();
-  const [page, snapshot] = await Promise.all([
+  const [page, snapshot, note] = await Promise.all([
     readCompetitorPage(workspaceId, params.entityId, now),
     readCompetitorSnapshot(workspaceId, params.entityId, now),
+    readEntityNote(workspaceId, params.entityId),
   ]);
   if (page === null) throw new Response("We don't track that competitor.", { status: 404 });
   return {
@@ -43,6 +42,7 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     lastChecked: page.watch.lastPolledAt === null ? null : captureLabel(page.watch.lastPolledAt),
     changes: page.changes.map((change) => ({ ...change, when: daysAgoLabel(change.observedAt, now) })),
     developments: page.developments.map((item) => ({ ...item, when: daysAgoLabel(item.observedAt, now) })),
+    note,
     now: now.getTime(),
     snapshot: snapshotCells(snapshot),
   };
@@ -50,23 +50,6 @@ export async function loader({ params, context }: Route.LoaderArgs) {
 
 export async function action({ request, params, context }: Route.ActionArgs) {
   return handleCompetitorForm(workspaceFrom(context), params.entityId, await request.formData());
-}
-
-function CompetitorFoot(props: {
-  name: string;
-  domain: string;
-  youtubeUrl: string | null;
-  siteUrl: string | null;
-  errors: CompetitorFormErrors | undefined;
-}) {
-  return (
-    <>
-      <CompetitorRename name={props.name} domain={props.domain} result={props.errors} />
-      <CompetitorSite url={props.siteUrl} error={props.errors?.siteError ?? null} />
-      <CompetitorYoutube url={props.youtubeUrl} error={props.errors?.youtubeError ?? null} />
-      <CompetitorForget name={props.name} error={props.errors?.forgetError ?? null} />
-    </>
-  );
 }
 
 function OnePager({ data }: { data: Route.ComponentProps["loaderData"] }) {
@@ -139,6 +122,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       <CompetitorFoot
         name={competitor.name}
         domain={competitor.domain}
+        note={loaderData.note}
         youtubeUrl={loaderData.youtubeUrl}
         siteUrl={loaderData.watch.customerSite}
         errors={actionData}

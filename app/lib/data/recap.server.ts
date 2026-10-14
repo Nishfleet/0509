@@ -34,7 +34,7 @@ const SELECT_RECAPS = `SELECT p.workspace_id,
 
 const latestMove = z.object({ rival: z.string(), what: z.string() });
 
-function parseLatest(json: string | null, ctx: z.RefinementCtx): z.infer<typeof latestMove> | null {
+export function parseLatest(json: string | null, ctx: z.RefinementCtx): z.infer<typeof latestMove> | null {
   if (json === null) return null;
   try {
     const parsed = latestMove.safeParse(JSON.parse(json));
@@ -60,7 +60,7 @@ const recapRow = z.object({
 export type TrialRecap = z.infer<typeof recapRow>;
 
 const DAY_MS = 86_400_000;
-const RECAP_DAY = 4;
+export const RECAP_DAY = 4;
 
 export async function readTrialRecaps(db: D1Database, now: Date): Promise<TrialRecap[]> {
   const from = new Date(now.getTime() + (TRIAL_DAYS - RECAP_DAY - 1) * DAY_MS);
