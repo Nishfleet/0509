@@ -55,6 +55,10 @@ async function seed(tag: string): Promise<{ workspaceId: string; userId: string 
       `INSERT INTO user_decision (id, workspace_id, user_id, verdict, note, decided_at)
        VALUES (?1, ?2, ?3, 'public_subject:confirmed', ?4, ?5)`,
     ).bind(`dec-${tag}`, workspaceId, userId, `${tag}.example`, NOW),
+    env.DB.prepare("INSERT INTO workspace_visit (workspace_id, day) VALUES (?1, ?2)").bind(
+      workspaceId,
+      tag === "mine" ? "2026-10-13" : "2026-10-12",
+    ),
   ]);
   return { workspaceId, userId };
 }
@@ -96,6 +100,7 @@ describe("workspace export", () => {
       expect.objectContaining({ candidate_domain: "mine-skip.example", status: "dismissed" }),
     ]);
     expect(data.decisions).toEqual([expect.objectContaining({ verdict: "public_subject:confirmed" })]);
+    expect(data.daysUsed).toEqual(["2026-10-13"]);
     expect(data.plan).toEqual(expect.objectContaining({ tier: "scout", billed: false }));
     expect(text).not.toContain("theirs");
     expect(text).not.toContain("203.0.113.9");

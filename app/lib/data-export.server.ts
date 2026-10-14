@@ -31,6 +31,8 @@ FROM signal s JOIN entity e ON e.id = s.entity_id
 WHERE s.workspace_id = ? AND s.is_tombstoned = 0
 ORDER BY s.observed_at DESC LIMIT ?`;
 
+const SELECT_VISITS = `SELECT day FROM workspace_visit WHERE workspace_id = ? ORDER BY day DESC`;
+
 const SELECT_BRIEFS = `SELECT subject, period_start, period_end, status, sent_at
 FROM digest WHERE workspace_id = ? ORDER BY period_start DESC`;
 
@@ -91,6 +93,7 @@ export async function readWorkspaceExport(input: { workspaceId: string; userId: 
     choices,
     decisions,
     incidents,
+    daysUsed: (await allRows<{ day: string }>(db, SELECT_VISITS, workspaceId)).map((visit) => visit.day),
     signals: signals.slice(0, SIGNAL_LIMIT),
     signalsTruncated: signals.length > SIGNAL_LIMIT,
     briefs,
