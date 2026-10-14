@@ -90,7 +90,14 @@ async function learnFromHome(
       now,
     });
   } catch (error) {
-    console.error(JSON.stringify({ event: "identity.pricing_probe_failed", error: String(error) }));
+    console.error(
+      JSON.stringify({
+        event: "identity.pricing_probe_failed",
+        error: String(error)
+          .replace(/https?:\/\/\S+/g, "<url>")
+          .slice(0, 300),
+      }),
+    );
   }
 }
 
