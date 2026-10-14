@@ -53,3 +53,9 @@ export function ledgerSummary(ledger: WorkLedger | undefined, lead: string): str
   if (ledger.pages_read === 0 && ledger.changes_seen === 0 && ledger.mentions_read === 0) return null;
   return [ledgerSentence(ledger, lead), setAsideNote(ledger)].filter((part) => part !== null).join(" ");
 }
+
+export function ledgerFooter(ledger: WorkLedger | undefined, whyLine: string): string | null {
+  if (ledger === undefined) return null;
+  if (quietLedgerLine(ledger) === whyLine) return setAsideNote(ledger);
+  return ledgerSummary(ledger, "This week we");
+}
