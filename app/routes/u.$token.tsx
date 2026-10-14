@@ -21,7 +21,7 @@ export async function loader({ params }: Route.LoaderArgs) {
   if (!(await isUnsubscribeTokenKnown(params.token))) {
     throw new Response(INVALID_LINK, { status: 404 });
   }
-  return { link: "confirm" as const };
+  return { link: "confirm" as const, teammate: await isTeammateUnsubscribeToken(params.token) };
 }
 
 export async function action({ params }: Route.ActionArgs) {
@@ -82,7 +82,17 @@ function ChangedYourMind({ teammate }: { teammate: boolean }) {
   );
 }
 
-export default function Unsubscribe({ actionData }: Route.ComponentProps) {
+function ConfirmCopy({ teammate }: { teammate: boolean }) {
+  if (teammate) return <>You will stop getting the weekly brief from Five to Nine at this address.</>;
+  return (
+    <>
+      You will stop getting the weekly brief and all alerts from Five to Nine at this address. Sign-in links still
+      arrive when you ask for one.
+    </>
+  );
+}
+
+export default function Unsubscribe({ actionData, loaderData }: Route.ComponentProps) {
   const navigation = useNavigation();
   const unsubscribing = navigation.state !== "idle";
   if (actionData?.unsubscribed) {
@@ -90,8 +100,9 @@ export default function Unsubscribe({ actionData }: Route.ComponentProps) {
       <main className="mx-auto max-w-xl px-4 py-16">
         <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">You're unsubscribed</h1>
         <p className="mt-4 leading-[1.65] text-ink-soft">
-          We won't send the weekly brief or alerts to this address any more.
-          {actionData.teammate ? "" : " Sign-in links still arrive when you ask for one."}
+          {actionData.teammate
+            ? "We won't send the weekly brief to this address any more."
+            : "We won't send the weekly brief or alerts to this address any more. Sign-in links still arrive when you ask for one."}
         </p>
         <ChangedYourMind teammate={actionData.teammate} />
         <Footer />
@@ -103,8 +114,7 @@ export default function Unsubscribe({ actionData }: Route.ComponentProps) {
     <main className="mx-auto max-w-xl px-4 py-16">
       <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">Unsubscribe from Five to Nine emails?</h1>
       <p className="mt-4 leading-[1.65] text-ink-soft">
-        You will stop getting the weekly brief and all alerts from Five to Nine at this address. Sign-in links still
-        arrive when you ask for one.
+        <ConfirmCopy teammate={loaderData.teammate} />
       </p>
       <Form method="post" className="mt-8">
         <Button type="submit" size="lg" disabled={unsubscribing}>

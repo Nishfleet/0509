@@ -33,14 +33,14 @@ function renderBoundary(error: unknown): string {
   return renderToStaticMarkup(createElement(ErrorBoundary, { error } as never));
 }
 
-function renderConfirm(unsubscribed: boolean): string {
+function renderConfirm(unsubscribed: boolean, teammate = false): string {
   const Stub = createRoutesStub([{ id: "routes/u.$token", path: "/u/:token", Component: Unsubscribe }]);
   return renderToStaticMarkup(
     createElement(Stub, {
       initialEntries: ["/u/t"],
       hydrationData: {
-        loaderData: { "routes/u.$token": { link: "confirm" } },
-        ...(unsubscribed ? { actionData: { "routes/u.$token": { unsubscribed: true } } } : {}),
+        loaderData: { "routes/u.$token": { link: "confirm", teammate } },
+        ...(unsubscribed ? { actionData: { "routes/u.$token": { unsubscribed: true, teammate } } } : {}),
       },
     }),
   );
@@ -98,7 +98,10 @@ function renderFormAt(state: Navigation["state"]): string {
         createElement(
           UNSAFE_DataRouterNavigationContext.Provider,
           { value: { navigation: navigationAt(state), revalidation: "idle" } },
-          createElement(Unsubscribe, { actionData: undefined } as never),
+          createElement(Unsubscribe, {
+            actionData: undefined,
+            loaderData: { link: "confirm", teammate: false },
+          } as never),
         ),
     },
   ]);
@@ -123,7 +126,7 @@ describe("/u/:token (0509#5761)", () => {
 
     const data = await loader({ params: { token: "a".repeat(64) } } as never);
 
-    expect(data).toEqual({ link: "confirm" });
+    expect(data).toEqual({ link: "confirm", teammate: false });
   });
 
   it("answers a POST with a bogus token as a 404 instead of claiming success", async () => {
@@ -165,6 +168,17 @@ describe("/u/:token (0509#5761)", () => {
 
     expect(html).toContain("Unsubscribe from Five to Nine emails?");
     expect(html).not.toContain("This unsubscribe link is no longer active");
+  });
+
+  it("tells a teammate they stop the weekly brief only, with no alerts or sign-in wording", () => {
+    const ask = renderConfirm(false, true);
+    const done = renderConfirm(true, true);
+
+    expect(ask).toContain("stop getting the weekly brief from Five to Nine");
+    expect(done).toContain("send the weekly brief to this address any more");
+    for (const html of [ask, done]) {
+      expect(html).not.toMatch(/alerts|Sign-in/);
+    }
   });
 
   it("renders the confirmation after a POST that suppressed the address", () => {
