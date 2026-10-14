@@ -20,6 +20,7 @@ import { insertWatches, markWatchPolled, readSiteSweepTargets, readUnwatchedEnti
 import { robotsAllows } from "../fetch/robots.server";
 import { decodeHtmlEntities } from "../html";
 import { normaliseSubject } from "../identity/normalise";
+import { changeExcerpt } from "../site-change-excerpt";
 import { takeBrowserScreenshot } from "./browser-budget.server";
 import { computeBreakageEvidence } from "./breakage-evidence";
 import type { CheckPageResult } from "./check-page.server";
@@ -143,7 +144,7 @@ export async function checkSitePage(
   options: CheckSitePageOptions = {},
 ): Promise<CheckPageResult> {
   if (target.entityRole === "self" && !(await robotsAllows(target.url))) {
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "site.check_failed",
         pageId: target.pageId,
@@ -167,7 +168,7 @@ export async function checkSitePage(
         : () => takeBrowserScreenshot(target.workspaceId, target.entityId, tick.plannedAt.slice(0, 10)),
   });
   if (result.outcome === "failed") {
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "site.check_failed",
         pageId: target.pageId,
@@ -223,6 +224,7 @@ function changeSignalPayload(
       screenshotKey: changed.screenshotKey,
     },
     diffKey: diff === null ? null : diffKey,
+    excerpt: diff === null ? [] : changeExcerpt(diff.hunks.map((hunk) => hunk.lines)),
     wordsAdded: words.filter((c) => c.added).reduce((n, c) => n + wordCount(c.value), 0),
     wordsRemoved: words.filter((c) => c.removed).reduce((n, c) => n + wordCount(c.value), 0),
     status: changed.status,
@@ -249,7 +251,7 @@ async function judgeUnlessFailed(change: SiteChangeInput, signalId: string | nul
   try {
     return await judgeChange(judgeInputFor(change, signalId));
   } catch (error) {
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "site.change_judge_failed",
         pageId: change.target.pageId,
@@ -387,7 +389,7 @@ async function emailPricingChange(signalId: string, judgment: JudgedChange | nul
   try {
     await env.SEND_EMAIL.send({ signal_id: signalId });
   } catch (error) {
-    console.log(JSON.stringify({ event: "site.change_email_enqueue_failed", signalId }));
+    console.warn(JSON.stringify({ event: "site.change_email_enqueue_failed", signalId }));
     captureException(error, { tags: { queue: "send-email", lane: "change" } });
   }
 }

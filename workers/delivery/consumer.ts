@@ -10,7 +10,12 @@ import {
   readUnrecordedSend,
   resolveSendAttempt,
 } from "../../app/lib/data/send_attempt.server";
-import { readConfirmedTeammates, readSlackTarget, writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
+import {
+  disconnectSlackTarget,
+  readConfirmedTeammates,
+  readSlackTarget,
+  writeUnsubscribeToken,
+} from "../../app/lib/data/send_target.server";
 import { insertSignalDeliveries } from "../../app/lib/data/signal_delivery.server";
 import { localDay, startOfLocalDay } from "../../app/lib/alert-day";
 import { canonicalTimezone } from "../../app/lib/timezone";
@@ -18,7 +23,7 @@ import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
 import { nextHour } from "../../app/lib/home-standing";
 import { neutralizeBareUrls, slackEscape } from "../../app/lib/slack-webhook";
-import { postToSlack } from "../../app/lib/slack.server";
+import { postToSlackOutcome } from "../../app/lib/slack.server";
 import {
   changeHeadline,
   markFromHunks,
@@ -628,8 +633,14 @@ async function postChangeToSlack(
     idempotencyKey,
     send: async () => {
       const text = slackText(change, payload, await readChangeMark(env, payload.diffKey));
-      const posted = await postToSlack(target.target_value, text);
-      return posted ? { outcome: "sent", error: null } : { outcome: "failed", error: "slack did not accept the post" };
+      const posted = await postToSlackOutcome(target.target_value, text);
+      if (posted === "revoked") {
+        await disconnectSlackTarget(env.DB, target.id);
+        return { outcome: "sent", error: "slack webhook revoked; target disconnected" };
+      }
+      return posted === "sent"
+        ? { outcome: "sent", error: null }
+        : { outcome: "failed", error: "slack did not accept the post" };
     },
   });
 }
