@@ -557,6 +557,21 @@ export async function fillCompetitorSocials(input: {
   return result.meta.changes === 1;
 }
 
+const SET_COMPETITOR_DESCRIPTION =
+  "UPDATE entity SET identity_json = json_set(identity_json, '$.description', ?3, '$.descriptionReadAt', ?4) WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor' AND json_valid(identity_json) AND coalesce(json_extract(identity_json, '$.description'), '') <> ?3";
+
+export async function setCompetitorDescription(input: {
+  workspaceId: string;
+  entityId: string;
+  description: string;
+  readAt: string;
+}): Promise<boolean> {
+  const result = await env.DB.prepare(SET_COMPETITOR_DESCRIPTION)
+    .bind(input.entityId, input.workspaceId, input.description, input.readAt)
+    .run();
+  return result.meta.changes === 1;
+}
+
 const SITE_FILL_STATES = ["pending", "filled", "gave_up"] as const;
 
 export type SiteFillState = (typeof SITE_FILL_STATES)[number];

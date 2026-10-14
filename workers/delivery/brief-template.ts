@@ -229,6 +229,7 @@ function renderBrandLine(line: BriefPayload["brands"][number]): { html: string; 
 
   const rankLabel = line.rank === null ? "unranked" : `#${n(line.rank)}`;
   const movement = movementText(line.movement, line.is_new);
+  const baseline = line.baseline ?? [];
 
   const html = [
     `<div class="brief-rule" style="padding:10px 0;">`,
@@ -240,10 +241,14 @@ function renderBrandLine(line: BriefPayload["brands"][number]): { html: string; 
       ? `<p style="margin:2px 0 0;font-family:${FONT};font-size:15px;line-height:22px;">${escapeHtml(line.biggest_move)}</p>`
       : "",
     `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:14px;line-height:20px;">${escapeHtml(counts.join(" · "))}</p>`,
+    ...baseline.map(
+      (row) =>
+        `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:14px;line-height:20px;">${escapeHtml(row)}</p>`,
+    ),
     `</div>`,
   ].join("");
 
-  const text = [`${line.name} — ${rankLabel}, ${movement}`, line.biggest_move, counts.join(" · ")]
+  const text = [`${line.name} — ${rankLabel}, ${movement}`, line.biggest_move, counts.join(" · "), ...baseline]
     .filter((v): v is string => v !== null)
     .join("\n");
 

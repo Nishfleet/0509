@@ -18,6 +18,11 @@ export function FirstLook({ rivals }: { rivals: readonly FirstLookRow[] }): Reac
           >
             <span className="min-w-0 font-display text-row-name font-bold [overflow-wrap:anywhere]">{rival.name}</span>
             <span className="text-body-sm text-ink-soft">{rival.line}</span>
+            {(rival.facts ?? []).map((fact) => (
+              <p key={fact} className="basis-full pt-1 text-body-sm text-ink-soft">
+                {fact}
+              </p>
+            ))}
           </li>
         ))}
       </ul>

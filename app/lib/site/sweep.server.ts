@@ -28,6 +28,7 @@ import { diffPageText } from "./diff";
 import type { JudgedChange, JudgeInput } from "./judge.server";
 import { judgeChange } from "./judge.server";
 import { readPage } from "./read-page.server";
+import { rememberRivalDescription } from "./rival-profile.server";
 
 const SITE_SOURCE_KEY = "site.web";
 
@@ -150,6 +151,7 @@ export async function checkSitePage(
     return { outcome: "failed", reason: "robots", detail: "disallowed by robots.txt" };
   }
   const read = await readPage(target, tick.plannedAt, { browser: options.browser ?? true });
+  await rememberRivalDescription(target, read);
   const result = await checkPage({
     watchId: target.watchId,
     pageId: target.pageId,
