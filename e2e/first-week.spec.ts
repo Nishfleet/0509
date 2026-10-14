@@ -111,7 +111,7 @@ test("one customer's first week: gathering, a second rival, a first alert, the f
 
   await page.goto("/app");
   const firstLook = page.locator('[data-home="first-look"]');
-  await expect(firstLook.getByRole("heading", { name: "Where your rivals stand today" })).toBeVisible();
+  await expect(firstLook.getByRole("heading", { name: "Where your competitors stand today" })).toBeVisible();
   await expect(firstLook).toContainText("Zephyrwear");
   await expect(page.locator('[data-home="first-week-steps"]')).toBeVisible();
   await expectNoSideways(page);
