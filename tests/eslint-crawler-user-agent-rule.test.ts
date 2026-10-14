@@ -2,14 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
-// 0509#5883: the crawler's User-Agent is one identity, typed once in
-// app/lib/fetch/robots.server.ts as CRAWLER_USER_AGENT and imported by every
-// module that fetches. CRAWLER_USER_AGENT_BAN in BANNED_SYNTAX makes a second
-// literal (either old spelling, at any version) a red build. These probes boot
-// the real eslint.config.js (same rig as eslint-catch-null-rule.test.ts) and
-// hold both directions: a re-typed literal fails, the definition site's
-// interpolated template stays clean.
-
 const MESSAGE = "The crawler User-Agent is typed once";
 
 const PROBE = "app/lib/cadence.ts";

@@ -27,38 +27,13 @@ interface BrowserStub {
   close(): Promise<void>;
 }
 
-/**
- * The transport's job, pinned in real workerd rather than in a Node mock: a
- * plain `fetch` is tried first, and a site that refuses it still produces the
- * page because the reader escalates to Browser Rendering exactly once
- * (identity card P3, 0509#3971).
- *
- * The two legs are separated on purpose. The fetch leg runs against a stubbed
- * outbound `fetch` so every escalation trigger is reachable deterministically —
- * a real bot-gated site cannot be asked to gate on demand. The escalation leg
- * runs `readUrl` for real inside workerd and asserts the shape it must return,
- * including the `X-Browser-Ms-Used` value the cost model is priced from.
- *
- * What is NOT proven here, and cannot be: the real `env.BROWSER` binding. A
- * local workerd has no Browser Run service, so the binding is a stand-in that
- * records calls. The production escalation is evidenced in the PR body.
- */
-
-/** A generous body, comfortably over the extracted-text floor. */
 const SUBSTANTIAL_PAGE = `<!doctype html><html><head><title>Brand</title></head>
 <body><h1>Gymshark</h1><p>${"Official site. ".repeat(40)}</p></body></html>`;
 
-/** A challenge body under the text floor, with a recognised marker. */
 const CHALLENGE_PAGE =
   `<!doctype html><html><body><h1>Just a moment...</h1>` +
   `<p>Checking if the site connection is secure</p></body></html>`;
 
-/**
- * A stand-in for the Browser Run binding. It records every call so a test can
- * assert "exactly one escalation" rather than "at least one", and it exposes a
- * `close()` that fails loudly if the module ever reaches for the forbidden
- * browser lifecycle.
- */
 function fakeBrowser(
   response:
     | { ok: true; html: string; status?: number; browserMs?: string }
@@ -108,7 +83,6 @@ afterEach(() => {
   browserHolder.current = undefined;
 });
 
-/** Swap the outbound `fetch` for one that serves `handlers` by URL. */
 function stubFetch(handlers: Record<string, () => Response | Promise<Response>>) {
   const real = globalThis.fetch;
   const seen: string[] = [];
@@ -142,7 +116,7 @@ describe("readUrl", () => {
       expect(result.transport).toBe("fetch");
       expect(result.status).toBe(200);
       expect(result.escalated).toBe(false);
-      // The escalation's cost is not paid when the fetch stands.
+
       expect(result.browserMsUsed).toBeUndefined();
       expect(result.html).toBe(SUBSTANTIAL_PAGE);
       expect(typeof result.ms).toBe("number");
@@ -163,8 +137,7 @@ describe("readUrl", () => {
     try {
       install(browser);
       await readUrl("https://brand.example.com/");
-      // The 8 s deadline from the packet, pinned: any other value would still
-      // be an AbortSignal, so `instanceof` alone cannot catch a drift.
+
       expect(spy).toHaveBeenCalledWith(8000);
     } finally {
       stub.restore();
@@ -190,7 +163,7 @@ describe("readUrl", () => {
       expect(result.transport).toBe("browser");
       expect(result.escalated).toBe(true);
       expect(result.status).toBe(200);
-      // The number the cost model is priced from, read off the header.
+
       expect(result.browserMsUsed).toBe(4123);
       expect(result.html).toBe(SUBSTANTIAL_PAGE);
       expect(browser.calls).toEqual(["https://gated.example.com/"]);
@@ -213,7 +186,7 @@ describe("readUrl", () => {
       const result = await readUrl("https://challenge.example.com/", { mayEscalate: async () => true });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      // The status alone cannot tell gated from served: this is a 200.
+
       expect(result.transport).toBe("browser");
       expect(result.status).toBe(200);
       expect(browser.calls).toHaveLength(1);
@@ -423,7 +396,7 @@ describe("readUrl", () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("escalation-failed");
-      // One call, not two: the module must not retry.
+
       expect(browser.calls).toHaveLength(1);
     } finally {
       stub.restore();
@@ -547,8 +520,7 @@ describe("readUrl", () => {
       const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      // The throw is the case the cost model most needs to see: an escalation
-      // that ran out of browser capacity must still count.
+
       expect(result.detail).toContain("browser call threw");
       const escalation = lines
         .map((line) => JSON.parse(line) as { event?: string; browserMsUsed?: number | null })
@@ -609,7 +581,7 @@ describe("readUrl", () => {
       });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      // The whole point: no wasted fetch leg before the browser runs.
+
       expect(stub.seen).toEqual([]);
       expect(result.transport).toBe("browser");
       expect(result.escalationReason).toBe("learned");
@@ -635,7 +607,7 @@ describe("readUrl", () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("deferred");
-      // A vetoed escalation costs nothing: no browser call, no retry.
+
       expect(result.detail).toBe("browser budget refused escalation (status)");
       expect(browser.calls).toEqual([]);
     } finally {
@@ -683,8 +655,7 @@ describe("readUrl", () => {
     try {
       install(browser);
       await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
-      // A per-request close re-pays cold-launch seconds and burns the
-      // 3-instances-per-second rate limit (REBUILD-STACK.md §4.3).
+
       expect(browser.closed).toBe(0);
     } finally {
       stub.restore();
@@ -842,7 +813,7 @@ describe("readUrl", () => {
       if (result.ok) return;
       expect(result.reason).toBe("deferred");
       expect(result.detail).toBe("no browser budget callback wired (learned)");
-      // The defer fires before either leg runs: no fetch, no browser call.
+
       expect(stub.seen).toEqual([]);
       expect(browser.calls).toEqual([]);
     } finally {
@@ -895,7 +866,7 @@ describe("countExtractedChars", () => {
       `<html><head><script>${"x".repeat(500)}</script>` +
       `<style>${"y".repeat(500)}</style></head>` +
       `<body><h1>Brand name</h1><p>${"z".repeat(300)}</p></body></html>`;
-    // "Brand name" (10) + 300 z's; the script and style bodies do not count.
+
     expect(await countExtractedChars(html)).toBe(310);
   });
 

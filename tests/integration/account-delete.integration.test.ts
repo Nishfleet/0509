@@ -411,10 +411,6 @@ describe("delete my account", () => {
       revokeGrant: async () => undefined,
     };
 
-    // The request answers after this resolves, so holding it until the first
-    // grant page is listed fails a delete that walks the two one behind the
-    // other: #7247 measured 20.5s for one production delete against a 30s
-    // teardown budget, and the grant pages share nothing with the instance.
     const create = env.ACCOUNT_DELETE.create.bind(env.ACCOUNT_DELETE);
     let released = false;
     env.ACCOUNT_DELETE.create = (async (options: never) => {
