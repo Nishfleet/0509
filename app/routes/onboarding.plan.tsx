@@ -7,6 +7,7 @@ import { OnboardingFrame } from "../components/onboarding-frame";
 import { PlanGate, UpgradeStatus } from "../components/plan-gate";
 import { createCheckoutUrl } from "../lib/billing/checkout.server";
 import { isWorkspacePaid } from "../lib/billing/entitlements";
+import { reconcileCheckoutReturn } from "../lib/billing/reconcile.server";
 import { isBillingInterval, isPlanId, TRIAL_TERMS } from "../lib/billing/plans";
 import { readPlanSubscription, readPlanTier } from "../lib/data/plan.server";
 import { readPlanIntent } from "../lib/plan-intent.server";
@@ -39,8 +40,9 @@ export function headers() {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const { workspaceId } = await workspaceFor(request);
+  const { workspaceId, email } = await workspaceFor(request);
   const wantedRaw = new URL(request.url).searchParams.get("upgraded");
+  if (isPlanId(wantedRaw)) await reconcileCheckoutReturn(workspaceId, email);
   const wanted = isPlanId(wantedRaw) ? wantedRaw : null;
   const [tier, subscription] = await Promise.all([readPlanTier(workspaceId), readPlanSubscription(workspaceId)]);
   if (isWorkspacePaid(subscription, new Date())) throw redirect("/app");
