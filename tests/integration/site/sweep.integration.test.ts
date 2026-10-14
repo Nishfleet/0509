@@ -241,6 +241,40 @@ describe("nightly site sweep", () => {
     expect(polled?.last_polled_at).not.toBeNull();
   });
 
+  it("stores the before and after in readable text, not as the page's character codes", async () => {
+    const [rival] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
+    if (rival === undefined) throw new Error("expected the rival's homepage");
+    const page = (price: string) =>
+      `<!doctype html><html><body><p>Men&#x27;s &amp; women&#x27;s plans start at ${price} a month.</p><p>${PAD}</p></body></html>`;
+    readHolder.html = page("ten dollars");
+    await checkSitePage(rival, await nextTick("codes-1"));
+    readHolder.html = page("twelve dollars");
+    const changed = await checkSitePage(rival, await nextTick("codes-2"));
+    if (changed.outcome !== "changed") throw new Error("expected a change");
+    await publishSiteChange(rival, changed);
+
+    const stored = await env.SNAPSHOTS.get(`snapshot/site/${rival.watchId}/${changed.snapshotId}.diff.json`);
+    const diff = JSON.stringify(JSON.parse((await stored?.text()) ?? "null"));
+    expect(diff).toContain("Men's & women's plans start at twelve dollars a month.");
+    expect(diff).not.toMatch(/&#x27;|&amp;/);
+  });
+
+  it("files nothing when only the way a character is written changed", async () => {
+    const [rival] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
+    if (rival === undefined) throw new Error("expected the rival's homepage");
+    const page = (apostrophe: string) =>
+      `<!doctype html><html><body><p>Men${apostrophe}s plans start at ten dollars a month.</p><p>${PAD}</p></body></html>`;
+    readHolder.html = page("&#x27;");
+    await checkSitePage(rival, await nextTick("same-1"));
+    readHolder.html = page("'");
+    const changed = await checkSitePage(rival, await nextTick("same-2"));
+    expect(changed.outcome).toBe("changed");
+    if (changed.outcome !== "changed") throw new Error("expected a change");
+    await publishSiteChange(rival, changed);
+
+    expect(await signals()).toEqual([]);
+  });
+
   it("judges the filed change signal, and a retried publish judges the same signal", async () => {
     Reflect.set(env, "AI", {
       async run(_model: string, request: { questions: Record<string, { type: string }> }) {

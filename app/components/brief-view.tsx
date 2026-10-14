@@ -1,7 +1,8 @@
 import { Fragment, type ReactElement } from "react";
 
 import { ReadThisFirst } from "./read-this-first";
-import { rankTrendLine, sinceStartedLine, type BriefPayload } from "../lib/brief-payload";
+import type { BriefPayload } from "../lib/brief-payload";
+import { rankTrendLine, sinceStartedLine } from "../lib/brief-since";
 
 const SECTION = "mt-5 border-t border-line pt-4";
 const HEAD = "font-mono text-eyebrow text-ink-soft uppercase";
@@ -21,7 +22,7 @@ export function BriefView({ payload }: { payload: BriefPayload }) {
 }
 
 function headlineBlock(payload: BriefPayload): ReactElement {
-  const trend = payload.is_unjudged || payload.headline_total < 2 ? null : rankTrendLine(payload);
+  const trend = rankTrendLine(payload);
   return (
     <section data-brief-block="headline">
       <h2 className="font-display text-[1.5rem] leading-[1.2] text-ink">

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { formatBriefAt, hourLabel, parseBriefSchedule } from "../../app/lib/brief-settings";
+import { parseBriefSchedule } from "../../app/lib/brief-schedule-input";
+import { formatBriefAt, hourLabel } from "../../app/lib/brief-settings";
 
 describe("the brief schedule form", () => {
   it("accepts a day, an hour and a real time zone", () => {
