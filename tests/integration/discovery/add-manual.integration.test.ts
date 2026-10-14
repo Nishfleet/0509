@@ -73,7 +73,7 @@ describe("handleCompetitorIntent intent=add", () => {
     const workspaceId = await seedWorkspace();
     vi.stubGlobal("fetch", NOT_FOUND);
     const result = await handleCompetitorIntent(workspaceId, addForm("gymshark.com"));
-    expect(result).toEqual({ message: null });
+    expect(result).toEqual({ message: null, added: true });
 
     const rows = await env.DB.prepare(
       "SELECT id, workspace_id, role, domain, name, origin, state FROM entity WHERE workspace_id = ? AND role = 'competitor'",
@@ -112,7 +112,7 @@ describe("handleCompetitorIntent intent=add", () => {
       ),
     );
     const result = await handleCompetitorIntent(workspaceId, addForm("gymshark.com"));
-    expect(result).toEqual({ message: null });
+    expect(result).toEqual({ message: null, added: true });
     const row = await env.DB.prepare("SELECT name FROM entity WHERE workspace_id = ? AND domain = 'gymshark.com'")
       .bind(workspaceId)
       .first<{ name: string | null }>();
@@ -124,7 +124,7 @@ describe("handleCompetitorIntent intent=add", () => {
     vi.stubGlobal("fetch", wikidataGymshark);
 
     const result = await handleCompetitorIntent(workspaceId, addForm("Gymshark"));
-    expect(result).toEqual({ message: null });
+    expect(result).toEqual({ message: null, added: true });
 
     const rows = await env.DB.prepare(
       "SELECT id, workspace_id, role, domain, name, origin, state FROM entity WHERE workspace_id = ? AND role = 'competitor'",
@@ -211,7 +211,7 @@ describe("handleCompetitorIntent intent=add", () => {
     const workspaceId = await seedWorkspace();
     vi.stubGlobal("fetch", wikidataGymshark);
     const result = await handleCompetitorIntent(workspaceId, addForm("Gymshark"));
-    expect(result).toEqual({ message: null });
+    expect(result).toEqual({ message: null, added: true });
     const added = await env.DB.prepare(
       "SELECT id FROM entity WHERE workspace_id = ? AND role = 'competitor' AND domain = 'gymshark.com'",
     )
