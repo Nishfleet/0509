@@ -4,7 +4,6 @@ import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { isWorkspacePaid } from "../../app/lib/billing/subscription-state";
 import { markDigestSentStatement } from "../../app/lib/data/digest.server";
 import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
-import type { SuppressionScope } from "../../app/lib/mail-kind";
 import { claimIncidentNotice, incidentWasAnnounced } from "../../app/lib/data/incident_notice.server";
 import { readEntitlements } from "../../app/lib/data/plan.server";
 import {
@@ -20,6 +19,7 @@ import {
   readSlackTarget,
   writeUnsubscribeToken,
 } from "../../app/lib/data/send_target.server";
+import type { SuppressionScope } from "../../app/lib/mail-kind";
 import { insertSignalDeliveries } from "../../app/lib/data/signal_delivery.server";
 import { localDay, startOfLocalDay } from "../../app/lib/alert-day";
 import { TEAMMATE_RETRY_DELAY_SECONDS, TEAMMATE_SEND_TRIES } from "../../app/lib/teammate-limit";
