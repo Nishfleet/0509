@@ -14,7 +14,7 @@ export async function copyMissingPage(cursor?: string): Promise<BackupPage> {
   const totals = await listed.objects.reduce<Promise<{ copied: number; present: number }>>(
     async (pending, object) => {
       const soFar = await pending;
-      if ((await env.SNAPSHOTS_BACKUP.head(object.key)) !== null) {
+      if ((await env.SNAPSHOTS_BACKUP.head(object.key))?.size === object.size) {
         return { ...soFar, present: soFar.present + 1 };
       }
       const source = await env.SNAPSHOTS.get(object.key);
