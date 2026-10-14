@@ -90,8 +90,7 @@ function OnePager({ data }: { data: Route.ComponentProps["loaderData"] }) {
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   const { competitor } = loaderData;
   const fetcher = useFetcher();
-  const pending = fetcher.formData?.get("intent");
-  const state = pending === "on" || pending === "off" ? pending : competitor.state;
+  const state = (["on", "off"] as const).find((value) => value === fetcher.formData?.get("intent")) ?? competitor.state;
   const pausedAt = competitor.state === "off" ? competitor.stateChangedAt : null;
   return (
     <main className="mx-auto flex max-w-6xl min-w-0 flex-col gap-10 px-4 py-10">
