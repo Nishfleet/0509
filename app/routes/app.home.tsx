@@ -25,7 +25,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   if (inputs === null) throw redirect("/onboarding");
   const payload = inputs.payload;
   const openId = resolveOpenId(new URL(request.url).searchParams.get("open"), payload, inputs.entities);
-  const { sources, siteFill, howRanked, moves, evidence } = await timings.measure(
+  const { sources, siteFill, howRanked, moves, evidence, firstLook } = await timings.measure(
     "reads",
     readHomeReads(workspaceId, payload, openId),
   );
@@ -34,6 +34,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       view: homeView({ ...inputs, moves, now: new Date() }),
       open: openId,
       evidence,
+      firstLook,
       howRanked,
       freshness: freshnessEntries(sources, Date.now()),
       siteFill,
@@ -76,6 +77,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         howRanked={loaderData.howRanked}
         openId={loaderData.open}
         evidence={loaderData.evidence}
+        firstLook={loaderData.firstLook}
         showEyebrow={false}
       />
       {loaderData.siteFill === "pending" || loaderData.siteFill === "gave_up" ? (

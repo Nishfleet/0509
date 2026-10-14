@@ -1,4 +1,5 @@
 import { escapeHtml } from "../../app/lib/html";
+import { preheaderHtml } from "../../app/lib/preheader";
 
 const COLORS = {
   page: "#f4f1e8",
@@ -60,13 +61,6 @@ function emailStyle(): string {
     `}`,
     `</style>`,
   ].join("");
-}
-
-const PREHEADER_STYLE =
-  "display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;";
-
-function preheaderHtml(preheader: string): string {
-  return preheader === "" ? "" : `<div style="${PREHEADER_STYLE}">${escapeHtml(preheader)}</div>`;
 }
 
 export function emailDocument(title: string, body: string, preheader = ""): string {

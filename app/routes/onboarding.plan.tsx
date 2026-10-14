@@ -63,9 +63,9 @@ export async function action({ request }: Route.ActionArgs) {
   return url === null ? UNAVAILABLE : redirect(url);
 }
 
-export default function Page({ loaderData, actionData }: Route.ComponentProps) {
+function Choices({ loaderData }: { loaderData: Route.ComponentProps["loaderData"] }) {
   return (
-    <OnboardingFrame step={4} heading="Start your trial">
+    <>
       <p className="mt-3 max-w-prose leading-[1.55] text-ink-soft">{TRIAL_TERMS}</p>
       <div className="mt-8">
         {loaderData.picked === null ? null : (
@@ -77,6 +77,15 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           <PlanGate key={plan.id} planId={plan.id} action={loaderData.checkoutPath} />
         ))}
       </div>
+    </>
+  );
+}
+
+export default function Page({ loaderData, actionData }: Route.ComponentProps) {
+  const confirming = loaderData.wanted !== null && loaderData.tier !== loaderData.wanted;
+  return (
+    <OnboardingFrame step={4} heading={confirming ? "Almost there" : "Start your trial"}>
+      {confirming ? null : <Choices loaderData={loaderData} />}
       <UpgradeStatus tier={loaderData.tier} wanted={loaderData.wanted} />
       {actionData?.message ? (
         <p role="alert" className="mt-4 text-[0.95rem]">

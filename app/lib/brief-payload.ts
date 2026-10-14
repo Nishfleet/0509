@@ -66,6 +66,7 @@ const checkedSchema = z
     mention_count: count,
     site_change_count: count,
     new_ad_count: count,
+    total_change_count: z.number().optional().catch(undefined),
     source_keys: keepValid(z.string()),
     degraded_source_keys: keepValid(z.string()),
     degraded_sources: keepValid(degradedSourceSchema),
@@ -109,6 +110,12 @@ const briefPayloadSchema = z.object({
 });
 
 export type BriefPayload = z.output<typeof briefPayloadSchema>;
+
+export function sinceStartedLine(checked: BriefPayload["checked"]): string | null {
+  const running = checked.total_change_count ?? 0;
+  if (running <= checked.site_change_count) return null;
+  return `${String(running)} site ${running === 1 ? "change" : "changes"} caught since you started`;
+}
 
 export interface BriefContext {
   unsubscribe_url: string | null;
