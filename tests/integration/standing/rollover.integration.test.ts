@@ -12,15 +12,6 @@ import {
 } from "../../../app/lib/brief-schedule";
 import { runNightlyStanding } from "../../../workers/standing/nightly";
 
-/**
- * The weekly rollover and the nightly cron against real workerd, real local D1
- * and the real Workflows binding (0509#3978, 0509#4004).
- *
- * Dates are taken relative to the real clock: `step.sleepUntil` and the
- * successor instance run on real time, so a fixed date would either never wake
- * or wake a chain of successors once the calendar passed it.
- */
-
 let runs = 0;
 let WS = "";
 let USER = "";
