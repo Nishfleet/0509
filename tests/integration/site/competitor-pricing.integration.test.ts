@@ -159,6 +159,21 @@ describe("a competitor's pricing page", () => {
     ]);
   });
 
+  it("backs off three days and keeps the home page readable when Jev answers nothing at all", async () => {
+    Reflect.set(env, "AI", { run: () => Promise.reject(new Error("2003: Rate limit exceeded")) });
+    const deferred = async (): Promise<string | null> =>
+      (
+        await env.DB.prepare("SELECT deferred_at FROM page WHERE entity_id = ?1 AND role = 'home'").bind(RIVAL).first<{
+          deferred_at: string | null;
+        }>()
+      )?.deferred_at ?? null;
+
+    expect(await classifyCompetitorSites(NOW)).toBe(1);
+    expect(await deferred()).toBeNull();
+    expect(await classifyCompetitorSites("2026-10-03T02:00:00Z")).toBe(0);
+    expect(await classifyCompetitorSites("2026-10-06T02:00:00Z")).toBe(1);
+  });
+
   it("marks the home page as read after a pass that finds no pricing page, so it is not read again", async () => {
     const quiet = HOME_HTML.replace("/plans", "/team");
     vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
