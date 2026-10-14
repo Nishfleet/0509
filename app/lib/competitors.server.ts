@@ -23,9 +23,11 @@ export interface CompetitorActionResult {
   message: string | null;
   upgradePlanId?: PlanId | null;
   returning?: boolean;
+  added?: boolean;
 }
 
 const DONE: CompetitorActionResult = { message: null };
+const ADDED: CompetitorActionResult = { message: null, added: true };
 const COULD_NOT_READ: CompetitorActionResult = {
   message: "We couldn't read that. Try their main website, like brand.com.",
 };
@@ -119,7 +121,7 @@ async function addCompetitor(workspaceId: string, raw: string, now: string): Pro
   });
   if (outcome === "at_cap") return capRefusal(workspaceId, cap);
   await tryFirstLook(workspaceId, domain);
-  return DONE;
+  return ADDED;
 }
 
 const SUGGESTION_INTENTS = new Map([

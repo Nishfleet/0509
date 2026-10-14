@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { nextBriefAt } from "../../app/lib/brief-schedule";
-import { formatBriefAt, parseBriefSchedule, WEEKDAYS } from "../../app/lib/brief-settings";
+import { parseBriefSchedule } from "../../app/lib/brief-schedule-input";
+import { formatBriefAt, WEEKDAYS } from "../../app/lib/brief-settings";
 
 describe("parseBriefSchedule", () => {
   it("accepts a day, an hour and a real time zone", () => {
