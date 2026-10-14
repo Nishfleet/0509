@@ -38,8 +38,8 @@ vi.mock("react-router", async (importOriginal) => {
   return { ...actual, useFetcher: () => ({ state: fetcher.value.state, data: fetcher.value.data, Form }) };
 });
 
-function render(plan: PlanSummary): string {
-  const Stub = createRoutesStub([{ path: "/", Component: () => createElement(PlanSection, { plan }) }]);
+function render(plan: PlanSummary, countLine: string | null = null): string {
+  const Stub = createRoutesStub([{ path: "/", Component: () => createElement(PlanSection, { plan, countLine }) }]);
   const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
   fetcher.value = { state: "idle", data: undefined };
   return html;
@@ -68,6 +68,13 @@ function paragraphWrapping(html: string, text: string): string {
 }
 
 describe("PlanSection", () => {
+  it("shows how many competitors the plan is watching, and nothing when it has no count", () => {
+    const line = "Watching 3 of 15 competitors on your plan.";
+    expect(render(BILLED, line)).toContain(`data-slot="plan-usage"`);
+    expect(render(BILLED, line)).toContain(line);
+    expect(render(BILLED)).not.toContain("plan-usage");
+  });
+
   it("offers the next plan to someone with no payment set up", () => {
     const html = render({ tier: "scout", status: "none", currentPeriodEnd: null, trialing: false, billed: false });
     expect(html).toContain("Upgrade to Starter");
