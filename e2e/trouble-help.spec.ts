@@ -57,6 +57,19 @@ test("a rival site that blocks us says what to do next", async ({ page }) => {
   await expect(note).toContainText("We couldn't read their website.");
   await expect(note).toContainText("add it under Another website of theirs below");
   await expect(page.getByRole("heading", { name: "Another website of theirs" })).toBeVisible();
+  await expect(page.getByText("Watching from today.")).toHaveCount(0);
+  await expect(page.getByText("First read tonight")).toHaveCount(0);
+  await expect(page.getByText("our first read is tonight")).toHaveCount(0);
+  await expect(page.getByText("We couldn't read their website, so there is nothing to score yet.")).toBeVisible();
+});
+
+test("Home does not say it is still reading a site we cannot read", async ({ page }) => {
+  const { cookie } = await seedPreviewSession("trouble-home", seed);
+  await page.setExtraHTTPHeaders({ cookie });
+
+  await page.goto("/app");
+  await expect(page.getByText("We couldn't read their website. We keep trying.")).toBeVisible();
+  await expect(page.getByText("Reading its site now")).toHaveCount(0);
 });
 
 test("Alerts says how to reach a person", async ({ page }) => {

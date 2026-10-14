@@ -48,6 +48,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           <SlackAlertsSetting
             connected={loaderData.slackConnected}
             revoked={loaderData.slackRevoked}
+            emailAlerts={loaderData.changeAlerts}
             error={actionData?.slackError ?? null}
           />
           <DismissedBrands dismissed={loaderData.dismissed} />
