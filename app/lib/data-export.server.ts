@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 
 import { readPlanSummary } from "./data/plan.server";
-import { readEmailTarget } from "./data/send_target.server";
+import { listTeammates, readEmailTarget } from "./data/send_target.server";
 
 const SIGNAL_LIMIT = 10_000;
 
@@ -47,18 +47,26 @@ async function allRows<T extends Record<string, unknown>>(
   ).results;
 }
 
+async function readBriefRecipients(db: D1Database, workspaceId: string, fallbackEmail: string) {
+  const [target, teammates] = await Promise.all([readEmailTarget(db, workspaceId), listTeammates(db, workspaceId)]);
+  return {
+    briefDeliveryEmail: target?.target_value ?? fallbackEmail,
+    teammates: teammates.map((mate) => ({ address: mate.target_value, confirmed: mate.is_verified === 1 })),
+  };
+}
+
 export async function readWorkspaceExport(input: { workspaceId: string; userId: string; email: string; now: Date }) {
   const { workspaceId, userId } = input;
   const db = env.DB;
   const owner = await db.prepare(SELECT_OWNER).bind(userId).first<{ name: string; email: string }>();
   if (owner === null) return null;
-  const [workspace, brands, signals, briefs, target, sessions, passkeys, keys, choices, decisions, incidents, plan] =
+  const [workspace, brands, signals, briefs, mail, sessions, passkeys, keys, choices, decisions, incidents, plan] =
     await Promise.all([
       db.prepare(SELECT_WORKSPACE).bind(workspaceId).first(),
       allRows(db, SELECT_BRANDS, workspaceId),
       allRows(db, SELECT_SIGNALS, workspaceId, SIGNAL_LIMIT + 1),
       allRows(db, SELECT_BRIEFS, workspaceId),
-      readEmailTarget(db, workspaceId),
+      readBriefRecipients(db, workspaceId, input.email),
       allRows(db, SELECT_SESSIONS, userId),
       allRows(db, SELECT_PASSKEYS, userId),
       allRows(db, SELECT_KEYS, userId),
@@ -72,7 +80,7 @@ export async function readWorkspaceExport(input: { workspaceId: string; userId: 
     account: {
       name: owner.name,
       signInEmail: owner.email,
-      briefDeliveryEmail: target?.target_value ?? input.email,
+      ...mail,
     },
     sessions,
     passkeys,

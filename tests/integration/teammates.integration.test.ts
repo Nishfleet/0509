@@ -95,7 +95,9 @@ describe("teammates on the brief", () => {
       .run();
 
     expect(await add("gone@0509.io")).toMatch(/unsubscribed/);
-    expect(await add("not an address")).toMatch(/Enter an email address/);
+    for (const bad of ["not an address", "a,b@0509.io", "a b@0509.io", "a@localhost", "a@@0509.io"]) {
+      expect(await add(bad)).toMatch(/Enter an email address/);
+    }
     expect(sentMail).toHaveLength(0);
     expect(await readTeammates(firstWorkspaceId(USER_ID))).toEqual([]);
   });

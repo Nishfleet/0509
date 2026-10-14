@@ -3,6 +3,5 @@ export function normalizeEmailAddress(address: string): string {
 }
 
 export function looksLikeEmailAddress(address: string): boolean {
-  const at = address.indexOf("@");
-  return at >= 1 && at === address.lastIndexOf("@") && at < address.length - 1;
+  return /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(address);
 }
