@@ -174,7 +174,7 @@ export async function insertAlternatePage(input: {
 const RECORD_TRANSPORT =
   "UPDATE page SET transport = ?2, transport_reason = ?3, transport_tested_at = ?4, deferred_at = NULL WHERE id = ?1";
 
-const MARK_LINKS_READ = "UPDATE page SET links_read_at = ?2 WHERE id = ?1";
+const MARK_LINKS_READ = "UPDATE page SET links_read_at = ?2, links_retry_at = NULL WHERE id = ?1";
 
 const MARK_LINKS_RETRY = "UPDATE page SET links_retry_at = ?2 WHERE id = ?1";
 
