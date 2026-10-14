@@ -24,7 +24,7 @@ export function CompetitorNote({ note, error }: CompetitorNoteProps): ReactEleme
       </p>
       <Form method="post" className="mt-3 flex flex-col gap-3">
         <input type="hidden" name="intent" value="note" />
-        <label htmlFor="competitor-note-body" className="text-meta">
+        <label htmlFor="competitor-note-body" className="font-mono text-meta text-ink-soft uppercase">
           What you know about them
         </label>
         <textarea
@@ -36,14 +36,14 @@ export function CompetitorNote({ note, error }: CompetitorNoteProps): ReactEleme
           placeholder="They discount every Q4. Raise their enterprise tier at renewal."
           aria-invalid={error === null ? undefined : true}
           aria-describedby={error === null ? undefined : "competitor-note-error"}
-          className="min-h-24 w-full border border-ink bg-transparent p-3 text-body"
+          className="min-h-24 w-full rounded-none border-[1.5px] border-ink bg-card p-4 text-body text-ink outline-none placeholder:text-ink-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
         />
         {error === null ? null : (
           <p id="competitor-note-error" role="alert" className="text-[0.95rem]">
             {error}
           </p>
         )}
-        <Button type="submit" variant="secondary" className="self-start" disabled={saving}>
+        <Button type="submit" variant="secondary" size="lg" className="self-start" disabled={saving}>
           {saving ? "Saving…" : "Save note"}
         </Button>
       </Form>
