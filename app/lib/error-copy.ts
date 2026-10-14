@@ -26,7 +26,7 @@ export function errorCopy(error: unknown, pathname: string): ErrorCopy {
   }
   if (status === 403) {
     return {
-      title: "You cannot open this page",
+      title: "You can't open this page",
       detail: "This page belongs to another account. Sign in with the right one, or go back to the home page.",
       retry: false,
     };

@@ -25,7 +25,7 @@ describe("error page by cause", () => {
   const response = (status: number) => ({ status, statusText: LEAK, internal: true, data: LEAK });
 
   it.each([
-    [403, "You cannot open this page", false],
+    [403, "You can&#x27;t open this page", false],
     [401, "Sign in to continue", false],
     [429, "Too many requests", true],
     [500, "Something went wrong", true],
