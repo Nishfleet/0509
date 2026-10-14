@@ -45,7 +45,11 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           {loaderData.schedule === null ? null : <BriefSection schedule={loaderData.schedule} />}
           <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
           <ChangeAlertsSetting on={loaderData.changeAlerts} />
-          <SlackAlertsSetting connected={loaderData.slackConnected} error={actionData?.slackError ?? null} />
+          <SlackAlertsSetting
+            connected={loaderData.slackConnected}
+            revoked={loaderData.slackRevoked}
+            error={actionData?.slackError ?? null}
+          />
           <DismissedBrands dismissed={loaderData.dismissed} />
           <AgentsSection />
           <PlanSection plan={loaderData.plan} countLine={loaderData.countLine} returning={loaderData.returning} />
