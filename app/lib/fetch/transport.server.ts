@@ -67,8 +67,6 @@ const CHALLENGE_MARKERS = [
   "pardon our interruption",
   "incapsula incident id",
   "errors.edgesuite.net",
-  "captcha-delivery.com",
-  "px-captcha",
   "sucuri website firewall - access denied",
 ] as const;
 

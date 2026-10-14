@@ -7,6 +7,7 @@ import { requestContext } from "../app/lib/agent/context.server";
 import { createOAuthProvider } from "../app/lib/agent/oauth.server";
 import { runNightlySlackBackfill } from "../app/lib/data/send_target.server";
 import { stampFirstSignals } from "../app/lib/data/onboarding_run.server";
+import { startBillingReconcile } from "../app/lib/billing/reconcile.server";
 import { startNightlyDiscovery, startWeeklyRefresh } from "../app/lib/discovery/start.server";
 import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
 import { withTransportSecurityHeaders } from "../app/lib/security-headers";
@@ -34,6 +35,7 @@ import { FeedSweep } from "./workflows/feed-sweep";
 import { HiringSweep } from "./workflows/hiring-sweep";
 import { OwnSiteCheck } from "./workflows/own-site-check";
 import { SiteSweep } from "./workflows/site-sweep";
+import { BillingReconcile } from "./workflows/billing-reconcile";
 import { SnapshotBackup } from "./workflows/snapshot-backup";
 import { MentionsSweep } from "./workflows/mentions";
 import { StandingRollover } from "./workflows/standing-rollover";
@@ -76,6 +78,7 @@ const handler = {
           sendTrialReminders(env, now),
           startNightlyDiscovery(now),
           ...nightlyDataChecks(env.DB, now),
+          startBillingReconcile(now),
           stampFirstSignals(),
           runNightlySlackBackfill(env.DB),
           runNightlyCostGuard(env.DB, env.CLOUDFLARE_API_TOKEN, controller.scheduledTime),
@@ -146,6 +149,8 @@ export class SiteSweepWorkflow extends instrumentWorkflowWithSentry(sentryOption
 export class HiringSweepWorkflow extends instrumentWorkflowWithSentry(sentryOptions, HiringSweep) {}
 
 export class FeedSweepWorkflow extends instrumentWorkflowWithSentry(sentryOptions, FeedSweep) {}
+
+export class BillingReconcileWorkflow extends instrumentWorkflowWithSentry(sentryOptions, BillingReconcile) {}
 
 export class SnapshotBackupWorkflow extends instrumentWorkflowWithSentry(sentryOptions, SnapshotBackup) {}
 

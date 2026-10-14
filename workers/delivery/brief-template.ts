@@ -6,7 +6,7 @@ import {
 } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
 import { countPhrase } from "../../app/lib/quiet-week";
-import { UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
+import { NOTHING_FIRST_LINE, UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
 import { EYEBROW, FONT, MONO, emailDocument, postalLine } from "./email-shell";
 import { SETTINGS_LINK, supportLineHtml, supportLineText } from "./alert-footer";
 
@@ -24,7 +24,7 @@ const COPY = {
   new: "new",
   firstRanking: "your first ranking",
   readThisFirst: "Read this first",
-  nothingFirst: "Nothing this week needed reading first.",
+  nothingFirst: NOTHING_FIRST_LINE,
   unjudged: UNJUDGED_WEEK_LINE,
   yourBrands: "Your tracked brands",
   ownSiteOk: "Your site looks fine.",
