@@ -17,7 +17,7 @@ interface ConfigModule {
 
 async function loadConfig(): Promise<ConfigModule> {
   const url = pathToFileURL(path.join(REPO_ROOT, "eslint.config.js")).href;
-  return (await import(url)) as ConfigModule;
+  return (await import(/* @vite-ignore */ url)) as ConfigModule;
 }
 
 const PROBES: { file: string; statement: string; foreign: boolean }[] = [
