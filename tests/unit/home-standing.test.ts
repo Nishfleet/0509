@@ -527,9 +527,9 @@ describe("Home chips", () => {
 });
 
 describe("four-week chart", () => {
-  it("shows the history weeks ascending, with the London week labelled 21 SEP", () => {
+  it("shows the history weeks ascending, with the London week labelled 21 SEPT", () => {
     const standing = chartStanding(HISTORY);
-    expect(standing.chart.weeks).toEqual(["24 AUG", "31 AUG", "7 SEP", "14 SEP", "21 SEP"]);
+    expect(standing.chart.weeks).toEqual(["24 AUG", "31 AUG", "7 SEPT", "14 SEPT", "21 SEPT"]);
   });
 
   it("keeps a missing week as null, never a zero", () => {
@@ -557,6 +557,6 @@ describe("four-week chart", () => {
     const standing = chartStanding([{ entity_id: "ent_self", week_start_at: "2026-09-20T23:00:00.000Z", rank: 1 }]);
     expect(standing.chart.lines).toHaveLength(1);
     expect(standing.chart.lines[0]?.ranks).toHaveLength(1);
-    expect(standing.chart.weeks).toEqual(["21 SEP"]);
+    expect(standing.chart.weeks).toEqual(["21 SEPT"]);
   });
 });

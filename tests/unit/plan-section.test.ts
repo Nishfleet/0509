@@ -78,7 +78,7 @@ describe("PlanSection", () => {
   it("offers the next plan to someone with no payment set up", () => {
     const html = render({ tier: "scout", status: "none", currentPeriodEnd: null, trialing: false, billed: false });
     expect(html).toContain("Upgrade to Starter");
-    expect(html).toContain("€46/mo");
+    expect(html).toContain("€46/month");
   });
 
   it("offers the next plan again, and keeps billing history, once a paid plan has ended", () => {
