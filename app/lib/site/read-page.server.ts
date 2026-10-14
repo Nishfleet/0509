@@ -69,10 +69,7 @@ export async function readPage(
 ): Promise<ReadUrlResult> {
   const isRival = target.entityRole !== "self";
   const shared = isRival ? await readSharedPage(target.url, now) : null;
-  if (shared !== null) {
-    if (!learnedBrowser(target, now)) await rememberTransport(target, shared, now);
-    return shared;
-  }
+  if (shared !== null) return shared;
   const read = await readLive(target, now, options);
   if (!read.ok) {
     if (read.reason === "deferred") await markPageDeferred(target.pageId, now);

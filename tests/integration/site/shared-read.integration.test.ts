@@ -81,6 +81,13 @@ describe("a rival's public page, read for several workspaces", () => {
     expect(read).toMatchObject({ ok: true, transport: "fetch", status: 200 });
   });
 
+  it("reads the page itself when the shared copy cannot be read", async () => {
+    vi.spyOn(env.IDENTITY_CACHE, "get").mockRejectedValue(new Error("KV GET failed: 429"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const read = await readPage(targetFor("ws-a", "competitor"), NIGHT_ONE);
+    expect(read).toMatchObject({ ok: true, transport: "fetch", status: 200 });
+  });
+
   it("is never shared for the owner's own page, which each workspace reads for itself", async () => {
     await readPage(targetFor("ws-a", "self"), NIGHT_ONE);
     await readPage(targetFor("ws-b", "self"), NIGHT_ONE);

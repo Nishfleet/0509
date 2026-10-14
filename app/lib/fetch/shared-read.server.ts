@@ -23,10 +23,15 @@ async function keyFor(url: string, sweep: string): Promise<string> {
 }
 
 export async function readSharedPage(url: string, sweep: string): Promise<SharedRead | null> {
-  const stored = await env.IDENTITY_CACHE.get(await keyFor(url, sweep));
-  if (stored === null) return null;
-  const parsed = sharedRead.safeParse(JSON.parse(stored));
-  return parsed.success ? { ...parsed.data, escalated: false } : null;
+  try {
+    const stored = await env.IDENTITY_CACHE.get(await keyFor(url, sweep));
+    if (stored === null) return null;
+    const parsed = sharedRead.safeParse(JSON.parse(stored));
+    return parsed.success ? { ...parsed.data, escalated: false } : null;
+  } catch (error) {
+    console.error(JSON.stringify({ event: "site.shared_read_failed", error: String(error) }));
+    return null;
+  }
 }
 
 export async function keepSharedPage(url: string, sweep: string, read: SharedRead): Promise<void> {
