@@ -18,7 +18,8 @@ function rivalNames(ctx: WelcomeContext): string {
 }
 
 function watching(ctx: WelcomeContext, namedInSubject: boolean): string {
-  if (ctx.rival_count === 0) return "Add the rivals you want to keep an eye on and we'll start reading their sites.";
+  if (ctx.rival_count === 0)
+    return "Add the competitors you want to keep an eye on and we'll start reading their sites.";
   if (namedInSubject) return "We read each site every night. Anything that changes is kept as a before and after.";
   return `We're watching ${rivalNames(ctx)}. Anything that changes on their sites from here is kept as a before and after.`;
 }

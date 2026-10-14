@@ -90,7 +90,7 @@ describe("the change alerts setting", () => {
       const html = stubbed(createElement(ChangeAlertsSetting, { on }));
 
       expect(html).toContain('data-testid="change-alerts-setting"');
-      expect(html).toContain('aria-label="Immediate alerts when a rival changes price or plan"');
+      expect(html).toContain('aria-label="Immediate alerts when a competitor changes price or plan"');
 
       const described = describedBy(switchTag(html));
       expect(described).toBeDefined();
