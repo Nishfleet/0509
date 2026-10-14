@@ -15,7 +15,8 @@ import { isPlanId } from "../lib/billing/plans";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import type { CompetitorRow } from "../lib/data/entity.server";
 import { readCompetitors } from "../lib/data/entity.server";
-import { readPlanTier } from "../lib/data/plan.server";
+import { readEntitlements, readPlanTier } from "../lib/data/plan.server";
+import { competitorCountLine } from "../lib/competitor-count";
 import { onboardedContext } from "../lib/require-onboarded.server";
 import { cn } from "../lib/utils";
 
@@ -32,8 +33,18 @@ function workspaceFrom(context: Route.LoaderArgs["context"]): string {
 export async function loader({ request, context }: Route.LoaderArgs) {
   const workspaceId = workspaceFrom(context);
   const wanted = new URL(request.url).searchParams.get("upgraded");
-  const [competitors, tier] = await Promise.all([readCompetitors(workspaceId), readPlanTier(workspaceId)]);
-  return { ...competitors, tier, wanted: isPlanId(wanted) ? wanted : null };
+  const [competitors, tier, entitlements] = await Promise.all([
+    readCompetitors(workspaceId),
+    readPlanTier(workspaceId),
+    readEntitlements(workspaceId),
+  ]);
+  const watching = competitors.competitors.filter((competitor) => competitor.state === "on").length;
+  return {
+    ...competitors,
+    tier,
+    countLine: competitorCountLine(watching, entitlements.competitors),
+    wanted: isPlanId(wanted) ? wanted : null,
+  };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -77,13 +88,16 @@ function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
-  const { competitors, maybes, questions, tier, wanted } = loaderData;
+  const { competitors, maybes, questions, tier, wanted, countLine } = loaderData;
   return (
     <main className={PAGE}>
       <PageHeading
         title="Competitors"
         lede="Each competitor has one switch. Turn it off to stop watching and alerts. Your history stays."
       />
+      <p data-slot="competitor-count" className="mt-2 text-body-sm text-ink-soft">
+        {countLine}
+      </p>
       <UpgradeStatus tier={tier} wanted={wanted} />
       {competitors.length === 0 ? (
         <div className="mt-8">
