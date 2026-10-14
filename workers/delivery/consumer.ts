@@ -47,6 +47,7 @@ interface MessageRow {
   kind: string;
   subject: string | null;
   payload_json: string;
+  status: string;
 }
 
 interface TargetRow {
@@ -98,7 +99,7 @@ export const CHANGE_DAILY_CAP = 5;
 
 async function readDigest(env: Env, digestId: string): Promise<MessageRow | null> {
   return env.DB.prepare(
-    `SELECT id, workspace_id, kind, subject, payload_json
+    `SELECT id, workspace_id, kind, subject, payload_json, status
        FROM digest
       WHERE id = ? AND status <> 'failed'`,
   )
@@ -319,7 +320,7 @@ async function sendToTeammate(env: Env, digest: MessageRow, mate: TargetRow): Pr
 
 async function sendToTeammates(env: Env, digestId: string): Promise<void> {
   const digest = await readDigest(env, digestId);
-  if (!digest) return;
+  if (digest?.status !== "sent") return;
   for (const mate of await readConfirmedTeammates(env.DB, digest.workspace_id)) {
     await sendToTeammate(env, digest, mate).catch((cause: unknown) => {
       console.error(JSON.stringify({ event: "delivery.teammate_failed", error: redactEmailShaped(errorText(cause)) }));

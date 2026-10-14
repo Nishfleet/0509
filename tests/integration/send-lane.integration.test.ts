@@ -269,6 +269,23 @@ describe("send lane (0509#3979)", () => {
     expect(mate?.status).toBe("failed");
   });
 
+  it("(teammates) a teammate waits while another worker still holds the owner's send", async () => {
+    const rec = recorder();
+    const digestId = await seedDigest("pending");
+    await seedTeammate("mate-1", "mate@0509.io", true);
+    await env.DB.prepare(
+      `INSERT INTO send_attempt (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at)
+       VALUES ('held', ?, ?, ?, ?, 'pending', ?)`,
+    )
+      .bind(WS, TARGET_ID, digestId, `digest:${digestId}:${TARGET_ID}`, new Date().toISOString())
+      .run();
+
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
+
+    expect(result.outcome).toBe("duplicate");
+    expect(rec.sent).toHaveLength(0);
+  });
+
   it("(teammates) nobody else gets the brief when the owner's send fails", async () => {
     const rec = recorder();
     rec.fail = new Error("smtp down");
