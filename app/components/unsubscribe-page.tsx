@@ -1,7 +1,7 @@
 import { Form } from "react-router";
 
 import type { SuppressionScope } from "../lib/mail-kind";
-import { Footer } from "./footer";
+import { Footer, SUPPORT_ADDRESS } from "./footer";
 import { Button } from "./ui/button";
 
 const WHAT: Record<SuppressionScope, string> = {
@@ -43,15 +43,49 @@ export function UnsubscribeConfirm({ scope, busy }: { scope: SuppressionScope; b
   );
 }
 
-export function UnsubscribeDone({ scope, busy }: { scope: SuppressionScope; busy: boolean }) {
+function ChangedYourMind({ teammate }: { teammate: boolean }) {
+  if (teammate) {
+    return (
+      <p className={BODY}>
+        Changed your mind? Email{" "}
+        <a
+          className="inline-flex min-h-11 items-center underline underline-offset-4"
+          href={`mailto:${SUPPORT_ADDRESS}`}
+        >
+          {SUPPORT_ADDRESS}
+        </a>{" "}
+        and we will sort it out.
+      </p>
+    );
+  }
+  return (
+    <p className={BODY}>
+      Changed your mind? Sign in, open{" "}
+      <a className="inline-flex min-h-11 items-center underline underline-offset-4" href="/app/settings">
+        Settings
+      </a>
+      , and switch it back on under "Emails to this address".
+    </p>
+  );
+}
+
+export function UnsubscribeDone({
+  scope,
+  teammate,
+  busy,
+}: {
+  scope: SuppressionScope;
+  teammate: boolean;
+  busy: boolean;
+}) {
   return (
     <main className="mx-auto max-w-xl px-4 py-16">
       <h1 className={HEADING}>You're unsubscribed</h1>
       <p className={BODY}>
-        We won't send {WHAT[scope]} to this address any more. {STILL[scope]} Sign-in links still arrive when you ask for
-        one.
+        We won't send {WHAT[scope]} to this address any more. {STILL[scope]}
+        {teammate ? "" : " Sign-in links still arrive when you ask for one."}
       </p>
-      {scope === "all" ? null : (
+      {scope === "all" || teammate ? null : (
         <Form method="post" className="mt-6">
           <input type="hidden" name="scope" value="all" />
           <Button type="submit" variant="secondary" size="lg" disabled={busy}>
@@ -59,13 +93,7 @@ export function UnsubscribeDone({ scope, busy }: { scope: SuppressionScope; busy
           </Button>
         </Form>
       )}
-      <p className={BODY}>
-        Changed your mind? Sign in, open{" "}
-        <a className="inline-flex min-h-11 items-center underline underline-offset-4" href="/app/settings">
-          Settings
-        </a>
-        , and switch it back on under "Emails to this address".
-      </p>
+      <ChangedYourMind teammate={teammate} />
       <Footer />
     </main>
   );

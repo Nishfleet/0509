@@ -337,15 +337,10 @@ async function deliverToOwner(env: Env, message: DigestMessage): Promise<Deliver
   });
 }
 
-<<<<<<< HEAD
 async function sendToTeammate(env: Env, digest: MessageRow, mate: TargetRow): Promise<DeliveryResult> {
-  if (await isAddressSuppressed(mate.target_value, env.DB)) {
+  if (await isAddressSuppressed(mate.target_value, "brief", env.DB)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
-=======
-async function sendToTeammate(env: Env, digest: MessageRow, mate: TargetRow): Promise<void> {
-  if (await isAddressSuppressed(mate.target_value, "brief", env.DB)) return;
->>>>>>> 73f4c440c (Let people stop the brief or alerts on their own)
   const idempotencyKey = `digest:${digest.id}:${mate.id}`;
   const claim = await claimSendAttempt(env.DB, {
     idempotencyKey,

@@ -159,10 +159,7 @@ describe("/u/:token (0509#5761)", () => {
 
     const data = await action(postOf("a".repeat(64), "https://0509.io/u/t?type=brief"));
 
-<<<<<<< HEAD
-    expect(data).toEqual({ unsubscribed: true, teammate: false });
-=======
-    expect(data).toEqual({ unsubscribed: true, scope: "brief" });
+    expect(data).toEqual({ unsubscribed: true, scope: "brief", teammate: false });
   });
 
   it("lets the second step widen a brief-only unsubscribe to everything", async () => {
@@ -171,8 +168,7 @@ describe("/u/:token (0509#5761)", () => {
 
     const data = await action(postOf("a".repeat(64), "https://0509.io/u/t?type=brief", body));
 
-    expect(data).toEqual({ unsubscribed: true, scope: "all" });
->>>>>>> 73f4c440c (Let people stop the brief or alerts on their own)
+    expect(data).toEqual({ unsubscribed: true, scope: "all", teammate: false });
   });
 
   it("renders 'This link is not valid' with no unsubscribe claim in it", () => {
