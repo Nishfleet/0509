@@ -1,7 +1,7 @@
 import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
 import { formatDate } from "./brief-template";
-import { EYEBROW, FONT, emailDocument } from "./email-shell";
+import { BODY, EYEBROW, HEADLINE, emailDocument, linkParagraph } from "./email-shell";
 
 export interface TrialEndingContext {
   plan: string;
@@ -10,9 +10,6 @@ export interface TrialEndingContext {
   timezone: string;
   link: string;
 }
-
-const HEADLINE = `margin:0;font-family:${FONT};font-size:24px;line-height:30px;font-weight:800;letter-spacing:-0.02em;`;
-const BODY = `margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;`;
 
 function copy(ctx: TrialEndingContext) {
   const ends = formatDate(ctx.ends_at, ctx.timezone, false);
@@ -27,7 +24,6 @@ function copy(ctx: TrialEndingContext) {
 
 export function renderTrialEnding(ctx: TrialEndingContext): RenderedBrief {
   const { subject, lines } = copy(ctx);
-  const href = escapeHtml(ctx.link);
   return {
     subject,
     text: [subject, ...lines, `Manage or cancel your plan: ${ctx.link}`].join("\n"),
@@ -37,7 +33,7 @@ export function renderTrialEnding(ctx: TrialEndingContext): RenderedBrief {
         `<p class="brief-muted" style="${EYEBROW}">Your trial</p>`,
         `<p style="${HEADLINE}">${escapeHtml(subject)}</p>`,
         ...lines.map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`),
-        `<p style="${BODY}">Manage or cancel your plan: <a class="brief-ink" href="${href}">${href}</a></p>`,
+        linkParagraph("Manage or cancel your plan", ctx.link),
       ].join(""),
       lines[0],
     ),
