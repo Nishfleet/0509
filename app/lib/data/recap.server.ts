@@ -34,6 +34,19 @@ const SELECT_RECAPS = `SELECT p.workspace_id,
 
 const latestMove = z.object({ rival: z.string(), what: z.string() });
 
+function parseLatest(json: string | null, ctx: z.RefinementCtx): z.infer<typeof latestMove> | null {
+  if (json === null) return null;
+  try {
+    const parsed = latestMove.safeParse(JSON.parse(json));
+    if (parsed.success) return parsed.data;
+  } catch {
+    ctx.addIssue({ code: "custom", message: "latest is not JSON" });
+    return z.NEVER;
+  }
+  ctx.addIssue({ code: "custom", message: "latest has no rival or title" });
+  return z.NEVER;
+}
+
 const recapRow = z.object({
   workspace_id: z.string(),
   subscription_id: z.string().nullable(),
@@ -41,10 +54,7 @@ const recapRow = z.object({
   target_value: z.string(),
   unsubscribe_token: z.string().nullable(),
   change_count: z.number(),
-  latest: z
-    .string()
-    .nullable()
-    .transform((json) => (json === null ? null : latestMove.parse(JSON.parse(json)))),
+  latest: z.string().nullable().transform(parseLatest),
 });
 
 export type TrialRecap = z.infer<typeof recapRow>;

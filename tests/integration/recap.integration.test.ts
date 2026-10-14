@@ -154,7 +154,7 @@ describe("trial recap email", () => {
     expect(sent[0]?.headers?.["List-Unsubscribe"]).toMatch(/^<https:\/\/0509\.io\/u\/[0-9a-f]{64}>$/);
   });
 
-  it("never mentions money or the end of the trial", async () => {
+  it("our own copy never mentions money or the end of the trial", async () => {
     await seedPlan();
     await seedChange("sig-1", "Pricing page now lists a free tier", "2026-10-10T10:00:00Z");
     const sent: EmailMessageBuilder[] = [];
