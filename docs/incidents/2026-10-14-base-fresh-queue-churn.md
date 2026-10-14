@@ -30,3 +30,13 @@ The same day, `feature-map.md` was the top source of merge conflicts. It held ev
 Fix: one file per row under `.agents/skills/verify/feature-map/<section>/`, so two pull requests conflict only if they change the same route. `tests/unit/feature-map-proof.test.ts` reads the directory and keeps every old check, plus one that a file holds exactly one row. The reviewer bot refuses a diff over 250 KB, so the move lands in six parts.
 
 The lesson: a file that every pull request edits is a queue lock. Put a per-change fact in its own file.
+
+## Third cause: an accessibility scan taken mid-fade
+
+From 21:45Z, when `e2e/a11y-onboarding.spec.ts` started running on every pull request (#7576), "screen 2 is operable by keyboard" failed now and then and passed on retry. Playwright counts a pass-on-retry as a failed run, so it knocked #7500 and #7496 out of the queue and failed #7573's checks twice.
+
+Cause: opening the name editor fades its popover in over 160 ms, and the scan ran inside that fade. axe read the placeholder's blended colour (colour-contrast, about 2.8:1) or counted the hidden base-ui focus guards as visible (aria-hidden-focus, six spans). Scanned right after opening, 7 of 8 local runs failed. Scanned once the popup was fully opaque, 30 of 30 were clean, so the colours and the guards were never wrong.
+
+Fix (#7580): the spec waits for `opacity: 1` and no `data-starting-style` before it scans. No skip, retry wrapper or loosened rule.
+
+The lesson: a scan of a transient surface waits for the surface to settle, and a new check that joins every pull request gets a repeat run under load before it merges.
