@@ -14,6 +14,7 @@ import {
   writeVerifyToken,
 } from "./data/send_target.server";
 import { readWorkspaceIdForOwner } from "./data/workspace.server";
+import { RECIPIENT_CAPPED, takeRecipientSlot } from "./recipient-cap.server";
 import { teammateInviteEmail, verifyAddressEmail } from "./verify-address-email";
 
 const INVALID = "Enter an email address, like you@company.com.";
@@ -154,6 +155,7 @@ export async function saveDeliveryAddress(input: {
     return { error: null, suppressed: false };
   }
 
+  if (!(await takeRecipientSlot(address))) return { error: RECIPIENT_CAPPED, suppressed: false };
   const error = await sendVerifyConfirmation(input.email, workspaceId, address);
   return { error, suppressed: false };
 }
