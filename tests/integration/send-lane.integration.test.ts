@@ -134,27 +134,41 @@ const digestStatus = async (id: string) =>
 
 const message = (digestId: string): DigestMessage => ({ digest_id: digestId });
 
-const batchFor = (bodies: unknown[]) => {
+const batchFor = (bodies: unknown[], attempts = 1) => {
   const acked: number[] = [];
   const retried: number[] = [];
+  const retryOptions: unknown[] = [];
   const batch: MessageBatch = {
     queue: "send-email",
     messages: bodies.map((body, index) => ({
       id: `msg-${index}`,
       timestamp: new Date("2026-09-22T00:00:03Z"),
       body,
-      attempts: 1,
+      attempts,
       ack: () => acked.push(index),
-      retry: () => retried.push(index),
+      retry: (options?: unknown) => {
+        retried.push(index);
+        retryOptions.push(options);
+      },
     })),
     metadata: { metrics: { backlogCount: bodies.length, backlogBytes: 0 } },
     ackAll: () => acked.push(...bodies.map((_, index) => index)),
     retryAll: () => retried.push(...bodies.map((_, index) => index)),
   };
-  return { batch, acked, retried };
+  return { batch, acked, retried, retryOptions };
 };
 
-const envWith = (email: SendEmail): Env => ({ ...env, EMAIL: email }) as Env;
+const envWith = (email: SendEmail, queued: unknown[] = []): Env =>
+  ({
+    ...env,
+    EMAIL: email,
+    SEND_EMAIL: {
+      sendBatch: (msgs: { body: unknown }[]) => {
+        queued.push(...msgs.map((msg) => msg.body));
+        return Promise.resolve();
+      },
+    },
+  }) as unknown as Env;
 describe("send lane (0509#3979)", () => {
   beforeEach(async () => {
     await env.DB.exec("DELETE FROM send_attempt");
@@ -221,8 +235,9 @@ describe("send lane (0509#3979)", () => {
       .bind(id, WS, CHANNEL, address, confirmed ? 1 : 0)
       .run();
 
-  it("(teammates) sends the brief to each confirmed teammate once, and never twice on a re-enqueue", async () => {
+  it("(teammates) queues one message per confirmed teammate, and each sends once, never twice on a re-enqueue", async () => {
     const rec = recorder();
+    const queued: unknown[] = [];
     const digestId = await seedDigest("pending");
     await seedTeammate("mate-1", "mate@0509.io", true);
     await seedTeammate("mate-2", "waiting@0509.io", false);
@@ -231,11 +246,15 @@ describe("send lane (0509#3979)", () => {
       .bind("gone@0509.io", "2026-09-23T00:00:00Z")
       .run();
 
-    const first = await deliver(envWith(bindingFor(rec)), message(digestId));
-    const second = await deliver(envWith(bindingFor(rec)), message(digestId));
+    const first = await deliver(envWith(bindingFor(rec), queued), message(digestId));
+    const second = await deliver(envWith(bindingFor(rec), queued), message(digestId));
 
     expect(first.outcome).toBe("sent");
     expect(second.outcome).toBe("duplicate");
+    expect(rec.sent.map((mail) => mail.to)).toEqual([TARGET]);
+    expect(queued).toContainEqual({ digest_id: digestId, target_id: "mate-1" });
+    expect(queued).not.toContainEqual({ digest_id: digestId, target_id: "mate-2" });
+    await handleBatch(envWith(bindingFor(rec)), batchFor(queued).batch);
     expect(rec.sent.map((mail) => mail.to).sort()).toEqual(["mate@0509.io", TARGET]);
     const rows = await readAttempts();
     expect(rows.map((row) => row.idempotency_key).sort()).toEqual(
@@ -248,25 +267,90 @@ describe("send lane (0509#3979)", () => {
     expect(tokenIn("mate@0509.io")).not.toBe(tokenIn(TARGET));
   });
 
+  const failingFor = (rec: Recorder, address: string): SendEmail => ({
+    send(mail: EmailMessage | EmailMessageBuilder) {
+      if ((mail as EmailMessageBuilder).to === address) throw new Error("mailbox full");
+      rec.sent.push(mail as EmailMessageBuilder);
+      return Promise.resolve({ messageId: "stub-send-email" });
+    },
+  });
+
   it("(teammates) a failing teammate send never undoes the owner's brief", async () => {
     const digestId = await seedDigest("pending");
     await seedTeammate("mate-1", "mate@0509.io", true);
-    const ownerOnly = recorder();
-    const flaky: SendEmail = {
-      send(mail: EmailMessage | EmailMessageBuilder) {
-        if ((mail as EmailMessageBuilder).to === "mate@0509.io") throw new Error("mailbox full");
-        ownerOnly.sent.push(mail as EmailMessageBuilder);
-        return Promise.resolve({ messageId: "stub-send-email" });
-      },
-    };
+    const rec = recorder();
+    const queued: unknown[] = [];
+    const flaky = failingFor(rec, "mate@0509.io");
 
-    const result = await deliver(envWith(flaky), message(digestId));
+    const result = await deliver(envWith(flaky, queued), message(digestId));
+    const mate = await handleBatch(envWith(flaky), batchFor(queued).batch);
 
     expect(result.outcome).toBe("sent");
+    expect(mate.map((row) => row.outcome)).toEqual(["failed"]);
     expect((await digestStatus(digestId))?.status).toBe("sent");
-    expect(ownerOnly.sent.map((mail) => mail.to)).toEqual([TARGET]);
-    const mate = (await readAttempts()).find((row) => row.send_target_id === "mate-1");
-    expect(mate?.status).toBe("failed");
+    expect(rec.sent.map((mail) => mail.to)).toEqual([TARGET]);
+    expect((await readAttempts()).find((row) => row.send_target_id === "mate-1")?.status).toBe("failed");
+  });
+
+  it("(teammates) a failed teammate message retries an hour later, twice at most, and then gives up quietly", async () => {
+    const digestId = await seedDigest("sent");
+    await seedTeammate("mate-1", "mate@0509.io", true);
+    const failing = failingFor(recorder(), "mate@0509.io");
+    const body = { digest_id: digestId, target_id: "mate-1" };
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const run = async (attempts: number) => {
+      const result = batchFor([body], attempts);
+      await handleBatch(envWith(failing), result.batch);
+      return result;
+    };
+    const first = await run(1);
+    const second = await run(2);
+    const third = await run(3);
+
+    expect(first.retried).toEqual([0]);
+    expect(first.retryOptions).toEqual([{ delaySeconds: 3600 }]);
+    expect(second.retryOptions).toEqual([{ delaySeconds: 3600 }]);
+    expect(third.retried).toEqual([]);
+    expect(third.acked).toEqual([0]);
+    const lines = log.mock.calls.map((call) => String(call[0]));
+    log.mockRestore();
+    expect(lines.some((line) => line.includes("delivery.teammate_gave_up"))).toBe(true);
+    expect((await digestStatus(digestId))?.status).toBe("sent");
+  });
+
+  it("(teammates) a redelivered owner message queues only teammates with no attempt yet", async () => {
+    const digestId = await seedDigest("pending");
+    await seedTeammate("mate-1", "mate@0509.io", true);
+    await seedTeammate("mate-2", "other@0509.io", true);
+    const rec = recorder();
+    const queued: unknown[] = [];
+    await deliver(envWith(bindingFor(rec), queued), message(digestId));
+    await handleBatch(
+      envWith(failingFor(rec, "mate@0509.io")),
+      batchFor([{ digest_id: digestId, target_id: "mate-1" }], 3).batch,
+    );
+
+    const again: unknown[] = [];
+    const redelivered = await deliver(envWith(bindingFor(rec), again), message(digestId));
+
+    expect(redelivered.outcome).toBe("duplicate");
+    expect(again).toEqual([{ digest_id: digestId, target_id: "mate-2" }]);
+  });
+
+  it("(teammates) a retry that works sends once and settles the message", async () => {
+    const digestId = await seedDigest("sent");
+    await seedTeammate("mate-1", "mate@0509.io", true);
+    const body = { digest_id: digestId, target_id: "mate-1" };
+    await handleBatch(envWith(failingFor(recorder(), "mate@0509.io")), batchFor([body], 1).batch);
+    const rec = recorder();
+
+    const retry = batchFor([body], 2);
+    await handleBatch(envWith(bindingFor(rec)), retry.batch);
+
+    expect(retry.acked).toEqual([0]);
+    expect(rec.sent.map((mail) => mail.to)).toEqual(["mate@0509.io"]);
+    expect((await readAttempts()).find((row) => row.send_target_id === "mate-1")?.status).toBe("sent");
   });
 
   it("(teammates) a teammate waits while another worker still holds the owner's send", async () => {

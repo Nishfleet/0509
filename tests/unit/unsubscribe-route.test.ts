@@ -7,6 +7,7 @@ const holder = vi.hoisted(() => ({ known: false, outcome: "invalid_token" as str
 
 vi.mock("../../app/lib/data/email_suppression.server", () => ({
   isUnsubscribeTokenKnown: () => Promise.resolve(holder.known),
+  isTeammateUnsubscribeToken: () => Promise.resolve(false),
   suppressByUnsubscribeToken: () => Promise.resolve(),
 }));
 
@@ -136,7 +137,7 @@ describe("/u/:token (0509#5761)", () => {
 
     const data = await action({ params: { token: "a".repeat(64) } } as never);
 
-    expect(data).toEqual({ unsubscribed: true });
+    expect(data).toEqual({ unsubscribed: true, teammate: false });
   });
 
   it("renders 'This link is not valid' with no unsubscribe claim in it", () => {

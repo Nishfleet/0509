@@ -37,6 +37,15 @@ export async function isUnsubscribeTokenKnown(token: string): Promise<boolean> {
   return row !== null;
 }
 
+const SELECT_TEAMMATE_TOKEN = `SELECT 1 AS present FROM send_target WHERE unsubscribe_token = ? AND role = 'teammate'`;
+
+export async function isTeammateUnsubscribeToken(token: string): Promise<boolean> {
+  const row = isUnsubscribeTokenKnownRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_TEAMMATE_TOKEN).bind(token).first());
+  return row !== null;
+}
+
 export async function suppressWorkspaceTargets(workspaceId: string): Promise<void> {
   await env.DB.prepare(SUPPRESS_WORKSPACE_TARGETS).bind(new Date().toISOString(), workspaceId).run();
 }
