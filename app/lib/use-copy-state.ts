@@ -4,7 +4,7 @@ import { copyToClipboard } from "./copy-to-clipboard";
 
 export type CopyState = "idle" | "copied" | "failed";
 
-export const COPIED_LABEL_MS = 2_000;
+const COPIED_LABEL_MS = 2_000;
 
 export function useCopyState(): readonly [CopyState, (value: string) => Promise<CopyState>] {
   const [state, setState] = useState<CopyState>("idle");
