@@ -55,7 +55,7 @@ vi.mock("../../app/lib/auth.server", () => ({
 import { toast } from "sonner";
 
 import { Toaster, toastSaved } from "../../app/components/toaster";
-import { BriefScheduleSettings } from "../../app/components/brief-schedule-settings";
+import { AppShell } from "../../app/components/app-shell";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -85,15 +85,9 @@ describe("toastSaved", () => {
 });
 
 describe("the mount and the skin", () => {
-  it("mounts exactly one polite live region, where the brief time is saved", () => {
+  it("mounts exactly one polite live region, in the app shell", () => {
     const Stub = createRoutesStub([
-      {
-        path: "/",
-        Component: () =>
-          createElement(BriefScheduleSettings, {
-            schedule: { weekday: 1, hour: 9, timezone: "UTC", pausedAt: null, nextLine: "Monday" },
-          }),
-      },
+      { path: "/", Component: () => createElement(AppShell, null, createElement("main", null, "content")) },
     ]);
     const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
     expect(html.match(/<section[^>]*aria-live="polite"/g)).toHaveLength(1);
