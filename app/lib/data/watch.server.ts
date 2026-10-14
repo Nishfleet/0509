@@ -274,6 +274,21 @@ JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
 WHERE w.is_active = 1
 ORDER BY e.workspace_id, e.id, w.id`;
 
+const NAME_KEYED_SOURCES = "SELECT id FROM source WHERE kind IN ('mentions', 'ads')";
+
+const RETIRE_OLD_NAME_WATCHES = `UPDATE watch SET is_active = 0
+WHERE entity_id = ?1 AND is_active = 1 AND target_key <> ?2 AND source_id IN (${NAME_KEYED_SOURCES})`;
+
+const RESUME_NEW_NAME_WATCHES = `UPDATE watch SET is_active = 1
+WHERE entity_id = ?1 AND is_active = 0 AND target_key = ?2 AND source_id IN (${NAME_KEYED_SOURCES})`;
+
+export async function retargetNameWatches(entityId: string, name: string): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(RETIRE_OLD_NAME_WATCHES).bind(entityId, name),
+    env.DB.prepare(RESUME_NEW_NAME_WATCHES).bind(entityId, name),
+  ]);
+}
+
 const DEACTIVATE_WATCH = "UPDATE watch SET is_active = 0 WHERE id = ?1";
 
 const hiringTargetRows = z.array(
