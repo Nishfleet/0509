@@ -80,14 +80,18 @@ async function learnFromHome(
   });
   const entity = { id: params.entityId, domain: params.domain };
   await classifyNavPages({ workspaceId: params.workspaceId, entity, pages: extract.navPages, now });
-  await findHiddenPricing({
-    workspaceId: params.workspaceId,
-    entity,
-    homepageUrl: home.url,
-    homeTitle: extract.nameSources.title,
-    navPages: extract.navPages,
-    now,
-  });
+  try {
+    await findHiddenPricing({
+      workspaceId: params.workspaceId,
+      entity,
+      homepageUrl: home.url,
+      homeTitle: extract.nameSources.title,
+      navPages: extract.navPages,
+      now,
+    });
+  } catch (error) {
+    console.error(JSON.stringify({ event: "identity.pricing_probe_failed", error: String(error) }));
+  }
 }
 
 export async function classifyTailPages(
