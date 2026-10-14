@@ -278,7 +278,7 @@ describe("one-click unsubscribe (0509#4358, 0509#4593, 0509#5761)", () => {
     expect(await readMailKinds(ADDRESS)).toEqual({ brief: true, alerts: false });
   });
 
-  it("(p) turns a partial stop into a clearable deletion stop when the account is deleted", async () => {
+  it("(p) keeps a partial opt-out as an opt-out, now stopping everything, when the account is deleted", async () => {
     await unsubscribe(TOKEN, "alerts");
 
     await suppressWorkspaceTargets(WS);

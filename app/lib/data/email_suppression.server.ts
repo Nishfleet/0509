@@ -30,8 +30,7 @@ SELECT lower(trim(t.target_value)), 'workspace_deleted', ?
  WHERE t.workspace_id = ? AND c.key = 'email' AND t.role = 'owner'
 ON CONFLICT(address) DO UPDATE SET
   stops_brief = 1,
-  stops_alerts = 1,
-  reason = CASE WHEN stops_brief = 1 AND stops_alerts = 1 THEN reason ELSE 'workspace_deleted' END`;
+  stops_alerts = 1`;
 
 const SELECT_SUPPRESSION = `SELECT address FROM email_suppression
  WHERE lower(trim(address)) = lower(trim(?1))
