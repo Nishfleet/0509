@@ -8,6 +8,8 @@ import { UNJUDGED_WEEK_LINE, readThisFirstLine } from "../../app/lib/read-this-f
 import { effectiveKindSql } from "../../app/lib/source-kind";
 import { sourceName } from "../../app/lib/source-name";
 import type { JudgedWeek } from "./read-this-first";
+import { readBrandMoves } from "./brand-moves";
+import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { required } from "../../app/lib/required";
 
 const RANKED_BRANDS = `SELECT s.entity_id AS entity_id,
@@ -140,8 +142,6 @@ export function pausedSentence(names: readonly string[]): string | null {
   return `${names.slice(0, -1).join(", ")} and ${last} paused, so every brand below them moved up.`;
 }
 
-type RankedBrand = z.infer<typeof rankedBrandRows>[number];
-type SignalCount = z.infer<typeof signalCountRows>[number];
 type SourceCoverage = z.infer<typeof sourceCoverageRows>[number];
 type OwnSiteIncident = z.infer<typeof incidentRows>[number];
 type PickedSignal = z.infer<typeof pickedSignalRows>[number];
@@ -201,11 +201,22 @@ function buildMarks(picks: readonly string[], pickedById: ReadonlyMap<string, Pi
   });
 }
 
-function buildLines(
-  brands: readonly RankedBrand[],
-  countsByEntity: ReadonlyMap<string, SignalCount>,
-  hadPreviousWeek: boolean,
+async function buildLines(
+  rows: Pick<Awaited<ReturnType<typeof loadBriefRows>>, "brands" | "countsByEntity" | "hadPreviousWeek">,
+  db: D1Database,
+  input: ComposeInput,
 ) {
+  const { brands, countsByEntity, hadPreviousWeek } = rows;
+  const moves = await readBrandMoves(db, {
+    workspaceId: input.workspaceId,
+    entityIds: brands.map((brand) => brand.entity_id),
+    since: input.week.startsAt.toISOString(),
+    until: input.week.closesAt.toISOString(),
+  }).catch((error: unknown) => {
+    console.error(JSON.stringify({ event: "standing.brand_moves_failed", error: redactEmailShaped(String(error)) }));
+    return new Map<string, string>();
+  });
+  const moveOf = (entityId: string): string | null => moves.get(entityId) ?? null;
   return brands.map((brand) => {
     const count = countsByEntity.get(brand.entity_id);
     return {
@@ -214,7 +225,7 @@ function buildLines(
       rank: brand.rank,
       movement: brand.movement,
       is_new: hadPreviousWeek && brand.movement === null,
-      biggest_move: null,
+      biggest_move: moveOf(brand.entity_id),
       ad_delta: count?.new_ads ?? 0,
       mention_delta: count?.mentions ?? 0,
       site_change_count: count?.site_changes ?? 0,
@@ -278,7 +289,7 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
   const rows = await loadBriefRows(db, input);
 
   const marks = buildMarks(readThisFirst.picks, rows.pickedById);
-  const lines = buildLines(rows.brands, rows.countsByEntity, rows.hadPreviousWeek);
+  const lines = await buildLines(rows, db, input);
   const totals: CheckedTotals = {
     mentions: lines.reduce((total, line) => total + line.mention_delta, 0),
     siteChanges: lines.reduce((total, line) => total + line.site_change_count, 0),

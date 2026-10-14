@@ -47,12 +47,9 @@ describe("withStepCheckIn", () => {
     ping.mockClear();
   });
 
-  it("pings the sweep's healthcheck at start and at the end, once each", async () => {
+  it("pings the sweep's healthcheck once, when the sweep ends ok", async () => {
     await withStepCheckIn(memoStep(), MONITOR, async () => ({ failed: 0 }));
-    expect(ping.mock.calls).toEqual([
-      ["feed-sweep", "start"],
-      ["feed-sweep", "ok"],
-    ]);
+    expect(ping.mock.calls).toEqual([["feed-sweep", "ok"]]);
   });
 
   it("pings fail, never ok, when the sweep throws", async () => {
@@ -61,20 +58,16 @@ describe("withStepCheckIn", () => {
         throw new Error("plan down");
       }),
     ).rejects.toThrow("plan down");
-    expect(ping.mock.calls).toEqual([
-      ["feed-sweep", "start"],
-      ["feed-sweep", "fail"],
-    ]);
+    expect(ping.mock.calls).toEqual([["feed-sweep", "fail"]]);
   });
 
-  it("does not ping a second start when run() replays after hibernation", async () => {
+  it("sends no ping before the sweep ends, even when run() replays after hibernation", async () => {
     const step = memoStep();
     void withStepCheckIn(step, MONITOR, () => new Promise(() => undefined));
     await vi.waitFor(() => {
       expect(checkIn).toHaveBeenCalledTimes(1);
     });
-    expect(ping.mock.calls).toEqual([["feed-sweep", "start"]]);
-    ping.mockClear();
+    expect(ping).not.toHaveBeenCalled();
     await withStepCheckIn(step, MONITOR, async () => ({ failed: 0 }));
     expect(ping.mock.calls).toEqual([["feed-sweep", "ok"]]);
   });
@@ -122,22 +115,16 @@ describe("withCheckPings", () => {
     ping.mockClear();
   });
 
-  it("pings start then ok around a daily cron", async () => {
+  it("pings ok after a daily cron", async () => {
     const work = vi.fn(() => Promise.resolve());
     await withCheckPings("nightly", true, work);
-    expect(ping.mock.calls).toEqual([
-      ["nightly", "start"],
-      ["nightly", "ok"],
-    ]);
+    expect(ping.mock.calls).toEqual([["nightly", "ok"]]);
     expect(work).toHaveBeenCalledTimes(1);
   });
 
   it("pings fail and rethrows when the cron throws", async () => {
     await expect(withCheckPings("nightly", true, () => Promise.reject(new Error("boom")))).rejects.toThrow("boom");
-    expect(ping.mock.calls).toEqual([
-      ["nightly", "start"],
-      ["nightly", "fail"],
-    ]);
+    expect(ping.mock.calls).toEqual([["nightly", "fail"]]);
   });
 
   it("only runs the work for a cron that has no daily check", async () => {
