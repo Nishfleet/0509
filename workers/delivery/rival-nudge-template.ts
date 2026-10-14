@@ -2,7 +2,7 @@ import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
 import { nudgeSubject } from "../../app/lib/rival-nudge";
 import { renderAlertFooter, type AlertFooterContext } from "./alert-footer";
-import { EYEBROW, FONT, emailDocument } from "./email-shell";
+import { BODY, EYEBROW, HEADLINE, emailDocument, linkParagraph } from "./email-shell";
 
 export interface RivalNudgeContext {
   rivals: number;
@@ -11,8 +11,6 @@ export interface RivalNudgeContext {
   footer: AlertFooterContext;
 }
 
-const HEADLINE = `margin:0;font-family:${FONT};font-size:24px;line-height:30px;font-weight:800;letter-spacing:-0.02em;`;
-const BODY = `margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;`;
 const OPEN = "Add a rival";
 
 function lines(ctx: RivalNudgeContext): string[] {
@@ -26,7 +24,6 @@ function lines(ctx: RivalNudgeContext): string[] {
 export function renderRivalNudge(ctx: RivalNudgeContext): RenderedBrief {
   const subject = nudgeSubject(ctx.rivals);
   const body = lines(ctx);
-  const href = escapeHtml(ctx.link);
   const footer = renderAlertFooter(ctx.footer);
   return {
     subject,
@@ -37,7 +34,7 @@ export function renderRivalNudge(ctx: RivalNudgeContext): RenderedBrief {
         `<p class="brief-muted" style="${EYEBROW}">Your rivals</p>`,
         `<p style="${HEADLINE}">${escapeHtml(subject)}</p>`,
         ...body.map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`),
-        `<p style="${BODY}"><a class="brief-ink" href="${href}">${OPEN}</a></p>`,
+        linkParagraph(OPEN, ctx.link),
         footer.html,
       ].join(""),
       body[0],

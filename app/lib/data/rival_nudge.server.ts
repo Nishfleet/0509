@@ -1,6 +1,9 @@
 import { z } from "zod";
 
+import { TRIAL_DAYS } from "../billing/plans";
 import { NUDGE_AFTER_DAYS, NUDGE_MAX_RIVALS, NUDGE_WITHIN_DAYS } from "../rival-nudge";
+
+import { RECAP_DAY } from "./recap.server";
 
 const RIVAL_COUNT = `(SELECT count(*) FROM entity e WHERE e.workspace_id = w.id AND e.role = 'competitor' AND e.state = 'on')`;
 
@@ -25,7 +28,8 @@ const SELECT_NUDGES = `SELECT w.id AS workspace_id,
      ORDER BY t.created_at ASC
      LIMIT 1
   )
- WHERE w.created_at <= ?1 AND w.created_at > ?2 AND ${RIVAL_COUNT} < ?3`;
+ WHERE w.created_at <= ?1 AND w.created_at > ?2 AND ${RIVAL_COUNT} < ?3
+   AND NOT (p.trialing = 1 AND p.current_period_end > ?4 AND p.current_period_end <= ?5)`;
 
 const fewRow = z.object({ rivals: z.number(), created_at: z.string() });
 
@@ -56,7 +60,13 @@ export async function readFewRivals(db: D1Database, workspaceId: string, now: Da
 export async function readRivalNudges(db: D1Database, now: Date): Promise<RivalNudge[]> {
   const { results } = await db
     .prepare(SELECT_NUDGES)
-    .bind(daysBefore(now, NUDGE_AFTER_DAYS), daysBefore(now, NUDGE_WITHIN_DAYS), NUDGE_MAX_RIVALS)
+    .bind(
+      daysBefore(now, NUDGE_AFTER_DAYS),
+      daysBefore(now, NUDGE_WITHIN_DAYS),
+      NUDGE_MAX_RIVALS,
+      daysBefore(now, RECAP_DAY + 1 - TRIAL_DAYS),
+      daysBefore(now, RECAP_DAY - 1 - TRIAL_DAYS),
+    )
     .all();
   const nudges: RivalNudge[] = [];
   for (const row of z.array(z.unknown()).parse(results)) {

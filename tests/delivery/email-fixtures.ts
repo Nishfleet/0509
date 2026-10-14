@@ -6,6 +6,7 @@ import { renderBrief } from "../../workers/delivery/brief-template";
 import { renderChange, renderChangeOverflow } from "../../workers/delivery/change-template";
 import { renderIncidentFixed, renderIncidentOpen } from "../../workers/delivery/incident-template";
 import { renderRecap } from "../../workers/delivery/recap-template";
+import { renderRivalNudge } from "../../workers/delivery/rival-nudge-template";
 import { renderTrialEnding } from "../../workers/delivery/trial-template";
 import { renderWelcome } from "../../workers/delivery/welcome-template";
 import { renderWinback } from "../../workers/delivery/winback-template";
@@ -24,6 +25,7 @@ const SETTINGS = "https://0509.io/app/settings";
 const HOME = "https://0509.io/app";
 const OPEN = "https://0509.io/app/brief";
 const ALERTS = "https://0509.io/app/alerts";
+const COMPETITORS = "https://0509.io/app/competitors";
 const FOOTER = { unsubscribe_url: UNSUBSCRIBE, settings_link: SETTINGS };
 
 function briefPayload(overrides: Partial<BriefPayload> = {}): BriefPayload {
@@ -204,6 +206,16 @@ export function lifecycleEmails(): readonly LifecycleEmail[] {
       "renderWinback, one change and no latest",
       renderWinback({ change_count: 1, latest: null, link: ALERTS, footer: FOOTER }),
       [ALERTS],
+    ),
+    email(
+      "renderRivalNudge, one rival",
+      renderRivalNudge({ rivals: 1, rival_name: "Kindred", link: COMPETITORS, footer: FOOTER }),
+      [COMPETITORS],
+    ),
+    email(
+      "renderRivalNudge, no rival",
+      renderRivalNudge({ rivals: 0, rival_name: null, link: COMPETITORS, footer: FOOTER }),
+      [COMPETITORS],
     ),
     email(
       "renderIncidentOpen",

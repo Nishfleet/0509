@@ -94,6 +94,17 @@ describe("add-a-rival nudge", () => {
     expect(sent).toHaveLength(0);
   });
 
+  it("holds the email while a day-4 trial recap is due within a day, then sends it", async () => {
+    await seed("2026-10-08T10:00:00Z");
+    await env.DB.batch([rival(1)]);
+    await env.DB.exec("UPDATE plan SET current_period_end = '2026-10-17T00:00:00Z'");
+    const sent: EmailMessageBuilder[] = [];
+
+    expect(await sendRivalNudges(envWith(sent), NOW, isTester)).toBe(0);
+    expect(await sendRivalNudges(envWith(sent), new Date("2026-10-15T12:00:00.000Z"), isTester)).toBe(1);
+    expect(sent).toHaveLength(1);
+  });
+
   it("counts a switched-off rival as not watched", async () => {
     await seed("2026-10-08T10:00:00Z");
     await env.DB.batch([rival(1), rival(2, "off")]);
