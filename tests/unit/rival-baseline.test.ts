@@ -72,7 +72,7 @@ describe("where a rival stands today", () => {
   it("introduces the first brief as a starting point, never as a change", () => {
     expect(firstBriefLine(1)).toContain("where your rival stands today");
     expect(firstBriefLine(4)).toBe(
-      "This is your starting point: where your 4 rivals stand today, before anything changes. We'll tell you the moment one moves.",
+      "This is your starting point: where your 4 rivals stand today, before anything changes. When one moves, your next brief says so.",
     );
   });
 });
