@@ -13,13 +13,52 @@ import { registeredToolDescriptors } from "../../app/lib/agent/mcp-tools";
 // import.meta.url, a recursive readdir, a pure-regex probe. The map is
 // hand-written on purpose; this test reads it, it does not generate it.
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const MAP = path.join(REPO_ROOT, ".agents", "skills", "verify", "feature-map.md");
+const MAP_DIR = path.join(REPO_ROOT, ".agents", "skills", "verify", "feature-map");
 // The same pattern the gardener sweeps used, so this gate fails on exactly
 // the references a human sweep would report.
 const SPEC_REF = /e2e\/[A-Za-z0-9_./-]+\.spec\.ts/g;
 // The `/mcp` row lists its tools inside one clause. The split phrase is named
 // here so a reword of that clause fails with the phrase, not a bare count.
 const TOOL_CLAUSE = "tools, each with an output schema:";
+
+interface MapFile {
+  name: string;
+  text: string;
+}
+
+async function mapFiles(dir: string = MAP_DIR): Promise<MapFile[]> {
+  const found: MapFile[] = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...(await mapFiles(full)));
+      continue;
+    }
+    found.push({
+      name: path.relative(MAP_DIR, full).split(path.sep).join("/"),
+      text: await readFile(full, "utf8"),
+    });
+  }
+  return found;
+}
+
+async function readMap(): Promise<string> {
+  return (await mapFiles()).map((file) => file.text).join("\n");
+}
+
+function routeRows(text: string): string[][] {
+  return text
+    .split("\n")
+    .filter((line) => line.startsWith("|"))
+    .map((line) =>
+      line
+        .replace(/^\|/, "")
+        .replace(/\|$/, "")
+        .split("|")
+        .map((cell) => cell.trim()),
+    )
+    .filter((cells) => cells.length >= 2 && cells[0].startsWith("`"));
+}
 
 async function e2eSpecFiles(dir: string): Promise<string[]> {
   const found: string[] = [];
@@ -37,7 +76,7 @@ async function e2eSpecFiles(dir: string): Promise<string[]> {
 
 describe("feature map proof coverage", () => {
   it("names every spec on disk", async () => {
-    const map = await readFile(MAP, "utf8");
+    const map = await readMap();
     const unnamed = (await e2eSpecFiles(path.join(REPO_ROOT, "e2e"))).filter((rel) => !map.includes(rel));
     expect(
       unnamed,
@@ -46,7 +85,7 @@ describe("feature map proof coverage", () => {
   });
 
   it("names no spec that is not on disk", async () => {
-    const map = await readFile(MAP, "utf8");
+    const map = await readMap();
     const onDisk = new Set(await e2eSpecFiles(path.join(REPO_ROOT, "e2e")));
     const dead = [...new Set(map.match(SPEC_REF) ?? [])].filter((ref) => !onDisk.has(ref));
     expect(
@@ -67,25 +106,20 @@ describe("feature map proof coverage", () => {
   // pattern). A parser that drifts and reads nothing would pass green while
   // checking nothing, so a positive control proves rows were actually seen.
   it("has no duplicate route row", async () => {
-    const map = await readFile(MAP, "utf8");
-    const seen = new Map<string, number>();
+    const map = await readMap();
+    const seen = new Map<string, string>();
     const duplicates: string[] = [];
-    map.split("\n").forEach((line, index) => {
-      if (!line.startsWith("|")) return;
-      const cells = line
-        .replace(/^\|/, "")
-        .replace(/\|$/, "")
-        .split("|")
-        .map((cell) => cell.trim());
-      if (cells.length < 2 || !cells[0].startsWith("`")) return;
-      const key = `${cells[0]}\t${cells[1]}`;
-      const first = seen.get(key);
-      if (first !== undefined) {
-        duplicates.push(`lines ${first} and ${index + 1} both claim ${cells[0]} in ${cells[1]}`);
-        return;
+    for (const file of await mapFiles()) {
+      for (const cells of routeRows(file.text)) {
+        const key = `${cells[0]}\t${cells[1]}`;
+        const first = seen.get(key);
+        if (first !== undefined) {
+          duplicates.push(`${first} and ${file.name} both claim ${cells[0]} in ${cells[1]}`);
+          continue;
+        }
+        seen.set(key, file.name);
       }
-      seen.set(key, index + 1);
-    });
+    }
     // Positive control: a parse that reads nothing must not pass green. The
     // map's route tables carry far more than a handful of rows, and `/` is on
     // every one of them.
@@ -97,13 +131,27 @@ describe("feature map proof coverage", () => {
     expect(duplicates, duplicates.join("\n")).toEqual([]);
   });
 
+  // The feature map is one row per file so parallel PRs edit different lines:
+  // on 2026-10-14 one shared file knocked a PR out of the queue three times and
+  // held a migration PR for three hours. A file with two rows would bring the
+  // shared lines back, and a file with none documents nothing.
+  it("holds exactly one row in each file", async () => {
+    const files = await mapFiles();
+    expect(files.length, "the map must have row files").toBeGreaterThan(0);
+    const wrong = files
+      .map((file) => ({ name: file.name, rows: file.text.split("\n").filter((line) => line.startsWith("|")).length }))
+      .filter((file) => file.rows !== 3)
+      .map((file) => `${file.name} has ${file.rows} table lines; a file is a header, a separator and one row`);
+    expect(wrong, wrong.join("\n")).toEqual([]);
+  });
+
   // 0509#7085 (item 7): the map's `/mcp` row named three tools
   // (`get_brief`, `list_competitors`, `list_alerts`) long after the server
   // registered five — the map is hand-written, so it drifts silently. The
   // tool list is machine-checkable against `registeredToolDescriptors`, so
   // this gate names every registered tool and forbids naming a dead one.
   it("names every registered MCP tool in the `/mcp` row", async () => {
-    const map = await readFile(MAP, "utf8");
+    const map = await readMap();
     const row = map.split("\n").find((line) => line.startsWith("| `/mcp`"));
     expect(row, "the map has no `/mcp` row").toBeDefined();
     const names: string[] = Object.keys(registeredToolDescriptors);
