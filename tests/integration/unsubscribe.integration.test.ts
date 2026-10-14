@@ -250,4 +250,15 @@ describe("one-click unsubscribe (0509#4358, 0509#4593, 0509#5761)", () => {
     expect([lifted, added]).toEqual([false, true]);
     expect(await readMailKinds("other@0509.io")).toEqual({ brief: false, alerts: false });
   });
+
+  it("(n) reports a save that changed nothing because a deletion row holds the address", async () => {
+    await env.DB.prepare(
+      `INSERT INTO email_suppression (address, reason, created_at) VALUES ('reader@0509.io', 'workspace_deleted', '2026-09-01T00:00:00Z')`,
+    ).run();
+
+    const saved = await saveMailKinds({ userId: USER, signInEmail: ADDRESS, brief: true, alerts: true });
+
+    expect(saved).toBe(false);
+    expect(await isAddressSuppressed(ADDRESS, "brief")).toBe(true);
+  });
 });

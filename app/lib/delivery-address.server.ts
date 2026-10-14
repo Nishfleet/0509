@@ -132,7 +132,8 @@ export async function saveMailKinds(input: {
     if (!verified || (input.brief && !current.brief) || (input.alerts && !current.alerts)) return false;
   }
   await writeMailKinds(normalized, { brief: input.brief, alerts: input.alerts });
-  return true;
+  const after = await readMailKinds(normalized);
+  return after.brief === input.brief && after.alerts === input.alerts;
 }
 
 export async function saveDeliveryAddress(input: {

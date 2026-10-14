@@ -239,7 +239,8 @@ async function saveMail(user: SettingsUser, form: FormData): Promise<SettingsRes
   });
   if (!saved)
     return result({
-      deliveryError: "This address can only be switched off here. To turn emails back on, use your sign-in address.",
+      deliveryError:
+        "We could not switch emails back on for this address. Use your sign-in address, or write to support@0509.io.",
     });
   return result({ saved: true });
 }
