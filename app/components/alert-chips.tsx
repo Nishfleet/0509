@@ -25,12 +25,11 @@ export function AlertChips({
       data-testid="alert-chips"
       className="mt-8 flex w-full flex-wrap gap-2"
     >
-      {ALERT_CHIPS.map((entry) => (
+      {ALERT_CHIPS.filter((entry) => counts[entry.key] > 0 || entry.key === chip).map((entry) => (
         <ToggleGroupItem
           key={entry.key}
           value={entry.key}
           data-testid={"alert-chip-" + entry.key}
-          disabled={counts[entry.key] === 0 && entry.key !== chip}
           className="min-h-11 rounded-none border border-line text-ink-soft hover:bg-card hover:text-ink aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-bone"
         >
           {entry.label}{" "}
