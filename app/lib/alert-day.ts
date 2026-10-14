@@ -1,5 +1,6 @@
 import { TZDate } from "@date-fns/tz";
 import { format, startOfDay } from "date-fns";
+import { APP_LOCALE } from "./locale";
 
 export type DayGroup = "Today" | "Yesterday" | "Earlier";
 
@@ -18,7 +19,7 @@ function time(at: string): number {
   return Number.isNaN(parsed) ? Number.MIN_SAFE_INTEGER : parsed;
 }
 
-const RELATIVE_DAYS = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+const RELATIVE_DAYS = new Intl.RelativeTimeFormat(APP_LOCALE, { numeric: "auto" });
 
 function dayNumber(day: string): number {
   return Date.parse(`${day}T00:00:00Z`) / 86_400_000;
