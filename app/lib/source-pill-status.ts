@@ -1,4 +1,4 @@
-import { readWatchConfig } from "./mentions/youtube-channel";
+import { readWatchConfig } from "./mentions/watch-config";
 
 export interface SourceRow {
   key: string;
