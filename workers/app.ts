@@ -37,7 +37,7 @@ import { SiteSweep } from "./workflows/site-sweep";
 import { SnapshotBackup } from "./workflows/snapshot-backup";
 import { MentionsSweep } from "./workflows/mentions";
 import { StandingRollover } from "./workflows/standing-rollover";
-import { reportNightlyResults, runNightlyDataChecks } from "./nightly-jobs";
+import { reportNightlyResults, nightlyDataChecks } from "./nightly-jobs";
 import { isWorkflowCron, reportMissedWorkflows, startMissedWorkflows, startScheduledWorkflow } from "./workflow-crons";
 
 type WorkerEnv = Env & { SENTRY_DSN?: string; LIVENESS_PING_URL?: string; CLOUDFLARE_API_TOKEN?: string };
@@ -75,7 +75,7 @@ const handler = {
           sweepPending(env, now),
           sendTrialReminders(env, now),
           startNightlyDiscovery(now),
-          runNightlyDataChecks(env.DB, now),
+          ...nightlyDataChecks(env.DB, now),
           stampFirstSignals(),
           runNightlySlackBackfill(env.DB),
           runNightlyCostGuard(env.DB, env.CLOUDFLARE_API_TOKEN, controller.scheduledTime),

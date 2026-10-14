@@ -4,8 +4,8 @@ import { checkStuckWebhooks } from "../app/lib/billing/stuck-webhooks.server";
 import { deleteExpiredAuthRows } from "../app/lib/data/auth_expiry.server";
 import { deleteExpiredJevFailures } from "../app/lib/data/jev_failure.server";
 
-export async function runNightlyDataChecks(db: D1Database, now: Date): Promise<void> {
-  await Promise.all([deleteExpiredAuthRows(db, now), deleteExpiredJevFailures(db, now), checkStuckWebhooks(now)]);
+export function nightlyDataChecks(db: D1Database, now: Date): Promise<void>[] {
+  return [deleteExpiredAuthRows(db, now), deleteExpiredJevFailures(db, now), checkStuckWebhooks(now)];
 }
 
 export function reportNightlyResults(results: readonly PromiseSettledResult<unknown>[]): void {
