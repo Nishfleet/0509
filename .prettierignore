@@ -14,4 +14,5 @@ tests/fixtures/
 # Vendored upstream shadcn skill, byte-for-byte at shadcn-ui/ui 2d3f1cd4, and its lock file.
 .agents/skills/shadcn/
 skills-lock.json
+# The feature-map index keeps its aligned tables while rows move into feature-map/; re-padding them every batch would rewrite every row left. Removed with the last batch.
 .agents/skills/verify/feature-map.md

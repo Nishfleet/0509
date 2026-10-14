@@ -27,20 +27,16 @@ interface MapFile {
   text: string;
 }
 
-async function mapFiles(dir: string = MAP_DIR): Promise<MapFile[]> {
-  const found: MapFile[] = [];
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      found.push(...(await mapFiles(full)));
-      continue;
-    }
-    found.push({
-      name: path.relative(MAP_DIR, full).split(path.sep).join("/"),
-      text: await readFile(full, "utf8"),
-    });
-  }
-  return found;
+async function mapFiles(): Promise<MapFile[]> {
+  const entries = await readdir(MAP_DIR, { recursive: true, withFileTypes: true });
+  return Promise.all(
+    entries
+      .filter((entry) => entry.isFile())
+      .map(async (entry) => {
+        const full = path.join(entry.parentPath, entry.name);
+        return { name: path.relative(MAP_DIR, full).split(path.sep).join("/"), text: await readFile(full, "utf8") };
+      }),
+  );
 }
 
 async function allMapFiles(): Promise<MapFile[]> {
@@ -62,21 +58,14 @@ function routeRows(text: string): string[][] {
         .split("|")
         .map((cell) => cell.trim()),
     )
-    .filter((cells) => cells.length >= 2 && cells[0].startsWith("`"));
+    .filter((cells) => cells.length >= 2 && !/^(Route|Surface|:?-+:?)$/.test(cells[0]));
 }
 
 async function e2eSpecFiles(dir: string): Promise<string[]> {
-  const found: string[] = [];
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      found.push(...(await e2eSpecFiles(full)));
-      continue;
-    }
-    if (!entry.name.endsWith(".spec.ts")) continue;
-    found.push(path.relative(REPO_ROOT, full).split(path.sep).join("/"));
-  }
-  return found;
+  const entries = await readdir(dir, { recursive: true, withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".spec.ts"))
+    .map((entry) => path.relative(REPO_ROOT, path.join(entry.parentPath, entry.name)).split(path.sep).join("/"));
 }
 
 describe("feature map proof coverage", () => {
@@ -111,7 +100,6 @@ describe("feature map proof coverage", () => {
   // pattern). A parser that drifts and reads nothing would pass green while
   // checking nothing, so a positive control proves rows were actually seen.
   it("has no duplicate route row", async () => {
-    const map = await readMap();
     const seen = new Map<string, string>();
     const duplicates: string[] = [];
     for (const file of await allMapFiles()) {
