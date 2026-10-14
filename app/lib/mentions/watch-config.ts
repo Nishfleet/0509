@@ -1,15 +1,15 @@
-import { z } from "zod";
+import * as z from "zod/mini";
 
 import { NO_CHANNEL_REASON } from "./channel-reasons";
 
 const CHANNEL_ID = /^UC[0-9A-Za-z_-]{22}$/;
 
-const channelIdSchema = z.string().regex(CHANNEL_ID);
+const channelIdSchema = z.string().check(z.regex(CHANNEL_ID));
 
 const degradedSchema = z.object({
   state: z.literal("degraded"),
-  reason: z.string().min(1),
-  at: z.string().min(1),
+  reason: z.string().check(z.minLength(1)),
+  at: z.string().check(z.minLength(1)),
 });
 
 const jsonObject = z.record(z.string(), z.unknown());

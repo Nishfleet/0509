@@ -1,12 +1,5 @@
-import {
-  COMPETITORS_LINK,
-  newRivalLines,
-  rankTrendLine,
-  sinceStartedLine,
-  type BriefContext,
-  type BriefPayload,
-  type RenderedBrief,
-} from "../../app/lib/brief-payload";
+import { type BriefContext, type BriefPayload, type RenderedBrief } from "../../app/lib/brief-payload";
+import { COMPETITORS_LINK, newRivalLines, rankTrendLine, sinceStartedLine } from "../../app/lib/brief-since";
 import { escapeHtml } from "../../app/lib/html";
 import { countPhrase } from "../../app/lib/quiet-week";
 import { NOTHING_FIRST_LINE, UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";

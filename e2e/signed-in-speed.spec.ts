@@ -92,7 +92,7 @@ async function settledVitals(page: Page): Promise<{ lcp: number; cls: number }> 
   return page.evaluate(() => (window as unknown as { __vitals: { lcp: number; cls: number } }).__vitals);
 }
 
-test("signed-in Home, competitor, brief and alerts hold LCP and CLS on a cold load over emulated Fast 4G with a 4x slower CPU", async ({
+test("signed-in Home, competitors, brief, alerts, settings and agents hold LCP and CLS on a cold load over emulated Fast 4G with a 4x slower CPU", async ({
   browser,
   baseURL,
 }, testInfo) => {
@@ -140,7 +140,15 @@ test("signed-in Home, competitor, brief and alerts hold LCP and CLS on a cold lo
     return { name, value: value.join("="), url: baseURL ?? "" };
   });
 
-  const paths = ["/app", `/app/competitors/${seeded.entityId}`, `/app/brief/${seeded.digestId}`, "/app/alerts"];
+  const paths = [
+    "/app",
+    "/app/competitors",
+    `/app/competitors/${seeded.entityId}`,
+    `/app/brief/${seeded.digestId}`,
+    "/app/alerts",
+    "/app/settings",
+    "/app/settings/agents",
+  ];
   const measured: Record<string, { lcp: number; cls: number }> = {};
   for (const path of paths) {
     const context = await browser.newContext();
