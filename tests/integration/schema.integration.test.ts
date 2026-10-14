@@ -18,8 +18,9 @@ describe("0001_rebuild.sql", () => {
     // jev_failure (0043), one row per failed judge call, which made 37.
     // 0048 then dropped the dead rate_limit_events (0509#7194), back to 36;
     // support_issue (0054, 0509#7223), one row per GitHub issue the inbox
-    // opened, makes 37.
-    expect(tables?.n).toBe(37);
+    // opened, makes 37. entity_note (0060), one private note per rival,
+    // makes 38.
+    expect(tables?.n).toBe(38);
   });
 
   it("carries better-auth's six generated tables", async () => {

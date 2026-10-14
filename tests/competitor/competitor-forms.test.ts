@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const calls = vi.hoisted(() => ({
   forget: vi.fn(),
   site: vi.fn(),
+  note: vi.fn(),
   youtube: vi.fn(),
   intent: vi.fn(),
 }));
 
 vi.mock("../../app/lib/competitor-forget.server", () => ({ forgetCompetitor: calls.forget }));
+vi.mock("../../app/lib/competitor-note.server", () => ({ saveCompetitorNote: calls.note }));
 vi.mock("../../app/lib/competitor-site.server", () => ({ saveCompetitorSite: calls.site }));
 vi.mock("../../app/lib/competitor-youtube.server", () => ({ saveCompetitorYoutube: calls.youtube }));
 vi.mock("../../app/lib/competitors.server", () => ({ handleCompetitorIntent: calls.intent }));
@@ -23,7 +25,7 @@ function form(values: Record<string, string>): FormData {
   return data;
 }
 
-const CLEAN = { forgetError: null, youtubeError: null, siteError: null };
+const CLEAN = { forgetError: null, youtubeError: null, siteError: null, noteError: null };
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -59,6 +61,7 @@ describe("handleCompetitorForm", () => {
   it.each([
     ["youtube", calls.youtube, "youtube", "youtubeError"],
     ["site", calls.site, "site", "siteError"],
+    ["note", calls.note, "note", "noteError"],
   ] as const)(
     "hands the %s field to its saver and shows the saver's refusal",
     async (intent, saver, name, errorKey) => {
