@@ -18,7 +18,14 @@ const CANT_ADD = `You can add up to ${String(MAX_TEAMMATES)} teammates, and each
 
 export async function readTeammates(workspaceId: string) {
   const mates = await listTeammates(env.DB, workspaceId);
-  return mates.map((mate) => ({ id: mate.id, address: mate.target_value, confirmed: mate.is_verified === 1 }));
+  return Promise.all(
+    mates.map(async (mate) => ({
+      id: mate.id,
+      address: mate.target_value,
+      confirmed: mate.is_verified === 1,
+      unsubscribed: await isAddressSuppressed(mate.target_value),
+    })),
+  );
 }
 
 async function takeDailyInvite(workspaceId: string, now: Date): Promise<boolean> {

@@ -7,6 +7,7 @@ interface Teammate {
   id: string;
   address: string;
   confirmed: boolean;
+  unsubscribed: boolean;
 }
 
 function TeammateRow({ mate }: { mate: Teammate }) {
@@ -14,7 +15,10 @@ function TeammateRow({ mate }: { mate: Teammate }) {
     <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-line py-2">
       <span className="min-w-0 [overflow-wrap:anywhere]">
         {mate.address}
-        {mate.confirmed ? null : <span className="text-ink-soft"> · waiting for them to confirm</span>}
+        {mate.unsubscribed ? <span className="text-ink-soft"> · unsubscribed</span> : null}
+        {mate.confirmed || mate.unsubscribed ? null : (
+          <span className="text-ink-soft"> · waiting for them to confirm</span>
+        )}
       </span>
       <Form method="post" action="/app/settings">
         <input type="hidden" name="intent" value="teammate-remove" />

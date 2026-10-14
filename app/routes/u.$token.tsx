@@ -4,7 +4,7 @@ import { Form, isRouteErrorResponse, useNavigation } from "react-router";
 import { ErrorPage } from "../components/error-page";
 import { Footer } from "../components/footer";
 import { Button } from "../components/ui/button";
-import { isUnsubscribeTokenKnown } from "../lib/data/email_suppression.server";
+import { isTeammateUnsubscribeToken, isUnsubscribeTokenKnown } from "../lib/data/email_suppression.server";
 import { unsubscribe } from "../lib/unsubscribe.server";
 
 const INVALID_LINK = "This link is not valid";
@@ -25,10 +25,11 @@ export async function loader({ params }: Route.LoaderArgs) {
 }
 
 export async function action({ params }: Route.ActionArgs) {
+  const teammate = await isTeammateUnsubscribeToken(params.token);
   if ((await unsubscribe(params.token)) === "invalid_token") {
     throw new Response(INVALID_LINK, { status: 404 });
   }
-  return { unsubscribed: true as const };
+  return { unsubscribed: true as const, teammate };
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
@@ -65,13 +66,19 @@ export default function Unsubscribe({ actionData }: Route.ComponentProps) {
           We won't send the weekly brief or alerts to this address any more. Sign-in links still arrive when you ask for
           one.
         </p>
-        <p className="mt-4 leading-[1.65] text-ink-soft">
-          Changed your mind? Sign in, open{" "}
-          <a className="inline-flex min-h-11 items-center underline underline-offset-4" href="/app/settings">
-            Settings
-          </a>
-          , tick "Send the brief to this address again" and save.
-        </p>
+        {actionData.teammate ? (
+          <p className="mt-4 leading-[1.65] text-ink-soft">
+            Changed your mind? Ask the person who added you to send the invitation again.
+          </p>
+        ) : (
+          <p className="mt-4 leading-[1.65] text-ink-soft">
+            Changed your mind? Sign in, open{" "}
+            <a className="inline-flex min-h-11 items-center underline underline-offset-4" href="/app/settings">
+              Settings
+            </a>
+            , tick "Send the brief to this address again" and save.
+          </p>
+        )}
         <Footer />
       </main>
     );

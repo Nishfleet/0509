@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { isTeammateUnsubscribeToken, suppressByUnsubscribeToken } from "../../app/lib/data/email_suppression.server";
 import {
   changeEmailTarget,
   ensureOwnerEmailTarget,
@@ -153,6 +154,27 @@ describe("teammates on the brief", () => {
 
     expect(await add("loop@0509.io")).toMatch(/lot of invitations today/);
     expect(sentMail).toHaveLength(4);
+
+  it("shows a teammate who unsubscribed, and tells their link apart from the owner's", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    await add("mate@0509.io");
+    await env.DB.prepare(
+      "UPDATE send_target SET unsubscribe_token = 'mate-token' WHERE workspace_id = ? AND role = 'teammate'",
+    )
+      .bind(workspaceId)
+      .run();
+    await env.DB.prepare(
+      "UPDATE send_target SET unsubscribe_token = 'owner-token' WHERE workspace_id = ? AND role = 'owner'",
+    )
+      .bind(workspaceId)
+      .run();
+
+    expect((await readTeammates(workspaceId))[0]?.unsubscribed).toBe(false);
+    await suppressByUnsubscribeToken("mate-token");
+
+    expect((await readTeammates(workspaceId))[0]?.unsubscribed).toBe(true);
+    expect(await isTeammateUnsubscribeToken("mate-token")).toBe(true);
+    expect(await isTeammateUnsubscribeToken("owner-token")).toBe(false);
   });
 
   it("removes a teammate, but never the owner's row", async () => {
