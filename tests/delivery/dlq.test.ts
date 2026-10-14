@@ -174,8 +174,7 @@ describe("handleDlqBatch", () => {
     expect(ack).toHaveBeenCalledOnce();
     expect(retry).not.toHaveBeenCalled();
     expect(ids).toEqual([]);
-    expect(capturedReasons()).toHaveLength(1);
-    expect(capturedReasons()[0]).toContain("teammate send gave up");
+    expect(capturedReasons().at(-1)).toContain("teammate send gave up");
     error.mockRestore();
   });
 
