@@ -2,7 +2,7 @@ import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
 import { renderAlertFooter, type AlertFooterContext } from "./alert-footer";
 import { formatDate } from "./brief-template";
-import { EYEBROW, FONT, emailDocument } from "./email-shell";
+import { BODY, EYEBROW, HEADLINE, emailDocument, linkParagraph } from "./email-shell";
 
 export interface IncidentOpenContext extends AlertFooterContext {
   site: string;
@@ -40,12 +40,8 @@ const COPY = {
     `We re-checked ${site} at ${formatDate(closed_at, timezone, true)} and it looks fixed.`,
 } as const;
 
-const HEADLINE = `margin:0;font-family:${FONT};font-size:24px;line-height:30px;font-weight:800;letter-spacing:-0.02em;`;
-const BODY = `margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;`;
-
 function linkLine(link: string): string {
-  const href = escapeHtml(link);
-  return `<p style="${BODY}">See it in Five to Nine: <a class="brief-ink" href="${href}">${href}</a></p>`;
+  return linkParagraph("See it in Five to Nine", link);
 }
 
 export function renderIncidentOpen(ctx: IncidentOpenContext): RenderedBrief {

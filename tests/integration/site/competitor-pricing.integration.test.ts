@@ -430,4 +430,54 @@ describe("a competitor's pricing page", () => {
       await expect(readCompetitorsToClassify(10, NOW)).resolves.toEqual([]);
     });
   });
+
+  it("is found at a common address when the navigation does not link it, and judged like any other page", async () => {
+    const PRICING = "https://rival-shop.com/pricing";
+    const probed: string[] = [];
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      probed.push(url);
+      const page = (title: string) =>
+        new Response(
+          `<html><head><title>${title}</title></head><body><main><p>${"We make training clothes for people who train hard and rest harder. ".repeat(6)}</p></main></body></html>`,
+          { status: 200, headers: { "content-type": "text/html" } },
+        );
+      if (url === HOME) return Promise.resolve(page("Rival"));
+      if (url === PRICING) return Promise.resolve(page("Pricing - Rival"));
+      if (url === "https://rival-shop.com/plans") return Promise.resolve(page("Rival"));
+      return Promise.resolve(new Response("", { status: 404 }));
+    });
+    Reflect.set(env, "AI", {
+      run(_model: string, request: { questions: Record<string, { type: string }> }) {
+        const text = JSON.stringify(request);
+        const choice = text.includes("/pricing") ? "pricing" : "other";
+        return Promise.resolve({ answers: { page_role: { type: "choice", choice } } });
+      },
+    });
+
+    await classifyCompetitorSites(NOW);
+
+    const rival = (await planSiteSweep(NOW)).filter((target) => target.entityId === RIVAL);
+    expect(rival.map((target) => [target.url, target.pageRole])).toEqual([
+      [HOME, "home"],
+      [PRICING, "pricing"],
+    ]);
+  });
+
+  it("does not probe common addresses when a pricing page was already found in the navigation", async () => {
+    const probed: string[] = [];
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      probed.push(url);
+      if (url === HOME) {
+        return Promise.resolve(new Response(HOME_HTML, { status: 200, headers: { "content-type": "text/html" } }));
+      }
+      return Promise.resolve(new Response("", { status: 404 }));
+    });
+
+    await classifyCompetitorSites(NOW);
+
+    expect(probed).not.toContain("https://rival-shop.com/pricing");
+    expect(probed).not.toContain("https://rival-shop.com/prices");
+  });
 });
