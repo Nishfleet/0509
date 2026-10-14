@@ -41,7 +41,7 @@ function parseJson(json: string, what: string): unknown {
   try {
     return JSON.parse(json);
   } catch (err) {
-    console.log(JSON.stringify({ event: "site_change.unreadable", what, error: String(err) }));
+    console.warn(JSON.stringify({ event: "site_change.unreadable", what, error: String(err) }));
     return null;
   }
 }
@@ -144,6 +144,7 @@ export interface SiteChangeView {
   provenance: string | null;
   sentence: string;
   mark: ChangeMark | null;
+  detailsUnavailable?: boolean;
   before: ChangeShot;
   after: ChangeShot;
   whyFlagged: WhyFlagged | null;

@@ -55,7 +55,7 @@ async function readSite(url: string, brandDomain: string): Promise<{ ok: true } 
     if (getDomain(res.url) === getDomain(brandDomain)) return { ok: false, message: SITE_SAME_ERROR };
     return (await robotsAllows(res.url)) ? { ok: true } : { ok: false, message: SITE_ROBOTS_ERROR };
   } catch (error) {
-    console.log(
+    console.warn(
       JSON.stringify({ event: "competitor-site.read_failed", error: error instanceof Error ? error.name : "unknown" }),
     );
     return { ok: false, message: SITE_UNREADABLE_ERROR };

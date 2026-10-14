@@ -144,7 +144,7 @@ export async function checkSitePage(
   options: CheckSitePageOptions = {},
 ): Promise<CheckPageResult> {
   if (target.entityRole === "self" && !(await robotsAllows(target.url))) {
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "site.check_failed",
         pageId: target.pageId,
@@ -169,7 +169,7 @@ export async function checkSitePage(
         : () => takeBrowserScreenshot(target.workspaceId, target.entityId, tick.plannedAt.slice(0, 10)),
   });
   if (result.outcome === "failed") {
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "site.check_failed",
         pageId: target.pageId,
@@ -251,7 +251,7 @@ async function judgeUnlessFailed(change: SiteChangeInput, signalId: string | nul
   try {
     return await judgeChange(judgeInputFor(change, signalId));
   } catch (error) {
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "site.change_judge_failed",
         pageId: change.target.pageId,
@@ -389,7 +389,7 @@ async function emailPricingChange(signalId: string, judgment: JudgedChange | nul
   try {
     await env.SEND_EMAIL.send({ signal_id: signalId });
   } catch (error) {
-    console.log(JSON.stringify({ event: "site.change_email_enqueue_failed", signalId }));
+    console.warn(JSON.stringify({ event: "site.change_email_enqueue_failed", signalId }));
     captureException(error, { tags: { queue: "send-email", lane: "change" } });
   }
 }

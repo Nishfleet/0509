@@ -2,7 +2,7 @@ import { createChangeEventDetails } from "@base-ui/react/internals/createBaseUIE
 import { REASONS } from "@base-ui/react/internals/reasons";
 import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MemoryRouter } from "react-router";
+import { createRoutesStub } from "react-router";
 import type * as ReactRouterModule from "react-router";
 import type { URLSearchParamsInit } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -124,9 +124,10 @@ const CHANGES: readonly SiteChangeItemData[] = [];
 
 function renderWith(rows: readonly FeedRow[], changes: readonly SiteChangeItemData[], url = "/"): string {
   feedFilterHarness.params = new URLSearchParams(new URL(url, "https://example.test").search);
-  return renderToStaticMarkup(
-    createElement(MemoryRouter, { initialEntries: [url] }, createElement(DevelopmentsFeed, { items: rows, changes })),
-  );
+  const Stub = createRoutesStub([
+    { path: "*", Component: () => createElement(DevelopmentsFeed, { items: rows, changes }) },
+  ]);
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: [url] }));
 }
 
 function render(url: string, rows: readonly FeedRow[] = ROWS): string {

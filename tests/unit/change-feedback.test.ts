@@ -1,10 +1,16 @@
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { ChangeFeedback } from "../../app/components/change-feedback";
 
-const render = (feedback: "useful" | "not_useful" | null) =>
-  renderToStaticMarkup(ChangeFeedback({ signalId: "sig-1", feedback }));
+const render = (feedback: "useful" | "not_useful" | null) => {
+  const Stub = createRoutesStub([
+    { path: "/", Component: () => createElement(ChangeFeedback, { signalId: "sig-1", feedback }) },
+  ]);
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
+};
 
 describe("ChangeFeedback", () => {
   it("asks the question with a Yes and a No that post the signal id", () => {
