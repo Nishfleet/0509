@@ -52,7 +52,9 @@ export async function fetchFeed(url: string, validators: FeedValidators | null):
     });
     return await classify(response);
   } catch (error) {
-    console.log(JSON.stringify({ event: "feed.fetch_failed", error: error instanceof Error ? error.name : "unknown" }));
+    console.warn(
+      JSON.stringify({ event: "feed.fetch_failed", error: error instanceof Error ? error.name : "unknown" }),
+    );
     return { outcome: "unreadable" };
   }
 }
@@ -70,7 +72,7 @@ export async function fetchHomepage(url: string): Promise<string | null> {
     }
     return await cappedText(response, MAX_FEED_BYTES);
   } catch (error) {
-    console.log(
+    console.warn(
       JSON.stringify({ event: "feed.homepage_failed", error: error instanceof Error ? error.name : "unknown" }),
     );
     return null;
