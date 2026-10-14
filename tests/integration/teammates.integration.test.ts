@@ -143,6 +143,18 @@ describe("teammates on the brief", () => {
     expect(await readDeliveryAddress(USER_ID, SIGN_IN_EMAIL)).toEqual({ address: SIGN_IN_EMAIL, verified: true });
   });
 
+  it("stops sending invitations after a few a day, even when each one is removed again", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    for (let sent = 0; sent < 4; sent += 1) {
+      expect(await add("loop@0509.io")).toBeNull();
+      const [mate] = await readTeammates(workspaceId);
+      await removeTeammateByOwner(USER_ID, mate.id);
+    }
+
+    expect(await add("loop@0509.io")).toMatch(/lot of invitations today/);
+    expect(sentMail).toHaveLength(4);
+  });
+
   it("removes a teammate, but never the owner's row", async () => {
     const workspaceId = firstWorkspaceId(USER_ID);
     await add("mate@0509.io");
