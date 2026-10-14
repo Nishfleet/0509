@@ -20,14 +20,6 @@ import {
   type NoulEvalRow,
 } from "./harness";
 
-/**
- * The two mention questions, scored on the shipped wording.
- *
- * The question constants and both state builders come from app/lib, which is
- * what workers/mentions/sweep.ts itself asks, so a wording edit and the eval
- * that measures it move together (0509#6163).
- */
-
 interface MentionCase extends NoulEvalRow {
   self: MentionSelf;
   subject: MentionSubject;

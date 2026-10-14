@@ -3,10 +3,6 @@ import { expect, test } from "./test";
 import { PLANS, TRIAL_TERMS } from "../app/lib/billing/plans";
 import { consoleFailures, watchConsole } from "./inbox";
 
-// The /pricing contract (0509#5601). Every assertion is reachable from the
-// /pricing row in .agents/skills/verify/feature-map.md. Plan names, prices and
-// the trial line are read from app/lib/billing/plans.ts, never typed here.
-
 const PATH = "/pricing";
 
 test("the pricing page states every plan and its monthly price @smoke", async ({ page }) => {
