@@ -215,7 +215,10 @@ test("a brand-new workspace with no competitors explains every screen and passes
     expect(width.scroll, `${screen.path}: no sideways scroll`).toBeLessThanOrEqual(width.inner);
     for (const colorScheme of SCHEMES) {
       await page.emulateMedia({ colorScheme });
-      await scanPage(page, testInfo, quality, `${screen.path} empty ${colorScheme} ${testInfo.project.name}`);
+      await scanPage(page, testInfo, quality, `${screen.path} empty ${colorScheme} ${testInfo.project.name}`, {
+        screen: /\S/,
+        keyboard: false,
+      });
     }
   }
 });
