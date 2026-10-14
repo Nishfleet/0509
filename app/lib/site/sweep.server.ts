@@ -129,7 +129,7 @@ export async function checkSitePage(
   options: CheckSitePageOptions = {},
 ): Promise<CheckPageResult> {
   if (target.entityRole === "self" && !(await robotsAllows(target.url))) {
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "site.check_failed",
         pageId: target.pageId,
@@ -153,12 +153,12 @@ export async function checkSitePage(
         : () => takeBrowserScreenshot(target.workspaceId, target.entityId, tick.plannedAt.slice(0, 10)),
   });
   if (result.outcome === "failed") {
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "site.check_failed",
         pageId: target.pageId,
         reason: result.reason,
-        detail: result.detail,
+        detail: result.detail.replace(/https?:\/\/\S+/g, "<url>").slice(0, 300),
       }),
     );
     return result;

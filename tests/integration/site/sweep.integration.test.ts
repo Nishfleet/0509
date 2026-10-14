@@ -417,7 +417,10 @@ describe("nightly site sweep", () => {
       throw new Error("expected the self and rival homepages");
     }
 
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     expect((await checkSitePage(self, await nextTick("robots-self"))).outcome).toBe("failed");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"event":"site.check_failed"'));
+    warn.mockRestore();
     expect(fetched).not.toContain("https://mybrand.com/");
     expect((await checkSitePage(rival, await nextTick("robots-rival"))).outcome).toBe("first");
     expect(fetched).not.toContain("https://rival.com/robots.txt");
