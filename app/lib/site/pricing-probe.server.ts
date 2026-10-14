@@ -17,7 +17,7 @@ async function probeOne(url: string, homeTitle: string | null): Promise<NavPage 
   return { url, title };
 }
 
-export async function probePricingPages(input: {
+async function probePricingPages(input: {
   homepageUrl: string;
   homeTitle: string | null;
   known: readonly NavPage[];
