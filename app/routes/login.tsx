@@ -114,7 +114,9 @@ export default function Login() {
       </header>
       <main id={MAIN_CONTENT_ID} tabIndex={-1} className="flex flex-col">
         <h1 className={SIGN_IN_TITLE}>Sign in</h1>
-        <p className={SIGN_IN_LEDE}>We email you a link. Tap it and you're in. There is no password.</p>
+        <p className={SIGN_IN_LEDE}>
+          New or returning, we email you a link. Tap it and you're in. There is no password.
+        </p>
         {deleted.progress === null || deleted.id === null ? null : (
           <AccountDeleteNotice id={deleted.id} progress={deleted.progress} />
         )}
