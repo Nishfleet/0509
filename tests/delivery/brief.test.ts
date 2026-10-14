@@ -267,7 +267,7 @@ describe("read this first is D4's, verbatim", () => {
   it("still renders the block when D4 picked nothing", () => {
     const { html, text } = renderBrief(payload({ read_this_first: [] }), CONTEXT);
     expect(html).toContain("Read this first");
-    expect(html).toContain("Nothing this week needed reading first.");
+    expect(html).toContain("Nothing needed your attention this week. We keep watching rival sites, ads and mentions.");
     expect(text).toContain("Read this first");
   });
 });
@@ -812,5 +812,25 @@ describe("the since-you-started line", () => {
   ])("is left out for %s", (_name, total) => {
     const { text } = renderBrief(payload({ checked: { ...payload().checked, total_change_count: total } }), CONTEXT);
     expect(text).not.toContain("since you started");
+  });
+});
+
+describe("the rank-over-time line", () => {
+  it.each([
+    [5, "Up from #5 6 weeks ago"],
+    [3, "Holding at #3 since 6 weeks ago"],
+    [2, "Down from #2 6 weeks ago"],
+  ])("compares today's #3 with an earlier #%i", (earlierRank, line) => {
+    const { html, text } = renderBrief(payload({ headline_earlier: { rank: earlierRank, weeks: 6 } }), CONTEXT);
+    expect(text).toContain(line);
+    expect(html).toContain(line);
+  });
+
+  it.each([
+    ["no history", undefined],
+    ["an explicit none", null],
+  ])("is left out for %s", (_name, earlier) => {
+    const { text } = renderBrief(payload({ headline_earlier: earlier }), CONTEXT);
+    expect(text).not.toMatch(/weeks ago|since \d+ weeks/);
   });
 });

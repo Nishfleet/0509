@@ -1,7 +1,8 @@
 import { Fragment, type ReactElement } from "react";
 
 import { ReadThisFirst } from "./read-this-first";
-import { sinceStartedLine, type BriefPayload } from "../lib/brief-payload";
+import type { BriefPayload } from "../lib/brief-payload";
+import { rankTrendLine, sinceStartedLine } from "../lib/brief-since";
 
 const SECTION = "mt-5 border-t border-line pt-4";
 const HEAD = "font-mono text-eyebrow text-ink-soft uppercase";
@@ -21,6 +22,7 @@ export function BriefView({ payload }: { payload: BriefPayload }) {
 }
 
 function headlineBlock(payload: BriefPayload): ReactElement {
+  const trend = payload.is_unjudged || payload.headline_total < 2 ? null : rankTrendLine(payload);
   return (
     <section data-brief-block="headline">
       <h2 className="font-display text-[1.5rem] leading-[1.2] text-ink">
@@ -30,6 +32,9 @@ function headlineBlock(payload: BriefPayload): ReactElement {
             ? `You're #${String(payload.headline_rank)} of ${String(payload.headline_total)} this week`
             : "Add a competitor to see where you stand"}
       </h2>
+      {trend === null ? null : (
+        <p className="mt-1 font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft uppercase">{trend}</p>
+      )}
       {payload.is_unjudged ? null : <p className={BODY}>{payload.why_line}</p>}
     </section>
   );

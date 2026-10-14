@@ -1,6 +1,6 @@
 import { Link, useFetcher } from "react-router";
 
-import { isPaymentFailed, isPaymentHeld, isPlanLapsed } from "../lib/billing/entitlements";
+import { isPaymentFailed, isPaymentHeld, isPlanLapsed } from "../lib/billing/subscription-state";
 import { planLine } from "../lib/billing/plan-line";
 import { nextPlan, type PlanSummary } from "../lib/billing/plans";
 import { BLOCK_HEADING } from "./page-heading";

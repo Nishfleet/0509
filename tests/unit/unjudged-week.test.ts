@@ -91,7 +91,7 @@ function unjudgedPayload(): BriefPayload {
   };
 }
 
-const QUIET = "Nothing this week needed reading first.";
+const QUIET = "Nothing needed your attention this week. We keep watching rival sites, ads and mentions.";
 const RANK = /You're #|You're <span|#\d+ of \d+/;
 
 function homeHtml(payload: BriefPayload): string {

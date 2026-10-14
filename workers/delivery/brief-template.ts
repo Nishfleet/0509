@@ -1,12 +1,8 @@
-import {
-  sinceStartedLine,
-  type BriefContext,
-  type BriefPayload,
-  type RenderedBrief,
-} from "../../app/lib/brief-payload";
+import { type BriefContext, type BriefPayload, type RenderedBrief } from "../../app/lib/brief-payload";
+import { rankTrendLine, sinceStartedLine } from "../../app/lib/brief-since";
 import { escapeHtml } from "../../app/lib/html";
 import { countPhrase } from "../../app/lib/quiet-week";
-import { UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
+import { NOTHING_FIRST_LINE, UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
 import { EYEBROW, FONT, MONO, emailDocument, postalLine } from "./email-shell";
 import { SETTINGS_LINK, supportLineHtml, supportLineText } from "./alert-footer";
 
@@ -24,7 +20,7 @@ const COPY = {
   new: "new",
   firstRanking: "your first ranking",
   readThisFirst: "Read this first",
-  nothingFirst: "Nothing this week needed reading first.",
+  nothingFirst: NOTHING_FIRST_LINE,
   unjudged: UNJUDGED_WEEK_LINE,
   yourBrands: "Your tracked brands",
   ownSiteOk: "Your site looks fine.",
@@ -121,6 +117,7 @@ function renderHeadline(payload: BriefPayload, whyLine: string): { html: string;
 
   const movement = payload.headline_is_new ? COPY.firstRanking : movementText(headline_movement, false);
   const period = COPY.weekOf(formatDate(payload.period_start, payload.timezone, false));
+  const trend = rankTrendLine(payload);
 
   const html = [
     `<p class="brief-muted" style="${EYEBROW}">${escapeHtml(period)}</p>`,
@@ -128,10 +125,20 @@ function renderHeadline(payload: BriefPayload, whyLine: string): { html: string;
     `You&#39;re <span class="brief-marker" style="padding:0 4px;">#${n(headline_rank)}</span> of ${n(headline_total)} this week`,
     `</p>`,
     `<p class="brief-muted" style="margin:4px 0 0;font-family:${MONO};font-size:13px;line-height:18px;letter-spacing:0.06em;text-transform:uppercase;">${escapeHtml(movement)}</p>`,
+    ...(trend === null
+      ? []
+      : [
+          `<p class="brief-muted" style="margin:2px 0 0;font-family:${MONO};font-size:13px;line-height:18px;letter-spacing:0.06em;text-transform:uppercase;">${escapeHtml(trend)}</p>`,
+        ]),
     `<p style="margin:14px 0 0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(whyLine)}</p>`,
   ].join("");
 
-  const text = [`${COPY.headline(headline_rank, headline_total)} — ${movement}`, period, whyLine].join("\n");
+  const text = [
+    `${COPY.headline(headline_rank, headline_total)} — ${movement}`,
+    ...(trend === null ? [] : [trend]),
+    period,
+    whyLine,
+  ].join("\n");
 
   return { html, text };
 }
