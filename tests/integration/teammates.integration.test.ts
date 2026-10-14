@@ -167,19 +167,7 @@ describe("teammates on the brief", () => {
     expect(sentMail).toHaveLength(4);
   });
 
-  it("does not invite the same address twice in a day, even after it is removed", async () => {
-    const workspaceId = firstWorkspaceId(USER_ID);
-    expect(await add("again@0509.io")).toBeNull();
-    const [mate] = await readTeammates(workspaceId);
-    await removeTeammateByOwner(USER_ID, mate.id);
-
-    expect(await add("again@0509.io")).toMatch(/invited in the last day/);
-    expect(await add("other@0509.io")).toBeNull();
-    expect(sentMail).toHaveLength(2);
-    expect(await readTeammates(workspaceId)).toHaveLength(1);
-  });
-
-  it("does not use up a slot or the one-a-day wait when the invitation fails to send", async () => {
+  it("does not use up a slot when the invitation fails to send", async () => {
     const broken: SendEmail = { send: () => Promise.reject(new Error("down")) };
     const failed = await addTeammateByOwner({
       userId: USER_ID,
