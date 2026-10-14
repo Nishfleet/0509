@@ -63,7 +63,9 @@ test("a connected Slack shows Disconnect, and disconnecting brings the address f
   await page.goto("/app/settings");
 
   const section = page.getByTestId("slack-alerts-setting");
-  await expect(section).toContainText("Price and plan changes, and your weekly brief, also post to your Slack channel.");
+  await expect(section).toContainText(
+    "Price and plan changes, and your weekly brief, also post to your Slack channel.",
+  );
   await expect(section.getByLabel("Slack webhook address")).toHaveCount(0);
   await expect(section.getByTestId("slack-reconnect")).toHaveCount(0);
 
