@@ -54,6 +54,7 @@ export function DeleteAccount({ email, error }: { email: string; error: string |
         <li>Every screenshot</li>
         <li>Your shared ranking image</li>
         <li>Your send history and every brief</li>
+        <li>The days you used 0509</li>
         <li>Your account, its API keys and connected AI apps</li>
       </ul>
       <p className="mt-2 max-w-prose leading-[1.55]">The emails stop. This can't be undone.</p>
