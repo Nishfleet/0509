@@ -127,7 +127,7 @@ so a new gated `/app` page gets the nav and the resume-point gate without
 wiring either; the second wraps the `/app/settings*` routes with the
 same shell and `requireSessionMiddleware`, so Settings stays reachable before onboarding
 finishes. Both layouts draw `app/components/navigation-pending.tsx` (a 3px green bar at the top of the
-viewport plus a screen-reader "Loading", shown while any navigation or revalidation is in flight) and both export an
+viewport plus a screen-reader "Loading", shown while any navigation or revalidation is in flight, then the name of the page that arrived, e.g. "Alerts", so a screen-reader user hears where they are; `e2e/a11y-reflow.spec.ts` checks it) and both export an
 `ErrorBoundary` (`app/components/app-route-error.tsx`) that keeps the nav and shows the error page inside the shell, so a
 failure under `/app` no longer removes the nav.
 `/app/competitors/:entityId` is opened by tapping a competitor's name on
