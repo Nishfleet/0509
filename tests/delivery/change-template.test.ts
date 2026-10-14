@@ -45,14 +45,19 @@ describe("rival change email", () => {
     expect(html).not.toContain("<script>x");
   });
 
-  it("breaks a URL in the rival's copy so the email cannot autolink it (0509#7084)", () => {
+  it("shows a web address in the rival's copy as the site name, never a link or a broken address (0509#7084)", () => {
     const { text, html } = renderChange({
       ...CTX,
-      mark: { removed: "was https://evil.example/old", added: "now https://evil.example/new" },
+      mark: { removed: "was https://evil.example/old", added: "now https://www.evil.example/new" },
     });
-    expect(text).toContain("https[:]//evil.example/old");
-    expect(text).not.toMatch(/https:\/\/evil\.example/);
-    expect(html).toContain("https[:]//evil.example/new");
+    expect(text).toContain("Before: was evil.example");
+    expect(text).toContain("After: now evil.example");
+    expect(html).toContain("now evil.example");
+    for (const output of [text, html]) {
+      expect(output).not.toContain("[:]");
+      expect(output).not.toMatch(/https:\/\/(www\.)?evil\.example/);
+    }
+    expect(html).not.toMatch(/<a [^>]*evil\.example/);
   });
 });
 
