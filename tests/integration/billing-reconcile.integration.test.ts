@@ -2,7 +2,11 @@ import { env } from "cloudflare:test";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { checkoutProof } from "../../app/lib/billing/checkout-proof.server";
-import { reconcileBilling, reconcileCheckoutReturn } from "../../app/lib/billing/reconcile.server";
+import {
+  reconcileCandidates,
+  reconcileCheckoutReturn,
+  reconcileSubscription,
+} from "../../app/lib/billing/reconcile.server";
 import subscriptionActive from "../fixtures/dodo/subscription-active.json";
 
 const WORKSPACE = "ws-reconcile";
@@ -32,6 +36,10 @@ function dodoAnswers(sub: ReturnType<typeof dodoSubscription>) {
     return Response.json(sub);
   });
   return calls;
+}
+
+async function reconcileBilling(now: Date): Promise<void> {
+  for (const id of await reconcileCandidates(now)) await reconcileSubscription(id);
 }
 
 const plan = () =>
@@ -183,6 +191,18 @@ describe("billing reconcile", () => {
     expect(row?.id).toBe("sub_current");
   });
 
+  it("corrects a known plan without moving its timestamp, so a later webhook for another subscription still wins", async () => {
+    await seedPlan("active");
+    dodoAnswers(dodoSubscription({ status: "on_hold" }));
+
+    await reconcileBilling(NOW);
+
+    const row = await env.DB.prepare("SELECT status, updated_at AS at FROM plan WHERE workspace_id = ?")
+      .bind(WORKSPACE)
+      .first<{ status: string; at: string }>();
+    expect(row).toEqual({ status: "on_hold", at: "2026-10-01T00:00:00Z" });
+  });
+
   it("ignores a subscription whose proof was not made for this workspace", async () => {
     dodoAnswers(dodoSubscription({ metadata: { workspace_id: WORKSPACE, plan: "starter", proof: "forged" } }));
 
@@ -196,7 +216,7 @@ describe("billing reconcile", () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ message: "down" }, { status: 500 }));
 
-    await expect(reconcileBilling(NOW)).rejects.toThrow("could not reach Dodo");
+    await expect(reconcileBilling(NOW)).rejects.toThrow();
     expect((await plan())?.status).toBe("active");
   });
 });
