@@ -49,7 +49,7 @@ const PAYLOAD = (workspaceId: string, entityId: string): string =>
     next_brief_at: null,
   });
 
-test("signed-in Home, competitors, brief, alerts, settings and agents hold LCP and CLS on a cold load over emulated Fast 4G with a 4x slower CPU", async ({
+test("signed-in Home, competitors, brief, alerts, settings and agents, with 25 rivals and 26 weeks of briefs, hold LCP and CLS on a cold load over emulated Fast 4G with a 4x slower CPU", async ({
   browser,
   baseURL,
 }, testInfo) => {
@@ -90,6 +90,51 @@ test("signed-in Home, competitors, brief, alerts, settings and agents hold LCP a
       workspaceId,
       PAYLOAD(workspaceId, entityId),
     );
+    run(
+      db,
+      "INSERT OR IGNORE INTO source (id, key, kind, platform, plugin_key, reliability) VALUES ('src-speed', 'speed-mentions', 'mentions', 'gdelt', 'gdelt', 'best_effort')",
+    );
+    for (let w = 1; w < 26; w += 1) {
+      const start = new Date(Date.parse("2026-10-05T08:00:00.000Z") - w * 7 * 86_400_000).toISOString();
+      run(
+        db,
+        "INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status, subject, payload_json, sent_at) VALUES (?, ?, 'weekly', ?, ?, 'sent', 'Your week', '{}', ?)",
+        `dg-${suffix}-${String(w)}`,
+        workspaceId,
+        start,
+        start,
+        start,
+      );
+    }
+    for (let i = 0; i < 24; i += 1) {
+      const rival = `ent-r${String(i)}-${suffix}`;
+      run(
+        db,
+        "INSERT INTO entity (id, workspace_id, role, domain, name, created_at) VALUES (?, ?, 'competitor', ?, ?, ?)",
+        rival,
+        workspaceId,
+        `rival${String(i)}-${suffix}.example`,
+        `Rival ${String(i)}`,
+        stamp,
+      );
+      for (let w = 0; w < 8; w += 1) {
+        const at = new Date(Date.parse("2026-10-12T00:00:00.000Z") - w * 7 * 86_400_000).toISOString();
+        for (const kind of ["mention", "hiring"]) {
+          run(
+            db,
+            "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, canonical_url, url_hash, dedup_key, observed_at, published_at) VALUES (?, ?, ?, 'src-speed', ?, 'A rival story', 'https://e.example/x', ?, ?, ?, ?)",
+            `sg-${suffix}-${String(i)}-${String(w)}-${kind}`,
+            workspaceId,
+            rival,
+            kind,
+            `h-${suffix}-${String(i)}-${String(w)}-${kind}`,
+            `d-${suffix}-${String(i)}-${String(w)}-${kind}`,
+            at,
+            at,
+          );
+        }
+      }
+    }
     return { entityId, digestId };
   });
   const cookies = cookie.split("; ").map((pair) => {
