@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import { Form, useNavigation } from "react-router";
 
 import type { AgentKey, ConnectedApp } from "../lib/agent/access";
+import { copyToClipboard } from "../lib/copy-to-clipboard";
 import { BLOCK_HEADING } from "./page-heading";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -15,25 +16,6 @@ const CLIENTS = ["Claude", "ChatGPT", "Cursor"];
 function day(iso: string): string {
   const ms = Date.parse(iso);
   return Number.isNaN(ms) ? "date unknown" : DAY.format(new Date(ms));
-}
-
-export const COPY_DEADLINE_MS = 2_000;
-
-export function copyToClipboard(value: string, deadlineMs = COPY_DEADLINE_MS): Promise<"copied" | "failed"> {
-  const write = Promise.resolve()
-    .then(() => navigator.clipboard.writeText(value))
-    .then(
-      () => "copied" as const,
-      () => "failed" as const,
-    );
-  return Promise.race([
-    write,
-    new Promise<"copied" | "failed">((settle) => {
-      setTimeout(() => {
-        settle("failed");
-      }, deadlineMs);
-    }),
-  ]);
 }
 
 export function copyKeyLabel(state: "idle" | "copied" | "failed"): string {

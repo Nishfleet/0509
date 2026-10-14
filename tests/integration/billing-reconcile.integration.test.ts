@@ -248,4 +248,13 @@ describe("billing reconcile", () => {
     await expect(reconcileBilling(NOW)).rejects.toThrow();
     expect((await plan())?.status).toBe("active");
   });
+
+  it("warns when Dodo is down as a customer returns from checkout", async () => {
+    const warned = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ message: "down" }, { status: 500 }));
+
+    await reconcileCheckoutReturn("ws-reconcile-dodo-down", "reconcile@example.com");
+
+    expect(warned).toHaveBeenCalledWith(expect.stringContaining("billing.reconcile_failed"));
+  });
 });
