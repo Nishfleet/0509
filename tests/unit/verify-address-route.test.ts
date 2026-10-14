@@ -6,7 +6,7 @@ import type * as ReactRouterModule from "react-router";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("../../app/lib/verify-delivery-address.server", () => ({
-  confirmDeliveryAddress: () => Promise.resolve(),
+  confirmDeliveryAddress: (token: string | undefined) => Promise.resolve(token === "good"),
 }));
 
 import VerifyAddress, { action, headers, meta } from "../../app/routes/v.$token";
@@ -31,12 +31,13 @@ vi.mock("react-router", async (importOriginal) => {
   };
 });
 
-function renderPage(confirmed: boolean): string {
+function renderPage(confirmed: boolean | "expired"): string {
   const Stub = createRoutesStub([{ id: "routes/v.$token", path: "/v/:token", Component: VerifyAddress }]);
   return renderToStaticMarkup(
     createElement(Stub, {
       initialEntries: ["/v/t"],
-      hydrationData: confirmed ? { actionData: { "routes/v.$token": { confirmed: true } } } : {},
+      hydrationData:
+        confirmed === false ? {} : { actionData: { "routes/v.$token": { confirmed: confirmed === true } } },
     }),
   );
 }
@@ -109,9 +110,18 @@ describe("/v/:token (0509#5811)", () => {
     expectDisabledButton(html);
   });
 
-  it("answers POST as confirmed for any token, including unknown", async () => {
-    expect(await action({ params: { token: "deadbeef" } } as never)).toEqual({ confirmed: true });
-    expect(await action({ params: { token: undefined } } as never)).toEqual({ confirmed: true });
+  it("says the link has expired when no token matched, and never claims it confirmed", () => {
+    const html = renderPage("expired");
+
+    expect(html).toContain("This link has expired or was already used");
+    expect(html).not.toContain("Email address confirmed");
+    expect(html).not.toContain("Confirm this email address?");
+  });
+
+  it("answers POST with what the confirm actually did", async () => {
+    expect(await action({ params: { token: "good" } } as never)).toEqual({ confirmed: true });
+    expect(await action({ params: { token: "deadbeef" } } as never)).toEqual({ confirmed: false });
+    expect(await action({ params: { token: undefined } } as never)).toEqual({ confirmed: false });
   });
 
   it("is no-store and noindex", () => {
