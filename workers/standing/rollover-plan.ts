@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { isWorkspacePaid } from "../../app/lib/billing/entitlements";
+import { isWorkspacePaid } from "../../app/lib/billing/subscription-state";
 import type { BriefSchedule, RolloverInstance, RolloverParams } from "../../app/lib/brief-schedule";
 import { openWeek, previousBriefAt, rolloverInstance } from "../../app/lib/brief-schedule";
 

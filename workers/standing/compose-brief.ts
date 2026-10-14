@@ -41,6 +41,10 @@ FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1
 WHERE s.workspace_id = ?1 AND s.kind = 'change' AND s.observed_at < ?2 AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL`;
 
+const EARLIER_RANK = `SELECT rank, week_start_at FROM standing
+WHERE workspace_id = ?1 AND entity_id = ?2 AND rank IS NOT NULL AND week_start_at <= ?3
+ORDER BY week_start_at DESC LIMIT 1`;
+
 const SOURCE_COVERAGE = `SELECT src.key AS key,
        ${effectiveKindSql("src")} AS kind,
        src.platform AS platform,
@@ -115,6 +119,8 @@ const incidentRows = z.array(
     closed_at: z.string().nullable(),
   }),
 );
+
+const earlierRankRows = z.array(z.object({ rank: z.number().int(), week_start_at: z.string() }));
 
 const totalChangeRows = z.array(z.object({ total: z.number() }));
 
@@ -293,6 +299,24 @@ function buildHeadLine(
   return readThisFirstLine(marks.length, readThisFirst.judged, lead.entity_name);
 }
 
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const MIN_TREND_WEEKS = 4;
+
+async function readEarlierRank(
+  db: D1Database,
+  input: { workspaceId: string; selfId: string | undefined; startsAt: Date },
+) {
+  const { workspaceId, selfId, startsAt } = input;
+  if (selfId === undefined) return null;
+  const cutoff = new Date(startsAt.getTime() - MIN_TREND_WEEKS * WEEK_MS).toISOString();
+  const row = earlierRankRows.parse(
+    (await db.prepare(EARLIER_RANK).bind(workspaceId, selfId, cutoff).all()).results,
+  )[0];
+  if (row === undefined) return null;
+  const weeks = Math.round((startsAt.getTime() - Date.parse(row.week_start_at)) / WEEK_MS);
+  return { rank: row.rank, weeks };
+}
+
 export async function composeBrief(db: D1Database, input: ComposeInput): Promise<BriefPayload> {
   const startsAt = input.week.startsAt.toISOString();
   const closesAt = input.week.closesAt.toISOString();
@@ -322,6 +346,11 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
     headline_total: lines.length,
     headline_movement: self?.movement ?? null,
     headline_is_new: self?.is_new ?? false,
+    headline_earlier: await readEarlierRank(db, {
+      workspaceId: input.workspaceId,
+      selfId,
+      startsAt: input.week.startsAt,
+    }),
     why_line: pausedLine === null ? headLine : `${headLine} ${pausedLine}`,
     is_quiet_week: marks.length === 0 && !readThisFirst.unjudged,
     is_unjudged: readThisFirst.unjudged,

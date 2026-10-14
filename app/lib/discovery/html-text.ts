@@ -1,26 +1,4 @@
-const ENTITY = /&(#x[0-9a-f]+|#\d+|[a-z]+);/gi;
-
-const NAMED_ENTITIES: Readonly<Record<string, string>> = {
-  amp: "&",
-  lt: "<",
-  gt: ">",
-  quot: '"',
-  apos: "'",
-  nbsp: " ",
-};
-
-function codePointOf(body: string): number | null {
-  if (body.startsWith("#x")) return Number.parseInt(body.slice(2), 16);
-  if (body.startsWith("#")) return Number.parseInt(body.slice(1), 10);
-  return null;
-}
-
-function decodeEntity(match: string, body: string): string {
-  const lower = body.toLowerCase();
-  const code = codePointOf(lower);
-  if (code === null) return NAMED_ENTITIES[lower] ?? match;
-  return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
-}
+import { decodeHtmlEntities } from "../html";
 
 export async function htmlToText(html: string): Promise<string> {
   const parts: string[] = [];
@@ -36,5 +14,5 @@ export async function htmlToText(html: string): Promise<string> {
       },
     });
   await rewriter.transform(new Response(`<div>${html}</div>`)).text();
-  return parts.join("").replace(ENTITY, decodeEntity).trim();
+  return decodeHtmlEntities(parts.join("")).trim();
 }
