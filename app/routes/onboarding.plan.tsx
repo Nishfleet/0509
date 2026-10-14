@@ -6,7 +6,7 @@ import { z } from "zod";
 import { OnboardingFrame } from "../components/onboarding-frame";
 import { PlanGate, UpgradeStatus } from "../components/plan-gate";
 import { createCheckoutUrl } from "../lib/billing/checkout.server";
-import { isWorkspacePaid } from "../lib/billing/entitlements";
+import { isWorkspacePaid } from "../lib/billing/subscription-state";
 import { reconcileCheckoutReturn } from "../lib/billing/reconcile.server";
 import { isBillingInterval, isPlanId, TRIAL_TERMS } from "../lib/billing/plans";
 import { readPlanSubscription, readPlanTier } from "../lib/data/plan.server";

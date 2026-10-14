@@ -3,7 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { Ticker } from "../../app/components/landing/ticker";
-import { agoLabel, tickerItems, type TickerItem } from "../../app/lib/ticker";
+import { agoLabel } from "../../app/lib/ago-label";
+import type { TickerItem } from "../../app/lib/ticker";
+import { tickerItems } from "../../app/lib/ticker-items.server";
 
 function siteChangeRow(
   overrides: Partial<{
