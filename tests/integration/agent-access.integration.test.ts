@@ -419,6 +419,28 @@ describe("agent access, scoped to one workspace", () => {
     expect(limited.headers.get("retry-after")).toBe("60");
   });
 
+  it("stops serving a key on both the REST and MCP paths the moment it is deleted", async () => {
+    const { key, id } = await auth.api.createApiKey({ body: { userId: a.userId, name: "to revoke" } });
+    const rest = () =>
+      apiResponse(
+        new Request("http://localhost/api/v1/brief", {
+          headers: { authorization: `Bearer ${key}`, "cf-connecting-ip": "203.0.113.203" },
+        }),
+        readAgentBrief,
+      );
+    const mcp = () =>
+      oauthBearerMcp(
+        new Request("http://localhost/mcp", {
+          headers: { authorization: `Bearer ${key}`, "cf-connecting-ip": "203.0.113.204" },
+        }),
+      );
+    expect((await rest()).status).toBe(200);
+    expect((await mcp()).status).toBe(200);
+    await env.DB.prepare('DELETE FROM "apikey" WHERE id = ?1').bind(id).run();
+    expect((await rest()).status).toBe(401);
+    expect((await mcp()).status).toBe(401);
+  });
+
   it("refuses an MCP request from a foreign origin and serves one from the product's own", async () => {
     const from = (origin: string) =>
       new Request("http://localhost/mcp", {

@@ -37,13 +37,13 @@ describe("DeliveryAddress", () => {
   it("offers resume and the alert when the address is suppressed", () => {
     const html = render({
       delivery: { address: "me@brand.com", verified: true },
-      error: "This address unsubscribed from the brief.",
+      error: "This address unsubscribed from the brief and alerts.",
       suppressed: true,
     });
     expect(html).toContain('name="resume"');
-    expect(html).toContain("Send the brief to this address again");
+    expect(html).toContain("Send the brief and alerts to this address again");
     expect(html).toContain('role="alert"');
-    expect(html).toContain("This address unsubscribed from the brief.");
+    expect(html).toContain("This address unsubscribed from the brief and alerts.");
   });
 
   it("says the address is unconfirmed while it is unverified, and stays quiet once it is", () => {

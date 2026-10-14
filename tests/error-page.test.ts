@@ -39,6 +39,7 @@ describe("error page by cause", () => {
     expect(html).not.toContain("/app/alerts");
     expect(html.includes('href=""')).toBe(retry);
     expect(html.includes("Try again")).toBe(retry);
+    expect(html.includes("support@0509.io")).toBe(retry);
     if (status === 401) {
       expect(html).toContain('href="/login"');
       expect(html).toContain(">Sign in<");
@@ -120,7 +121,8 @@ describe("error page", () => {
     expect(html).toContain('href="/"');
     expect(html).not.toContain("blow-up");
     expect(html).toContain('href=""');
-    expect(html.match(/<a /g)).toHaveLength(2);
+    expect(html.match(/<a /g)).toHaveLength(3);
+    expect(html).toContain('href="mailto:support@0509.io"');
   });
 
   it("treats a non-404 route error as the problem page", () => {

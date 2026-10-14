@@ -387,7 +387,7 @@ export async function deactivateWatch(watchId: string): Promise<void> {
   await env.DB.prepare(DEACTIVATE_WATCH).bind(watchId).run();
 }
 
-const ALTERNATE_MARKER = (alias: string): string =>
+export const ALTERNATE_MARKER = (alias: string): string =>
   `coalesce(CASE WHEN json_valid(${alias}.config_json) THEN json_extract(${alias}.config_json, '$.alternateHome') END, 0) = 1`;
 
 const BLOCKED_RIVALS = `SELECT e.id AS entity_id, e.workspace_id AS workspace_id, e.domain AS domain

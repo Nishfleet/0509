@@ -233,11 +233,41 @@ describe("nightly site sweep", () => {
     const stored = await env.SNAPSHOTS.get(diffKey);
     const diff: unknown = JSON.parse((await stored?.text()) ?? "null");
     expect(diff).toMatchObject({ hunks: [expect.objectContaining({ lines: expect.any(Array) })] });
+    expect(payload).toMatchObject({ excerpt: [expect.objectContaining({ lines: expect.any(Array) })] });
 
     const polled = await env.DB.prepare("SELECT last_polled_at FROM watch WHERE id = ?")
       .bind(rival.watchId)
       .first<{ last_polled_at: string | null }>();
     expect(polled?.last_polled_at).not.toBeNull();
+  });
+
+  it("reads a rival once for every workspace that watches it when they share one sweep tick", async () => {
+    await env.DB.prepare(
+      `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
+       VALUES ('ws-second', 'Second', ?, 'UTC', 1, 8, ?)`,
+    )
+      .bind(USER, NOW)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES ('plan-second', 'ws-second', 'starter', 'active', ?)`,
+    )
+      .bind(NOW)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
+       VALUES ('ent-rival-second', 'ws-second', 'competitor', 'rival.com', '{}', 'manual', 'on', ?)`,
+    )
+      .bind(NOW)
+      .run();
+
+    const rivals = (await planSiteSweep(NOW)).filter((t) => t.url === "https://rival.com/");
+    expect(rivals).toHaveLength(2);
+    const tick = await nextTick("shared-night");
+    const reads = [];
+    for (const rival of rivals) reads.push(await checkSitePage(rival, tick));
+
+    expect(reads.map((read) => read.outcome)).toEqual(["first", "first"]);
+    expect(calls.filter((call) => call === "GET https://rival.com/")).toHaveLength(1);
   });
 
   it("stores the before and after in readable text, not as the page's character codes", async () => {

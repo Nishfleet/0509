@@ -9,6 +9,7 @@ import { API_KEY_PREFIX, READ_SCOPE } from "./agent/paths";
 import { cancelPendingDigests } from "./data/digest.server";
 import { suppressWorkspaceTargets } from "./data/email_suppression.server";
 import { readWorkspaceIdForOwner } from "./data/workspace.server";
+import { withEmailLanding } from "./email-change-landing";
 import { ensureWorkspaceForSignIn } from "./workspace.server";
 import { accessPrecleared } from "./auth/access-preclearance.server";
 import { changeEmailEmail } from "./auth/change-email-email";
@@ -58,7 +59,11 @@ function sendChangeEmailMessage(
   email: SendEmail,
   input: { kind: "approve" | "confirm"; to: string; named: string; url: string },
 ): Promise<void> {
-  const message = changeEmailEmail({ kind: input.kind, email: input.named, url: input.url });
+  const message = changeEmailEmail({
+    kind: input.kind,
+    email: input.named,
+    url: withEmailLanding(input.url, input.kind),
+  });
   return sendOrThrow(email, {
     to: input.to,
     from: { email: "hello@0509.io", name: "Five to Nine" },
@@ -225,6 +230,11 @@ export async function createAuthForRequest(env: AuthEnv, request: Request) {
 export async function signOut(env: AuthEnv, request: Request): Promise<Headers> {
   const { headers } = await createAuth(env).api.signOut({ headers: request.headers, returnHeaders: true });
   return headers;
+}
+
+export async function signOutEverywhere(env: AuthEnv, request: Request): Promise<Headers> {
+  await createAuth(env).api.revokeSessions({ headers: request.headers });
+  return signOut(env, request);
 }
 
 async function silenceWorkspace(db: D1Database, userId: string): Promise<void> {

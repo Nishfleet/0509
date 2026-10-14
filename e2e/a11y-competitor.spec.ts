@@ -3,12 +3,6 @@ import { expect, test } from "./test";
 
 import { onboardedStatePath } from "../playwright.config";
 
-// One competitor's own page measured at each shape the product ships, the same
-// production lane and the same reason as e2e/a11y-alerts.spec.ts: the preview
-// Worker cannot mint a session, so this spec skips there. The shared onboarded
-// session already tracks competitors (e2e/competitor-page.spec.ts opens its
-// nike.com row), so the spec follows the first row of the Competitors list. It
-// reads only: it toggles no switch and adds no competitor.
 test.use({
   storageState: async ({}, use, testInfo) => {
     await use(
