@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { TRIAL_DAYS } from "../billing/plans";
+
 const SELECT_NEW_TRIALS = `SELECT p.workspace_id,
        p.provider_subscription_id AS subscription_id,
        w.timezone,
@@ -8,7 +10,7 @@ const SELECT_NEW_TRIALS = `SELECT p.workspace_id,
        st.id AS target_id,
        st.target_value,
        (SELECT count(*) FROM entity e WHERE e.workspace_id = p.workspace_id AND e.role = 'competitor' AND e.state = 'on') AS rival_count,
-       (SELECT group_concat(n.name, '|') FROM (
+       (SELECT json_group_array(n.name) FROM (
           SELECT COALESCE(NULLIF(e.name, ''), e.domain) AS name
             FROM entity e
            WHERE e.workspace_id = p.workspace_id AND e.role = 'competitor' AND e.state = 'on'
@@ -24,7 +26,7 @@ const SELECT_NEW_TRIALS = `SELECT p.workspace_id,
      ORDER BY t.created_at ASC
      LIMIT 1
   )
- WHERE p.trialing = 1 AND p.status = 'active' AND p.updated_at >= ?1`;
+ WHERE p.trialing = 1 AND p.status = 'active' AND p.current_period_end >= ?1`;
 
 const newTrialRow = z.object({
   workspace_id: z.string(),
@@ -35,15 +37,19 @@ const newTrialRow = z.object({
   target_id: z.string(),
   target_value: z.string(),
   rival_count: z.number(),
-  rival_names: z.string().nullable(),
+  rival_names: z
+    .string()
+    .nullable()
+    .transform((json) => (json === null ? [] : z.array(z.string()).parse(JSON.parse(json)))),
 });
 
 export type NewTrial = z.infer<typeof newTrialRow>;
 
-const WELCOME_WINDOW_MS = 2 * 86_400_000;
+const DAY_MS = 86_400_000;
+const WELCOME_WINDOW_DAYS = 2;
 
 export async function readNewTrials(db: D1Database, now: Date): Promise<NewTrial[]> {
-  const since = new Date(now.getTime() - WELCOME_WINDOW_MS);
+  const since = new Date(now.getTime() + (TRIAL_DAYS - WELCOME_WINDOW_DAYS) * DAY_MS);
   const { results } = await db.prepare(SELECT_NEW_TRIALS).bind(since.toISOString()).all();
   const trials: NewTrial[] = [];
   for (const row of z.array(z.unknown()).parse(results)) {

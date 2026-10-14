@@ -12,6 +12,7 @@ import { EmptyState } from "../components/empty-state";
 import { PAGE, PageHeading } from "../components/page-heading";
 import { RetireQuestions } from "../components/retire-questions";
 import { isPlanId } from "../lib/billing/plans";
+import { reconcileCheckoutReturn } from "../lib/billing/reconcile.server";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import type { CompetitorRow } from "../lib/data/entity.server";
 import { readCompetitors } from "../lib/data/entity.server";
@@ -33,6 +34,7 @@ function workspaceFrom(context: Route.LoaderArgs["context"]): string {
 export async function loader({ request, context }: Route.LoaderArgs) {
   const workspaceId = workspaceFrom(context);
   const wanted = new URL(request.url).searchParams.get("upgraded");
+  if (isPlanId(wanted)) await reconcileCheckoutReturn(workspaceId, context.get(onboardedContext).session.user.email);
   const [competitors, tier, entitlements] = await Promise.all([
     readCompetitors(workspaceId),
     readPlanTier(workspaceId),
@@ -116,6 +118,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         message={actionData?.message}
         upgradePlanId={actionData?.upgradePlanId}
         returning={actionData?.returning}
+        added={actionData?.added}
       />
     </main>
   );

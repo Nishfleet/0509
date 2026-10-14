@@ -29,7 +29,7 @@ describe("ReadThisFirst", () => {
     const html = renderToStaticMarkup(createElement(ReadThisFirst, { marks: [] }));
     expect(html).toContain('data-brief-block="read-this-first"');
     expect(html).toContain("Read this first");
-    expect(html).toContain("Nothing this week needed reading first.");
+    expect(html).toContain("Nothing needed your attention this week. We keep watching rival sites, ads and mentions.");
   });
 
   it("renders two marks in the order they are given", () => {
