@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { sendMessage } from "../../workers/delivery/send";
 import { redactEmailShaped } from "./auth/redact-email-shaped";
 import { looksLikeEmailAddress, normalizeEmailAddress } from "./email-address";
-import { clearSuppression, isAddressSuppressed, writeMailKinds } from "./data/email_suppression.server";
+import { clearSuppression, isAddressSuppressed, readMailKinds, writeMailKinds } from "./data/email_suppression.server";
 import {
   changeEmailTarget,
   ensureOwnerEmailTarget,
@@ -127,7 +127,10 @@ export async function saveMailKinds(input: {
 }): Promise<boolean> {
   const { address, verified } = await readDeliveryAddress(input.userId, input.signInEmail);
   const normalized = normalizeEmailAddress(address);
-  if (!verified && normalized !== normalizeEmailAddress(input.signInEmail)) return false;
+  if (normalized !== normalizeEmailAddress(input.signInEmail)) {
+    const current = await readMailKinds(normalized);
+    if (!verified || (input.brief && !current.brief) || (input.alerts && !current.alerts)) return false;
+  }
   await writeMailKinds(normalized, { brief: input.brief, alerts: input.alerts });
   return true;
 }

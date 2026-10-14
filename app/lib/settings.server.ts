@@ -237,7 +237,7 @@ async function saveMail(user: SettingsUser, form: FormData): Promise<SettingsRes
     brief: parsed.success && parsed.data.brief === "yes",
     alerts: parsed.success && parsed.data.alerts === "yes",
   });
-  if (!saved) return result({ deliveryError: "Confirm this address first, then choose which emails it gets." });
+  if (!saved) return result({ deliveryError: "This address can only be switched off here. To turn emails back on, use your sign-in address." });
   return result({ saved: true });
 }
 

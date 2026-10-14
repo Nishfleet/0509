@@ -237,4 +237,17 @@ describe("one-click unsubscribe (0509#4358, 0509#4593, 0509#5761)", () => {
     expect(await readMailKinds("victim@0509.io")).toEqual({ brief: false, alerts: false });
     expect(await suppressionRows()).toHaveLength(1);
   });
+
+  it("(m) lets a confirmed teammate-style address only add stops, never lift one", async () => {
+    await env.DB.prepare("UPDATE send_target SET target_value = 'other@0509.io'").run();
+    await env.DB.prepare(
+      `INSERT INTO email_suppression (address, reason, created_at, stops_brief, stops_alerts) VALUES ('other@0509.io', 'unsubscribed', '2026-09-01T00:00:00Z', 1, 0)`,
+    ).run();
+
+    const lifted = await saveMailKinds({ userId: USER, signInEmail: ADDRESS, brief: true, alerts: true });
+    const added = await saveMailKinds({ userId: USER, signInEmail: ADDRESS, brief: false, alerts: false });
+
+    expect([lifted, added]).toEqual([false, true]);
+    expect(await readMailKinds("other@0509.io")).toEqual({ brief: false, alerts: false });
+  });
 });
