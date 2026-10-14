@@ -1,16 +1,5 @@
 import { expect, test } from "./test";
 
-// This spec traces to the `/`, `/login`, `/pricing`, `/privacy` and `/terms` rows in
-// .agents/skills/verify/feature-map.md: each route's footer carries the Privacy
-// link, the Terms link and the takedown address support@0509.io, in the same order
-// with the same markup. The landing cannot import the shared Footer (it is a
-// static document), so its footer is a hand-kept copy of the same three anchors.
-//
-// Copy is pattern-matched, never pinned verbatim: the landing h1 lesson
-// (2026-09-21T16:03Z) turned every copy edit into a red gate. What is asserted
-// is the contract - the link exists, is visible, is labelled and points at the
-// right destination - plus the source order, which is what "same order" means
-// here.
 const PUBLIC_ROUTES = ["/", "/login", "/pricing", "/privacy", "/terms", "/security"] as const;
 
 const PRIVACY_HREF = 'a[href="/privacy"]';
@@ -42,10 +31,6 @@ for (const route of PUBLIC_ROUTES) {
       await expect(footer.locator('a[href="/status"]')).toHaveCount(route === "/security" ? 1 : 0);
     }
 
-    // The anchors sit in the footer's own source order, compared without
-    // layout: the static landing has no gap utilities, so its separator is a
-    // text span, and the only cross-route invariant that survives is that the
-    // address comes first on every route.
     const [supportIndex, privacyIndex, termsIndex] = await Promise.all([
       support.evaluate((element) => Array.from(element.closest("footer")?.children ?? []).indexOf(element)),
       privacy.evaluate((element) => Array.from(element.closest("footer")?.children ?? []).indexOf(element)),
