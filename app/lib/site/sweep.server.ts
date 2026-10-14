@@ -46,8 +46,8 @@ async function readText(key: string): Promise<string | null> {
   return object === null ? null : object.text();
 }
 
-function sameVisibleText(before: string | null, after: string | null): boolean {
-  return before !== null && before === after;
+function sameVisibleText(changed: ChangedPage, before: string | null, after: string | null): boolean {
+  return changed.previousTextKey !== changed.textKey && before !== null && before === after;
 }
 
 async function readVisibleText(key: string): Promise<string | null> {
@@ -413,7 +413,7 @@ export async function publishSiteChange(target: SiteSweepTarget, changed: Change
     readVisibleText(changed.previousTextKey),
     readVisibleText(changed.textKey),
   ]);
-  if (changed.previousTextKey !== changed.textKey && sameVisibleText(before, after)) {
+  if (sameVisibleText(changed, before, after)) {
     console.log(JSON.stringify({ event: "site.change_same_text", pageId: target.pageId }));
     return changed.snapshotId;
   }
