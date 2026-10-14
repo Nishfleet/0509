@@ -40,3 +40,7 @@ Cause: opening the name editor fades its popover in over 160 ms, and the scan ra
 Fix (#7580): the spec waits for `opacity: 1` and no `data-starting-style` before it scans. No skip, retry wrapper or loosened rule.
 
 The lesson: a scan of a transient surface waits for the surface to settle, and a new check that joins every pull request gets a repeat run under load before it merges.
+
+## Fourth cause: a layout shift counted against the page load
+
+The teammates quality test failed once on CI with a 0.0587 shift. The shift came from the invite's own new row, but the invite response took longer than Chrome's 500 ms input window, so it was counted as load shift. `startQuality` now attributes shifts within 3 s of the test's own click, key or submit to that action. The 0.02 budget is unchanged and shifts with no recent input still count in full (#7580).
