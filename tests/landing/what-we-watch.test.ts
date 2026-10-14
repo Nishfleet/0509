@@ -24,8 +24,6 @@ function markup(sources: readonly WatchedSource[], now: number = NOW): string {
   return renderToStaticMarkup(createElement(WhatWeWatch, { sources, now }));
 }
 
-// React serializes the apostrophe in a text node as an entity; decode it so an
-// assertion is against the copy as written, not React's escaping.
 function decoded(html: string): string {
   return html.replaceAll("&#x27;", "'").replaceAll("&quot;", '"');
 }

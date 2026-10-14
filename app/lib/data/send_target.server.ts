@@ -129,6 +129,15 @@ WHERE st.workspace_id = ? AND c.key = 'slack' AND c.is_enabled = 1 AND st.is_ver
 ORDER BY st.created_at ASC
 LIMIT 1`;
 
+const readSlackDisconnectedRow = z.object({ found: z.number() });
+
+const DISCONNECT_SLACK_TARGET = `UPDATE send_target SET is_verified = 0 WHERE id = ?`;
+
+const SELECT_DISCONNECTED_SLACK = `SELECT 1 AS found FROM send_target st
+JOIN channel c ON c.id = st.channel_id
+WHERE st.workspace_id = ? AND c.key = 'slack' AND st.is_verified = 0
+LIMIT 1`;
+
 const DELETE_SLACK_TARGET = `DELETE FROM send_target
 WHERE workspace_id = ? AND channel_id = (SELECT id FROM channel WHERE key = 'slack')`;
 
@@ -301,6 +310,17 @@ export async function runNightlySlackBackfill(db: D1Database, options: { maxRows
 
 export async function removeSlackTarget(db: D1Database, workspaceId: string): Promise<void> {
   await db.prepare(DELETE_SLACK_TARGET).bind(workspaceId).run();
+}
+
+export async function disconnectSlackTarget(db: D1Database, targetId: string): Promise<void> {
+  await db.prepare(DISCONNECT_SLACK_TARGET).bind(targetId).run();
+}
+
+export async function readSlackDisconnected(db: D1Database, workspaceId: string): Promise<boolean> {
+  return (
+    readSlackDisconnectedRow.nullable().parse(await db.prepare(SELECT_DISCONNECTED_SLACK).bind(workspaceId).first()) !==
+    null
+  );
 }
 
 export async function saveSlackTarget(

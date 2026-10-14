@@ -106,7 +106,8 @@ function DevelopmentsSection({
       {unreadable ? (
         <p data-slot="site-unreadable" className="border-t border-ink pt-3 text-meta text-ink-soft">
           We couldn't read their website. It may block automated visits. We'll keep trying, and we're still watching
-          everything else about them.
+          everything else about them. If you know another website of theirs, add it under Another website of theirs
+          below.
         </p>
       ) : null}
       {developments.length === 0 ? (

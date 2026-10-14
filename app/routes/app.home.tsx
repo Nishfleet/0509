@@ -5,6 +5,8 @@ import { data, Link, redirect } from "react-router";
 import { FreshnessLine } from "../components/freshness-line";
 import { HomePageFrame, HomeStanding } from "../components/home-standing";
 import { ShareButton } from "../components/share-button";
+import { formatPausedSince } from "../lib/brief-settings";
+import { readBriefScheduleForOwner } from "../lib/data/workspace.server";
 import { homeView } from "../lib/home-standing";
 import { readHomeReads, resolveOpenId } from "../lib/home-page.server";
 import { readHomeStandingInputs } from "../lib/home-standing.server";
@@ -21,7 +23,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const timings = createTimings();
   const { session, workspaceId } = context.get(onboardedContext);
   if (workspaceId === null) throw redirect("/onboarding");
-  const inputs = await timings.measure("standing", readHomeStandingInputs(session.user.id, workspaceId));
+  const [inputs, owned] = await timings.measure(
+    "standing",
+    Promise.all([readHomeStandingInputs(session.user.id, workspaceId), readBriefScheduleForOwner(session.user.id)]),
+  );
   if (inputs === null) throw redirect("/onboarding");
   const payload = inputs.payload;
   const openId = resolveOpenId(new URL(request.url).searchParams.get("open"), payload, inputs.entities);
@@ -38,6 +43,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       howRanked,
       freshness: freshnessEntries(sources, Date.now()),
       siteFill,
+      pausedSince:
+        owned?.schedule.pausedAt == null ? null : formatPausedSince(owned.schedule.pausedAt, owned.schedule.timezone),
     },
     { headers: timings.header() },
   );
@@ -51,6 +58,17 @@ function SiteFillLine({ state }: { state: "pending" | "gave_up" }) {
   return (
     <p role="status" className="mt-6 text-[0.88rem] text-ink-soft">
       {text}
+    </p>
+  );
+}
+
+function BriefPausedLine({ since }: { since: string }) {
+  return (
+    <p role="status" className="mt-6 text-[0.88rem] text-ink-soft">
+      Your weekly brief has been paused since {since}, so no email is coming.{" "}
+      <Link className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4" to="/app/settings">
+        Resume it in Settings
+      </Link>
     </p>
   );
 }
@@ -83,6 +101,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       {loaderData.siteFill === "pending" || loaderData.siteFill === "gave_up" ? (
         <SiteFillLine state={loaderData.siteFill} />
       ) : null}
+      {loaderData.pausedSince === null ? null : <BriefPausedLine since={loaderData.pausedSince} />}
       <FreshnessLine entries={loaderData.freshness} />
       {loaderData.view.standing.kind === "ranked" ? <ShareButton /> : null}
     </HomePageFrame>

@@ -37,26 +37,24 @@ function resetQuality(quality: Quality): void {
   quality.watched.prefetchRefused.length = 0;
 }
 
-async function expectNoSeriousAxe(page: Page, testInfo: TestInfo, label: string): Promise<void> {
+export async function expectNoAxeViolations(page: Page, testInfo: TestInfo, label: string): Promise<void> {
   const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
   await testInfo.attach(`axe ${label}`, {
     body: JSON.stringify(results.violations, null, 2),
     contentType: "application/json",
   });
-  const blocking = results.violations.filter(
-    (violation) => violation.impact === "serious" || violation.impact === "critical",
-  );
   expect
     .soft(
-      blocking.map(
-        (violation) => `${violation.id}: ${violation.nodes.map((node) => node.target.join(" ")).join(" | ")}`,
+      results.violations.map(
+        (violation) =>
+          `${violation.id} (${violation.impact ?? "unrated"}): ${violation.nodes.map((node) => node.target.join(" ")).join(" | ")}`,
       ),
       label,
     )
     .toEqual([]);
 }
 
-async function expectKeyboardReachesVisibleFocus(page: Page, label: string): Promise<void> {
+export async function expectKeyboardReachesVisibleFocus(page: Page, label: string): Promise<void> {
   await page.evaluate(() => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   });
@@ -117,7 +115,7 @@ export async function scanPage(
   options: { keyboard: boolean } = { keyboard: true },
 ): Promise<void> {
   await animationsSettled(page);
-  await expectNoSeriousAxe(page, testInfo, label);
+  await expectNoAxeViolations(page, testInfo, label);
   await expectQuiet(page, testInfo, quality, label);
   if (options.keyboard) await expectKeyboardReachesVisibleFocus(page, label);
   resetQuality(quality);
