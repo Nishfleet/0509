@@ -80,7 +80,7 @@ describe("landing LCP critical path", () => {
   it("still ships the module script, the faces stylesheet and the preloads on every other document", () => {
     const html = renderDocument("routes/login");
     expect(html).toContain("<script");
-    expect(html).toContain('<link rel="stylesheet" href="/app-faces.css"/>');
+    expect(html).toContain('<link rel="stylesheet" href="/app-faces.css" data-precedence="default"/>');
     expect(html).toContain("/fonts/instrument-sans-latin.woff2");
     expect(html).toContain("/fonts/bricolage-hero.woff2");
   });

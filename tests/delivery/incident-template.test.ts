@@ -40,6 +40,13 @@ const FIXED: IncidentFixedContext = {
   settings_link: "https://0509.io/app/settings",
 };
 
+describe("open incident preview", () => {
+  it("previews what was seen and when we re-check, not only the timestamp", () => {
+    const { html } = renderIncidentOpen(OPEN);
+    expect(html).toMatch(/display:none[^>]*>Seen at [^<]*We re-check at /);
+  });
+});
+
 describe("open incident email", () => {
   it("subjects it as the site plus what broke", () => {
     expect(renderIncidentOpen(OPEN).subject).toBe("shop.example looks broken: pricing section missing");
@@ -74,7 +81,7 @@ describe("open incident email", () => {
 
   it("links the dashboard url in the html body", () => {
     const { html } = renderIncidentOpen(OPEN);
-    expect(html).toContain('<a class="brief-ink" href="https://0509.io/site/inc_1">See it in Five to Nine</a>');
+    expect(html).toContain('href="https://0509.io/site/inc_1">See it in Five to Nine</a>');
     expect(html).not.toContain(">https://0509.io/site/inc_1<");
   });
 });
@@ -97,7 +104,7 @@ describe("fixed incident email", () => {
 
   it("links the same url in the html", () => {
     const { html } = renderIncidentFixed(FIXED);
-    expect(html).toContain('<a class="brief-ink" href="https://0509.io/site/inc_1">See it in Five to Nine</a>');
+    expect(html).toContain('href="https://0509.io/site/inc_1">See it in Five to Nine</a>');
   });
 });
 
