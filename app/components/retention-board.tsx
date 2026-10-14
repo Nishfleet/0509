@@ -68,11 +68,19 @@ export function RetentionBoardView({ board }: { board: RetentionBoard }): ReactE
       <h1 className="font-display text-2xl font-bold">Retention</h1>
       <p className="mt-2 max-w-prose text-ink-soft">
         Counts from our own database only. Visits are recorded once a day per workspace from the day this page shipped.
-        Test accounts are included.
+        Paid includes free tester accounts, which cannot be told apart in our data.
       </p>
       <Table
         title="Trial to paid, by signup week"
-        head={["Week of", "Signed up", "Started", "In trial", "Paying", "Cancelled", "Paying of started"]}
+        head={[
+          "Week of",
+          "Signed up",
+          "Started",
+          "In trial",
+          "Paid or tester",
+          "Cancelled",
+          "Paid or tester of started",
+        ]}
         rows={funnelRows(board)}
       />
       <Table title="Last seen, live workspaces" head={["When", "Workspaces"]} rows={lastSeenRows(board)} />
