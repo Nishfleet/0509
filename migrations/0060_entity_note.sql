@@ -10,3 +10,5 @@ CREATE TABLE entity_note (
   FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE CASCADE,
   FOREIGN KEY (workspace_id, entity_id) REFERENCES entity(workspace_id, id) ON DELETE CASCADE
 ) WITHOUT ROWID;
+
+CREATE INDEX entity_note_entity ON entity_note (entity_id);
