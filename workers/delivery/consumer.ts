@@ -1,3 +1,5 @@
+import { captureException } from "@sentry/cloudflare";
+
 import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { isWorkspacePaid } from "../../app/lib/billing/entitlements";
 import { markDigestSentStatement } from "../../app/lib/data/digest.server";
@@ -7,6 +9,7 @@ import { readEntitlements } from "../../app/lib/data/plan.server";
 import {
   claimChangeSlot,
   claimSendAttempt,
+  hasSendAttempt,
   readUnrecordedSend,
   resolveSendAttempt,
 } from "../../app/lib/data/send_attempt.server";
@@ -334,7 +337,9 @@ async function readSentWeekly(env: Env, digestId: string): Promise<MessageRow | 
 async function queueTeammates(env: Env, digestId: string): Promise<void> {
   const digest = await readSentWeekly(env, digestId);
   if (digest === null) return;
-  const mates = await readConfirmedTeammates(env.DB, digest.workspace_id);
+  const confirmed = await readConfirmedTeammates(env.DB, digest.workspace_id);
+  const asked = await Promise.all(confirmed.map((mate) => hasSendAttempt(env.DB, `digest:${digestId}:${mate.id}`)));
+  const mates = confirmed.filter((_, index) => !asked[index]);
   if (mates.length === 0) return;
   await env.SEND_EMAIL.sendBatch(mates.map((mate) => ({ body: { digest_id: digestId, target_id: mate.id } })));
 }
@@ -352,6 +357,7 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
   const result = await deliverToOwner(env, message);
   if (result.outcome === "sent" || result.outcome === "duplicate") {
     await queueTeammates(env, message.digest_id).catch((cause: unknown) => {
+      captureException(cause, { tags: { lane: "teammates", digest_id: message.digest_id } });
       console.error(JSON.stringify({ event: "delivery.teammates_failed", error: redactEmailShaped(errorText(cause)) }));
     });
   }
@@ -681,6 +687,9 @@ function settle(item: Message, parsed: DeliveryMessage, result: DeliveryResult):
   } else if (item.attempts < TEAMMATE_SEND_TRIES) {
     item.retry({ delaySeconds: TEAMMATE_RETRY_DELAY_SECONDS });
   } else {
+    captureException(new Error("teammate brief not delivered"), {
+      tags: { lane: "teammates", digest_id: parsed.digest_id },
+    });
     console.error(JSON.stringify({ event: "delivery.teammate_gave_up", digest_id: parsed.digest_id }));
     item.ack();
   }

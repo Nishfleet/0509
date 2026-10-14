@@ -319,6 +319,25 @@ describe("send lane (0509#3979)", () => {
     expect((await digestStatus(digestId))?.status).toBe("sent");
   });
 
+  it("(teammates) a redelivered owner message queues only teammates with no attempt yet", async () => {
+    const digestId = await seedDigest("pending");
+    await seedTeammate("mate-1", "mate@0509.io", true);
+    await seedTeammate("mate-2", "other@0509.io", true);
+    const rec = recorder();
+    const queued: unknown[] = [];
+    await deliver(envWith(bindingFor(rec), queued), message(digestId));
+    await handleBatch(
+      envWith(failingFor(rec, "mate@0509.io")),
+      batchFor([{ digest_id: digestId, target_id: "mate-1" }], 3).batch,
+    );
+
+    const again: unknown[] = [];
+    const redelivered = await deliver(envWith(bindingFor(rec), again), message(digestId));
+
+    expect(redelivered.outcome).toBe("duplicate");
+    expect(again).toEqual([{ digest_id: digestId, target_id: "mate-2" }]);
+  });
+
   it("(teammates) a retry that works sends once and settles the message", async () => {
     const digestId = await seedDigest("sent");
     await seedTeammate("mate-1", "mate@0509.io", true);

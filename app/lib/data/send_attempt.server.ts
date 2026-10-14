@@ -22,6 +22,14 @@ export async function readUnrecordedSend(db: D1Database, idempotencyKey: string)
   return readUnrecordedSendRow.nullable().parse(await db.prepare(SENT_UNRECORDED).bind(idempotencyKey).first());
 }
 
+const SELECT_ATTEMPT = `SELECT 1 AS present FROM send_attempt WHERE idempotency_key = ?`;
+
+const attemptPresentRow = z.object({ present: z.number() });
+
+export async function hasSendAttempt(db: D1Database, idempotencyKey: string): Promise<boolean> {
+  return attemptPresentRow.nullable().parse(await db.prepare(SELECT_ATTEMPT).bind(idempotencyKey).first()) !== null;
+}
+
 const claimSendAttemptRow = z.object({ id: z.string() });
 
 export async function claimSendAttempt(
