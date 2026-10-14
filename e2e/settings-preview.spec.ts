@@ -71,9 +71,15 @@ test("pausing the brief says so, survives a reload, and resuming undoes it", asy
   await expect(page.getByText(/Paused since/)).toBeVisible();
   await page.reload();
   await expect(page.getByText(/Paused since/)).toBeVisible();
+  await page.goto("/app");
+  await expect(page.getByText(/Your weekly brief has been paused since/)).toBeVisible();
+  await page.getByRole("link", { name: "Resume it in Settings" }).click();
+  await expect(page).toHaveURL(/\/app\/settings$/);
   await page.getByRole("button", { name: "Resume the brief" }).click();
   await expect(page.getByRole("button", { name: "Pause the brief" })).toBeVisible();
   await expect(page.getByText(/Paused since/)).toHaveCount(0);
+  await page.goto("/app");
+  await expect(page.getByText(/Your weekly brief has been paused since/)).toHaveCount(0);
 });
 
 test("the own-site alerts switch keeps its state across a reload", async ({ page, baseURL }) => {
