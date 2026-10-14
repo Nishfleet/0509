@@ -26,6 +26,13 @@ export const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetic
 export const MONO = "ui-monospace,'SF Mono',Menlo,Consolas,monospace";
 export const EYEBROW = `margin:0 0 8px;font-family:${MONO};font-size:12px;line-height:16px;letter-spacing:0.16em;text-transform:uppercase;font-weight:500;`;
 
+export const HEADLINE = `margin:0;font-family:${FONT};font-size:24px;line-height:30px;font-weight:800;letter-spacing:-0.02em;`;
+export const BODY = `margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;`;
+
+export function linkParagraph(label: string, link: string): string {
+  return `<p style="${BODY}"><a class="brief-ink" href="${escapeHtml(link)}">${escapeHtml(label)}</a></p>`;
+}
+
 export const POSTAL_ADDRESS: string | null = null;
 
 export function postalLine(address: string | null = POSTAL_ADDRESS): { html: string; text: string } | null {

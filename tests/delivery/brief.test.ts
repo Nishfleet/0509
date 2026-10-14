@@ -855,7 +855,7 @@ describe("the since-you-started line", () => {
 describe("the rank-over-time line", () => {
   it.each([
     [5, "Up from #5 6 weeks ago"],
-    [3, "Holding at #3 since 6 weeks ago"],
+    [3, "Holding at #3 for 6 weeks"],
     [2, "Down from #2 6 weeks ago"],
   ])("compares today's #3 with an earlier #%i", (earlierRank, line) => {
     const { html, text } = renderBrief(payload({ headline_earlier: { rank: earlierRank, weeks: 6 } }), CONTEXT);
@@ -868,6 +868,14 @@ describe("the rank-over-time line", () => {
     ["an explicit none", null],
   ])("is left out for %s", (_name, earlier) => {
     const { text } = renderBrief(payload({ headline_earlier: earlier }), CONTEXT);
-    expect(text).not.toMatch(/weeks ago|since \d+ weeks/);
+    expect(text).not.toMatch(/weeks ago|for \d+ weeks/);
+  });
+
+  it.each([
+    ["an unjudged week", { is_unjudged: true }],
+    ["a headline with one brand", { headline_total: 1 }],
+  ])("is left out of the email for %s, as it is in the app", (_name, change) => {
+    const { text } = renderBrief(payload({ headline_earlier: { rank: 5, weeks: 6 }, ...change }), CONTEXT);
+    expect(text).not.toContain("Up from");
   });
 });
