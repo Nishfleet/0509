@@ -115,4 +115,11 @@ describe("every string field carries the injection probe escaped, never raw (050
     const { html } = renderChange(CTX);
     expect(html).toMatch(/display:none[^>]*>Seen at [^<]*Pro \$12 a month[^<]*Pro \$15 a month[^<]*</);
   });
+
+  it("ends the change with what to do about it, before the link", () => {
+    const { text } = renderChange(CTX);
+    const todo = text.indexOf("Worth a look today");
+    expect(todo).toBeGreaterThan(text.indexOf("After:"));
+    expect(todo).toBeLessThan(text.indexOf("See the before and after"));
+  });
 });

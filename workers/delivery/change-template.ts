@@ -59,6 +59,8 @@ export function renderChangeOverflow(ctx: ChangeOverflowContext): RenderedBrief 
   };
 }
 
+const SO_WHAT = "Worth a look today: does your own pricing page still hold up next to this?";
+
 export function renderChange(ctx: ChangeContext): RenderedBrief {
   const seen = `Seen at ${formatDate(ctx.observed_at, ctx.timezone, true)}.`;
   const lines = [seen, ...markLines(ctx.mark)];
@@ -66,13 +68,16 @@ export function renderChange(ctx: ChangeContext): RenderedBrief {
   const footer = renderAlertFooter(ctx);
   return {
     subject: ctx.headline,
-    text: [ctx.headline, ...lines, `See the before and after in Five to Nine: ${ctx.link}`, footer.text].join("\n"),
+    text: [ctx.headline, ...lines, SO_WHAT, `See the before and after in Five to Nine: ${ctx.link}`, footer.text].join(
+      "\n",
+    ),
     html: emailDocument(
       ctx.headline,
       [
         `<p class="brief-muted" style="${EYEBROW}">Price or plan change</p>`,
         `<p style="${HEADLINE}">${escapeHtml(ctx.headline)}</p>`,
         paragraphs(lines),
+        paragraphs([SO_WHAT]),
         `<p style="${BODY}">See the before and after in Five to Nine: <a class="brief-ink" href="${href}">${href}</a></p>`,
         footer.html,
       ].join(""),
