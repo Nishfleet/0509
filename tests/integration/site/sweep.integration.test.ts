@@ -287,6 +287,24 @@ describe("nightly site sweep", () => {
     expect(diff).not.toMatch(/&#x27;|&amp;/);
   });
 
+  it("keeps the page's lines, so one changed word stays one small passage", async () => {
+    const [rival] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
+    if (rival === undefined) throw new Error("expected the rival's homepage");
+    const page = (price: string) =>
+      `<!doctype html><html><body><p>First paragraph about the team.</p><p>Plans start at ${price} a month.</p><p>${PAD}</p><p>Last paragraph about support.</p></body></html>`;
+    readHolder.html = page("ten dollars");
+    await checkSitePage(rival, await nextTick("lines-1"));
+    readHolder.html = page("twelve dollars");
+    const changed = await checkSitePage(rival, await nextTick("lines-2"));
+    if (changed.outcome !== "changed") throw new Error("expected a change");
+    await publishSiteChange(rival, changed);
+
+    const stored = await env.SNAPSHOTS.get(`snapshot/site/${rival.watchId}/${changed.snapshotId}.diff.json`);
+    const diff = JSON.stringify(JSON.parse((await stored?.text()) ?? "null"));
+    expect(diff).toContain("twelve dollars");
+    expect(diff).not.toContain("Last paragraph about support.");
+  });
+
   it("files nothing when only the way a character is written changed", async () => {
     const [rival] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
     if (rival === undefined) throw new Error("expected the rival's homepage");

@@ -119,9 +119,6 @@ describe("send-email-dlq, incident lane (0509#5761)", () => {
     expect(alerts[0].status).toBe("unread");
     expect(alerts[0].body).not.toContain("invalid recipient");
 
-    // The Sentry raise is asserted in tests/delivery/dlq.test.ts, the node
-    // project where @sentry/cloudflare can be mocked; this file is the real
-    // D1 write path.
     expect(acks).toEqual([0]);
   });
 

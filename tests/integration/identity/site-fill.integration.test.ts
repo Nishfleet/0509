@@ -168,9 +168,7 @@ describe("site fill", () => {
 
   it("ignores a field edit recorded in another workspace", async () => {
     await seed({ description: null, socials: [] });
-    // Since 0509#4965 a user_decision row cannot point at another workspace's
-    // entity, so the other workspace's edit is recorded on its own entity for
-    // the same domain.
+
     const otherEntityId = `entity-site-fill-other-${crypto.randomUUID()}`;
     await insertSelfEntity({
       id: otherEntityId,

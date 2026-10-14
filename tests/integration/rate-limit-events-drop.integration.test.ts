@@ -1,29 +1,6 @@
 import { env, type D1Migration } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
-/**
- * 0048_drop_rate_limit_events.sql (#7194, parent audit #7080), proven in real
- * workerd against real D1 once the whole chain has applied.
- *
- * The issue asks for one thing: the table is gone after the chain applies. The
- * setup file applies every file in migrations/ before this suite, so the
- * assertions below are about the schema the deploy ships, and the migration is
- * read out of TEST_MIGRATIONS rather than restated here, so the test cannot
- * pass against a copy that has drifted from the file that ships
- * (migration-0040.integration.test.ts).
- *
- * A statement that fails is the stronger claim: a table the app still reaches
- * would resolve even with an empty row list, so an absent sqlite_master row
- * alone cannot tell "dropped" from "empty".
- *
- * The resurrection vector is the migration chain, not the app source: nothing
- * in app/, workers/ or e2e/ can bring the table back, because a table exists
- * only once a file in migrations/ creates it, and the assertion below scans
- * every one of those files. A future writer that reaches for the table anyway
- * fails at prepare time, which is exactly what the read and write assertions
- * pin.
- */
-
 const TABLE = "rate_limit_events";
 
 function dropMigration(): D1Migration {
@@ -32,7 +9,6 @@ function dropMigration(): D1Migration {
   return found;
 }
 
-/** query text with the leading comment lines dropped, so statements can be counted. */
 function statementsOf(migration: D1Migration): string[] {
   return migration.queries
     .map((query) =>
@@ -61,8 +37,7 @@ describe("0048_drop_rate_limit_events.sql", () => {
     const naming = env.TEST_MIGRATIONS.filter((migration) => statementsOf(migration).some(namesTable)).map(
       (migration) => migration.name,
     );
-    // 0001 creates the table; this file drops it. A third name means a
-    // resurrection, or a second drop folded into an in-flight packet.
+
     expect(naming).toEqual(["0001_rebuild.sql", "0048_drop_rate_limit_events.sql"]);
   });
 
@@ -74,9 +49,6 @@ describe("0048_drop_rate_limit_events.sql", () => {
   });
 
   it("closes the read and the write path, not only the table listing", async () => {
-    // Each call sits in its own async function so a synchronous throw from
-    // prepare is a rejected promise to the matcher, never a raw throw that
-    // skips the assertion.
     await expect(async () => {
       await env.DB.prepare(`SELECT * FROM ${TABLE}`).all();
     }).rejects.toThrow(/no such table/i);

@@ -5,18 +5,6 @@ import { z } from "zod";
 import { cachedProbe, PROBE_TTL_SECONDS, probeKey } from "../../../app/lib/identity/probe-cache.server";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 
-/**
- * The 24-hour KV probe cache (engine 1, issue #4419), pinned against the real
- * local KV namespace the workers project provisions from
- * tests/integration/wrangler.test.jsonc. The cache is the engine's resume
- * point: a miss runs the probe and writes the entry, a hit never runs, a value
- * that no longer parses is treated as a miss, and a failing probe writes
- * nothing — so a probe that breaks cannot poison the cache for 24 hours.
- *
- * The `env` import is `cloudflare:workers`, the same binding surface
- * app/lib/fetch/transport.server.ts reads, so seeding and inspecting go
- * through the binding shape production has.
- */
 const normalised = normaliseSubject("gymshark.com");
 if (!normalised.ok) throw new Error("gymshark.com must normalise to a subject");
 const subject = normalised.subject;
