@@ -78,7 +78,18 @@ describe("add-a-rival nudge", () => {
     expect(sent[0]?.to).toBe(TARGET);
     expect(sent[0]?.subject).toBe("Your brief compares you with one rival so far");
     expect(sent[0]?.text).toContain("You are watching Rival 1");
-    expect(sent[0]?.headers?.["List-Unsubscribe"]).toContain("https://0509.io/u/");
+    expect(sent[0]?.headers?.["List-Unsubscribe"]).toContain("?type=brief");
+  });
+
+  it("follows the brief switch: an alerts-only stop still gets it", async () => {
+    await seed("2026-10-08T10:00:00Z");
+    await env.DB.batch([rival(1)]);
+    await env.DB.prepare(
+      `INSERT INTO email_suppression (address, reason, created_at, stops_brief, stops_alerts) VALUES (?, 'unsubscribed', '2026-10-10', 0, 1)`,
+    )
+      .bind(TARGET)
+      .run();
+    expect(await sendRivalNudges(envWith([]), NOW, isTester)).toBe(1);
   });
 
   it.each([
