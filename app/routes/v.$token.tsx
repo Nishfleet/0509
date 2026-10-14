@@ -14,8 +14,7 @@ export function headers(_: Route.HeadersArgs) {
 }
 
 export async function action({ params }: Route.ActionArgs) {
-  await confirmDeliveryAddress(params.token);
-  return { confirmed: true as const };
+  return { confirmed: await confirmDeliveryAddress(params.token) };
 }
 
 export default function VerifyAddress({ actionData }: Route.ComponentProps) {
@@ -31,6 +30,18 @@ export default function VerifyAddress({ actionData }: Route.ComponentProps) {
           <a className="inline-flex min-h-11 items-center underline underline-offset-4" href="/app">
             Open Five to Nine
           </a>
+        </p>
+        <Footer />
+      </main>
+    );
+  }
+
+  if (actionData?.confirmed === false) {
+    return (
+      <main className="mx-auto max-w-xl px-4 py-16">
+        <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">This link has expired</h1>
+        <p className="mt-4 leading-[1.65] text-ink-soft">
+          Confirmation links work once and last a day. Ask whoever added you to send a new one.
         </p>
         <Footer />
       </main>

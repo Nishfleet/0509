@@ -95,7 +95,7 @@ describe("teammates on the brief", () => {
       .bind("gone@0509.io", NOW)
       .run();
 
-    expect(await add("gone@0509.io")).toMatch(/can't send the brief to that address/);
+    expect(await add("gone@0509.io")).toMatch(/up to 2 teammates/);
     for (const bad of ["not an address", "a,b@0509.io", "a b@0509.io", "a@localhost", "a@@0509.io"]) {
       expect(await add(bad)).toMatch(/Enter an email address/);
     }
@@ -147,13 +147,34 @@ describe("teammates on the brief", () => {
   it("stops sending invitations after a few a day, even when each one is removed again", async () => {
     const workspaceId = firstWorkspaceId(USER_ID);
     for (let sent = 0; sent < 4; sent += 1) {
-      expect(await add("loop@0509.io")).toBeNull();
+      expect(await add(`loop${String(sent)}@0509.io`)).toBeNull();
       const [mate] = await readTeammates(workspaceId);
       await removeTeammateByOwner(USER_ID, mate.id);
     }
 
-    expect(await add("loop@0509.io")).toMatch(/lot of invitations today/);
+    expect(await add("loop4@0509.io")).toMatch(/lot of invitations today/);
     expect(sentMail).toHaveLength(4);
+  });
+
+  it("does not invite the same address twice in a day, even after it is removed", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    expect(await add("again@0509.io")).toBeNull();
+    const [mate] = await readTeammates(workspaceId);
+    await removeTeammateByOwner(USER_ID, mate.id);
+
+    expect(await add("again@0509.io")).toMatch(/invited in the last day/);
+    expect(await add("other@0509.io")).toBeNull();
+    expect(sentMail).toHaveLength(2);
+    expect(await readTeammates(workspaceId)).toHaveLength(1);
+  });
+
+  it("answers an unsubscribed address exactly like a duplicate, so it cannot be probed", async () => {
+    await env.DB.prepare("INSERT INTO email_suppression (address, reason, created_at) VALUES (?, 'unsubscribed', ?)")
+      .bind("quiet@0509.io", NOW)
+      .run();
+    expect(await add("dup@0509.io")).toBeNull();
+
+    expect(await add("quiet@0509.io")).toBe(await add("dup@0509.io"));
   });
 
   it("shows a teammate who unsubscribed, and tells their link apart from the owner's", async () => {

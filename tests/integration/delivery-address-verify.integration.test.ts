@@ -221,14 +221,14 @@ describe("confirm a changed delivery address (0509#5811)", () => {
     await save(rec, NEW_ADDRESS);
     const token = emailedToken(rec);
 
-    await confirmDeliveryAddress(token);
+    expect(await confirmDeliveryAddress(token)).toBe(true);
     expect(await onlyTarget(workspaceId)).toMatchObject({
       target_value: NEW_ADDRESS,
       is_verified: 1,
       verify_token: null,
     });
 
-    await confirmDeliveryAddress(token);
+    expect(await confirmDeliveryAddress(token)).toBe(false);
     expect(await onlyTarget(workspaceId)).toMatchObject({
       target_value: NEW_ADDRESS,
       is_verified: 1,
@@ -246,7 +246,7 @@ describe("confirm a changed delivery address (0509#5811)", () => {
       .run();
     const before = await onlyTarget(workspaceId);
 
-    await confirmDeliveryAddress(token);
+    expect(await confirmDeliveryAddress(token)).toBe(false);
 
     expect(await onlyTarget(workspaceId)).toEqual(before);
   });
