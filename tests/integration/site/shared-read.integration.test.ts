@@ -39,7 +39,9 @@ const targetFor = (workspaceId: string, role: "competitor" | "self", url = URL_O
 });
 
 describe("a rival's public page, read for several workspaces", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    const { keys } = await env.IDENTITY_CACHE.list({ prefix: "shared-read:" });
+    await Promise.all(keys.map((key) => env.IDENTITY_CACHE.delete(key.name)));
     fetched.length = 0;
     stubWeb();
   });
