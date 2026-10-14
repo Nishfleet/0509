@@ -144,6 +144,7 @@ export interface SiteChangeView {
   provenance: string | null;
   sentence: string;
   mark: ChangeMark | null;
+  detailsUnavailable?: boolean;
   before: ChangeShot;
   after: ChangeShot;
   whyFlagged: WhyFlagged | null;
