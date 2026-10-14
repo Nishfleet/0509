@@ -1,6 +1,6 @@
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MemoryRouter } from "react-router";
+import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { BiggestMove, type BiggestMoveProps } from "../../app/components/biggest-move";
@@ -48,7 +48,8 @@ function move(overrides: Partial<BiggestMoveView> = {}): BiggestMoveView {
 }
 
 function render(element: ReactElement): string {
-  return renderToStaticMarkup(createElement(MemoryRouter, null, element));
+  const Stub = createRoutesStub([{ path: "/", Component: () => element }]);
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
 }
 
 function slab(props: BiggestMoveProps): string {
