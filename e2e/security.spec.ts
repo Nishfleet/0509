@@ -2,9 +2,6 @@ import { expect, test } from "./test";
 
 import { consoleFailures, watchConsole } from "./inbox";
 
-// The /security contract. Every assertion here is reachable from the /security row in
-// .agents/skills/verify/feature-map.md. Copy is pattern-matched, never pinned verbatim.
-
 test("the security page renders its heading and date @smoke", async ({ page }) => {
   const response = await page.goto("/security");
   expect(response?.status()).toBe(200);

@@ -11,7 +11,7 @@ interface TurnstileApi {
     options: {
       sitekey: string;
       appearance: "interaction-only";
-      tabindex: number;
+      tabindex: 0;
       "response-field-name": string;
     },
   ) => string;
@@ -23,6 +23,12 @@ declare global {
     turnstile?: TurnstileApi;
   }
 }
+
+export const TURNSTILE_RENDER_OPTIONS = {
+  appearance: "interaction-only",
+  tabindex: 0,
+  "response-field-name": "cf-turnstile-response",
+} as const;
 
 let loading: Promise<TurnstileApi> | null = null;
 
@@ -63,12 +69,7 @@ export function TurnstileWidget({ siteKey, startOn }: { siteKey: string; startOn
       loadTurnstile()
         .then((api) => {
           if (cancelled || widgetId !== null) return;
-          widgetId = api.render(element, {
-            sitekey: siteKey,
-            appearance: "interaction-only",
-            tabindex: -1,
-            "response-field-name": "cf-turnstile-response",
-          });
+          widgetId = api.render(element, { sitekey: siteKey, ...TURNSTILE_RENDER_OPTIONS });
         })
         .catch((error: unknown) => {
           if (cancelled) return;

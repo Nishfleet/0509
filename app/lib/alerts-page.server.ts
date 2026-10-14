@@ -20,7 +20,7 @@ import { readWorkspaceMentionSources } from "./data/source.server";
 import { readWorkspaceIdForOwner, readWorkspaceTimezone } from "./data/workspace.server";
 import { daysAgoLabel } from "./delivery-alert";
 import { nextHour } from "./home-standing";
-import { withoutMentionAlerts } from "./mention-feed";
+import { mentionAlertWhen, withoutMentionAlerts } from "./mention-feed";
 import { offBrandsSentence } from "./off-brands";
 import { daysBefore, readSiteChangeViews } from "./site-changes.server";
 
@@ -172,8 +172,8 @@ function buildAlertItems(inputs: AlertInputs, now: Date) {
     ...mentions.map((mention) => ({
       kind: "mention" as const,
       id: mention.id,
-      at: mention.publishedAt ?? mention.observedAt,
-      mention,
+      at: mention.observedAt,
+      mention: { ...mention, when: mentionAlertWhen(mention, now, inputs.timeZone) },
     })),
   ];
 }

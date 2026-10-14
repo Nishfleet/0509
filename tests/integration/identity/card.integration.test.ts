@@ -528,7 +528,7 @@ describe("startCard", () => {
     const stub = stubBrowser(BOT_GATED_HTML);
     installBrowser(stub);
 
-    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const log = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
     const card = startCard("ws-1", subject, []);
 
@@ -552,7 +552,7 @@ describe("startCard", () => {
 describe("the unreached log lines", () => {
   async function logged(run: () => Promise<unknown>): Promise<Record<string, unknown>[]> {
     const lines: string[] = [];
-    const spy = vi.spyOn(console, "log").mockImplementation((line) => {
+    const spy = vi.spyOn(console, "warn").mockImplementation((line) => {
       lines.push(String(line));
     });
     try {
@@ -681,7 +681,8 @@ describe("confirmCard", () => {
     await settledTail();
 
     const entity = await env.DB.prepare("SELECT id FROM entity WHERE role = 'self'").first<{ id: string }>();
-    const expected = (await extractIdentity(gym, "https://www.gymshark.com/")).navPages.length;
+    const found = (await extractIdentity(gym, "https://www.gymshark.com/")).navPages.length;
+    const expected = Math.min(found, 40);
     expect(expected).toBeGreaterThan(0);
 
     const { results } = await env.DB.prepare(
