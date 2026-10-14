@@ -125,7 +125,7 @@ const handler = {
       return;
     }
     if (batch.queue === FETCH_SWEEP_DLQ) {
-      handleFetchSweepDlqBatch(batch);
+      await handleFetchSweepDlqBatch(batch);
       return;
     }
     if (batch.queue === FETCH_SWEEP_QUEUE) {

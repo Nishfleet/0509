@@ -143,6 +143,10 @@ function logEscalation(browserMsUsed: number | null, reason: EscalationReason) {
   );
 }
 
+export function deferredByTimeout(detail: string): boolean {
+  return detail.endsWith("(timeout)");
+}
+
 async function deferUnlessAllowed(options: ReadUrlOptions, reason: EscalationReason): Promise<ReadUrlFailure | null> {
   if (!options.mayEscalate) {
     return { ok: false, reason: "deferred", detail: `no browser budget callback wired (${reason})` };

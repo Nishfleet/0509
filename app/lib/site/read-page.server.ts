@@ -1,4 +1,4 @@
-import { markPageDeferred, recordPageTransport } from "../data/page.server";
+import { clearPageFailure, markPageDeferred, recordPageFailure, recordPageTransport } from "../data/page.server";
 import type { SiteSweepTarget } from "../data/watch.server";
 import { readOrArchive } from "../fetch/archive.server";
 import type { ReadUrlResult } from "../fetch/transport.server";
@@ -20,6 +20,22 @@ function escalation(
   return () => takeBrowserEscalation(target.workspaceId, target.entityId, day);
 }
 
+function failureText(read: { reason: string; detail: string }): string {
+  return read.reason === "deferred" ? `deferred: ${read.detail}` : read.reason;
+}
+
+async function recordFailure(input: {
+  target: SiteSweepTarget;
+  live: { reason: string; detail: string };
+  read: ReadUrlResult;
+  now: string;
+  options: ReadPageOptions;
+}): Promise<void> {
+  const { target, live, read, now, options } = input;
+  await recordPageFailure(target.pageId, failureText(live), now);
+  if (!read.ok && read.reason === "deferred" && options.browser !== false) await markPageDeferred(target.pageId, now);
+}
+
 export async function readPage(
   target: SiteSweepTarget,
   now: string,
@@ -39,11 +55,9 @@ export async function readPage(
     now: new Date(now),
     allowed: target.entityRole !== "self",
   });
-  if (!read.ok) {
-    if (read.reason === "deferred") await markPageDeferred(target.pageId, now);
-    return read;
-  }
-  if (read.fromArchive === true) return read;
+  if (!live.ok) await recordFailure({ target, live, read, now, options });
+  if (!read.ok || read.fromArchive === true) return read;
+  await clearPageFailure(target.pageId);
   if (!learnedBrowser) {
     await recordPageTransport({
       pageId: target.pageId,
