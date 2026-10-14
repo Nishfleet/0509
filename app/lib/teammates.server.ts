@@ -24,7 +24,7 @@ export async function readTeammates(workspaceId: string) {
       id: mate.id,
       address: mate.target_value,
       confirmed: mate.is_verified === 1,
-      unsubscribed: await isAddressSuppressed(mate.target_value),
+      unsubscribed: mate.is_verified === 1 && (await isAddressSuppressed(mate.target_value)),
     })),
   );
 }
@@ -59,7 +59,6 @@ export async function addTeammateByOwner(input: {
   if (workspaceId === null) return NO_WORKSPACE;
   const { success } = await env.SIGN_IN_EMAIL_LIMIT.limit({ key: `teammate:${workspaceId}` });
   if (!success) return RATE_LIMITED;
-  if (await isAddressSuppressed(address)) return CANT_ADD;
   const current = await listTeammates(env.DB, workspaceId);
   if (current.some((mate) => mate.target_value === address)) return CANT_ADD;
   if ((await env.IDENTITY_CACHE.get(reinviteKey(workspaceId, address))) !== null) return RECENTLY_INVITED;
@@ -69,6 +68,7 @@ export async function addTeammateByOwner(input: {
   const targetId = await addTeammate(env.DB, { workspaceId, address, now: now.toISOString() });
   if (targetId === null) return CANT_ADD;
   await countInvite({ workspaceId, address, now, used });
+  if (await isAddressSuppressed(address)) return null;
   return sendTeammateInvite({ email: input.email, workspaceId, targetId, address, addedBy: input.signInEmail });
 }
 

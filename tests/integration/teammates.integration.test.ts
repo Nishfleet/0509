@@ -90,12 +90,11 @@ describe("teammates on the brief", () => {
     expect(sentMail).toHaveLength(2);
   });
 
-  it("refuses an address we cannot mail, and a malformed one, and sends nothing", async () => {
+  it("refuses a malformed address and sends nothing", async () => {
     await env.DB.prepare("INSERT INTO email_suppression (address, reason, created_at) VALUES (?, 'unsubscribed', ?)")
       .bind("gone@0509.io", NOW)
       .run();
 
-    expect(await add("gone@0509.io")).toMatch(/up to 2 teammates/);
     for (const bad of ["not an address", "a,b@0509.io", "a b@0509.io", "a@localhost", "a@@0509.io"]) {
       expect(await add(bad)).toMatch(/Enter an email address/);
     }
@@ -168,18 +167,26 @@ describe("teammates on the brief", () => {
     expect(await readTeammates(workspaceId)).toHaveLength(1);
   });
 
-  it("answers an unsubscribed address exactly like a duplicate, so it cannot be probed", async () => {
+  it("accepts an unsubscribed address like any other but sends it no invitation, so it cannot be probed", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
     await env.DB.prepare("INSERT INTO email_suppression (address, reason, created_at) VALUES (?, 'unsubscribed', ?)")
       .bind("quiet@0509.io", NOW)
       .run();
-    expect(await add("dup@0509.io")).toBeNull();
 
-    expect(await add("quiet@0509.io")).toBe(await add("dup@0509.io"));
+    expect(await add("quiet@0509.io")).toBeNull();
+    expect(await add("fresh@0509.io")).toBeNull();
+
+    expect(sentMail.map((mail) => mail.to)).toEqual(["fresh@0509.io"]);
+    expect(await readTeammates(workspaceId)).toEqual([
+      expect.objectContaining({ address: "quiet@0509.io", confirmed: false, unsubscribed: false }),
+      expect.objectContaining({ address: "fresh@0509.io", confirmed: false, unsubscribed: false }),
+    ]);
   });
 
   it("shows a teammate who unsubscribed, and tells their link apart from the owner's", async () => {
     const workspaceId = firstWorkspaceId(USER_ID);
     await add("mate@0509.io");
+    await confirmDeliveryAddress(emailedToken());
     await env.DB.prepare(
       "UPDATE send_target SET unsubscribe_token = 'mate-token' WHERE workspace_id = ? AND role = 'teammate'",
     )
