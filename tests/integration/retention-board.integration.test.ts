@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { isAdminEmail, requireAdmin } from "../../app/lib/admin.server";
 import { readRetentionBoard } from "../../app/lib/data/retention_board.server";
 import { touchWorkspaceSeen } from "../../app/lib/data/workspace.server";
+import { deleteExpiredVisits } from "../../app/lib/data/workspace_visit.server";
 
 const NOW = new Date("2026-10-14T12:00:00.000Z");
 
@@ -101,6 +102,28 @@ describe("recording visits", () => {
     await touchWorkspaceSeen("v", new Date("2026-10-15T08:00:00.000Z"));
     const days = await env.DB.prepare("SELECT day FROM workspace_visit ORDER BY day").all();
     expect(days.results).toEqual([{ day: "2026-10-14" }, { day: "2026-10-15" }]);
+  });
+});
+
+describe("visit retention", () => {
+  beforeEach(async () => {
+    for (const table of ["workspace_visit", "workspace"]) await env.DB.exec(`DELETE FROM ${table}`);
+    await env.DB.exec('DELETE FROM "user"');
+    await env.DB.batch(workspace("v", "2026-09-01T00:00:00Z", null));
+  });
+
+  it("prunes visit days older than 400 days and keeps the rest", async () => {
+    await env.DB.batch([visit("v", "2025-09-01"), visit("v", "2025-09-20"), visit("v", "2026-10-13")]);
+    const deleted = await deleteExpiredVisits(env.DB, new Date("2026-10-14T03:00:00.000Z"));
+    const days = await env.DB.prepare("SELECT day FROM workspace_visit ORDER BY day").all();
+    expect(deleted).toBe(1);
+    expect(days.results).toEqual([{ day: "2025-09-20" }, { day: "2026-10-13" }]);
+  });
+
+  it("is removed with its workspace", async () => {
+    await env.DB.batch([visit("v", "2026-10-13")]);
+    await env.DB.exec("DELETE FROM workspace WHERE id = 'v'");
+    expect(await env.DB.prepare("SELECT 1 FROM workspace_visit").all()).toMatchObject({ results: [] });
   });
 });
 
