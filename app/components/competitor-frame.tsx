@@ -110,10 +110,10 @@ function DevelopmentsSection({
           below.
         </p>
       ) : null}
-      {developments.length === 0 ? (
-        <EmptyState sentence={developmentsEmpty(lastChecked, sweepClock)} />
-      ) : (
+      {developments.length > 0 ? (
         <DevelopmentsFeed items={developments} changes={changes} />
+      ) : unreadable ? null : (
+        <EmptyState sentence={developmentsEmpty(lastChecked, sweepClock)} />
       )}
     </section>
   );
@@ -147,7 +147,7 @@ export function CompetitorFrame({
           sweepClock={sweepClock}
         />
       </div>
-      <CompetitorRail {...rail} lastChecked={lastChecked} sweepClock={sweepClock} />
+      <CompetitorRail {...rail} lastChecked={lastChecked} sweepClock={sweepClock} unreadable={unreadable} />
     </div>
   );
 }

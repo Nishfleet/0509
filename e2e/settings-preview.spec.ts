@@ -135,3 +135,13 @@ test("Your plan says how many competitors the plan is watching", async ({ page, 
     `Watching 0 of ${String(PLANS[0].limits.competitors)} competitors on your plan.`,
   );
 });
+
+test("a teammate invitation shows as waiting and clears the field", async ({ page, baseURL }) => {
+  await signIn(page, baseURL);
+  const field = page.getByLabel("Teammate's email");
+  await field.fill("teammate-preview@example.com");
+  await page.getByRole("button", { name: "Send invitation" }).click();
+  await expect(page.getByText("teammate-preview@example.com")).toBeVisible();
+  await expect(page.getByText("waiting for them to confirm")).toBeVisible();
+  await expect(page.getByLabel("Teammate's email")).toHaveValue("");
+});

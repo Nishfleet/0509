@@ -49,6 +49,9 @@ WHERE workspace_id = ?
 const CONFIRM_EMAIL_TARGET_BY_TOKEN = `UPDATE send_target SET is_verified = 1, verify_token = NULL, verify_token_expires_at = NULL
 WHERE verify_token = ? AND verify_token_expires_at > ?`;
 
+const SELECT_ROLE_BY_TOKEN = `SELECT role FROM send_target
+WHERE verify_token = ? AND verify_token_expires_at > ?`;
+
 const SELECT_EMAIL_TARGET_BY_TOKEN = `SELECT target_value FROM send_target
 WHERE verify_token = ? AND verify_token_expires_at > ?`;
 
@@ -116,6 +119,19 @@ export async function readEmailTargetByToken(
     .nullable()
     .parse(await db.prepare(SELECT_EMAIL_TARGET_BY_TOKEN).bind(tokenHash, input.now).first());
   return row?.target_value ?? null;
+}
+
+const roleByTokenRow = z.object({ role: z.enum(["owner", "teammate"]) });
+
+export async function readTargetRoleByToken(
+  db: TargetDb,
+  input: { token: string; now: string },
+): Promise<"owner" | "teammate" | null> {
+  const tokenHash = await sha256Hex(input.token);
+  const row = roleByTokenRow
+    .nullable()
+    .parse(await db.prepare(SELECT_ROLE_BY_TOKEN).bind(tokenHash, input.now).first());
+  return row?.role ?? null;
 }
 
 export async function confirmEmailTargetByToken(db: TargetDb, input: { token: string; now: string }): Promise<void> {
