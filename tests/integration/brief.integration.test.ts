@@ -384,3 +384,37 @@ describe("each brand's biggest move reaches its brief line, through real D1", ()
     expect(brandLine(text, "Quiet Brand")).not.toContain("Growth Lead");
   });
 });
+
+describe("the running total of changes reaches the brief, through real D1", () => {
+  const addChanges = async (workspaceId: string, entityId: string, sourceId: string, times: readonly string[]) => {
+    await env.DB.batch(
+      times.map((observedAt, index) =>
+        env.DB.prepare(
+          "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, aspect, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'change', 'Page changed', 'pricing', ?1, ?5)",
+        ).bind(`sig_total_${workspaceId}_${String(index)}`, workspaceId, entityId, sourceId, observedAt),
+      ),
+    );
+  };
+
+  it("counts every change up to the week's close, this week's and earlier ones, and none after", async () => {
+    const { workspaceId, hiredEntity } = await seedHiring();
+    const sourceRow = await env.DB.prepare("SELECT source_id FROM signal WHERE workspace_id = ?1 LIMIT 1")
+      .bind(workspaceId)
+      .first<{ source_id: string }>();
+    await addChanges(workspaceId, hiredEntity, sourceRow?.source_id ?? "", [
+      "2026-08-20T10:00:00.000Z",
+      "2026-09-02T10:00:00.000Z",
+      "2026-09-16T10:00:00.000Z",
+      "2026-09-30T10:00:00.000Z",
+    ]);
+    const payload = await composeBrief(env.DB, {
+      workspaceId,
+      schedule: { timezone: "UTC", weekday: 1, hour: 8 },
+      week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
+      readThisFirst: { picks: [], judged: 0, unjudged: false },
+    });
+
+    expect(payload.checked.site_change_count).toBe(1);
+    expect(payload.checked.total_change_count).toBe(3);
+  });
+});

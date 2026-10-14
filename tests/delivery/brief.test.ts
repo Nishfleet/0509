@@ -798,3 +798,19 @@ describe("inbox preview and the Settings link (Mobbin benchmark)", () => {
     expect(text).toContain("Choose when your brief arrives in Settings: https://0509.io/app/settings");
   });
 });
+
+describe("the since-you-started line", () => {
+  it("names the running total when it is bigger than this week's count", () => {
+    const { html, text } = renderBrief(payload({ checked: { ...payload().checked, total_change_count: 40 } }), CONTEXT);
+    expect(text).toContain("40 site changes caught since you started.");
+    expect(html).toContain("40 site changes caught since you started.");
+  });
+
+  it.each([
+    ["the first week", 14],
+    ["a digest saved before the total existed", undefined],
+  ])("is left out for %s", (_name, total) => {
+    const { text } = renderBrief(payload({ checked: { ...payload().checked, total_change_count: total } }), CONTEXT);
+    expect(text).not.toContain("since you started");
+  });
+});
