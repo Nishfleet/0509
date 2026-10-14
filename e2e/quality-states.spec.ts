@@ -48,7 +48,7 @@ const BILLING_STATES: BillingState[] = [
     trialing: 0,
     periodEndDays: 5,
     line: /then it stops/,
-    button: "Manage or cancel plan",
+    button: "Manage billing",
   },
   {
     name: "payment on hold",
