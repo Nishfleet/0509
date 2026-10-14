@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseLatest } from "./recap.server";
 
 const SELECT_WINBACKS = `SELECT w.id AS workspace_id,
        p.provider_subscription_id AS subscription_id,
@@ -31,21 +32,6 @@ const SELECT_WINBACKS = `SELECT w.id AS workspace_id,
      LIMIT 1
   )
  WHERE w.last_seen_at IS NOT NULL AND w.last_seen_at <= ?1`;
-
-const latestMove = z.object({ rival: z.string(), what: z.string() });
-
-function parseLatest(json: string | null, ctx: z.RefinementCtx): z.infer<typeof latestMove> | null {
-  if (json === null) return null;
-  try {
-    const parsed = latestMove.safeParse(JSON.parse(json));
-    if (parsed.success) return parsed.data;
-  } catch {
-    ctx.addIssue({ code: "custom", message: "latest is not JSON" });
-    return z.NEVER;
-  }
-  ctx.addIssue({ code: "custom", message: "latest has no rival or title" });
-  return z.NEVER;
-}
 
 const winbackRow = z.object({
   workspace_id: z.string(),
