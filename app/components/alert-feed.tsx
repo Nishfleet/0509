@@ -18,7 +18,11 @@ export function AlertFeed({ groups }: { groups: { group: string; items: AlertFee
   return (
     <>
       {visible.map((group, groupIndex) => (
-        <section key={group.group} data-testid="alert-day">
+        <section
+          key={group.group}
+          data-testid="alert-day"
+          className="[contain-intrinsic-size:auto_900px] [content-visibility:auto]"
+        >
           <h2 className="mt-10 font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft uppercase">{group.group}</h2>
           {group.items.map((item, index) => (
             <AlertFeedRow key={item.id} item={item} eager={groupIndex === 0 && index === 0} />

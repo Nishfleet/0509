@@ -1,7 +1,15 @@
 import { expect, test } from "./test";
 
 import { isLocalLane, run, seedPreviewSession } from "./inbox";
-import { CLS_BUDGET, emulate4g, LCP_BUDGET_MS, observeVitals, settledVitals } from "./vitals";
+import {
+  CLS_BUDGET,
+  emulate4g,
+  LCP_BUDGET_MS,
+  chipTapDurations,
+  observeVitals,
+  settledVitals,
+  TAP_BUDGET_MS,
+} from "./vitals";
 
 test.skip(
   !isLocalLane(),
@@ -152,6 +160,7 @@ test("signed-in Home, competitors, brief, alerts, settings and agents, with 25 r
     "/app/settings/agents",
   ];
   const measured: Record<string, { lcp: number; cls: number }> = {};
+  let tapMs: number[] = [];
   for (const path of paths) {
     const context = await browser.newContext();
     await context.addCookies(cookies);
@@ -161,11 +170,26 @@ test("signed-in Home, competitors, brief, alerts, settings and agents, with 25 r
     const response = await page.goto(path, { waitUntil: "load" });
     expect(response?.status(), path).toBe(200);
     measured[path] = await settledVitals(page);
+    if (path === "/app/alerts") {
+      tapMs = await chipTapDurations(page, [
+        "mentions",
+        "all",
+        "mentions",
+        "all",
+        "mentions",
+        "all",
+        "mentions",
+        "all",
+      ]);
+    }
     await context.close();
   }
   testInfo.annotations.push({ type: "vitals", description: JSON.stringify(measured) });
-  console.log(JSON.stringify({ event: "signed-in-speed", measured }));
+  console.log(JSON.stringify({ event: "signed-in-speed", measured, chipTapMs: tapMs }));
 
+  const sortedTaps = [...tapMs].sort((a, b) => a - b);
+  expect(sortedTaps.length, "Alerts chip taps seen").toBeGreaterThan(4);
+  expect(sortedTaps[Math.floor(sortedTaps.length / 2)], "median Alerts chip tap").toBeLessThan(TAP_BUDGET_MS);
   for (const [path, vitals] of Object.entries(measured)) {
     expect(vitals.lcp, `LCP of ${path}`).toBeLessThan(LCP_BUDGET_MS);
     expect(vitals.cls, `CLS of ${path}`).toBeLessThan(CLS_BUDGET);

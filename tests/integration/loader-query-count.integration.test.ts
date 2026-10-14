@@ -109,7 +109,7 @@ describe("loader query counts", () => {
           await readHomeReads(ws, inputs?.payload ?? null, null);
         },
         competitor: () => readCompetitorPage(ws, `${ws}_r0`, new Date("2026-10-12T00:00:00.000Z")),
-        alerts: () => loadAlertsPage(ws, "all"),
+        alerts: () => loadAlertsPage(ws),
         brief: async () => {
           const weeksList = await listWorkspaceBriefs(ws);
           await readWorkspaceBrief(ws, weeksList[0]?.id ?? "none");
