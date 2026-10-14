@@ -162,4 +162,56 @@ describe("extractIdentity", () => {
     const card = await extractIdentity(html, pageUrl);
     expect(card.socials).toEqual([{ platform: "youtube", url: "https://www.youtube.com/user/rival" }]);
   });
+
+  it("finds a YouTube channel link inside script state when no anchor renders it", async () => {
+    const html = `<html><script id="__NEXT_DATA__">{"footer":{"youtube":"https:\\u002F\\u002Fwww.youtube.com\\u002F@gymshark"}}</script></html>`;
+    const card = await extractIdentity(html, pageUrl);
+    expect(card.socials).toEqual([{ platform: "youtube", url: "https://www.youtube.com/@gymshark" }]);
+  });
+
+  it("ignores YouTube embed and watch links in script text", async () => {
+    const html = `<html><script>var v="https://www.youtube.com/embed/abc123"; var w="https://www.youtube.com/watch?v=abc123"</script></html>`;
+    const card = await extractIdentity(html, pageUrl);
+    expect(card.socials).toEqual([]);
+  });
+
+  it("ignores a script-state YouTube link that is not named after the brand", async () => {
+    const html = `<html><script>{"by":"https://www.youtube.com/@someoneelse"}</script></html>`;
+    const card = await extractIdentity(html, pageUrl);
+    expect(card.socials).toEqual([]);
+  });
+
+  it("matches the brand name on a two-part public suffix, not the suffix itself", async () => {
+    const wrong = `<html><script>{"a":"https://www.youtube.com/@welcomeshop","b":"https://www.youtube.com/@comedyclub"}</script></html>`;
+    expect((await extractIdentity(wrong, "https://www.brand.com.au/")).socials).toEqual([]);
+    const right = `<html><script>{"a":"https://www.youtube.com/@brand"}</script></html>`;
+    expect((await extractIdentity(right, "https://www.brand.co.uk/")).socials).toEqual([
+      { platform: "youtube", url: "https://www.youtube.com/@brand" },
+    ]);
+  });
+
+  it("needs the whole name, so a fan or sub-brand channel is ignored", async () => {
+    const html = `<html><script>{"a":"https://www.youtube.com/@gymsharkfans","b":"https://www.youtube.com/@gymsharkwomen"}</script></html>`;
+    expect((await extractIdentity(html, pageUrl)).socials).toEqual([]);
+  });
+
+  it("drops trailing punctuation from a link found in script text", async () => {
+    const html = `<html><script>var t = "see https://www.youtube.com/@gymshark. Thanks";</script></html>`;
+    expect((await extractIdentity(html, pageUrl)).socials).toEqual([
+      { platform: "youtube", url: "https://www.youtube.com/@gymshark" },
+    ]);
+  });
+
+  it("keeps a rendered anchor even when a script link has a better rank", async () => {
+    const html = `<html><script>{"u":"https://www.youtube.com/@gymshark"}</script><a href="https://www.youtube.com/user/gymshark">YT</a></html>`;
+    expect((await extractIdentity(html, pageUrl)).socials).toEqual([
+      { platform: "youtube", url: "https://www.youtube.com/user/gymshark" },
+    ]);
+  });
+
+  it("prefers a rendered channel anchor over a script-state user link", async () => {
+    const html = `<html><script>{"u":"https://www.youtube.com/user/gymshark-old"}</script><a href="https://www.youtube.com/@gymshark">YT</a></html>`;
+    const card = await extractIdentity(html, pageUrl);
+    expect(card.socials).toEqual([{ platform: "youtube", url: "https://www.youtube.com/@gymshark" }]);
+  });
 });

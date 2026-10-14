@@ -1,3 +1,4 @@
+import { getDomainWithoutSuffix } from "tldts";
 import { z } from "zod";
 
 import { extractPageText } from "../site/extract-text";
@@ -189,6 +190,26 @@ function inlineSocialLinks(html: string): string[] {
   return links;
 }
 
+const RAW_YOUTUBE_LINK = /https?:\/\/(?:www\.|m\.)?youtube\.com\/(?:@|c\/|user\/)(\w+(?:[.-]\w+)*)/gi;
+
+function simplified(value: string): string {
+  return value.toLowerCase().replaceAll(/[^a-z0-9]/g, "");
+}
+
+function rawYoutubeLinks(html: string, pageUrl: string, ldBlocks: readonly string[]): string[] {
+  const label = simplified(getDomainWithoutSuffix(new URL(pageUrl).hostname) ?? "");
+  if (label.length < 3) return [];
+  const text = ldBlocks.reduce((rest, block) => rest.replaceAll(block, ""), html).replaceAll(/\\u002f|\\\//gi, "/");
+  return [...text.matchAll(RAW_YOUTUBE_LINK)]
+    .filter(([, name]) => simplified(name ?? "") === label)
+    .map(([link]) => link);
+}
+
+function withScriptYoutube(socials: SocialLink[], scripted: readonly string[]): SocialLink[] {
+  if (socials.some((social) => social.platform === "youtube")) return socials;
+  return [...socials, ...collectSocials(scripted, [])];
+}
+
 const YOUTUBE_CHANNEL_PATH = /^\/(?:channel\/UC[0-9A-Za-z_-]{22}|@[^/]+)\/?$/;
 const YOUTUBE_NAMED_PATH = /^\/(?:c|user)\/[^/]+\/?$/;
 
@@ -372,7 +393,10 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
     ldOrganizationLogo: organization.logo,
     appleTouchIcon: state.appleTouchIcon,
     manifestUrl: state.manifestUrl,
-    socials: collectSocials([...organization.sameAs, ...inlineSocialLinks(html)], anchors),
+    socials: withScriptYoutube(
+      collectSocials([...organization.sameAs, ...inlineSocialLinks(html)], anchors),
+      rawYoutubeLinks(html, pageUrl, state.ldBlocks),
+    ),
     navLinks,
     navPages,
     adLibraryHints,
