@@ -885,9 +885,6 @@ const TAILWIND_DEFAULT_PALETTE = {
     "The Tailwind default palette is banned: every colour is a @theme token in app/app.css (bg-green is the one accent, DESIGN.md rule 8). Source: 0509#5871.",
 };
 
-const TW_ANIMATE_STOCK_CLASSES =
-  "(?:^|:)(?:animate-in|animate-out|fade-in-0|fade-out-0|zoom-in-95|zoom-out-95|slide-in-from-(?:top|bottom|left|right)-2)$";
-
 // The plugin lints a `const X = "..."` class list only when it has been told
 // the name: its own defaults are `className`, `classNames`, `classes` and
 // `styles`, and this repo's convention is a bare SHOUTY name instead (ROW,
@@ -1804,7 +1801,11 @@ export default tseslint.config(
   // `(?:[^\s]*:)*` because a variant prefix is not always one word: this repo
   // writes `max-[859px]:`, `aria-[current=page]:` and `[&:hover]:`, and a
   // prefix pattern of `[a-z0-9-]+` let a banned colour hide behind all three.
-  // The `ui/` ignore list keeps only the tw-animate-css classes (0509#7071):
+  // `ui/` no longer ignores the tw-animate-css classes: the app never imports
+  // that package, so animate-in, fade-in-0 and the rest silently did nothing and
+  // every shadcn dialog and popover appeared without animating (the fix that
+  // moved them to Base UI's starting and ending style states). An unknown
+  // animation class is now as red here as anywhere else. Earlier note (0509#7071):
   // the stock shadcn semantic tokens used to be ignored here too, on the false
   // premise that they were dead on main. They are not — DialogContent carries
   // `bg-popover` — so those tokens are now aliased onto the house palette in
@@ -1827,12 +1828,6 @@ export default tseslint.config(
         { restrict: [TAILWIND_ARBITRARY_COLOUR, TAILWIND_DEFAULT_PALETTE] },
       ],
       "better-tailwindcss/enforce-consistent-class-order": "error",
-    },
-  },
-  {
-    files: ["app/components/ui/**/*.tsx"],
-    rules: {
-      "better-tailwindcss/no-unknown-classes": ["error", { ignore: [TW_ANIMATE_STOCK_CLASSES] }],
     },
   },
 

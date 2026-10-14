@@ -372,20 +372,26 @@ describe("the running total of changes reaches the brief, through real D1", () =
     const sourceRow = await env.DB.prepare("SELECT source_id FROM signal WHERE workspace_id = ?1 LIMIT 1")
       .bind(workspaceId)
       .first<{ source_id: string }>();
+    expect(sourceRow).not.toBeNull();
     await addChanges(workspaceId, hiredEntity, sourceRow?.source_id ?? "", [
       "2026-08-20T10:00:00.000Z",
       "2026-09-02T10:00:00.000Z",
       "2026-09-16T10:00:00.000Z",
       "2026-09-30T10:00:00.000Z",
     ]);
-    const payload = await composeBrief(env.DB, {
-      workspaceId,
-      schedule: { timezone: "UTC", weekday: 1, hour: 8 },
-      week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
-      readThisFirst: { picks: [], judged: 0, unjudged: false },
-    });
+    const compose = () =>
+      composeBrief(env.DB, {
+        workspaceId,
+        schedule: { timezone: "UTC", weekday: 1, hour: 8 },
+        week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
+        readThisFirst: { picks: [], judged: 0, unjudged: false },
+      });
+    const payload = await compose();
 
     expect(payload.checked.site_change_count).toBe(1);
     expect(payload.checked.total_change_count).toBe(3);
+
+    await env.DB.prepare("UPDATE entity SET state = 'off' WHERE id = ?1").bind(hiredEntity).run();
+    expect((await compose()).checked.total_change_count).toBe(3);
   });
 });

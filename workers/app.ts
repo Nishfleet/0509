@@ -5,8 +5,6 @@ import { createRequestHandler } from "react-router";
 import { NIGHTLY_CRON, OWN_SITE_CHECK_CRON, WEEKLY_REFRESH_CRON } from "../app/lib/cadence";
 import { requestContext } from "../app/lib/agent/context.server";
 import { createOAuthProvider } from "../app/lib/agent/oauth.server";
-import { deleteExpiredAuthRows } from "../app/lib/data/auth_expiry.server";
-import { deleteExpiredJevFailures } from "../app/lib/data/jev_failure.server";
 import { runNightlySlackBackfill } from "../app/lib/data/send_target.server";
 import { stampFirstSignals } from "../app/lib/data/onboarding_run.server";
 import { startNightlyDiscovery, startWeeklyRefresh } from "../app/lib/discovery/start.server";
@@ -39,7 +37,7 @@ import { SiteSweep } from "./workflows/site-sweep";
 import { SnapshotBackup } from "./workflows/snapshot-backup";
 import { MentionsSweep } from "./workflows/mentions";
 import { StandingRollover } from "./workflows/standing-rollover";
-import { reportNightlyResults } from "./nightly-jobs";
+import { reportNightlyResults, nightlyDataChecks } from "./nightly-jobs";
 import { isWorkflowCron, reportMissedWorkflows, startMissedWorkflows, startScheduledWorkflow } from "./workflow-crons";
 
 type WorkerEnv = Env & { SENTRY_DSN?: string; LIVENESS_PING_URL?: string; CLOUDFLARE_API_TOKEN?: string };
@@ -77,8 +75,7 @@ const handler = {
           sweepPending(env, now),
           sendTrialReminders(env, now),
           startNightlyDiscovery(now),
-          deleteExpiredAuthRows(env.DB, now),
-          deleteExpiredJevFailures(env.DB, now),
+          ...nightlyDataChecks(env.DB, now),
           stampFirstSignals(),
           runNightlySlackBackfill(env.DB),
           runNightlyCostGuard(env.DB, env.CLOUDFLARE_API_TOKEN, controller.scheduledTime),

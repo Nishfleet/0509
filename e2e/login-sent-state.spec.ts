@@ -44,6 +44,7 @@ test("the sent state lands in place and the resend waits 30 seconds with a visib
   await page.getByRole("button", { name: "Use a different email" }).click();
   await expect(page.locator('input[name="email"]')).toBeVisible();
   await expect(page.getByRole("heading", { level: 1, name: "Sign in" })).toBeVisible();
+  await expect(page.getByText("New or returning, we email you a link.")).toBeVisible();
 
   const fitsViewport = await page.evaluate(
     () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,

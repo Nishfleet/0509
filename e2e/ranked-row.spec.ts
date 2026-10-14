@@ -66,6 +66,13 @@ test("below 860px an open ranked row's evidence is a bottom sheet that clears th
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.locator('[data-slot="row-evidence"]')).toBeHidden();
 
+  const sheet = await page.getByRole("dialog").evaluate((el) => {
+    const style = getComputedStyle(el);
+    return { duration: style.transitionDuration, property: style.transitionProperty };
+  });
+  expect(sheet.property, JSON.stringify(sheet)).toContain("translate");
+  expect(sheet.duration, JSON.stringify(sheet)).toContain("0.38s");
+
   await page.addStyleTag({ content: "html, body { overflow-x: visible !important; }" });
   const m = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
