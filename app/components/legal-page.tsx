@@ -2,10 +2,11 @@ import { Footer, SupportLink } from "./footer";
 import { MAIN_CONTENT_ID, SkipLink } from "./skip-link";
 import type { LegalDocument, LegalSection } from "../lib/legal/document";
 import { LEGAL_UPDATED } from "../lib/legal/document";
+import { APP_LOCALE } from "../lib/locale";
 
 const body = "text-ink-soft mt-4 leading-[1.65]";
 
-const dateFormat = new Intl.DateTimeFormat("en-GB", {
+const dateFormat = new Intl.DateTimeFormat(APP_LOCALE, {
   day: "numeric",
   month: "long",
   year: "numeric",

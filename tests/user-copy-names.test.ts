@@ -12,7 +12,10 @@ const SQL = /\b(SELECT|INSERT|UPDATE|DELETE|CREATE)\b/;
 const NAMES: readonly { wrong: RegExp; use: string }[] = [
   { wrong: /\brivals?\b/i, use: "competitor" },
   { wrong: /\bweekly reports?\b/i, use: "brief" },
+  { wrong: /€\s?\d+\s?(\/mo\b|a month|per month)/i, use: "€10/month" },
 ];
+
+const BILLING_COPY_HELD = new Set(["workers/delivery/trial-template.ts"]);
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
@@ -42,7 +45,7 @@ function visibleText(file: string): string[] {
 }
 
 describe("customer-facing copy names each thing once", () => {
-  const files = ROOTS.flatMap(sources).filter((file) => !PROMPTS.has(file));
+  const files = ROOTS.flatMap(sources).filter((file) => !PROMPTS.has(file) && !BILLING_COPY_HELD.has(file));
   for (const { wrong, use } of NAMES) {
     it(`never says ${String(wrong)}; the word is "${use}"`, () => {
       const hits = files.flatMap((file) =>

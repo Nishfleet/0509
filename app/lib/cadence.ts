@@ -1,3 +1,4 @@
+import { APP_LOCALE } from "./locale";
 export const MENTIONS_SWEEP_CRON = "0 19 * * *";
 export const SITE_SWEEP_UTC_HOUR = 21;
 export const SITE_SWEEP_ALLOWANCE_HOURS = 2;
@@ -10,14 +11,14 @@ function siteSweepAt(now: Date): Date {
 
 export function siteSweepLabel(timeZone: string, now: Date): string {
   const at = siteSweepAt(now);
-  const clock = new Intl.DateTimeFormat("en-GB", {
+  const clock = new Intl.DateTimeFormat(APP_LOCALE, {
     timeZone,
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
   }).format(at);
   const zone =
-    new Intl.DateTimeFormat("en-GB", { timeZone, timeZoneName: "short" })
+    new Intl.DateTimeFormat(APP_LOCALE, { timeZone, timeZoneName: "short" })
       .formatToParts(at)
       .find((part) => part.type === "timeZoneName")?.value ?? timeZone;
   return `${clock} ${zone}`;

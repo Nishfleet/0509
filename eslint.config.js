@@ -365,7 +365,15 @@ const HAND_ROLLED_ARIA_TAB = {
     "Tabs come from app/components/ui/tabs.tsx (shadcn on @base-ui/react/tabs). A hand-rolled role=tab/tablist/tabpanel has no arrow keys and no roving tabIndex. Source: 0509#7014.",
 };
 
+const APP_LOCALE_ONLY = {
+  selector:
+    "NewExpression[callee.object.name='Intl'][callee.property.name=/^(DateTimeFormat|NumberFormat|RelativeTimeFormat)$/][arguments.0.type='Literal']",
+  message:
+    "A literal locale gives this screen its own month abbreviation and clock: en-US printed 'Sep' and '3:30 PM' where the rest of the app printed 'Sept' and '15:30'. Pass APP_LOCALE from app/lib/locale.ts. Source: ci/stripe-bar consistency sweep, 0509#7540.",
+};
+
 const BANNED_SYNTAX = [
+  APP_LOCALE_ONLY,
   HAND_ROLLED_ARIA_TAB,
   BARE_TOAST,
   SUPPORT_ADDRESS_BAN,

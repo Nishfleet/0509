@@ -34,7 +34,7 @@ describe("landing hero", () => {
     expect(html).not.toContain("aria-label=");
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*>/);
     expect(html.match(/<button/g)).toHaveLength(1);
-    expect(html).toContain("€10/mo");
+    expect(html).toContain("€10/month");
     expect(html).toContain(MICROCOPY);
     expect(html).not.toContain("7-day trial");
   });

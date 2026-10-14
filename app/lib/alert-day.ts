@@ -1,12 +1,21 @@
 import { TZDate } from "@date-fns/tz";
 import { startOfDay } from "date-fns";
 
+import { APP_LOCALE } from "./locale";
+
 export type DayGroup = "Today" | "Yesterday" | "Earlier";
 
 const DAY_GROUPS: readonly DayGroup[] = ["Today", "Yesterday", "Earlier"];
 
 export function localDay(at: Date, timeZone: string): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
+  const parts = new Intl.DateTimeFormat(APP_LOCALE, {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(at);
+  const part = (type: string): string => parts.find((entry) => entry.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
 export function startOfLocalDay(now: Date, timeZone: string): Date {
