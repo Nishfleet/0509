@@ -3,7 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { expect, type Page, type TestInfo } from "@playwright/test";
 
-import { consoleFailures, run, watchConsole, watchRequests } from "./inbox";
+import { consoleFailures, isLocalLane, run, seedPreviewSession, watchConsole, watchRequests } from "./inbox";
 
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const MAX_TAB_STOPS = 60;
@@ -179,4 +179,12 @@ export async function signIn(page: Page, baseURL: string | undefined, cookie: st
       return { name, value: value.join("="), url: baseURL ?? "" };
     }),
   );
+}
+
+export async function signInOnLocalLane(page: Page, baseURL: string | undefined, prefix: string): Promise<void> {
+  if (!isLocalLane()) return;
+  const { cookie } = await seedPreviewSession(prefix, ({ db, suffix, userId }) => {
+    seedCompetitor(db, suffix, seedWorkspace(db, suffix, userId));
+  });
+  await signIn(page, baseURL, cookie);
 }
