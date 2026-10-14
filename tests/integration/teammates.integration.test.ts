@@ -94,7 +94,9 @@ describe("teammates on the brief", () => {
       .bind("gone@0509.io", NOW)
       .run();
 
-    expect(await add("gone@0509.io")).toMatch(/can't send the brief to that address/);
+    const refusal = await add(SIGN_IN_EMAIL);
+    expect(await add("gone@0509.io")).toBe(refusal);
+    expect(refusal).toMatch(/We can't add that address/);
     for (const bad of ["not an address", "a,b@0509.io", "a b@0509.io", "a@localhost", "a@@0509.io"]) {
       expect(await add(bad)).toMatch(/Enter an email address/);
     }
