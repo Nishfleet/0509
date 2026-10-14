@@ -30,7 +30,7 @@ function PopoverContent({
         <PopoverPrimitive.Popup
           data-slot="popover-content"
           className={cn(
-            "data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 z-50 flex w-72 origin-(--transform-origin) flex-col gap-2.5 rounded-none border-[1.5px] border-ink bg-popover p-2.5 text-sm text-popover-foreground outline-hidden duration-160 ease-linear",
+            "z-50 flex w-72 origin-(--transform-origin) flex-col gap-2.5 rounded-none border-[1.5px] border-ink bg-popover p-2.5 text-sm text-popover-foreground outline-hidden transition-opacity duration-160 ease-linear data-ending-style:opacity-0 data-starting-style:opacity-0",
             className,
           )}
           {...props}
