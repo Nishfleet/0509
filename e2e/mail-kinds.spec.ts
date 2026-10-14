@@ -34,6 +34,6 @@ test.describe("choosing which emails reach the delivery address", () => {
     await page.goto("/app/settings");
     const again = page.getByRole("region", { name: "Emails to this address" });
     await expect(again.getByLabel("The weekly brief")).not.toBeChecked();
-    await expect(again.getByLabel("Alerts, when a rival changes or your site has trouble")).toBeChecked();
+    await expect(again.getByLabel("Alerts, when a competitor changes or your site has trouble")).toBeChecked();
   });
 });

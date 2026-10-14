@@ -26,7 +26,7 @@ export function MailKinds({ address, mail }: { address: string; mail: { brief: b
       <Form method="post" action="/app/settings" className="mt-4 flex flex-col gap-1">
         <input type="hidden" name="intent" value="mail-kinds" />
         <Kind name="brief" label="The weekly brief" on={mail.brief} />
-        <Kind name="alerts" label="Alerts, when a rival changes or your site has trouble" on={mail.alerts} />
+        <Kind name="alerts" label="Alerts, when a competitor changes or your site has trouble" on={mail.alerts} />
         <Button type="submit" variant="secondary" size="lg" className="mt-2 self-start" disabled={saving}>
           {saving ? "Updating…" : "Update choices"}
         </Button>
