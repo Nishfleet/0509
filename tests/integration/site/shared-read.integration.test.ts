@@ -39,6 +39,25 @@ const targetFor = (workspaceId: string, role: "competitor" | "self", url = URL_O
   transportTestedAt: null,
 });
 
+async function seedPage(workspaceId: string): Promise<void> {
+  const at = "2026-10-01T00:00:00Z";
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, 'Owner', ?2, 1, ?3, ?3)`,
+    ).bind(`user-${workspaceId}`, `${workspaceId}@0509.io`, at),
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
+       VALUES (?1, ?1, ?2, 'UTC', 1, 8, ?3)`,
+    ).bind(workspaceId, `user-${workspaceId}`, at),
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES (?1, ?2, 'competitor', 'shared-rival.com', 'Rival', 'on', ?3)`,
+    ).bind(`ent-${workspaceId}`, workspaceId, at),
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO page (id, entity_id, url, role, discovered_at) VALUES (?1, ?2, ?3, 'home', ?4)`,
+    ).bind(`page-${workspaceId}`, `ent-${workspaceId}`, URL_OF_RIVAL, at),
+  ]);
+}
+
 describe("a rival's public page, read for several workspaces", () => {
   beforeEach(async () => {
     const { keys } = await env.IDENTITY_CACHE.list({ prefix: "shared-read:" });
@@ -174,5 +193,23 @@ describe("a rival's public page, read for several workspaces", () => {
       verdictMisses: {},
     });
     expect(line).not.toMatch(/ws-|shared-rival/);
+  });
+
+  it("never hands a fetch-only copy to a page that has learned it needs the browser", async () => {
+    await readPage(targetFor("ws-a", "competitor"), NIGHT_ONE);
+    const learned = { ...targetFor("ws-b", "competitor"), transport: "browser" as const, transportTestedAt: NIGHT_ONE };
+    const read = await readPage(learned, NIGHT_ONE);
+    expect(read.ok).toBe(false);
+    expect(fetched.filter((url) => url === URL_OF_RIVAL)).toHaveLength(1);
+  });
+
+  it("still records how the page was read for a workspace that took the shared copy", async () => {
+    await seedPage("ws-b");
+    await readPage(targetFor("ws-a", "competitor"), NIGHT_ONE);
+    const second = await readPage(targetFor("ws-b", "competitor"), NIGHT_ONE);
+    expect(second).toMatchObject({ ok: true });
+    expect(fetched.filter((url) => url === URL_OF_RIVAL)).toHaveLength(1);
+    const page = await env.DB.prepare("SELECT transport, transport_tested_at FROM page WHERE id = 'page-ws-b'").first();
+    expect(page).toEqual({ transport: "fetch", transport_tested_at: NIGHT_ONE });
   });
 });

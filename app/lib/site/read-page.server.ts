@@ -2,7 +2,7 @@ import { markPageDeferred, recordPageTransport } from "../data/page.server";
 import type { SiteSweepTarget } from "../data/watch.server";
 import { readOrArchive } from "../fetch/archive.server";
 import type { ReadUrlResult } from "../fetch/transport.server";
-import { keepSharedPage, readSharedPage } from "../fetch/shared-read.server";
+import { keepSharedPage, readSharedPage, type SharedReadKey } from "../fetch/shared-read.server";
 import { sharedChecksOn } from "../shared-checks.server";
 import { readUrl } from "../fetch/transport.server";
 import { takeBrowserEscalation } from "./browser-budget.server";
@@ -51,13 +51,13 @@ async function readLive(target: SiteSweepTarget, now: string, options: ReadPageO
   return readOrArchive(live, { url: target.url, now: new Date(now), allowed: target.entityRole !== "self" });
 }
 
-async function keepSharedPageSafely(
-  url: string,
-  now: string,
-  read: Extract<ReadUrlResult, { ok: true }>,
-): Promise<void> {
+function sharedKey(target: SiteSweepTarget, now: string): SharedReadKey {
+  return { url: target.url, sweep: now, startWith: learnedBrowser(target, now) ? "browser" : "fetch" };
+}
+
+async function keepSharedPageSafely(key: SharedReadKey, read: Extract<ReadUrlResult, { ok: true }>): Promise<void> {
   try {
-    await keepSharedPage(url, now, read);
+    await keepSharedPage(key, read);
   } catch (error) {
     console.error(JSON.stringify({ event: "site.shared_read_keep_failed", error: String(error) }));
   }
@@ -69,15 +69,19 @@ export async function readPage(
   options: ReadPageOptions = {},
 ): Promise<ReadUrlResult> {
   const isRival = target.entityRole !== "self" && sharedChecksOn();
-  const shared = isRival ? await readSharedPage(target.url, now) : null;
-  if (shared !== null) return shared;
+  const key = sharedKey(target, now);
+  const shared = isRival ? await readSharedPage(key) : null;
+  if (shared !== null) {
+    if (!learnedBrowser(target, now)) await rememberTransport(target, shared, now);
+    return shared;
+  }
   const read = await readLive(target, now, options);
   if (!read.ok) {
     if (read.reason === "deferred") await markPageDeferred(target.pageId, now);
     return read;
   }
   if (read.fromArchive === true) return read;
-  if (isRival) await keepSharedPageSafely(target.url, now, read);
+  if (isRival) await keepSharedPageSafely(key, read);
   if (!learnedBrowser(target, now)) await rememberTransport(target, read, now);
   return read;
 }

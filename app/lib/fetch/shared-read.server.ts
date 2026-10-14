@@ -19,26 +19,32 @@ const sharedRead = z.object({
   ms: z.number(),
 });
 
-async function keyFor(url: string, sweep: string): Promise<string> {
-  return `${SHARED_READ_PREFIX}${sweep}:${await sha256Hex(url)}`;
+export interface SharedReadKey {
+  url: string;
+  sweep: string;
+  startWith: "fetch" | "browser";
 }
 
-export async function readSharedPage(url: string, sweep: string): Promise<SharedRead | null> {
+async function keyFor({ url, sweep, startWith }: SharedReadKey): Promise<string> {
+  return `${SHARED_READ_PREFIX}${sweep}:${startWith}:${await sha256Hex(url)}`;
+}
+
+export async function readSharedPage(key: SharedReadKey): Promise<SharedRead | null> {
   try {
-    const stored = await env.IDENTITY_CACHE.get(await keyFor(url, sweep));
+    const stored = await env.IDENTITY_CACHE.get(await keyFor(key));
     const parsed = stored === null ? null : sharedRead.safeParse(JSON.parse(stored));
-    await noteSharedOutcome("page", parsed?.success === true ? "hit" : "no_copy", sweep);
+    await noteSharedOutcome("page", parsed?.success === true ? "hit" : "no_copy", key.sweep);
     return parsed?.success === true ? { ...parsed.data, escalated: false } : null;
   } catch (error) {
     console.error(JSON.stringify({ event: "site.shared_read_failed", error: String(error) }));
-    await noteSharedOutcome("page", "read_failed", sweep);
+    await noteSharedOutcome("page", "read_failed", key.sweep);
     return null;
   }
 }
 
-export async function keepSharedPage(url: string, sweep: string, read: SharedRead): Promise<void> {
+export async function keepSharedPage(key: SharedReadKey, read: SharedRead): Promise<void> {
   const { html, transport, status, ms } = read;
-  await env.IDENTITY_CACHE.put(await keyFor(url, sweep), JSON.stringify({ ok: true, html, transport, status, ms }), {
+  await env.IDENTITY_CACHE.put(await keyFor(key), JSON.stringify({ ok: true, html, transport, status, ms }), {
     expirationTtl: SHARED_READ_SECONDS,
   });
 }
