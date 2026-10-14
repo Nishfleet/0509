@@ -10,7 +10,7 @@ import { handleCompetitorIntent } from "./competitors.server";
 
 const FORGET_MISMATCH = "That doesn't match the name. Type it exactly as shown.";
 
-export interface CompetitorFormErrors {
+interface CompetitorFormErrors {
   forgetError: string | null;
   youtubeError: string | null;
   siteError: string | null;
