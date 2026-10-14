@@ -113,7 +113,7 @@ describe("rival change email lane (0509#6375)", () => {
     const results = await Promise.all(ids.map((id) => deliverChange(envWith(sent), { signal_id: id })));
 
     const changeEmails = sent.filter((message) => message.subject.startsWith("Rival changed its pricing page"));
-    const notices = sent.filter((message) => message.subject === "More rivals changed price or plan today");
+    const notices = sent.filter((message) => message.subject === "More competitors changed price or plan today");
     expect(changeEmails).toHaveLength(CHANGE_DAILY_CAP);
     expect(notices).toHaveLength(1);
     expect(results.filter((result) => result.outcome === "sent")).toHaveLength(CHANGE_DAILY_CAP);
@@ -143,7 +143,7 @@ describe("rival change email lane (0509#6375)", () => {
 
     expect(outcomes).toEqual([...Array<string>(CHANGE_DAILY_CAP).fill("sent"), "capped", "capped"]);
     expect(sent).toHaveLength(CHANGE_DAILY_CAP + 1);
-    expect(sent.at(-1)?.subject).toBe("More rivals changed price or plan today");
+    expect(sent.at(-1)?.subject).toBe("More competitors changed price or plan today");
     expect(
       sent.slice(0, CHANGE_DAILY_CAP).every((message) => message.subject.startsWith("Rival changed its pricing page")),
     ).toBe(true);

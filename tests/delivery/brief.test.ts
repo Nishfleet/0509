@@ -267,7 +267,9 @@ describe("read this first is D4's, verbatim", () => {
   it("still renders the block when D4 picked nothing", () => {
     const { html, text } = renderBrief(payload({ read_this_first: [] }), CONTEXT);
     expect(html).toContain("Read this first");
-    expect(html).toContain("Nothing needed your attention this week. We keep watching rival sites, ads and mentions.");
+    expect(html).toContain(
+      "Nothing needed your attention this week. We keep watching competitor sites, ads and mentions.",
+    );
     expect(text).toContain("Read this first");
   });
 });

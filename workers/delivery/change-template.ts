@@ -53,7 +53,7 @@ function paragraphs(lines: readonly string[]): string {
 }
 
 export function renderChangeOverflow(ctx: ChangeOverflowContext): RenderedBrief {
-  const subject = `More rivals changed price or plan today`;
+  const subject = `More competitors changed price or plan today`;
   const lines = [
     `You have had ${String(ctx.cap)} price or plan emails today, so we stopped there.`,
     `Every change is still in Alerts and in your Monday brief.`,

@@ -28,7 +28,7 @@ describe("first look", () => {
     const html = renderToStaticMarkup(
       createElement(FirstLook, { rivals: [{ id: "a", name: "Acme", line: "Read 3 pages, 12m ago" }] }),
     );
-    expect(html).toContain("Where your rivals stand today");
+    expect(html).toContain("Where your competitors stand today");
     expect(html).toContain("Acme");
     expect(html).toContain("Read 3 pages, 12m ago");
     expect(renderToStaticMarkup(createElement(FirstLook, { rivals: [] }))).toBe("");

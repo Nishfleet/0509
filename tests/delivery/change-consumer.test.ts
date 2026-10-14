@@ -209,7 +209,7 @@ describe("deliverChange", () => {
     const first = await deliverChange(fakeEnv(), { signal_id: "sig-1" });
     expect(first.outcome).toBe("capped");
     expect(sent).toHaveLength(1);
-    expect(sent[0]?.subject).toBe("More rivals changed price or plan today");
+    expect(sent[0]?.subject).toBe("More competitors changed price or plan today");
 
     slots.claimSendAttempt.mockResolvedValue(null);
     const second = await deliverChange(fakeEnv(), { signal_id: "sig-2" });

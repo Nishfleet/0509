@@ -189,7 +189,7 @@ function buildOpenIncident(inputs: AlertInputs, now: Date) {
     url: open.url,
     openedLabel: daysAgoLabel(open.opened_at, now),
     recheckAt,
-    recheckLabel: new Intl.DateTimeFormat("en-US", {
+    recheckLabel: new Intl.DateTimeFormat("en-GB", {
       timeZone,
       hour: "numeric",
       minute: "2-digit",

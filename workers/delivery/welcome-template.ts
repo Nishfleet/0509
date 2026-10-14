@@ -12,7 +12,8 @@ export interface WelcomeContext {
 }
 
 function watching(ctx: WelcomeContext): string {
-  if (ctx.rival_count === 0) return "Add the rivals you want to keep an eye on and we'll start reading their sites.";
+  if (ctx.rival_count === 0)
+    return "Add the competitors you want to keep an eye on and we'll start reading their sites.";
   const more = ctx.rival_count - ctx.rivals.length;
   const names = ctx.rivals.join(", ") + (more > 0 ? ` and ${String(more)} more` : "");
   return `We're watching ${names}. Anything that changes on their sites from here is kept as a before and after.`;
