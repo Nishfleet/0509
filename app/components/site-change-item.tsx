@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 
 import type { SiteChangeView } from "../lib/site-change";
+import { ChangeFeedback } from "./change-feedback";
 import { CapturePlate } from "./capture-plate";
 import { Mark } from "./mark";
 import type { MarkSize } from "./mark";
@@ -67,6 +68,7 @@ export function SiteChangeItem({
           <WhyFlaggedSheet why={change.whyFlagged} />
         </div>
       )}
+      <ChangeFeedback signalId={change.id} feedback={change.feedback} />
     </article>
   );
 }
