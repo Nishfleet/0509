@@ -79,7 +79,7 @@ export function Teammates({ teammates, error, limit }: { teammates: Teammate[]; 
           ))}
         </ul>
       )}
-      {teammates.length >= limit ? null : <InviteForm error={error} />}
+      {teammates.length >= limit ? null : <InviteForm key={teammates.length} error={error} />}
     </section>
   );
 }
