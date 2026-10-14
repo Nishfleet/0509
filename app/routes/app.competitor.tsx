@@ -10,6 +10,7 @@ import { CompetitorRename } from "../components/competitor-rename";
 import { CompetitorSite } from "../components/competitor-site";
 import { CompetitorYoutube } from "../components/competitor-youtube";
 import { CompetitorSnapshot } from "../components/competitor-snapshot";
+import { RivalOnePager } from "../components/rival-one-pager";
 import { handleCompetitorForm, type CompetitorFormErrors } from "../lib/competitor-forms.server";
 import { readCompetitorPage } from "../lib/competitor-page.server";
 import { snapshotCells } from "../lib/competitor-snapshot";
@@ -93,6 +94,14 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         }
       />
       <CompetitorSnapshot cells={loaderData.snapshot} />
+      <RivalOnePager
+        name={competitor.name}
+        domain={competitor.domain}
+        pages={loaderData.watch.pages}
+        lastChecked={loaderData.lastChecked}
+        changes={loaderData.changes}
+        moves={loaderData.developments}
+      />
       <CompetitorFrame
         changes={loaderData.changes}
         developments={loaderData.developments}
