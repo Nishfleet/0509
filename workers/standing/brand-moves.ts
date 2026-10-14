@@ -28,8 +28,8 @@ export async function readBrandMoves(db: D1Database, input: BrandMovesInput): Pr
       until: input.until,
     });
     const signal = pickBiggestMove(scored, weights)?.signal;
-    const text = signal === undefined ? null : (signal.title ?? signal.summary);
-    if (text !== null && text.trim() !== "") moves.set(entityId, shorten(text));
+    const text = [signal?.title, signal?.summary].find((candidate) => candidate?.trim());
+    if (text !== undefined && text !== null) moves.set(entityId, shorten(text));
   }
   return moves;
 }

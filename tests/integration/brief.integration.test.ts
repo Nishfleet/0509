@@ -365,7 +365,7 @@ describe("each brand's biggest move reaches its brief line, through real D1", ()
       readThisFirst: { picks: [], judged: 0, unjudged: false },
     });
 
-  it("names the week's newest top-scoring signal on the brand that has one, and nothing on a quiet brand", async () => {
+  it("names the week's highest-weighted signal on the brand that has one, and nothing on a quiet brand", async () => {
     const { workspaceId } = await seedHiring();
     const payload = await compose(workspaceId);
 

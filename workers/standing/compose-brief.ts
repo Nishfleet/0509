@@ -9,6 +9,7 @@ import { effectiveKindSql } from "../../app/lib/source-kind";
 import { sourceName } from "../../app/lib/source-name";
 import type { JudgedWeek } from "./read-this-first";
 import { readBrandMoves } from "./brand-moves";
+import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { required } from "../../app/lib/required";
 
 const RANKED_BRANDS = `SELECT s.entity_id AS entity_id,
@@ -211,6 +212,9 @@ async function buildLines(
     entityIds: brands.map((brand) => brand.entity_id),
     since: input.week.startsAt.toISOString(),
     until: input.week.closesAt.toISOString(),
+  }).catch((error: unknown) => {
+    console.error(JSON.stringify({ event: "standing.brand_moves_failed", error: redactEmailShaped(String(error)) }));
+    return new Map<string, string>();
   });
   const moveOf = (entityId: string): string | null => moves.get(entityId) ?? null;
   return brands.map((brand) => {
