@@ -12,10 +12,7 @@ export function PricingPage({ source }: { source: StartSource | null }) {
       <SkipLink />
       <SiteHeader />
       <main id={MAIN_CONTENT_ID} tabIndex={-1}>
-        <div className={`${pageWidth} py-12 sm:py-16`}>
-          <h1 className="max-w-[24ch] font-display text-display-2 font-extrabold uppercase">Five to Nine pricing</h1>
-        </div>
-        <Price source={source} />
+        <Price source={source} page />
         <p className={`${pageWidth} pb-12 font-mono text-meta text-ink-soft`}>
           Prices are in euros. At checkout you see your local currency where we can offer it.
         </p>

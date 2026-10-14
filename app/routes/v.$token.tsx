@@ -24,7 +24,7 @@ export default function VerifyAddress({ actionData }: Route.ComponentProps) {
       <main className="mx-auto max-w-xl px-4 py-16">
         <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">Email address confirmed</h1>
         <p className="mt-4 leading-[1.65] text-ink-soft">
-          Your weekly brief and alerts will now go to this email address.
+          Your weekly brief will now go to this email address, and every one has an unsubscribe link.
         </p>
         <p className="mt-4 leading-[1.65]">
           <a className="inline-flex min-h-11 items-center underline underline-offset-4" href="/app">

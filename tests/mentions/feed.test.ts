@@ -55,8 +55,9 @@ describe("mentions feed", () => {
   });
 
   it("says found today when published_at is null and a relative time otherwise", () => {
-    expect(mentionWhen(null, NOW)).toBe("found today");
-    expect(mentionWhen("2026-09-23T00:00:00.000Z", NOW)).toBe("2 days ago");
+    const observedAt = NOW.toISOString();
+    expect(mentionWhen({ publishedAt: null, observedAt }, NOW)).toBe("found today");
+    expect(mentionWhen({ publishedAt: "2026-09-23T00:00:00.000Z", observedAt }, NOW)).toBe("2 days ago");
   });
 
   it("keeps unstated rows as unreviewed, drops empty titles, and keeps the stored reason instead of the score", () => {
