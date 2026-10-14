@@ -14,7 +14,7 @@ const SUBJECT = "What Five to Nine has caught so far";
 
 function lines(ctx: RecapContext): string[] {
   const noun = ctx.change_count === 1 ? "change" : "changes";
-  const counted = `In your first days we've caught ${String(ctx.change_count)} ${noun} across your rivals.`;
+  const counted = `In your first days we've caught ${String(ctx.change_count)} ${noun} across your competitors.`;
   return ctx.latest === null
     ? [counted]
     : [counted, `Most recent: ${ctx.latest.rival}, ${ctx.latest.what}`, "Each one is kept as a before and after."];
