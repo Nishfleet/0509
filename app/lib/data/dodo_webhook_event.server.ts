@@ -31,12 +31,12 @@ export async function markWebhookEventProcessed(id: string, processedAt: string)
   await env.DB.prepare(MARK_PROCESSED).bind(processedAt, id).run();
 }
 
-export async function countUnprocessedWebhookEvents(input: {
-  receivedBefore: string;
-  receivedSince: string;
-}): Promise<number> {
+export async function countUnprocessedWebhookEvents(
+  db: D1Database,
+  input: { receivedBefore: string; receivedSince: string },
+): Promise<number> {
   const row = countRow.parse(
-    await env.DB.prepare(COUNT_UNPROCESSED).bind(input.receivedBefore, input.receivedSince).first(),
+    await db.prepare(COUNT_UNPROCESSED).bind(input.receivedBefore, input.receivedSince).first(),
   );
   return row.total;
 }

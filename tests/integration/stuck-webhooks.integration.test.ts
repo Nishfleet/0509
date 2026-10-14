@@ -22,18 +22,20 @@ describe("checkStuckWebhooks", () => {
     await store("evt_done", "2026-10-12T12:00:00Z", "2026-10-12T12:00:01Z");
     await store("evt_fresh", "2026-10-13T06:00:00Z", null);
 
-    await expect(checkStuckWebhooks(NOW)).resolves.toBeUndefined();
+    await expect(checkStuckWebhooks(env.DB, NOW)).resolves.toBeUndefined();
   });
 
   it("raises when an event is still unprocessed a day and a half after it arrived", async () => {
     await store("evt_stuck", "2026-10-12T20:00:00Z", null);
 
-    await expect(checkStuckWebhooks(NOW)).rejects.toThrow("Dodo webhook events still unprocessed after 36 hours");
+    await expect(checkStuckWebhooks(env.DB, NOW)).rejects.toThrow(
+      "Dodo webhook events still unprocessed after 36 hours",
+    );
   });
 
   it("stops raising once the event is older than the alert window", async () => {
     await store("evt_old", "2026-10-09T06:00:00Z", null);
 
-    await expect(checkStuckWebhooks(NOW)).resolves.toBeUndefined();
+    await expect(checkStuckWebhooks(env.DB, NOW)).resolves.toBeUndefined();
   });
 });

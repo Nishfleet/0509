@@ -3,8 +3,8 @@ import { countUnprocessedWebhookEvents } from "../data/dodo_webhook_event.server
 const DODO_RETRY_WINDOW_MS = 36 * 60 * 60 * 1000;
 const ALERT_WINDOW_MS = 72 * 60 * 60 * 1000;
 
-export async function checkStuckWebhooks(now: Date): Promise<void> {
-  const total = await countUnprocessedWebhookEvents({
+export async function checkStuckWebhooks(db: D1Database, now: Date): Promise<void> {
+  const total = await countUnprocessedWebhookEvents(db, {
     receivedBefore: new Date(now.getTime() - DODO_RETRY_WINDOW_MS).toISOString(),
     receivedSince: new Date(now.getTime() - ALERT_WINDOW_MS).toISOString(),
   });
