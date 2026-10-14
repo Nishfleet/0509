@@ -5,12 +5,14 @@ import { Form } from "react-router";
 import { BrandChipRow } from "./brand-chip";
 import { EmptyState, fewerThanTwoOnBrands } from "./empty-state";
 import { FirstFilePanel } from "./first-file-panel";
+import { FirstLook } from "./first-look";
 import { FirstWeekSteps } from "./first-week-steps";
 import { FourWeekLine } from "./four-week-line";
 import { HowRankedSheet } from "./how-ranked-sheet";
 import { PAGE } from "./page-heading";
 import { RankedRow } from "./ranked-row";
 import { ReadThisFirst } from "./read-this-first";
+import type { FirstLookRow } from "../lib/first-look";
 import type { HomeRow, HomeView, WeekEvidence } from "../lib/home-standing";
 import type { HowRanked } from "../lib/how-ranked";
 import { cn } from "../lib/utils";
@@ -46,12 +48,14 @@ export function HomeStanding({
   howRanked,
   openId = null,
   evidence = null,
+  firstLook = [],
   showEyebrow = true,
 }: {
   view: HomeView;
   howRanked?: HowRanked | null;
   openId?: string | null;
   evidence?: readonly WeekEvidence[] | null;
+  firstLook?: readonly FirstLookRow[];
   showEyebrow?: boolean;
 }): ReactElement {
   return (
@@ -59,7 +63,7 @@ export function HomeStanding({
       {showEyebrow ? <p className={EYEBROW}>{view.eyebrow}</p> : null}
       {greeting(view)}
       {chips(view)}
-      {body({ view, howRanked, openId, evidence })}
+      {body({ view, howRanked, openId, evidence, firstLook })}
     </section>
   );
 }
@@ -90,9 +94,10 @@ interface BodyInput {
   howRanked: HowRanked | null | undefined;
   openId: string | null;
   evidence: readonly WeekEvidence[] | null;
+  firstLook: readonly FirstLookRow[];
 }
 
-function body({ view, howRanked, openId, evidence }: BodyInput): ReactElement {
+function body({ view, howRanked, openId, evidence, firstLook }: BodyInput): ReactElement {
   const { standing } = view;
   if (standing.kind === "add-competitor") {
     return (
@@ -108,6 +113,7 @@ function body({ view, howRanked, openId, evidence }: BodyInput): ReactElement {
     return (
       <div className="mt-6">
         <FirstFilePanel brands={standing.brands} firstSweepAt={standing.firstSweepAt} briefAt={standing.briefAt} />
+        <FirstLook rivals={firstLook} />
         <FirstWeekSteps />
       </div>
     );

@@ -12,6 +12,7 @@ import { Button } from "../components/ui/button";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import { markCompetitorsReady, markWatchingStarted } from "../lib/data/onboarding_run.server";
 import { readOnboardingScreen } from "../lib/discovery/start.server";
+import { TRIAL_DAYS } from "../lib/billing/plans";
 import { discoveryNotice, type DiscoveryState } from "../lib/discovery/state";
 import { requireFreshSession, requireSession, signOutToLogin } from "../lib/require-session.server";
 import { createTimings } from "../lib/server-timing.server";
@@ -117,7 +118,10 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         <Button type="submit" size="lg" disabled={starting}>
           {starting ? "Starting…" : "Start watching"}
         </Button>
-        <p className="mt-3 text-body-sm text-ink-soft">You can switch any of them on or off later in Competitors.</p>
+        <p className="mt-3 text-body-sm text-ink-soft">
+          You can switch any of them on or off later in Competitors. Next you'll choose a plan and start your{" "}
+          {String(TRIAL_DAYS)}-day trial.
+        </p>
       </Form>
     </OnboardingFrame>
   );

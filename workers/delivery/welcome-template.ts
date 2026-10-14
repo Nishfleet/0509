@@ -38,7 +38,7 @@ export function renderWelcome(ctx: WelcomeContext): RenderedBrief {
   const href = escapeHtml(ctx.alerts_link);
   return {
     subject,
-    text: [subject, ...lines, `See what changed: ${ctx.alerts_link}`].join("\n"),
+    text: [subject, ...lines, `See what changed: ${ctx.alerts_link}`].join("\n\n"),
     html: emailDocument(
       subject,
       [
@@ -47,6 +47,7 @@ export function renderWelcome(ctx: WelcomeContext): RenderedBrief {
         ...lines.map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`),
         `<p style="${BODY}">See what changed: <a class="brief-ink" href="${href}">${href}</a></p>`,
       ].join(""),
+      lines[0],
     ),
   };
 }

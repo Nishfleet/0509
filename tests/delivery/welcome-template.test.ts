@@ -26,6 +26,13 @@ describe("welcome email", () => {
     expect(text).toContain("Your first ranking arrives with your weekly brief.");
   });
 
+  it("previews the rivals line and keeps paragraphs apart in plain text", () => {
+    const { html, text } = renderWelcome(CTX);
+    expect(html).toContain("display:none");
+    expect(html).toContain("We&#39;re watching Acme, Globex and 3 more.");
+    expect(text).toContain("\n\nWe're watching");
+  });
+
   it("escapes anything it is handed", () => {
     expectNoHtmlInjection(renderWelcome({ ...CTX, rivals: [PROBE] }).html, "rivals");
   });
