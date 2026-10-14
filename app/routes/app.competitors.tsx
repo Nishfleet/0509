@@ -34,7 +34,7 @@ function workspaceFrom(context: Route.LoaderArgs["context"]): string {
 export async function loader({ request, context }: Route.LoaderArgs) {
   const workspaceId = workspaceFrom(context);
   const wanted = new URL(request.url).searchParams.get("upgraded");
-  if (wanted !== null) await reconcileCheckoutReturn(workspaceId, context.get(onboardedContext).session.user.email);
+  if (isPlanId(wanted)) await reconcileCheckoutReturn(workspaceId, context.get(onboardedContext).session.user.email);
   const [competitors, tier, entitlements] = await Promise.all([
     readCompetitors(workspaceId),
     readPlanTier(workspaceId),

@@ -11,7 +11,10 @@ const KNOWN_PER_NIGHT = 200;
 const PAGE_SIZE = 100;
 const CUSTOMERS_PER_RETURN = 3;
 
-type Found = Awaited<ReturnType<DodoPayments["subscriptions"]["retrieve"]>>;
+type Seen = Pick<
+  Awaited<ReturnType<DodoPayments["subscriptions"]["retrieve"]>>,
+  "subscription_id" | "status" | "metadata" | "created_at"
+>;
 
 function dodo(): DodoPayments | null {
   if (env.DODO_PAYMENTS_API_KEY === "") return null;
@@ -34,7 +37,7 @@ async function snapshot(workspaceId: string | null): Promise<string> {
     : `${plan.tier}|${plan.status}|${plan.subscriptionId ?? ""}|${plan.currentPeriodEnd ?? ""}`;
 }
 
-async function reconcileOne(sub: Found, timestamp: string): Promise<void> {
+async function reconcileOne(sub: Seen, timestamp: string): Promise<void> {
   const claimed = sub.metadata.workspace_id;
   const workspaceId =
     (await readWorkspaceIdBySubscription(sub.subscription_id)) ?? (typeof claimed === "string" ? claimed : null);
@@ -69,12 +72,7 @@ async function reconcileKnown(client: DodoPayments, now: Date): Promise<void> {
 async function reconcileRecent(client: DodoPayments, now: Date): Promise<void> {
   const since = new Date(now.getTime() - RECENT_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const page = await client.subscriptions.list({ created_at_gte: since, page_size: PAGE_SIZE });
-  for (const item of page.items) {
-    await attempt(async () => {
-      const sub = await client.subscriptions.retrieve(item.subscription_id);
-      await reconcileOne(sub, sub.created_at);
-    });
-  }
+  for (const item of page.items) await attempt(() => reconcileOne(item, item.created_at));
 }
 
 export async function reconcileBilling(now: Date): Promise<void> {
@@ -84,12 +82,12 @@ export async function reconcileBilling(now: Date): Promise<void> {
   await attempt(() => reconcileRecent(client, now));
 }
 
-async function customerSubscriptions(client: DodoPayments, email: string): Promise<Found[]> {
-  const found: Found[] = [];
+async function customerSubscriptions(client: DodoPayments, email: string): Promise<Seen[]> {
+  const found: Seen[] = [];
   const customers = await client.customers.list({ email, page_size: CUSTOMERS_PER_RETURN });
   for (const customer of customers.items) {
     const page = await client.subscriptions.list({ customer_id: customer.customer_id, page_size: 10 });
-    for (const item of page.items) found.push(await client.subscriptions.retrieve(item.subscription_id));
+    found.push(...page.items);
   }
   return found;
 }
@@ -99,6 +97,8 @@ export async function reconcileCheckoutReturn(workspaceId: string, email: string
   if (current !== null && isSubscriptionLive(current, new Date())) return;
   const client = dodo();
   if (client === null) return;
+  const { success } = await env.SIGN_IN_EMAIL_LIMIT.limit({ key: `reconcile:${workspaceId}` });
+  if (!success) return;
   await attempt(async () => {
     for (const sub of await customerSubscriptions(client, email)) await reconcileOne(sub, sub.created_at);
   });

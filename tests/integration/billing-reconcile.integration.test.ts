@@ -27,7 +27,7 @@ function dodoAnswers(sub: ReturnType<typeof dodoSubscription>) {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     calls.push({ method: init?.method ?? "GET", url: `${url.pathname}${url.search}` });
-    if (url.pathname === "/subscriptions") return Response.json({ items: [{ subscription_id: sub.subscription_id }] });
+    if (url.pathname === "/subscriptions") return Response.json({ items: [sub] });
     if (url.pathname === "/customers") return Response.json({ items: [{ customer_id: sub.customer.customer_id }] });
     return Response.json(sub);
   });
@@ -124,6 +124,17 @@ describe("billing reconcile", () => {
     await reconcileCheckoutReturn(WORKSPACE, "reconcile@example.com");
 
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("asks Dodo at most five times a minute for one workspace", async () => {
+    await seedPlan("failed");
+    const calls = dodoAnswers(dodoSubscription({ status: "failed" }));
+
+    for (let attempt = 0; attempt < 8; attempt += 1) await reconcileCheckoutReturn(WORKSPACE, "reconcile@example.com");
+
+    const lookups = calls.filter((call) => call.url.startsWith("/customers")).length;
+    expect(lookups).toBeGreaterThan(0);
+    expect(lookups).toBeLessThanOrEqual(5);
   });
 
   it("ignores a subscription whose proof was not made for this workspace", async () => {
