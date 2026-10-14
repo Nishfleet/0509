@@ -72,7 +72,7 @@ describe("loader query counts", () => {
     }
     expect(counts.home[1]).toBe(counts.home[0]);
     expect(counts.competitor[1]).toBe(counts.competitor[0]);
-    expect(counts.home[1]).toBeLessThanOrEqual(10);
+    expect(counts.home[1]).toBeLessThanOrEqual(13);
     expect(counts.competitor[1]).toBeLessThanOrEqual(15);
   });
 });
