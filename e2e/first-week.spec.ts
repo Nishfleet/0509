@@ -115,7 +115,10 @@ test("one customer's first week: gathering, a second rival, a first alert, the f
   await expect(firstLook).toContainText("Zephyrwear");
   await expect(page.locator('[data-home="first-week-steps"]')).toBeVisible();
   await expectNoSideways(page);
-  await scanPage(page, testInfo, quality, `week day 0 Home ${testInfo.project.name}`, { keyboard: true });
+  await scanPage(page, testInfo, quality, `week day 0 Home ${testInfo.project.name}`, {
+    screen: /^good (morning|afternoon|evening)/i,
+    keyboard: true,
+  });
 
   await openPlace(page, "Competitors");
   const count = page.locator('[data-slot="competitor-count"]');
@@ -135,7 +138,10 @@ test("one customer's first week: gathering, a second rival, a first alert, the f
   await openPlace(page, "Alerts");
   await expect(page.getByText("Zephyrwear opens a London flagship")).toBeVisible();
   await expect(page.getByTestId("alert-chip-mentions")).toContainText("1");
-  await scanPage(page, testInfo, quality, `week day 4 Alerts ${testInfo.project.name}`, { keyboard: false });
+  await scanPage(page, testInfo, quality, `week day 4 Alerts ${testInfo.project.name}`, {
+    screen: /^alerts$/i,
+    keyboard: false,
+  });
 
   await page.goto("/app/brief");
   await expect(page.getByText(/first brief/i)).toBeVisible();
@@ -147,7 +153,10 @@ test("one customer's first week: gathering, a second rival, a first alert, the f
   await expect(page.locator("[data-brief-state=sent]")).toHaveText(/Week of 5 Oct · Sent 12 Oct/);
   await expect(page.getByText("Zephyrwear led the first week and you are one place behind.")).toBeVisible();
   await expectNoSideways(page);
-  await scanPage(page, testInfo, quality, `week day 7 Brief ${testInfo.project.name}`, { keyboard: false });
+  await scanPage(page, testInfo, quality, `week day 7 Brief ${testInfo.project.name}`, {
+    screen: /^your weekly brief$/i,
+    keyboard: false,
+  });
 
   await openPlace(page, "Settings");
   const teammate = `mate-${Date.now().toString(36)}-${testInfo.project.name}@example.com`;
