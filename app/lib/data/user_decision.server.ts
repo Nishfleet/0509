@@ -98,7 +98,7 @@ export async function readSubjectDecision(workspaceId: string, subject: string):
 }
 
 const CLEAR_CHANGE_FEEDBACK = `DELETE FROM user_decision
-WHERE workspace_id = ?1 AND signal_id = ?2 AND verdict LIKE 'change_feedback:%'`;
+WHERE workspace_id = ?1 AND signal_id = ?2 AND verdict IN ('change_feedback:useful', 'change_feedback:not_useful')`;
 
 const INSERT_CHANGE_FEEDBACK = `INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at)
 SELECT ?1, s.workspace_id, ?3, s.id, s.entity_id, ?4, NULL, ?5

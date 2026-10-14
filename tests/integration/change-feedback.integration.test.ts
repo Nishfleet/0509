@@ -64,6 +64,16 @@ describe("feedback on a change", () => {
     expect(rows?.n).toBe(1);
   });
 
+  it("ignores a decision whose verdict only resembles a feedback answer", async () => {
+    await env.DB.prepare(
+      `INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at)
+       VALUES ('ud-odd', 'ws-fb', 'user-fb', 'sig-fb', 'ent-fb', 'change_feedback:maybe', NULL, ?1)`,
+    )
+      .bind(AT)
+      .run();
+    expect(await feedbackOf("ws-fb", "ent-fb")).toEqual([null]);
+  });
+
   it("refuses a change that belongs to another workspace", async () => {
     await recordChangeFeedback({
       workspaceId: "ws-fb",
