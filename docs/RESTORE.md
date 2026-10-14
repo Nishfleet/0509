@@ -28,12 +28,12 @@ Written from `.github/workflows/deploy-production.yml` on 2026-10-14. No live ro
 - **Automatic.** The deploy job records the serving version, deploys, then polls `/api/health` until it answers `ok` with this commit (20 tries, 5 s apart). A red or cancelled smoke runs `wrangler rollback` to the recorded version. Read the step "Roll back to the serving Worker version" in the run.
 - **Manual.** `npx wrangler versions list` shows version ids, `npx wrangler rollback <version-id> --message "<why>"` serves one. This changes production, so it needs Nish's yes (AGENTS.md: production state stays gated).
 - **A rollback is not a fix.** The next push to `main` deploys again. Revert the bad commit through the merge queue as well.
-- **Cannot be rolled back.** A deploy that carries a Durable Object migration (`new_sqlite_classes` in `wrangler.jsonc`) cannot be rolled back by Cloudflare. That deploy needs manual recovery.
+- **Can be impossible.** A deploy that adds a new Durable Object migration tag in `wrangler.jsonc` can make a rollback impossible or unsafe. On such a deploy the automatic rollback step still runs and may fail, so check the run and recover by hand. Deploys that add no new tag are not affected.
 
 ### A migration
 
 - Migrations are additive, so the previous Worker keeps running on the new schema. Rolling the Worker back does not need the schema rolled back.
 - The migration step runs before the Worker deploys. A migration file that fails stops the job: the Worker is never deployed, and the files before it stay applied.
 - The deploy writes the D1 Time Travel bookmark taken just before migrating into the run's job summary. That bookmark is the path back for a migration that dropped or rewrote data.
-- To use it, `npx wrangler d1 time-travel restore 0509 --bookmark=<bookmark>`. This rewinds every write after the bookmark, including sign-ups and snapshots written since. Run `npx wrangler d1 export 0509 --remote --output <file>` first so those rows can be put back. Production restores need Nish's yes.
+- To use it, `npx wrangler d1 time-travel restore 0509 --bookmark=<bookmark>`. This rewinds every write after the bookmark, including sign-ups and snapshots written since. Exporting first (`npx wrangler d1 export 0509 --remote --output <file>`) keeps those rows, but the export blocks the database while it runs, so during an incident decide whether the Time Travel bookmark alone is enough. Production restores need Nish's yes.
 - A restore prints the bookmark it replaced, which undoes the restore if it was the wrong call.

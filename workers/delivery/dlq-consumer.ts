@@ -147,7 +147,11 @@ async function deadLetteredDigest(env: Env, messageId: string, digestId: string)
 
   const attempt = await env.DB.prepare(SELECT_LATEST_ATTEMPT_ERROR).bind(digestId).first<{ error: string | null }>();
   captureException(
-    digestDeadLetterError({ message_id: messageId, digest_id: digestId, reason: attempt?.error ?? "unknown" }),
+    digestDeadLetterError({
+      message_id: messageId,
+      digest_id: digestId,
+      reason: attempt?.error ?? "no send attempt recorded",
+    }),
     { tags: { queue: "send-email-dlq", digest_id: digestId } },
   );
   console.error(
