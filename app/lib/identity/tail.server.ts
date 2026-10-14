@@ -102,6 +102,7 @@ async function learnFromHome(
   });
   const entity = { id: params.entityId, domain: params.domain };
   const judged = await judgeNavPages(params, extract.navPages, now);
+  if (!judged) return false;
   try {
     await findHiddenPricing({
       workspaceId: params.workspaceId,
