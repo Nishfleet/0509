@@ -1,7 +1,7 @@
 import { Fragment, type ReactElement } from "react";
 
 import { ReadThisFirst } from "./read-this-first";
-import type { BriefPayload } from "../lib/brief-payload";
+import { sinceStartedLine, type BriefPayload } from "../lib/brief-payload";
 
 const SECTION = "mt-5 border-t border-line pt-4";
 const HEAD = "font-mono text-eyebrow text-ink-soft uppercase";
@@ -89,6 +89,7 @@ function ownSiteBlock(payload: BriefPayload): ReactElement {
 }
 
 function checkedBlock(payload: BriefPayload): ReactElement {
+  const since = sinceStartedLine(payload.checked);
   return (
     <section data-brief-block="checked" className={SECTION}>
       <h3 className={HEAD}>What was checked</h3>
@@ -96,6 +97,7 @@ function checkedBlock(payload: BriefPayload): ReactElement {
         {countLabel(payload.checked.mention_count, "mention", "mentions")} ·{" "}
         {countLabel(payload.checked.site_change_count, "site change", "site changes")}
       </p>
+      {since === null ? null : <p className="mt-1 font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft">{since}</p>}
     </section>
   );
 }

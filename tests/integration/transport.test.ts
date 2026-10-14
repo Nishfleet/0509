@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   countExtractedChars,
+  refusalReason,
   readUrl,
   type EscalationReason,
   type Transport,
@@ -867,6 +868,24 @@ describe("readUrl", () => {
     } finally {
       stub.restore();
     }
+  });
+});
+
+describe("refusalReason", () => {
+  const LONG_TEXT = "Welcome to our store, browse the range and read our story. ".repeat(10);
+
+  it.each([
+    ["Imperva", "<title>Pardon Our Interruption</title>"],
+    ["Incapsula", "Request unsuccessful. Incapsula incident ID: 1-2-3"],
+    ["Akamai", '<a href="https://errors.edgesuite.net/18.1.2">Reference</a>'],
+    ["Sucuri", "<title>Sucuri WebSite Firewall - Access Denied</title>"],
+  ])("calls a %s block page served with a 200 a challenge, even when it is long", async (_vendor, marker) => {
+    const html = `<html><head>${marker}</head><body><p>${LONG_TEXT}</p></body></html>`;
+    expect(await refusalReason(200, html)).toBe("challenge");
+  });
+
+  it("lets a long ordinary page through", async () => {
+    expect(await refusalReason(200, `<html><body><p>${LONG_TEXT}</p></body></html>`)).toBeNull();
   });
 });
 
