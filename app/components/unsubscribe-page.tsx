@@ -72,7 +72,8 @@ function ChangedYourMind({ teammate }: { teammate: boolean }) {
       <a className="inline-flex min-h-11 items-center underline underline-offset-4" href="/app/settings">
         Settings
       </a>
-      , and switch it back on under "Emails to this address".
+      , and switch it back on under "Emails to this address". If your emails go to a different address than your
+      sign-in, write to {SUPPORT_ADDRESS}.
     </p>
   );
 }

@@ -240,7 +240,7 @@ async function saveMail(user: SettingsUser, form: FormData): Promise<SettingsRes
   });
   if (!saved)
     return result({
-      deliveryError: `We could not switch emails back on for this address. Use your sign-in address, or write to ${SUPPORT_ADDRESS}.`,
+      deliveryError: `We could not change the emails for this address. Switching them back on works from your sign-in address, or write to ${SUPPORT_ADDRESS}.`,
     });
   return result({ saved: true });
 }
