@@ -1,7 +1,7 @@
 import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
 import { renderAlertFooter, type AlertFooterContext } from "./alert-footer";
-import { EYEBROW, FONT, emailDocument } from "./email-shell";
+import { BODY, EYEBROW, HEADLINE, emailDocument, linkParagraph } from "./email-shell";
 
 export interface MonthlyContext {
   month: string;
@@ -11,9 +11,8 @@ export interface MonthlyContext {
   footer: AlertFooterContext;
 }
 
-const HEADLINE = `margin:0;font-family:${FONT};font-size:24px;line-height:30px;font-weight:800;letter-spacing:-0.02em;`;
-const BODY = `margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;`;
 const SUBJECT = "Your month in rivals";
+const OPEN = "See everything in Five to Nine";
 
 function lines(ctx: MonthlyContext): string[] {
   const noun = ctx.change_count === 1 ? "change" : "changes";
@@ -24,18 +23,17 @@ function lines(ctx: MonthlyContext): string[] {
 
 export function renderMonthly(ctx: MonthlyContext): RenderedBrief {
   const body = lines(ctx);
-  const href = escapeHtml(ctx.link);
   const footer = renderAlertFooter(ctx.footer);
   return {
     subject: SUBJECT,
-    text: [SUBJECT, ...body, `See everything: ${ctx.link}`, footer.text].join("\n"),
+    text: [SUBJECT, ...body, `${OPEN}: ${ctx.link}`, footer.text].join("\n"),
     html: emailDocument(
       SUBJECT,
       [
         `<p class="brief-muted" style="${EYEBROW}">${escapeHtml(ctx.month)}</p>`,
         `<p style="${HEADLINE}">${escapeHtml(SUBJECT)}</p>`,
         ...body.map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`),
-        `<p style="${BODY}">See everything: <a class="brief-ink" href="${href}">${href}</a></p>`,
+        linkParagraph(OPEN, ctx.link),
         footer.html,
       ].join(""),
       body[0],
