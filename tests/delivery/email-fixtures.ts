@@ -5,6 +5,7 @@ import { teammateInviteEmail, verifyAddressEmail } from "../../app/lib/verify-ad
 import { renderBrief } from "../../workers/delivery/brief-template";
 import { renderChange, renderChangeOverflow } from "../../workers/delivery/change-template";
 import { renderIncidentFixed, renderIncidentOpen } from "../../workers/delivery/incident-template";
+import { renderMonthly } from "../../workers/delivery/monthly-template";
 import { renderRecap } from "../../workers/delivery/recap-template";
 import { renderTrialEnding } from "../../workers/delivery/trial-template";
 import { renderWelcome } from "../../workers/delivery/welcome-template";
@@ -188,6 +189,25 @@ export function lifecycleEmails(): readonly LifecycleEmail[] {
     email(
       "renderRecap, one change and no latest",
       renderRecap({ change_count: 1, latest: null, link: ALERTS, footer: FOOTER }),
+      [ALERTS],
+    ),
+    email(
+      "renderMonthly",
+      renderMonthly({
+        month: "September",
+        change_count: 7,
+        moves: [
+          { rival: "Kindred", what: "changed its pricing page" },
+          { rival: "Acme", what: "rewrote its homepage headline" },
+        ],
+        link: ALERTS,
+        footer: FOOTER,
+      }),
+      [ALERTS],
+    ),
+    email(
+      "renderMonthly, one change and no moves",
+      renderMonthly({ month: "September", change_count: 1, moves: [], link: ALERTS, footer: FOOTER }),
       [ALERTS],
     ),
     email(
