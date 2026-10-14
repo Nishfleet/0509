@@ -265,3 +265,13 @@ export async function setChangeAlerts(workspaceId: string, changeAlerts: boolean
     .bind(changeAlerts ? 1 : 0, workspaceId)
     .run();
 }
+
+const SEEN_DEBOUNCE_MS = 20 * 3_600_000;
+
+const TOUCH_WORKSPACE_SEEN = `UPDATE workspace SET last_seen_at = ?1
+WHERE id = ?2 AND (last_seen_at IS NULL OR last_seen_at < ?3)`;
+
+export async function touchWorkspaceSeen(workspaceId: string, now: Date): Promise<void> {
+  const stale = new Date(now.getTime() - SEEN_DEBOUNCE_MS).toISOString();
+  await env.DB.prepare(TOUCH_WORKSPACE_SEEN).bind(now.toISOString(), workspaceId, stale).run();
+}
