@@ -1,4 +1,5 @@
 import { APP_LOCALE } from "./locale";
+
 const ADDED = new Intl.DateTimeFormat(APP_LOCALE, { timeZone: "UTC", year: "numeric", month: "short", day: "numeric" });
 
 export function passkeyLabel(name: string | null | undefined, createdAt: Date | string): string {

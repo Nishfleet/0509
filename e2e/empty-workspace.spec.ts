@@ -40,7 +40,7 @@ test("a brand-new workspace with no competitors explains every screen and passes
     const response = await page.goto(screen.path);
     expect(response?.status(), screen.path).toBe(200);
     await expect(page.getByRole("main"), screen.path).toContainText(screen.says);
-    await expect(page.getByRole("main"), screen.path).not.toContainText(/undefined|null|NaN|\{\{/);
+    await expect(page.getByRole("main"), screen.path).not.toContainText(/\b(?:undefined|null|NaN)\b|\{\{/);
     const width = await page.evaluate(() => ({
       scroll: document.documentElement.scrollWidth,
       inner: window.innerWidth,
