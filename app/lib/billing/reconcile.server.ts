@@ -12,7 +12,7 @@ const KNOWN_PER_NIGHT = 200;
 const PAGE_SIZE = 100;
 const CUSTOMERS_PER_RETURN = 3;
 const AT_ONCE = 10;
-const NIGHTLY = { timeout: 10_000, maxRetries: 1 };
+const NIGHTLY = { timeout: 8_000, maxRetries: 0 };
 const AT_CHECKOUT = { timeout: 4_000, maxRetries: 0 };
 
 type Seen = Pick<
@@ -52,16 +52,26 @@ async function matchesDodo(workspaceId: string, sub: Seen): Promise<boolean> {
   );
 }
 
+async function snapshot(workspaceId: string | null): Promise<string> {
+  const plan = workspaceId === null ? null : await readPlanSubscription(workspaceId);
+  return plan === null
+    ? "none"
+    : `${plan.tier}|${plan.status}|${plan.subscriptionId ?? ""}|${plan.currentPeriodEnd ?? ""}`;
+}
+
 async function reconcileOne(sub: Seen, now: Date): Promise<void> {
   const known = await readWorkspaceIdBySubscription(sub.subscription_id);
   if (known !== null && (await matchesDodo(known, sub))) return;
+  const claimed = sub.metadata.workspace_id;
+  const workspaceId = known ?? (typeof claimed === "string" ? claimed : null);
+  const before = await snapshot(workspaceId);
   const timestamp = known === null ? sub.created_at : now.toISOString();
   const outcome = await applySubscription({ data: sub }, `subscription.${sub.status}`, timestamp);
   if (outcome === "retry") {
     say("billing.reconcile_unmatched", { subscription: sub.subscription_id, status: sub.status });
-    captureMessage("billing: a Dodo subscription has no workspace", { level: "warning" });
     return;
   }
+  if ((await snapshot(workspaceId)) === before) return;
   say("billing.reconcile_corrected", { subscription: sub.subscription_id, status: sub.status });
   captureMessage("billing: reconcile corrected a plan the webhook had not delivered", { level: "warning" });
 }
@@ -118,13 +128,11 @@ export async function reconcileBilling(now: Date): Promise<void> {
 }
 
 async function customerSubscriptions(client: DodoPayments, email: string): Promise<Seen[]> {
-  const found: Seen[] = [];
   const customers = await client.customers.list({ email, page_size: CUSTOMERS_PER_RETURN });
-  for (const customer of customers.items) {
-    const page = await client.subscriptions.list({ customer_id: customer.customer_id, page_size: 10 });
-    found.push(...page.items);
-  }
-  return found;
+  const pages = await Promise.all(
+    customers.items.map((customer) => client.subscriptions.list({ customer_id: customer.customer_id, page_size: 10 })),
+  );
+  return pages.flatMap((page) => page.items);
 }
 
 export async function reconcileCheckoutReturn(workspaceId: string, email: string): Promise<void> {
@@ -132,10 +140,10 @@ export async function reconcileCheckoutReturn(workspaceId: string, email: string
   if (current !== null && isSubscriptionLive(current, new Date())) return;
   const client = dodo(AT_CHECKOUT);
   if (client === null) return;
-  const { success } = await env.SIGN_IN_EMAIL_LIMIT.limit({ key: `reconcile:${workspaceId}` });
-  if (!success) return;
   const now = new Date();
   await attempt({ tried: 0, failed: 0 }, async () => {
+    const { success } = await env.SIGN_IN_EMAIL_LIMIT.limit({ key: `reconcile:${workspaceId}` });
+    if (!success) return;
     for (const sub of await customerSubscriptions(client, email)) await reconcileOne(sub, now);
   });
 }

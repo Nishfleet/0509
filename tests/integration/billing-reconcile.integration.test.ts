@@ -158,6 +158,22 @@ describe("billing reconcile", () => {
     expect(lookups).toBeLessThanOrEqual(5);
   });
 
+  it("raises no correction when a recent subscription is older than the plan the workspace already holds", async () => {
+    await seedPlan("active", "2026-10-13T12:00:00Z");
+    await env.DB.prepare("UPDATE plan SET provider_subscription_id = 'sub_current' WHERE workspace_id = ?")
+      .bind(WORKSPACE)
+      .run();
+    dodoAnswers(dodoSubscription());
+
+    await reconcileBilling(NOW);
+
+    expect(JSON.stringify(logged.mock.calls)).not.toContain("reconcile_corrected");
+    const row = await env.DB.prepare("SELECT provider_subscription_id AS id FROM plan WHERE workspace_id = ?")
+      .bind(WORKSPACE)
+      .first<{ id: string }>();
+    expect(row?.id).toBe("sub_current");
+  });
+
   it("ignores a subscription whose proof was not made for this workspace", async () => {
     dodoAnswers(dodoSubscription({ metadata: { workspace_id: WORKSPACE, plan: "starter", proof: "forged" } }));
 
