@@ -1,7 +1,7 @@
 import { Fragment, type ReactElement } from "react";
 
 import { ReadThisFirst } from "./read-this-first";
-import { rankTrendLine, sinceStartedLine, type BriefPayload } from "../lib/brief-payload";
+import { newRivalLines, rankTrendLine, sinceStartedLine, type BriefPayload } from "../lib/brief-payload";
 
 const SECTION = "mt-5 border-t border-line pt-4";
 const HEAD = "font-mono text-eyebrow text-ink-soft uppercase";
@@ -15,6 +15,7 @@ export function BriefView({ payload }: { payload: BriefPayload }) {
       <ReadThisFirst marks={payload.read_this_first} unjudged={payload.is_unjudged} />
       {brandsBlock(payload)}
       {ownSiteBlock(payload)}
+      {newRivalBlock(payload)}
       {checkedBlock(payload)}
     </article>
   );
@@ -88,6 +89,23 @@ function ownSiteBlock(payload: BriefPayload): ReactElement {
           ))}
         </Fragment>
       )}
+    </section>
+  );
+}
+
+function newRivalBlock(payload: BriefPayload): ReactElement | null {
+  const rival = newRivalLines(payload);
+  if (rival === null) return null;
+  return (
+    <section data-brief-block="new-rival" className={SECTION}>
+      <h3 className={HEAD}>A rival you may be missing</h3>
+      <p className={BODY}>
+        {rival.title}
+        {rival.reason === null ? "" : ` ${rival.reason}`}{" "}
+        <a href="/app/competitors" className="underline">
+          Review in Competitors
+        </a>
+      </p>
     </section>
   );
 }

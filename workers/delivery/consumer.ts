@@ -19,6 +19,7 @@ import { parseBriefPayload } from "../../app/lib/brief-payload";
 import { nextHour } from "../../app/lib/home-standing";
 import { neutralizeBareUrls, slackEscape } from "../../app/lib/slack-webhook";
 import { postToSlack } from "../../app/lib/slack.server";
+import { slackBriefText } from "../../app/lib/slack-brief";
 import {
   changeHeadline,
   markFromHunks,
@@ -328,11 +329,39 @@ async function sendToTeammates(env: Env, digestId: string): Promise<void> {
   }
 }
 
+async function postBriefToSlack(env: Env, digestId: string): Promise<void> {
+  const digest = await readDigest(env, digestId);
+  if (digest?.status !== "sent" || digest.kind !== "weekly") return;
+  const target = await readSlackTarget(env.DB, digest.workspace_id);
+  if (target === null) return;
+  const idempotencyKey = `brief-slack:${digest.id}:${target.id}`;
+  const claim = await claimSendAttempt(env.DB, {
+    idempotencyKey,
+    workspaceId: digest.workspace_id,
+    targetId: target.id,
+    digestId: digest.id,
+  });
+  if (!claim) return;
+  await sendAndResolve(env, {
+    claimId: claim.id,
+    idempotencyKey,
+    send: async () => {
+      const posted = await postToSlack(target.target_value, slackBriefText(briefOf(digest)));
+      return posted ? { outcome: "sent", error: null } : { outcome: "failed", error: "slack did not accept the post" };
+    },
+  });
+}
+
 export async function deliver(env: Env, message: DigestMessage): Promise<DeliveryResult> {
   const result = await deliverToOwner(env, message);
   if (result.outcome === "sent" || result.outcome === "duplicate") {
     await sendToTeammates(env, message.digest_id).catch((cause: unknown) => {
       console.error(JSON.stringify({ event: "delivery.teammates_failed", error: redactEmailShaped(errorText(cause)) }));
+    });
+    await postBriefToSlack(env, message.digest_id).catch((cause: unknown) => {
+      console.error(
+        JSON.stringify({ event: "delivery.slack_brief_failed", error: redactEmailShaped(errorText(cause)) }),
+      );
     });
   }
   return result;

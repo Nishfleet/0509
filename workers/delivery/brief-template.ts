@@ -1,4 +1,6 @@
 import {
+  COMPETITORS_LINK,
+  newRivalLines,
   rankTrendLine,
   sinceStartedLine,
   type BriefContext,
@@ -32,6 +34,8 @@ const COPY = {
   ownSiteBroken: (count: number) => `Your site looks broken (${count === 1 ? "1 page" : `${n(count)} pages`}):`,
   stillBroken: "still broken",
   fixed: "fixed",
+  newRival: "A rival you may be missing",
+  reviewRival: "Review in Competitors",
   footerTitle: "What was checked",
   next: "Next brief",
   noNext: "Next brief date not set yet",
@@ -308,6 +312,17 @@ function renderOwnSite(payload: BriefPayload): { html: string; text: string } {
   return { html, text: `${COPY.ownSiteBroken(open.length)}\n${lines}` };
 }
 
+function renderNewRival(payload: BriefPayload): { html: string; text: string } | null {
+  const rival = newRivalLines(payload);
+  if (rival === null) return null;
+  const detail = rival.reason === null ? "" : ` ${rival.reason}`;
+  const html = [
+    `<h2 class="brief-muted" style="${EYEBROW}">${escapeHtml(COPY.newRival)}</h2>`,
+    `<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(`${rival.title}${detail}`)} <a class="brief-ink" href="${COMPETITORS_LINK}">${escapeHtml(COPY.reviewRival)}</a></p>`,
+  ].join("");
+  return { html, text: `${COPY.newRival}\n${rival.title}${detail}\n${COPY.reviewRival}: ${COMPETITORS_LINK}` };
+}
+
 function sinceSentence(checked: BriefPayload["checked"]): string {
   const since = sinceStartedLine(checked);
   return since === null ? "" : ` ${since}.`;
@@ -384,6 +399,7 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
   const brands = renderBrands(payload);
   const ownSite = renderOwnSite(payload);
   const footer = renderFooter(payload, context.unsubscribe_url);
+  const newRival = renderNewRival(payload);
 
   const subject = briefSubject(payload);
 
@@ -391,9 +407,14 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
 
   const html = emailDocument(
     subject,
-    [headline.html, ...(quiet ? [] : [block(marks.html)]), block(brands.html), block(ownSite.html), footer.html].join(
-      "",
-    ),
+    [
+      headline.html,
+      ...(quiet ? [] : [block(marks.html)]),
+      block(brands.html),
+      block(ownSite.html),
+      ...(newRival === null ? [] : [block(newRival.html)]),
+      footer.html,
+    ].join(""),
     whyLine,
   );
 
@@ -405,6 +426,7 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
     "",
     ownSite.text,
     "",
+    ...(newRival === null ? [] : [newRival.text, ""]),
     footer.text,
   ].join("\n");
 

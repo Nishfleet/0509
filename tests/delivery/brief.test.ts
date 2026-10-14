@@ -834,3 +834,35 @@ describe("the rank-over-time line", () => {
     expect(text).not.toMatch(/weeks ago|since \d+ weeks/);
   });
 });
+
+describe("the rival-you-may-be-missing block", () => {
+  const rival = { name: "Northwind", domain: "northwind.example", reason: "Named alongside you by 3 publishers" };
+
+  it("names the rival, why, and where to review it, in html and text", () => {
+    const { html, text } = renderBrief(payload({ new_rival: rival }), CONTEXT);
+    for (const out of [html, text]) {
+      expect(out).toContain("A rival you may be missing");
+      expect(out).toContain("Northwind (northwind.example) may be a rival you are missing.");
+      expect(out).toContain("Named alongside you by 3 publishers");
+      expect(out).toContain("https://0509.io/app/competitors");
+    }
+  });
+
+  it.each([
+    ["none found", null],
+    ["a digest saved before it existed", undefined],
+  ])("is left out for %s", (_name, none) => {
+    const { html, text } = renderBrief(payload({ new_rival: none }), CONTEXT);
+    expect(html).not.toContain("may be missing");
+    expect(text).not.toContain("may be missing");
+  });
+
+  it("escapes what the rival is called", () => {
+    const { html } = renderBrief(
+      payload({ new_rival: { name: "<b>x</b>", domain: "x.example", reason: null } }),
+      CONTEXT,
+    );
+    expect(html).not.toContain("<b>x</b>");
+    expect(html).toContain("&lt;b&gt;x&lt;/b&gt;");
+  });
+});

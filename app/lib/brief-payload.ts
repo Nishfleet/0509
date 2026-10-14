@@ -89,6 +89,12 @@ const checkedSchema = z
     ],
   }));
 
+const newRivalSchema = z
+  .object({ name: text, domain: text, reason: optionalText })
+  .nullable()
+  .optional()
+  .catch(undefined);
+
 const briefPayloadSchema = z.object({
   workspace_id: text,
   timezone: text,
@@ -112,6 +118,7 @@ const briefPayloadSchema = z.object({
   own_site: ownSiteSchema,
   checked: checkedSchema,
   next_brief_at: optionalText,
+  new_rival: newRivalSchema,
 });
 
 export type BriefPayload = z.output<typeof briefPayloadSchema>;
@@ -130,6 +137,14 @@ export function rankTrendLine(payload: BriefPayload): string | null {
   if (rank < earlier.rank) return `Up from #${String(earlier.rank)} ${when}`;
   if (rank > earlier.rank) return `Down from #${String(earlier.rank)} ${when}`;
   return `Holding at #${String(rank)} since ${when}`;
+}
+
+export const COMPETITORS_LINK = "https://0509.io/app/competitors";
+
+export function newRivalLines(payload: BriefPayload): { title: string; reason: string | null } | null {
+  const rival = payload.new_rival;
+  if (rival === null || rival === undefined) return null;
+  return { title: `${rival.name} (${rival.domain}) may be a rival you are missing.`, reason: rival.reason };
 }
 
 export interface BriefContext {

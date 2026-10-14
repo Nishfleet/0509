@@ -23,8 +23,8 @@ export function SlackAlertsSetting({ connected, error }: { connected: boolean; e
       </h2>
       <p className="mt-2 max-w-prose leading-[1.55]">
         {connected
-          ? "Price and plan changes also post to your Slack channel."
-          : "Post price and plan changes to a Slack channel. Make an incoming webhook in Slack and paste its address here."}
+          ? "Price and plan changes, and your weekly brief, also post to your Slack channel."
+          : "Post price and plan changes and your weekly brief to a Slack channel. Make an incoming webhook in Slack and paste its address here."}
       </p>
       <Form method="post" action="/app/settings" className="mt-4 flex flex-col gap-3">
         <input type="hidden" name="intent" value={connected ? "slack-remove" : "slack-save"} />
