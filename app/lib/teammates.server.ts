@@ -10,7 +10,7 @@ import { MAX_TEAMMATES } from "./teammate-limit";
 const INVALID = "Enter an email address, like colleague@company.com.";
 const NO_WORKSPACE = "Finish setting up first, then add a teammate.";
 const RATE_LIMITED = "Too many invitations. Wait a minute, then try again.";
-const UNSUBSCRIBED = "That address unsubscribed from the brief, so it can't be added.";
+const UNSUBSCRIBED = "We can't send the brief to that address, so it can't be added.";
 const CANT_ADD = `You can add up to ${String(MAX_TEAMMATES)} teammates, and each address only once.`;
 
 export async function readTeammates(workspaceId: string) {

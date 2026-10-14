@@ -89,12 +89,12 @@ describe("teammates on the brief", () => {
     expect(sentMail).toHaveLength(2);
   });
 
-  it("refuses an address that unsubscribed, and a malformed one, and sends nothing", async () => {
+  it("refuses an address we cannot mail, and a malformed one, and sends nothing", async () => {
     await env.DB.prepare("INSERT INTO email_suppression (address, reason, created_at) VALUES (?, 'unsubscribed', ?)")
       .bind("gone@0509.io", NOW)
       .run();
 
-    expect(await add("gone@0509.io")).toMatch(/unsubscribed/);
+    expect(await add("gone@0509.io")).toMatch(/can't send the brief to that address/);
     for (const bad of ["not an address", "a,b@0509.io", "a b@0509.io", "a@localhost", "a@@0509.io"]) {
       expect(await add(bad)).toMatch(/Enter an email address/);
     }
