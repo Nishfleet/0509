@@ -46,13 +46,17 @@ async function readText(key: string): Promise<string | null> {
   return object === null ? null : object.text();
 }
 
+function squash(text: string | null): string | null {
+  return text === null ? null : text.replace(/\s+/g, " ").trim();
+}
+
 function sameVisibleText(changed: ChangedPage, before: string | null, after: string | null): boolean {
-  return changed.previousTextKey !== changed.textKey && before !== null && before === after;
+  return changed.previousTextKey !== changed.textKey && before !== null && squash(before) === squash(after);
 }
 
 async function readVisibleText(key: string): Promise<string | null> {
   const raw = await readText(key);
-  return raw === null ? null : decodeHtmlEntities(raw).replace(/\s+/g, " ").trim();
+  return raw === null ? null : decodeHtmlEntities(raw);
 }
 
 function enteredHomeUrl(entity: { domain: string; url: string | null }): string | null {
