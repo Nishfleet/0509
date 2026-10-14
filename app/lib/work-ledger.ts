@@ -28,13 +28,13 @@ function mentionsClause(ledger: WorkLedger): string | null {
   return `read ${countPhrase(ledger.mentions_read, "mention", "mentions")} and kept ${String(ledger.mentions_kept)}`;
 }
 
-export function ledgerParts(ledger: WorkLedger): string[] {
+function ledgerParts(ledger: WorkLedger): string[] {
   return [pagesClause(ledger), changesClause(ledger), mentionsClause(ledger)].filter(
     (part): part is string => part !== null,
   );
 }
 
-export function ledgerSentence(ledger: WorkLedger, lead: string): string {
+function ledgerSentence(ledger: WorkLedger, lead: string): string {
   return `${lead} ${ledgerParts(ledger).join("; ")}.`;
 }
 
