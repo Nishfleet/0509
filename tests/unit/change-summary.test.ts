@@ -42,6 +42,16 @@ describe("changeSummary", () => {
     expect(text).not.toMatch(/[\p{Cf}\p{Cc}]/u);
   });
 
+  it("strips bidi overrides and control characters from the headline and page too", () => {
+    const text = changeSummary({
+      ...CHANGE,
+      headline: "Ac\u202Eme changed pricing.",
+      page: "Pri\u200Bcing page\u0007",
+    });
+    expect(text).toContain("Acme changed pricing (Pricing page).");
+    expect(text).not.toMatch(/[\p{Cf}\p{Cc}]/u);
+  });
+
   it("cuts on code points so an emoji at the cut is never split", () => {
     const long = `${"a".repeat(138)}😀😀😀`;
     const text = changeSummary({ ...CHANGE, mark: { removed: long, added: "x" } });

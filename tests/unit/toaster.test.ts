@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -128,5 +128,19 @@ describe("upstream accessibility guarantees", () => {
     // evaluated inside the mock factory; cssText is the exact stylesheet
     // sonner appends to document.head in the browser.
     expect(injectedStyleSheet.cssText).toContain("@media (prefers-reduced-motion)");
+  });
+});
+
+describe("the app mounts one Toaster", () => {
+  it("mounts the Toaster in app-shell.tsx once and nowhere else under app/", async () => {
+    const appDir = path.join(REPO_ROOT, "app");
+    const entries = await readdir(appDir, { recursive: true });
+    const mounts: string[] = [];
+    for (const entry of entries.filter((name) => name.endsWith(".tsx"))) {
+      const source = await readFile(path.join(appDir, entry), "utf8");
+      const count = source.split("<Toaster").length - 1;
+      if (count > 0) mounts.push(`${path.basename(entry)}:${String(count)}`);
+    }
+    expect(mounts).toEqual(["app-shell.tsx:1"]);
   });
 });
