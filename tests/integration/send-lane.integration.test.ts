@@ -286,6 +286,26 @@ describe("send lane (0509#3979)", () => {
     expect(await readAttempts()).toEqual([]);
   });
 
+  it("(teammates) a teammate removed after one brief is not queued or mailed for the next, and an alert never reaches them", async () => {
+    const rec = recorder();
+    const queued: unknown[] = [];
+    const first = await seedDigest("pending");
+    await seedTeammate("mate-1", "mate@0509.io", true);
+    await deliver(envWith(bindingFor(rec), queued), message(first));
+    await handleBatch(envWith(bindingFor(rec)), batchFor(queued).batch);
+    expect(rec.sent.map((mail) => mail.to).sort()).toEqual(["mate@0509.io", TARGET]);
+
+    await env.DB.prepare("DELETE FROM send_target WHERE id = 'mate-1'").run();
+    const next = await seedDigest("pending");
+    const nextQueued: unknown[] = [];
+    const before = rec.sent.length;
+    await deliver(envWith(bindingFor(rec), nextQueued), message(next));
+
+    expect(nextQueued).toEqual([]);
+    expect(rec.sent.slice(before).map((mail) => mail.to)).toEqual([TARGET]);
+    expect(rec.sent.filter((mail) => mail.to === "mate@0509.io")).toHaveLength(1);
+  });
+
   const failingFor = (rec: Recorder, address: string): SendEmail => ({
     send(mail: EmailMessage | EmailMessageBuilder) {
       if ((mail as EmailMessageBuilder).to === address) throw new Error("mailbox full");
