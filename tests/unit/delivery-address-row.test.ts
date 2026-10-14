@@ -63,7 +63,7 @@ describe("DeliveryAddress", () => {
 
     const failedSend = render({
       delivery: { address: "me@brand.com", verified: false },
-      error: "We could not send the confirmation email. Save again to retry.",
+      error: "We couldn't send the confirmation email. Save again to retry.",
       suppressed: false,
     });
     expect(failedSend).not.toContain("This address isn&#x27;t confirmed yet.");

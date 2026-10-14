@@ -3,10 +3,11 @@ import { rankTrendLine, sinceStartedLine } from "../../app/lib/brief-since";
 import { escapeHtml } from "../../app/lib/html";
 import { countPhrase } from "../../app/lib/quiet-week";
 import { NOTHING_FIRST_LINE, UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
-import { EYEBROW, FONT, MONO, emailDocument, postalLine } from "./email-shell";
+import { EYEBROW, FONT, MONO, emailDocument, linkParagraph, postalLine, siteName } from "./email-shell";
 import { SETTINGS_LINK, supportLineHtml, supportLineText } from "./alert-footer";
 
 const COPY = {
+  open: "Open in Five to Nine",
   subject: (rank: number, total: number) => `You're #${n(rank)} of ${n(total)} this week`,
   subjectMoved: (rank: number, total: number, movement: string) =>
     `You're #${n(rank)} of ${n(total)} this week, ${movement}`,
@@ -161,7 +162,7 @@ function renderMark(
   const label = mark.entity_name === "" ? mark.source : `${mark.entity_name} · ${mark.source}`;
   const when = formatDate(mark.observed_at, payload.timezone, true);
   const thumb = thumbnailSrc(mark.thumbnail_r2_key, assetBaseUrl);
-  const title = mark.title === "" ? mark.url : mark.title;
+  const title = mark.title === "" ? siteName(mark.url) : mark.title;
   const href = safeUrl(mark.url);
 
   const html = [
@@ -375,6 +376,7 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
     .join(" ");
   const whyLine = quiet && blindLine !== "" ? blindLine : payload.why_line;
   const headline = renderHeadline(payload, whyLine);
+  const open = context.open_url == null ? null : safeUrl(context.open_url);
   const marks = renderReadThisFirst(payload, context.asset_base_url);
   const brands = renderBrands(payload);
   const ownSite = renderOwnSite(payload);
@@ -386,15 +388,21 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
 
   const html = emailDocument(
     subject,
-    [headline.html, ...(quiet ? [] : [block(marks.html)]), block(brands.html), block(ownSite.html), footer.html].join(
-      "",
-    ),
+    [
+      headline.html,
+      ...(open === null ? [] : [linkParagraph(COPY.open, open)]),
+      ...(quiet ? [] : [block(marks.html)]),
+      block(brands.html),
+      block(ownSite.html),
+      footer.html,
+    ].join(""),
     whyLine,
   );
 
   const text = [
     headline.text,
     "",
+    ...(open === null ? [] : [`${COPY.open}: ${open}`, ""]),
     ...(quiet ? [] : [marks.text, ""]),
     brands.text,
     "",

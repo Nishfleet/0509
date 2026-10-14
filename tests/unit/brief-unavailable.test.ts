@@ -8,7 +8,7 @@ describe("BriefUnavailable", () => {
   const html = renderToStaticMarkup(createElement(BriefUnavailable));
 
   it("keeps the sentence the page has always shown", () => {
-    expect(html).toContain("This brief could not be shown here.");
+    expect(html).toContain("This brief couldn&#x27;t be shown here.");
   });
 
   it("says the other weeks are on the page and the email has the brief", () => {
