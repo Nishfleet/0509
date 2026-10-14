@@ -28,7 +28,7 @@ export function MailKinds({ address, mail }: { address: string; mail: { brief: b
         <Kind name="brief" label="The weekly brief" on={mail.brief} />
         <Kind name="alerts" label="Alerts, when a rival changes or your site has trouble" on={mail.alerts} />
         <Button type="submit" variant="secondary" size="lg" className="mt-2 self-start" disabled={saving}>
-          {saving ? "Saving…" : "Save"}
+          {saving ? "Updating…" : "Update choices"}
         </Button>
       </Form>
     </section>
