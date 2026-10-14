@@ -76,7 +76,7 @@ describe("welcome email", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]?.to).toBe(TARGET);
     expect(sent[0]?.subject).toBe("We're watching Acme");
-    expect(sent[0]?.text).toContain("We're watching Acme.");
+    expect(sent[0]?.text).toContain("We read each site every night.");
     expect(sent[0]?.text).toContain("Monday 19 October");
   });
 
