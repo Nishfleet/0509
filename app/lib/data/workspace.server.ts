@@ -4,6 +4,8 @@ import { z } from "zod";
 import { entitledTier, resolveEntitlements } from "../billing/entitlements";
 import { canonicalTimezone } from "../timezone";
 
+import { recordVisitDay } from "./workspace_visit.server";
+
 const SELECT_WORKSPACE_TIMEZONE = "SELECT timezone FROM workspace WHERE id = ?";
 
 const readWorkspaceTimezoneRow = z.object({ timezone: z.string() });
@@ -273,5 +275,6 @@ WHERE id = ?2 AND (last_seen_at IS NULL OR last_seen_at < ?3)`;
 
 export async function touchWorkspaceSeen(workspaceId: string, now: Date): Promise<void> {
   const stale = new Date(now.getTime() - SEEN_DEBOUNCE_MS).toISOString();
-  await env.DB.prepare(TOUCH_WORKSPACE_SEEN).bind(now.toISOString(), workspaceId, stale).run();
+  const touched = await env.DB.prepare(TOUCH_WORKSPACE_SEEN).bind(now.toISOString(), workspaceId, stale).run();
+  if (touched.meta.changes === 1) await recordVisitDay(workspaceId, now);
 }
