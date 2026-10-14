@@ -413,7 +413,7 @@ export async function publishSiteChange(target: SiteSweepTarget, changed: Change
     readVisibleText(changed.previousTextKey),
     readVisibleText(changed.textKey),
   ]);
-  if (sameVisibleText(before, after)) {
+  if (changed.previousTextKey !== changed.textKey && sameVisibleText(before, after)) {
     console.log(JSON.stringify({ event: "site.change_same_text", pageId: target.pageId }));
     return changed.snapshotId;
   }
