@@ -58,7 +58,7 @@ describe("handleCompetitorForm", () => {
       (error: unknown) => error,
     );
     expect(thrown).toBeInstanceOf(Response);
-    expect((thrown as Response).headers.get("location")).toBe("/app/competitors");
+    expect((thrown as Response).headers.get("location")).toBe("/app/competitors?removed=1");
   });
 
   it("answers 404 when the competitor is not tracked", async () => {

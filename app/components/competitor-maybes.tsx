@@ -1,8 +1,9 @@
 import { useEffect, useRef, type ReactElement } from "react";
-import { Form, useNavigation } from "react-router";
+import { Form, useFetcher, useNavigation } from "react-router";
 
 import type { PlanId } from "../lib/billing/plans";
 import { BLOCK_HEADING } from "./page-heading";
+import { CapRefusal } from "./cap-refusal";
 import { Monogram } from "./monogram";
 import { PlanGate } from "./plan-gate";
 import { Button } from "./ui/button";
@@ -33,10 +34,12 @@ export function CompetitorMaybes({ maybes }: { maybes: readonly Maybe[] }): Reac
 }
 
 function MaybeRow({ maybe }: { maybe: Maybe }): ReactElement {
-  const navigation = useNavigation();
-  const busy = navigation.state !== "idle" && navigation.formData?.get("suggestionId") === maybe.suggestionId;
-  const watching = busy && navigation.formData?.get("intent") === "accept";
-  const dismissing = busy && navigation.formData?.get("intent") === "dismiss";
+  const fetcher = useFetcher<{ message: string | null; upgradePlanId?: string | null }>({
+    key: `maybe-${maybe.suggestionId}`,
+  });
+  const busy = fetcher.state !== "idle";
+  const watching = busy && fetcher.formData?.get("intent") === "accept";
+  const dismissing = busy && fetcher.formData?.get("intent") === "dismiss";
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line py-4">
       <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -47,7 +50,7 @@ function MaybeRow({ maybe }: { maybe: Maybe }): ReactElement {
           {maybe.reason === null ? null : <p className="mt-1 text-body-sm text-ink-soft">{maybe.reason}</p>}
         </div>
       </div>
-      <Form method="post" className="flex gap-2">
+      <fetcher.Form method="post" className="flex gap-2">
         <input type="hidden" name="suggestionId" value={maybe.suggestionId} />
         <Button
           type="submit"
@@ -70,7 +73,8 @@ function MaybeRow({ maybe }: { maybe: Maybe }): ReactElement {
         >
           {dismissing ? "Dismissing…" : "Dismiss"}
         </Button>
-      </Form>
+      </fetcher.Form>
+      <CapRefusal result={fetcher.data} />
     </li>
   );
 }
