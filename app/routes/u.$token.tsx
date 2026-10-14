@@ -2,7 +2,7 @@ import type { Route } from "./+types/u.$token";
 import { Form, isRouteErrorResponse, useNavigation } from "react-router";
 
 import { ErrorPage } from "../components/error-page";
-import { Footer } from "../components/footer";
+import { Footer, SUPPORT_ADDRESS } from "../components/footer";
 import { Button } from "../components/ui/button";
 import { isTeammateUnsubscribeToken, isUnsubscribeTokenKnown } from "../lib/data/email_suppression.server";
 import { unsubscribe } from "../lib/unsubscribe.server";
@@ -55,6 +55,32 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   );
 }
 
+function ChangedYourMind({ teammate }: { teammate: boolean }) {
+  if (teammate) {
+    return (
+      <p className="mt-4 leading-[1.65] text-ink-soft">
+        Changed your mind? Email{" "}
+        <a
+          className="inline-flex min-h-11 items-center underline underline-offset-4"
+          href={`mailto:${SUPPORT_ADDRESS}`}
+        >
+          {SUPPORT_ADDRESS}
+        </a>{" "}
+        and we will sort it out.
+      </p>
+    );
+  }
+  return (
+    <p className="mt-4 leading-[1.65] text-ink-soft">
+      Changed your mind? Sign in, open{" "}
+      <a className="inline-flex min-h-11 items-center underline underline-offset-4" href="/app/settings">
+        Settings
+      </a>
+      , tick "Send the brief to this address again" and save.
+    </p>
+  );
+}
+
 export default function Unsubscribe({ actionData }: Route.ComponentProps) {
   const navigation = useNavigation();
   const unsubscribing = navigation.state !== "idle";
@@ -63,20 +89,10 @@ export default function Unsubscribe({ actionData }: Route.ComponentProps) {
       <main className="mx-auto max-w-xl px-4 py-16">
         <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">You're unsubscribed</h1>
         <p className="mt-4 leading-[1.65] text-ink-soft">
-          We won't send the weekly brief or alerts to this address any more. Sign-in links still arrive when you ask for
-          one.
+          We won't send the weekly brief or alerts to this address any more.
+          {actionData.teammate ? "" : " Sign-in links still arrive when you ask for one."}
         </p>
-        {actionData.teammate ? (
-          <p className="mt-4 leading-[1.65] text-ink-soft">Changed your mind? Email us and we will sort it out.</p>
-        ) : (
-          <p className="mt-4 leading-[1.65] text-ink-soft">
-            Changed your mind? Sign in, open{" "}
-            <a className="inline-flex min-h-11 items-center underline underline-offset-4" href="/app/settings">
-              Settings
-            </a>
-            , tick "Send the brief to this address again" and save.
-          </p>
-        )}
+        <ChangedYourMind teammate={actionData.teammate} />
         <Footer />
       </main>
     );
