@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { APP_LOCALE } from "../locale";
 
 const SELECT_MONTHLIES = `SELECT w.id AS workspace_id,
        p.provider_subscription_id AS subscription_id,
@@ -41,7 +42,7 @@ function parseMoves(json: string, ctx: z.RefinementCtx): z.infer<typeof moveRow>
     ctx.addIssue({ code: "custom", message: "moves is not JSON" });
     return z.NEVER;
   }
-  ctx.addIssue({ code: "custom", message: "a move has no rival or title" });
+  ctx.addIssue({ code: "custom", message: "a move has no name or title" });
   return z.NEVER;
 }
 
@@ -62,7 +63,7 @@ const AWAY_DAYS = 21;
 const SEND_FROM_DAY = 3;
 const SEND_UNTIL_DAY = 9;
 
-const MONTH_NAME = new Intl.DateTimeFormat("en-GB", { month: "long", timeZone: "UTC" });
+const MONTH_NAME = new Intl.DateTimeFormat(APP_LOCALE, { month: "long", timeZone: "UTC" });
 
 function previousMonth(now: Date): { from: Date; to: Date; label: string; key: string } {
   const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));

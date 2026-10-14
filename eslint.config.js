@@ -383,7 +383,42 @@ const HAND_ROLLED_ARIA_TAB = {
     "Tabs come from app/components/ui/tabs.tsx (shadcn on @base-ui/react/tabs). A hand-rolled role=tab/tablist/tabpanel has no arrow keys and no roving tabIndex. Source: 0509#7014.",
 };
 
+const APP_LOCALE_ONLY = {
+  selector:
+    "NewExpression[callee.object.name='Intl'][callee.property.name=/^(DateTimeFormat|NumberFormat|RelativeTimeFormat)$/][arguments.0.type='Literal']",
+  message:
+    "A literal locale gives this screen its own month abbreviation and clock: en-US printed 'Sep' and '3:30 PM' where the rest of the app printed 'Sept' and '15:30'. Pass APP_LOCALE from app/lib/locale.ts. Source: ci/stripe-bar consistency sweep, 0509#7540.",
+};
+
+const COPY_NAME = (word) =>
+  [
+    `Literal[value=/^(?=.*\\s)(?=.*${word})/i]`,
+    `TemplateElement[value.raw=/^(?=.*\\s)(?=.*${word})/i]`,
+    `JSXText[value=/^(?=.*\\s)(?=.*${word})/i]`,
+  ].join(", ");
+
+const RIVAL_COPY = {
+  selector: COPY_NAME("\\brivals?\\b"),
+  message:
+    "Customer copy calls them competitors, as the nav, the URLs and the buttons do; eight lines said 'rival' until the sweep in 0509#7540. A prompt for Jev is exempt in the block that lists it. Source: 0509#7540.",
+};
+
+const WEEKLY_REPORT_COPY = {
+  selector: COPY_NAME("\\bweekly reports?\\b"),
+  message: "The weekly email and its page are the brief. 'Report' is a second name for one thing. Source: 0509#7540.",
+};
+
+const PRICE_SUFFIX_COPY = {
+  selector: `Literal[value=/€\\s?\\d+\\s?(\\/mo\\b|a month|per month)/i], TemplateElement[value.raw=/€\\s?\\d+\\s?(\\/mo\\b|a month|per month)/i], JSXText[value=/€\\s?\\d+\\s?(\\/mo\\b|a month|per month)/i]`,
+  message:
+    "A price reads '€10/month', from monthlyPrice() in app/lib/billing/plans.ts. '/mo' and 'a month' were three spellings of one price until 0509#7540. The trial email is billing copy and is worded by Nish.",
+};
+
 const BANNED_SYNTAX = [
+  APP_LOCALE_ONLY,
+  RIVAL_COPY,
+  WEEKLY_REPORT_COPY,
+  PRICE_SUFFIX_COPY,
   HAND_ROLLED_ARIA_TAB,
   BARE_TOAST,
   SUPPORT_ADDRESS_BAN,
@@ -497,7 +532,7 @@ export const TABLE_WRITER_BLOCKS = readdirSync(new URL("./app/lib/data/", import
     rules: {
       "no-restricted-syntax": [
         "error",
-        ...BANNED_SYNTAX,
+        ...BANNED_SYNTAX.filter((rule) => rule !== RIVAL_COPY),
         ...NO_USER_DATA_IN_LOGS,
         FEED_STATE_LITERAL,
         D1_ROW_TYPE_ARGUMENT,
@@ -1066,6 +1101,19 @@ export default tseslint.config(
     rules: {
       "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, RAW_DML_WRITER, FEED_STATE_LITERAL],
       "form-rules/form-data-get": "error",
+    },
+  },
+
+  {
+    files: ["app/lib/discovery/run.server.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== RIVAL_COPY),
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+      ],
     },
   },
 

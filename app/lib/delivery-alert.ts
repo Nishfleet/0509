@@ -1,6 +1,8 @@
+import { APP_LOCALE } from "./locale";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const RELATIVE_DAYS = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+const RELATIVE_DAYS = new Intl.RelativeTimeFormat(APP_LOCALE, { numeric: "auto" });
 
 export function daysAgoLabel(at: string, now: Date): string {
   const elapsed = now.getTime() - Date.parse(at);
