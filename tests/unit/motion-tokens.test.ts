@@ -35,12 +35,34 @@ describe.each([
 ])("the %s surface", (_name, file) => {
   it("fades and never zooms, slides, rounds, shadows or blurs", async () => {
     const css = await source(...file.split("/"));
-    expect(css).toContain("fade-in-0");
-    expect(css).toContain("fade-out-0");
+    expect(css).toContain("data-starting-style:opacity-0");
+    expect(css).toContain("data-ending-style:opacity-0");
+    expect(css).toContain("transition-opacity duration-160 ease-linear");
     expect(css).not.toMatch(
-      /zoom-(in|out)|slide-(in|out)|rounded-(sm|md|lg|xl|2xl|3xl|4xl)\b|shadow-|backdrop-blur|ring-1/,
+      /animate-(in|out)|fade-(in|out)-0|zoom-(in|out)|slide-(in|out)|rounded-(sm|md|lg|xl|2xl|3xl|4xl)\b|shadow-|backdrop-blur|ring-1/,
     );
     expect(css).toContain("rounded-none");
+  });
+});
+
+describe("the dialog as a mobile sheet", () => {
+  it("slides up over 380ms and down over 280ms on the push curve below 860px", async () => {
+    const css = await source("components", "ui", "dialog.tsx");
+    for (const token of [
+      "max-[859px]:duration-380",
+      "max-[859px]:ease-push",
+      "max-[859px]:data-starting-style:translate-y-full",
+      "max-[859px]:data-ending-style:translate-y-full",
+      "max-[859px]:data-ending-style:duration-280",
+    ]) {
+      expect(css).toContain(token);
+    }
+  });
+
+  it("does not lean on tw-animate classes, which the app never imports", async () => {
+    const app = await readFile(path.join(APP, "app.css"), "utf8");
+    expect(app).not.toMatch(/tw-animate/);
+    expect(await source("components", "ui", "dialog.tsx")).not.toMatch(/animate-(in|out)/);
   });
 });
 
