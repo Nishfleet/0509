@@ -395,3 +395,52 @@ describe("the running total of changes reaches the brief, through real D1", () =
     expect((await compose()).checked.total_change_count).toBe(3);
   });
 });
+
+describe("rank over time reaches the brief, through real D1", () => {
+  const NOW = "2026-09-21T12:00:00.000Z";
+
+  const seedSelf = async (tag: string, ranks: Readonly<Record<string, number>>): Promise<string> => {
+    const workspaceId = `ws_trend_${tag}`;
+    const selfId = `ent_trend_${tag}`;
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, 'T', ?2, 1, ?3, ?3)",
+      ).bind(`u_trend_${tag}`, `trend-${tag}@example.test`, NOW),
+      env.DB.prepare(
+        "INSERT INTO workspace (id, name, owner_user_id, timezone, created_at) VALUES (?1, 'Trend', ?2, 'UTC', ?3)",
+      ).bind(workspaceId, `u_trend_${tag}`, NOW),
+      env.DB.prepare(
+        "INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES (?1, ?2, 'self', ?3, 'Me', 'on', ?4)",
+      ).bind(selfId, workspaceId, `me-${tag}.example`, NOW),
+      ...Object.entries(ranks).map(([weekStart, rank]) =>
+        env.DB.prepare(
+          "INSERT INTO standing (id, workspace_id, entity_id, week_start_at, score, rank, computed_at) VALUES (?1, ?2, ?3, ?4, 1, ?5, ?6)",
+        ).bind(`st_trend_${tag}_${weekStart}`, workspaceId, selfId, weekStart, rank, NOW),
+      ),
+    ]);
+    return workspaceId;
+  };
+
+  const compose = (workspaceId: string) =>
+    composeBrief(env.DB, {
+      workspaceId,
+      schedule: { timezone: "UTC", weekday: 1, hour: 8 },
+      week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date(NOW) },
+      readThisFirst: { picks: [], judged: 0, unjudged: false },
+    });
+
+  it("uses the newest standing at least four weeks back, and nothing newer", async () => {
+    const workspaceId = await seedSelf("far", {
+      "2026-07-27T12:00:00.000Z": 6,
+      "2026-08-10T12:00:00.000Z": 5,
+      "2026-08-31T12:00:00.000Z": 1,
+      "2026-09-14T12:00:00.000Z": 3,
+    });
+    expect((await compose(workspaceId)).headline_earlier).toEqual({ rank: 5, weeks: 5 });
+  });
+
+  it("stays out until there are four weeks of history", async () => {
+    const workspaceId = await seedSelf("near", { "2026-08-31T12:00:00.000Z": 1, "2026-09-14T12:00:00.000Z": 3 });
+    expect((await compose(workspaceId)).headline_earlier).toBeNull();
+  });
+});

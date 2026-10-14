@@ -2,6 +2,8 @@ import type { NoulQuestion } from "./jev/thresholds";
 
 export const D4_QUESTION_ID = "read_this_first";
 
+export const NOTHING_FIRST_LINE =
+  "Nothing needed your attention this week. We keep watching rival sites, ads and mentions.";
 export const UNJUDGED_WEEK_LINE = "We haven't finished reviewing this week's changes yet.";
 
 export const READ_THIS_FIRST: NoulQuestion = {

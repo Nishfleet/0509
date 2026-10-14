@@ -85,3 +85,12 @@ describe("transition durations in the app", () => {
     expect(css).not.toMatch(/transition-all/);
   });
 });
+
+describe("the evidence tabs", () => {
+  it("ease colours on the push curve, never transition-all, and draw no focus ring shadow", async () => {
+    const tabs = await source("components", "ui", "tabs.tsx");
+    expect(tabs).toContain("transition-colors duration-140 ease-push");
+    expect(tabs).not.toContain("transition-all");
+    expect(tabs).toContain("focus-visible:ring-0");
+  });
+});

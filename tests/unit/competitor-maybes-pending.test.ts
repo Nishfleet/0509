@@ -156,3 +156,11 @@ describe("the Still competing? Stop tracking and Keep buttons", () => {
     expect(row(html, "Keep tracking Acme")).toContain(">Keep<");
   });
 });
+
+describe("the add form confirms an added competitor", () => {
+  it("says we're reading their site only after an add", () => {
+    const added = render(createElement(AddCompetitor, { message: null, added: true }), null);
+    expect(added).toContain("Added. We&#x27;re reading their site now.");
+    expect(addForm(undefined)).not.toContain("reading their site");
+  });
+});

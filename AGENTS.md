@@ -85,6 +85,7 @@ you.
   `playwright/no-networkidle`). Conditional `test.skip(condition, reason)` and
   `test.fail()` stay allowed. The full enforced set is the two test-lint blocks
   in `eslint.config.js`. Source: 0509#5785.
+- **An e2e name must still exist.** A name a spec looks up by string literal (`getByRole` name, `getByLabel`, `getByText`, a `button:` field) is checked against app source and e2e seed data by `tests/e2e-names-exist.test.ts`; a name the app builds at run time is listed there with its template. Source: 0509#7430.
 - **Formatting is Prettier.** `npm run lint` runs `prettier --check .`; run `npm run format` before committing.
 - **Stock only, at the version named in `docs/dependencies.md`.** `tests/stack-dependencies.test.ts` fails a dependency with no row there. A PR names the library or Cloudflare primitive it uses and what it rejected. Hand-rolled schedulers, diffing, crawlers, queues, retries, auth, billing, email, charts or home-built design systems are rejected. The official upstream shadcn skill in `.agents/skills/shadcn` and the token frontmatter in `DESIGN.md` are allowed: they are stock, not home-built (Nish, 2026-10-09). A hand-written type annotation over a framework value is a hand-rolled assertion: use the generated types.
 - **Jev decides every typed decision** (`docs/REBUILD-JEV.md`, D1–D9). Code never guesses with regexes where a judgment is needed; Jev internals are never shown to customers.

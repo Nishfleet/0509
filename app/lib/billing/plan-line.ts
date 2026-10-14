@@ -1,4 +1,4 @@
-import { isPaymentFailed, isPaymentHeld, isPlanLapsed } from "./entitlements";
+import { isPaymentFailed, isPaymentHeld, isPlanLapsed } from "./subscription-state";
 import { PLANS, type PlanSummary } from "./plans";
 
 const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });

@@ -33,6 +33,13 @@ describe("welcome email", () => {
     expect(text).toContain("\n\nWe're watching");
   });
 
+  it("links a label in the html and keeps the bare address for plain text", () => {
+    const { html, text } = renderWelcome(CTX);
+    expect(html).toContain('href="https://0509.io/app/alerts">See what changed</a>');
+    expect(html).not.toContain(">https://0509.io/app/alerts<");
+    expect(text).toContain("See what changed: https://0509.io/app/alerts");
+  });
+
   it("escapes anything it is handed", () => {
     expectNoHtmlInjection(renderWelcome({ ...CTX, rivals: [PROBE] }).html, "rivals");
   });

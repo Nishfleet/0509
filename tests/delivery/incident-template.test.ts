@@ -64,8 +64,8 @@ describe("open incident email", () => {
 
   it("links the dashboard url in the html body", () => {
     const { html } = renderIncidentOpen(OPEN);
-    expect(html).toContain('<a class="brief-ink" href="https://0509.io/site/inc_1">https://0509.io/site/inc_1</a>');
-    expect(html).toContain("See it in Five to Nine: ");
+    expect(html).toContain('<a class="brief-ink" href="https://0509.io/site/inc_1">See it in Five to Nine</a>');
+    expect(html).not.toContain(">https://0509.io/site/inc_1<");
   });
 });
 
@@ -87,7 +87,7 @@ describe("fixed incident email", () => {
 
   it("links the same url in the html", () => {
     const { html } = renderIncidentFixed(FIXED);
-    expect(html).toContain('<a class="brief-ink" href="https://0509.io/site/inc_1">https://0509.io/site/inc_1</a>');
+    expect(html).toContain('<a class="brief-ink" href="https://0509.io/site/inc_1">See it in Five to Nine</a>');
   });
 });
 
