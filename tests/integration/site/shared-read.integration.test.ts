@@ -59,7 +59,8 @@ describe("a rival's public page, read for several workspaces", () => {
     for (const read of [first, second, third]) {
       expect(read).toMatchObject({ ok: true, transport: "fetch", status: 200 });
     }
-    expect(second.ok && first.ok ? second.html : null).toBe(first.ok ? first.html : undefined);
+    if (!first.ok || !second.ok) throw new Error("expected both reads to succeed");
+    expect(second.html).toBe(first.html);
   });
 
   it("is fetched again the next night, so a changed page is seen", async () => {
