@@ -53,7 +53,7 @@ for (const path of ["/privacy", "/terms", "/security"]) {
         await expect(takedown).toHaveAttribute("href", "mailto:support@0509.io");
 
         const hrefs = await page.locator("a[href]").evaluateAll((els) => els.map((el) => el.getAttribute("href")));
-        await page.mouse.click(1, 1);
+        await page.reload();
         const visited: (string | null)[] = [];
         for (const _ of hrefs) {
           await page.keyboard.press("Tab");

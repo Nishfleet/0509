@@ -97,7 +97,7 @@ test("the privacy footer carries the takedown address @smoke", async ({ page }) 
 
 test("the privacy wordmark loads the landing page @smoke", async ({ page }) => {
   await page.goto("/privacy");
-  await page.locator('a[href="/"]').click();
+  await page.getByRole("link", { name: "Five to Nine" }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.locator('a[href="mailto:support@0509.io"]')).toBeVisible();

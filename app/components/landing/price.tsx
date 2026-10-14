@@ -32,11 +32,12 @@ function includes(plan: PlanId): string[] {
   );
 }
 
-export function Price({ source = null }: { source?: StartSource | null }) {
+export function Price({ source = null, page = false }: { source?: StartSource | null; page?: boolean }) {
   return (
     <Section
       id="price"
-      kicker="Three plans"
+      page={page}
+      kicker={page ? "Five to Nine pricing" : "Three plans"}
       title="Pick how closely you watch."
       lead="Every plan sends the Monday brief with the proof behind every line. Plans differ in how many competitors you follow, how deep we look, and how far back the proof goes."
     >
