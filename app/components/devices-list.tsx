@@ -4,7 +4,7 @@ export function DevicesList({ devices }: { devices: DeviceItem[] }) {
   if (devices.length === 0) return null;
   return (
     <div className="mt-6">
-      <h3 id="settings-devices" className="font-display font-bold">
+      <h3 id="settings-devices" className="font-semibold">
         Where you're signed in
       </h3>
       <ul aria-labelledby="settings-devices" className="mt-2 divide-y divide-line border-y border-line">
