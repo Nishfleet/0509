@@ -21,7 +21,7 @@ const runJevOutcome = (input: {
 }): Promise<{ outcome: "proceed" | "ask" | "refuse" } | null> =>
   screenPublicSubject(input).catch((error: unknown) => {
     if (!(error instanceof JevUnavailableError)) throw error;
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "public_subject.jev_unavailable",
         workspaceId: input.workspaceId,

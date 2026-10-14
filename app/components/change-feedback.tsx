@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { useFetcher } from "react-router";
 
 import type { ChangeFeedback as ChangeFeedbackValue } from "../lib/site-change";
 import { Button } from "./ui/button";
@@ -15,8 +16,11 @@ export function ChangeFeedback({
   signalId: string;
   feedback: ChangeFeedbackValue | null | undefined;
 }): ReactElement {
+  const fetcher = useFetcher();
+  const picked = fetcher.formData?.get("value");
+  const shown = picked === "useful" || picked === "not_useful" ? picked : feedback;
   return (
-    <form
+    <fetcher.Form
       method="post"
       action="/app/changes/feedback"
       role="group"
@@ -26,7 +30,7 @@ export function ChangeFeedback({
     >
       <input type="hidden" name="signalId" value={signalId} />
       <span className="font-mono text-meta text-ink-soft uppercase">
-        {feedback == null ? "Was this worth telling you?" : "Thanks, noted."}
+        {shown == null ? "Was this worth telling you?" : "Thanks, noted."}
       </span>
       {CHOICES.map((choice) => (
         <Button
@@ -35,12 +39,12 @@ export function ChangeFeedback({
           name="value"
           value={choice.value}
           variant="tertiary"
-          aria-pressed={feedback === choice.value}
-          className={feedback === choice.value ? "decoration-2" : undefined}
+          aria-pressed={shown === choice.value}
+          className={shown === choice.value ? "decoration-2" : undefined}
         >
           {choice.label}
         </Button>
       ))}
-    </form>
+    </fetcher.Form>
   );
 }

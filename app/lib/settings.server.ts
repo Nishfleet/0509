@@ -106,7 +106,7 @@ async function readCountLine(workspaceId: string): Promise<string | null> {
     const watching = competitors.filter((competitor) => competitor.state === "on").length;
     return competitorCountLine(watching, entitlements.competitors);
   } catch (error) {
-    console.log(
+    console.warn(
       JSON.stringify({ event: "settings.count_line_failed", error: error instanceof Error ? error.name : "unknown" }),
     );
     return null;
