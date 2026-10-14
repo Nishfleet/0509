@@ -5,6 +5,7 @@ import { addTeammate, listTeammates, removeTeammate } from "./data/send_target.s
 import { readWorkspaceIdForOwner } from "./data/workspace.server";
 import { sendTeammateInvite } from "./delivery-address.server";
 import { looksLikeEmailAddress, normalizeEmailAddress } from "./email-address";
+import { RECIPIENT_CAPPED, takeRecipientSlot } from "./recipient-cap.server";
 import { MAX_TEAMMATES } from "./teammate-limit";
 
 const INVALID = "Enter an email address, like colleague@company.com.";
@@ -31,6 +32,7 @@ export async function addTeammateByOwner(input: {
   const { success } = await env.SIGN_IN_EMAIL_LIMIT.limit({ key: `teammate:${workspaceId}` });
   if (!success) return RATE_LIMITED;
   if (await isAddressSuppressed(address)) return CANT_ADD;
+  if (!(await takeRecipientSlot(address))) return RECIPIENT_CAPPED;
   const targetId = await addTeammate(env.DB, { workspaceId, address, now: new Date().toISOString() });
   if (targetId === null) return CANT_ADD;
   return sendTeammateInvite({ email: input.email, workspaceId, targetId, address, addedBy: input.signInEmail });

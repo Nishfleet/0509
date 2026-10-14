@@ -15,6 +15,10 @@ describe("the email family", () => {
     expect(html).not.toContain(">https://");
   });
 
+  it("draws the one action as a button", () => {
+    expect(linkParagraph("Open", "https://0509.io/app")).toContain('class="brief-button"');
+  });
+
   it("takes its headline and body type from the shell, not a private copy", async () => {
     const files = (await readdir(DELIVERY)).filter((name) => name.endsWith("-template.ts"));
     const sources = await Promise.all(files.map((name) => readFile(path.join(DELIVERY, name), "utf8")));

@@ -114,7 +114,7 @@ export async function classifyTailPages(
     });
     if (!page.ok) {
       const subjectSha256 = await sha256Hex(params.domain);
-      console.log(
+      console.warn(
         JSON.stringify({
           event: "identity-page-role-skipped",
           workspaceId: params.workspaceId,
@@ -129,7 +129,7 @@ export async function classifyTailPages(
     return true;
   } catch (error) {
     const subjectSha256 = await sha256Hex(params.domain);
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "identity-page-role-skipped",
         workspaceId: params.workspaceId,
