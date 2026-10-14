@@ -102,8 +102,13 @@ function newRivalBlock(payload: BriefPayload): ReactElement | null {
       <h3 className={HEAD}>A rival you may be missing</h3>
       <p className={BODY}>
         {rival.title}
-        {rival.reason === null ? "" : ` ${rival.reason}`}{" "}
-        <a href="/app/competitors" className="underline">
+        {rival.reason === null ? "" : ` ${rival.reason}`}
+      </p>
+      <p className={BODY}>
+        <a
+          className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4"
+          href="/app/competitors"
+        >
           Review in Competitors
         </a>
       </p>
