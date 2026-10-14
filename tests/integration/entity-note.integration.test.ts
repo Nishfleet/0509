@@ -69,6 +69,13 @@ describe("competitor notes", () => {
     expect(await readEntityNote("ws-a", "rival-a")).toBe("secret plan");
   });
 
+  it("refuses an empty save for an id that is not one of its competitors", async () => {
+    expect(await saveEntityNote({ workspaceId: "ws-a", entityId: "nope", body: "", now: NOW })).toBe(false);
+    expect(await saveEntityNote({ workspaceId: "ws-a", entityId: "self-a", body: " ", now: NOW })).toBe(false);
+    expect(await saveEntityNote({ workspaceId: "ws-b", entityId: "rival-a", body: "", now: NOW })).toBe(false);
+    expect(await saveEntityNote({ workspaceId: "ws-a", entityId: "rival-a", body: "", now: NOW })).toBe(true);
+  });
+
   it("only attaches to a competitor, not the own brand", async () => {
     const result = await saveCompetitorNote("ws-a", "self-a", "about me");
     expect(result.ok).toBe(false);

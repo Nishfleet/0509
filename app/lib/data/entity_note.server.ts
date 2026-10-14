@@ -10,7 +10,10 @@ ON CONFLICT (workspace_id, entity_id) DO UPDATE SET body = excluded.body, update
 
 const DELETE_NOTE = `DELETE FROM entity_note WHERE workspace_id = ?1 AND entity_id = ?2`;
 
+const SELECT_COMPETITOR = `SELECT 1 AS found FROM entity WHERE workspace_id = ?1 AND id = ?2 AND role = 'competitor'`;
+
 const noteRow = z.object({ body: z.string() });
+const competitorRow = z.object({ found: z.literal(1) });
 
 export async function readEntityNote(workspaceId: string, entityId: string): Promise<string> {
   const row = noteRow.nullable().parse(await env.DB.prepare(SELECT_NOTE).bind(workspaceId, entityId).first());
@@ -25,6 +28,10 @@ export async function saveEntityNote(input: {
 }): Promise<boolean> {
   const { workspaceId, entityId, body, now } = input;
   if (body.trim() === "") {
+    const competitor = competitorRow
+      .nullable()
+      .parse(await env.DB.prepare(SELECT_COMPETITOR).bind(workspaceId, entityId).first());
+    if (competitor === null) return false;
     await env.DB.prepare(DELETE_NOTE).bind(workspaceId, entityId).run();
     return true;
   }
