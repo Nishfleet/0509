@@ -6,6 +6,8 @@ import { PasskeyList } from "./passkey-list";
 import { BriefScheduleSettings } from "./brief-schedule-settings";
 import { ChangeSignInEmail } from "./change-sign-in-email";
 import { DeliveryAddress } from "./delivery-address";
+import { Teammates } from "./teammates";
+import { MAX_TEAMMATES } from "../lib/teammate-limit";
 import { SignOut } from "./account-settings";
 import type { ComponentProps } from "react";
 
@@ -78,18 +80,42 @@ export function AgentsSection() {
 interface AccountResult {
   deliveryError: string | null;
   deliverySuppressed: boolean;
+  teammateError: string | null;
   emailChangeSent: boolean;
   emailChangeError: string | null;
+}
+
+function DeliverySettings({
+  delivery,
+  teammates,
+  result,
+}: {
+  delivery: ComponentProps<typeof DeliveryAddress>["delivery"];
+  teammates: ComponentProps<typeof Teammates>["teammates"];
+  result: AccountResult | undefined;
+}) {
+  return (
+    <>
+      <DeliveryAddress
+        delivery={delivery}
+        error={result?.deliveryError ?? null}
+        suppressed={result?.deliverySuppressed ?? false}
+      />
+      <Teammates teammates={teammates} error={result?.teammateError ?? null} limit={MAX_TEAMMATES} />
+    </>
+  );
 }
 
 export function AccountSection({
   email,
   delivery,
+  teammates,
   passkeys,
   result,
 }: {
   email: string;
   delivery: ComponentProps<typeof DeliveryAddress>["delivery"];
+  teammates: ComponentProps<typeof Teammates>["teammates"];
   passkeys: ComponentProps<typeof PasskeyList>["passkeys"];
   result: AccountResult | undefined;
 }) {
@@ -102,11 +128,7 @@ export function AccountSection({
         Signed in as <strong className="font-semibold">{email}</strong>
       </p>
       <ChangeSignInEmail sent={result?.emailChangeSent ?? false} error={result?.emailChangeError ?? null} />
-      <DeliveryAddress
-        delivery={delivery}
-        error={result?.deliveryError ?? null}
-        suppressed={result?.deliverySuppressed ?? false}
-      />
+      <DeliverySettings delivery={delivery} teammates={teammates} result={result} />
       <PasskeyList passkeys={passkeys} />
       <div className="mt-2 flex flex-wrap items-start gap-x-6">
         <AddPasskey />

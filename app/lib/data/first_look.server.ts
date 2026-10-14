@@ -1,0 +1,30 @@
+import { env } from "cloudflare:workers";
+import { z } from "zod";
+
+import type { FirstLookRival } from "../first-look";
+
+const SELECT_FIRST_LOOK = `SELECT e.id, COALESCE(NULLIF(e.name, ''), e.domain) AS name,
+       COUNT(DISTINCT sn.page_id) AS pages,
+       MAX(sn.fetched_at) AS checked_at
+  FROM entity e
+  LEFT JOIN watch w ON w.entity_id = e.id AND w.is_active = 1
+  LEFT JOIN snapshot sn ON sn.watch_id = w.id
+ WHERE e.workspace_id = ?1 AND e.role = 'competitor' AND e.state = 'on'
+ GROUP BY e.id
+ ORDER BY e.created_at ASC, e.id ASC
+ LIMIT 12`;
+
+const firstLookRow = z.object({
+  id: z.string(),
+  name: z.string(),
+  pages: z.number(),
+  checked_at: z.string().nullable(),
+});
+
+export async function readFirstLook(workspaceId: string): Promise<FirstLookRival[]> {
+  const { results } = await env.DB.prepare(SELECT_FIRST_LOOK).bind(workspaceId).all();
+  return z
+    .array(firstLookRow)
+    .parse(results)
+    .map((row) => ({ id: row.id, name: row.name, pages: row.pages, checkedAt: row.checked_at }));
+}

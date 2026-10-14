@@ -80,6 +80,20 @@ describe("welcome email", () => {
     expect(sent[0]?.text).toContain("Monday 19 October");
   });
 
+  it("welcomes the owner, never an older confirmed teammate", async () => {
+    await env.DB.prepare(
+      `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at, role)
+       VALUES ('mate-old', ?, 'chan-email', 'mate@0509.io', 1, '2000-01-01T00:00:00Z', 'teammate')`,
+    )
+      .bind(WS)
+      .run();
+    await seedPlan({});
+    const sent: EmailMessageBuilder[] = [];
+
+    expect(await sendWelcomes(envWith(sent), NOW, isTester)).toBe(1);
+    expect(sent.map((mail) => mail.to)).toEqual([TARGET]);
+  });
+
   it.each([
     ["a customer who already paid", { trialing: 0 }],
     ["a cancelled plan", { status: "cancelled" }],

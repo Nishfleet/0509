@@ -39,6 +39,7 @@ function openDb(): DatabaseSync {
       target_value TEXT NOT NULL,
       is_verified INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'owner',
       UNIQUE (workspace_id, channel_id, target_value)
     );
     CREATE TABLE entity (
