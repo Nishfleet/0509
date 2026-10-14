@@ -152,7 +152,17 @@ describe("teammates on the brief", () => {
     await removeTeammate(env.DB, { workspaceId, targetId: owner?.id ?? "none" });
     expect(await readEmailTarget(env.DB, workspaceId)).not.toBeNull();
 
+    await env.DB.prepare(
+      `INSERT INTO send_attempt (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at)
+       VALUES ('att-mate', ?, ?, NULL, 'digest:d:mate', 'sent', ?)`,
+    )
+      .bind(workspaceId, mate.id, NOW)
+      .run();
+
     await removeTeammateByOwner(USER_ID, mate.id);
     expect(await readTeammates(workspaceId)).toEqual([]);
+    expect(await env.DB.prepare("SELECT status FROM send_attempt WHERE id = 'att-mate'").first()).toEqual({
+      status: "sent",
+    });
   });
 });

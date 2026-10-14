@@ -26,6 +26,7 @@ export async function addTeammateByOwner(input: {
 }): Promise<string | null> {
   const address = normalizeEmailAddress(input.address);
   if (!looksLikeEmailAddress(address)) return INVALID;
+  if (address === normalizeEmailAddress(input.signInEmail)) return CANT_ADD;
   const workspaceId = await readWorkspaceIdForOwner(input.userId);
   if (workspaceId === null) return NO_WORKSPACE;
   const { success } = await env.SIGN_IN_EMAIL_LIMIT.limit({ key: `teammate:${workspaceId}` });
