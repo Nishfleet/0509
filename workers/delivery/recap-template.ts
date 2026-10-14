@@ -16,7 +16,7 @@ const SUBJECT_MAX = 70;
 
 function subjectFor(ctx: RecapContext): string {
   const noun = ctx.change_count === 1 ? "change" : "changes";
-  const counted = `${String(ctx.change_count)} rival ${noun} caught so far`;
+  const counted = `${String(ctx.change_count)} competitor ${noun} caught so far`;
   if (ctx.latest === null) return counted;
   const subject = `${counted}, latest: ${ctx.latest.rival}`;
   return subject.length <= SUBJECT_MAX ? subject : counted;
@@ -24,7 +24,7 @@ function subjectFor(ctx: RecapContext): string {
 
 function lines(ctx: RecapContext): string[] {
   const noun = ctx.change_count === 1 ? "change" : "changes";
-  const counted = `In your first days we've caught ${String(ctx.change_count)} ${noun} across your rivals.`;
+  const counted = `In your first days we've caught ${String(ctx.change_count)} ${noun} across your competitors.`;
   return ctx.latest === null
     ? [counted]
     : [counted, `Most recent: ${ctx.latest.rival}, ${ctx.latest.what}`, "Each one is kept as a before and after."];

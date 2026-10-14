@@ -163,7 +163,7 @@ describe("the first week and a half of one customer, day by day", () => {
 
     expect(sent.map((mail) => `day ${String(mail.day)}: ${mail.subject}`)).toEqual([
       "day 0: We're watching Acme",
-      "day 4: 1 rival change caught so far, latest: Acme",
+      "day 4: 1 competitor change caught so far, latest: Acme",
       "day 5: Your Starter trial ends on Monday 12 October",
       "day 7: Your first ranking: you're #2 of 3",
       "day 9: Acme changed its pricing page: Pro $29 a month → Pro $39 a month",

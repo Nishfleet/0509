@@ -1,12 +1,13 @@
 import { TZDate } from "@date-fns/tz";
-import { startOfDay } from "date-fns";
+import { format, startOfDay } from "date-fns";
+import { APP_LOCALE } from "./locale";
 
 export type DayGroup = "Today" | "Yesterday" | "Earlier";
 
 const DAY_GROUPS: readonly DayGroup[] = ["Today", "Yesterday", "Earlier"];
 
 export function localDay(at: Date, timeZone: string): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
+  return format(new TZDate(at.getTime(), timeZone), "yyyy-MM-dd");
 }
 
 export function startOfLocalDay(now: Date, timeZone: string): Date {
@@ -18,7 +19,7 @@ function time(at: string): number {
   return Number.isNaN(parsed) ? Number.MIN_SAFE_INTEGER : parsed;
 }
 
-const RELATIVE_DAYS = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+const RELATIVE_DAYS = new Intl.RelativeTimeFormat(APP_LOCALE, { numeric: "auto" });
 
 function dayNumber(day: string): number {
   return Date.parse(`${day}T00:00:00Z`) / 86_400_000;
