@@ -25,3 +25,7 @@ The sweep stops hammering a source that keeps refusing: three skipped targets in
 1. Code: the breaker and retry rounds in `workers/mentions/retry.ts`, tested in `tests/integration/mentions/retry.integration.test.ts`.
 2. Alert: `mentions.sustained_skips` goes to Sentry as an error.
 3. Open: whether the pause lengths are enough in production is proven by the next nightly `mentions.sweep` line, to be read from Sentry.
+
+## Same pattern: YouTube on 2026-10-10
+
+`youtube.channel_rss` answered 429 at 19:00Z on 2026-10-10, the night with no YouTube snapshots. The same code path skipped the whole target with no retry, so that night's channels were not read. The retry rounds above cover it (a skipped YouTube target is retried like any other); the 429 itself is Google's and is not preventable from here.
