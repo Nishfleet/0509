@@ -45,6 +45,13 @@ async function signIn(page: Page, baseURL: string | undefined): Promise<void> {
   await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
 }
 
+test("Settings lists where the account is signed in and marks this device", async ({ page, baseURL }) => {
+  await signIn(page, baseURL);
+  const list = page.getByRole("list", { name: "Where you're signed in" });
+  await expect(list).toBeVisible();
+  await expect(list.getByText("This device")).toHaveCount(1);
+});
+
 test("the brief day saves at once and is still there after a reload", async ({ page, baseURL }) => {
   await signIn(page, baseURL);
   const day = page.getByRole("combobox", { name: "Day", exact: true });
@@ -64,9 +71,15 @@ test("pausing the brief says so, survives a reload, and resuming undoes it", asy
   await expect(page.getByText(/Paused since/)).toBeVisible();
   await page.reload();
   await expect(page.getByText(/Paused since/)).toBeVisible();
+  await page.goto("/app");
+  await expect(page.getByText(/Your weekly brief has been paused since/)).toBeVisible();
+  await page.getByRole("link", { name: "Resume it in Settings" }).click();
+  await expect(page).toHaveURL(/\/app\/settings$/);
   await page.getByRole("button", { name: "Resume the brief" }).click();
   await expect(page.getByRole("button", { name: "Pause the brief" })).toBeVisible();
   await expect(page.getByText(/Paused since/)).toHaveCount(0);
+  await page.goto("/app");
+  await expect(page.getByText(/Your weekly brief has been paused since/)).toHaveCount(0);
 });
 
 test("the own-site alerts switch keeps its state across a reload", async ({ page, baseURL }) => {

@@ -1,5 +1,6 @@
-import { createElement } from "react";
+import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -10,6 +11,10 @@ import {
   quietWeek,
   type EmptyStateAction,
 } from "../../app/components/empty-state";
+
+function inRouter(element: ReactElement): string {
+  return renderToStaticMarkup(createElement(MemoryRouter, null, element));
+}
 
 /**
  * Nishfleet/0509#4020. DESIGN.md 7: "Never 'No data'. Every empty state says
@@ -35,7 +40,7 @@ function clock(at: Date): string {
 }
 
 function emptyState(sentence: string, action?: EmptyStateAction): string {
-  return renderToStaticMarkup(createElement(EmptyState, { sentence, action }));
+  return inRouter(createElement(EmptyState, { sentence, action }));
 }
 
 function links(html: string): string[] {
@@ -96,7 +101,7 @@ describe("DESIGN.md 7 empty states", () => {
     expect(html).toContain("61 mentions");
     expect(html).toContain("2 site changes");
     expect(html).not.toContain("first week hidden");
-    expect(renderToStaticMarkup(createElement(EmptyState, { sentence }))).toBe(html);
+    expect(inRouter(createElement(EmptyState, { sentence }))).toBe(html);
   });
 });
 
@@ -233,7 +238,7 @@ describe("the Home second-zero copy comes from the real schedule (#5862)", () =>
     expect(view.standing.kind).toBe("gathering");
     if (view.standing.kind !== "gathering") return;
 
-    const html = renderToStaticMarkup(
+    const html = inRouter(
       createElement(FirstFilePanel, {
         brands: view.standing.brands,
         firstSweepAt: view.standing.firstSweepAt,

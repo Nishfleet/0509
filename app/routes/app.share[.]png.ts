@@ -24,7 +24,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const mayRender =
     workspaceId === null ? undefined : () => takeBrowserShareImage(workspaceId, new Date().toISOString().slice(0, 10));
   const png = await renderShareImage(shareDocument(card, new URL(request.url).origin), mayRender);
-  if (png === null) return plain(503, "We could not make the picture. Try again in a minute.", { "retry-after": "60" });
+  if (png === null) return plain(503, "We couldn't make the picture. Try again in a minute.", { "retry-after": "60" });
 
   return new Response(png, {
     headers: {

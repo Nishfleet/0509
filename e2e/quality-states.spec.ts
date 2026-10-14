@@ -183,6 +183,37 @@ test("a refused delete and a refused add show their alert and pass the quality c
   await scanBothSchemes(page, testInfo, quality, "/app/competitors add refused");
 });
 
+test("teammates: an invited address, a refused repeat and a removal pass the quality checks", async ({
+  page,
+  baseURL,
+}, testInfo) => {
+  const quality = await startQuality(page);
+  const { cookie } = await seedPreviewSession("quality-teammates", ({ db, suffix, userId }) => {
+    const workspaceId = seedWorkspace(db, suffix, userId);
+    seedCompetitor(db, suffix, workspaceId);
+  });
+  await signIn(page, baseURL, cookie);
+  await page.goto("/app/settings");
+
+  const teammate = `mate-${Date.now().toString(36)}-${testInfo.project.name}@example.com`;
+  const invite = async () => {
+    await page.getByLabel("Teammate's email").fill(teammate);
+    await page.getByRole("button", { name: "Send invitation" }).click();
+  };
+  await invite();
+  const row = page.getByRole("listitem").filter({ hasText: teammate });
+  await expect(row).toContainText("waiting for them to confirm");
+  await scanBothSchemes(page, testInfo, quality, "/app/settings teammate invited");
+
+  await invite();
+  await expect(page.locator("#teammate-error")).toBeVisible();
+  await expect(page.getByLabel("Teammate's email")).toHaveAttribute("aria-invalid", "true");
+  await scanBothSchemes(page, testInfo, quality, "/app/settings teammate refused");
+
+  await page.getByRole("button", { name: `Remove ${teammate}` }).click();
+  await expect(row).toBeHidden();
+});
+
 test("the how this is ranked dialog opens, passes the quality checks and returns focus", async ({
   page,
   baseURL,

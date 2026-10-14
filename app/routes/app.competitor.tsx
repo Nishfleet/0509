@@ -7,9 +7,11 @@ import { CompetitorForget } from "../components/competitor-forget";
 import { CompetitorFrame } from "../components/competitor-frame";
 import { CompetitorNote } from "../components/competitor-note";
 import { CompetitorHeader, dayMonthLabel } from "../components/competitor-header";
+import { CompetitorRename } from "../components/competitor-rename";
 import { CompetitorSite } from "../components/competitor-site";
 import { CompetitorYoutube } from "../components/competitor-youtube";
 import { CompetitorSnapshot } from "../components/competitor-snapshot";
+import { RivalOnePager } from "../components/rival-one-pager";
 import { handleCompetitorForm, type CompetitorFormErrors } from "../lib/competitor-forms.server";
 import { readEntityNote } from "../lib/data/entity_note.server";
 import { readCompetitorPage } from "../lib/competitor-page.server";
@@ -55,6 +57,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 
 function CompetitorFoot(props: {
   name: string;
+  domain: string;
   note: string;
   youtubeUrl: string | null;
   siteUrl: string | null;
@@ -62,11 +65,25 @@ function CompetitorFoot(props: {
 }) {
   return (
     <>
+      <CompetitorRename name={props.name} domain={props.domain} result={props.errors} />
       <CompetitorNote note={props.note} error={props.errors?.noteError ?? null} />
       <CompetitorSite url={props.siteUrl} error={props.errors?.siteError ?? null} />
       <CompetitorYoutube url={props.youtubeUrl} error={props.errors?.youtubeError ?? null} />
       <CompetitorForget name={props.name} error={props.errors?.forgetError ?? null} />
     </>
+  );
+}
+
+function OnePager({ data }: { data: Route.ComponentProps["loaderData"] }) {
+  return (
+    <RivalOnePager
+      name={data.competitor.name}
+      domain={data.competitor.domain}
+      pages={data.watch.pages}
+      lastChecked={data.lastChecked}
+      changes={data.changes}
+      moves={data.developments}
+    />
   );
 }
 
@@ -96,6 +113,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         }
       />
       <CompetitorSnapshot cells={loaderData.snapshot} />
+      <OnePager data={loaderData} />
       <CompetitorFrame
         changes={loaderData.changes}
         developments={loaderData.developments}
@@ -111,6 +129,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       />
       <CompetitorFoot
         name={competitor.name}
+        domain={competitor.domain}
         note={loaderData.note}
         youtubeUrl={loaderData.youtubeUrl}
         siteUrl={loaderData.watch.customerSite}

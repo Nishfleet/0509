@@ -14,13 +14,24 @@ const CTX = {
 };
 
 describe("rival change email", () => {
-  it("subjects it as the headline and carries before, after and the link", () => {
+  it("subjects it as the headline and the move, and carries before, after and the link", () => {
     const { subject, text, html } = renderChange(CTX);
-    expect(subject).toBe("Rival changed its pricing page");
+    expect(subject).toBe("Rival changed its pricing page: Pro $12 a month → Pro $15 a month");
     expect(text).toContain("Before: Pro $12 a month");
     expect(text).toContain("After: Pro $15 a month");
     expect(text).toContain("https://0509.io/app/alerts");
     expect(html).toContain("Pro $15 a month");
+  });
+
+  it("strips bidi and control characters from the sides before they reach the subject", () => {
+    const { subject } = renderChange({ ...CTX, mark: { removed: "Pro \u202E$12\u200B", added: "Pro $15\u0007" } });
+    expect(subject).toBe("Rival changed its pricing page: Pro $12 → Pro $15");
+  });
+
+  it("keeps the plain headline when a side is missing or too long to read in an inbox", () => {
+    expect(renderChange({ ...CTX, mark: { removed: null, added: "Pro $15" } }).subject).toBe(CTX.headline);
+    expect(renderChange({ ...CTX, mark: { removed: "x".repeat(40), added: "Pro $15" } }).subject).toBe(CTX.headline);
+    expect(renderChange({ ...CTX, headline: "w".repeat(60) }).subject).toBe("w".repeat(60));
   });
 
   it("leaves out before and after when no mark could be read", () => {
@@ -34,14 +45,19 @@ describe("rival change email", () => {
     expect(html).not.toContain("<script>x");
   });
 
-  it("breaks a URL in the rival's copy so the email cannot autolink it (0509#7084)", () => {
+  it("shows a web address in the rival's copy as the site name, never a link or a broken address (0509#7084)", () => {
     const { text, html } = renderChange({
       ...CTX,
-      mark: { removed: "was https://evil.example/old", added: "now https://evil.example/new" },
+      mark: { removed: "was https://evil.example/old", added: "now https://www.evil.example/new" },
     });
-    expect(text).toContain("https[:]//evil.example/old");
-    expect(text).not.toMatch(/https:\/\/evil\.example/);
-    expect(html).toContain("https[:]//evil.example/new");
+    expect(text).toContain("Before: was evil.example");
+    expect(text).toContain("After: now evil.example");
+    expect(html).toContain("now evil.example");
+    for (const output of [text, html]) {
+      expect(output).not.toContain("[:]");
+      expect(output).not.toMatch(/https:\/\/(www\.)?evil\.example/);
+    }
+    expect(html).not.toMatch(/<a [^>]*evil\.example/);
   });
 });
 
@@ -111,8 +127,8 @@ describe("every string field carries the injection probe escaped, never raw (050
     expectNoHtmlInjection(html, `renderChangeOverflow ${field}`);
   });
 
-  it("opens with a hidden inbox preview of when it was seen and what changed", () => {
+  it("opens with a hidden inbox preview of what changed, then when it was seen", () => {
     const { html } = renderChange(CTX);
-    expect(html).toMatch(/display:none[^>]*>Seen at [^<]*Pro \$12 a month[^<]*Pro \$15 a month[^<]*</);
+    expect(html).toMatch(/display:none[^>]*>Before: Pro \$12 a month After: Pro \$15 a month Seen at /);
   });
 });

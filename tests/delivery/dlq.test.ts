@@ -97,6 +97,7 @@ describe("incidentUndeliveredAlert", () => {
 
 describe("handleDlqBatch", () => {
   it("marks the digest failed, inserts one plain delivery_failed alert and acks (0509#4375)", async () => {
+    vi.mocked(captureException).mockClear();
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { env, recorded } = fakeEnv((sql) => {
       if (sql.startsWith("SELECT workspace_id")) {
@@ -121,6 +122,9 @@ describe("handleDlqBatch", () => {
     expect(ack).toHaveBeenCalledOnce();
     expect(retry).not.toHaveBeenCalled();
     expect(ids).toEqual(["dlq:dg_1"]);
+    expect(capturedReasons()).toHaveLength(1);
+    expect(capturedReasons()[0]).toContain("dg_1");
+    expect(capturedReasons()[0]).toContain("invalid recipient");
     error.mockRestore();
   });
 
@@ -140,6 +144,7 @@ describe("handleDlqBatch", () => {
   });
 
   it("acks a missing digest without inserting an alert", async () => {
+    vi.mocked(captureException).mockClear();
     const { env, recorded } = fakeEnv((sql) => {
       if (sql.startsWith("SELECT workspace_id")) {
         return Promise.resolve(null);
@@ -154,6 +159,8 @@ describe("handleDlqBatch", () => {
     expect(ack).toHaveBeenCalledOnce();
     expect(retry).not.toHaveBeenCalled();
     expect(ids).toEqual([]);
+    expect(capturedReasons()).toHaveLength(1);
+    expect(capturedReasons()[0]).toContain("digest not found");
   });
 
   it("raises the Sentry error and writes the workspace alert for a dead-lettered incident (0509#5761)", async () => {

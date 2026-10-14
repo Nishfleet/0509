@@ -1,4 +1,5 @@
 import { escapeHtml } from "../../app/lib/html";
+import { normaliseSubject } from "../../app/lib/identity/normalise";
 import { preheaderHtml } from "../../app/lib/preheader";
 
 const COLORS = {
@@ -29,8 +30,10 @@ export const EYEBROW = `margin:0 0 8px;font-family:${MONO};font-size:12px;line-h
 export const HEADLINE = `margin:0;font-family:${FONT};font-size:24px;line-height:30px;font-weight:800;letter-spacing:-0.02em;`;
 export const BODY = `margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;`;
 
+const BUTTON = `display:inline-block;padding:12px 20px;border-radius:6px;font-weight:700;text-decoration:none;`;
+
 export function linkParagraph(label: string, link: string): string {
-  return `<p style="${BODY}"><a class="brief-ink" href="${escapeHtml(link)}">${escapeHtml(label)}</a></p>`;
+  return `<p style="${BODY}margin-top:20px;"><a class="brief-button" style="${BUTTON}" href="${escapeHtml(link)}">${escapeHtml(label)}</a></p>`;
 }
 
 export const POSTAL_ADDRESS: string | null = null;
@@ -56,6 +59,7 @@ function emailStyle(): string {
     `.brief-marker{background-color:${COLORS.green};color:${COLORS.onGreen};}`,
     `.brief-strike{color:${COLORS.muted};text-decoration-color:${COLORS.red};}`,
     `a.brief-ink,a.brief-muted{color:inherit;}`,
+    `a.brief-button{background-color:${COLORS.green};color:${COLORS.onGreen};}`,
     `@media (prefers-color-scheme: dark) {`,
     `.brief-page{background-color:${DARK_COLORS.page};}`,
     `.brief-card{background-color:${DARK_COLORS.card};color:${DARK_COLORS.ink};}`,
@@ -65,6 +69,7 @@ function emailStyle(): string {
     `.brief-card{border:1.5px solid ${DARK_COLORS.ink};}`,
     `.brief-marker{background-color:${DARK_COLORS.green};color:${COLORS.onGreen};}`,
     `.brief-strike{color:${DARK_COLORS.muted};text-decoration-color:${DARK_COLORS.red};}`,
+    `a.brief-button{background-color:${DARK_COLORS.green};color:${COLORS.onGreen};}`,
     `}`,
     `</style>`,
   ].join("");
@@ -91,4 +96,11 @@ export function emailDocument(title: string, body: string, preheader = ""): stri
     `</body>`,
     `</html>`,
   ].join("");
+}
+
+export function siteName(url: string): string {
+  const result = normaliseSubject(url);
+  if (result.ok && result.subject.kind === "domain") return result.subject.registrable;
+  const bare = url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").replace(/^www\./i, "");
+  return bare.split(/[/?#]/)[0] ?? bare;
 }
