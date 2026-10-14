@@ -15,6 +15,7 @@ import type { JudgedWeek } from "./read-this-first";
 import { readBrandMoves } from "./brand-moves";
 import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { required } from "../../app/lib/required";
+import { readMarkWording } from "../../app/lib/data/mark_wording.server";
 
 const RANKED_BRANDS = `SELECT s.entity_id AS entity_id,
        COALESCE(e.name, e.domain) AS name,
@@ -218,6 +219,19 @@ function buildMarks(picks: readonly string[], pickedById: ReadonlyMap<string, Pi
   });
 }
 
+async function buildMarksWithWording(
+  db: D1Database,
+  input: ComposeInput,
+  pickedById: ReadonlyMap<string, PickedSignal>,
+) {
+  const picks = input.readThisFirst.picks;
+  const wording = await readMarkWording(db, { workspaceId: input.workspaceId, signalIds: picks });
+  return buildMarks(picks, pickedById).map((mark) => {
+    const change = wording.get(mark.signal_id);
+    return change === undefined ? mark : { ...mark, before: change.removed, after: change.added };
+  });
+}
+
 async function buildLines(
   rows: Pick<Awaited<ReturnType<typeof loadBriefRows>>, "brands" | "countsByEntity" | "previousWeeks">,
   db: D1Database,
@@ -380,7 +394,7 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
   const { readThisFirst } = input;
   const rows = await loadBriefRows(db, input);
 
-  const marks = buildMarks(readThisFirst.picks, rows.pickedById);
+  const marks = await buildMarksWithWording(db, input, rows.pickedById);
   const baseline = await readBaseline(db, { ...input, previousWeeks: rows.previousWeeks, marks: marks.length });
   const lines = await buildLines(rows, db, { ...input, baseline });
   const totals: CheckedTotals = {
