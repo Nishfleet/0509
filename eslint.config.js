@@ -391,7 +391,7 @@ const WEEKLY_REPORT_COPY = {
 };
 
 const PRICE_SUFFIX_COPY = {
-  selector: COPY_NAME("€\\s?\\d+\\s?(\\/mo\\b|a month|per month)"),
+  selector: `Literal[value=/€\\s?\\d+\\s?(\\/mo\\b|a month|per month)/i], TemplateElement[value.raw=/€\\s?\\d+\\s?(\\/mo\\b|a month|per month)/i], JSXText[value=/€\\s?\\d+\\s?(\\/mo\\b|a month|per month)/i]`,
   message:
     "A price reads '€10/month', from monthlyPrice() in app/lib/billing/plans.ts. '/mo' and 'a month' were three spellings of one price until 0509#7540. The trial email is billing copy and is worded by Nish.",
 };

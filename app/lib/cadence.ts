@@ -1,4 +1,5 @@
 import { APP_LOCALE } from "./locale";
+
 export const MENTIONS_SWEEP_CRON = "0 19 * * *";
 export const SITE_SWEEP_UTC_HOUR = 21;
 export const SITE_SWEEP_ALLOWANCE_HOURS = 2;
