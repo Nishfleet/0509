@@ -58,6 +58,9 @@ export function SiteChangeItem({
         )}
       </div>
       <p className="mt-2 leading-[1.65]">{change.sentence}</p>
+      {change.detailsUnavailable === true ? (
+        <p className="mt-2 text-ink-soft">Details unavailable right now. They will be back shortly.</p>
+      ) : null}
       <ProvenanceNote text={change.provenance} />
       <time dateTime={change.observedAt} className={WHEN_CLASS}>
         {change.when}
