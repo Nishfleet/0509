@@ -112,6 +112,21 @@ function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
   };
 }
 
+describe("a mark without a title", () => {
+  it("links the source's host, never the raw address", () => {
+    const { html } = renderBrief(
+      payload({
+        read_this_first: [
+          { ...payload().read_this_first[0], title: "", url: "https://www.kindred.example/pricing?x=1" },
+        ],
+      }),
+      CONTEXT,
+    );
+    expect(html).toContain(">kindred.example</a>");
+    expect(html).not.toContain(">https://www.kindred.example");
+  });
+});
+
 describe("brief block order", () => {
   it("renders the five blocks in the contract's order", () => {
     const { html } = renderBrief(payload(), CONTEXT);
@@ -818,7 +833,7 @@ describe("the since-you-started line", () => {
 describe("the rank-over-time line", () => {
   it.each([
     [5, "Up from #5 6 weeks ago"],
-    [3, "Holding at #3 since 6 weeks ago"],
+    [3, "Holding at #3 for 6 weeks"],
     [2, "Down from #2 6 weeks ago"],
   ])("compares today's #3 with an earlier #%i", (earlierRank, line) => {
     const { html, text } = renderBrief(payload({ headline_earlier: { rank: earlierRank, weeks: 6 } }), CONTEXT);
@@ -831,6 +846,40 @@ describe("the rank-over-time line", () => {
     ["an explicit none", null],
   ])("is left out for %s", (_name, earlier) => {
     const { text } = renderBrief(payload({ headline_earlier: earlier }), CONTEXT);
-    expect(text).not.toMatch(/weeks ago|since \d+ weeks/);
+    expect(text).not.toMatch(/weeks ago|for \d+ weeks/);
+  });
+
+  it.each([
+    ["an unjudged week", { is_unjudged: true }],
+    ["a headline with one brand", { headline_total: 1 }],
+  ])("is left out of the email for %s, as it is in the app", (_name, change) => {
+    const { text } = renderBrief(payload({ headline_earlier: { rank: 5, weeks: 6 }, ...change }), CONTEXT);
+    expect(text).not.toContain("Up from");
+  });
+});
+
+describe("the one action", () => {
+  const OPEN = { ...CONTEXT, open_url: "https://0509.io/app/brief" };
+
+  it("is a single Open in Five to Nine button right under the headline, in both parts", () => {
+    const { html, text } = renderBrief(payload(), OPEN);
+    expect(html).toContain(">Open in Five to Nine</a>");
+    expect(html.match(/Open in Five to Nine/g)).toHaveLength(1);
+    expect(html.indexOf("Open in Five to Nine")).toBeLessThan(html.indexOf("Your tracked brands"));
+    expect(text).toContain("Open in Five to Nine: https://0509.io/app/brief");
+  });
+
+  it("is left out when there is no link, as for a teammate who has no account", () => {
+    const { html, text } = renderBrief(payload(), CONTEXT);
+    expect(html).not.toContain("Open in Five to Nine");
+    expect(text).not.toContain("Open in Five to Nine");
+  });
+
+  it("never shows a raw address as link text for an untitled mark", () => {
+    const base = payload();
+    const mark = { ...base.read_this_first[0], title: "", url: "https://social.example/ads/abc123" };
+    const { html } = renderBrief({ ...base, read_this_first: [mark as (typeof base.read_this_first)[number]] }, OPEN);
+    expect(html).toContain(">social.example</a>");
+    expect(html).not.toMatch(/>\s*https?:\/\/[^<]*</);
   });
 });

@@ -4,14 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleCompetitorIntent } from "../../app/lib/competitors.server";
 import { withinProbeLimit } from "../../app/lib/identity/card.server";
 
-/**
- * Manual-add cap (0509#4891): adding a competitor by hand is refused once the
- * workspace already has its plan's cap of ON competitors, with no row inserted
- * or switched on. The cap comes from the `plan` row's `limits_json.competitors`
- * when present, else the `PLANS` entry whose `id` equals the row's `tier`, else
- * the scout value (5).
- */
-
 let seededRuns = 0;
 let fetchMock: ReturnType<typeof vi.fn>;
 

@@ -92,7 +92,7 @@ describe("rival change email lane (0509#6375)", () => {
     expect(second.outcome).toBe("duplicate");
     expect(sent).toHaveLength(1);
     expect(sent[0].to).toBe(TARGET);
-    expect(sent[0].subject).toBe("Rival changed its pricing page");
+    expect(sent[0].subject).toBe("Rival changed its pricing page: Pro $12 a month → Pro $15 a month");
     expect(sent[0].text).toContain("Before: Pro $12 a month");
     expect(sent[0].text).toContain("After: Pro $15 a month");
     expect(sent[0].text).toContain("https://0509.io/app/settings");
@@ -112,7 +112,7 @@ describe("rival change email lane (0509#6375)", () => {
 
     const results = await Promise.all(ids.map((id) => deliverChange(envWith(sent), { signal_id: id })));
 
-    const changeEmails = sent.filter((message) => message.subject === "Rival changed its pricing page");
+    const changeEmails = sent.filter((message) => message.subject.startsWith("Rival changed its pricing page"));
     const notices = sent.filter((message) => message.subject === "More rivals changed price or plan today");
     expect(changeEmails).toHaveLength(CHANGE_DAILY_CAP);
     expect(notices).toHaveLength(1);
@@ -145,7 +145,7 @@ describe("rival change email lane (0509#6375)", () => {
     expect(sent).toHaveLength(CHANGE_DAILY_CAP + 1);
     expect(sent.at(-1)?.subject).toBe("More rivals changed price or plan today");
     expect(
-      sent.slice(0, CHANGE_DAILY_CAP).every((message) => message.subject === "Rival changed its pricing page"),
+      sent.slice(0, CHANGE_DAILY_CAP).every((message) => message.subject.startsWith("Rival changed its pricing page")),
     ).toBe(true);
   });
 

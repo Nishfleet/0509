@@ -1,22 +1,12 @@
-import type { CDPSession, Page } from "@playwright/test";
 import { expect, test } from "./test";
 
 import { isLocalLane, run, seedPreviewSession } from "./inbox";
+import { CLS_BUDGET, emulate4g, LCP_BUDGET_MS, observeVitals, settledVitals } from "./vitals";
 
 test.skip(
   !isLocalLane(),
   "the speed guard seeds the preview Worker's own database; production has no fixture workspace",
 );
-
-const LCP_BUDGET_MS = 1500;
-const CLS_BUDGET = 0.1;
-const FAST_4G = {
-  offline: false,
-  downloadThroughput: (1.6 * 1024 * 1024) / 8,
-  uploadThroughput: (750 * 1024) / 8,
-  latency: 150,
-};
-const CPU_SLOWDOWN = 4;
 
 interface Seeded {
   entityId: string;
@@ -59,40 +49,7 @@ const PAYLOAD = (workspaceId: string, entityId: string): string =>
     next_brief_at: null,
   });
 
-async function emulate4g(page: Page): Promise<CDPSession> {
-  const client = await page.context().newCDPSession(page);
-  await client.send("Network.enable");
-  await client.send("Network.emulateNetworkConditions", FAST_4G);
-  await client.send("Emulation.setCPUThrottlingRate", { rate: CPU_SLOWDOWN });
-  return client;
-}
-
-async function observeVitals(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    const vitals = { lcp: 0, cls: 0 };
-    Object.assign(window, { __vitals: vitals });
-    new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) vitals.lcp = entry.startTime;
-    }).observe({ type: "largest-contentful-paint", buffered: true });
-    new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) {
-        if ("hadRecentInput" in entry && "value" in entry && entry.hadRecentInput === false) {
-          vitals.cls += Number(entry.value);
-        }
-      }
-    }).observe({ type: "layout-shift", buffered: true });
-  });
-}
-
-async function settledVitals(page: Page): Promise<{ lcp: number; cls: number }> {
-  await page.evaluate(() => document.fonts.ready);
-  await expect
-    .poll(() => page.evaluate(() => (window as unknown as { __vitals: { lcp: number } }).__vitals.lcp))
-    .toBeGreaterThan(0);
-  return page.evaluate(() => (window as unknown as { __vitals: { lcp: number; cls: number } }).__vitals);
-}
-
-test("signed-in Home, competitor, brief and alerts hold LCP and CLS on a cold load over emulated Fast 4G with a 4x slower CPU", async ({
+test("signed-in Home, competitors, brief, alerts, settings and agents hold LCP and CLS on a cold load over emulated Fast 4G with a 4x slower CPU", async ({
   browser,
   baseURL,
 }, testInfo) => {
@@ -140,7 +97,15 @@ test("signed-in Home, competitor, brief and alerts hold LCP and CLS on a cold lo
     return { name, value: value.join("="), url: baseURL ?? "" };
   });
 
-  const paths = ["/app", `/app/competitors/${seeded.entityId}`, `/app/brief/${seeded.digestId}`, "/app/alerts"];
+  const paths = [
+    "/app",
+    "/app/competitors",
+    `/app/competitors/${seeded.entityId}`,
+    `/app/brief/${seeded.digestId}`,
+    "/app/alerts",
+    "/app/settings",
+    "/app/settings/agents",
+  ];
   const measured: Record<string, { lcp: number; cls: number }> = {};
   for (const path of paths) {
     const context = await browser.newContext();

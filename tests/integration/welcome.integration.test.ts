@@ -75,8 +75,8 @@ describe("welcome email", () => {
     expect(await sendWelcomes(envWith(sent), new Date("2026-10-13T13:00:00.000Z"), isTester)).toBe(0);
     expect(sent).toHaveLength(1);
     expect(sent[0]?.to).toBe(TARGET);
-    expect(sent[0]?.subject).toBe("Welcome to Five to Nine");
-    expect(sent[0]?.text).toContain("We're watching Acme.");
+    expect(sent[0]?.subject).toBe("We're watching Acme");
+    expect(sent[0]?.text).toContain("We read each site every night.");
     expect(sent[0]?.text).toContain("Monday 19 October");
   });
 
