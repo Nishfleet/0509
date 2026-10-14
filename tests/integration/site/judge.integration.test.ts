@@ -442,6 +442,42 @@ describe("judgeChange", () => {
     ]);
   });
 
+  it("case g3: history_30d carries the wording of the newest changes, so a rotation reads as one", async () => {
+    jevAnswers.noul.set("noteworthy_change", 0.95);
+    jevAnswers.choice.set("change_kind", "copy");
+    const wordings: [string, string][] = [
+      ["Sort: Relevance", "Sort: Featured"],
+      ["Sort: Featured", "Sort: Relevance"],
+      ["Sort: Relevance", "Sort: Featured"],
+      ["Sort: Featured", "Sort: Relevance"],
+      ["Sort: Relevance", "Sort: Featured"],
+      ["Sort: Featured", "Sort: Relevance"],
+    ];
+    for (const [index, [removed, added]] of wordings.entries()) {
+      const diffKey = `snapshot/site/w-rot/s-${String(index)}.diff.json`;
+      await env.SNAPSHOTS.put(
+        diffKey,
+        JSON.stringify({ hunks: [{ lines: ["@@ -1,1 +1,1 @@", `-${removed}`, `+${added}`] }] }),
+      );
+      const at = new Date(Date.now() - index * 3_600_000).toISOString();
+      await env.DB.prepare(
+        `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, url, payload_json, dedup_key, observed_at, last_seen_at)
+         VALUES (?, 'ws-mine', 'rival', 'src_site_web', 'change', 'home', 'https://rival.example/', ?, ?, ?, ?)`,
+      )
+        .bind(`sig-rot-${String(index)}`, JSON.stringify({ diffKey }), `dedup-rot-${String(index)}`, at, at)
+        .run();
+    }
+
+    await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
+
+    const sent = jevAnswers.states[0] as { history_30d: { kind: string | null; change?: string }[] };
+    expect(sent.history_30d).toHaveLength(6);
+    expect(sent.history_30d.slice(0, 5).map((entry) => entry.change)).toEqual(
+      wordings.slice(0, 5).map(([removed, added]) => `${removed} \u2192 ${added}`),
+    );
+    expect(sent.history_30d[5]).not.toHaveProperty("change");
+  });
+
   it("case g2: history_30d leaves out signals that are not changes", async () => {
     jevAnswers.noul.set("noteworthy_change", 0.95);
     jevAnswers.choice.set("change_kind", "pricing");

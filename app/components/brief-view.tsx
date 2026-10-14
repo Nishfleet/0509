@@ -1,7 +1,8 @@
 import { Fragment, type ReactElement } from "react";
 
 import { ReadThisFirst } from "./read-this-first";
-import { rankTrendLine, sinceStartedLine, type BriefPayload } from "../lib/brief-payload";
+import type { BriefPayload } from "../lib/brief-payload";
+import { rankTrendLine, sinceStartedLine } from "../lib/brief-since";
 
 const SECTION = "mt-5 border-t border-line pt-4";
 const HEAD = "font-mono text-eyebrow text-ink-soft uppercase";

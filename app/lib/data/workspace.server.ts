@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-import { entitledTier, resolveEntitlements } from "../billing/entitlements";
+import { resolveEntitlements } from "../billing/entitlements";
+import { entitledTier } from "../billing/subscription-state";
 import { canonicalTimezone } from "../timezone";
 
 const SELECT_WORKSPACE_TIMEZONE = "SELECT timezone FROM workspace WHERE id = ?";

@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-import { entitledTier, isWorkspacePaid, resolveEntitlements, type Entitlements } from "../billing/entitlements";
+import { resolveEntitlements, type Entitlements } from "../billing/entitlements";
+import { entitledTier, isWorkspacePaid } from "../billing/subscription-state";
 import { isPlanId, type PlanId, type PlanSummary } from "../billing/plans";
 import { readWorkspaceIdForOwner } from "./workspace.server";
 
