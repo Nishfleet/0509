@@ -222,7 +222,7 @@ describe("teammates on the brief", () => {
       .run();
 
     expect((await readTeammates(workspaceId))[0]?.unsubscribed).toBe(false);
-    await suppressByUnsubscribeToken("mate-token");
+    await suppressByUnsubscribeToken("mate-token", "all");
 
     expect((await readTeammates(workspaceId))[0]?.unsubscribed).toBe(true);
     expect(await isTeammateUnsubscribeToken("mate-token")).toBe(true);
