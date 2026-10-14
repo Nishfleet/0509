@@ -95,48 +95,6 @@ describe("delivery sweeper (0509#4353)", () => {
     expect(result.enqueued).toBe(1);
   });
 
-  it("enqueues a sent digest again for a failed teammate send, an hour apart and at most three times", async () => {
-    await seedDigest("d-mate", "sent", "2026-09-23T00:00:00.000Z");
-    await env.DB.prepare(
-      `INSERT OR IGNORE INTO channel (id, key, is_enabled, config_json) VALUES ('chan-email', 'email', 1, '{}')`,
-    ).run();
-    await env.DB.prepare(
-      `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at, role)
-       VALUES ('mate-sweep', ?, 'chan-email', 'mate@0509.io', 1, '2026-09-22T00:00:00Z', 'teammate')`,
-    )
-      .bind(WS)
-      .run();
-    const seedMateAttempt = (id: string, attempts: number, attemptedAt: string) =>
-      env.DB.prepare(
-        `INSERT INTO send_attempt
-           (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at, attempt_count)
-         VALUES (?, ?, 'mate-sweep', 'd-mate', ?, 'failed', ?, ?)`,
-      )
-        .bind(id, WS, `digest:d-mate:${id}`, attemptedAt, attempts)
-        .run();
-    const sweep = async () => {
-      const sent: unknown[] = [];
-      await sweepPending(envWith(sent), NOW);
-      return sent;
-    };
-
-    await seedMateAttempt("recent", 1, "2026-09-23T02:30:00.000Z");
-    expect(await sweep()).toEqual([]);
-
-    await env.DB.exec("DELETE FROM send_attempt");
-    await seedMateAttempt("spent", 3, "2026-09-23T01:00:00.000Z");
-    expect(await sweep()).toEqual([]);
-
-    await env.DB.exec("DELETE FROM send_attempt");
-    await seedMateAttempt("due", 2, "2026-09-23T01:00:00.000Z");
-    expect(await sweep()).toEqual([{ digest_id: "d-mate" }]);
-
-    await env.DB.prepare("INSERT INTO email_suppression (address, reason, created_at) VALUES (?, 'unsubscribed', ?)")
-      .bind("mate@0509.io", "2026-09-23T02:00:00.000Z")
-      .run();
-    expect(await sweep()).toEqual([]);
-  });
-
   it("does not enqueue an attempt that has been pending for 30 minutes", async () => {
     await seedDigest("d-recent-attempt", "sent", "2026-09-23T00:00:00.000Z");
     await seedAttempt("a-recent", "d-recent-attempt", "pending", "2026-09-23T02:30:00.000Z");

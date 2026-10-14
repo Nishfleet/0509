@@ -1,19 +1,13 @@
 import { z } from "zod";
 
-import { MAX_TEAMMATE_SEND_ATTEMPTS } from "../teammate-limit";
-
 const STALE_CLAIM_MS = 60 * 60 * 1000;
 
 const CLAIM_ATTEMPT = `INSERT INTO send_attempt
   (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at)
 VALUES (?, ?, ?, ?, ?, 'pending', ?)
 ON CONFLICT(idempotency_key) DO UPDATE
-  SET status = 'pending', error = NULL, attempted_at = excluded.attempted_at,
-      attempt_count = send_attempt.attempt_count + CASE WHEN send_attempt.status = 'failed' THEN 1 ELSE 0 END
-  WHERE (send_attempt.status = 'failed' AND (
-          NOT EXISTS (SELECT 1 FROM send_target t WHERE t.id = send_attempt.send_target_id AND t.role = 'teammate')
-          OR (send_attempt.attempt_count < ${String(MAX_TEAMMATE_SEND_ATTEMPTS)} AND send_attempt.attempted_at < ?)))
-     OR (send_attempt.status = 'pending' AND send_attempt.attempted_at < ?)
+  SET status = 'pending', error = NULL, attempted_at = excluded.attempted_at
+  WHERE send_attempt.status = 'failed' OR (send_attempt.status = 'pending' AND send_attempt.attempted_at < ?)
 RETURNING id`;
 
 const RESOLVE_ATTEMPT = `UPDATE send_attempt SET status = ?, error = ? WHERE id = ?`;
@@ -53,7 +47,6 @@ export async function claimSendAttempt(
           input.digestId,
           input.idempotencyKey,
           now,
-          staleBefore,
           staleBefore,
         )
         .first(),

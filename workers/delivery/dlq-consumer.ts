@@ -99,6 +99,12 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
       continue;
     }
 
+    if ("target_id" in parsed) {
+      console.error(JSON.stringify({ event: "delivery.teammate_dead_lettered", digest_id: parsed.digest_id }));
+      item.ack();
+      continue;
+    }
+
     if ("incident_id" in parsed) {
       const deadLettered = await deadLetteredIncident(env, item.id, parsed.incident_id);
       item.ack();
