@@ -200,7 +200,10 @@ function newUnsubscribeToken(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function ensureUnsubscribeToken(env: Env, target: TargetRow): Promise<string> {
+export async function ensureUnsubscribeToken(
+  env: Env,
+  target: Pick<TargetRow, "id" | "unsubscribe_token">,
+): Promise<string> {
   if (target.unsubscribe_token !== null) return target.unsubscribe_token;
   await writeUnsubscribeToken(env.DB, { targetId: target.id, token: newUnsubscribeToken() });
   const row = await env.DB.prepare(`SELECT unsubscribe_token FROM send_target WHERE id = ?`)
@@ -212,7 +215,7 @@ async function ensureUnsubscribeToken(env: Env, target: TargetRow): Promise<stri
   return row.unsubscribe_token;
 }
 
-const UNSUBSCRIBE_BASE_URL = "https://0509.io/u/";
+export const UNSUBSCRIBE_BASE_URL = "https://0509.io/u/";
 
 function briefOf(message: MessageRow): BriefPayload {
   try {
