@@ -61,4 +61,11 @@ describe("transition durations in the app", () => {
       expect(await source(...file.split("/"))).toMatch(/transition-colors duration-140 ease-push/);
     }
   });
+
+  it("runs the shared switch track and thumb at 180ms on the push curve", async () => {
+    const css = await source("components", "ui", "switch.tsx");
+    expect(css).toMatch(/transition-colors duration-180 ease-push/);
+    expect(css).toMatch(/transition-transform duration-180 ease-push/);
+    expect(css).not.toMatch(/transition-all/);
+  });
 });
