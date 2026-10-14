@@ -200,7 +200,7 @@ the current step on the marker runs across the top of all four.
 3. **Who you're up against.** Accepted competitors (D1 p ≥ 0.9) listed ON with a
    one-line reason each; maybes below on the bone ground, off, with Jev's reason and its
    probability. "Add one we missed" is the same one input, inline, at the bottom of the
-   list. One action: "Start watching — €10/mo".
+   list. One action: "Start watching — €10/month".
 4. **Start your trial.** The plan gate is the last onboarding step: the trial terms, then
    each plan with its price on its button. Checkout starts the 7-day card-up-front trial,
    and /app does not open until the workspace has a live subscription (#7061).
@@ -486,7 +486,7 @@ Declared under both `@media (prefers-color-scheme: dark)` scoped to
 
 1. **Primary** — filled ink, square, display 700, one per viewport. Always a verb.
    **The price is on the button** wherever the action starts or changes a subscription:
-   `Start watching  €10/mo`. List prices from the ledger, localized at checkout by
+   `Start watching  €10/month`. List prices from the ledger, localized at checkout by
    Dodo: **Scout €10/month, Starter €46/month, Agency €136/month.** There is no free
    plan and no "free" anywhere in the copy (#3896). **Trial copy is decided** (Nish,
    2026-09-22, #3912 item 2): every paid plan carries a 7-day trial through Dodo, card up

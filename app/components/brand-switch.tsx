@@ -1,8 +1,9 @@
 import { type ReactElement, useId } from "react";
 
 import { Switch } from "./ui/switch";
+import { APP_LOCALE } from "../lib/locale";
 
-export const DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
+export const DAY_MONTH = new Intl.DateTimeFormat(APP_LOCALE, {
   day: "numeric",
   month: "short",
   timeZone: "UTC",
@@ -11,7 +12,7 @@ export const DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
 export function dayMonthLabel(value: string, timeZone = "UTC"): string | null {
   if (Number.isNaN(Date.parse(value))) return null;
   if (timeZone === "UTC") return DAY_MONTH.format(new Date(value));
-  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone }).format(new Date(value));
+  return new Intl.DateTimeFormat(APP_LOCALE, { day: "numeric", month: "short", timeZone }).format(new Date(value));
 }
 
 export type BrandSwitchState = "on" | "off" | "you";

@@ -23,6 +23,7 @@ import { nextHour } from "./home-standing";
 import { mentionAlertWhen, withoutMentionAlerts } from "./mention-feed";
 import { offBrandsSentence } from "./off-brands";
 import { daysBefore, readSiteChangeViews } from "./site-changes.server";
+import { APP_LOCALE } from "./locale";
 
 const HIRING_LIMIT = 100;
 
@@ -189,7 +190,7 @@ function buildOpenIncident(inputs: AlertInputs, now: Date) {
     url: open.url,
     openedLabel: daysAgoLabel(open.opened_at, now),
     recheckAt,
-    recheckLabel: new Intl.DateTimeFormat("en-US", {
+    recheckLabel: new Intl.DateTimeFormat(APP_LOCALE, {
       timeZone,
       hour: "numeric",
       minute: "2-digit",
