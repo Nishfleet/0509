@@ -1,10 +1,9 @@
 import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
 import type { ChangeMark } from "../../app/lib/site-change";
-import { neutralizeBareUrls } from "../../app/lib/slack-webhook";
 import { renderAlertFooter, type AlertFooterContext } from "./alert-footer";
 import { formatDate } from "./brief-template";
-import { BODY, EYEBROW, HEADLINE, emailDocument, linkParagraph } from "./email-shell";
+import { BODY, EYEBROW, HEADLINE, emailDocument, linkParagraph, siteName } from "./email-shell";
 
 export interface ChangeContext extends AlertFooterContext {
   headline: string;
@@ -18,10 +17,14 @@ const SUBJECT_MAX = 78;
 const SIDE_MAX = 30;
 const OPEN = "See the before and after in Five to Nine";
 
+function siteNames(text: string): string {
+  return text.replace(/https?:\/\/[^\s]+/gi, siteName);
+}
+
 function oneLine(value: string | null): string | null {
   const flat =
-    value
-      ?.replace(/\s+/g, " ")
+    siteNames(value ?? "")
+      .replace(/\s+/g, " ")
       .replace(/[\p{Cf}\p{Cc}]/gu, "")
       .trim() ?? "";
   return flat === "" || flat.length > SIDE_MAX ? null : flat;
@@ -38,8 +41,8 @@ function subjectFor(headline: string, mark: ChangeMark | null): string {
 function markLines(mark: ChangeMark | null): string[] {
   if (mark === null) return [];
   return [
-    ...(mark.removed === null ? [] : [`Before: ${neutralizeBareUrls(mark.removed)}`]),
-    ...(mark.added === null ? [] : [`After: ${neutralizeBareUrls(mark.added)}`]),
+    ...(mark.removed === null ? [] : [`Before: ${siteNames(mark.removed)}`]),
+    ...(mark.added === null ? [] : [`After: ${siteNames(mark.added)}`]),
   ];
 }
 
