@@ -652,6 +652,29 @@ describe("inline styles survive the attribute they sit in", () => {
   });
 });
 
+describe("what to do next", () => {
+  it("adds one fixed line under a mark whose judged kind has a next step, and nothing otherwise", () => {
+    const [first, second] = payload().read_this_first;
+    const withKinds = payload({
+      read_this_first:
+        first && second
+          ? [
+              { ...first, kind: "pricing" },
+              { ...second, kind: "noise" },
+            ]
+          : [],
+    });
+    const { html, text } = renderBrief(withKinds, CONTEXT);
+    expect(text).toContain("Compare it with your own pricing.");
+    expect(html).toContain("Compare it with your own pricing.");
+    expect(text.match(/Compare it with|Decide whether|Check whether/g)).toHaveLength(1);
+  });
+
+  it("says nothing about a mark with no kind, as in briefs composed before this existed", () => {
+    expect(renderBrief(payload(), CONTEXT).text).not.toMatch(/Compare it with|Decide whether|Check whether/);
+  });
+});
+
 describe("the subject line", () => {
   it("names the top rival move with its before and after", () => {
     expect(renderBrief(payload(), CONTEXT).subject).toBe("Kindred: 3 tiers → 2 tiers (+1 more)");

@@ -213,6 +213,37 @@ async function seedHiring(): Promise<{ workspaceId: string; hiredEntity: string 
   return { workspaceId, hiredEntity };
 }
 
+describe("the brief's read-first marks carry the judged kind, through real D1", () => {
+  it("copies the change_kind choice onto the mark, and null when none was judged", async () => {
+    const { workspaceId, hiredEntity } = await seedHiring();
+    const a =
+      (
+        await env.DB.prepare("SELECT id FROM signal WHERE workspace_id = ? AND title = 'Senior Accountant'")
+          .bind(workspaceId)
+          .first<{ id: string }>()
+      )?.id ?? "";
+    const b =
+      (
+        await env.DB.prepare("SELECT id FROM signal WHERE workspace_id = ? AND title = 'Growth Lead'")
+          .bind(workspaceId)
+          .first<{ id: string }>()
+      )?.id ?? "";
+    await env.DB.prepare(
+      `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, choice, decided_at)
+       VALUES ('jv-kind-1', ?1, 'change_kind', 'kind-hash-1', ?2, ?3, 'pricing', '2026-09-20T00:00:00Z')`,
+    )
+      .bind(workspaceId, a, hiredEntity)
+      .run();
+    const payload = await composeBrief(env.DB, {
+      workspaceId,
+      schedule: { timezone: "UTC", weekday: 1, hour: 8 },
+      week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
+      readThisFirst: { picks: [a, b], judged: 2, unjudged: false },
+    });
+    expect(payload.read_this_first.map((mark) => mark.kind)).toEqual(["pricing", null]);
+  });
+});
+
 describe("new job posts reach the brief's brand line, through real D1", () => {
   // #4728: the count has to survive the real SIGNAL_COUNTS query, not a
   // restated one, so each case seeds real hiring rows and runs composeBrief
