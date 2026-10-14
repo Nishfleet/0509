@@ -26,7 +26,7 @@ export function teammateInviteEmail(input: { email: string; url: string; addedBy
   const message: LinkEmail = {
     subject: `${input.addedBy} wants to send you the Five to Nine brief`,
     headline: "Get the weekly brief",
-    line: `${input.addedBy} added ${input.email} to receive their weekly Five to Nine brief: what their rivals changed and how they rank. Confirm to start getting it.`,
+    line: `${input.addedBy} added ${input.email} to receive their weekly Five to Nine brief: what their competitors changed and how they rank. Confirm to start getting it.`,
     button: "Yes, send me the brief",
     url: input.url,
     ignore:

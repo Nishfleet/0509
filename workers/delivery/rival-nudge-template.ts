@@ -11,14 +11,14 @@ export interface RivalNudgeContext {
   footer: AlertFooterContext;
 }
 
-const OPEN = "Add a rival";
+const OPEN = "Add a competitor";
 
 function lines(ctx: RivalNudgeContext): string[] {
   const watching =
     ctx.rivals === 0 || ctx.rival_name === null
-      ? "You are not watching a rival yet, so there is nobody to rank you against."
-      : `You are watching ${ctx.rival_name}, so your ranking compares you with one rival.`;
-  return [watching, "Each rival you add is read the same way and joins your weekly ranking and brief."];
+      ? "You are not watching a competitor yet, so there is nobody to rank you against."
+      : `You are watching ${ctx.rival_name}, so your ranking compares you with one competitor.`;
+  return [watching, "Each competitor you add is read the same way and joins your weekly ranking and brief."];
 }
 
 export function renderRivalNudge(ctx: RivalNudgeContext): RenderedBrief {
@@ -31,7 +31,7 @@ export function renderRivalNudge(ctx: RivalNudgeContext): RenderedBrief {
     html: emailDocument(
       subject,
       [
-        `<p class="brief-muted" style="${EYEBROW}">Your rivals</p>`,
+        `<p class="brief-muted" style="${EYEBROW}">Your competitors</p>`,
         `<p style="${HEADLINE}">${escapeHtml(subject)}</p>`,
         ...body.map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`),
         linkParagraph(OPEN, ctx.link),

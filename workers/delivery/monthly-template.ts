@@ -11,12 +11,12 @@ export interface MonthlyContext {
   footer: AlertFooterContext;
 }
 
-const SUBJECT = "Your month in rivals";
+const SUBJECT = "Your month in competitors";
 const OPEN = "See everything in Alerts";
 
 function lines(ctx: MonthlyContext): string[] {
   const noun = ctx.change_count === 1 ? "change" : "changes";
-  const counted = `In ${ctx.month} we caught ${String(ctx.change_count)} ${noun} across your rivals.`;
+  const counted = `In ${ctx.month} we caught ${String(ctx.change_count)} ${noun} across your competitors.`;
   if (ctx.moves.length === 0) return [counted];
   return [counted, "Most recent:", ...ctx.moves.map((move) => `${move.rival}, ${move.what}`)];
 }

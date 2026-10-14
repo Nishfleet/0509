@@ -6,8 +6,9 @@ import { useCopyState, type CopyState } from "../lib/use-copy-state";
 import { BLOCK_HEADING } from "./page-heading";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { APP_LOCALE } from "../lib/locale";
 
-const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+const DAY = new Intl.DateTimeFormat(APP_LOCALE, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const BLOCK = "mt-10 border-t border-line pt-4";
 const ROW = "flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-line py-3";
 const CLIENTS = ["Claude", "ChatGPT", "Cursor"];

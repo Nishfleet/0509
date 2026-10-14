@@ -17,7 +17,7 @@ const CTX = {
 describe("monthly note", () => {
   it("names the month, the count and the recent moves", () => {
     const { subject, text } = renderMonthly(CTX);
-    expect(subject).toBe("Your month in rivals");
+    expect(subject).toBe("Your month in competitors");
     expect(text).toContain("In September we caught 4 changes");
     expect(text).toContain("Acme, Homepage headline changed");
     expect(text).toContain("Beta, New careers page");
