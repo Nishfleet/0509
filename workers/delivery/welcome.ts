@@ -1,3 +1,4 @@
+import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { nextBriefAt } from "../../app/lib/brief-schedule";
 import { isTesterSubscription } from "../../app/lib/billing/returning.server";
 import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
@@ -16,7 +17,9 @@ function firstBriefAt(trial: NewTrial, now: Date): string | null {
     const at = nextBriefAt({ timezone: trial.timezone, weekday: trial.brief_weekday, hour: trial.brief_hour }, now);
     return Number.isNaN(at.getTime()) ? null : at.toISOString();
   } catch (error) {
-    console.error(JSON.stringify({ event: "delivery.welcome_brief_date_failed", error: String(error).slice(0, 200) }));
+    console.error(
+      JSON.stringify({ event: "delivery.welcome_brief_date_failed", error: redactEmailShaped(String(error)) }),
+    );
     return null;
   }
 }
@@ -37,7 +40,7 @@ async function welcome(env: Env, trial: NewTrial, when: { now: Date; isTester: T
     to: trial.target_value,
     render: () =>
       renderWelcome({
-        rivals: trial.rival_names === null ? [] : trial.rival_names.split("|"),
+        rivals: trial.rival_names,
         rival_count: trial.rival_count,
         first_brief_at: firstBriefAt(trial, when.now),
         timezone: trial.timezone,
@@ -50,7 +53,7 @@ export async function sendWelcomes(env: Env, now: Date, isTester: TesterCheck = 
   let sent = 0;
   for (const trial of await readNewTrials(env.DB, now)) {
     const done = await welcome(env, trial, { now, isTester }).catch((error: unknown) => {
-      console.error(JSON.stringify({ event: "delivery.welcome_failed", error: String(error).slice(0, 200) }));
+      console.error(JSON.stringify({ event: "delivery.welcome_failed", error: redactEmailShaped(String(error)) }));
       return false;
     });
     if (done) sent += 1;

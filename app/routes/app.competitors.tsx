@@ -116,6 +116,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         message={actionData?.message}
         upgradePlanId={actionData?.upgradePlanId}
         returning={actionData?.returning}
+        added={actionData?.added}
       />
     </main>
   );
