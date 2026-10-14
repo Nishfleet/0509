@@ -39,8 +39,8 @@ describe("first look", () => {
   it("adds what is already held under a rival, and nothing for a rival with no facts", () => {
     const rows = firstLookRows(
       [
-        { id: "a", name: "Acme", pages: 2, checkedAt: "2026-10-14T11:48:00.000Z" },
-        { id: "b", name: "Beta", pages: 0, checkedAt: null },
+        { id: "a", name: "Acme", pages: 2, checkedAt: "2026-10-14T11:48:00.000Z", blocked: false },
+        { id: "b", name: "Beta", pages: 0, checkedAt: null, blocked: false },
       ],
       NOW,
       new Map([
