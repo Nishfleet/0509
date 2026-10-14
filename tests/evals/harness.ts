@@ -134,7 +134,7 @@ interface JevResponse {
 export async function loadCases<T extends EvalRow>(
   questionId: string,
   required: readonly (keyof T & string)[],
-  options: { file?: string; project?: (entry: unknown) => unknown } = {},
+  options: { file?: string; project?: (entry: unknown) => unknown; unsplit?: boolean } = {},
 ): Promise<T[]> {
   const file = path.join(HERE, "cases", `${options.file ?? questionId}.json`);
   if (!existsSync(file)) throw new Error(`eval cases missing: ${file}`);
@@ -144,7 +144,8 @@ export async function loadCases<T extends EvalRow>(
     const entry = options.project?.(raw) ?? raw;
     const row = entry as EvalRow;
     if (typeof row.id !== "string" || row.id === "") throw new Error(`case ${index} has no id`);
-    if (row.split !== "train" && row.split !== "test") throw new Error(`case ${row.id} has no split`);
+    if (options.unsplit !== true && row.split !== "train" && row.split !== "test")
+      throw new Error(`case ${row.id} has no split`);
     if (typeof row.why !== "string" || row.why === "") throw new Error(`case ${row.id} has no why`);
     for (const key of required) {
       const value = Reflect.get(row, key);
@@ -159,7 +160,7 @@ export async function loadCases<T extends EvalRow>(
   if (cases.length < MIN_TOTAL) throw new Error(`${questionId} has ${cases.length} cases, needs ${MIN_TOTAL}`);
   const ids = new Set(cases.map((row) => row.id));
   if (ids.size !== cases.length) throw new Error(`${questionId} has duplicate case ids`);
-  for (const split of ["train", "test"] as const) {
+  for (const split of options.unsplit === true ? [] : (["train", "test"] as const)) {
     const count = cases.filter((row) => row.split === split).length;
     if (count < MIN_PER_SPLIT)
       throw new Error(`${questionId} ${split} split has ${count} cases, needs ${MIN_PER_SPLIT}`);
@@ -376,6 +377,17 @@ export function loadSiteRows<L extends boolean | string>(caseFile: string, quest
   });
 }
 
+export function loadProdRows(): Promise<SiteRow<boolean>[]> {
+  return loadCases<SiteRow<boolean>>("noteworthy_change", ["subject", "pageUrl", "hunks", "evidence", "label"], {
+    file: "site-change-prod",
+    unsplit: true,
+    project: (entry) => {
+      const { labels, why, ...rest } = entry as SiteChangeCase;
+      return { ...rest, split: "test", label: labels.noteworthy_change, why: why.noteworthy_change };
+    },
+  });
+}
+
 // One place builds the noul question body, so the request type and the answer field read
 // back cannot drift apart.
 function noulQuestions(questions: readonly NoulEvalQuestion[]): Record<string, unknown> {
@@ -455,7 +467,7 @@ function stdev(values: readonly number[]): number {
   return Math.sqrt(mean(values.map((value) => (value - average) ** 2)));
 }
 
-async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length);
   let next = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
