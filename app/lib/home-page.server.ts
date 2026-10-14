@@ -2,8 +2,10 @@ import { env } from "cloudflare:workers";
 
 import type { BriefPayload } from "./brief-payload";
 import { readSelfSiteFill } from "./data/entity.server";
+import { readFirstLook } from "./data/first_look.server";
 import { readWeekEvidence } from "./data/signal.server";
 import { readWorkspaceMentionSources } from "./data/source.server";
+import { firstLookRows } from "./first-look";
 import { readHowRanked } from "./how-ranked.server";
 import { readBiggestSiteChanges } from "./site-changes.server";
 
@@ -17,7 +19,7 @@ export function resolveOpenId(
 }
 
 async function readWorkspaceReads(workspaceId: string, payload: BriefPayload | null, openId: string | null) {
-  const [sources, siteFill, howRanked, moves, evidence] = await Promise.all([
+  const [sources, siteFill, howRanked, moves, evidence, firstLook] = await Promise.all([
     readWorkspaceMentionSources(workspaceId),
     readSelfSiteFill(workspaceId),
     readHowRanked(env.DB, payload),
@@ -25,12 +27,13 @@ async function readWorkspaceReads(workspaceId: string, payload: BriefPayload | n
     openId !== null && payload !== null
       ? readWeekEvidence({ workspaceId, entityId: openId, since: payload.period_start })
       : null,
+    payload === null ? readFirstLook(workspaceId).then((rivals) => firstLookRows(rivals, new Date())) : [],
   ]);
-  return { sources, siteFill, howRanked, moves, evidence };
+  return { sources, siteFill, howRanked, moves, evidence, firstLook };
 }
 
 export async function readHomeReads(workspaceId: string | null, payload: BriefPayload | null, openId: string | null) {
   if (workspaceId !== null) return readWorkspaceReads(workspaceId, payload, openId);
   const howRanked = await readHowRanked(env.DB, payload);
-  return { sources: [], siteFill: null, howRanked, moves: [], evidence: null };
+  return { sources: [], siteFill: null, howRanked, moves: [], evidence: null, firstLook: [] };
 }
