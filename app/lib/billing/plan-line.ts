@@ -1,7 +1,8 @@
 import { isPaymentFailed, isPaymentHeld, isPlanLapsed } from "./subscription-state";
 import { PLANS, type PlanSummary } from "./plans";
+import { APP_LOCALE } from "../locale";
 
-const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+const DAY = new Intl.DateTimeFormat(APP_LOCALE, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
 function formatDay(value: string | null): string | null {
   const parsed = value === null ? Number.NaN : Date.parse(value);

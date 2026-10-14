@@ -51,7 +51,7 @@ test("before the first brief Home lists where each rival stands", async ({ page,
 
   await page.goto("/app");
   const firstLook = page.locator('[data-home="first-look"]');
-  await expect(firstLook.getByRole("heading", { name: "Where your rivals stand today" })).toBeVisible();
+  await expect(firstLook.getByRole("heading", { name: "Where your competitors stand today" })).toBeVisible();
   await expect(firstLook.getByRole("listitem")).toHaveCount(2);
   await expect(firstLook).toContainText("Zephyrwear");
   await expect(firstLook).toContainText("Northloop");

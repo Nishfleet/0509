@@ -13,7 +13,7 @@ const CTX = {
 describe("recap email", () => {
   it("counts the changes and names the latest", () => {
     const { subject, text } = renderRecap(CTX);
-    expect(subject).toBe("3 rival changes caught so far, latest: Acme");
+    expect(subject).toBe("3 competitor changes caught so far, latest: Acme");
     expect(text).toContain("caught 3 changes");
     expect(text).toContain("Most recent: Acme, Homepage headline changed");
     expect(text).toContain("https://0509.io/app/alerts");
@@ -21,8 +21,8 @@ describe("recap email", () => {
 
   it("keeps the subject short and drops the rival name when it is long", () => {
     const long = renderRecap({ ...CTX, latest: { rival: "x".repeat(80), what: "y" } }).subject;
-    expect(long).toBe("3 rival changes caught so far");
-    expect(renderRecap({ ...CTX, change_count: 1, latest: null }).subject).toBe("1 rival change caught so far");
+    expect(long).toBe("3 competitor changes caught so far");
+    expect(renderRecap({ ...CTX, change_count: 1, latest: null }).subject).toBe("1 competitor change caught so far");
   });
 
   it("says change in the singular and skips the latest when there is none", () => {
@@ -34,7 +34,7 @@ describe("recap email", () => {
   it("leads the inbox preview with the latest move, or the count when there is none", () => {
     expect(renderRecap(CTX).html).toMatch(/display:none[^>]*>Most recent: Acme, Homepage headline changed/);
     expect(renderRecap({ ...CTX, latest: null }).html).toMatch(
-      /display:none[^>]*>In your first days we(?:'|&#39;)ve caught 3 changes across your rivals\./,
+      /display:none[^>]*>In your first days we(?:'|&#39;)ve caught 3 changes across your competitors\./,
     );
   });
 
