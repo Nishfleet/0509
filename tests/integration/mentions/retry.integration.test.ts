@@ -58,7 +58,8 @@ describe("mentions retry of skipped targets", () => {
   it("trips a source after three skipped targets in a row and resets on a success", () => {
     const streaks = new Map<string, number>();
     const first = target("a");
-    [lost, lost].forEach((outcome) => track(streaks, first, outcome));
+    track(streaks, first, lost);
+    track(streaks, first, lost);
     expect(tripped(streaks, first)).toBe(false);
     track(streaks, first, lost);
     expect(tripped(streaks, first)).toBe(true);
