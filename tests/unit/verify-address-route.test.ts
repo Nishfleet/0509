@@ -6,10 +6,12 @@ import type * as ReactRouterModule from "react-router";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("../../app/lib/verify-delivery-address.server", () => ({
-  confirmDeliveryAddress: (token: string | undefined) => Promise.resolve(token === "good"),
+  confirmDeliveryAddress: (token: string | undefined) => Promise.resolve(token === "good" || token === "mate"),
+  readConfirmRole: (token: string | undefined) =>
+    Promise.resolve(token === "mate" ? "teammate" : token === "good" ? "owner" : null),
 }));
 
-import VerifyAddress, { action, headers, meta } from "../../app/routes/v.$token";
+import VerifyAddress, { action, headers, loader, meta } from "../../app/routes/v.$token";
 
 // The Confirm button must be disabled while the form's own submission runs, so
 // the navigation mock carries the state the route's other forms only touch via
@@ -31,13 +33,17 @@ vi.mock("react-router", async (importOriginal) => {
   };
 });
 
-function renderPage(confirmed: boolean | "expired"): string {
+function renderPage(confirmed: boolean | "expired", teammate = false): string {
   const Stub = createRoutesStub([{ id: "routes/v.$token", path: "/v/:token", Component: VerifyAddress }]);
   return renderToStaticMarkup(
     createElement(Stub, {
       initialEntries: ["/v/t"],
-      hydrationData:
-        confirmed === false ? {} : { actionData: { "routes/v.$token": { confirmed: confirmed === true } } },
+      hydrationData: {
+        loaderData: { "routes/v.$token": { teammate } },
+        ...(confirmed === false
+          ? {}
+          : { actionData: { "routes/v.$token": { confirmed: confirmed === true, teammate } } }),
+      },
     }),
   );
 }
@@ -119,9 +125,28 @@ describe("/v/:token (0509#5811)", () => {
   });
 
   it("answers POST with what the confirm actually did", async () => {
-    expect(await action({ params: { token: "good" } } as never)).toEqual({ confirmed: true });
-    expect(await action({ params: { token: "deadbeef" } } as never)).toEqual({ confirmed: false });
-    expect(await action({ params: { token: undefined } } as never)).toEqual({ confirmed: false });
+    expect(await action({ params: { token: "good" } } as never)).toEqual({ confirmed: true, teammate: false });
+    expect(await action({ params: { token: "mate" } } as never)).toEqual({ confirmed: true, teammate: true });
+    expect(await action({ params: { token: "deadbeef" } } as never)).toEqual({ confirmed: false, teammate: false });
+    expect(await action({ params: { token: undefined } } as never)).toEqual({ confirmed: false, teammate: false });
+  });
+
+  it("tells a teammate the brief only, never alerts, and gives no way into the owner's app", () => {
+    const before = renderPage(false, true);
+    expect(before).toContain("The weekly brief will go to this email address");
+    expect(before).not.toContain("alerts");
+
+    const after = renderPage(true, true);
+    expect(after).toContain("You are on the list");
+    expect(after).not.toContain("alerts");
+    expect(after).not.toContain('href="/app"');
+    expect(after).not.toContain("Email address confirmed");
+  });
+
+  it("looks the role up for the page before the button is pressed", async () => {
+    expect(await loader({ params: { token: "mate" } } as never)).toEqual({ teammate: true });
+    expect(await loader({ params: { token: "good" } } as never)).toEqual({ teammate: false });
+    expect(await loader({ params: { token: "nope" } } as never)).toEqual({ teammate: false });
   });
 
   it("is no-store and noindex", () => {

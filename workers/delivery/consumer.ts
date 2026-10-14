@@ -250,6 +250,7 @@ function render(message: MessageRow, recipient: { to: string; token: string; own
     unsubscribe_url: unsubscribeUrl,
     asset_base_url: null,
     open_url: owner ? BRIEF_OPEN_URL : null,
+    teammate: !owner,
   });
   return {
     to,

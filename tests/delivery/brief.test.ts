@@ -796,6 +796,15 @@ describe("inbox preview and the Settings link (Mobbin benchmark)", () => {
     expect(html).toContain('href="https://0509.io/app/settings"');
     expect(text).toContain("Choose when your brief arrives in Settings: https://0509.io/app/settings");
   });
+
+  it("leaves the Settings link out of a teammate's copy, which keeps its unsubscribe link", () => {
+    const { html, text } = renderBrief(payload(), { ...CONTEXT, teammate: true });
+
+    expect(html).not.toContain("/app/settings");
+    expect(text).not.toContain("Settings");
+    expect(text).toContain("Next brief: Mon 28 Sept, 08:00\nUnsubscribe: https://0509.io/u/opaque-token");
+    expect(html).toContain("Unsubscribe");
+  });
 });
 
 describe("the since-you-started line", () => {

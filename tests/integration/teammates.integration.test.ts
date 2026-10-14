@@ -15,7 +15,7 @@ import {
 } from "../../app/lib/data/send_target.server";
 import { readDeliveryAddress, saveDeliveryAddress } from "../../app/lib/delivery-address.server";
 import { addTeammateByOwner, readTeammates, removeTeammateByOwner } from "../../app/lib/teammates.server";
-import { confirmDeliveryAddress } from "../../app/lib/verify-delivery-address.server";
+import { confirmDeliveryAddress, readConfirmRole } from "../../app/lib/verify-delivery-address.server";
 import { ensureWorkspaceForSignIn, firstWorkspaceId } from "../../app/lib/workspace.server";
 
 let USER_ID = "user-mates";
@@ -68,12 +68,43 @@ describe("teammates on the brief", () => {
 
     expect(sentMail).toHaveLength(1);
     expect(sentMail[0].to).toBe("mate@0509.io");
-    expect(sentMail[0].subject).toContain(SIGN_IN_EMAIL);
+    expect(sentMail[0].subject).toBe("A colleague wants to send you the Five to Nine brief");
+    expect(sentMail[0].text).not.toContain(SIGN_IN_EMAIL);
     expect(await readTeammates(workspaceId)).toMatchObject([{ address: "mate@0509.io", confirmed: false }]);
 
-    await confirmDeliveryAddress(emailedToken());
+    const token = emailedToken();
+    expect(await readConfirmRole(token)).toBe("teammate");
+    await confirmDeliveryAddress(token);
 
+    expect(await readConfirmRole(token)).toBeNull();
     expect(await readTeammates(workspaceId)).toMatchObject([{ address: "mate@0509.io", confirmed: true }]);
+  });
+
+  it("stops a removed teammate's invitation link working at once", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    await add("gone@0509.io");
+    const token = emailedToken();
+    const [mate] = await readTeammates(workspaceId);
+    await removeTeammateByOwner(USER_ID, mate.id);
+
+    expect(await readConfirmRole(token)).toBeNull();
+    expect(await confirmDeliveryAddress(token)).toBe(false);
+    expect(await readTeammates(workspaceId)).toEqual([]);
+  });
+
+  it("names the owner's brand in the invitation, never their sign-in address", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, name, created_at) VALUES ('ent-self-mates', ?, 'self', 'acme.example', 'Acme', ?)`,
+    )
+      .bind(workspaceId, NOW)
+      .run();
+
+    expect(await add("brand@0509.io")).toBeNull();
+
+    expect(sentMail[0].subject).toBe("Acme wants to send you the Five to Nine brief");
+    expect(sentMail[0].text).toContain("Acme added brand@0509.io");
+    expect(`${sentMail[0].subject}${sentMail[0].text}${sentMail[0].html}`).not.toContain(SIGN_IN_EMAIL);
   });
 
   it("leaves the owner's own delivery address alone", async () => {
