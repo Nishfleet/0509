@@ -7,6 +7,7 @@ interface Teammate {
   id: string;
   address: string;
   confirmed: boolean;
+  unsubscribed: boolean;
 }
 
 function TeammateRow({ mate }: { mate: Teammate }) {
@@ -16,7 +17,10 @@ function TeammateRow({ mate }: { mate: Teammate }) {
     <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-line py-2">
       <span className="min-w-0 [overflow-wrap:anywhere]">
         {mate.address}
-        {mate.confirmed ? null : <span className="text-ink-soft"> · waiting for them to confirm</span>}
+        {mate.unsubscribed ? <span className="text-ink-soft"> · unsubscribed</span> : null}
+        {mate.confirmed || mate.unsubscribed ? null : (
+          <span className="text-ink-soft"> · waiting for them to confirm</span>
+        )}
       </span>
       <Form method="post" action="/app/settings">
         <input type="hidden" name="intent" value="teammate-remove" />
@@ -72,7 +76,8 @@ export function Teammates({ teammates, error, limit }: { teammates: Teammate[]; 
       </h2>
       <p className="mt-2 max-w-prose leading-[1.55]">
         Up to {limit} teammates get the weekly brief too. They confirm by email first and can unsubscribe themselves.
-        Alerts still come only to you.
+        Alerts still come only to you, and a teammate only reads the brief: they can't change your plan, billing or
+        rivals.
       </p>
       {teammates.length === 0 ? null : (
         <ul className="mt-3 max-w-prose">
@@ -81,7 +86,7 @@ export function Teammates({ teammates, error, limit }: { teammates: Teammate[]; 
           ))}
         </ul>
       )}
-      {teammates.length >= limit ? null : <InviteForm error={error} />}
+      {teammates.length >= limit ? null : <InviteForm key={teammates.length} error={error} />}
     </section>
   );
 }

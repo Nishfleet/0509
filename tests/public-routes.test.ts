@@ -288,6 +288,12 @@ describe("public-route manifest", () => {
     expect((SITEMAP_PATHS as readonly string[]).includes("/")).toBe(!noindex);
   });
 
+  it("llms.txt never says public sources twice when no source is answering", () => {
+    const summary = llmsTxt("https://0509.io", [], NOW).split("\n")[2] ?? "";
+    expect(summary).toContain("watches their public sources, ranks you");
+    expect(summary).not.toContain("public sources from public sources");
+  });
+
   it("llms.txt has the spec's title and summary and links every public path", () => {
     const body = llmsTxt("https://0509.io", healthyRegistry(), NOW);
     expect(body.startsWith("# Five to Nine\n\n> ")).toBe(true);
