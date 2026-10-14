@@ -88,9 +88,9 @@ describe("fixed incident email", () => {
     expect(renderIncidentFixed({ ...FIXED, kind: "breakage" }).subject).toBe("shop.example looks fixed");
   });
 
-  it("is one line of news before the footer", () => {
+  it("is one line of news before the footer and support line", () => {
     const { text } = renderIncidentFixed(FIXED);
-    expect(text.split("\n")).toHaveLength(3);
+    expect(text.split("\n")).toHaveLength(4);
     expect(text).toContain("We re-checked shop.example at Wed 23 Sept, 05:52 and it looks fixed.");
     expect(text).toContain("https://0509.io/site/inc_1");
   });
@@ -218,5 +218,12 @@ describe("every string field carries the injection probe escaped, never raw (050
   it.each(fixedRows)("%s lands in the fixed email's html only escaped", (field, patch) => {
     const { html } = renderIncidentFixed({ ...FIXED, ...patch });
     expectNoHtmlInjection(html, `renderIncidentFixed ${field}`);
+  });
+
+  it("opens each email with a hidden inbox preview that is not the headline", () => {
+    const open = renderIncidentOpen(OPEN).html;
+    const fixed = renderIncidentFixed(FIXED).html;
+    expect(open).toMatch(/display:none[^>]*>Seen /);
+    expect(fixed).toMatch(/display:none[^>]*>[^<]*shop\.example/);
   });
 });

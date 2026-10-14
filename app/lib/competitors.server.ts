@@ -17,6 +17,7 @@ import {
 import { isTakenDown } from "./data/takedown.server";
 import { resolveDomain } from "./discovery/resolve-domain.server";
 import { normaliseSubject } from "./identity/normalise";
+import { tryFirstLook } from "./site/first-look.server";
 
 export interface CompetitorActionResult {
   message: string | null;
@@ -116,7 +117,9 @@ async function addCompetitor(workspaceId: string, raw: string, now: string): Pro
     now,
     cap,
   });
-  return outcome === "at_cap" ? capRefusal(workspaceId, cap) : DONE;
+  if (outcome === "at_cap") return capRefusal(workspaceId, cap);
+  await tryFirstLook(workspaceId, domain);
+  return DONE;
 }
 
 const SUGGESTION_INTENTS = new Map([

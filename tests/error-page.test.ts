@@ -21,6 +21,35 @@ function page(error: unknown, signedIn: boolean, pathname: string) {
   );
 }
 
+describe("error page by cause", () => {
+  const response = (status: number) => ({ status, statusText: LEAK, internal: true, data: LEAK });
+
+  it.each([
+    [403, "You cannot open this page", false],
+    [401, "Sign in to continue", false],
+    [429, "Too many requests", true],
+    [500, "Something went wrong", true],
+    [503, "Something went wrong", true],
+  ])("answers a %i with its own words and no raw text", (status, title, retry) => {
+    const html = page(response(status), true, "/app/alerts");
+    expect(html).toContain(title);
+    expect(html).not.toContain(LEAK);
+    expect(html).not.toContain(String(status));
+    expect(html).not.toContain("!");
+    expect(html).not.toContain("/app/alerts");
+    expect(html.includes('href=""')).toBe(retry);
+    expect(html.includes("Try again")).toBe(retry);
+    expect(html).toContain("Back to home");
+  });
+
+  it("treats a thrown Error as a problem on our side and offers a retry", () => {
+    const html = page(new Error(LEAK), false, "/app");
+    expect(html).toContain("Something went wrong");
+    expect(html).toContain("Try again");
+    expect(html).not.toContain(LEAK);
+  });
+});
+
 describe("error page", () => {
   it("says what is missing and offers the landing when signed out", () => {
     const error = {
@@ -81,10 +110,11 @@ describe("error page", () => {
     expect(html).toContain("Something went wrong");
     expect(html).toContain("we have been alerted");
     expect(html).not.toContain(LEAK);
-    expect(html).not.toContain("blow-up");
     expect(html).not.toContain("<pre");
     expect(html).toContain('href="/"');
-    expect(html.match(/<a /g)).toHaveLength(1);
+    expect(html).not.toContain("blow-up");
+    expect(html).toContain('href=""');
+    expect(html.match(/<a /g)).toHaveLength(2);
   });
 
   it("treats a non-404 route error as the problem page", () => {

@@ -8,6 +8,8 @@ import { UNJUDGED_WEEK_LINE, readThisFirstLine } from "../../app/lib/read-this-f
 import { effectiveKindSql } from "../../app/lib/source-kind";
 import { sourceName } from "../../app/lib/source-name";
 import type { JudgedWeek } from "./read-this-first";
+import { readBrandMoves } from "./brand-moves";
+import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { required } from "../../app/lib/required";
 
 const RANKED_BRANDS = `SELECT s.entity_id AS entity_id,
@@ -33,6 +35,11 @@ FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
 WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL
 GROUP BY s.entity_id`;
+
+const TOTAL_CHANGES = `SELECT count(*) AS total
+FROM signal s
+JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1
+WHERE s.workspace_id = ?1 AND s.kind = 'change' AND s.observed_at < ?2 AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL`;
 
 const SOURCE_COVERAGE = `SELECT src.key AS key,
        ${effectiveKindSql("src")} AS kind,
@@ -109,6 +116,8 @@ const incidentRows = z.array(
   }),
 );
 
+const totalChangeRows = z.array(z.object({ total: z.number() }));
+
 const pausedCompetitorRows = z.array(z.object({ name: z.string() }));
 
 const pickedSignalRows = z.array(
@@ -140,8 +149,6 @@ export function pausedSentence(names: readonly string[]): string | null {
   return `${names.slice(0, -1).join(", ")} and ${last} paused, so every brand below them moved up.`;
 }
 
-type RankedBrand = z.infer<typeof rankedBrandRows>[number];
-type SignalCount = z.infer<typeof signalCountRows>[number];
 type SourceCoverage = z.infer<typeof sourceCoverageRows>[number];
 type OwnSiteIncident = z.infer<typeof incidentRows>[number];
 type PickedSignal = z.infer<typeof pickedSignalRows>[number];
@@ -149,7 +156,7 @@ type PickedSignal = z.infer<typeof pickedSignalRows>[number];
 async function loadBriefRows(db: D1Database, input: ComposeInput) {
   const startsAt = input.week.startsAt.toISOString();
   const closesAt = input.week.closesAt.toISOString();
-  const [ranked, frozen, counts, coverage, incidents, pausedRows, pickedRows] = await db.batch([
+  const [ranked, frozen, counts, coverage, incidents, pausedRows, pickedRows, totalRows] = await db.batch([
     db.prepare(RANKED_BRANDS).bind(input.workspaceId, startsAt),
     db.prepare(PREVIOUS_FROZEN_WEEKS).bind(input.workspaceId, startsAt),
     db.prepare(SIGNAL_COUNTS).bind(input.workspaceId, startsAt, closesAt),
@@ -157,6 +164,7 @@ async function loadBriefRows(db: D1Database, input: ComposeInput) {
     db.prepare(OWN_SITE_INCIDENTS).bind(input.workspaceId, startsAt, closesAt),
     db.prepare(PAUSED_COMPETITORS).bind(input.workspaceId, startsAt, closesAt),
     db.prepare(PICKED_SIGNALS).bind(input.workspaceId, JSON.stringify(input.readThisFirst.picks)),
+    db.prepare(TOTAL_CHANGES).bind(input.workspaceId, closesAt),
   ]);
   return {
     brands: rankedBrandRows.parse(required(ranked, "compose-brief.ranked").results),
@@ -171,6 +179,7 @@ async function loadBriefRows(db: D1Database, input: ComposeInput) {
     pausedNames: pausedCompetitorRows
       .parse(required(pausedRows, "compose-brief.pausedRows").results)
       .map((row) => row.name),
+    totalChanges: totalChangeRows.parse(required(totalRows, "compose-brief.totalRows").results)[0]?.total ?? 0,
     pickedById: new Map(
       pickedSignalRows
         .parse(required(pickedRows, "compose-brief.pickedRows").results)
@@ -201,11 +210,22 @@ function buildMarks(picks: readonly string[], pickedById: ReadonlyMap<string, Pi
   });
 }
 
-function buildLines(
-  brands: readonly RankedBrand[],
-  countsByEntity: ReadonlyMap<string, SignalCount>,
-  hadPreviousWeek: boolean,
+async function buildLines(
+  rows: Pick<Awaited<ReturnType<typeof loadBriefRows>>, "brands" | "countsByEntity" | "hadPreviousWeek">,
+  db: D1Database,
+  input: ComposeInput,
 ) {
+  const { brands, countsByEntity, hadPreviousWeek } = rows;
+  const moves = await readBrandMoves(db, {
+    workspaceId: input.workspaceId,
+    entityIds: brands.map((brand) => brand.entity_id),
+    since: input.week.startsAt.toISOString(),
+    until: input.week.closesAt.toISOString(),
+  }).catch((error: unknown) => {
+    console.error(JSON.stringify({ event: "standing.brand_moves_failed", error: redactEmailShaped(String(error)) }));
+    return new Map<string, string>();
+  });
+  const moveOf = (entityId: string): string | null => moves.get(entityId) ?? null;
   return brands.map((brand) => {
     const count = countsByEntity.get(brand.entity_id);
     return {
@@ -214,7 +234,7 @@ function buildLines(
       rank: brand.rank,
       movement: brand.movement,
       is_new: hadPreviousWeek && brand.movement === null,
-      biggest_move: null,
+      biggest_move: moveOf(brand.entity_id),
       ad_delta: count?.new_ads ?? 0,
       mention_delta: count?.mentions ?? 0,
       site_change_count: count?.site_changes ?? 0,
@@ -242,6 +262,7 @@ interface CheckedTotals {
   mentions: number;
   siteChanges: number;
   newAds: number;
+  allChanges: number;
 }
 
 function buildChecked(sources: readonly SourceCoverage[], totals: CheckedTotals) {
@@ -250,6 +271,7 @@ function buildChecked(sources: readonly SourceCoverage[], totals: CheckedTotals)
     mention_count: totals.mentions,
     site_change_count: totals.siteChanges,
     new_ad_count: totals.newAds,
+    total_change_count: totals.allChanges,
     source_keys: sources.map((source) => source.key),
     degraded_source_keys: degraded.map((source) => source.key),
     degraded_sources: degraded.map((source) => ({
@@ -278,11 +300,12 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
   const rows = await loadBriefRows(db, input);
 
   const marks = buildMarks(readThisFirst.picks, rows.pickedById);
-  const lines = buildLines(rows.brands, rows.countsByEntity, rows.hadPreviousWeek);
+  const lines = await buildLines(rows, db, input);
   const totals: CheckedTotals = {
     mentions: lines.reduce((total, line) => total + line.mention_delta, 0),
     siteChanges: lines.reduce((total, line) => total + line.site_change_count, 0),
     newAds: lines.reduce((total, line) => total + line.ad_delta, 0),
+    allChanges: rows.totalChanges,
   };
   const selfId = rows.brands.find((brand) => brand.role === "self")?.entity_id;
   const self = lines.find((line) => line.entity_id === selfId);

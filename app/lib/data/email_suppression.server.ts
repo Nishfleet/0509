@@ -13,7 +13,7 @@ const SUPPRESS_WORKSPACE_TARGETS = `INSERT INTO email_suppression (address, reas
 SELECT lower(trim(t.target_value)), 'workspace_deleted', ?
   FROM send_target t
   JOIN channel c ON c.id = t.channel_id
- WHERE t.workspace_id = ? AND c.key = 'email'
+ WHERE t.workspace_id = ? AND c.key = 'email' AND t.role = 'owner'
 ON CONFLICT(address) DO NOTHING`;
 
 const SELECT_SUPPRESSION = `SELECT address FROM email_suppression WHERE lower(trim(address)) = lower(trim(?)) LIMIT 1`;

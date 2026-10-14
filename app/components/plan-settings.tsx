@@ -26,7 +26,8 @@ function BillingButton({ label }: { label: string }) {
 
 function billingLabel(plan: PlanSummary, retryable: boolean): string {
   if (isPaymentHeld(plan)) return "Update payment method";
-  return retryable ? "See billing history" : "Manage or cancel plan";
+  if (retryable) return "See billing history";
+  return plan.status === "cancelled" ? "Manage billing" : "Manage or cancel plan";
 }
 
 export function PlanSection({ plan, returning = false }: { plan: PlanSummary | null; returning?: boolean }) {

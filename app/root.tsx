@@ -1,8 +1,9 @@
-import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration, useMatches } from "react-router";
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, useMatches } from "react-router";
 
 import type { Route } from "./+types/root";
 import { ErrorPage } from "./components/error-page";
 import { hasSessionCookie } from "./lib/auth.server";
+import { errorCopy } from "./lib/error-copy";
 import { FACES_SCRIPT } from "./lib/faces-script";
 import "./app.css";
 
@@ -75,19 +76,15 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export function ErrorBoundary({ error, loaderData }: Route.ErrorBoundaryProps) {
-  const notFound = isRouteErrorResponse(error) && error.status === 404;
   const signedIn = loaderData?.signedIn === true;
-  const where = loaderData?.pathname ?? "this address";
+  const copy = errorCopy(error, loaderData?.pathname ?? "this address");
   return (
     <ErrorPage
-      title={notFound ? "Page not found" : "Something went wrong"}
-      detail={
-        notFound
-          ? `There is no page at ${where}. Check the address, or go back to the home page.`
-          : "This is a problem on our side and we have been alerted. Please try again in a minute."
-      }
+      title={copy.title}
+      detail={copy.detail}
       actionHref={signedIn ? "/app" : "/"}
       actionLabel="Back to home"
+      retry={copy.retry}
     />
   );
 }

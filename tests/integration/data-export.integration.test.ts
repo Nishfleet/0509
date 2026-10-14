@@ -63,6 +63,15 @@ describe("workspace export", () => {
   it("holds the caller's own brands and signals and nothing of another workspace or the judge", async () => {
     const mine = await seed("mine");
     await seed("theirs");
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT OR IGNORE INTO channel (id, key, is_enabled, config_json) VALUES ('chan-email', 'email', 1, '{}')`,
+      ),
+      env.DB.prepare(
+        `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at, role)
+             VALUES ('mate-export', ?, 'chan-email', 'mate@0509.io', 0, ?, 'teammate')`,
+      ).bind(mine.workspaceId, NOW),
+    ]);
 
     const data = await readWorkspaceExport({
       workspaceId: mine.workspaceId,
@@ -75,6 +84,7 @@ describe("workspace export", () => {
 
     expect(data.account.signInEmail).toBe("mine@test.dev");
     expect(data.account.name).toBe("mine");
+    expect(data.account.teammates).toEqual([{ address: "mate@0509.io", confirmed: false }]);
     expect(data.brands).toHaveLength(1);
     expect(data.signals).toEqual([expect.objectContaining({ brand: "mine.example", title: "Mention of mine" })]);
     expect(data.sessions).toEqual([
