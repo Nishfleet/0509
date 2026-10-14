@@ -1,7 +1,14 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { readEmailTarget, removeTeammate } from "../../app/lib/data/send_target.server";
+import {
+  changeEmailTarget,
+  ensureOwnerEmailTarget,
+  markEmailTargetVerified,
+  readEmailTarget,
+  removeTeammate,
+  writeVerifyToken,
+} from "../../app/lib/data/send_target.server";
 import { readDeliveryAddress } from "../../app/lib/delivery-address.server";
 import { addTeammateByOwner, readTeammates, removeTeammateByOwner } from "../../app/lib/teammates.server";
 import { confirmDeliveryAddress } from "../../app/lib/verify-delivery-address.server";
@@ -91,6 +98,32 @@ describe("teammates on the brief", () => {
     expect(await add("not an address")).toMatch(/Enter an email address/);
     expect(sentMail).toHaveLength(0);
     expect(await readTeammates(firstWorkspaceId(USER_ID))).toEqual([]);
+  });
+
+  it("keeps every owner-address read and write on the owner when a teammate row is older", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    await env.DB.prepare(
+      `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at, role)
+       VALUES ('mate-old', ?, 'chan-email', 'mate@0509.io', 0, '2000-01-01T00:00:00Z', 'teammate')`,
+    )
+      .bind(workspaceId)
+      .run();
+    const mate = () =>
+      env.DB.prepare("SELECT target_value, is_verified, verify_token FROM send_target WHERE id = 'mate-old'").first();
+
+    expect(await readEmailTarget(env.DB, workspaceId)).toEqual({ target_value: SIGN_IN_EMAIL, is_verified: 1 });
+    await writeVerifyToken(env.DB, { workspaceId, token: "owner-token", expiresAt: "2999-01-01T00:00:00Z" });
+    await markEmailTargetVerified(env.DB, { workspaceId });
+    await changeEmailTarget(env.DB, { workspaceId, address: "new-owner@0509.io" });
+
+    expect(await mate()).toEqual({ target_value: "mate@0509.io", is_verified: 0, verify_token: null });
+    expect(await readEmailTarget(env.DB, workspaceId)).toEqual({ target_value: "new-owner@0509.io", is_verified: 0 });
+    await env.DB.prepare("DELETE FROM send_target WHERE workspace_id = ? AND role = 'owner'").bind(workspaceId).run();
+    await ensureOwnerEmailTarget(env.DB, { workspaceId, now: NOW });
+    const rows = await env.DB.prepare("SELECT role FROM send_target WHERE workspace_id = ? ORDER BY role")
+      .bind(workspaceId)
+      .all();
+    expect(rows.results).toEqual([{ role: "owner" }, { role: "teammate" }]);
   });
 
   it("removes a teammate, but never the owner's row", async () => {

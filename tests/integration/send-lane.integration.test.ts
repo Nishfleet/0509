@@ -509,6 +509,24 @@ describe("send lane (0509#3979)", () => {
     expect(lines).toContainEqual({ event: "delivery.no_target", digest_id: digestId, workspace_id: WS, reason });
   });
 
+  it("(teammates) an older confirmed teammate never stands in for an unverified owner", async () => {
+    const rec = recorder();
+    await env.DB.prepare(`UPDATE send_target SET is_verified = 0 WHERE id = ?`).bind(TARGET_ID).run();
+    await env.DB.prepare(
+      `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at, role)
+       VALUES ('mate-old', ?, ?, 'mate@0509.io', 1, '2000-01-01T00:00:00Z', 'teammate')`,
+    )
+      .bind(WS, CHANNEL)
+      .run();
+    const digestId = await seedDigest("pending");
+
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
+
+    expect(result.outcome).toBe("no_target");
+    expect(rec.sent).toHaveLength(0);
+    expect(await readAttempts()).toHaveLength(0);
+  });
+
   it("reports no_target when the only email target is unverified", async () => {
     const rec = recorder();
     await env.DB.prepare(`UPDATE send_target SET is_verified = 0 WHERE id = ?`).bind(TARGET_ID).run();
