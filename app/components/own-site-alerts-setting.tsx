@@ -59,7 +59,7 @@ export function ChangeAlertsSetting({ on }: { on: boolean }): ReactElement {
     <AlertSwitch
       on={on}
       intent="change-alerts"
-      label="Immediate alerts when a rival changes price or plan"
+      label="Immediate alerts when a competitor changes price or plan"
       note="Off stops the email and the Slack post. The change still shows in Alerts and in your Monday brief."
       testId="change-alerts-setting"
     />

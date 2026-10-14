@@ -83,5 +83,5 @@ export function nextPlan(tier: string): (typeof PLANS)[number] | null {
 }
 
 export function monthlyPrice(eur: number): string {
-  return `€${String(eur)}/mo`;
+  return `€${String(eur)}/month`;
 }
