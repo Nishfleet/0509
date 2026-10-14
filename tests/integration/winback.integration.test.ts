@@ -164,7 +164,7 @@ describe("win-back email", () => {
 
     await sendWinbacks(envWith(sent), NOW, isTester);
 
-    expect(`${sent[0]?.subject ?? ""} ${sent[0]?.text.split("Choose which alerts")[0] ?? ""}`).not.toMatch(
+    expect(`${sent[0]?.subject ?? ""} ${(sent[0]?.text ?? "").split("Choose which alerts")[0]}`).not.toMatch(
       /trial|charge|billed|billing|cancel|card|€|\bplan\b|renew|subscri/i,
     );
   });
