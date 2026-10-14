@@ -19,11 +19,11 @@ function render(emailAlerts: boolean): string {
 }
 
 describe("the Slack reconnect note", () => {
-  it("warns that nothing reaches the customer when email alerts are off too", () => {
-    expect(render(false)).toContain("nothing reaches you until you reconnect");
+  it("says plainly that nothing is sent when price and plan alerts are off", () => {
+    expect(render(false)).toContain("nothing is sent by email or to Slack");
   });
 
   it("does not warn when email alerts are still on", () => {
-    expect(render(true)).not.toContain("nothing reaches you");
+    expect(render(true)).not.toContain("nothing is sent by email or to Slack");
   });
 });

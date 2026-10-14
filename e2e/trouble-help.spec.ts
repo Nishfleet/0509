@@ -63,6 +63,15 @@ test("a rival site that blocks us says what to do next", async ({ page }) => {
   await expect(page.getByText("We couldn't read their website, so there is nothing to score yet.")).toBeVisible();
 });
 
+test("Home does not say it is still reading a site we cannot read", async ({ page }) => {
+  const { cookie } = await seedPreviewSession("trouble-home", seed);
+  await page.setExtraHTTPHeaders({ cookie });
+
+  await page.goto("/app");
+  await expect(page.getByText("We couldn't read their website. We keep trying.")).toBeVisible();
+  await expect(page.getByText("Reading its site now")).toHaveCount(0);
+});
+
 test("Alerts says how to reach a person", async ({ page }) => {
   const { cookie } = await seedPreviewSession("trouble-alerts", seed);
   await page.setExtraHTTPHeaders({ cookie });
