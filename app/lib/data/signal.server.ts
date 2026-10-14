@@ -752,3 +752,31 @@ export async function readWorkspaceContent(workspaceId: string, since: string, l
   const { results } = await env.DB.prepare(SELECT_WORKSPACE_CONTENT).bind(workspaceId, since, limit).all();
   return workspaceHiringRows.parse(results);
 }
+
+const SELECT_CHANGES_WITHOUT_EXCERPT = `SELECT id, json_extract(payload_json, '$.diffKey') AS diff_key
+FROM signal
+WHERE kind = 'change' AND json_valid(payload_json)
+  AND json_extract(payload_json, '$.excerpt') IS NULL
+  AND json_extract(payload_json, '$.diffKey') IS NOT NULL
+ORDER BY observed_at DESC, id DESC
+LIMIT ?1`;
+
+const SAVE_CHANGE_EXCERPT = `UPDATE signal SET payload_json = json_set(payload_json, '$.excerpt', json(?2))
+WHERE id = ?1 AND json_valid(payload_json)`;
+
+const changeWithoutExcerptRow = z.object({ id: z.string(), diff_key: z.string() });
+
+export async function readChangesWithoutExcerpt(limit: number): Promise<{ id: string; diffKey: string }[]> {
+  const { results } = await env.DB.prepare(SELECT_CHANGES_WITHOUT_EXCERPT).bind(limit).all();
+  return z
+    .array(changeWithoutExcerptRow)
+    .parse(results)
+    .map((row) => ({ id: row.id, diffKey: row.diff_key }));
+}
+
+export async function saveChangeExcerpts(
+  rows: readonly { id: string; excerpt: readonly { lines: readonly string[] }[] }[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  await env.DB.batch(rows.map((row) => env.DB.prepare(SAVE_CHANGE_EXCERPT).bind(row.id, JSON.stringify(row.excerpt))));
+}
