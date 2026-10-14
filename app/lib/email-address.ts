@@ -1,7 +1,9 @@
+import { z } from "zod";
+
 export function normalizeEmailAddress(address: string): string {
   return address.trim().toLowerCase();
 }
 
 export function looksLikeEmailAddress(address: string): boolean {
-  return /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(address);
+  return z.email().safeParse(address).success;
 }

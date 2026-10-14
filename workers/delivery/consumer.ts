@@ -320,7 +320,7 @@ async function sendToTeammate(env: Env, digest: MessageRow, mate: TargetRow): Pr
 
 async function sendToTeammates(env: Env, digestId: string): Promise<void> {
   const digest = await readDigest(env, digestId);
-  if (digest?.status !== "sent") return;
+  if (digest?.status !== "sent" || digest.kind !== "weekly") return;
   for (const mate of await readConfirmedTeammates(env.DB, digest.workspace_id)) {
     await sendToTeammate(env, digest, mate).catch((cause: unknown) => {
       console.error(JSON.stringify({ event: "delivery.teammate_failed", error: redactEmailShaped(errorText(cause)) }));
