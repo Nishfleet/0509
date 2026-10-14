@@ -17,6 +17,27 @@ export interface ChangeContext extends AlertFooterContext {
 const HEADLINE = `margin:0;font-family:${FONT};font-size:24px;line-height:30px;font-weight:800;letter-spacing:-0.02em;`;
 const BODY = `margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;`;
 
+const SUBJECT_MAX = 78;
+const SIDE_MAX = 30;
+const OPEN = "See the before and after in Five to Nine";
+
+function oneLine(value: string | null): string | null {
+  const flat =
+    value
+      ?.replace(/\s+/g, " ")
+      .replace(/[\p{Cf}\p{Cc}]/gu, "")
+      .trim() ?? "";
+  return flat === "" || flat.length > SIDE_MAX ? null : flat;
+}
+
+function subjectFor(headline: string, mark: ChangeMark | null): string {
+  const before = oneLine(mark?.removed ?? null);
+  const after = oneLine(mark?.added ?? null);
+  if (before === null || after === null) return headline;
+  const subject = `${headline}: ${before} → ${after}`;
+  return subject.length <= SUBJECT_MAX ? subject : headline;
+}
+
 function markLines(mark: ChangeMark | null): string[] {
   if (mark === null) return [];
   return [
@@ -61,19 +82,19 @@ export function renderChangeOverflow(ctx: ChangeOverflowContext): RenderedBrief 
 
 export function renderChange(ctx: ChangeContext): RenderedBrief {
   const seen = `Seen at ${formatDate(ctx.observed_at, ctx.timezone, true)}.`;
-  const lines = [seen, ...markLines(ctx.mark)];
+  const lines = [...markLines(ctx.mark), seen];
   const href = escapeHtml(ctx.link);
   const footer = renderAlertFooter(ctx);
   return {
-    subject: ctx.headline,
-    text: [ctx.headline, ...lines, `See the before and after in Five to Nine: ${ctx.link}`, footer.text].join("\n"),
+    subject: subjectFor(ctx.headline, ctx.mark),
+    text: [ctx.headline, ...lines, `${OPEN}: ${ctx.link}`, footer.text].join("\n"),
     html: emailDocument(
       ctx.headline,
       [
         `<p class="brief-muted" style="${EYEBROW}">Price or plan change</p>`,
         `<p style="${HEADLINE}">${escapeHtml(ctx.headline)}</p>`,
         paragraphs(lines),
-        `<p style="${BODY}">See the before and after in Five to Nine: <a class="brief-ink" href="${href}">${href}</a></p>`,
+        `<p style="${BODY}"><a class="brief-ink" href="${href}">${OPEN}</a></p>`,
         footer.html,
       ].join(""),
       lines.join(" "),
