@@ -39,12 +39,12 @@ const plan = () =>
     .bind(WORKSPACE)
     .first<{ tier: string; status: string }>();
 
-async function seedPlan(status: string): Promise<void> {
+async function seedPlan(status: string, updatedAt = "2026-10-01T00:00:00Z"): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO plan (id, workspace_id, tier, status, provider_customer_id, provider_subscription_id, current_period_end, trialing, updated_at)
-     VALUES ('plan-reconcile', ?, 'starter', ?, 'cus_8VbC6JDZzPEqfBPUdpj0K', 'sub_7EeHq2ewQuadropD2ra', '2026-10-06T10:00:00.125145Z', 0, '2026-10-01T00:00:00Z')`,
+     VALUES ('plan-reconcile', ?1, 'starter', ?2, 'cus_8VbC6JDZzPEqfBPUdpj0K', 'sub_7EeHq2ewQuadropD2ra', '2026-10-06T10:00:00.125145Z', 0, ?3)`,
   )
-    .bind(WORKSPACE, status)
+    .bind(WORKSPACE, status, updatedAt)
     .run();
 }
 
@@ -109,6 +109,27 @@ describe("billing reconcile", () => {
     expect(JSON.stringify(logged.mock.calls)).not.toContain("reconcile_corrected");
   });
 
+  it("repairs a pending row whose active webhook was lost, even though the row is newer than the subscription", async () => {
+    await seedPlan("pending", "2026-10-13T12:00:00Z");
+    dodoAnswers(dodoSubscription());
+
+    await reconcileCheckoutReturn(WORKSPACE, "reconcile@example.com");
+
+    expect((await plan())?.status).toBe("active");
+  });
+
+  it("leaves a plan that already matches Dodo untouched, so its timestamp never moves", async () => {
+    await seedPlan("active", "2026-10-12T00:00:00Z");
+    dodoAnswers(dodoSubscription());
+
+    await reconcileBilling(NOW);
+
+    const row = await env.DB.prepare("SELECT updated_at FROM plan WHERE workspace_id = ?")
+      .bind(WORKSPACE)
+      .first<{ updated_at: string }>();
+    expect(row?.updated_at).toBe("2026-10-12T00:00:00Z");
+  });
+
   it("finds a missed subscription from the customer's email on checkout return", async () => {
     dodoAnswers(dodoSubscription());
 
@@ -145,12 +166,12 @@ describe("billing reconcile", () => {
     expect(await plan()).toBeNull();
   });
 
-  it("leaves the plan alone and does not throw when Dodo is down", async () => {
+  it("raises, and leaves the plan alone, when every call to Dodo fails", async () => {
     await seedPlan("active");
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ message: "down" }, { status: 500 }));
 
-    await expect(reconcileBilling(NOW)).resolves.toBeUndefined();
+    await expect(reconcileBilling(NOW)).rejects.toThrow("could not reach Dodo");
     expect((await plan())?.status).toBe("active");
   });
 });

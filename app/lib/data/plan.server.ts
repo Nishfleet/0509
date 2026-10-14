@@ -226,7 +226,7 @@ const reconcilablePlanRow = z.object({ workspace_id: z.string(), provider_subscr
 
 const SELECT_RECONCILABLE = `SELECT workspace_id, provider_subscription_id FROM plan
 WHERE provider_subscription_id IS NOT NULL AND status IN ('pending', 'trialing', 'active', 'past_due', 'on_hold', 'failed')
-ORDER BY updated_at ASC LIMIT ?`;
+ORDER BY random() LIMIT ?`;
 
 export async function readReconcilablePlans(
   limit: number,
