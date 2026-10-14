@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isPlanLapsed } from "../../app/lib/billing/entitlements";
+import { isPlanLapsed } from "../../app/lib/billing/subscription-state";
 
 const now = new Date("2026-10-13T12:00:00.000Z");
 

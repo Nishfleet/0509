@@ -3,7 +3,7 @@ import { captureMessage } from "@sentry/cloudflare";
 import DodoPayments from "dodopayments";
 
 import { readPlanSubscription, readReconcilablePlans, readWorkspaceIdBySubscription } from "../data/plan.server";
-import { isSubscriptionLive } from "./entitlements";
+import { isSubscriptionLive } from "./subscription-state";
 import { planIdForProduct } from "./products.server";
 import { applySubscription } from "./webhook.server";
 

@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import DodoPayments from "dodopayments";
 
 import { readPlanSubscription, type PlanSubscription } from "../data/plan.server";
-import { isSubscriptionLive } from "./entitlements";
+import { isSubscriptionLive } from "./subscription-state";
 import type { PlanSummary } from "./plans";
 import { testerProductId } from "./products.server";
 
