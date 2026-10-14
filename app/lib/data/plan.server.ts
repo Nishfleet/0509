@@ -225,13 +225,16 @@ export async function upsertSubscriptionPlan(input: SubscriptionPlan): Promise<v
 const reconcilablePlanRow = z.object({ workspace_id: z.string(), provider_subscription_id: z.string() });
 
 const SELECT_RECONCILABLE = `SELECT workspace_id, provider_subscription_id FROM plan
-WHERE provider_subscription_id IS NOT NULL AND status IN ('pending', 'trialing', 'active', 'past_due', 'on_hold', 'failed')
-ORDER BY random() LIMIT ?`;
+WHERE provider_subscription_id IS NOT NULL
+  AND (status IN ('pending', 'trialing', 'active', 'past_due', 'on_hold', 'failed')
+    OR (status IN ('cancelled', 'expired') AND updated_at >= ?2))
+ORDER BY random() LIMIT ?1`;
 
 export async function readReconcilablePlans(
   limit: number,
+  endedSince: string,
 ): Promise<readonly { workspaceId: string; subscriptionId: string }[]> {
-  const rows = await env.DB.prepare(SELECT_RECONCILABLE).bind(limit).all();
+  const rows = await env.DB.prepare(SELECT_RECONCILABLE).bind(limit, endedSince).all();
   return reconcilablePlanRow
     .array()
     .parse(rows.results)

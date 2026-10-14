@@ -7,13 +7,16 @@ import { isSubscriptionLive } from "./entitlements";
 import { planIdForProduct } from "./products.server";
 import { applySubscription } from "./webhook.server";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
 const RECENT_DAYS = 3;
-const KNOWN_PER_NIGHT = 200;
+const ENDED_DAYS = 45;
+const KNOWN_PER_NIGHT = 100;
+const RECENT_LIMIT = 300;
 const PAGE_SIZE = 100;
 const CUSTOMERS_PER_RETURN = 3;
 const AT_ONCE = 10;
 const NIGHTLY = { timeout: 8_000, maxRetries: 0 };
-const AT_CHECKOUT = { timeout: 4_000, maxRetries: 0 };
+const AT_CHECKOUT = { timeout: 3_000, maxRetries: 0 };
 
 type Seen = Pick<
   Awaited<ReturnType<DodoPayments["subscriptions"]["retrieve"]>>,
@@ -25,11 +28,6 @@ type Seen = Pick<
   | "next_billing_date"
   | "cancel_at_next_billing_date"
 >;
-
-interface Tally {
-  tried: number;
-  failed: number;
-}
 
 function dodo(options: { timeout: number; maxRetries: number }): DodoPayments | null {
   if (env.DODO_PAYMENTS_API_KEY === "") return null;
@@ -76,55 +74,71 @@ async function reconcileOne(sub: Seen, now: Date): Promise<void> {
   captureMessage("billing: reconcile corrected a plan the webhook had not delivered", { level: "warning" });
 }
 
-async function attempt(tally: Tally, work: () => Promise<void>): Promise<void> {
-  tally.tried += 1;
+type Outcome = "ok" | "failed";
+
+async function settle(work: () => Promise<void>): Promise<Outcome> {
   try {
     await work();
+    return "ok";
   } catch (error) {
-    tally.failed += 1;
     say("billing.reconcile_failed", { kind: error instanceof Error ? error.name : "unknown" });
+    return "failed";
   }
 }
 
-async function phase(tally: Tally, work: () => Promise<void>): Promise<void> {
-  try {
-    await work();
-  } catch (error) {
-    tally.tried += 1;
-    tally.failed += 1;
-    say("billing.reconcile_failed", { kind: error instanceof Error ? error.name : "unknown" });
-  }
-}
-
-async function inGroups<Item>(items: readonly Item[], work: (item: Item) => Promise<void>): Promise<void> {
+async function inGroups<Item>(items: readonly Item[], work: (item: Item) => Promise<Outcome>): Promise<Outcome[]> {
+  const outcomes: Outcome[] = [];
   for (let start = 0; start < items.length; start += AT_ONCE) {
-    await Promise.all(items.slice(start, start + AT_ONCE).map(work));
+    outcomes.push(...(await Promise.all(items.slice(start, start + AT_ONCE).map(work))));
   }
+  return outcomes;
 }
 
-async function reconcileKnown(client: DodoPayments, now: Date, tally: Tally): Promise<void> {
-  const plans = await readReconcilablePlans(KNOWN_PER_NIGHT);
-  await inGroups(plans, (plan) =>
-    attempt(tally, async () => reconcileOne(await client.subscriptions.retrieve(plan.subscriptionId), now)),
+async function reconcileKnown(client: DodoPayments, now: Date): Promise<Outcome[]> {
+  const endedSince = new Date(now.getTime() - ENDED_DAYS * DAY_MS).toISOString();
+  const plans = await readReconcilablePlans(KNOWN_PER_NIGHT, endedSince);
+  return inGroups(plans, (plan) =>
+    settle(async () => reconcileOne(await client.subscriptions.retrieve(plan.subscriptionId), now)),
   );
 }
 
-async function reconcileRecent(client: DodoPayments, now: Date, tally: Tally): Promise<void> {
-  const since = new Date(now.getTime() - RECENT_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  const page = await client.subscriptions.list({ created_at_gte: since, page_size: PAGE_SIZE });
-  await inGroups(page.items, (item) => attempt(tally, () => reconcileOne(item, now)));
+async function recentSubscriptions(client: DodoPayments, now: Date): Promise<Seen[]> {
+  const since = new Date(now.getTime() - RECENT_DAYS * DAY_MS).toISOString();
+  const found: Seen[] = [];
+  for await (const item of client.subscriptions.list({ created_at_gte: since, page_size: PAGE_SIZE })) {
+    if (found.length >= RECENT_LIMIT) {
+      say("billing.reconcile_recent_capped", { limit: RECENT_LIMIT.toFixed(0) });
+      break;
+    }
+    found.push(item);
+  }
+  return found;
+}
+
+async function reconcileRecent(client: DodoPayments, now: Date): Promise<Outcome[]> {
+  const items = await recentSubscriptions(client, now);
+  return inGroups(items, (item) => settle(() => reconcileOne(item, now)));
+}
+
+async function phase(work: () => Promise<Outcome[]>): Promise<Outcome[]> {
+  try {
+    return await work();
+  } catch (error) {
+    say("billing.reconcile_failed", { kind: error instanceof Error ? error.name : "unknown" });
+    return ["failed"];
+  }
 }
 
 export async function reconcileBilling(now: Date): Promise<void> {
   const client = dodo(NIGHTLY);
-  if (client === null) {
-    say("billing.reconcile_skipped", { reason: "no_api_key" });
-    return;
+  if (client === null) throw new Error("billing: reconcile skipped because the Dodo API key is not set");
+  const outcomes = [
+    ...(await phase(() => reconcileKnown(client, now))),
+    ...(await phase(() => reconcileRecent(client, now))),
+  ];
+  if (outcomes.length > 0 && outcomes.every((outcome) => outcome === "failed")) {
+    throw new Error("billing: reconcile could not reach Dodo");
   }
-  const tally: Tally = { tried: 0, failed: 0 };
-  await phase(tally, () => reconcileKnown(client, now, tally));
-  await phase(tally, () => reconcileRecent(client, now, tally));
-  if (tally.failed > 0 && tally.failed === tally.tried) throw new Error("billing: reconcile could not reach Dodo");
 }
 
 async function customerSubscriptions(client: DodoPayments, email: string): Promise<Seen[]> {
@@ -141,7 +155,7 @@ export async function reconcileCheckoutReturn(workspaceId: string, email: string
   const client = dodo(AT_CHECKOUT);
   if (client === null) return;
   const now = new Date();
-  await attempt({ tried: 0, failed: 0 }, async () => {
+  await settle(async () => {
     const { success } = await env.SIGN_IN_EMAIL_LIMIT.limit({ key: `reconcile:${workspaceId}` });
     if (!success) return;
     for (const sub of await customerSubscriptions(client, email)) await reconcileOne(sub, now);

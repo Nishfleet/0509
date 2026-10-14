@@ -48,7 +48,7 @@ async function seedPlan(status: string, updatedAt = "2026-10-01T00:00:00Z"): Pro
     .run();
 }
 
-let logged = vi.spyOn(console, "log");
+let logged: ReturnType<typeof vi.spyOn>;
 
 describe("billing reconcile", () => {
   beforeEach(async () => {
@@ -114,6 +114,15 @@ describe("billing reconcile", () => {
     dodoAnswers(dodoSubscription());
 
     await reconcileCheckoutReturn(WORKSPACE, "reconcile@example.com");
+
+    expect((await plan())?.status).toBe("active");
+  });
+
+  it("restores a recently cancelled plan that Dodo has reactivated", async () => {
+    await seedPlan("cancelled", "2026-10-10T00:00:00Z");
+    dodoAnswers(dodoSubscription());
+
+    await reconcileBilling(NOW);
 
     expect((await plan())?.status).toBe("active");
   });
