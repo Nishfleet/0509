@@ -1,8 +1,5 @@
 # Push to main deploys. The migration step runs before the Worker goes out, so
-# schema and code land in one ordered step — and note what that means for this
-# rebuild: the first run of this workflow applies 0001_rebuild.sql, whose DROP
-# prologue wipes the pre-rebuild schema from production D1. Nish approved that
-# wipe on 2026-09-20; there are 0 users.
+# schema and code land in one ordered step (the 2026-09-20 rebuild wipe, approved by Nish, is in git history).
 name: Deploy production
 
 on:
@@ -92,7 +89,10 @@ jobs:
         # GIT_SHA is the commit /api/health names (#7187). `--var KEY:VALUE`
         # overrides the empty default in wrangler.jsonc's vars:
         # https://developers.cloudflare.com/workers/wrangler/commands/#deploy
-        run: npm run deploy -- --var "GIT_SHA:$GITHUB_SHA"
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
+        with:
+          timeout_minutes: 3
+          command: npm run deploy -- --var "GIT_SHA:$GITHUB_SHA"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
