@@ -132,7 +132,7 @@ describe("a competitor's pricing page", () => {
     expect(await classifyCompetitorSites("2026-10-06T02:00:00Z")).toBe(0);
   });
 
-  it("keeps the verdicts that landed when Jev refuses the pricing link, defers the home page, and retries it later", async () => {
+  it("keeps the verdicts that landed when Jev refuses the pricing link, leaves the home page unmarked, and retries it next night", async () => {
     Reflect.set(env, "AI", {
       run(_model: string, request: { questions: Record<string, { type: string }> }) {
         if (JSON.stringify(request).includes("/plans")) return Promise.reject(new Error("2003: Rate limit exceeded"));
@@ -150,8 +150,7 @@ describe("a competitor's pricing page", () => {
     expect(await pages()).toEqual([`${HOME}:home:unread`, `https://rival-shop.com/about:other:unread`]);
 
     installJev();
-    expect(await classifyCompetitorSites("2026-10-03T02:00:00Z")).toBe(0);
-    expect(await classifyCompetitorSites("2026-10-06T02:00:00Z")).toBe(1);
+    expect(await classifyCompetitorSites("2026-10-03T02:00:00Z")).toBe(1);
     expect(await pages()).toEqual([
       `${HOME}:home:read`,
       `https://rival-shop.com/about:other:unread`,

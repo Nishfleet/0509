@@ -20,8 +20,8 @@ export async function classifyCompetitorSites(now: string): Promise<number> {
       now,
       { archive: true },
     );
-    if (read) await markLinksRead(competitor.homePageId, now);
-    else await markPageDeferred(competitor.homePageId, now);
+    if (read === "read") await markLinksRead(competitor.homePageId, now);
+    else if (read === "unread") await markPageDeferred(competitor.homePageId, now);
   }
   await adoptAlternateHomes(now);
   return competitors.length;

@@ -66,11 +66,33 @@ async function readHome(
   return readOrArchive(live, { url: homepageUrl, ...archive });
 }
 
+async function judgeNavPages(
+  params: IdentityTailParams,
+  pages: IdentityExtract["navPages"],
+  now: string,
+): Promise<boolean> {
+  try {
+    const entity = { id: params.entityId, domain: params.domain };
+    await classifyNavPages({ workspaceId: params.workspaceId, entity, pages, now });
+    return true;
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        event: "identity-page-role-unanswered",
+        workspaceId: params.workspaceId,
+        reason: probeFailureReason(error),
+        pages: pages.length,
+      }),
+    );
+    return false;
+  }
+}
+
 async function learnFromHome(
   params: IdentityTailParams,
   home: { url: string; extract: IdentityExtract },
   now: string,
-): Promise<void> {
+): Promise<boolean> {
   const { extract } = home;
   await fillCompetitorSocials({
     workspaceId: params.workspaceId,
@@ -79,7 +101,7 @@ async function learnFromHome(
     readAt: now,
   });
   const entity = { id: params.entityId, domain: params.domain };
-  await classifyNavPages({ workspaceId: params.workspaceId, entity, pages: extract.navPages, now });
+  const judged = await judgeNavPages(params, extract.navPages, now);
   try {
     await findHiddenPricing({
       workspaceId: params.workspaceId,
@@ -99,14 +121,17 @@ async function learnFromHome(
       }),
     );
   }
+  return judged;
 }
+
+export type TailRead = "read" | "partial" | "unread";
 
 export async function classifyTailPages(
   params: IdentityTailParams,
   now: string,
   options: { archive?: boolean } = {},
-): Promise<boolean> {
-  if (params.handle !== undefined || params.homepageUrl === null) return false;
+): Promise<TailRead> {
+  if (params.handle !== undefined || params.homepageUrl === null) return "unread";
   try {
     const page = await readHome(params, params.homepageUrl, {
       now: new Date(now),
@@ -122,11 +147,11 @@ export async function classifyTailPages(
           subjectSha256,
         }),
       );
-      return false;
+      return "unread";
     }
     const extract = await extractIdentity(page.html, params.homepageUrl);
-    await learnFromHome(params, { url: params.homepageUrl, extract }, now);
-    return true;
+    const judged = await learnFromHome(params, { url: params.homepageUrl, extract }, now);
+    return judged ? "read" : "partial";
   } catch (error) {
     const subjectSha256 = await sha256Hex(params.domain);
     console.warn(
@@ -137,7 +162,7 @@ export async function classifyTailPages(
         subjectSha256,
       }),
     );
-    return false;
+    return "unread";
   }
 }
 
