@@ -238,6 +238,7 @@ describe("deliverChange", () => {
     expect(result.outcome).toBe("failed");
     expect(slots.resolveSendAttempt).toHaveBeenCalledWith(expect.anything(), {
       attemptId: "att-1",
+      idempotencyKey: "change:sig-1:tgt-1",
       outcome: "failed",
       error: "smtp down",
     });
