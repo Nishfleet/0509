@@ -223,6 +223,15 @@ describe("billing reconcile", () => {
     expect(row).toEqual({ status: "active", at: "2026-10-14T02:59:00Z" });
   });
 
+  it("still corrects a known plan when Dodo returns no metadata", async () => {
+    await seedPlan("active");
+    dodoAnswers(dodoSubscription({ status: "on_hold", metadata: null }));
+
+    await reconcileBilling(NOW);
+
+    expect((await plan())?.status).toBe("on_hold");
+  });
+
   it("ignores a subscription whose proof was not made for this workspace", async () => {
     dodoAnswers(dodoSubscription({ metadata: { workspace_id: WORKSPACE, plan: "starter", proof: "forged" } }));
 

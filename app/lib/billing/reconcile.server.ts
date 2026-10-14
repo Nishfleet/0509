@@ -59,7 +59,7 @@ async function snapshot(workspaceId: string | null): Promise<string> {
 }
 
 function workspaceFor(known: string | null, sub: Seen): string | null {
-  const claimed = sub.metadata.workspace_id;
+  const claimed = (sub.metadata as Record<string, unknown> | null)?.workspace_id;
   return known ?? (typeof claimed === "string" ? claimed : null);
 }
 
