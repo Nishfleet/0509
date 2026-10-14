@@ -495,6 +495,11 @@ describe("judgeChange", () => {
        SELECT 'ud-fb', 'ws-mine', owner_user_id, 'sig-fb-0', 'rival', 'change_feedback:not_useful', NULL, '2026-10-14T00:00:00Z'
        FROM workspace WHERE id = 'ws-mine'`,
     ).run();
+    await env.DB.prepare(
+      `INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at)
+       SELECT 'ud-fb-old', 'ws-mine', owner_user_id, 'sig-fb-0', 'rival', 'change_feedback:useful', NULL, '2026-10-13T00:00:00Z'
+       FROM workspace WHERE id = 'ws-mine'`,
+    ).run();
 
     await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
 

@@ -484,7 +484,7 @@ export async function readRecentSignals(entityId: string, since: string): Promis
 
 const SELECT_RECENT_CHANGE_DIFFS = `SELECT aspect, observed_at, json_extract(CASE WHEN json_valid(payload_json) THEN payload_json ELSE '{}' END, '$.diffKey') AS diff_key,
   (SELECT ud.verdict FROM user_decision ud
-   WHERE ud.signal_id = signal.id AND ud.workspace_id = signal.workspace_id AND ud.verdict LIKE 'change_feedback:%'
+   WHERE ud.signal_id = signal.id AND ud.workspace_id = signal.workspace_id AND ud.verdict IN ('change_feedback:useful', 'change_feedback:not_useful')
    ORDER BY ud.decided_at DESC LIMIT 1) AS feedback
 FROM signal
 WHERE entity_id = ? AND kind = 'change' AND observed_at >= ? AND is_tombstoned = 0 AND duplicate_of IS NULL
