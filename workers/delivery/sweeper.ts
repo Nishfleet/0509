@@ -1,8 +1,16 @@
+import { MAX_TEAMMATE_SEND_ATTEMPTS } from "../../app/lib/teammate-limit";
+
 export const SELECT_STALE_PENDING_DIGESTS = `SELECT id FROM digest WHERE status = 'pending' AND period_end < ? AND period_end >= ?`;
 
 export const SELECT_STALE_PENDING_ATTEMPTS = `SELECT DISTINCT a.digest_id FROM send_attempt a
      JOIN digest d ON d.id = a.digest_id
      WHERE a.status = 'pending' AND a.attempted_at < ? AND d.status <> 'failed' AND d.period_end >= ?`;
+
+const SELECT_RETRYABLE_TEAMMATE_ATTEMPTS = `SELECT DISTINCT a.digest_id FROM send_attempt a
+     JOIN send_target t ON t.id = a.send_target_id
+     JOIN digest d ON d.id = a.digest_id
+     WHERE a.status = 'failed' AND t.role = 'teammate' AND a.attempt_count < ?
+       AND a.attempted_at < ? AND d.status = 'sent' AND d.period_end >= ?`;
 
 export interface SweepResult {
   digests: number;
@@ -28,7 +36,10 @@ export async function sweepPending(env: Env, now: Date): Promise<SweepResult> {
   const attemptRows = await env.DB.prepare(SELECT_STALE_PENDING_ATTEMPTS)
     .bind(attemptCutoff, staleAfter)
     .all<{ digest_id: string }>();
-  const attemptIds = attemptRows.results.map((row) => row.digest_id);
+  const retryRows = await env.DB.prepare(SELECT_RETRYABLE_TEAMMATE_ATTEMPTS)
+    .bind(MAX_TEAMMATE_SEND_ATTEMPTS, attemptCutoff, staleAfter)
+    .all<{ digest_id: string }>();
+  const attemptIds = [...attemptRows.results, ...retryRows.results].map((row) => row.digest_id);
 
   const merged = [...new Set([...digestIds, ...attemptIds])];
 

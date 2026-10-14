@@ -269,6 +269,38 @@ describe("send lane (0509#3979)", () => {
     expect(mate?.status).toBe("failed");
   });
 
+  it("(teammates) a failed teammate send is retried an hour later, at most three times in all", async () => {
+    const digestId = await seedDigest("pending");
+    await seedTeammate("mate-1", "mate@0509.io", true);
+    const failing: SendEmail = {
+      send(mail: EmailMessage | EmailMessageBuilder) {
+        if ((mail as EmailMessageBuilder).to === "mate@0509.io") throw new Error("mailbox full");
+        return Promise.resolve({ messageId: "stub-send-email" });
+      },
+    };
+    const mateAttempt = async () =>
+      env.DB.prepare("SELECT status, attempt_count FROM send_attempt WHERE send_target_id = 'mate-1'").first();
+    const ago = (hours: number) => new Date(Date.now() - hours * 60 * 60 * 1000 + 60_000).toISOString();
+
+    await deliver(envWith(failing), message(digestId));
+    expect(await mateAttempt()).toEqual({ status: "failed", attempt_count: 1 });
+
+    await deliver(envWith(failing), message(digestId));
+    expect(await mateAttempt()).toEqual({ status: "failed", attempt_count: 1 });
+
+    for (const expected of [2, 3]) {
+      await env.DB.prepare("UPDATE send_attempt SET attempted_at = ? WHERE send_target_id = 'mate-1'")
+        .bind(ago(2))
+        .run();
+      await deliver(envWith(failing), message(digestId));
+      expect(await mateAttempt()).toEqual({ status: "failed", attempt_count: expected });
+    }
+
+    await env.DB.prepare("UPDATE send_attempt SET attempted_at = ? WHERE send_target_id = 'mate-1'").bind(ago(2)).run();
+    await deliver(envWith(failing), message(digestId));
+    expect(await mateAttempt()).toEqual({ status: "failed", attempt_count: 3 });
+  });
+
   it("(teammates) a teammate waits while another worker still holds the owner's send", async () => {
     const rec = recorder();
     const digestId = await seedDigest("pending");

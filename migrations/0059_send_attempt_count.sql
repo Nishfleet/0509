@@ -1,0 +1,1 @@
+ALTER TABLE send_attempt ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 1;
