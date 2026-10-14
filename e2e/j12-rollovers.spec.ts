@@ -4,11 +4,6 @@ import { expect, test } from "./test";
 import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
 import { requireInboxToken, signInWithMagicLink } from "./inbox";
 
-// J12 from docs/REBUILD-DONE.md §A. Production only: the fixed kept account
-// signs in over the real mail path, and the rollovers it reads are the
-// StandingRollover Workflow's own, one per Monday brief. The preview Worker
-// has no inbox and no elapsed weeks. Run weekly by the j12 job in
-// e2e-scheduled.yml (Wednesday, after Monday's rollover has frozen).
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "J12 reads weeks the production Workflow froze; the local preview Worker has none and no inbox",

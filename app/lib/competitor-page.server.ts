@@ -26,6 +26,8 @@ import { readWorkspaceTimezone } from "./data/workspace.server";
 import { weightsAsOf } from "./standing-score";
 import { ALL_WEIGHTS, weightRows } from "./standing-score.server";
 
+const UNREADABLE_QUIET = "We couldn't read their website, so there is nothing to score yet.";
+
 export interface CompetitorPage {
   competitor: CompetitorEntity;
   watch: SiteWatchSummary;
@@ -86,11 +88,13 @@ export async function readCompetitorPage(
     developments,
     weekCount: changes.filter((change) => change.observedAt >= weekStart).length,
     biggestMove: move === null ? null : biggestMoveView(move, now),
-    quiet: quietWeekSentence(
-      watchedNames(sources.map((row) => row.source.platform)),
-      watch.lastPolledAt === null ? null : captureLabel(watch.lastPolledAt),
-      sweepClock,
-    ),
+    quiet: watch.unreadable
+      ? UNREADABLE_QUIET
+      : quietWeekSentence(
+          watchedNames(sources.map((row) => row.source.platform)),
+          watch.lastPolledAt === null ? null : captureLabel(watch.lastPolledAt),
+          sweepClock,
+        ),
     sweepClock,
     timezone,
     youtubeUrl: socials?.find((social) => social.platform === "youtube")?.url ?? null,

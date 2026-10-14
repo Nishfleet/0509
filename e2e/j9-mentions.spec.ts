@@ -5,9 +5,6 @@ import { expect, test } from "./test";
 import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
 import { consoleFailures, isLocalLane, run, seedPreviewSession, watchConsole } from "./inbox";
 
-// The end-of-test screenshot is report evidence, not an assertion. Playwright's
-// recorder attaches it and drops a capture that fails instead of failing the
-// test; e2e/reduced-motion.spec.ts has the why.
 test.use({ screenshot: { mode: "on", fullPage: true } });
 
 test.skip(
@@ -114,8 +111,6 @@ test("J9: news, Hacker News and YouTube mentions are listed and the homonym is n
   const cookie = await seedSession();
   await page.setExtraHTTPHeaders({ cookie });
 
-  // The bound is read on its own page, so closing it cannot abort a fetch of
-  // the page whose console the journey watches.
   const competitorsPage = await page.context().newPage();
   await competitorsPage.setExtraHTTPHeaders({ cookie });
   await competitorsPage.goto("/app/competitors");

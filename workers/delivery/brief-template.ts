@@ -309,7 +309,20 @@ function sinceSentence(checked: BriefPayload["checked"]): string {
   return since === null ? "" : ` ${since}.`;
 }
 
-function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { html: string; text: string } {
+function settingsLine(teammate: boolean): { html: string; text: string } {
+  if (teammate) return { html: "", text: "" };
+  return {
+    html: `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;"><a class="brief-muted" href="${SETTINGS_LINK}">${escapeHtml(COPY.settings)}</a>.</p>`,
+    text: `${COPY.settings}: ${SETTINGS_LINK}`,
+  };
+}
+
+function renderFooter(
+  payload: BriefPayload,
+  unsubscribeUrl: string | null,
+  teammate: boolean,
+): { html: string; text: string } {
+  const settings = settingsLine(teammate);
   const sinceTail = sinceSentence(payload.checked);
   const checked = countsSentence(payload.checked);
   const sourceCount = payload.checked.source_keys.length;
@@ -332,7 +345,7 @@ function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { h
     `<p class="brief-muted" style="${EYEBROW}">${escapeHtml(COPY.footerTitle)}</p>`,
     `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(`${checked}${across}.${degraded}${sinceTail}`)}</p>`,
     `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(nextAt)}</p>`,
-    `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;"><a class="brief-muted" href="${SETTINGS_LINK}">${escapeHtml(COPY.settings)}</a>.</p>`,
+    settings.html,
     `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">`,
     unsubscribeHref === null
       ? escapeHtml(COPY.noUnsubscribe)
@@ -346,11 +359,13 @@ function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { h
   const text = [
     `${COPY.footerTitle}: ${checked}${across}.${degraded}${sinceTail}`,
     nextAt,
-    `${COPY.settings}: ${SETTINGS_LINK}`,
+    settings.text,
     unsubscribeUrl === null ? COPY.noUnsubscribe : `${COPY.unsubscribe}: ${unsubscribeUrl}`,
     supportLineText(),
     ...(postal === null ? [] : [postal.text]),
-  ].join("\n");
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
 
   return { html, text };
 }
@@ -380,7 +395,7 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
   const marks = renderReadThisFirst(payload, context.asset_base_url);
   const brands = renderBrands(payload);
   const ownSite = renderOwnSite(payload);
-  const footer = renderFooter(payload, context.unsubscribe_url);
+  const footer = renderFooter(payload, context.unsubscribe_url, context.teammate === true);
 
   const subject = briefSubject(payload);
 
