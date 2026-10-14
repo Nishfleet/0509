@@ -64,6 +64,12 @@ const CHALLENGE_MARKERS = [
   "unusual traffic from your computer network",
   "are you a robot",
   "verification successful. waiting for",
+  "pardon our interruption",
+  "incapsula incident id",
+  "errors.edgesuite.net",
+  "captcha-delivery.com",
+  "px-captcha",
+  "sucuri website firewall - access denied",
 ] as const;
 
 const FETCH_HEADERS = {
