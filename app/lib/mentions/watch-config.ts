@@ -1,18 +1,12 @@
-import { z } from "zod";
-
 import { NO_CHANNEL_REASON } from "./channel-reasons";
 
 const CHANNEL_ID = /^UC[0-9A-Za-z_-]{22}$/;
 
-const channelIdSchema = z.string().regex(CHANNEL_ID);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
-const degradedSchema = z.object({
-  state: z.literal("degraded"),
-  reason: z.string().min(1),
-  at: z.string().min(1),
-});
-
-const jsonObject = z.record(z.string(), z.unknown());
+const isText = (value: unknown): value is string => typeof value === "string" && value !== "";
 
 export interface LostChannelFlag {
   reason: string;
@@ -40,9 +34,9 @@ function readChannelField(
   key: string,
 ): { ok: true; value: string | null } | { ok: false } {
   if (!Object.hasOwn(record, key)) return { ok: true, value: null };
-  const parsed = channelIdSchema.safeParse(record[key]);
-  if (!parsed.success) return { ok: false };
-  return { ok: true, value: parsed.data };
+  const held = record[key];
+  if (typeof held !== "string" || !CHANNEL_ID.test(held)) return { ok: false };
+  return { ok: true, value: held };
 }
 
 export function readWatchConfig(raw: string | null | undefined): WatchConfigRead {
@@ -64,14 +58,13 @@ export function readWatchConfig(raw: string | null | undefined): WatchConfigRead
     console.error(JSON.stringify({ event: "mentions.youtube_channel_json_parse_failed", error: String(error) }));
     return { status: "unreadable" };
   }
-  const record = jsonObject.safeParse(value);
-  if (!record.success) return { status: "unreadable" };
+  if (!isRecord(value)) return { status: "unreadable" };
 
-  const channelId = readChannelField(record.data, "channelId");
-  const pendingChannelId = readChannelField(record.data, "pendingChannelId");
+  const channelId = readChannelField(value, "channelId");
+  const pendingChannelId = readChannelField(value, "pendingChannelId");
   if (!channelId.ok || !pendingChannelId.ok) return { status: "unreadable" };
 
-  const flags = readFlags(record.data);
+  const flags = readFlags(value);
   if (flags === null) return { status: "unreadable" };
 
   return {
@@ -81,7 +74,7 @@ export function readWatchConfig(raw: string | null | undefined): WatchConfigRead
     degraded: flags.lostChannel ?? flags.noChannel,
     noChannel: flags.noChannel,
     lostChannel: flags.lostChannel,
-    record: record.data,
+    record: value,
   };
 }
 
@@ -103,7 +96,7 @@ function readFlagSlot(
   key: string,
 ): { ok: true; flag: LostChannelFlag | null } | { ok: false } {
   if (!Object.hasOwn(record, key)) return { ok: true, flag: null };
-  const parsed = degradedSchema.safeParse(record[key]);
-  if (!parsed.success) return { ok: false };
-  return { ok: true, flag: { reason: parsed.data.reason, at: parsed.data.at } };
+  const held = record[key];
+  if (!isRecord(held) || held.state !== "degraded" || !isText(held.reason) || !isText(held.at)) return { ok: false };
+  return { ok: true, flag: { reason: held.reason, at: held.at } };
 }
