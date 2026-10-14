@@ -74,7 +74,14 @@ async function displacement(input: {
 const firstLookWhenActive = (type: string, workspaceId: string): Promise<void> =>
   type === "subscription.active" ? tryFirstLook(workspaceId) : Promise.resolve();
 
-export async function applySubscription(body: unknown, type: string, timestamp: string): Promise<"done" | "retry"> {
+export interface SubscriptionEvent {
+  type: string;
+  timestamp: string;
+  expectedUpdatedAt?: string;
+}
+
+export async function applySubscription(body: unknown, event: SubscriptionEvent): Promise<"done" | "retry"> {
+  const { type, timestamp } = event;
   const parsed = subscriptionEvent.safeParse(body);
   if (!parsed.success) {
     log("billing.webhook_unparsed", { type });
@@ -118,6 +125,7 @@ export async function applySubscription(body: unknown, type: string, timestamp: 
       }),
     updatedAt: timestamp,
     replace: change === "takeover",
+    expectedUpdatedAt: event.expectedUpdatedAt,
   });
   await firstLookWhenActive(type, workspaceId);
   return "done";
@@ -169,7 +177,7 @@ export async function handleDodoWebhook(request: Request): Promise<Response> {
     receivedAt: now,
   });
   if (state === "processed") return new Response(null, OK);
-  const outcome = type.startsWith("subscription.") ? await applySubscription(json, type, timestamp) : "done";
+  const outcome = type.startsWith("subscription.") ? await applySubscription(json, { type, timestamp }) : "done";
   if (outcome === "retry") return new Response(null, { status: 500 });
   await markWebhookEventProcessed(id, now);
   return new Response(null, OK);

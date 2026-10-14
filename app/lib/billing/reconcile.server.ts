@@ -58,15 +58,23 @@ async function snapshot(workspaceId: string | null): Promise<string> {
     : `${plan.tier}|${plan.status}|${plan.subscriptionId ?? ""}|${plan.currentPeriodEnd ?? ""}`;
 }
 
-async function reconcileOne(sub: Seen): Promise<void> {
+function workspaceFor(known: string | null, sub: Seen): string | null {
+  const claimed = sub.metadata.workspace_id;
+  return known ?? (typeof claimed === "string" ? claimed : null);
+}
+
+async function reconcileOne(sub: Seen, readBeforeDodo: string | null): Promise<void> {
   const known = await readWorkspaceIdBySubscription(sub.subscription_id);
   const current = known === null ? null : await readPlanSubscription(known);
   if (matchesDodo(current, sub)) return;
-  const claimed = sub.metadata.workspace_id;
-  const workspaceId = known ?? (typeof claimed === "string" ? claimed : null);
+  if (current !== null && current.updatedAt !== readBeforeDodo) return;
+  const workspaceId = workspaceFor(known, sub);
   const before = await snapshot(workspaceId);
-  const timestamp = known === null || current === null ? sub.created_at : current.updatedAt;
-  const outcome = await applySubscription({ data: sub }, `subscription.${sub.status}`, timestamp);
+  const timestamp = current?.updatedAt ?? sub.created_at;
+  const outcome = await applySubscription(
+    { data: sub },
+    { type: `subscription.${sub.status}`, timestamp, expectedUpdatedAt: current?.updatedAt },
+  );
   if (outcome === "retry") {
     say("billing.reconcile_unmatched", { subscription: sub.subscription_id, status: sub.status });
     return;
@@ -88,7 +96,9 @@ export async function reconcileCandidates(now: Date): Promise<string[]> {
 export async function reconcileSubscription(subscriptionId: string): Promise<void> {
   const client = dodo(NIGHTLY);
   if (client === null) throw new Error("billing: reconcile skipped because the Dodo API key is not set");
-  await reconcileOne(await client.subscriptions.retrieve(subscriptionId));
+  const owner = await readWorkspaceIdBySubscription(subscriptionId);
+  const readBeforeDodo = owner === null ? null : ((await readPlanSubscription(owner))?.updatedAt ?? null);
+  await reconcileOne(await client.subscriptions.retrieve(subscriptionId), readBeforeDodo);
 }
 
 async function recentSubscriptions(client: DodoPayments, now: Date): Promise<Seen[]> {
@@ -109,7 +119,8 @@ async function customerSubscriptions(client: DodoPayments, email: string): Promi
   const pages = await Promise.all(
     customers.items.map((customer) => client.subscriptions.list({ customer_id: customer.customer_id, page_size: 10 })),
   );
-  return pages.flatMap((page) => page.items);
+  const ids = pages.flatMap((page) => page.items.map((item) => item.subscription_id)).slice(0, AT_CHECKOUT_LIMIT);
+  return Promise.all(ids.map((id) => client.subscriptions.retrieve(id)));
 }
 
 export async function reconcileCheckoutReturn(workspaceId: string, email: string): Promise<void> {
@@ -120,8 +131,8 @@ export async function reconcileCheckoutReturn(workspaceId: string, email: string
   try {
     const { success } = await env.SIGN_IN_EMAIL_LIMIT.limit({ key: `reconcile:${workspaceId}` });
     if (!success) return;
-    for (const sub of (await customerSubscriptions(client, email)).slice(0, AT_CHECKOUT_LIMIT)) {
-      await reconcileOne(sub);
+    for (const sub of await customerSubscriptions(client, email)) {
+      await reconcileOne(sub, current?.updatedAt ?? null);
     }
   } catch (error) {
     say("billing.reconcile_failed", { kind: error instanceof Error ? error.name : "unknown" });

@@ -203,6 +203,26 @@ describe("billing reconcile", () => {
     expect(row).toEqual({ status: "on_hold", at: "2026-10-01T00:00:00Z" });
   });
 
+  it("leaves a plan alone when a webhook updated it while Dodo was being asked", async () => {
+    await seedPlan("active");
+    const sub = dodoSubscription({ status: "on_hold" });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.pathname === "/subscriptions") return Response.json({ items: [sub] });
+      await env.DB.prepare("UPDATE plan SET updated_at = '2026-10-14T02:59:00Z' WHERE workspace_id = ?")
+        .bind(WORKSPACE)
+        .run();
+      return Response.json(sub);
+    });
+
+    await reconcileBilling(NOW);
+
+    const row = await env.DB.prepare("SELECT status, updated_at AS at FROM plan WHERE workspace_id = ?")
+      .bind(WORKSPACE)
+      .first<{ status: string; at: string }>();
+    expect(row).toEqual({ status: "active", at: "2026-10-14T02:59:00Z" });
+  });
+
   it("ignores a subscription whose proof was not made for this workspace", async () => {
     dodoAnswers(dodoSubscription({ metadata: { workspace_id: WORKSPACE, plan: "starter", proof: "forged" } }));
 
