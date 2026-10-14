@@ -2,6 +2,7 @@ import { markPageDeferred, recordPageTransport } from "../data/page.server";
 import type { SiteSweepTarget } from "../data/watch.server";
 import { readOrArchive } from "../fetch/archive.server";
 import type { ReadUrlResult } from "../fetch/transport.server";
+import { keepSharedPage, readSharedPage } from "../fetch/shared-read.server";
 import { readUrl } from "../fetch/transport.server";
 import { takeBrowserEscalation } from "./browser-budget.server";
 
@@ -20,37 +21,50 @@ function escalation(
   return () => takeBrowserEscalation(target.workspaceId, target.entityId, day);
 }
 
+async function rememberTransport(
+  target: SiteSweepTarget,
+  read: Extract<ReadUrlResult, { ok: true }>,
+  now: string,
+): Promise<void> {
+  await recordPageTransport({
+    pageId: target.pageId,
+    transport: read.transport,
+    reason: read.escalationReason ?? null,
+    testedAt: now,
+  });
+}
+
+function learnedBrowser(target: SiteSweepTarget, now: string): boolean {
+  return (
+    target.transport === "browser" &&
+    target.transportTestedAt !== null &&
+    Date.parse(now) - Date.parse(target.transportTestedAt) < RETEST_MS
+  );
+}
+
+async function readLive(target: SiteSweepTarget, now: string, options: ReadPageOptions): Promise<ReadUrlResult> {
+  const live = await readUrl(target.url, {
+    startWith: learnedBrowser(target, now) ? "browser" : "fetch",
+    mayEscalate: escalation(options, target, now.slice(0, 10)),
+  });
+  return readOrArchive(live, { url: target.url, now: new Date(now), allowed: target.entityRole !== "self" });
+}
+
 export async function readPage(
   target: SiteSweepTarget,
   now: string,
   options: ReadPageOptions = {},
 ): Promise<ReadUrlResult> {
-  const learnedBrowser =
-    target.transport === "browser" &&
-    target.transportTestedAt !== null &&
-    Date.parse(now) - Date.parse(target.transportTestedAt) < RETEST_MS;
-  const day = now.slice(0, 10);
-  const live = await readUrl(target.url, {
-    startWith: learnedBrowser ? "browser" : "fetch",
-    mayEscalate: escalation(options, target, day),
-  });
-  const read = await readOrArchive(live, {
-    url: target.url,
-    now: new Date(now),
-    allowed: target.entityRole !== "self",
-  });
+  const isRival = target.entityRole !== "self";
+  const shared = isRival ? await readSharedPage(target.url, now.slice(0, 10)) : null;
+  if (shared !== null) return shared;
+  const read = await readLive(target, now, options);
   if (!read.ok) {
     if (read.reason === "deferred") await markPageDeferred(target.pageId, now);
     return read;
   }
   if (read.fromArchive === true) return read;
-  if (!learnedBrowser) {
-    await recordPageTransport({
-      pageId: target.pageId,
-      transport: read.transport,
-      reason: read.escalationReason ?? null,
-      testedAt: now,
-    });
-  }
+  if (isRival) await keepSharedPage(target.url, now.slice(0, 10), read);
+  if (!learnedBrowser(target, now)) await rememberTransport(target, read, now);
   return read;
 }

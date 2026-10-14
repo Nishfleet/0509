@@ -46,6 +46,8 @@ const AFTER_HTML = `<!doctype html><html><body><h1>Rival</h1><p>Plans start at t
 
 const nextTick = async (name: string) => {
   await new Promise((resolve) => setTimeout(resolve, 5));
+  const shared = await env.IDENTITY_CACHE.list({ prefix: "shared-read:" });
+  await Promise.all(shared.keys.map((key) => env.IDENTITY_CACHE.delete(key.name)));
   return { instanceId: name, plannedAt: new Date().toISOString() };
 };
 
