@@ -12,7 +12,7 @@ import { nextBriefAt } from "./brief-schedule";
 import { formatBriefAt } from "./brief-settings";
 import { parseBriefSchedule } from "./brief-schedule-input";
 import { readPlanSummary } from "./data/plan.server";
-import { readSlackTarget, removeSlackTarget, saveSlackTarget } from "./data/send_target.server";
+import { readSlackDisconnected, readSlackTarget, removeSlackTarget, saveSlackTarget } from "./data/send_target.server";
 import { readUserDismissed, restoreSuggestion } from "./data/suggestion.server";
 import {
   readBriefScheduleForOwner,
@@ -88,6 +88,7 @@ const NO_WORKSPACE_SETTINGS = {
   ownSiteAlerts: true,
   changeAlerts: true,
   slackConnected: false,
+  slackRevoked: false,
   dismissed: [],
   teammates: [],
   plan: null,
@@ -95,16 +96,26 @@ const NO_WORKSPACE_SETTINGS = {
 };
 
 async function readWorkspaceSettings(workspaceId: string) {
-  const [ownSiteAlerts, changeAlerts, slackTarget, dismissed, plan, teammates] = await Promise.all([
+  const [ownSiteAlerts, changeAlerts, slackTarget, slackRevoked, dismissed, plan, teammates] = await Promise.all([
     readOwnSiteAlerts(workspaceId),
     readChangeAlerts(workspaceId),
     readSlackTarget(env.DB, workspaceId),
+    readSlackDisconnected(env.DB, workspaceId),
     readUserDismissed(workspaceId),
     readPlanSummary(workspaceId),
     readTeammates(workspaceId),
   ]);
   const returning = await returningForGate(workspaceId, plan);
-  return { ownSiteAlerts, changeAlerts, slackConnected: slackTarget !== null, dismissed, teammates, plan, returning };
+  return {
+    ownSiteAlerts,
+    changeAlerts,
+    slackConnected: slackTarget !== null,
+    slackRevoked,
+    dismissed,
+    teammates,
+    plan,
+    returning,
+  };
 }
 
 export async function readSettings(user: SettingsUser) {
@@ -121,7 +132,7 @@ export async function readSettings(user: SettingsUser) {
           nextLine: formatBriefAt(nextBriefAt(owned.schedule, new Date()), owned.schedule.timezone),
         };
   const workspace = workspaceId === null ? null : await readWorkspaceSettings(workspaceId);
-  const { ownSiteAlerts, changeAlerts, slackConnected, dismissed, teammates, plan, returning } =
+  const { ownSiteAlerts, changeAlerts, slackConnected, slackRevoked, dismissed, teammates, plan, returning } =
     workspace ?? NO_WORKSPACE_SETTINGS;
   return {
     email: user.email,
@@ -129,6 +140,7 @@ export async function readSettings(user: SettingsUser) {
     ownSiteAlerts,
     changeAlerts,
     slackConnected,
+    slackRevoked,
     dismissed,
     delivery,
     teammates,
