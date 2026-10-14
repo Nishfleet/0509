@@ -284,7 +284,7 @@ describe("one-click unsubscribe (0509#4358, 0509#4593, 0509#5761)", () => {
     await suppressWorkspaceTargets(WS);
 
     expect(await readMailKinds(ADDRESS)).toEqual({ brief: false, alerts: false });
-    expect((await suppressionRows()).map((row) => row.reason)).toEqual(["workspace_deleted"]);
+    expect((await suppressionRows()).map((row) => row.reason)).toEqual(["unsubscribed"]);
   });
 
   it("(q) confirming an address lifts only the brief stop and keeps an alerts stop", async () => {
