@@ -1,12 +1,17 @@
-import { createElement } from "react";
+import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { degradedSource, EmptyState, fewerThanTwoOnBrands, quietWeek } from "../app/components/empty-state";
 import type { EmptyStateAction } from "../app/components/empty-state";
 
+function inRouter(element: ReactElement): string {
+  return renderToStaticMarkup(createElement(MemoryRouter, null, element));
+}
+
 function renderEmptyState(sentence: string, action?: EmptyStateAction): string {
-  return renderToStaticMarkup(createElement(EmptyState, { sentence, action }));
+  return inRouter(createElement(EmptyState, { sentence, action }));
 }
 
 describe("EmptyState", () => {

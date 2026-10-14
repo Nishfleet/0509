@@ -22,11 +22,6 @@ const ONE_ARTICLE = {
 
 let runs = 0;
 
-// A mentions source row plus the workspace and competitor rows
-// sweep.integration.test.ts seeds. The platform is dedicated per suite so the
-// UNIQUE (platform, kind, plugin_key) constraint on source cannot collide with
-// the rows migrations/0001 and 0017 already insert, and so asserting on
-// degraded_reason never reads a row another test wrote.
 async function seedBlockedSource(
   slot: string,
   options: { readonly enabled: boolean },
@@ -61,9 +56,6 @@ async function seedBlockedSource(
   return { sourceId, workspaceId, competitorId, brand };
 }
 
-// planTargets() groups by (source_id, target_key), and migrations/0017 already
-// ships an enabled gdelt.doc row. Matching on sourceId as well as the brand is
-// what pins the assertion to the row this test seeded.
 async function gdeltTargetFor(sourceId: string, brand: string) {
   const targets = await planTargets();
   const target = targets.find(

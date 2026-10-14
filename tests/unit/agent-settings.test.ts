@@ -8,12 +8,11 @@ import {
   AgentKeys,
   ConnectedApps,
   ConnectDetails,
-  COPY_DEADLINE_MS,
   CopyFailureNote,
   CopyKey,
   copyKeyLabel,
-  copyToClipboard,
 } from "../../app/components/agent-settings";
+import { COPY_DEADLINE_MS, copyToClipboard } from "../../app/lib/copy-to-clipboard";
 
 const MCP_URL = "https://0509.io/mcp";
 const ORIGIN = "https://0509.io";

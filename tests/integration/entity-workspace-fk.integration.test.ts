@@ -2,15 +2,6 @@ import { applyD1Migrations, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { D1Migration } from "./entity-workspace-fk";
 
-/**
- * 0509#4707. Applies every migration numbered before 0021, stores a connected
- * set of rows, then applies the rebuild. A later file must not run first.
- * A standing row that pairs another workspace's entity aborts the rebuild
- * before any table is dropped, and the stored rows are still there.
- * After that row is removed, the rebuild keeps every stored row, a matching
- * insert succeeds, and an insert that pairs another workspace's entity fails.
- */
-
 const MIGRATION = "0021_entity_workspace_fk.sql";
 const NOW = "2026-09-25T00:00:00.000Z";
 
