@@ -482,6 +482,35 @@ export async function readRecentSignals(entityId: string, since: string): Promis
     }));
 }
 
+const SELECT_RECENT_CHANGE_DIFFS = `SELECT aspect, observed_at, json_extract(CASE WHEN json_valid(payload_json) THEN payload_json ELSE '{}' END, '$.diffKey') AS diff_key
+FROM signal
+WHERE entity_id = ? AND kind = 'change' AND observed_at >= ? AND is_tombstoned = 0 AND duplicate_of IS NULL
+ORDER BY observed_at DESC LIMIT ?`;
+
+const recentChangeDiffRow = z.object({
+  aspect: z.string().nullable(),
+  observed_at: z.string(),
+  diff_key: z.string().nullable(),
+});
+
+export interface RecentChangeDiff {
+  aspect: string | null;
+  observedAt: string;
+  diffKey: string | null;
+}
+
+export async function readRecentChangeDiffs(
+  entityId: string,
+  since: string,
+  limit: number,
+): Promise<RecentChangeDiff[]> {
+  const { results } = await env.DB.prepare(SELECT_RECENT_CHANGE_DIFFS).bind(entityId, since, limit).all();
+  return z
+    .array(recentChangeDiffRow)
+    .parse(results)
+    .map((row) => ({ aspect: row.aspect, observedAt: row.observed_at, diffKey: row.diff_key }));
+}
+
 const SELECT_WEEK_EVIDENCE = `SELECT s.id, ${effectiveKindSql("src")} AS source_kind, s.title, s.summary, s.url, s.evidence_url, s.observed_at
 FROM signal s JOIN source src ON src.id = s.source_id
 WHERE s.workspace_id = ?1 AND s.entity_id = ?2 AND s.observed_at >= ?3 AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL
@@ -534,6 +563,7 @@ const siteChangeRow = z.object({
   verdict_p: z.number().nullable(),
   verdict_reason: z.string().nullable(),
   verdict_decided_at: z.string().nullable(),
+  feedback: z.enum(["change_feedback:useful", "change_feedback:not_useful"]).nullable(),
 });
 
 export type SiteChangeRow = z.infer<typeof siteChangeRow>;
@@ -541,7 +571,10 @@ export type SiteChangeRow = z.infer<typeof siteChangeRow>;
 const SELECT_SITE_CHANGES = `SELECT s.id, s.entity_id, e.name AS entity_name, e.domain AS entity_domain,
   e.role AS entity_role, s.url, s.payload_json, s.observed_at,
   b.fetched_at AS before_at, a.fetched_at AS after_at,
-  v.id AS verdict_id, v.p AS verdict_p, v.reason AS verdict_reason, v.decided_at AS verdict_decided_at
+  v.id AS verdict_id, v.p AS verdict_p, v.reason AS verdict_reason, v.decided_at AS verdict_decided_at,
+  (SELECT ud.verdict FROM user_decision ud
+   WHERE ud.signal_id = s.id AND ud.workspace_id = s.workspace_id AND ud.verdict IN ('change_feedback:useful', 'change_feedback:not_useful')
+   ORDER BY ud.decided_at DESC LIMIT 1) AS feedback
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id
 LEFT JOIN snapshot a ON a.id = s.snapshot_id

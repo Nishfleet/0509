@@ -6,6 +6,7 @@ import { PasskeyList } from "./passkey-list";
 import { BriefScheduleSettings } from "./brief-schedule-settings";
 import { ChangeSignInEmail } from "./change-sign-in-email";
 import { DeliveryAddress } from "./delivery-address";
+import { DevicesList } from "./devices-list";
 import { Teammates } from "./teammates";
 import { MAX_TEAMMATES } from "../lib/teammate-limit";
 import { SignOut, SignOutEverywhere } from "./account-settings";
@@ -111,12 +112,14 @@ export function AccountSection({
   delivery,
   teammates,
   passkeys,
+  devices,
   result,
 }: {
   email: string;
   delivery: ComponentProps<typeof DeliveryAddress>["delivery"];
   teammates: ComponentProps<typeof Teammates>["teammates"];
   passkeys: ComponentProps<typeof PasskeyList>["passkeys"];
+  devices: ComponentProps<typeof DevicesList>["devices"];
   result: AccountResult | undefined;
 }) {
   return (
@@ -135,6 +138,7 @@ export function AccountSection({
         <SignOut />
         <SignOutEverywhere />
       </div>
+      <DevicesList devices={devices} />
     </section>
   );
 }

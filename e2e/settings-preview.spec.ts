@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { type Page } from "@playwright/test";
 import { expect, test } from "./test";
 
+import { PLANS } from "../app/lib/billing/plans";
 import { isLocalLane, run, seedPreviewSession } from "./inbox";
 
 test.skip(
@@ -43,6 +44,13 @@ async function signIn(page: Page, baseURL: string | undefined): Promise<void> {
   await page.goto("/app/settings");
   await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
 }
+
+test("Settings lists where the account is signed in and marks this device", async ({ page, baseURL }) => {
+  await signIn(page, baseURL);
+  const list = page.getByRole("list", { name: "Where you're signed in" });
+  await expect(list).toBeVisible();
+  await expect(list.getByText("This device")).toHaveCount(1);
+});
 
 test("the brief day saves at once and is still there after a reload", async ({ page, baseURL }) => {
   await signIn(page, baseURL);
@@ -113,4 +121,11 @@ test("deleting an account says the plan is cancelled and points to the export fi
   const section = page.locator("#delete-account").locator("xpath=..");
   await expect(section).toContainText("Your plan is cancelled and the emails stop.");
   await expect(section).toContainText("Use Download my data above.");
+});
+
+test("Your plan says how many competitors the plan is watching", async ({ page, baseURL }) => {
+  await signIn(page, baseURL);
+  await expect(page.locator('[data-slot="plan-usage"]')).toHaveText(
+    `Watching 0 of ${String(PLANS[0].limits.competitors)} competitors on your plan.`,
+  );
 });
