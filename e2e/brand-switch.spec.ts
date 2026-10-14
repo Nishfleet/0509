@@ -74,7 +74,7 @@ test("a row's switch is square and paints the card fill when off @smoke", async 
   await track.click();
   await expect(track).not.toBeChecked();
 
-  // The stock root carries `transition-all` and the thumb `duration-180`, so
+  // The stock root carries `transition-colors duration-180` and the thumb `duration-180`, so
   // the off paint is read through a polling assert: a single read lands
   // mid-flight (measured: 84% of the 180ms travel, thumb at 5.8px and the fill
   // still blending `--green` toward `--card`).
