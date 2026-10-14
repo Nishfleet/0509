@@ -7,6 +7,7 @@ import {
   readMailKinds,
   writeMailKinds,
 } from "../../app/lib/data/email_suppression.server";
+import { saveMailKinds } from "../../app/lib/delivery-address.server";
 import { unsubscribe } from "../../app/lib/unsubscribe.server";
 import { deliver } from "../../workers/delivery/consumer";
 
@@ -209,5 +210,31 @@ describe("one-click unsubscribe (0509#4358, 0509#4593, 0509#5761)", () => {
 
     expect(result.outcome).not.toBe("suppressed");
     expect(result.attempt_id).not.toBeNull();
+  });
+
+  it("(k) never touches an opt-out or deletion row that Settings did not write", async () => {
+    await env.DB.prepare(
+      `INSERT INTO email_suppression (address, reason, created_at) VALUES ('gone@0509.io', 'workspace_deleted', '2026-09-01T00:00:00Z')`,
+    ).run();
+
+    await writeMailKinds("gone@0509.io", { brief: true, alerts: true });
+    await writeMailKinds("gone@0509.io", { brief: true, alerts: false });
+
+    expect(await readMailKinds("gone@0509.io")).toEqual({ brief: false, alerts: false });
+    expect((await suppressionRows()).map((row) => row.reason)).toEqual(["workspace_deleted"]);
+  });
+
+  it("(l) refuses to switch kinds for a delivery address that is neither verified nor the sign-in email", async () => {
+    await env.DB.prepare("UPDATE send_target SET target_value = 'victim@0509.io', is_verified = 0").run();
+    await env.DB.prepare(
+      `INSERT INTO email_suppression (address, reason, created_at) VALUES ('victim@0509.io', 'unsubscribed', '2026-09-01T00:00:00Z')`,
+    ).run();
+
+    const refused = await saveMailKinds({ userId: USER, signInEmail: ADDRESS, brief: true, alerts: true });
+    const blocked = await saveMailKinds({ userId: USER, signInEmail: ADDRESS, brief: false, alerts: false });
+
+    expect([refused, blocked]).toEqual([false, false]);
+    expect(await readMailKinds("victim@0509.io")).toEqual({ brief: false, alerts: false });
+    expect(await suppressionRows()).toHaveLength(1);
   });
 });

@@ -231,12 +231,13 @@ async function saveAddress(user: SettingsUser, form: FormData): Promise<Settings
 
 async function saveMail(user: SettingsUser, form: FormData): Promise<SettingsResult> {
   const parsed = mailKindsForm.safeParse(Object.fromEntries(form));
-  await saveMailKinds({
+  const saved = await saveMailKinds({
     userId: user.id,
     signInEmail: user.email,
     brief: parsed.success && parsed.data.brief === "yes",
     alerts: parsed.success && parsed.data.alerts === "yes",
   });
+  if (!saved) return result({ deliveryError: "Confirm this address first, then choose which emails it gets." });
   return result({ saved: true });
 }
 

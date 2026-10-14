@@ -124,9 +124,12 @@ export async function saveMailKinds(input: {
   signInEmail: string;
   brief: boolean;
   alerts: boolean;
-}): Promise<void> {
-  const { address } = await readDeliveryAddress(input.userId, input.signInEmail);
-  await writeMailKinds(normalizeEmailAddress(address), { brief: input.brief, alerts: input.alerts });
+}): Promise<boolean> {
+  const { address, verified } = await readDeliveryAddress(input.userId, input.signInEmail);
+  const normalized = normalizeEmailAddress(address);
+  if (!verified && normalized !== normalizeEmailAddress(input.signInEmail)) return false;
+  await writeMailKinds(normalized, { brief: input.brief, alerts: input.alerts });
+  return true;
 }
 
 export async function saveDeliveryAddress(input: {

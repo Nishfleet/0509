@@ -14,7 +14,8 @@ ON CONFLICT(address) DO UPDATE SET
 
 const SET_KINDS = `INSERT INTO email_suppression (address, reason, created_at, stops_brief, stops_alerts)
 VALUES (lower(trim(?1)), 'unsubscribed', ?2, ?3, ?4)
-ON CONFLICT(address) DO UPDATE SET stops_brief = excluded.stops_brief, stops_alerts = excluded.stops_alerts`;
+ON CONFLICT(address) DO UPDATE SET stops_brief = excluded.stops_brief, stops_alerts = excluded.stops_alerts
+ WHERE reason = 'unsubscribed'`;
 
 const SELECT_KINDS = `SELECT stops_brief, stops_alerts FROM email_suppression WHERE lower(trim(address)) = lower(trim(?)) LIMIT 1`;
 
@@ -23,7 +24,7 @@ SELECT lower(trim(t.target_value)), 'workspace_deleted', ?
   FROM send_target t
   JOIN channel c ON c.id = t.channel_id
  WHERE t.workspace_id = ? AND c.key = 'email' AND t.role = 'owner'
-ON CONFLICT(address) DO NOTHING`;
+ON CONFLICT(address) DO UPDATE SET stops_brief = 1, stops_alerts = 1`;
 
 const SELECT_SUPPRESSION = `SELECT address FROM email_suppression
  WHERE lower(trim(address)) = lower(trim(?1))
@@ -33,6 +34,8 @@ const SELECT_SUPPRESSION = `SELECT address FROM email_suppression
 const SELECT_UNSUBSCRIBE_TOKEN = `SELECT 1 AS present FROM send_target WHERE unsubscribe_token = ?`;
 
 const DELETE_SUPPRESSION = `DELETE FROM email_suppression WHERE lower(trim(address)) = lower(trim(?))`;
+
+const DELETE_UNSUBSCRIBED_SUPPRESSION = `DELETE FROM email_suppression WHERE lower(trim(address)) = lower(trim(?)) AND reason = 'unsubscribed'`;
 
 const DELETE_WORKSPACE_DELETED_SUPPRESSION = `DELETE FROM email_suppression WHERE lower(trim(address)) = lower(trim(?)) AND reason = 'workspace_deleted'`;
 
@@ -86,7 +89,7 @@ export async function readMailKinds(address: string): Promise<{ brief: boolean; 
 
 export async function writeMailKinds(address: string, on: { brief: boolean; alerts: boolean }): Promise<void> {
   if (on.brief && on.alerts) {
-    await clearSuppression(address);
+    await env.DB.prepare(DELETE_UNSUBSCRIBED_SUPPRESSION).bind(address).run();
     return;
   }
   await env.DB.prepare(SET_KINDS)
