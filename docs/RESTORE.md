@@ -18,3 +18,22 @@ Checked read-only on 2026-10-14 (backup drill, 0509 journeys thread).
 - D1: seconds to minutes, measured.
 - R2: **estimate, not measured.** The cloud has no read access to R2 objects, so no timed fetch exists. The nightly listing ran 9 pages of 200 in 30 to 45 s per page, copy included. Copying about 1,900 objects (about 513 MB) back at that page rate is 10 pages, so about 5 to 8 minutes.
 - What is not covered: the copy keeps no history of an object that was overwritten (only logos reuse a key), and a deletion in the source is never deleted in the backup until its lifecycle rule fires.
+
+## Roll back a bad deploy
+
+Written from `.github/workflows/deploy-production.yml` on 2026-10-14. No live rollback was triggered for this write-up, so none of it was drilled against production.
+
+### The Worker
+
+- **Automatic.** The deploy job records the serving version, deploys, then polls `/api/health` until it answers `ok` with this commit (20 tries, 5 s apart). A red or cancelled smoke runs `wrangler rollback` to the recorded version. Read the step "Roll back to the serving Worker version" in the run.
+- **Manual.** `npx wrangler versions list` shows version ids, `npx wrangler rollback <version-id> --message "<why>"` serves one. This changes production, so it needs Nish's yes (AGENTS.md: production state stays gated).
+- **A rollback is not a fix.** The next push to `main` deploys again. Revert the bad commit through the merge queue as well.
+- **Cannot be rolled back.** A deploy that carries a Durable Object migration (`new_sqlite_classes` in `wrangler.jsonc`) cannot be rolled back by Cloudflare. That deploy needs manual recovery.
+
+### A migration
+
+- Migrations are additive, so the previous Worker keeps running on the new schema. Rolling the Worker back does not need the schema rolled back.
+- The migration step runs before the Worker deploys. A migration file that fails stops the job: the Worker is never deployed, and the files before it stay applied.
+- The deploy writes the D1 Time Travel bookmark taken just before migrating into the run's job summary. That bookmark is the path back for a migration that dropped or rewrote data.
+- To use it, `npx wrangler d1 time-travel restore 0509 --bookmark=<bookmark>`. This rewinds every write after the bookmark, including sign-ups and snapshots written since. Run `npx wrangler d1 export 0509 --remote --output <file>` first so those rows can be put back. Production restores need Nish's yes.
+- A restore prints the bookmark it replaced, which undoes the restore if it was the wrong call.

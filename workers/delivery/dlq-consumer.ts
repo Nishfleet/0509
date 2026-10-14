@@ -89,6 +89,18 @@ function incidentDeadLetterError(input: { message_id: string; incident_id: strin
   );
 }
 
+function digestDeadLetterError(input: { message_id: string; digest_id: string; reason: string }): Error {
+  return new Error(
+    JSON.stringify({
+      event: "send-email-dlq.dead_lettered",
+      queue: "send-email-dlq",
+      message_id: input.message_id,
+      digest_id: input.digest_id,
+      reason: input.reason,
+    }),
+  );
+}
+
 export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<string[]> {
   let ids: string[] = [];
   for (const item of batch.messages) {
@@ -113,23 +125,31 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
       continue;
     }
 
-    const deadLettered = await deadLetteredDigest(env, parsed.digest_id);
+    const deadLettered = await deadLetteredDigest(env, item.id, parsed.digest_id);
     item.ack();
     if (deadLettered !== null) ids = [...ids, deadLettered];
   }
   return ids;
 }
 
-async function deadLetteredDigest(env: Env, digestId: string): Promise<string | null> {
+async function deadLetteredDigest(env: Env, messageId: string, digestId: string): Promise<string | null> {
   const digest = await env.DB.prepare(`SELECT workspace_id FROM digest WHERE id = ?`)
     .bind(digestId)
     .first<{ workspace_id: string }>();
   if (!digest) {
+    captureException(
+      digestDeadLetterError({ message_id: messageId, digest_id: digestId, reason: "digest not found" }),
+      { tags: { queue: "send-email-dlq", digest_id: digestId } },
+    );
     console.error("send-email-dlq: digest not found", digestId);
     return null;
   }
 
   const attempt = await env.DB.prepare(SELECT_LATEST_ATTEMPT_ERROR).bind(digestId).first<{ error: string | null }>();
+  captureException(
+    digestDeadLetterError({ message_id: messageId, digest_id: digestId, reason: attempt?.error ?? "unknown" }),
+    { tags: { queue: "send-email-dlq", digest_id: digestId } },
+  );
   console.error(
     JSON.stringify({
       event: "delivery.dead_lettered",
