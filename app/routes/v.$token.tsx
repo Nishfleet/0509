@@ -39,9 +39,11 @@ export default function VerifyAddress({ actionData }: Route.ComponentProps) {
   if (actionData?.confirmed === false) {
     return (
       <main className="mx-auto max-w-xl px-4 py-16">
-        <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">This link has expired</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">
+          This link has expired or was already used
+        </h1>
         <p className="mt-4 leading-[1.65] text-ink-soft">
-          Confirmation links work once and last a day. Ask whoever sent it for a new one.
+          Confirmation links work once and last a day. If you have not confirmed yet, ask whoever sent it for a new one.
         </p>
         <Footer />
       </main>

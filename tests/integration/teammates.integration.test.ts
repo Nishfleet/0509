@@ -167,6 +167,22 @@ describe("teammates on the brief", () => {
     expect(await readTeammates(workspaceId)).toHaveLength(1);
   });
 
+  it("does not use up a slot or the one-a-day wait when the invitation fails to send", async () => {
+    const broken: SendEmail = { send: () => Promise.reject(new Error("down")) };
+    const failed = await addTeammateByOwner({
+      userId: USER_ID,
+      signInEmail: SIGN_IN_EMAIL,
+      address: "retry@0509.io",
+      email: broken,
+    });
+    expect(failed).not.toBeNull();
+    const [mate] = await readTeammates(firstWorkspaceId(USER_ID));
+    await removeTeammateByOwner(USER_ID, mate.id);
+
+    expect(await add("retry@0509.io")).toBeNull();
+    expect(sentMail).toHaveLength(1);
+  });
+
   it("accepts an unsubscribed address like any other but sends it no invitation, so it cannot be probed", async () => {
     const workspaceId = firstWorkspaceId(USER_ID);
     await env.DB.prepare("INSERT INTO email_suppression (address, reason, created_at) VALUES (?, 'unsubscribed', ?)")

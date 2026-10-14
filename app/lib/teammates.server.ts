@@ -48,6 +48,23 @@ async function countInvite(input: { workspaceId: string; address: string; now: D
   await env.IDENTITY_CACHE.put(await reinviteKey(workspaceId, address), "1", { expirationTtl: REINVITE_WAIT_SECONDS });
 }
 
+async function inviteAndCount(input: {
+  email: SendEmail;
+  signInEmail: string;
+  workspaceId: string;
+  targetId: string;
+  address: string;
+  now: Date;
+  used: number;
+}): Promise<string | null> {
+  const { workspaceId, targetId, address, now, used } = input;
+  const failure = (await isAddressSuppressed(address))
+    ? null
+    : await sendTeammateInvite({ email: input.email, workspaceId, targetId, address, addedBy: input.signInEmail });
+  if (failure === null) await countInvite({ workspaceId, address, now, used });
+  return failure;
+}
+
 export async function addTeammateByOwner(input: {
   userId: string;
   signInEmail: string;
@@ -69,9 +86,7 @@ export async function addTeammateByOwner(input: {
   if (used >= INVITES_PER_DAY) return DAILY_LIMIT;
   const targetId = await addTeammate(env.DB, { workspaceId, address, now: now.toISOString() });
   if (targetId === null) return CANT_ADD;
-  await countInvite({ workspaceId, address, now, used });
-  if (await isAddressSuppressed(address)) return null;
-  return sendTeammateInvite({ email: input.email, workspaceId, targetId, address, addedBy: input.signInEmail });
+  return inviteAndCount({ ...input, workspaceId, targetId, address, now, used });
 }
 
 export async function removeTeammateByOwner(userId: string, targetId: string): Promise<void> {

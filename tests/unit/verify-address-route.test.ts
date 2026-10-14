@@ -6,7 +6,7 @@ import type * as ReactRouterModule from "react-router";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("../../app/lib/verify-delivery-address.server", () => ({
-  confirmDeliveryAddress: (token: string | undefined) => Promise.resolve(token === "deadbeef" ? false : true),
+  confirmDeliveryAddress: (token: string | undefined) => Promise.resolve(token === "good"),
 }));
 
 import VerifyAddress, { action, headers, meta } from "../../app/routes/v.$token";
@@ -113,7 +113,7 @@ describe("/v/:token (0509#5811)", () => {
   it("says the link has expired when no token matched, and never claims it confirmed", () => {
     const html = renderPage("expired");
 
-    expect(html).toContain("This link has expired");
+    expect(html).toContain("This link has expired or was already used");
     expect(html).not.toContain("Email address confirmed");
     expect(html).not.toContain("Confirm this email address?");
   });
@@ -121,6 +121,7 @@ describe("/v/:token (0509#5811)", () => {
   it("answers POST with what the confirm actually did", async () => {
     expect(await action({ params: { token: "good" } } as never)).toEqual({ confirmed: true });
     expect(await action({ params: { token: "deadbeef" } } as never)).toEqual({ confirmed: false });
+    expect(await action({ params: { token: undefined } } as never)).toEqual({ confirmed: false });
   });
 
   it("is no-store and noindex", () => {
