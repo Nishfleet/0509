@@ -521,7 +521,7 @@ describe("inline-styled html, and the voice", () => {
     expect(both.html).toContain("<!doctype html>");
     expect(both.html).toContain("<body");
     expect(both.text.length).toBeGreaterThan(0);
-    expect(both.subject).toBe("You're #3 of 8 this week, up 2");
+    expect(both.subject).toBe("Kindred: 3 tiers → 2 tiers (+1 more)");
   });
 
   it("widths the container for a 600 px read", () => {
@@ -653,12 +653,49 @@ describe("inline styles survive the attribute they sit in", () => {
 });
 
 describe("the subject line", () => {
-  it("names the rank when there is one", () => {
-    expect(renderBrief(payload(), CONTEXT).subject).toBe("You're #3 of 8 this week, up 2");
+  it("names the top rival move with its before and after", () => {
+    expect(renderBrief(payload(), CONTEXT).subject).toBe("Kindred: 3 tiers → 2 tiers (+1 more)");
   });
 
-  it("stays generic when there is no rank", () => {
-    expect(renderBrief(payload({ headline_rank: null }), CONTEXT).subject).toBe("Your weekly brief");
+  it("falls back to the title, then to a plain statement, never a URL", () => {
+    const [lead, ...rest] = payload().read_this_first;
+    const withTitle = payload({ read_this_first: lead ? [{ ...lead, before: null, after: null }] : [] });
+    expect(renderBrief(withTitle, CONTEXT).subject).toBe("Kindred: Pricing page rewritten");
+    const urlTitle = payload({
+      read_this_first: lead ? [{ ...lead, before: null, after: null, title: "https://kindred.example/p" }] : [],
+    });
+    expect(renderBrief(urlTitle, CONTEXT).subject).toBe("Kindred made a move");
+    expect(rest.length).toBeGreaterThan(0);
+  });
+
+  it("stays under 78 characters however long the words are", () => {
+    const [lead] = payload().read_this_first;
+    const long = "word ".repeat(40);
+    const subject = renderBrief(
+      payload({ read_this_first: lead ? [{ ...lead, before: long, after: long, entity_name: long }] : [] }),
+      CONTEXT,
+    ).subject;
+    expect(subject.length).toBeLessThanOrEqual(78);
+  });
+
+  it("is honest on a quiet week and keeps the rank for context", () => {
+    const quiet = payload({ read_this_first: [], is_quiet_week: true });
+    expect(renderBrief(quiet, CONTEXT).subject).toBe("Quiet week: you're #3 of 8");
+    expect(renderBrief({ ...quiet, headline_rank: null }, CONTEXT).subject).toBe(
+      "Quiet week: nothing needed your attention",
+    );
+  });
+
+  it("promises nothing about timing and never shouts", () => {
+    const { subject } = renderBrief(payload(), CONTEXT);
+    expect(subject).not.toMatch(/[!]|breaking|now|today|just/i);
+  });
+
+  it("uses the top reason as the preheader and offers one link to the brief", () => {
+    const { html, text } = renderBrief(payload(), CONTEXT);
+    expect(html).toContain("A competitor dropping a tier before launch week is the move.");
+    expect(html.match(/href="https:\/\/0509\.io\/app\/brief"/g)).toHaveLength(1);
+    expect(text).toContain("See every change in your brief: https://0509.io/app/brief");
   });
 });
 
@@ -782,9 +819,9 @@ describe("every string field carries the injection probe escaped, never raw (050
 });
 
 describe("inbox preview and the Settings link (Mobbin benchmark)", () => {
-  it("hides the why line as the preview text under the opening tag, before the wordmark", () => {
+  it("hides the top reason as the preview text under the opening tag, before the wordmark", () => {
     const { html } = renderBrief(payload(), CONTEXT);
-    const preview = html.indexOf("Kindred is the mover");
+    const preview = html.indexOf("A competitor dropping a tier");
 
     expect(html).toContain("display:none");
     expect(preview).toBeGreaterThan(html.indexOf("<body"));

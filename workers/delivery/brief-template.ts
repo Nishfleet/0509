@@ -1,4 +1,5 @@
 import { type BriefContext, type BriefPayload, type RenderedBrief } from "../../app/lib/brief-payload";
+import { briefPreheader, briefSubject } from "../../app/lib/brief-subject";
 import { rankTrendLine, sinceStartedLine } from "../../app/lib/brief-since";
 import { escapeHtml } from "../../app/lib/html";
 import { countPhrase } from "../../app/lib/quiet-week";
@@ -8,10 +9,7 @@ import { EYEBROW, FONT, MONO, emailDocument, postalLine } from "./email-shell";
 import { SETTINGS_LINK, supportLineHtml, supportLineText } from "./alert-footer";
 
 const COPY = {
-  subject: (rank: number, total: number) => `You're #${n(rank)} of ${n(total)} this week`,
-  subjectMoved: (rank: number, total: number, movement: string) =>
-    `You're #${n(rank)} of ${n(total)} this week, ${movement}`,
-  noRankSubject: "Your weekly brief",
+  openBrief: "See every change in your brief",
   weekOf: (start: string) => `Week of ${start}`,
   headline: (rank: number, total: number) => `You're #${n(rank)} of ${n(total)} this week`,
   noRank: "Add a competitor to see where you stand",
@@ -43,6 +41,8 @@ const COPY = {
   blindNever: (source: string) =>
     `We have not been able to reach ${source} yet, so we cannot say this was a quiet week.`,
 } as const;
+
+const BRIEF_LINK = "https://0509.io/app/brief";
 
 function n(value: number): string {
   return String(value);
@@ -210,12 +210,14 @@ function renderReadThisFirst(payload: BriefPayload, assetBaseUrl: string | null)
     };
   }
 
-  const html = [heading(COPY.readThisFirst), ...marks.map((mark) => renderMark(mark, payload, assetBaseUrl).html)].join(
-    "",
-  );
+  const html = [
+    heading(COPY.readThisFirst),
+    ...marks.map((mark) => renderMark(mark, payload, assetBaseUrl).html),
+    `<p style="margin:4px 0 0;font-family:${FONT};font-size:16px;line-height:24px;"><a class="brief-ink" href="${BRIEF_LINK}">${escapeHtml(COPY.openBrief)}</a></p>`,
+  ].join("");
 
   const rendered = marks.map((mark) => renderMark(mark, payload, assetBaseUrl));
-  const text = [COPY.readThisFirst, ...rendered.map((r) => r.text)].join("\n\n");
+  const text = [COPY.readThisFirst, ...rendered.map((r) => r.text), `${COPY.openBrief}: ${BRIEF_LINK}`].join("\n\n");
 
   return { html, text };
 }
@@ -372,16 +374,6 @@ function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { h
   return { html, text };
 }
 
-function briefSubject(payload: BriefPayload): string {
-  const { headline_rank, headline_total, headline_movement } = payload;
-  if (payload.is_unjudged) return COPY.unjudged;
-  if (headline_rank === null || headline_total < 2) return COPY.noRankSubject;
-  if (payload.headline_is_new || headline_movement === null || headline_movement === 0) {
-    return COPY.subject(headline_rank, headline_total);
-  }
-  return COPY.subjectMoved(headline_rank, headline_total, movementText(headline_movement, false));
-}
-
 export function renderBrief(payload: BriefPayload, context: BriefContext): RenderedBrief {
   const quiet = payload.is_quiet_week && payload.read_this_first.length === 0;
   const blindLine = payload.checked.degraded_sources
@@ -398,7 +390,7 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
   const ownSite = renderOwnSite(payload);
   const footer = renderFooter(payload, context.unsubscribe_url);
 
-  const subject = briefSubject(payload);
+  const subject = briefSubject(payload, COPY.unjudged);
 
   const block = (inner: string) => `<div class="brief-rule" style="padding:20px 0;">${inner}</div>`;
 
@@ -407,7 +399,7 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
     [headline.html, ...(quiet ? [] : [block(marks.html)]), block(brands.html), block(ownSite.html), footer.html].join(
       "",
     ),
-    whyLine,
+    briefPreheader(payload, whyLine),
   );
 
   const text = [
