@@ -220,6 +220,20 @@ describe("incident lane (0509#4364)", () => {
     expect(notices?.[0]?.sent_on).toBe(DAY);
   });
 
+  it("never mails an incident notice to a confirmed teammate, only to the owner", async () => {
+    await env.DB.prepare(
+      `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at, role)
+       VALUES ('mate-incident', ?, ?, 'mate@0509.io', 1, '2026-09-23T00:00:02Z', 'teammate')`,
+    )
+      .bind(WS, CHANNEL)
+      .run();
+    const rec = recorder();
+
+    await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
+
+    expect(rec.sent.map((mail) => mail.to)).toEqual([TARGET]);
+  });
+
   it("(b) drops a re-enqueued open notice as a duplicate", async () => {
     const rec = recorder();
     await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));

@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { saveSlackTarget } from "../../app/lib/data/send_target.server";
+import { readSlackDisconnected, readSlackTarget, saveSlackTarget } from "../../app/lib/data/send_target.server";
 import { CHANGE_DAILY_CAP, deliverChange, handleBatch } from "../../workers/delivery/consumer";
 
 const USER = "user-change-lane";
@@ -103,6 +103,20 @@ describe("rival change email lane (0509#6375)", () => {
       "List-Unsubscribe": `<https://0509.io/u/${token?.unsubscribe_token ?? ""}>`,
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
     });
+  });
+
+  it("never emails a rival change to a confirmed teammate, only to the owner", async () => {
+    await env.DB.prepare(
+      `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at, role)
+       VALUES ('mate-change', ?, 'chan-email', 'mate@0509.io', 1, '2026-09-23T00:00:02Z', 'teammate')`,
+    )
+      .bind(WS)
+      .run();
+    const sent: EmailMessageBuilder[] = [];
+
+    await deliverChange(envWith(sent), { signal_id: SIGNAL });
+
+    expect(sent.map((mail) => mail.to)).toEqual([TARGET]);
   });
 
   it("never sends more than the cap when consumers race for the last slots", async () => {
@@ -237,7 +251,7 @@ describe("rival change email lane (0509#6375)", () => {
     });
 
     it("reports a failed post for retry, without sending the email twice", async () => {
-      await connect(404);
+      await connect(500);
       const sent: EmailMessageBuilder[] = [];
 
       expect((await deliverChange(envWith(sent), { signal_id: SIGNAL })).outcome).toBe("failed");
@@ -246,8 +260,20 @@ describe("rival change email lane (0509#6375)", () => {
       expect(sent).toHaveLength(1);
     });
 
+    it("stops posting and disconnects Slack when the webhook is revoked, and still emails", async () => {
+      const posts = await connect(404);
+      const sent: EmailMessageBuilder[] = [];
+
+      expect((await deliverChange(envWith(sent), { signal_id: SIGNAL })).outcome).toBe("sent");
+
+      expect(sent).toHaveLength(1);
+      expect(posts).toHaveLength(1);
+      expect(await readSlackTarget(env.DB, WS)).toBeNull();
+      expect(await readSlackDisconnected(env.DB, WS)).toBe(true);
+    });
+
     it("re-posts once when Slack recovers on retry, never repeats the email and then stays quiet", async () => {
-      await connect(404);
+      await connect(500);
       const sent: EmailMessageBuilder[] = [];
       expect((await deliverChange(envWith(sent), { signal_id: SIGNAL })).outcome).toBe("failed");
 

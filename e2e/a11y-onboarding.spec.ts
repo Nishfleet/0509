@@ -1,7 +1,18 @@
+import type { DatabaseSync } from "node:sqlite";
+
 import AxeBuilder from "@axe-core/playwright";
+import { type Page, type TestInfo } from "@playwright/test";
 import { expect, test } from "./test";
 
-import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink } from "./inbox";
+import {
+  deleteCreatedAccount,
+  isLocalLane,
+  requireInboxToken,
+  run,
+  seedPreviewSession,
+  signInWithMagicLink,
+} from "./inbox";
+import { seedBareWorkspace, seedCompetitor, seedWorkspace, signIn } from "./quality";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -11,29 +22,70 @@ test.afterEach(async ({ page }, testInfo) => {
   createdEmail = "";
 });
 
-// Production only, for the reason e2e/onboarding-input.spec.ts gives: the
-// preview lane's wrangler dev has no EMAIL binding and no inbox to read, so a
-// spec that signs in through the real magic link skips there rather than fakes
-// a session. The three tests below are the WCAG 2.2 AA proof for #4149.
-test.skip(
-  !process.env.PLAYWRIGHT_TEST_BASE_URL,
-  "the onboarding screens need a signed-in session; the preview lane cannot read the magic-link inbox",
-);
+const STAMP = "2026-10-12T00:00:00.000Z";
+const SEEDED_SUBJECT = "nope-a11y-onboarding.example.com";
 
-// The end-of-test screenshot is report evidence, not an assertion. Playwright's
-// recorder attaches it and drops a capture that fails instead of failing the
-// test; e2e/reduced-motion.spec.ts has the why.
-test.use({ screenshot: "on" });
+type Step = "input" | "identity" | "competitors";
 
-test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at both widths (#4149) @own-signin", async ({
-  page,
-}, testInfo) => {
-  const token = requireInboxToken();
+function seedStep(db: DatabaseSync, suffix: string, userId: string, step: Step): void {
+  if (step === "competitors") {
+    const workspaceId = seedWorkspace(db, suffix, userId);
+    seedCompetitor(db, suffix, workspaceId);
+    run(db, "UPDATE onboarding_run SET watching_started_at = NULL WHERE workspace_id = ?", workspaceId);
+    return;
+  }
+  const workspaceId = seedBareWorkspace(db, suffix, userId);
+  run(
+    db,
+    "INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at) VALUES (?, ?, ?, NULL, NULL, 'public_subject:confirmed', 'example.com', ?)",
+    `ud-${suffix}`,
+    workspaceId,
+    userId,
+    STAMP,
+  );
+}
+
+async function signInAtStep(page: Page, baseURL: string | undefined, step: Step): Promise<void> {
+  const { cookie } = await seedPreviewSession(
+    `a11y-onboarding-${step}`,
+    ({ db, suffix, userId }) => {
+      seedStep(db, suffix, userId, step);
+    },
+    { livePlan: false },
+  );
+  await page.context().clearCookies();
+  await signIn(page, baseURL, cookie);
+}
+
+async function newCustomer(page: Page, baseURL: string | undefined, step: Step): Promise<void> {
+  if (isLocalLane()) {
+    await signInAtStep(page, baseURL, step);
+    return;
+  }
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   createdEmail = email;
-  await signInWithMagicLink(page, email, token);
+  await signInWithMagicLink(page, email, requireInboxToken());
+}
 
-  async function scan(label: string): Promise<void> {
+async function reachIdentity(page: Page, baseURL: string | undefined): Promise<void> {
+  await newCustomer(page, baseURL, "identity");
+  if (isLocalLane()) {
+    await page.goto(`/onboarding/identity?subject=${SEEDED_SUBJECT}`);
+    await expect(page.getByRole("button", { name: "That's me" })).toBeVisible({ timeout: 30_000 });
+    return;
+  }
+  await page.goto("/onboarding");
+  const input = page.getByRole("textbox", { name: /your website address or social username/i });
+  await input.fill("nike.com");
+  await input.press("Enter");
+  await expect(page).toHaveURL(/\/onboarding\/identity\?subject=nike\.com$/);
+  await expect(page.getByRole("button", { name: "That's me" })).toBeVisible({ timeout: 30_000 });
+  await page.reload();
+  await expect(page.getByRole("button", { name: "That's me" })).toBeVisible();
+}
+
+function axeScan(page: Page, testInfo: TestInfo) {
+  return async (label: string): Promise<void> => {
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
       .analyze();
@@ -42,60 +94,56 @@ test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at
       contentType: "application/json",
     });
     expect(results.violations).toEqual([]);
-  }
+  };
+}
 
+async function scanMatrix(
+  page: Page,
+  scan: (label: string) => Promise<void>,
+  name: string,
+  url: string,
+): Promise<void> {
   for (const colorScheme of ["light", "dark"] as const) {
     for (const width of [1440, 390]) {
       await page.emulateMedia({ colorScheme });
       await page.setViewportSize({ width, height: 900 });
-      await page.goto("/onboarding");
-      await scan(`onboarding-${colorScheme}-${width}`);
+      await page.goto(url);
+      await scan(`${name}-${colorScheme}-${width}`);
     }
   }
+}
 
-  await page.emulateMedia({ colorScheme: "light" });
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/onboarding");
-  const input = page.getByRole("textbox", { name: /your website address or social username/i });
-  await input.fill("nike.com");
-  await input.press("Enter");
-  await expect(page).toHaveURL(/\/onboarding\/identity\?subject=nike\.com$/);
-  await expect(page.getByRole("button", { name: "That's me" })).toBeVisible({ timeout: 30_000 });
+test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at both widths (#4149) @own-signin", async ({
+  page,
+  baseURL,
+}, testInfo) => {
+  test.setTimeout(180_000);
+  const scan = axeScan(page, testInfo);
 
-  for (const colorScheme of ["light", "dark"] as const) {
-    for (const width of [1440, 390]) {
-      await page.emulateMedia({ colorScheme });
-      await page.setViewportSize({ width, height: 900 });
-      await page.reload();
-      await expect(page.getByRole("button", { name: "That's me" })).toBeVisible();
-      await scan(`identity-${colorScheme}-${width}`);
-    }
+  await newCustomer(page, baseURL, "input");
+  await scanMatrix(page, scan, "onboarding", "/onboarding");
+
+  await reachIdentity(page, baseURL);
+  await scanMatrix(page, scan, "identity", page.url());
+
+  if (isLocalLane()) {
+    await newCustomer(page, baseURL, "competitors");
+    await page.goto("/onboarding/competitors");
+  } else {
+    await page.emulateMedia({ colorScheme: "light" });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.getByRole("button", { name: "edit name" }).click();
+    const name = page.getByRole("textbox", { name: "name" });
+    await name.fill("Nike");
+    await name.press("Escape");
+    await page.getByRole("button", { name: "That's me" }).click();
   }
-
-  await page.emulateMedia({ colorScheme: "light" });
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.getByRole("button", { name: "edit name" }).click();
-  const name = page.getByRole("textbox", { name: "name" });
-  await name.fill("Nike");
-  await name.press("Escape");
-  await page.getByRole("button", { name: "That's me" }).click();
   await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
-
-  for (const colorScheme of ["light", "dark"] as const) {
-    for (const width of [1440, 390]) {
-      await page.emulateMedia({ colorScheme });
-      await page.setViewportSize({ width, height: 900 });
-      await page.reload();
-      await scan(`competitors-${colorScheme}-${width}`);
-    }
-  }
+  await scanMatrix(page, scan, "competitors", page.url());
 });
 
-test("screen 1 is operable by keyboard in order (#4149) @own-signin", async ({ page }) => {
-  const token = requireInboxToken();
-  const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
-  createdEmail = email;
-  await signInWithMagicLink(page, email, token);
+test("screen 1 is operable by keyboard in order (#4149) @own-signin", async ({ page, baseURL }) => {
+  await newCustomer(page, baseURL, "input");
 
   await page.emulateMedia({ colorScheme: "light" });
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -114,34 +162,12 @@ test("screen 1 is operable by keyboard in order (#4149) @own-signin", async ({ p
 
 test("screen 2 is operable by keyboard in order, with one polite live region (#4149) @own-signin", async ({
   page,
+  baseURL,
 }, testInfo) => {
-  const token = requireInboxToken();
-  const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
-  createdEmail = email;
-  await signInWithMagicLink(page, email, token);
-
-  async function scan(label: string): Promise<void> {
-    const results = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .analyze();
-    await testInfo.attach(label, {
-      body: JSON.stringify(results.violations, null, 2),
-      contentType: "application/json",
-    });
-    expect(results.violations).toEqual([]);
-  }
-
+  const scan = axeScan(page, testInfo);
   await page.emulateMedia({ colorScheme: "light" });
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/onboarding");
-
-  const input = page.getByRole("textbox", { name: /your website address or social username/i });
-  await input.fill("nike.com");
-  await input.press("Enter");
-  await expect(page).toHaveURL(/\/onboarding\/identity\?subject=nike\.com$/);
-  await expect(page.getByRole("button", { name: "That's me" })).toBeVisible({ timeout: 30_000 });
-  await page.reload();
-  await expect(page.getByRole("button", { name: "That's me" })).toBeVisible();
+  await reachIdentity(page, baseURL);
 
   await expect(page.getByRole("status")).toHaveCount(1);
   await expect(page.getByRole("alert")).toHaveCount(0);
@@ -150,10 +176,6 @@ test("screen 2 is operable by keyboard in order, with one polite live region (#4
   const editName = page.getByRole("button", { name: "edit name" });
   await expect(editName).toBeFocused();
   await expect(editName).toHaveCSS("outline-style", "solid");
-  await testInfo.attach("focus-edit-name", {
-    body: await page.screenshot(),
-    contentType: "image/png",
-  });
 
   await page.keyboard.press("Enter");
   const nameField = page.getByRole("textbox", { name: "name", exact: true });
@@ -179,10 +201,6 @@ test("screen 2 is operable by keyboard in order, with one polite live region (#4
     expect(await page.evaluate(() => document.activeElement?.getAttribute("type"))).toBe("checkbox");
   }
   await expect(thatsMe).toBeFocused();
-  await testInfo.attach("focus-thats-me", {
-    body: await page.screenshot(),
-    contentType: "image/png",
-  });
 
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "support@0509.io" })).toBeFocused();

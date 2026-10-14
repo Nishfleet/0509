@@ -3,7 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { expect, type Page, type TestInfo } from "@playwright/test";
 
-import { consoleFailures, run, watchConsole, watchRequests } from "./inbox";
+import { consoleFailures, isLocalLane, run, seedPreviewSession, watchConsole, watchRequests } from "./inbox";
 
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const MAX_TAB_STOPS = 60;
@@ -37,26 +37,24 @@ function resetQuality(quality: Quality): void {
   quality.watched.prefetchRefused.length = 0;
 }
 
-async function expectNoSeriousAxe(page: Page, testInfo: TestInfo, label: string): Promise<void> {
+export async function expectNoAxeViolations(page: Page, testInfo: TestInfo, label: string): Promise<void> {
   const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
   await testInfo.attach(`axe ${label}`, {
     body: JSON.stringify(results.violations, null, 2),
     contentType: "application/json",
   });
-  const blocking = results.violations.filter(
-    (violation) => violation.impact === "serious" || violation.impact === "critical",
-  );
   expect
     .soft(
-      blocking.map(
-        (violation) => `${violation.id}: ${violation.nodes.map((node) => node.target.join(" ")).join(" | ")}`,
+      results.violations.map(
+        (violation) =>
+          `${violation.id} (${violation.impact ?? "unrated"}): ${violation.nodes.map((node) => node.target.join(" ")).join(" | ")}`,
       ),
       label,
     )
     .toEqual([]);
 }
 
-async function expectKeyboardReachesVisibleFocus(page: Page, label: string): Promise<void> {
+export async function expectKeyboardReachesVisibleFocus(page: Page, label: string): Promise<void> {
   await page.evaluate(() => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   });
@@ -114,10 +112,14 @@ export async function scanPage(
   testInfo: TestInfo,
   quality: Quality,
   label: string,
-  options: { keyboard: boolean } = { keyboard: true },
+  options: { screen: RegExp; keyboard: boolean },
 ): Promise<void> {
+  await expect(
+    page.getByRole("heading", { name: options.screen }).first(),
+    `${label}: the screen under test`,
+  ).toBeVisible();
   await animationsSettled(page);
-  await expectNoSeriousAxe(page, testInfo, label);
+  await expectNoAxeViolations(page, testInfo, label);
   await expectQuiet(page, testInfo, quality, label);
   if (options.keyboard) await expectKeyboardReachesVisibleFocus(page, label);
   resetQuality(quality);
@@ -139,6 +141,19 @@ export function seedWorkspace(db: DatabaseSync, suffix: string, userId: string, 
     `ent-self-${suffix}`,
     workspaceId,
     `self-${suffix}.example`,
+    STAMP,
+  );
+  return workspaceId;
+}
+
+export function seedBareWorkspace(db: DatabaseSync, suffix: string, userId: string): string {
+  const workspaceId = `ws-${suffix}`;
+  run(
+    db,
+    "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?, ?, ?, 'UTC', 1, 8, ?)",
+    workspaceId,
+    "Onboarding",
+    userId,
     STAMP,
   );
   return workspaceId;
@@ -181,4 +196,12 @@ export async function signIn(page: Page, baseURL: string | undefined, cookie: st
       return { name, value: value.join("="), url: baseURL ?? "" };
     }),
   );
+}
+
+export async function signInOnLocalLane(page: Page, baseURL: string | undefined, prefix: string): Promise<void> {
+  if (!isLocalLane()) return;
+  const { cookie } = await seedPreviewSession(prefix, ({ db, suffix, userId }) => {
+    seedCompetitor(db, suffix, seedWorkspace(db, suffix, userId));
+  });
+  await signIn(page, baseURL, cookie);
 }

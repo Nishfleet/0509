@@ -89,6 +89,7 @@ test("a site change copies as one plain paragraph, by keyboard, with a toast and
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(copied).toMatch(/^Zephyrwear .*\(pricing page\)\. Seen .+, via Five to Nine\.$/);
   expect(copied).not.toContain("\n");
+  await expect(button).toHaveText("Copy for the team");
 
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
