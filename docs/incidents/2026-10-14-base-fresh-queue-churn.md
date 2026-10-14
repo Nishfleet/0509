@@ -22,3 +22,11 @@ A red head cannot be armed or queued until `main` is merged into it. That makes 
 ## What this does not cover
 
 A head armed before a gate tightened can reach the queue as the first run on the new gate, the 2026-10-07 case. The queue then ejects that one pull request, once.
+
+## Second cause: one shared feature map
+
+The same day, `feature-map.md` was the top source of merge conflicts. It held every route as one very long line in one 490 KB file, and every pull request that changed a route edited it. It knocked #7393 out of the queue three times and held #7497 (migration 0059, with four pull requests behind it) in the queue for three hours.
+
+Fix: one file per row under `.agents/skills/verify/feature-map/<section>/`, so two pull requests conflict only if they change the same route. `tests/unit/feature-map-proof.test.ts` reads the directory and keeps every old check, plus one that a file holds exactly one row. The reviewer bot refuses a diff over 250 KB, so the move lands in six parts.
+
+The lesson: a file that every pull request edits is a queue lock. Put a per-change fact in its own file.
