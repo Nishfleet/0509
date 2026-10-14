@@ -10,8 +10,17 @@ export interface SummarisableChange {
 }
 
 function shorten(text: string): string {
-  const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length <= MAX_SIDE ? flat : `${flat.slice(0, MAX_SIDE - 1).trimEnd()}…`;
+  const flat = text
+    .replace(/\s+/g, " ")
+    .replace(/[\p{Cf}\p{Cc}]/gu, "")
+    .trim();
+  const points = Array.from(flat);
+  return points.length <= MAX_SIDE
+    ? flat
+    : `${points
+        .slice(0, MAX_SIDE - 1)
+        .join("")
+        .trimEnd()}…`;
 }
 
 function markParts(mark: ChangeMark | null): string[] {

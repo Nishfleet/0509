@@ -35,6 +35,20 @@ describe("changeSummary", () => {
     expect(text.length).toBeLessThan(400);
   });
 
+  it("strips bidi overrides and zero-width characters from rival text", () => {
+    const text = changeSummary({ ...CHANGE, mark: { removed: "Pro \u202Eplan\u200B 40", added: "x\u0007y" } });
+    expect(text).toContain("Before: “Pro plan 40”.");
+    expect(text).toContain("After: “xy”.");
+    expect(text).not.toMatch(/[\p{Cf}\p{Cc}]/u);
+  });
+
+  it("cuts on code points so an emoji at the cut is never split", () => {
+    const long = `${"a".repeat(138)}😀😀😀`;
+    const text = changeSummary({ ...CHANGE, mark: { removed: long, added: "x" } });
+    expect(text).toContain(`${"a".repeat(138)}😀…”.`);
+    expect(text).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
+  });
+
   it("carries no link and nothing internal", () => {
     expect(changeSummary(CHANGE)).not.toMatch(/https?:|0509\.io|jev|p=/i);
   });
