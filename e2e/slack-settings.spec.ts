@@ -39,6 +39,7 @@ test("Slack alerts start unconnected and refuse an address that is not a Slack w
   await expect(section).toContainText("Make an incoming webhook in Slack and paste its address here.");
   await expect(section.getByTestId("slack-reconnect")).toHaveCount(0);
   await scanPage(page, testInfo, quality, `/app/settings slack unconnected ${testInfo.project.name}`, {
+    screen: /^settings$/i,
     keyboard: true,
   });
 
@@ -91,7 +92,10 @@ test("a webhook Slack revoked tells the owner to reconnect and says email alerts
   );
   await expect(section.getByLabel("Slack webhook address")).toBeVisible();
   await expect(section.getByRole("button", { name: "Connect Slack" })).toBeVisible();
-  await scanPage(page, testInfo, quality, `/app/settings slack revoked ${testInfo.project.name}`, { keyboard: true });
+  await scanPage(page, testInfo, quality, `/app/settings slack revoked ${testInfo.project.name}`, {
+    screen: /^settings$/i,
+    keyboard: true,
+  });
 });
 
 test("a revoked Slack webhook with price and plan alerts off says nothing is being sent", async ({
@@ -112,6 +116,7 @@ test("a revoked Slack webhook with price and plan alerts off says nothing is bei
     "Slack stopped accepting our posts, so we disconnected it. Paste a new webhook address to reconnect. Price and plan alerts are off, so nothing is sent by email or to Slack. Switch them on above.",
   );
   await scanPage(page, testInfo, quality, `/app/settings slack revoked alerts off ${testInfo.project.name}`, {
+    screen: /^settings$/i,
     keyboard: true,
   });
 });

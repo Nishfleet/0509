@@ -1,6 +1,7 @@
 import { expect, test } from "./test";
 
 import { onboardedStatePath } from "../playwright.config";
+import { signInOnLocalLane } from "./quality";
 
 test.use({
   storageState: async ({}, use, testInfo) => {
@@ -11,10 +12,9 @@ test.use({
     );
   },
 });
-test.skip(
-  !process.env.PLAYWRIGHT_TEST_BASE_URL,
-  "the Competitors page needs a real session; the local preview Worker cannot mint one",
-);
+test.beforeEach(async ({ page, baseURL }) => {
+  await signInOnLocalLane(page, baseURL, "a11y-competitors");
+});
 
 test("the Competitors page is landmarked, ordered and keyboard-operable at 1440 and 390 in light and dark", async ({
   page,
@@ -54,10 +54,6 @@ test("the Competitors page is landmarked, ordered and keyboard-operable at 1440 
         "outline-style",
         "solid",
       );
-
-      await page.screenshot({
-        path: test.info().outputPath(`competitors-focus-${String(viewport.width)}-${colorScheme}.png`),
-      });
 
       const add = page.getByLabel("Add a competitor we missed");
       for (let i = 0; i < 60; i += 1) {
