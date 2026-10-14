@@ -5,10 +5,10 @@ import { emailLandingLine } from "../lib/email-change-landing";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
-export function ChangeSignInEmail({ sent, error }: { sent: boolean; error: string | null }) {
+export function ChangeSignInEmail({ email, sent, error }: { email: string; sent: boolean; error: string | null }) {
   const navigation = useNavigation();
   const [params] = useSearchParams();
-  const landing = emailLandingLine(params.get("email"));
+  const landing = emailLandingLine(params, email);
   const sending = navigation.state !== "idle" && navigation.formData?.get("intent") === "change-email";
   return (
     <Form method="post" action="/app/settings" className="mt-4 flex flex-col gap-3">

@@ -20,7 +20,7 @@ function render(navigation: { state: string; formData?: FormData }, entry = "/ap
         createElement(
           UNSAFE_DataRouterNavigationContext.Provider,
           { value: { navigation } as unknown as RouterState },
-          createElement(ChangeSignInEmail, { sent: false, error: null }),
+          createElement(ChangeSignInEmail, { email: "me@brand.com", sent: false, error: null }),
         ),
     },
   ]);
@@ -73,14 +73,21 @@ describe("the line after an email-change link lands on Settings", () => {
     expect(html).toContain("We sent a confirmation link to the new address.");
   });
 
-  it("says the new address is the sign-in email now", () => {
-    expect(render({ state: "idle" }, "/app/settings?email=changed")).toContain(
-      "This is the email you sign in with now.",
-    );
+  it("names the email you sign in with, so a pasted link cannot claim a change that never happened", () => {
+    expect(render({ state: "idle" }, "/app/settings?email=changed")).toContain("You sign in with me@brand.com now.");
+  });
+
+  it("says nothing when the link failed, whatever flag it kept", () => {
+    for (const flag of ["approved", "changed"]) {
+      const html = render({ state: "idle" }, `/app/settings?email=${flag}&error=invalid_token`);
+      expect(html).not.toContain('role="status"');
+    }
   });
 
   it("says nothing without the flag, and nothing for a made-up one", () => {
     expect(render({ state: "idle" })).not.toContain('role="status"');
-    expect(render({ state: "idle" }, "/app/settings?email=whatever")).not.toContain('role="status"');
+    for (const flag of ["whatever", "__proto__", "toString"]) {
+      expect(render({ state: "idle" }, `/app/settings?email=${flag}`)).not.toContain('role="status"');
+    }
   });
 });
