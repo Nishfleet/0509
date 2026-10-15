@@ -68,9 +68,19 @@ async function seed(): Promise<Seeded> {
 
   const change = (id: string, dedupKey: string, observedAt: string): D1PreparedStatement =>
     env.DB.prepare(
-      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, aspect, dedup_key, observed_at)
-       VALUES (?1, ?2, ?3, ?4, 'change', ?5, ?6, 'copy', ?7, ?8)`,
-    ).bind(id, workspaceId, entityA, srcSite, `Change ${id}`, `https://a-${run}.example/pricing`, dedupKey, observedAt);
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, aspect, payload_json, dedup_key, observed_at)
+       VALUES (?1, ?2, ?3, ?4, 'change', ?5, ?6, 'copy', ?7, ?8, ?9)`,
+    ).bind(
+      id,
+      workspaceId,
+      entityA,
+      srcSite,
+      `Change ${id}`,
+      `https://a-${run}.example/pricing`,
+      JSON.stringify({ before: { textKey: `${id}/before.txt` }, after: { textKey: `${id}/after.txt` } }),
+      dedupKey,
+      observedAt,
+    );
 
   const hiring = (
     id: string,

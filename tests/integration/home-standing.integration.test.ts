@@ -161,7 +161,7 @@ describe("readHomeStandingInputs", () => {
         [`${WS}_sig_dead`, `${WS}_dead`, "2026-09-10T00:00:00.000Z", 1],
       ].map(([id, dedupKey, observedAt, isTombstoned]) =>
         env.DB.prepare(
-          "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at, is_tombstoned) VALUES (?1, ?2, ?3, 'src_home_site_web', 'site_change', ?4, ?5, ?6)",
+          "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, dedup_key, observed_at, is_tombstoned) VALUES (?1, ?2, ?3, 'src_home_site_web', 'content', ?1, 'https://rival.example/' || ?1, ?4, ?5, ?6)",
         ).bind(id, WS, `${WS}_rival`, dedupKey, observedAt, isTombstoned),
       ),
     ]);

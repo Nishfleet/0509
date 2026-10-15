@@ -17,7 +17,7 @@ LEFT JOIN jev_verdict v ON v.id = (
   ORDER BY v2.decided_at DESC
   LIMIT 1
 )
-WHERE m.workspace_id = ?1 AND m.duplicate_of IS NULL
+WHERE m.workspace_id = ?1 AND m.kind = 'mention' AND m.duplicate_of IS NULL
 ORDER BY m.observed_at DESC, m.id DESC
 LIMIT 50`;
 

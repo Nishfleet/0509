@@ -36,18 +36,25 @@ const seedWorkspace = (lastSeen: string | null, pausedAt: string | null = null) 
     .bind(lastSeen, pausedAt, WS)
     .run();
 
-const seedChange = (id: string, title: string, observedAt: string) =>
-  env.DB.prepare(
-    `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, aspect, dedup_key, observed_at)
-     VALUES (?1, ?2, 'ent-r1', 'src-recap', 'change', ?3, 'pricing', ?1, ?4)`,
-  )
-    .bind(id, WS, title, observedAt)
-    .run();
+const CAPTURED = JSON.stringify({ before: { textKey: "b.txt" }, after: { textKey: "a.txt" } });
+
+const seedChange = (id: string, title: string, observedAt: string, entity = "ent-r1") =>
+  env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, aspect, payload_json, dedup_key, observed_at)
+       VALUES (?1, ?2, ?5, 'src-recap', 'change', ?3, 'pricing', ?6, ?1, ?4)`,
+    ).bind(id, WS, title, observedAt, entity, CAPTURED),
+    env.DB.prepare(
+      `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at)
+       VALUES ('v-' || ?1, ?2, 'noteworthy_change', 'h-' || ?1, ?1, ?3, 0.95, ?4)`,
+    ).bind(id, WS, entity, observedAt),
+  ]);
 
 describe("trial recap email", () => {
   beforeEach(async () => {
     lookup.tester = false;
     for (const table of [
+      "jev_verdict",
       "signal",
       "send_attempt",
       "email_suppression",
@@ -131,11 +138,8 @@ describe("trial recap email", () => {
         `INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, origin, state, created_at)
          VALUES ('ent-off', ?, 'competitor', 'off.com', 'Off', '{}', 'manual', 'off', '2026-08-01T09:00:00Z')`,
       ).bind(WS),
-      env.DB.prepare(
-        `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, aspect, dedup_key, observed_at)
-         VALUES ('sig-off', ?, 'ent-off', 'src-recap', 'change', 'Not live', 'pricing', 'sig-off', '2026-09-05T10:00:00Z')`,
-      ).bind(WS),
     ]);
+    await seedChange("sig-off", "Not live", "2026-09-05T10:00:00Z", "ent-off");
     await seedPlan();
     await seedWorkspace("2026-10-04T08:00:00Z");
     await seedChange("sig-1", "Rival change", "2026-09-03T10:00:00Z");

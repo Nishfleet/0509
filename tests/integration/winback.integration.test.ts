@@ -35,18 +35,25 @@ const seedPlan = (trialing = 0) =>
 const seedSeen = (lastSeen: string | null) =>
   env.DB.prepare("UPDATE workspace SET last_seen_at = ? WHERE id = ?").bind(lastSeen, WS).run();
 
-const seedChange = (id: string, title: string, observedAt: string) =>
-  env.DB.prepare(
-    `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, aspect, dedup_key, observed_at)
-     VALUES (?1, ?2, 'ent-r1', 'src-winback', 'change', ?3, 'pricing', ?1, ?4)`,
-  )
-    .bind(id, WS, title, observedAt)
-    .run();
+const CAPTURED = JSON.stringify({ before: { textKey: "b.txt" }, after: { textKey: "a.txt" } });
+
+const seedChange = (id: string, title: string, observedAt: string, entity = "ent-r1") =>
+  env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, aspect, payload_json, dedup_key, observed_at)
+       VALUES (?1, ?2, ?5, 'src-winback', 'change', ?3, 'pricing', ?6, ?1, ?4)`,
+    ).bind(id, WS, title, observedAt, entity, CAPTURED),
+    env.DB.prepare(
+      `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at)
+       VALUES ('v-' || ?1, ?2, 'noteworthy_change', 'h-' || ?1, ?1, ?3, 0.95, ?4)`,
+    ).bind(id, WS, entity, observedAt),
+  ]);
 
 describe("win-back email", () => {
   beforeEach(async () => {
     lookup.tester = false;
     for (const table of [
+      "jev_verdict",
       "signal",
       "send_attempt",
       "email_suppression",
@@ -141,12 +148,7 @@ describe("win-back email", () => {
     await seedPlan();
     await seedSeen(AWAY);
     await seedChange("sig-1", "Rival change", "2026-09-20T10:00:00Z");
-    await env.DB.prepare(
-      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, aspect, dedup_key, observed_at)
-       VALUES ('sig-off', ?, 'ent-off', 'src-winback', 'change', 'Not live', 'pricing', 'sig-off', '2026-09-21T10:00:00Z')`,
-    )
-      .bind(WS)
-      .run();
+    await seedChange("sig-off", "Not live", "2026-09-21T10:00:00Z", "ent-off");
     const sent: EmailMessageBuilder[] = [];
 
     await sendWinbacks(envWith(sent), NOW, isTester);

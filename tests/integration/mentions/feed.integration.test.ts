@@ -162,7 +162,7 @@ async function seed(): Promise<string> {
       `jev-medium-${suffix}`,
       `sig-medium-${suffix}`,
       onId,
-      0.42,
+      0.6,
       "A roundup mention, not a move of its own.",
       "2026-09-25T07:00:00.000Z",
     ),
@@ -199,38 +199,25 @@ describe("mention feed read", () => {
     const workspaceId = await seed();
     const mentions = await readMentionFeed(workspaceId, NOW);
     expect(mentions.map((mention) => mention.title)).toEqual([
-      "Zephyrwear posts a hiring page",
-      "Zephyrwear is quoted on a podcast",
       "Zephyrwear opens a London flagship",
       "Zephyrwear thread on Hacker News",
       "Zephyrwear shows up in a roundup",
-      "Zephyrwear ticker line",
     ]);
-    expect(mentions.map((mention) => mention.treatment)).toEqual([
-      "unreviewed",
-      "pending",
-      "shown",
-      "shown",
-      "possibly",
-      "held",
-    ]);
+    expect(mentions.map((mention) => mention.treatment)).toEqual(["shown", "shown", "possibly"]);
     expect(mentions.map((mention) => mention.sourceName)).toEqual([
-      "News mentions",
-      "News mentions",
       "News mentions",
       "Hacker News mentions",
       "Medium mentions",
-      "News mentions",
     ]);
-    expect(mentions[4]?.when).toBe("found today");
+    expect(mentions[2]?.when).toBe("found today");
     expect(mentions.map((mention) => mention.why)).toEqual([
-      null,
-      null,
       "A London flagship is a move worth knowing.",
       "A public thread about the brand is worth a look.",
       "A roundup mention, not a move of its own.",
-      "A ticker line, not a move.",
     ]);
+    expect(JSON.stringify(mentions)).not.toContain("hiring page");
+    expect(JSON.stringify(mentions)).not.toContain("quoted on a podcast");
+    expect(JSON.stringify(mentions)).not.toContain("ticker line");
     expect(JSON.stringify(mentions)).not.toMatch(BANNED);
     expect(JSON.stringify(mentions)).not.toContain("Paused brand");
     expect(JSON.stringify(mentions)).not.toContain("Dismissed brand");

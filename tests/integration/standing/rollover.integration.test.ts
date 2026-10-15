@@ -62,7 +62,7 @@ async function seedMention(slug: string, entity: string, observedAt: Date, p: nu
   const entityId = `${WS}_${entity}`;
   await env.DB.batch([
     env.DB.prepare(
-      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, canonical_url, url_hash, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?7, ?8)",
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, canonical_url, url_hash, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'mention', 'Mention', ?5, ?6, ?7, ?8)",
     ).bind(
       id,
       WS,

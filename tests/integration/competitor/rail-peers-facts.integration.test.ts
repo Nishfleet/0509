@@ -45,8 +45,22 @@ function changeRow(
   tombstoned: number,
 ): D1PreparedStatement {
   return env.DB.prepare(
-    "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, dedup_key, observed_at, is_tombstoned) VALUES (?1, ?2, ?3, ?4, 'change', 'pricing', ?1, ?5, ?6)",
-  ).bind(id, workspaceId, entityId, sourceId, observedAt, tombstoned);
+    "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, payload_json, dedup_key, observed_at, is_tombstoned) VALUES (?1, ?2, ?3, ?4, 'change', 'pricing', ?7, ?1, ?5, ?6)",
+  ).bind(
+    id,
+    workspaceId,
+    entityId,
+    sourceId,
+    observedAt,
+    tombstoned,
+    JSON.stringify({ before: { textKey: `${id}/before.txt` }, after: { textKey: `${id}/after.txt` } }),
+  );
+}
+
+function noteworthyRow(id: string, workspaceId: string, entityId: string): D1PreparedStatement {
+  return env.DB.prepare(
+    "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at) VALUES (?1, ?2, 'noteworthy_change', ?3, ?4, ?5, 0.95, ?6)",
+  ).bind(`jv_${id}`, workspaceId, `jh_${id}`, id, entityId, NOW);
 }
 
 function hiringRow(
@@ -57,7 +71,7 @@ function hiringRow(
   observedAt: string,
 ): D1PreparedStatement {
   return env.DB.prepare(
-    "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', 'Engineer', ?1, ?5)",
+    "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', 'Engineer', 'https://kindred.example/careers', ?1, ?5)",
   ).bind(id, workspaceId, entityId, sourceId, observedAt);
 }
 
@@ -126,6 +140,11 @@ async function seedRail(): Promise<Seed> {
     changeRow(`sig_change_old_${n}`, rows.wsA, rows.compOn, rows.source, "2026-08-15T12:00:00.000Z", 0),
     changeRow(`sig_change_tombstoned_${n}`, rows.wsA, rows.compOn, rows.source, "2026-09-16T12:00:00.000Z", 1),
     changeRow(`sig_change_other_ws_${n}`, rows.wsB, rows.compB, rows.source, "2026-09-19T12:00:00.000Z", 0),
+    noteworthyRow(`sig_change_a_${n}`, rows.wsA, rows.compOn),
+    noteworthyRow(`sig_change_b_${n}`, rows.wsA, rows.compOn),
+    noteworthyRow(`sig_change_old_${n}`, rows.wsA, rows.compOn),
+    noteworthyRow(`sig_change_tombstoned_${n}`, rows.wsA, rows.compOn),
+    noteworthyRow(`sig_change_other_ws_${n}`, rows.wsB, rows.compB),
   ]);
 
   return rows;

@@ -16,8 +16,8 @@ const DIFF_KEY = "snapshot/site/w/s.diff.json";
 
 const payload = JSON.stringify({
   page: { role: "pricing", url: "https://rival.example/pricing" },
-  before: { snapshotId: "a", screenshotKey: null },
-  after: { snapshotId: "b", screenshotKey: null },
+  before: { snapshotId: "a", screenshotKey: null, textKey: "change-lane/before.txt" },
+  after: { snapshotId: "b", screenshotKey: null, textKey: "change-lane/after.txt" },
   diffKey: DIFF_KEY,
   wordsAdded: 2,
   wordsRemoved: 2,
@@ -34,6 +34,12 @@ const envWith = (sent: EmailMessageBuilder[]): Env =>
     },
   }) as Env;
 
+const insertVerdict = (signalId: string, entityId: string) =>
+  env.DB.prepare(
+    `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at)
+     VALUES (?1, ?2, 'noteworthy_change', ?3, ?4, ?5, 0.95, '2026-10-01T02:11:00Z')`,
+  ).bind(`jv-${signalId}`, WS, `jh-${signalId}`, signalId, entityId);
+
 const insertSignal = (id: string, entityId: string) =>
   env.DB.prepare(
     `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, url, payload_json, dedup_key, observed_at)
@@ -42,7 +48,16 @@ const insertSignal = (id: string, entityId: string) =>
 
 describe("rival change email lane (0509#6375)", () => {
   beforeEach(async () => {
-    for (const table of ["send_attempt", "signal", "source", "entity", "send_target", "channel", "workspace"]) {
+    for (const table of [
+      "send_attempt",
+      "jev_verdict",
+      "signal",
+      "source",
+      "entity",
+      "send_target",
+      "channel",
+      "workspace",
+    ]) {
       await env.DB.exec(`DELETE FROM ${table}`);
     }
     await env.DB.exec('DELETE FROM "user"');
@@ -77,6 +92,8 @@ describe("rival change email lane (0509#6375)", () => {
       ).bind(SOURCE),
       insertSignal(SIGNAL, RIVAL),
       insertSignal(SELF_SIGNAL, SELF),
+      insertVerdict(SIGNAL, RIVAL),
+      insertVerdict(SELF_SIGNAL, SELF),
     ]);
     await env.SNAPSHOTS.put(DIFF_KEY, JSON.stringify({ hunks: [{ lines: ["-Pro $12 a month", "+Pro $15 a month"] }] }));
   });
@@ -121,7 +138,7 @@ describe("rival change email lane (0509#6375)", () => {
 
   it("never sends more than the cap when consumers race for the last slots", async () => {
     const ids = Array.from({ length: CHANGE_DAILY_CAP + 4 }, (_, index) => `sig-race-${String(index)}`);
-    await env.DB.batch(ids.map((id) => insertSignal(id, RIVAL)));
+    await env.DB.batch(ids.flatMap((id) => [insertSignal(id, RIVAL), insertVerdict(id, RIVAL)]));
     const sent: EmailMessageBuilder[] = [];
 
     const results = await Promise.all(ids.map((id) => deliverChange(envWith(sent), { signal_id: id })));
@@ -149,7 +166,7 @@ describe("rival change email lane (0509#6375)", () => {
 
   it("stops at the daily cap, sends one notice for the overflow, then nothing more that day", async () => {
     const ids = Array.from({ length: CHANGE_DAILY_CAP + 2 }, (_, index) => `sig-cap-${String(index)}`);
-    await env.DB.batch(ids.map((id) => insertSignal(id, RIVAL)));
+    await env.DB.batch(ids.flatMap((id) => [insertSignal(id, RIVAL), insertVerdict(id, RIVAL)]));
     const sent: EmailMessageBuilder[] = [];
 
     const outcomes: string[] = [];

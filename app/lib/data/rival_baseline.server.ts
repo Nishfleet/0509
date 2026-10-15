@@ -110,14 +110,12 @@ export async function readRivalFacts(db: D1Database, workspaceId: string, now: D
         changes: changes.get(row.entity_id)?.c1 ?? 0,
         lastChangeAt: changes.get(row.entity_id)?.c2 ?? null,
         roles: (roles.get(row.entity_id) ?? []).map((role) => role.c1),
-        kinds: (kinds.get(row.entity_id) ?? []).map(
-          (found): BaselineKind => ({
-            kind: found.c1,
-            count: found.c4,
-            latestTitle: found.c2,
-            latestAt: found.c3,
-          }),
-        ),
+        kinds: (kinds.get(row.entity_id) ?? []).map((found): BaselineKind => ({
+          kind: found.c1,
+          count: found.c4,
+          latestTitle: found.c2,
+          latestAt: found.c3,
+        })),
         feed: feeds.get(row.entity_id) ?? null,
       },
     ]),

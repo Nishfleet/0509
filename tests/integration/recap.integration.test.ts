@@ -32,18 +32,25 @@ const seedPlan = (periodEnd = PERIOD_END) =>
     .bind(WS, periodEnd)
     .run();
 
-const seedChange = (id: string, title: string, observedAt: string) =>
-  env.DB.prepare(
-    `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, aspect, dedup_key, observed_at)
-     VALUES (?1, ?2, 'ent-r1', 'src-recap', 'change', ?3, 'pricing', ?1, ?4)`,
-  )
-    .bind(id, WS, title, observedAt)
-    .run();
+const CAPTURED = JSON.stringify({ before: { textKey: "b.txt" }, after: { textKey: "a.txt" } });
+
+const seedChange = (id: string, title: string, observedAt: string, entity = "ent-r1") =>
+  env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, aspect, payload_json, dedup_key, observed_at)
+       VALUES (?1, ?2, ?5, 'src-recap', 'change', ?3, 'pricing', ?6, ?1, ?4)`,
+    ).bind(id, WS, title, observedAt, entity, CAPTURED),
+    env.DB.prepare(
+      `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at)
+       VALUES ('v-' || ?1, ?2, 'noteworthy_change', 'h-' || ?1, ?1, ?3, 0.95, ?4)`,
+    ).bind(id, WS, entity, observedAt),
+  ]);
 
 describe("trial recap email", () => {
   beforeEach(async () => {
     lookup.tester = false;
     for (const table of [
+      "jev_verdict",
       "signal",
       "send_attempt",
       "email_suppression",
@@ -129,12 +136,7 @@ describe("trial recap email", () => {
       ["sig-self", "ent-self"],
       ["sig-off", "ent-off"],
     ]) {
-      await env.DB.prepare(
-        `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, aspect, dedup_key, observed_at)
-         VALUES (?1, ?2, ?3, 'src-recap', 'change', 'Not a live rival', 'pricing', ?1, '2026-10-11T10:00:00Z')`,
-      )
-        .bind(id, WS, entity)
-        .run();
+      await seedChange(id, "Not a live rival", "2026-10-11T10:00:00Z", entity);
     }
     const sent: EmailMessageBuilder[] = [];
 

@@ -177,6 +177,23 @@ async function seed(): Promise<Fixture> {
       "2026-09-06T09:00:00.000Z",
     ),
   ]);
+  const captured = JSON.stringify({ before: { textKey: "before.txt" }, after: { textKey: "after.txt" } });
+  const verdict = (signalId: string, workspace: string, entity: string, question: string) =>
+    env.DB.prepare(
+      "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0.95, ?7)",
+    ).bind(`jv-${signalId}`, workspace, question, `jh-${signalId}`, signalId, entity, SINCE);
+  await env.DB.batch([
+    env.DB.prepare("UPDATE signal SET payload_json = ?1 WHERE id IN (?2, ?3, ?4)").bind(
+      captured,
+      priced,
+      copy,
+      foreign,
+    ),
+    verdict(priced, workspaceId, entityId, "noteworthy_change"),
+    verdict(copy, workspaceId, entityId, "noteworthy_change"),
+    verdict(foreign, otherWorkspaceId, otherEntityId, "noteworthy_change"),
+    verdict(mentioned, workspaceId, entityId, "mention_matters"),
+  ]);
   return {
     workspaceId,
     otherWorkspaceId,
