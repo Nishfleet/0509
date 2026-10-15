@@ -136,12 +136,14 @@ test("Your plan says how many competitors the plan is watching", async ({ page, 
   );
 });
 
-test("a teammate invitation shows as waiting and clears the field", async ({ page, baseURL }) => {
+test("a teammate invitation shows as waiting and clears the field", async ({ page, baseURL }, testInfo) => {
+  const invitee = `teammate-${testInfo.project.name}-${String(Date.now())}@example.com`;
   await signIn(page, baseURL);
   const field = page.getByLabel("Teammate's email");
-  await field.fill("teammate-preview@example.com");
-  await page.getByRole("button", { name: "Send invitation" }).click();
-  await expect(page.getByText("teammate-preview@example.com")).toBeVisible();
+  await field.fill(invitee);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("status").filter({ hasText: "Invitation sent" })).toBeVisible();
+  await expect(page.getByText(invitee)).toBeVisible();
   await expect(page.getByText("waiting for them to confirm")).toBeVisible();
   await expect(page.getByLabel("Teammate's email")).toHaveValue("");
 });

@@ -107,7 +107,7 @@ function DeliverySettings({
         suppressed={result?.deliverySuppressed ?? false}
       />
       <MailKinds address={delivery.address} mail={mail} />
-      <Teammates teammates={teammates} error={result?.teammateError ?? null} limit={MAX_TEAMMATES} />
+      <Teammates teammates={teammates} limit={MAX_TEAMMATES} />
     </>
   );
 }
