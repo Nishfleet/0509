@@ -26,6 +26,11 @@ export const CHANGE_UNDELIVERED_TITLE = "We couldn't email you about a competito
 export const CHANGE_UNDELIVERED_BODY =
   "A competitor changed price or plan and we tried several times to email you about it, so we have stopped trying. The change is on your Alerts page.";
 
+export const CHANGE_SLACK_UNDELIVERED_TITLE = "We couldn't post a competitor change to Slack";
+
+export const CHANGE_SLACK_UNDELIVERED_BODY =
+  "Slack did not take our post after several tries, so we have stopped trying. The change is on your Alerts page.";
+
 export function deliveryFailedAlert(input: {
   digest_id: string;
   workspace_id: string;
@@ -261,10 +266,10 @@ async function deadLetteredChange(env: Env, messageId: string, signalId: string)
   }
 
   const attempt = await env.DB.prepare(
-    `SELECT error FROM send_attempt WHERE idempotency_key LIKE ? ORDER BY attempted_at DESC LIMIT 1`,
+    `SELECT status, error FROM send_attempt WHERE idempotency_key LIKE ? ORDER BY attempted_at DESC LIMIT 1`,
   )
     .bind(`change:${signalId}:%`)
-    .first<{ error: string | null }>();
+    .first<{ status: string; error: string | null }>();
   const reason = attempt?.error ?? "no send attempt recorded";
   captureException(changeDeadLetterError({ message_id: messageId, signal_id: signalId, reason }), {
     tags: { queue: "send-email-dlq", signal_id: signalId },
@@ -278,6 +283,10 @@ async function deadLetteredChange(env: Env, messageId: string, signalId: string)
     workspace_id: signal.workspace_id,
     now: new Date().toISOString(),
   });
-  await insertDeliveryFailedAlert(env.DB, alert);
+  const emailReached = attempt === null || attempt.status === "sent";
+  await insertDeliveryFailedAlert(
+    env.DB,
+    emailReached ? { ...alert, title: CHANGE_SLACK_UNDELIVERED_TITLE, body: CHANGE_SLACK_UNDELIVERED_BODY } : alert,
+  );
   return alert.id;
 }
