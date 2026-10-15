@@ -37,7 +37,7 @@ const PAVED_PATH_PATTERNS = [
 const SONNER_IMPORT = {
   name: "sonner",
   message:
-    "sonner is imported in exactly one module, app/components/toaster.tsx, which owns every toast() call behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo' — a second import site is a second toast authority. Source: 0509#4116.",
+    "sonner is removed. Its toast is a tabindex=0 list item at the end of the page, shows no focus ring, and sends focus back to the previous element when you Tab out, which loops a keyboard user at the end of the page. Show 'saved' as an inline role=status line beside the control. Source: 0509#4116 (the toaster this replaces), polish/accessibility.md 2026-10-15.",
 };
 
 const UPLOT_IMPORT = {
@@ -384,7 +384,7 @@ const ESLINT_DISK_PROBE_BAN = {
 const BARE_TOAST = {
   selector: "CallExpression[callee.name='toast'], MemberExpression[object.name='toast']",
   message:
-    "toast() is called in exactly one module, app/components/toaster.tsx, behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo'. The sonner import ban does not catch a toast reached another way, so the call shape is banned too. Source: 0509#4116, 0509#7007.",
+    "No toast() call: toasts are removed (focus loop at the end of the page, no focus ring). Show 'saved' as an inline role=status line beside the control. The sonner import ban does not catch a toast reached another way, so the call shape is banned too. Source: 0509#4116, 0509#7007, polish/accessibility.md 2026-10-15.",
 };
 
 const HAND_ROLLED_ARIA_TAB = {
@@ -1259,22 +1259,6 @@ export default tseslint.config(
   },
 
   {
-    // The one toast() call site, behind toastSaved(). It is client code, so
-    // BARE_FETCH stays off as in the client block above. Flat config replaces
-    // no-restricted-syntax wholesale, so this restates the list. 0509#7007.
-    files: ["app/components/toaster.tsx"],
-    rules: {
-      "no-restricted-syntax": [
-        "error",
-        ...BANNED_SYNTAX.filter((rule) => rule !== BARE_FETCH && rule !== BARE_TOAST),
-        ...NO_USER_DATA_IN_LOGS,
-        RAW_DML_WRITER,
-        FEED_STATE_LITERAL,
-      ],
-    },
-  },
-
-  {
     // The browser paved path, where the bounded calls live by definition. The
     // array restates the shared list because a later matching block's
     // no-restricted-syntax entry replaces the earlier one wholesale. 0509#7296.
@@ -1346,7 +1330,7 @@ export default tseslint.config(
 
   {
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
-    ignores: ["app/lib/auth.server.ts", "app/lib/auth-client.ts", "app/components/toaster.tsx"],
+    ignores: ["app/lib/auth.server.ts", "app/lib/auth-client.ts"],
     rules: {
       "no-restricted-imports": ["error", { paths: ONE_PAVED_PATH_IMPORTS, patterns: PAVED_PATH_PATTERNS }],
     },
@@ -1369,14 +1353,7 @@ export default tseslint.config(
 
   {
     files: ["app/**/*.{ts,tsx}"],
-    ignores: [
-      "app/**/*.server.ts",
-      "app/routes/**",
-      "app/root.tsx",
-      "app/entry.*.tsx",
-      "app/lib/auth-client.ts",
-      "app/components/toaster.tsx",
-    ],
+    ignores: ["app/**/*.server.ts", "app/routes/**", "app/root.tsx", "app/entry.*.tsx", "app/lib/auth-client.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -1390,7 +1367,7 @@ export default tseslint.config(
 
   {
     files: ["app/components/**/*.{ts,tsx}"],
-    ignores: ["app/components/toaster.tsx", "app/components/four-week-plot.tsx"],
+    ignores: ["app/components/four-week-plot.tsx"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -1415,24 +1392,6 @@ export default tseslint.config(
         "error",
         {
           paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT],
-        },
-      ],
-    },
-  },
-
-  {
-    files: ["app/components/toaster.tsx"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          paths: [
-            ...ONE_PAVED_PATH_IMPORTS.filter((p) => p !== SONNER_IMPORT),
-            CLOUDFLARE_WORKERS_IMPORT,
-            FULL_ZOD_IMPORT,
-            ...CHART_IMPORTS,
-          ],
-          patterns: PAVED_PATH_PATTERNS,
         },
       ],
     },
