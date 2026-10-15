@@ -1,7 +1,12 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { insertMention, readEntityDevelopments, resolveUnjudgedMention } from "../../app/lib/data/signal.server";
+import {
+  insertMention,
+  readEntityDevelopments,
+  readUnjudgedMentions,
+  resolveUnjudgedMention,
+} from "../../app/lib/data/signal.server";
 
 const SINCE = "2026-09-01T00:00:00.000Z";
 
@@ -245,6 +250,16 @@ describe("competitor feed read", () => {
     const fixture = await seed();
     const titles = ["Flock: A Flock of Birds in your Browser", "Libron E-Reader Font", "List of April Fools RFCs"];
     const ids = titles.map((_, index) => `sig-fed-hn-${fixture.entityId}-${index}`);
+    const watchId = `watch-fed-hn-${fixture.entityId}`;
+    const snapshotId = `snap-fed-hn-${fixture.entityId}`;
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO watch (id, entity_id, source_id, target_key) VALUES (?1, ?2, 'src_site_web', 'brand name')",
+      ).bind(watchId, fixture.entityId),
+      env.DB.prepare(
+        "INSERT INTO snapshot (id, watch_id, fetched_at, payload_hash) VALUES (?1, ?2, '2026-10-13T10:00:00.000Z', 'h')",
+      ).bind(snapshotId, watchId),
+    ]);
     await env.DB.batch(
       titles.map((title, index) =>
         insertMention({
@@ -252,8 +267,8 @@ describe("competitor feed read", () => {
           workspaceId: fixture.workspaceId,
           entityId: fixture.entityId,
           sourceId: "src_site_web",
-          watchId: null,
-          snapshotId: null,
+          watchId,
+          snapshotId,
           title,
           url: `https://news.ycombinator.com/item?id=${String(4100 + index)}`,
           urlHash: `hash-${ids[index] ?? ""}`,
@@ -281,7 +296,9 @@ describe("competitor feed read", () => {
       ).map((item) => item.title);
     const before = await read();
     for (const title of titles) expect(before).not.toContain(title);
-    await env.DB.batch([resolveUnjudgedMention(ids[0] ?? "", false), resolveUnjudgedMention(ids[1] ?? "", true)]);
+    const pending = await readUnjudgedMentions(watchId, 10);
+    expect(pending.map((row) => row.title).sort()).toEqual([...titles].sort());
+    await env.DB.batch(pending.map((row) => resolveUnjudgedMention(row.id, row.title !== titles[0])));
     const after = await read();
     expect(after).toContain(titles[0]);
     expect(after).not.toContain(titles[1]);

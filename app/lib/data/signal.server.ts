@@ -217,8 +217,8 @@ export interface MentionSignal {
   workspaceId: string;
   entityId: string;
   sourceId: string;
-  watchId: string | null;
-  snapshotId: string | null;
+  watchId: string;
+  snapshotId: string;
   title: string;
   url: string;
   urlHash: string;
