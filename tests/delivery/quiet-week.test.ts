@@ -124,6 +124,35 @@ describe("the quiet week brief", () => {
     expect(text).not.toContain("2026-09-19T08:00:00.000Z");
   });
 
+  it("keeps the work line in the footer when the headline is replaced by the blind-source line", () => {
+    const ledger = {
+      rivals: 5,
+      pages_read: 31,
+      changes_seen: 0,
+      changes_told: 0,
+      changes_set_aside: 0,
+      mentions_read: 0,
+      mentions_kept: 0,
+    };
+    const base = quiet();
+    const { text } = renderBrief(
+      quiet({
+        why_line: "Quiet week: we read 31 pages across 5 competitors; saw no changes.",
+        checked: {
+          ...base.checked,
+          ledger,
+          degraded_source_keys: ["reddit"],
+          degraded_sources: [
+            { key: "reddit.search", name: "Reddit mentions", last_landed_at: "2026-09-19T08:00:00.000Z" },
+          ],
+        },
+      }),
+      CONTEXT,
+    );
+    expect(text).toContain("so we cannot say this was a quiet week.");
+    expect(text).toContain("This week we read 31 pages across 5 competitors; saw no changes.");
+  });
+
   it("says a blind source has not answered yet when it never landed", () => {
     const { text } = renderBrief(
       quiet({

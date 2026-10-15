@@ -1,7 +1,7 @@
 import { Fragment, type ReactElement } from "react";
 import { Link } from "react-router";
 
-import { ledgerSummary } from "../lib/work-ledger";
+import { ledgerFooter } from "../lib/work-ledger";
 import { ReadThisFirst } from "./read-this-first";
 import type { BriefPayload } from "../lib/brief-payload";
 import { newRivalLines, rankTrendLine, sinceStartedLine } from "../lib/brief-since";
@@ -125,7 +125,7 @@ function newRivalBlock(payload: BriefPayload): ReactElement | null {
 
 function checkedBlock(payload: BriefPayload): ReactElement {
   const since = sinceStartedLine(payload.checked);
-  const work = ledgerSummary(payload.checked.ledger, "This week we");
+  const work = ledgerFooter(payload.checked.ledger, payload.why_line);
   return (
     <section data-brief-block="checked" className={SECTION}>
       <h3 className={HEAD}>What was checked</h3>
