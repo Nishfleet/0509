@@ -29,7 +29,7 @@ const COPY = {
   ownSiteBroken: (count: number) => `Your site looks broken (${count === 1 ? "1 page" : `${n(count)} pages`}):`,
   stillBroken: "still broken",
   fixed: "fixed",
-  newRival: "A rival you may be missing",
+  newRival: "A competitor you may be missing",
   reviewRival: "Review in Competitors",
   footerTitle: "What was checked",
   next: "Next brief",

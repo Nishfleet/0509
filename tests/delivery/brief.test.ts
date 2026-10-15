@@ -859,8 +859,8 @@ describe("the rival-you-may-be-missing block", () => {
   it("names the rival, why, and where to review it, in html and text", () => {
     const { html, text } = renderBrief(payload({ new_rival: rival }), CONTEXT);
     for (const out of [html, text]) {
-      expect(out).toContain("A rival you may be missing");
-      expect(out).toContain("Northwind (northwind.example) may be a rival you are missing.");
+      expect(out).toContain("A competitor you may be missing");
+      expect(out).toContain("Northwind (northwind.example) may be a competitor you are missing.");
       expect(out).toContain("Named alongside you by 3 publishers");
       expect(out).toContain("https://0509.io/app/competitors");
     }

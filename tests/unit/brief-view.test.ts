@@ -192,7 +192,7 @@ describe("the web brief's rival-you-may-be-missing block", () => {
       }),
     );
     expect(html).toContain('data-brief-block="new-rival"');
-    expect(html).toContain("Northwind (northwind.example) may be a rival you are missing.");
+    expect(html).toContain("Northwind (northwind.example) may be a competitor you are missing.");
     expect(html).toContain('href="/app/competitors"');
   });
 

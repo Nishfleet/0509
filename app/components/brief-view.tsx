@@ -99,7 +99,7 @@ function newRivalBlock(payload: BriefPayload): ReactElement | null {
   if (rival === null) return null;
   return (
     <section data-brief-block="new-rival" className={SECTION}>
-      <h3 className={HEAD}>A rival you may be missing</h3>
+      <h3 className={HEAD}>A competitor you may be missing</h3>
       <p className={BODY}>
         {rival.title}
         {rival.reason === null ? "" : ` ${rival.reason}`}

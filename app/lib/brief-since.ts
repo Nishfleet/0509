@@ -22,5 +22,5 @@ export const COMPETITORS_LINK = "https://0509.io/app/competitors";
 export function newRivalLines(payload: BriefPayload): { title: string; reason: string | null } | null {
   const rival = payload.new_rival;
   if (rival === null || rival === undefined) return null;
-  return { title: `${rival.name} (${rival.domain}) may be a rival you are missing.`, reason: rival.reason };
+  return { title: `${rival.name} (${rival.domain}) may be a competitor you are missing.`, reason: rival.reason };
 }
