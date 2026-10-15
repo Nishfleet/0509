@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { takeRecipientSlot } from "../../app/lib/recipient-cap.server";
 
-const NOW = new Date("2026-10-14T10:00:00.000Z");
+const NOW = new Date("2036-10-14T10:00:00.000Z");
 const HOUR = 3_600_000;
 
 describe("takeRecipientSlot", () => {
