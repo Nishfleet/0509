@@ -32,17 +32,15 @@ const subscriptionEvent = z.object({ data: subscriptionData });
 
 const OK = { status: 200 };
 
-function log(event: string, fields: Record<string, string>): void {
-  console.log(JSON.stringify({ event, ...fields }));
-}
+type Level = "log" | "warn" | "error";
 
-function warn(event: string, fields: Record<string, string>): void {
-  console.warn(JSON.stringify({ event, ...fields }));
-}
+const emit = (level: Level) => (event: string, fields: Record<string, string>) => {
+  console[level](JSON.stringify({ event, ...fields }));
+};
 
-function fail(event: string, fields: Record<string, string>): void {
-  console.error(JSON.stringify({ event, ...fields }));
-}
+const log = emit("log");
+const warn = emit("warn");
+const fail = emit("error");
 
 type Workspace = { kind: "found"; id: string } | { kind: "retry" } | { kind: "ignore" };
 
