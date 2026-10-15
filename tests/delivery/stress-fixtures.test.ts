@@ -169,6 +169,23 @@ describe("the weekly brief under stress", () => {
     expect(text).toContain(`${ARABIC} — #2, up 1`);
     expect(text).toContain("Яндекс — #3, up 1");
   });
+
+  it("gives a teammate the same long and non-Latin brief with no link into the app", () => {
+    const { html, text } = renderBrief(
+      payload({
+        read_this_first: [mark(1, LONG), mark(2, JAPANESE)],
+        brands: [brand(1, LONG), brand(2, JAPANESE), brand(3, ARABIC)],
+        why_line: `${LONG} is the mover`,
+      }),
+      { ...CONTEXT, open_url: null, teammate: true },
+    );
+    expect(html).toContain("overflow-wrap:anywhere");
+    expect(text).toContain(`${JAPANESE} — #2, up 1`);
+    expect(text).toContain(`${ARABIC} — #3, up 1`);
+    expect(text).not.toContain("/app/brief");
+    expect(html).not.toContain("/app/brief");
+    expect(text).toContain(CONTEXT.unsubscribe_url);
+  });
 });
 
 const RECAP: RecapContext = {

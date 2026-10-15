@@ -1,12 +1,12 @@
 import { env } from "cloudflare:workers";
 
 import { insertSnapshot, latestSiteSnapshot } from "../data/snapshot.server";
-import { readUrl, type ReadUrlResult } from "../fetch/transport.server";
+import { readUrl, type EscalationReason, type ReadUrlResult } from "../fetch/transport.server";
 import { browserScreenshot } from "./browser-budget.server";
 import { extractPageText } from "./extract-text";
 
 export type CheckPageResult =
-  | { outcome: "failed"; reason: string; detail: string }
+  | { outcome: "failed"; reason: string; detail: string; escalation?: EscalationReason }
   | { outcome: "gone" }
   | { outcome: "unchanged"; snapshotId: string }
   | { outcome: "first"; snapshotId: string; textKey: string; screenshotKey: string | null }
@@ -133,10 +133,16 @@ async function recordUnchanged(
   return { outcome: "unchanged", snapshotId: unchanged.id };
 }
 
+function failedRead(read: Exclude<ReadUrlResult, { ok: true }>): Extract<CheckPageResult, { outcome: "failed" }> {
+  return read.reason === "deferred"
+    ? { outcome: "failed", reason: read.reason, detail: read.detail, escalation: read.escalation }
+    : { outcome: "failed", reason: read.reason, detail: read.detail };
+}
+
 export async function checkPage(input: CheckPageInput): Promise<CheckPageResult> {
   const read = input.read ?? (await readUrl(input.url));
   if (!read.ok) {
-    return { outcome: "failed", reason: read.reason, detail: read.detail };
+    return failedRead(read);
   }
 
   const extracted = await extractPageText(read.html);

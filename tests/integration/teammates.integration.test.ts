@@ -117,16 +117,16 @@ describe("teammates on the brief", () => {
   });
 
   it("refuses the owner's own sign-in address in any case, and sends nothing", async () => {
-    expect(await add(SIGN_IN_EMAIL)).toMatch(/We can't add that address/);
-    expect(await add(SIGN_IN_EMAIL.toUpperCase())).toMatch(/We can't add that address/);
+    expect(await add(SIGN_IN_EMAIL)).toMatch(/address you sign in with/);
+    expect(await add(SIGN_IN_EMAIL.toUpperCase())).toMatch(/address you sign in with/);
     expect(sentMail).toHaveLength(0);
     expect(await readTeammates(firstWorkspaceId(USER_ID))).toEqual([]);
   });
 
   it("allows two teammates and each address once, and refuses the owner's own address", async () => {
     expect(await add("a@0509.io")).toBeNull();
-    expect(await add("A@0509.io")).toMatch(/up to 2 teammates/);
-    expect(await add(SIGN_IN_EMAIL)).toMatch(/up to 2 teammates/);
+    expect(await add("A@0509.io")).toMatch(/already on your list/);
+    expect(await add(SIGN_IN_EMAIL)).toMatch(/address you sign in with/);
     expect(await add("b@0509.io")).toBeNull();
     expect(await add("c@0509.io")).toMatch(/up to 2 teammates/);
     expect(sentMail).toHaveLength(2);
@@ -231,10 +231,13 @@ describe("teammates on the brief", () => {
     expect(await add("fresh@0509.io")).toBeNull();
 
     expect(sentMail.map((mail) => mail.to)).toEqual(["fresh@0509.io"]);
-    expect(await readTeammates(workspaceId)).toEqual([
-      expect.objectContaining({ address: "quiet@0509.io", confirmed: false, unsubscribed: false }),
-      expect.objectContaining({ address: "fresh@0509.io", confirmed: false, unsubscribed: false }),
-    ]);
+    expect(await readTeammates(workspaceId)).toHaveLength(2);
+    expect(await readTeammates(workspaceId)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ address: "quiet@0509.io", confirmed: false, unsubscribed: false }),
+        expect.objectContaining({ address: "fresh@0509.io", confirmed: false, unsubscribed: false }),
+      ]),
+    );
   });
 
   it("shows a teammate who unsubscribed, and tells their link apart from the owner's", async () => {

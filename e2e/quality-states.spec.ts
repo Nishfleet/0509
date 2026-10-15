@@ -179,7 +179,7 @@ test("a refused delete and a refused add show their alert and pass the quality c
   await scanBothSchemes(page, testInfo, quality, "/app/settings delete refused", /^settings$/i);
 
   await page.goto("/app/competitors");
-  await page.getByLabel("Add a competitor we missed").fill("not a website");
+  await page.getByLabel("Add a competitor we missed").fill("@refused");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.locator("#add-competitor-error")).toBeVisible();
   await scanBothSchemes(page, testInfo, quality, "/app/competitors add refused", /^competitors$/i);

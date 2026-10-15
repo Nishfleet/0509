@@ -17,6 +17,7 @@ const NO_ERRORS: CompetitorFormErrors = {
   siteError: null,
   nameError: null,
   noteError: null,
+  noteSaved: false,
   renamed: false,
 };
 
@@ -50,7 +51,7 @@ async function editField(workspaceId: string, entityId: string, fields: Fields):
   }
   if (fields.intent === "note") {
     const saved = await saveCompetitorNote(workspaceId, entityId, fields.note);
-    return { message: null, ...NO_ERRORS, noteError: saved.ok ? null : saved.message };
+    return { message: null, ...NO_ERRORS, noteError: saved.ok ? null : saved.message, noteSaved: saved.ok };
   }
   if (fields.intent === "site") {
     const saved = await saveCompetitorSite(workspaceId, entityId, fields.site);

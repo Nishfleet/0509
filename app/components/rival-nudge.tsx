@@ -11,7 +11,7 @@ export function RivalNudge({ rivals }: { rivals: number }): ReactElement {
         className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4"
         to="/app/competitors"
       >
-        Add a rival
+        Add a competitor
       </Link>
     </p>
   );
