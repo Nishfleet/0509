@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { expectSendRecord, PROVIDER_ID } from "./send-record";
 import { sendTrialReminders } from "../../workers/delivery/trial-reminder";
 
 const lookup = { tester: false as boolean | null };
@@ -18,7 +19,7 @@ const envWith = (sent: EmailMessageBuilder[]): Env =>
     EMAIL: {
       send(message: EmailMessageBuilder) {
         sent.push(message);
-        return Promise.resolve({} as EmailSendResult);
+        return Promise.resolve({ messageId: PROVIDER_ID });
       },
     },
   }) as Env;
@@ -69,6 +70,7 @@ describe("trial ending reminder", () => {
     expect(sent[0]?.to).toBe(TARGET);
     expect(sent[0]?.subject).toBe("Your Starter trial ends on Wednesday 14 October");
     expect(sent[0]?.text).toContain("€46 a month");
+    await expectSendRecord("trial_ending", sent[0]?.subject);
   });
 
   it("reminds the owner, never an older confirmed teammate", async () => {

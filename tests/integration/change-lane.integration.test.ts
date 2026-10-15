@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { expectSendRecord, PROVIDER_ID } from "./send-record";
 import { readSlackDisconnected, readSlackTarget, saveSlackTarget } from "../../app/lib/data/send_target.server";
 import { CHANGE_DAILY_CAP, deliverChange, handleBatch } from "../../workers/delivery/consumer";
 
@@ -29,7 +30,7 @@ const envWith = (sent: EmailMessageBuilder[]): Env =>
     EMAIL: {
       send(message: EmailMessageBuilder) {
         sent.push(message);
-        return Promise.resolve({} as EmailSendResult);
+        return Promise.resolve({ messageId: PROVIDER_ID });
       },
     },
   }) as Env;
@@ -103,6 +104,7 @@ describe("rival change email lane (0509#6375)", () => {
       "List-Unsubscribe": `<https://0509.io/u/${token?.unsubscribe_token ?? ""}?type=alerts>`,
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
     });
+    await expectSendRecord("change", sent[0]?.subject);
   });
 
   it("never emails a rival change to a confirmed teammate, only to the owner", async () => {

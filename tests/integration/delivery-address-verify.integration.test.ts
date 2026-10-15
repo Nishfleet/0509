@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { clearRecipientCap } from "./clear-recipient-cap";
 
+import { expectSendRecord } from "./send-record";
 import { readDeliveryAddress, saveDeliveryAddress } from "../../app/lib/delivery-address.server";
 import { confirmDeliveryAddress } from "../../app/lib/verify-delivery-address.server";
 import { ensureWorkspaceForSignIn, firstWorkspaceId } from "../../app/lib/workspace.server";
@@ -115,6 +116,7 @@ describe("confirm a changed delivery address (0509#5811)", () => {
     expect(rec.sent[0].text).toContain(`We sent this to ${NEW_ADDRESS}.`);
     expect(rec.sent[0].text).toContain(`https://0509.io/v/${token}`);
     expect(rec.sent[0].html).toContain(`https://0509.io/v/${token}`);
+    await expectSendRecord("address_verify", rec.sent[0].subject, "test-message");
   });
 
   it("(b) saving the same unverified address again writes a fresh token and sends again", async () => {

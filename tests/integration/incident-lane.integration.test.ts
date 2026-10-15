@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { expectSendRecord } from "./send-record";
 import { deliverIncident, handleBatch, type IncidentMessage } from "../../workers/delivery/consumer";
 
 interface Recorder {
@@ -218,6 +219,7 @@ describe("incident lane (0509#4364)", () => {
     expect(notices?.[0]?.is_resolution).toBe(0);
     expect(notices?.[0]?.incident_id).toBe(INCIDENT_A);
     expect(notices?.[0]?.sent_on).toBe(DAY);
+    await expectSendRecord("incident", rec.sent[0].subject, "unused");
   });
 
   it("never mails an incident notice to a confirmed teammate, only to the owner", async () => {
