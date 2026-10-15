@@ -64,7 +64,7 @@ describe("withStepCheckIn", () => {
         throw new Error("plan down");
       }),
     ).rejects.toThrow("plan down");
-    expect(ping.mock.calls).toEqual([["feed-sweep", "fail", "threw"]]);
+    expect(ping.mock.calls).toEqual([["feed-sweep", "fail", "failed: threw"]]);
   });
 
   it("sends no ping before the sweep ends, even when run() replays after hibernation", async () => {
@@ -129,7 +129,7 @@ describe("withStepCheckIn on a run that finished but did not work", () => {
 
   it("closes the check-in as error, pings fail and tells Sentry, and still returns the outcome", async () => {
     expect(await run({ state: "failed", reason: "30 of 40 failed" })).toEqual({ failed: 3 });
-    expect(ping.mock.calls).toEqual([["feed-sweep", "fail", "30 of 40 failed"]]);
+    expect(ping.mock.calls).toEqual([["feed-sweep", "fail", "failed: 30 of 40 failed"]]);
     expect(checkIn.mock.calls.map((call) => call[0])).toEqual([
       { monitorSlug: "feed-sweep", status: "in_progress" },
       { checkInId: "check-in-1", monitorSlug: "feed-sweep", status: "error" },
@@ -137,9 +137,9 @@ describe("withStepCheckIn on a run that finished but did not work", () => {
     expect(exception).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps the check-in green but warns Sentry and sends the counts to the health check when degraded", async () => {
+  it("keeps the Sentry check-in green with a warning but pings the health check as down with the counts when degraded", async () => {
     await run({ state: "degraded", reason: "2 of 40 failed: page-a, page-b" });
-    expect(ping.mock.calls).toEqual([["feed-sweep", "ok", "2 of 40 failed: page-a, page-b"]]);
+    expect(ping.mock.calls).toEqual([["feed-sweep", "fail", "degraded: 2 of 40 failed: page-a, page-b"]]);
     expect(checkIn.mock.calls[1]?.[0]).toMatchObject({ status: "ok" });
     expect(warning).toHaveBeenCalledWith(
       "feed-sweep degraded: 2 of 40 failed: page-a, page-b",
