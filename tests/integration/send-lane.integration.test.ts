@@ -782,7 +782,7 @@ describe("send lane (0509#3979)", () => {
     const token = stored?.unsubscribe_token ?? "";
     expect(token).toMatch(/^[0-9a-f]{64}$/);
     expect(rec.sent[0].headers).toEqual({
-      "List-Unsubscribe": `<https://0509.io/u/${token}>`,
+      "List-Unsubscribe": `<https://0509.io/u/${token}?type=brief>`,
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
     });
 
@@ -790,7 +790,7 @@ describe("send lane (0509#3979)", () => {
     const second = await deliver(envWith(bindingFor(rec)), message(secondId));
     expect(second.outcome).toBe("sent");
     expect(rec.sent[1].headers).toEqual({
-      "List-Unsubscribe": `<https://0509.io/u/${token}>`,
+      "List-Unsubscribe": `<https://0509.io/u/${token}?type=brief>`,
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
     });
   });

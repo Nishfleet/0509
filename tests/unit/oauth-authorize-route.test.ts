@@ -22,15 +22,6 @@ vi.mock("../../app/lib/require-session.server", () => ({
 
 import Page from "../../app/routes/oauth.authorize";
 
-// Two submit buttons share the one consent form, so the pending state comes from
-// the router's navigation alone. The harness stands in for that navigation, the
-// same shape the unsubscribe, verify-address and competitor pending-state tests
-// use (tests/unit/unsubscribe-route.test.ts, tests/unit/verify-address-route.test.ts,
-// tests/competitor/competitor-pending-buttons.test.ts).
-//
-// React Router keeps the submission's formData from "submitting" through the
-// "loading" that follows it and drops it only at "idle", so the harness carries
-// the decision on both states that hold a submission.
 const harness = vi.hoisted(() => ({
   state: "idle" as Navigation["state"],
   decision: null as string | null,
@@ -46,8 +37,7 @@ vi.mock("react-router", async (importOriginal) => {
   const actual = await importOriginal<typeof ReactRouterModule>();
   return {
     ...actual,
-    // The real hook is called on every render and its result is overridden, so
-    // the hook count never changes between an idle and a pending render.
+
     useNavigation: (...args: Parameters<typeof actual.useNavigation>) => {
       const real = actual.useNavigation(...args);
       if (harness.state === "idle") return real;
@@ -60,9 +50,6 @@ const ASK: ConsentView = { kind: "ask", host: "app.example", claimedName: "Test 
 
 const NEVER = () => new Promise(() => undefined);
 
-// The action never settles in this harness, so the router stays in the state the
-// submission put it in and the screen renders that state for real -- the same
-// device tests/unit/onboarding-start-pending.test.ts uses.
 function renderPage(submission: { decision: string } | null, loaderData: ConsentView): string {
   const router = createMemoryRouter(
     [
@@ -89,8 +76,6 @@ function render(state: Exclude<Navigation["state"], "idle">, decision: string | 
   return renderPage(null, ASK);
 }
 
-// The button's own class list carries `disabled:pointer-events-none`, so the
-// attribute is matched on its own and not as a substring of the class string.
 function isDisabled(button: string): boolean {
   const tag = /<button\b[^>]*>/.exec(button)?.[0] ?? "";
   return /(?:^|\s)disabled(?:\s|>|=|$)/.test(tag);
@@ -132,8 +117,6 @@ describe("/oauth/authorize consent buttons (0509#6759)", () => {
   });
 
   it("disables both buttons and reads Allowing… while the allow decision posts", () => {
-    // The post itself, on the real stub router: the pending state a second tap
-    // would have submitted into is what the state and label carry here.
     const html = renderPage({ decision: "allow" }, ASK);
 
     expect(isDisabled(allow(html))).toBe(true);

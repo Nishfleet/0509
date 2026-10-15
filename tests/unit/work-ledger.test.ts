@@ -15,14 +15,15 @@ const BASE: WorkLedger = {
 describe("the work ledger", () => {
   it("says what was read, seen and kept, and what stayed off the brief", () => {
     expect(ledgerSummary(BASE, "This week we")).toBe(
-      "This week we read 31 pages across 5 rivals; saw 4 changes, 1 worth your time; read 40 mentions and kept 2. 3 changes judged too small to interrupt you stayed off the brief.",
+      "This week we read 31 pages across 5 competitors; saw 4 changes, 1 worth your time; read 40 mentions and kept 2. 3 changes judged too small to interrupt you stayed off the brief.",
     );
   });
 
   it("turns a quiet week into proof of work, never into a bare zero", () => {
     expect(quietLedgerLine({ ...BASE, changes_seen: 0, changes_told: 0, changes_set_aside: 0, mentions_read: 0 })).toBe(
-      "Quiet week: we read 31 pages across 5 rivals; saw no changes.",
+      "Quiet week: we read 31 pages across 5 competitors; saw no changes.",
     );
+    expect(quietLedgerLine(BASE)).toBeNull();
     expect(quietLedgerLine({ ...BASE, changes_told: 0 })).toContain("saw 4 changes, none worth your time");
   });
 
@@ -54,7 +55,9 @@ describe("the work ledger", () => {
         },
         "This month we",
       ),
-    ).toBe("This month we read 1 page across 1 rival; saw 1 change, 1 worth your time; read 1 mention and kept 1.");
+    ).toBe(
+      "This month we read 1 page across 1 competitor; saw 1 change, 1 worth your time; read 1 mention and kept 1.",
+    );
   });
 
   it("does not say the week twice when the headline already did", () => {

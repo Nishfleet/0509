@@ -133,7 +133,7 @@ describe("teammates on the brief", () => {
   });
 
   it("stops inviting one address once it has had three emails from us in a day", async () => {
-    for (let round = 0; round < 3; round += 1) expect(await takeRecipientSlot("loop@0509.io")).toBe(true);
+    for (let round = 0; round < 3; round += 1) expect(await takeRecipientSlot("loop@0509.io", new Date())).toBe(true);
 
     expect(await add("loop@0509.io")).toMatch(/several emails/);
     expect(sentMail).toHaveLength(0);
@@ -253,7 +253,7 @@ describe("teammates on the brief", () => {
       .run();
 
     expect((await readTeammates(workspaceId))[0]?.unsubscribed).toBe(false);
-    await suppressByUnsubscribeToken("mate-token");
+    await suppressByUnsubscribeToken("mate-token", "all");
 
     expect((await readTeammates(workspaceId))[0]?.unsubscribed).toBe(true);
     expect(await isTeammateUnsubscribeToken("mate-token")).toBe(true);

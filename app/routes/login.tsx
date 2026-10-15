@@ -12,7 +12,7 @@ import { Wordmark } from "../components/wordmark";
 import { Footer } from "../components/footer";
 import { safeReturnTo } from "../lib/agent/paths";
 import { subjectRedirect } from "../lib/onboarding-subject";
-import { deadLinkMessage } from "../lib/login-link-error";
+import { deadLinkMessage, sessionEndedMessage } from "../lib/login-link-error";
 import { formMagicLinkRequest } from "../lib/auth/login-magic-link.server";
 import { createAuthForRequest } from "../lib/auth.server";
 import { hasSession } from "../lib/require-session.server";
@@ -44,7 +44,7 @@ export function meta() {
 export async function loader({ request }: Route.LoaderArgs) {
   const turnstileSiteKey = env.TURNSTILE_SITE_KEY;
   const search = new URL(request.url).searchParams;
-  const linkError = deadLinkMessage(search);
+  const linkError = deadLinkMessage(search) ?? sessionEndedMessage(search);
   const id = search.get("deleted");
   const planHeaders = await planIntentHeaders(search);
   if (id === null && linkError === null && (await hasSession(request))) {

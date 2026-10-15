@@ -136,6 +136,18 @@ describe("the work ledger against real D1", () => {
     });
   });
 
+  it("does not count a read that has no page behind it", async () => {
+    await env.DB.prepare(
+      `INSERT INTO snapshot (id, watch_id, page_id, fetched_at, payload_hash) VALUES ('s-nopage', 'w-ws-a', NULL, ?1, 'h')`,
+    )
+      .bind(IN)
+      .run();
+    expect(await readWorkLedger(env.DB, { workspaceId: "ws-a", from: FROM, until: UNTIL })).toMatchObject({
+      rivals: 0,
+      pages_read: 0,
+    });
+  });
+
   it("never counts another workspace's reads or signals", async () => {
     await snapshot("sb", "ws-b", IN);
     await signal({ id: "cb", ws: "ws-b", rival: "rv-b", kind: "change", p: 0.95 });
@@ -156,12 +168,15 @@ describe("the work ledger against real D1", () => {
       week: WEEK,
       readThisFirst: { picks: [], judged: 1, unjudged: false },
     });
-    expect(payload.why_line).toBe("Quiet week: we read 2 pages across 1 rival; saw 1 change, none worth your time.");
+    expect(payload.why_line).toBe(
+      "Quiet week: we read 2 pages across 1 competitor; saw 1 change, none worth your time.",
+    );
     const { text } = renderBrief(parseBriefPayload(JSON.stringify(payload)), {
       unsubscribe_url: "https://0509.io/u/t",
       asset_base_url: "https://assets.0509.io",
     });
-    expect(text).toContain("1 change judged too small to interrupt you stayed off the brief.");
-    expect(text).not.toContain("This week we read 2 pages");
+    expect(text).toContain(
+      "This week we read 2 pages across 1 competitor; saw 1 change, none worth your time. 1 change judged too small to interrupt you stayed off the brief.",
+    );
   });
 });

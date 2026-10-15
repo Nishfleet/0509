@@ -1,11 +1,13 @@
 import type { Route } from "./+types/u.$token";
-import { Form, isRouteErrorResponse, useNavigation } from "react-router";
+import { isRouteErrorResponse, useNavigation } from "react-router";
+
+import { z } from "zod";
 
 import { ErrorPage } from "../components/error-page";
-import { Footer, SUPPORT_ADDRESS } from "../components/footer";
-import { Button } from "../components/ui/button";
+import { Footer } from "../components/footer";
+import { UnsubscribeConfirm, UnsubscribeDone } from "../components/unsubscribe-page";
 import { isTeammateUnsubscribeToken, isUnsubscribeTokenKnown } from "../lib/data/email_suppression.server";
-import { unsubscribe } from "../lib/unsubscribe.server";
+import { unsubscribe, unsubscribeScope } from "../lib/unsubscribe.server";
 
 const INVALID_LINK = "This unsubscribe link is no longer active";
 
@@ -17,19 +19,32 @@ export function headers(_: Route.HeadersArgs) {
   return { "Cache-Control": "no-store" };
 }
 
-export async function loader({ params }: Route.LoaderArgs) {
+const widenForm = z.object({ scope: z.literal("all").optional() });
+
+function linkScope(request: Request) {
+  return unsubscribeScope(new URL(request.url).searchParams.get("type"));
+}
+
+export async function loader({ params, request }: Route.LoaderArgs) {
   if (!(await isUnsubscribeTokenKnown(params.token))) {
     throw new Response(INVALID_LINK, { status: 404 });
   }
-  return { link: "confirm" as const };
+  return {
+    link: "confirm" as const,
+    scope: linkScope(request),
+    teammate: await isTeammateUnsubscribeToken(params.token),
+  };
 }
 
-export async function action({ params }: Route.ActionArgs) {
+export async function action({ params, request }: Route.ActionArgs) {
   const teammate = await isTeammateUnsubscribeToken(params.token);
-  if ((await unsubscribe(params.token)) === "invalid_token") {
+  const form = await request.formData().catch(() => new FormData());
+  const widened = widenForm.safeParse(Object.fromEntries(form));
+  const scope = widened.success && widened.data.scope === "all" ? "all" : linkScope(request);
+  if ((await unsubscribe(params.token, scope)) === "invalid_token") {
     throw new Response(INVALID_LINK, { status: 404 });
   }
-  return { unsubscribed: true as const, teammate };
+  return { unsubscribed: true as const, scope, teammate };
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
@@ -56,62 +71,11 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   );
 }
 
-function ChangedYourMind({ teammate }: { teammate: boolean }) {
-  if (teammate) {
-    return (
-      <p className="mt-4 leading-[1.65] text-ink-soft">
-        Changed your mind? Email{" "}
-        <a
-          className="inline-flex min-h-11 items-center underline underline-offset-4"
-          href={`mailto:${SUPPORT_ADDRESS}`}
-        >
-          {SUPPORT_ADDRESS}
-        </a>{" "}
-        and we will sort it out.
-      </p>
-    );
-  }
-  return (
-    <p className="mt-4 leading-[1.65] text-ink-soft">
-      Changed your mind? Sign in, open{" "}
-      <a className="inline-flex min-h-11 items-center underline underline-offset-4" href="/app/settings">
-        Settings
-      </a>
-      , tick "Send the brief and alerts to this address again" and save.
-    </p>
-  );
-}
-
-export default function Unsubscribe({ actionData }: Route.ComponentProps) {
+export default function Unsubscribe({ loaderData, actionData }: Route.ComponentProps) {
   const navigation = useNavigation();
-  const unsubscribing = navigation.state !== "idle";
+  const busy = navigation.state !== "idle";
   if (actionData?.unsubscribed) {
-    return (
-      <main className="mx-auto max-w-xl px-4 py-16">
-        <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">You're unsubscribed</h1>
-        <p className="mt-4 leading-[1.65] text-ink-soft">
-          We won't send the weekly brief or alerts to this address any more.
-          {actionData.teammate ? "" : " Sign-in links still arrive when you ask for one."}
-        </p>
-        <ChangedYourMind teammate={actionData.teammate} />
-        <Footer />
-      </main>
-    );
+    return <UnsubscribeDone scope={actionData.scope} teammate={actionData.teammate} busy={busy} />;
   }
-
-  return (
-    <main className="mx-auto max-w-xl px-4 py-16">
-      <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">Unsubscribe from Five to Nine emails?</h1>
-      <p className="mt-4 leading-[1.65] text-ink-soft">
-        You will stop getting the weekly brief and all alerts from Five to Nine at this address. Sign-in links still
-        arrive when you ask for one.
-      </p>
-      <Form method="post" className="mt-8">
-        <Button type="submit" size="lg" disabled={unsubscribing}>
-          {unsubscribing ? "Unsubscribing…" : "Unsubscribe"}
-        </Button>
-      </Form>
-      <Footer />
-    </main>
-  );
+  return <UnsubscribeConfirm scope={loaderData.scope} teammate={loaderData.teammate} busy={busy} />;
 }

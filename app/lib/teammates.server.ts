@@ -24,7 +24,7 @@ export async function readTeammates(workspaceId: string) {
       id: mate.id,
       address: mate.target_value,
       confirmed: mate.is_verified === 1,
-      unsubscribed: mate.is_verified === 1 && (await isAddressSuppressed(mate.target_value)),
+      unsubscribed: mate.is_verified === 1 && (await isAddressSuppressed(mate.target_value, "brief")),
     })),
   );
 }
@@ -60,7 +60,7 @@ async function inviteAndCount(input: {
   used: number;
 }): Promise<string | null> {
   const { workspaceId, targetId, address, now, used } = input;
-  const failure = (await isAddressSuppressed(address))
+  const failure = (await isAddressSuppressed(address, "brief"))
     ? null
     : await sendTeammateInvite({
         email: input.email,
@@ -91,7 +91,7 @@ export async function addTeammateByOwner(input: {
   const now = new Date();
   const used = await invitesUsedToday(workspaceId, now);
   if (used >= INVITES_PER_DAY) return DAILY_LIMIT;
-  if (!(await takeRecipientSlot(address))) return RECIPIENT_CAPPED;
+  if (!(await takeRecipientSlot(address, now))) return RECIPIENT_CAPPED;
   const targetId = await addTeammate(env.DB, { workspaceId, address, now: now.toISOString() });
   if (targetId === null) return CANT_ADD;
   return inviteAndCount({ ...input, workspaceId, targetId, address, now, used });

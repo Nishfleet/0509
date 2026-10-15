@@ -6,10 +6,6 @@ import { describe, expect, it } from "vitest";
 import { AddCompetitor, CompetitorMaybes } from "../../app/components/competitor-maybes";
 import { RetireQuestions } from "../../app/components/retire-questions";
 
-// Every row here posts to the route with the row's own suggestionId, so the
-// pending state has to be scoped to that id: one row in flight disables its two
-// buttons and leaves every other row live. Two rows render in each test so the
-// scope is what is under test, not the mere presence of a submission.
 const NEVER = () => new Promise(() => undefined);
 
 const MAYBE_A = { suggestionId: "sug-a", name: "Acme", domain: "acme.example", reason: null };
@@ -65,11 +61,6 @@ function row(html: string, ariaLabel: string): string {
 }
 
 describe("the Add a competitor field and its error", () => {
-  // Every message handleCompetitorIntent can return for intent=add is an error,
-  // so the field carries the failure and announces it as one. Before this the
-  // same message was a role=status, read politely only when nothing else
-  // happens, and the input said nothing at all. renderToStaticMarkup escapes
-  // the apostrophe, so the message is asserted in its escaped form.
   const ERROR = "We couldn't read that. Try their main website, like brand.com.";
   const ERROR_ESCAPED = "We couldn&#x27;t read that. Try their main website, like brand.com.";
 

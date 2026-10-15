@@ -4,12 +4,6 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-// DESIGN.md §9 promises a 320ms push when you navigate into a brand, and no
-// stylesheet drew one. The push is the browser's view transition, switched on
-// by `viewTransition` on the links into a brand; this pins that the two
-// pseudo-element rules read the §9 tokens and exist only for visitors who have
-// not asked for reduced motion.
-
 const CSS_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "app", "app.css");
 
 function block(css: string, opener: string): string {

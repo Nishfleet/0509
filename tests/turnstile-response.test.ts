@@ -11,9 +11,6 @@ class FakeInputElement {
 const querySelector = vi.fn();
 
 function stubDocument(): void {
-  // The node project has no `document` or `HTMLInputElement`, so both are
-  // stubbed: querySelector returns the per-test fixture, and HTMLInputElement
-  // is the stub class the source's `instanceof` check resolves against.
   vi.stubGlobal("document", { querySelector });
   vi.stubGlobal("HTMLInputElement", FakeInputElement);
 }

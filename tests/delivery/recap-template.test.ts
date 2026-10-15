@@ -7,6 +7,7 @@ const CTX = {
   change_count: 3,
   latest: { rival: "Acme", what: "Homepage headline changed" },
   link: "https://0509.io/app/alerts",
+  standing: [],
   footer: { unsubscribe_url: "https://0509.io/u/tok", settings_link: "https://0509.io/app/settings" },
 };
 
@@ -48,6 +49,19 @@ describe("recap email", () => {
     const { html, text } = renderRecap(CTX);
     expect(html).toContain('href="https://0509.io/u/tok"');
     expect(text).toContain("Unsubscribe: https://0509.io/u/tok");
+  });
+
+  it("shows where rivals stand when nothing has changed", () => {
+    const { subject, text } = renderRecap({
+      ...CTX,
+      change_count: 0,
+      latest: null,
+      standing: [{ rival: "Acme", lines: ["In its own words: Invoices for freelancers"] }],
+    });
+    expect(text).toContain("Nothing has changed on their sites yet.");
+    expect(text).toContain("Acme\nIn its own words: Invoices for freelancers");
+    expect(text).not.toContain("caught");
+    expect(subject).toBe("Where your competitors stand today");
   });
 
   it("escapes anything it is handed", () => {

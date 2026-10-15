@@ -2,10 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as Harness from "../../evals/harness";
 
-// EVAL_MAX_NEURONS is the per-run ceiling on Workers AI spend and EVAL_DAILY_NEURON_CEILING
-// the per-day one (0509#7249). These cases run the real harness against a stubbed AI binding
-// and a stubbed GraphQL endpoint, so no neuron is spent.
-
 const run = vi.fn((): Promise<unknown> => Promise.resolve({ response: "{}" }));
 
 vi.mock("wrangler", () => ({
