@@ -9,6 +9,7 @@ import type { Streaks } from "../mentions/retry";
 import { deferred, retrySkipped, sustainedSkips, track, tripped } from "../mentions/retry";
 import type { MentionTarget, TargetOutcome } from "../mentions/sweep";
 import { planTargets, sweepTarget } from "../mentions/sweep";
+import { sweepFailure } from "../../app/lib/sweep-health";
 import { isNativeSchedule } from "../workflow-crons";
 import { withStepCheckIn } from "../workflow-monitor";
 
@@ -30,7 +31,15 @@ export interface MentionsOutcome {
 export class MentionsSweep extends WorkflowEntrypoint<Env> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<MentionsOutcome | null> {
     if (isNativeSchedule(event)) return null;
-    return withStepCheckIn(step, { slug: "mentions-sweep", config: MONITOR }, () => this.runMentions(event, step));
+    return withStepCheckIn(
+      step,
+      {
+        slug: "mentions-sweep",
+        config: MONITOR,
+        unhealthy: (outcome) => sweepFailure({ failed: outcome.failed, attempted: outcome.targets }),
+      },
+      () => this.runMentions(event, step),
+    );
   }
 
   private async runMentions(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<MentionsOutcome> {

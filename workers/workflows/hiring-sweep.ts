@@ -7,6 +7,7 @@ import type { BoardResult } from "../../app/lib/hiring/read-board.server";
 import { readBoard } from "../../app/lib/hiring/read-board.server";
 import type { FoundBoard } from "../../app/lib/hiring/sweep.server";
 import { findBoard, planHiringSweep } from "../../app/lib/hiring/sweep.server";
+import { sweepFailure } from "../../app/lib/sweep-health";
 import { isNativeSchedule } from "../workflow-crons";
 import { withStepCheckIn } from "../workflow-monitor";
 
@@ -25,6 +26,7 @@ export interface HiringSweepOutcome {
   changed: number;
   newRoles: number;
   failed: number;
+  attempted: number;
 }
 
 async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null> {
@@ -45,7 +47,15 @@ async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null
 export class HiringSweep extends WorkflowEntrypoint<Env> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<HiringSweepOutcome | null> {
     if (isNativeSchedule(event)) return null;
-    return withStepCheckIn(step, { slug: "hiring-sweep", config: MONITOR }, () => this.runSweep(event, step));
+    return withStepCheckIn(
+      step,
+      {
+        slug: "hiring-sweep",
+        config: MONITOR,
+        unhealthy: (outcome) => sweepFailure({ failed: outcome.failed, attempted: outcome.attempted }),
+      },
+      () => this.runSweep(event, step),
+    );
   }
 
   private async runSweep(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<HiringSweepOutcome> {
@@ -78,6 +88,7 @@ export class HiringSweep extends WorkflowEntrypoint<Env> {
       changed: outcome("changed"),
       newRoles: reads.reduce((total, result) => total + (result?.newRoles ?? 0), 0),
       failed: found.filter((result) => result === null).length + reads.filter((result) => result === null).length,
+      attempted: found.length + reads.length,
     };
     console.log(JSON.stringify({ event: "hiring.sweep", ...summary }));
     return summary;

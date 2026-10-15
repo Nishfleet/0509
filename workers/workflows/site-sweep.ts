@@ -14,6 +14,7 @@ import {
   publishSiteChange,
   uncoveredItems,
 } from "../../app/lib/site/sweep.server";
+import { sweepFailure } from "../../app/lib/sweep-health";
 import { plannedAt } from "../../app/lib/workflow-time";
 import { isNativeSchedule } from "../workflow-crons";
 import { withStepCheckIn } from "../workflow-monitor";
@@ -194,7 +195,16 @@ async function recordRun(
 export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: string }> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<SiteSweepOutcome | null> {
     if (isNativeSchedule(event)) return null;
-    return withStepCheckIn(step, { slug: "site-sweep", config: MONITOR }, () => this.runSweep(event, step));
+    return withStepCheckIn(
+      step,
+      {
+        slug: "site-sweep",
+        config: MONITOR,
+        unhealthy: (outcome) =>
+          outcome.recorded ? sweepFailure({ failed: outcome.failed, attempted: outcome.pages }) : "run not recorded",
+      },
+      () => this.runSweep(event, step),
+    );
   }
 
   private async runSweep(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<SiteSweepOutcome> {

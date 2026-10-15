@@ -3,17 +3,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@sentry/cloudflare", () => ({
   captureCheckIn: vi.fn(() => "check-in-1"),
+  captureException: vi.fn(),
 }));
 
 vi.mock("../app/lib/healthcheck.server", () => ({
   pingCheck: vi.fn(() => Promise.resolve(null)),
 }));
 
-import { captureCheckIn } from "@sentry/cloudflare";
+import { captureCheckIn, captureException } from "@sentry/cloudflare";
 import { pingCheck } from "../app/lib/healthcheck.server";
 import { withCheckPings, withStepCheckIn } from "../workers/workflow-monitor";
 
 const checkIn = vi.mocked(captureCheckIn);
+const exception = vi.mocked(captureException);
 const ping = vi.mocked(pingCheck);
 
 const MONITOR = {
@@ -45,6 +47,7 @@ describe("withStepCheckIn", () => {
   beforeEach(() => {
     checkIn.mockClear();
     ping.mockClear();
+    exception.mockClear();
   });
 
   it("pings the sweep's healthcheck once, when the sweep ends ok", async () => {
@@ -107,6 +110,39 @@ describe("withStepCheckIn", () => {
       { monitorSlug: "feed-sweep", status: "in_progress" },
       { checkInId: "check-in-1", monitorSlug: "feed-sweep", status: "error" },
     ]);
+  });
+});
+
+describe("withStepCheckIn on a run that finished but did not work", () => {
+  beforeEach(() => {
+    checkIn.mockClear();
+    ping.mockClear();
+    exception.mockClear();
+  });
+
+  it("closes the check-in as error, pings fail and tells Sentry, and still returns the outcome", async () => {
+    const outcome = await withStepCheckIn(
+      memoStep(),
+      {
+        ...MONITOR,
+        unhealthy: (result: { failed: number; pages: number }) =>
+          result.failed * 2 >= result.pages ? "30 of 40 failed" : null,
+      },
+      async () => ({ failed: 30, pages: 40 }),
+    );
+    expect(outcome).toEqual({ failed: 30, pages: 40 });
+    expect(ping.mock.calls).toEqual([["feed-sweep", "fail"]]);
+    expect(checkIn.mock.calls.map((call) => call[0])).toEqual([
+      { monitorSlug: "feed-sweep", status: "in_progress" },
+      { checkInId: "check-in-1", monitorSlug: "feed-sweep", status: "error" },
+    ]);
+    expect(exception).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes ok and tells Sentry nothing when the verdict is healthy", async () => {
+    await withStepCheckIn(memoStep(), { ...MONITOR, unhealthy: () => null }, async () => ({ failed: 0 }));
+    expect(ping.mock.calls).toEqual([["feed-sweep", "ok"]]);
+    expect(exception).not.toHaveBeenCalled();
   });
 });
 

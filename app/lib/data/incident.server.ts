@@ -51,10 +51,14 @@ const breakageRows = z.array(z.object({ page_id: z.string(), before_key: z.strin
 
 const openIncidentRow = z.object({ id: z.string() });
 
+export async function readOpenIncidentId(pageId: string): Promise<string | null> {
+  const open = openIncidentRow.nullable().parse(await env.DB.prepare(OPEN_INCIDENT_FOR_PAGE).bind(pageId).first());
+  return open?.id ?? null;
+}
+
 export async function openIncident(row: NewIncident): Promise<string | null> {
   await openIncidentStatement(row).run();
-  const open = openIncidentRow.nullable().parse(await env.DB.prepare(OPEN_INCIDENT_FOR_PAGE).bind(row.pageId).first());
-  return open?.id ?? null;
+  return readOpenIncidentId(row.pageId);
 }
 
 export async function readOpenIncidents(): Promise<Record<string, string>> {

@@ -1,4 +1,3 @@
-import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { isTesterSubscription } from "../../app/lib/billing/returning.server";
 import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
 import { readTrialRecaps, recapKey, type TrialRecap } from "../../app/lib/data/recap.server";
@@ -7,6 +6,7 @@ import { hasReminderAttempt } from "../../app/lib/data/trial_reminder.server";
 import { SETTINGS_LINK, unsubscribeHeaders } from "../../app/lib/alert-footer";
 import { ensureUnsubscribeToken, unsubscribeUrlFor } from "./consumer";
 import { renderRecap } from "./recap-template";
+import { reportLifecycleFailure } from "./lifecycle-failure";
 import { sendOnce } from "./send-once";
 
 const ALERTS_LINK = "https://0509.io/app/alerts";
@@ -45,7 +45,7 @@ export async function sendRecaps(env: Env, now: Date, isTester: TesterCheck = is
   let sent = 0;
   for (const recap of await readTrialRecaps(env.DB, now)) {
     const done = await recapOne(env, recap, isTester).catch((error: unknown) => {
-      console.error(JSON.stringify({ event: "delivery.recap_failed", error: redactEmailShaped(String(error)) }));
+      reportLifecycleFailure("delivery.recap_failed", error);
       return false;
     });
     if (done) sent += 1;

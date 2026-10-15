@@ -10,6 +10,7 @@ import {
   planOwnSiteCheck,
   probeOwnSite,
 } from "../../app/lib/site/own-site.server";
+import { sweepFailure } from "../../app/lib/sweep-health";
 import { isNativeSchedule, startOwnSiteCheckHour } from "../workflow-crons";
 import { withStepCheckIn } from "../workflow-monitor";
 
@@ -113,7 +114,15 @@ export class OwnSiteCheck extends WorkflowEntrypoint<Env> {
       await startOwnSiteCheckHour(this.env, event.timestamp.getTime());
       return null;
     }
-    return withStepCheckIn(step, { slug: "own-site-check", config: MONITOR }, () => this.runCheck(event, step));
+    return withStepCheckIn(
+      step,
+      {
+        slug: "own-site-check",
+        config: MONITOR,
+        unhealthy: (outcome) => sweepFailure({ failed: outcome.failed, attempted: outcome.pages }),
+      },
+      () => this.runCheck(event, step),
+    );
   }
 
   private async runCheck(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<OwnSiteCheckOutcome> {
