@@ -7,6 +7,7 @@ export default [
   route("terms", "routes/terms.tsx"),
   route("security", "routes/security.tsx"),
   route("pricing", "routes/pricing.tsx"),
+  route("signup", "routes/signup.ts"),
   route("robots.txt", "routes/robots[.]txt.ts"),
   route("sitemap.xml", "routes/sitemap[.]xml.ts"),
   route(".well-known/http-message-signatures-directory", "routes/[.]well-known.http-message-signatures-directory.ts"),

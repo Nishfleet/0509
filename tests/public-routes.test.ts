@@ -37,6 +37,7 @@ const SESSION_GATE_ALLOWLIST: Readonly<Record<string, string>> = {
   "/login": "sign-in must load without a session",
   "/api/health": "liveness probe has no cookie",
   "/api/docs": "public OpenAPI explorer",
+  "/signup": "no page of its own; redirects to /pricing, where each plan has its own start link",
   "/onboarding": "first-run flow after sign-in, not under /app layouts",
   "/onboarding/competitors": "first-run flow after sign-in, not under /app layouts",
   "/onboarding/identity": "first-run flow after sign-in, not under /app layouts",

@@ -29,6 +29,7 @@ export const DISALLOWED_PREFIXES = [
   "/v/",
   "/login",
   "/onboarding",
+  "/signup",
   "/oauth",
   "/design",
 ] as const;
