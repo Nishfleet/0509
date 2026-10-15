@@ -1,9 +1,6 @@
 import { env } from "cloudflare:workers";
 
-const FORBIDDEN = {
-  error: "forbidden_origin",
-  error_description: "This origin may not call the MCP server.",
-};
+import { PROBLEMS } from "./problems";
 
 function productOrigin(): string {
   return new URL(env.BETTER_AUTH_URL).origin;
@@ -15,8 +12,8 @@ export function originAllowed(origin: string | null): boolean {
 
 export function forbiddenOrigin(): Response {
   return Response.json(
-    { error: FORBIDDEN.error, error_description: FORBIDDEN.error_description },
-    { status: 403, headers: { "cache-control": "no-store" } },
+    { error: "forbidden_origin", error_description: PROBLEMS.forbidden_origin.description },
+    { status: PROBLEMS.forbidden_origin.status, headers: { "cache-control": "no-store" } },
   );
 }
 

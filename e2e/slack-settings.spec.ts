@@ -38,6 +38,7 @@ test("Slack alerts start unconnected and refuse an address that is not a Slack w
   await expect(section.getByRole("heading", { name: "Slack alerts" })).toBeVisible();
   await expect(section).toContainText("Make an incoming webhook in Slack and paste its address here.");
   await expect(section.getByTestId("slack-reconnect")).toHaveCount(0);
+  await expect(page.getByRole("switch", { name: /Weekly brief in Slack/ })).toHaveCount(0);
   await scanPage(page, testInfo, quality, `/app/settings slack unconnected ${testInfo.project.name}`, {
     screen: /^settings$/i,
     keyboard: true,
@@ -66,6 +67,16 @@ test("a connected Slack shows Disconnect, and disconnecting brings the address f
   await expect(section).toContainText("Price and plan changes also post to your Slack channel.");
   await expect(section.getByLabel("Slack webhook address")).toHaveCount(0);
   await expect(section.getByTestId("slack-reconnect")).toHaveCount(0);
+
+  const briefSwitch = page.getByRole("switch", { name: /Weekly brief in Slack/ });
+  await expect(briefSwitch).not.toBeChecked();
+  const saved = page.waitForResponse(
+    (response) => response.request().method() === "POST" && response.url().includes("/app/settings"),
+  );
+  await briefSwitch.click();
+  await saved;
+  await page.reload();
+  await expect(briefSwitch).toBeChecked();
 
   await section.getByRole("button", { name: "Disconnect Slack" }).click();
   await expect(section.getByLabel("Slack webhook address")).toBeVisible();
