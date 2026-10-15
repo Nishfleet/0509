@@ -9,8 +9,6 @@ const SITE_KEY = "1x00000000000000000000BB";
 const PATH = "/login";
 
 function render(props: { busy: boolean; error: string }): string {
-  // SignInEmailForm renders react-router's <Form>, which reads the action from
-  // the router context, so it needs a router even though nothing navigates here.
   const form = () => createElement(SignInEmailForm, { turnstileSiteKey: SITE_KEY, ...props });
   const router = createMemoryRouter([{ id: "login", path: PATH, Component: form }], { initialEntries: [PATH] });
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
@@ -24,8 +22,6 @@ function submitButton(html: string): string {
   return /<button[^>]*type="submit"[^>]*>[\s\S]*?<\/button>/.exec(html)?.[0] ?? "";
 }
 
-// The disabled control renders the bare attribute, but the button class list
-// holds utility names that contain the same word, so match the attribute itself.
 function isDisabled(button: string): boolean {
   return /\sdisabled(?:=|\s|$)/.test(button);
 }
@@ -39,7 +35,7 @@ describe("SignInEmailForm (app/components/sign-in-email-form.tsx)", () => {
     expect(input).toContain('name="email"');
     expect(input).toContain('type="email"');
     expect(input).toContain("required");
-    // The attributes reach the markup in the camelCase spelling they were given.
+
     expect(input).toMatch(/inputmode="email"/i);
     expect(input).toMatch(/autocomplete="email"/i);
     expect(input).not.toContain("aria-invalid");
@@ -53,8 +49,6 @@ describe("SignInEmailForm (app/components/sign-in-email-form.tsx)", () => {
 
     expect(input).toContain('aria-invalid="true"');
     expect(input).toContain(`aria-describedby="${SIGN_IN_ERROR_ID}"`);
-    // SignInEmailForm only names the target. The <p id=...> itself is the route's
-    // SignInError, which tests/unit/login-sign-in-error.test.ts covers.
   });
 
   it("offers the send button enabled while the link is not being sent", () => {

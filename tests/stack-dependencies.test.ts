@@ -3,28 +3,6 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-// AGENTS.md: "Adding a dependency that is not in that file is a rejection."
-// A reviewer enforced it until Nish 2026-09-28 16:47Z asked for the lean-code
-// rules as hard blocks (0509#5783). Every dependency, of every kind, in every
-// package.json the repo tracks needs its own approving row in
-// docs/dependencies.md: `| `<name>` | <specifier> |` (any run of spaces around the pipes: Prettier aligns tables). A mention in prose
-// or in a "Rejected" table does not count.
-//
-// 0509#7017: the table used to sit in docs/REBUILD-STACK.md §9, inside a 190 KB
-// file of 2026-09 probe notes, and the old read matched a row anywhere in that
-// file, so a row buried in research §1-8 satisfied the gate. It is its own file
-// now, and the second describe is what stops it going back into one.
-//
-// 0509#7085 (item 3): the row check proved a row existed and nothing about its
-// numbers, so the table drifted from package.json and package-lock.json
-// unnoticed — `@types/node` named the wrong specifier and the wrong lock,
-// `@sentry/cloudflare` the wrong lock. The table's own prose says "The version
-// in this table is the `package.json` specifier", and the Lock column is "the
-// resolved version", so both columns are now checked against the files they
-// copy. A drifted row is a lie about what ships. It drifted back into prose
-// inside a 190 KB file; it drifts just as quietly in its own 81-line file, so
-// the number checks outlive the move that made the file readable.
-
 const ROOT = path.resolve(import.meta.dirname, "..");
 const ALLOWLIST = "docs/dependencies.md";
 const KINDS = ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"] as const;
@@ -45,13 +23,6 @@ const dependencyNames = (file: string): string[] => {
 
 const names = manifests.flatMap(dependencyNames);
 
-// One approving row, whichever way it is asked for: | `name` | <specifier> |.
-// Given a name it matches that package's row; given none it matches any
-// approving row in the file, which is what stops the table growing a second
-// home (0509#7017). The specifier cell is one token, because a cell that starts
-// with a digit is not only a version: docs/REBUILD-STACK.md §4 has probe-result
-// rows whose second cell reads `200, image/x-icon`, and the looser shape matched
-// all three of them.
 const approvingRow = (name?: string): RegExp => {
   const cell = name === undefined ? "[^`]+" : name.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
   return new RegExp(`^\\| \`${cell}\` +\\| +[\\^~]?\\d[^\\s|]* *\\|`, "m");
@@ -59,17 +30,12 @@ const approvingRow = (name?: string): RegExp => {
 
 const allowlist = readFileSync(path.join(ROOT, ALLOWLIST), "utf8");
 
-// The table's header declares six columns; cells are read by position, so every
-// data row must have the six the header declares.
 interface StackRow {
   name: string;
   specifier: string;
   locked: string;
 }
 
-// Throws with the file and the line, rather than asserting from module scope: a
-// table that no longer parses then fails the named test that reads it, not the
-// whole file's collection.
 function stackRows(): Map<string, StackRow> {
   const lines = allowlist.split("\n");
   const header = lines.findIndex((line) => /^\|\s*Package\s*\|/.test(line));
@@ -79,9 +45,7 @@ function stackRows(): Map<string, StackRow> {
   for (let at = header + 2; at < lines.length; at += 1) {
     const line = lines[at];
     if (!line.trim().startsWith("|")) break;
-    // `\|` inside a cell is legal Markdown and is not a column separator, so a
-    // row holding one splits into the wrong number of cells and would fail the
-    // width check below with a count that does not name the cell.
+
     const cells = line
       .split(/(?<!\\)\|/)
       .slice(1, -1)
@@ -95,8 +59,6 @@ function stackRows(): Map<string, StackRow> {
   return rows;
 }
 
-// package-lock.json resolves every direct dependency of the root manifest to
-// `node_modules/<name>` at lockfileVersion 3.
 const lock = JSON.parse(readFileSync(path.join(ROOT, "package-lock.json"), "utf8")) as {
   packages?: Record<string, { version?: string }>;
 };
@@ -126,10 +88,6 @@ describe("the allowlist lives in one file", () => {
   });
 });
 
-// The row checks above read every manifest, but the specifier and Lock checks
-// below read the root manifest and the root lock, so a second package.json would
-// pass the row check while silently escaping both number checks. Fail loudly
-// instead of under-checking: adding a manifest means extending this file.
 describe("the number columns", () => {
   it("reads the root manifest only", () => {
     expect(

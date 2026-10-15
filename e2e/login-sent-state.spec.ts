@@ -58,3 +58,16 @@ test("the sent state lands in place and the resend waits 30 seconds with a visib
     testInfo.project.name,
   ).toEqual([]);
 });
+
+test("a stale session lands on sign-in with a calm explanation", async ({ page, baseURL }) => {
+  const host = new URL(baseURL ?? "http://localhost").hostname;
+  await page
+    .context()
+    .addCookies([{ name: "better-auth.session_token", value: "stale.value", domain: host, path: "/" }]);
+  await page.goto("/app");
+  await expect(page).toHaveURL(/\/login\?.*ended=1/);
+  await expect(page.getByRole("alert")).toContainText("You were signed out");
+  await page.context().clearCookies();
+  await page.goto("/app");
+  await expect(page).toHaveURL(/\/login$/);
+});

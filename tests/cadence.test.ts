@@ -25,19 +25,10 @@ function cronMinuteOfDay(cron: string): number {
   return Number(hour) * 60 + Number(minute);
 }
 
-/**
- * Minutes from a sweep's start to the next nightly refresh. The overnight
- * block wraps midnight (19:00 to 03:00), so the difference is taken modulo a
- * day rather than as a plain subtraction.
- */
 function minutesToNightly(cron: string): number {
   return (cronMinuteOfDay(NIGHTLY_CRON) - cronMinuteOfDay(cron) + MINUTES_IN_DAY) % MINUTES_IN_DAY;
 }
 
-// 0509#5823: the schedule constants live in app/lib/cadence.ts. The
-// Workflow schedule and the trigger crons below are asserted against the
-// constants, never against a literal, so the gate reddens the day one of them
-// diverges from the constant it names.
 describe("cadence", () => {
   it("leaves the six scheduled Workflows off `schedules` and starts them from triggers.crons", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
@@ -84,15 +75,6 @@ describe("cadence", () => {
   });
 });
 
-/**
- * 0509#7191: the site sweep ran from 02:00 UTC with a 120 minute budget and the
- * nightly refresh starts at 03:00, so at 40 to 50 workspaces the sweep was
- * still writing when the refresh wanted to write. Every sweep now starts early
- * enough to finish before NIGHTLY_CRON, and the Workflows build their monitor
- * from SWEEP_MONITORS, so a cron and the budget that watches it live in one
- * place. These two assertions are the gate: a cron moved back to 02:00, or a
- * budget raised past the nightly, reddens here instead of the nightly.
- */
 describe("nightly sweeps finish before the nightly refresh", () => {
   it("starts and finishes every sweep before NIGHTLY_CRON", () => {
     for (const [cron, monitor] of Object.entries(SWEEP_MONITORS)) {
@@ -117,18 +99,6 @@ describe("nightly sweeps finish before the nightly refresh", () => {
   });
 });
 
-/**
- * One cron constant feeds two parsers that disagree about the numbers.
- * Cloudflare counts days of the week 1 = Sunday .. 7 = Saturday (its docs:
- * "1-7, case-insensitive 3-letter abbreviations"); Sentry's cronsim counts
- * 0 = Sunday .. 6 = Saturday, where SYMBOLIC_DAYS is "SUN MON TUE WED THU FRI
- * SAT", so its 1 is Monday. `triggers.crons` runs the Worker, and
- * `cronMonitor()` hands the same string to the Sentry Cron Monitor, so
- * `0 4 * * 1` started the refresh on Sunday and left Sentry waiting for the
- * check-in on the Monday it had computed, which raised a missed-check-in
- * alert every week while the job had already run (0509#7067). Both parsers
- * take the abbreviation, so no constant here carries a numeric weekday.
- */
 const CRON_CONSTANTS: Record<string, string> = {
   MENTIONS_SWEEP_CRON,
   SITE_SWEEP_CRON,

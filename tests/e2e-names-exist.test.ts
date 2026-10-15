@@ -4,13 +4,6 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-// 0509#7430: main renamed the cancelled-plan button to "Manage billing" and
-// the billing-state spec still looked for "Manage or cancel plan"; only the
-// preview run caught it, 10 minutes later. A name an e2e spec looks up by a
-// string literal must still exist as a phrase in app source, public files,
-// workers, or as seed data elsewhere in e2e. Names the app builds at run time
-// from a template are listed below with the template that builds them.
-
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const BUILT_AT_RUN_TIME: Record<string, string> = {

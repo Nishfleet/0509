@@ -2,10 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import { httpUrl } from "../app/lib/http-url";
 
-// httpUrl decides whether a stored string becomes an href, so every branch of
-// app/lib/http-url.ts is pinned here: the empty-value early return, the
-// successful parse, the parse failure that logs, and the protocol allow-list
-// that keeps javascript: and data: out of an href.
 describe("httpUrl", () => {
   it("returns null for an empty or whitespace-only value without logging", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);

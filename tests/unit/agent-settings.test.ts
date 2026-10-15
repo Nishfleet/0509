@@ -56,11 +56,6 @@ function buttons(html: string): string[] {
   return [...html.matchAll(/<button\b[^>]*>[\s\S]*?<\/button>/g)].map((match) => match[0]);
 }
 
-// A real memory router whose only action never settles until the test
-// releases it: calling navigate() puts the router in the same
-// "submitting" state a double click would, with the form's own
-// FormData on the navigation, so the pending render is the one the
-// browser makes.
 function pendingCreateKey() {
   return pendingSubmit(
     createElement(AgentKeys, { keys: TWO_KEYS, newKey: null, duplicate: false, submission: SUBMISSION }),
@@ -307,10 +302,6 @@ describe("AgentKeys", () => {
     expect(html).not.toContain("Making…");
   });
 
-  // One row with a bad timestamp took down the whole page: day() formatted the
-  // value through Intl.DateTimeFormat, which throws RangeError on an Invalid
-  // Date. day() now says "date unknown" for a value Date.parse rejects, so the
-  // row still renders.
   it("says date unknown instead of throwing when a key's createdAt is unparseable", () => {
     const html = stubbed(
       createElement(AgentKeys, {
@@ -339,8 +330,6 @@ describe("AgentKeys", () => {
     expect(html).not.toContain("Invalid");
   });
 
-  // Inverse of the two cases above: a valid createdAt still formats a day, so
-  // the guard cannot be replaced by an unconditional "date unknown" and pass.
   it("still formats the created day for a key with a valid timestamp", () => {
     const html = stubbed(
       createElement(AgentKeys, {
@@ -400,8 +389,6 @@ describe("ConnectedApps", () => {
     expect(html).not.toContain("Disconnecting…");
   });
 
-  // A connected-app row holds a timestamp the MCP client sent, so a bad one
-  // reaches the same day() a bad key timestamp does.
   it("says date unknown instead of throwing when an app's connectedAt is unparseable", () => {
     const html = stubbed(
       createElement(ConnectedApps, {
@@ -413,9 +400,6 @@ describe("ConnectedApps", () => {
     expect(html).not.toContain("Invalid");
   });
 
-  // Inverse of the case above: a good timestamp still formats a day, so a
-  // refactor that returned "date unknown" for every value cannot pass this
-  // suite silently.
   it("still formats the connected day for an app with a valid timestamp", () => {
     const html = stubbed(
       createElement(ConnectedApps, {
@@ -470,14 +454,6 @@ describe("the connect block on /app/settings/agents", () => {
   });
 });
 
-// #6648: CopyKey's clipboard write had no .then(onOk, onFail), so a refused
-// write (permission denied, insecure context, some in-app browsers) left an
-// unhandled rejection and no message on screen, right under the notice that
-// says the key is never shown again. The copy boundary, the state the button
-// reads and the sentence it shows are the three real app units under test;
-// the node project has no DOM, so navigator is stubbed per case exactly as
-// tests/unit/share-button.test.ts does (#6619).
-
 const NEW_KEY = "0509_live_secret_value";
 
 let unhandled: unknown[] = [];
@@ -485,9 +461,6 @@ function recordUnhandled(reason: unknown): void {
   unhandled.push(reason);
 }
 
-// Node reports an unhandled rejection only after the microtask queue drains, so
-// every claim below waits for that drain before reading the list. Reading it
-// first would make the claim unable to fail.
 async function settledUnhandled(): Promise<unknown[]> {
   await new Promise((resolve) => setImmediate(resolve));
   return unhandled;
@@ -530,9 +503,6 @@ describe("copying a new API key", () => {
     expect(await settledUnhandled()).toEqual([]);
   });
 
-  // An insecure context or an in-app browser leaves navigator.clipboard absent,
-  // so reading .writeText throws before a promise exists. The chain starts from
-  // Promise.resolve() so that throw is a rejection the onFail arm handles.
   it("reports failed and raises nothing when navigator.clipboard is absent", async () => {
     vi.stubGlobal("navigator", {});
 
@@ -621,9 +591,6 @@ describe("copying a new API key", () => {
     expect(html).not.toContain("Copy failed");
   });
 
-  // The failure sentence tells the person to select the key above, so the key
-  // has to be on screen in the same notice, above the button. This is the only
-  // place CopyKey is rendered.
   it("puts the key on screen above the copy button in the new-key notice", () => {
     const Stub = createRoutesStub([
       {
@@ -641,14 +608,6 @@ describe("copying a new API key", () => {
   });
 });
 
-// The click path end to end: the button's real onClick, the real
-// copyToClipboard, the real setState wiring and the real failure render. The
-// node project has no DOM, so the button and the state hook are stubbed with
-// the same shape tests/competitor/competitor-pending-buttons.test.ts uses for
-// useNavigation: the stubbed button hands the harness its onClick, and the
-// stubbed useState is a one-slot store so the settled outcome can be rendered
-// again. Everything between the click and the second render is the shipped
-// code, so deleting `.then(setState)` or the failure note fails these tests.
 const clicked = vi.hoisted(() => ({
   state: "idle" as "idle" | "copied" | "failed",
   onClick: null as null | (() => void),
