@@ -12,7 +12,7 @@ test.skip(
 test.setTimeout(180_000);
 
 const PUBLIC_PAGES: [string, RegExp][] = [
-  ["/", /quietly, we.re rebuilding/i],
+  ["/", /know where you stand/i],
   ["/pricing", /pick how closely you watch/i],
   ["/privacy", /privacy policy/i],
   ["/terms", /terms of service/i],

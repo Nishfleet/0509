@@ -1,12 +1,11 @@
 import { OPERATOR, type LegalDocument } from "./document";
 
-const SECURITY_UPDATED = "2026-10-12";
+export const SECURITY_UPDATED = "2026-10-12";
 
 export const SECURITY: LegalDocument = {
   path: "/security",
   title: "Security",
   updated: SECURITY_UPDATED,
-  walled: true,
   description:
     "How Five to Nine keeps your workspace safe: where the data lives, how you sign in, what agents can touch, and how to report a security problem.",
   intro: `This page says, in plain words, how ${OPERATOR} protects what you give it and how to tell us if you find a hole. What we collect and for how long is on the privacy page.`,
