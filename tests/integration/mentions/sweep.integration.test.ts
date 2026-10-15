@@ -124,8 +124,15 @@ describe("nightly mentions sweep", () => {
     stubGdelt();
     Reflect.set(env, "AI", { run: jevAnswering() });
 
+    const startedAt = new Date().toISOString();
     const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
     expect(outcome).toEqual({ items: 3, stored: 2, unjudged: 0, skipped: 0 });
+
+    const decided = await env.DB.prepare("SELECT decided_at FROM jev_verdict WHERE workspace_id = ?")
+      .bind(workspaceId)
+      .all<{ decided_at: string }>();
+    expect(decided.results.length).toBeGreaterThan(0);
+    for (const row of decided.results) expect(row.decided_at >= startedAt).toBe(true);
 
     const alerts = await readSignalAlerts(env.DB, workspaceId);
     expect(alerts.map((alert) => alert.title)).toEqual([`${brand}: Zephyrwear opens a London flagship`]);
