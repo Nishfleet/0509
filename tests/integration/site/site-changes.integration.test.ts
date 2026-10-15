@@ -202,6 +202,7 @@ describe("site changes a customer can see", () => {
       pages: 1,
       lastPolledAt: "2026-09-23T02:10:00.000Z",
       unreadable: false,
+      notFound: false,
       customerSite: null,
     });
     expect(page?.rail.verdict).toBeNull();
