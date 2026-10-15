@@ -26,6 +26,7 @@ const INSERT_ORDER = [
   "send_target",
   "send_attempt",
   "signal_delivery",
+  "active_workspace",
 ] as const;
 
 const SEED: Readonly<Record<string, string>> = {
@@ -60,6 +61,7 @@ const SEED: Readonly<Record<string, string>> = {
     VALUES ('standing-cascade', 'ws-cascade', 'ent-cascade', '${NOW}', '${NOW}')`,
   entity_note: `INSERT INTO entity_note (workspace_id, entity_id, body, updated_at)
     VALUES ('ws-cascade', 'ent-cascade', 'Cascade note', '${NOW}')`,
+  active_workspace: `INSERT INTO active_workspace (user_id, workspace_id) VALUES ('user-cascade', 'ws-cascade')`,
   digest: `INSERT INTO digest (id, workspace_id, period_start, period_end)
     VALUES ('digest-cascade', 'ws-cascade', '2026-09-18', '2026-09-25')`,
   send_target: `INSERT INTO send_target (id, workspace_id, channel_id, target_value, created_at)

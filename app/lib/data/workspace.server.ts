@@ -4,6 +4,7 @@ import { z } from "zod";
 import { resolveEntitlements } from "../billing/entitlements";
 import { entitledTier } from "../billing/subscription-state";
 import { canonicalTimezone } from "../timezone";
+import { activeFirstOrder, governingWorkspace } from "./active-workspace";
 
 const SELECT_WORKSPACE_TIMEZONE = "SELECT timezone FROM workspace WHERE id = ?";
 
@@ -23,8 +24,8 @@ ORDER BY w.id`;
 
 const DELETE_WORKSPACE = "DELETE FROM workspace WHERE id = ?";
 
-const SELECT_WORKSPACE_BY_OWNER = `SELECT id FROM workspace WHERE owner_user_id = ?
-ORDER BY created_at LIMIT 1`;
+const SELECT_WORKSPACE_BY_OWNER = `SELECT id FROM workspace WHERE owner_user_id = ?1
+ORDER BY ${activeFirstOrder("?1")} LIMIT 1`;
 
 const workspaceIdRow = z.object({ id: z.string() });
 
@@ -42,9 +43,9 @@ LEFT JOIN entity e ON e.id = (
 LEFT JOIN onboarding_run r ON r.id = (
   SELECT id FROM onboarding_run WHERE workspace_id = w.id ORDER BY started_at ASC LIMIT 1
 )
-LEFT JOIN plan p ON p.workspace_id = w.id
-WHERE w.owner_user_id = ?
-ORDER BY w.created_at ASC
+LEFT JOIN plan p ON p.workspace_id = ${governingWorkspace("w.id")}
+WHERE w.owner_user_id = ?1
+ORDER BY ${activeFirstOrder("?1", "w.id", "w.created_at")}
 LIMIT 1`;
 
 const workspaceLandingRow = z.object({
@@ -182,8 +183,8 @@ export async function deleteWorkspace(workspaceId: string): Promise<void> {
   await env.DB.prepare(DELETE_WORKSPACE).bind(workspaceId).run();
 }
 
-const SELECT_SCHEDULE_BY_OWNER = `SELECT id, timezone, brief_weekday, brief_hour, brief_paused_at FROM workspace WHERE owner_user_id = ?
-ORDER BY created_at LIMIT 1`;
+const SELECT_SCHEDULE_BY_OWNER = `SELECT id, timezone, brief_weekday, brief_hour, brief_paused_at FROM workspace WHERE owner_user_id = ?1
+ORDER BY ${activeFirstOrder("?1")} LIMIT 1`;
 
 const UPDATE_SCHEDULE = `UPDATE workspace SET timezone = ?, brief_weekday = ?, brief_hour = ? WHERE id = ?`;
 

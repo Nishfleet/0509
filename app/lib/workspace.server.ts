@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 
 import { isWorkspacePaid } from "./billing/subscription-state";
+import { activeFirstOrder } from "./data/active-workspace";
 import { clearWorkspaceDeletedSuppression } from "./data/email_suppression.server";
 import { ensureOwnerEmailTarget } from "./data/send_target.server";
 import { isPerRunFixtureEmail } from "./fixture-accounts";
@@ -28,8 +29,8 @@ interface WorkspaceRow {
 }
 
 const SELECT_WORKSPACE = `SELECT id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at
-FROM workspace WHERE owner_user_id = ?
-ORDER BY created_at ASC
+FROM workspace WHERE owner_user_id = ?1
+ORDER BY ${activeFirstOrder("?1")}
 LIMIT 1`;
 
 export function firstWorkspaceId(userId: string): string {
