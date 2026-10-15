@@ -218,6 +218,24 @@ describe("handleCompetitorIntent intent=add", () => {
     expect(fetched).not.toHaveBeenCalled();
   });
 
+  it("tells a workspace at its plan cap about the cap, not the spelling, and sends no request", async () => {
+    const workspaceId = await seedWorkspace();
+    const fetched = vi.fn((_input: RequestInfo | URL) => Promise.reject(new TypeError("fetch failed")));
+    vi.stubGlobal("fetch", fetched);
+    const rivals = ["a", "b", "c", "d", "e"].map((name) =>
+      env.DB.prepare(
+        "INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at) VALUES (?1, ?2, 'competitor', ?3, '{}', 'manual', 'on', ?4)",
+      ).bind(`${workspaceId}-${name}`, workspaceId, `${name}-brand.example`, NOW),
+    );
+    await env.DB.batch(rivals);
+
+    const result = await handleCompetitorIntent(workspaceId, addForm("gymshrk.com"));
+
+    expect(result.unreachable).toBeUndefined();
+    expect(result.message).toContain("Your plan watches up to 5 competitors");
+    expect(fetched).not.toHaveBeenCalled();
+  });
+
   it("adds an address that does not answer when the customer chooses to add it anyway", async () => {
     const workspaceId = await seedWorkspace();
     vi.stubGlobal("fetch", () => Promise.reject(new TypeError("fetch failed")));
