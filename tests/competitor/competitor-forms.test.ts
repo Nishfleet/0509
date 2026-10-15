@@ -3,11 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const calls = vi.hoisted(() => ({
   forget: vi.fn(),
   site: vi.fn(),
+  name: vi.fn(),
+  note: vi.fn(),
   youtube: vi.fn(),
   intent: vi.fn(),
 }));
 
 vi.mock("../../app/lib/competitor-forget.server", () => ({ forgetCompetitor: calls.forget }));
+vi.mock("../../app/lib/competitor-name.server", () => ({ saveCompetitorName: calls.name }));
+vi.mock("../../app/lib/competitor-note.server", () => ({ saveCompetitorNote: calls.note }));
 vi.mock("../../app/lib/competitor-site.server", () => ({ saveCompetitorSite: calls.site }));
 vi.mock("../../app/lib/competitor-youtube.server", () => ({ saveCompetitorYoutube: calls.youtube }));
 vi.mock("../../app/lib/competitors.server", () => ({ handleCompetitorIntent: calls.intent }));
@@ -23,7 +27,14 @@ function form(values: Record<string, string>): FormData {
   return data;
 }
 
-const CLEAN = { forgetError: null, youtubeError: null, siteError: null };
+const CLEAN = {
+  forgetError: null,
+  youtubeError: null,
+  siteError: null,
+  nameError: null,
+  noteError: null,
+  renamed: false,
+};
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -47,7 +58,7 @@ describe("handleCompetitorForm", () => {
       (error: unknown) => error,
     );
     expect(thrown).toBeInstanceOf(Response);
-    expect((thrown as Response).headers.get("location")).toBe("/app/competitors");
+    expect((thrown as Response).headers.get("location")).toBe("/app/competitors?removed=1");
   });
 
   it("answers 404 when the competitor is not tracked", async () => {
@@ -59,6 +70,7 @@ describe("handleCompetitorForm", () => {
   it.each([
     ["youtube", calls.youtube, "youtube", "youtubeError"],
     ["site", calls.site, "site", "siteError"],
+    ["note", calls.note, "note", "noteError"],
   ] as const)(
     "hands the %s field to its saver and shows the saver's refusal",
     async (intent, saver, name, errorKey) => {
@@ -72,6 +84,18 @@ describe("handleCompetitorForm", () => {
       });
     },
   );
+
+  it("hands the new name to its saver, reporting a refusal or a saved flag", async () => {
+    calls.name.mockResolvedValueOnce({ ok: false, message: "No." }).mockResolvedValueOnce({ ok: true });
+    const refused = await handleCompetitorForm(WS, ENTITY, form({ intent: "rename", name: "x" }));
+    expect(calls.name).toHaveBeenCalledWith(WS, ENTITY, "x");
+    expect(refused).toEqual({ ...CLEAN, message: null, nameError: "No." });
+    expect(await handleCompetitorForm(WS, ENTITY, form({ intent: "rename", name: "y" }))).toEqual({
+      ...CLEAN,
+      message: null,
+      renamed: true,
+    });
+  });
 
   it("treats a missing field as empty text", async () => {
     calls.site.mockResolvedValue({ ok: true });

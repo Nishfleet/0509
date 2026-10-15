@@ -3,10 +3,6 @@ import { expect, test } from "./test";
 import { PLANS, TRIAL_TERMS } from "../app/lib/billing/plans";
 import { consoleFailures, watchConsole } from "./inbox";
 
-// The /pricing contract (0509#5601). Every assertion is reachable from the
-// /pricing row in .agents/skills/verify/feature-map.md. Plan names, prices and
-// the trial line are read from app/lib/billing/plans.ts, never typed here.
-
 const PATH = "/pricing";
 
 test("the pricing page states every plan and its monthly price @smoke", async ({ page }) => {
@@ -14,17 +10,17 @@ test("the pricing page states every plan and its monthly price @smoke", async ({
   expect(response?.status()).toBe(200);
 
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
-  const plans = page.locator("main li").filter({ has: page.getByRole("heading", { level: 3 }) });
+  const plans = page.locator("main li").filter({ has: page.getByRole("heading", { level: 2 }) });
   await expect(plans).toHaveCount(PLANS.length);
   for (const [index, plan] of PLANS.entries()) {
     const card = plans.nth(index);
-    await expect(card.getByRole("heading", { level: 3, name: plan.name })).toBeVisible();
+    await expect(card.getByRole("heading", { level: 2, name: plan.name })).toBeVisible();
     await expect(card).toContainText(`€${String(plan.monthlyPriceEur)}/month`);
   }
   const cardOf = (id: string) => {
     const plan = PLANS.find((candidate) => candidate.id === id);
     if (!plan) throw new Error(`plan ${id} is not in PLANS`);
-    return plans.filter({ has: page.getByRole("heading", { level: 3, name: plan.name, exact: true }) });
+    return plans.filter({ has: page.getByRole("heading", { level: 2, name: plan.name, exact: true }) });
   };
   await expect(cardOf("starter")).toContainText("Everything in Scout, plus");
   await expect(cardOf("agency")).toContainText("Everything in Starter, plus");

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { SettingsJumps } from "../../app/components/settings-sections";
 
-const ALWAYS = ["#settings-account", "#settings-agents", "#export-data"] as const;
+const ALWAYS = ["#settings-alerts", "#settings-account", "#settings-agents", "#export-data"] as const;
 
 function hrefs(hasBrief: boolean, hasPlan: boolean): string[] {
   const html = renderToStaticMarkup(createElement(SettingsJumps, { hasBrief, hasPlan }));
@@ -12,9 +12,10 @@ function hrefs(hasBrief: boolean, hasPlan: boolean): string[] {
 }
 
 describe("SettingsJumps", () => {
-  it("renders all five hrefs when both flags are true", () => {
+  it("renders all six hrefs when both flags are true", () => {
     expect(hrefs(true, true)).toEqual([
       "#settings-brief",
+      "#settings-alerts",
       "#settings-agents",
       "#settings-plan",
       "#settings-account",

@@ -43,9 +43,16 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         <SettingsJumps hasBrief={loaderData.schedule !== null} hasPlan={loaderData.plan !== null} />
         <div className="max-w-3xl min-w-0">
           {loaderData.schedule === null ? null : <BriefSection schedule={loaderData.schedule} />}
-          <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
-          <ChangeAlertsSetting on={loaderData.changeAlerts} />
-          <SlackAlertsSetting connected={loaderData.slackConnected} error={actionData?.slackError ?? null} />
+          <div id="settings-alerts">
+            <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
+            <ChangeAlertsSetting on={loaderData.changeAlerts} />
+            <SlackAlertsSetting
+              connected={loaderData.slackConnected}
+              revoked={loaderData.slackRevoked}
+              emailAlerts={loaderData.changeAlerts}
+              error={actionData?.slackError ?? null}
+            />
+          </div>
           <DismissedBrands dismissed={loaderData.dismissed} />
           <AgentsSection />
           <PlanSection plan={loaderData.plan} countLine={loaderData.countLine} returning={loaderData.returning} />

@@ -8,15 +8,6 @@ import {
   releaseIssueSlot,
 } from "../../app/lib/data/support_issue.server";
 
-/**
- * support_issue writer module (0509#7223): the ledger the support inbox cap
- * reads. Every row is a GitHub issue the inbox opened, so the cap counts opened
- * issues and not stored support reports. The claim is one statement, so two
- * mails that arrive together cannot both win the last slot.
- *
- * Real workerd and real local D1 with migrations/ applied.
- */
-
 const NOW = new Date("2026-10-06T12:00:00.000Z");
 const DAY_MS = 24 * 60 * 60 * 1000;
 

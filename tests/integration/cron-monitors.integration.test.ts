@@ -3,13 +3,6 @@ import { describe, expect, it } from "vitest";
 import { NIGHTLY_CRON, SNAPSHOT_BACKUP_CRON, WEEKLY_REFRESH_CRON } from "../../app/lib/cadence";
 import { cronMonitor } from "../../workers/cron-monitors";
 
-/**
- * Every scheduled cron's Sentry Cron Monitor (0509#5750, parent 0509#5736).
- *
- * This file lives in the workers project because workers/cron-monitors.ts
- * imports app/lib/discovery/start.server.ts, which imports cloudflare:workers.
- */
-
 describe("cronMonitor", () => {
   it("maps the nightly cron to a 30-minute check-in margin and a 30-minute run budget", () => {
     expect(NIGHTLY_CRON).toBe("0 3 * * *");

@@ -6,15 +6,6 @@ import { readHowRanked, readHowRankedInputs } from "../../app/lib/how-ranked.ser
 import type { BucketCount } from "../../app/lib/standing-score";
 import { refreshWorkspaceScores } from "../../workers/standing/refresh";
 
-/**
- * The "how this is ranked" sheet's read against the real D1 the deploy ships.
- *
- * One call returns every scoring_weight row and the week's per-brand bucket
- * counts in a single batch — the same query the nightly score uses. The seed
- * mirrors the nightly refresh's, so the bucket assertions and the weight
- * assertions pin what the sheet will render.
- */
-
 const WINDOW_START = "2026-09-15T00:00:00.000Z";
 const WINDOW_END = "2026-09-22T00:00:00.000Z";
 const SEED_WEEK = "2026-09-14T00:00:00.000Z";

@@ -3,6 +3,7 @@ import type { Route } from "./+types/app.alerts";
 import { Link } from "react-router";
 import { z } from "zod";
 
+import { AlertsFoot } from "../components/alert-help";
 import { AlertChipEmpty } from "../components/alert-chip-empty";
 import { AlertChips } from "../components/alert-chips";
 import { AlertFeed } from "../components/alert-feed";
@@ -55,7 +56,7 @@ export async function action({ request }: Route.ActionArgs) {
 function BriefSendFailed({ failed }: { failed: { id: string } }) {
   return (
     <p role="alert" data-alert="brief-send-failed" className="mt-4 leading-[1.65]">
-      We could not email your weekly brief.{" "}
+      We couldn't email your weekly brief.{" "}
       <Link
         className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4"
         to={`/app/brief/${failed.id}`}
@@ -134,11 +135,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         <AlertChipEmpty chip={loaderData.chip} counts={loaderData.chipCounts} groups={loaderData.groups} />
       )}
       <AlertFeed groups={loaderData.groups} />
-      {loaderData.offLine === null ? null : (
-        <p data-testid="alerts-off-footer" className="mt-10 border-t border-line pt-6 leading-[1.65] text-ink-soft">
-          {loaderData.offLine}
-        </p>
-      )}
+      <AlertsFoot offLine={loaderData.offLine} />
     </main>
   );
 }
