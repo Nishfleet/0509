@@ -69,4 +69,14 @@ describe("checkSilentRivals", () => {
 
     await expect(checkSilentRivals(NOW)).resolves.toBeUndefined();
   });
+  it("still raises when only a feed snapshot is recent, because the site itself is unread", async () => {
+    await seedRival({ id: "feedonly", discoveredAt: LONG_AGO, paid: true, reason: "blocked" });
+    await env.DB.prepare(
+      `INSERT INTO snapshot (id, watch_id, page_id, fetched_at, payload_hash) VALUES ('s-feed', 'w-feedonly', NULL, ?1, 'h')`,
+    )
+      .bind("2026-10-13T21:00:00Z")
+      .run();
+
+    await expect(checkSilentRivals(NOW)).rejects.toThrow("paid competitors with no snapshot for 7 days");
+  });
 });

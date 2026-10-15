@@ -230,10 +230,7 @@ const SILENT_RIVALS = `SELECT e.workspace_id AS workspace_id, COALESCE(p.last_fa
 FROM entity e
 JOIN page p ON p.entity_id = e.id AND p.role = 'home'
 WHERE e.role = 'competitor' AND e.state = 'on' AND p.discovered_at < ?1
-  AND NOT EXISTS (
-    SELECT 1 FROM snapshot s JOIN watch w ON w.id = s.watch_id
-    WHERE w.entity_id = e.id AND s.fetched_at >= ?1
-  )`;
+  AND NOT EXISTS (SELECT 1 FROM snapshot s WHERE s.page_id = p.id AND s.fetched_at >= ?1)`;
 
 const silentRivalRows = z.array(z.object({ workspace_id: z.string(), reason: z.string() }));
 
