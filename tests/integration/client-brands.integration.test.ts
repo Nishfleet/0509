@@ -10,6 +10,7 @@ import {
   readOtherBrands,
   switchClientBrand,
 } from "../../app/lib/client-brands.server";
+import { loadNightlyPlan } from "../../workers/standing/rollover-plan";
 import { MAX_CLIENT_BRANDS } from "../../app/lib/client-brands";
 import { readWorkspaceExport } from "../../app/lib/data-export.server";
 import { readEntitlements, readPlanSubscription } from "../../app/lib/data/plan.server";
@@ -83,6 +84,19 @@ describe("client brands", () => {
       .bind(await readWorkspaceIdForOwner(AGENCY.id))
       .first();
     expect(row).toEqual({ parent_workspace_id: "ws-agency" });
+  });
+
+  it("schedules the weekly rollover for a client brand through its Agency parent", async () => {
+    await addClientBrand(AGENCY, "Acme Foods");
+    const clientId = await readWorkspaceIdForOwner(AGENCY.id);
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, created_at)
+       VALUES ('ent-client', ?1, 'self', 'acme.example.test', '2026-10-01T00:00:00Z')`,
+    )
+      .bind(clientId)
+      .run();
+    const plan = await loadNightlyPlan(env.DB, new Date());
+    expect(plan.scheduled.map((instance) => instance.params.workspaceId)).toContain(clientId);
   });
 
   it("gives the client brand an owner email target for its brief", async () => {
