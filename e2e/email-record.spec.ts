@@ -30,7 +30,7 @@ test("a real sign-in leaves a send record with the sent subject and no address",
   const newest = readPreview((db) =>
     db
       .prepare(
-        "SELECT kind, subject, provider_id, status, error, workspace_id FROM send_attempt WHERE kind = 'sign_in' ORDER BY attempted_at DESC LIMIT 1",
+        "SELECT kind, subject, provider_message, status, error, workspace_id FROM send_attempt WHERE kind = 'sign_in' ORDER BY attempted_at DESC LIMIT 1",
       )
       .get(),
   );

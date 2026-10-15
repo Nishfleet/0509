@@ -53,7 +53,7 @@ describe("mail sent before an account has a workspace", () => {
           kind,
           workspace_id: null,
           subject: message.subject,
-          provider_id: PROVIDER_ID,
+          provider_message: PROVIDER_ID,
           status: "sent",
           error: null,
         }),
@@ -83,7 +83,7 @@ describe("mail sent before an account has a workspace", () => {
         status: "failed",
         error: "throttled",
         subject: message.subject,
-        provider_id: null,
+        provider_message: null,
       }),
     ]);
   });

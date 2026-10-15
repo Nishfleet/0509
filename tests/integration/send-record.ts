@@ -9,7 +9,7 @@ export async function expectSendRecord(
   providerId = PROVIDER_ID,
 ): Promise<void> {
   const { results } = await env.DB.prepare(
-    `SELECT kind, subject, provider_id, status, error, workspace_id FROM send_attempt WHERE kind = ?`,
+    `SELECT kind, subject, provider_message, status, error, workspace_id FROM send_attempt WHERE kind = ?`,
   )
     .bind(kind)
     .all();
@@ -17,7 +17,7 @@ export async function expectSendRecord(
     {
       kind,
       subject,
-      provider_id: providerId,
+      provider_message: providerId,
       status: "sent",
       error: null,
       workspace_id: expect.any(String) as string,

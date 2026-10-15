@@ -37,7 +37,7 @@ CREATE TABLE send_attempt (
   idempotency_key TEXT NOT NULL UNIQUE,
   kind TEXT NOT NULL DEFAULT 'unknown',
   subject TEXT,
-  provider_id TEXT,
+  provider_message TEXT,
   status TEXT NOT NULL,
   error TEXT,
   attempted_at TEXT NOT NULL,

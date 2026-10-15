@@ -38,7 +38,7 @@ ON CONFLICT(idempotency_key) DO UPDATE
   WHERE send_attempt.status = 'failed' OR (send_attempt.status = 'pending' AND send_attempt.attempted_at < ?)
 RETURNING id`;
 
-const RESOLVE_ATTEMPT = `UPDATE send_attempt SET status = ?, error = ?, subject = ?, provider_id = ? WHERE id = ?`;
+const RESOLVE_ATTEMPT = `UPDATE send_attempt SET status = ?, error = ?, subject = ?, provider_message = ? WHERE id = ?`;
 
 const SENT_UNRECORDED = `SELECT a.id FROM send_attempt a
   JOIN digest d ON d.id = a.digest_id
