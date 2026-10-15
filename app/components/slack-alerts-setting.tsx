@@ -3,6 +3,7 @@ import { Form, useNavigation } from "react-router";
 
 import { BLOCK_HEADING } from "./page-heading";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 
 function slackSubmitting(navigation: ReturnType<typeof useNavigation>, connected: boolean): boolean {
   if (navigation.state === "idle") return false;
@@ -27,14 +28,13 @@ function WebhookField({ error }: { error: string | null }): ReactElement {
       <label htmlFor="slack-webhook-input" className="font-mono text-meta text-ink-soft uppercase">
         Slack webhook address
       </label>
-      <input
+      <Input
         id="slack-webhook-input"
         name="webhook"
         type="url"
         required
         autoComplete="off"
         placeholder="https://hooks.slack.com/services/…"
-        className="h-11 border border-line px-3"
         aria-invalid={error === null ? undefined : true}
         aria-describedby={error === null ? undefined : "slack-webhook-error"}
       />

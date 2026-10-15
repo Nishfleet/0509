@@ -3,6 +3,7 @@ import { Form, useFetcher, useNavigation } from "react-router";
 
 import { BLOCK_HEADING } from "./page-heading";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 
 interface Teammate {
   id: string;
@@ -49,7 +50,7 @@ function InviteForm() {
       <label htmlFor="teammate-address" className="font-mono text-meta text-ink-soft uppercase">
         Teammate's email
       </label>
-      <input
+      <Input
         id="teammate-address"
         name="address"
         type="email"
@@ -59,7 +60,6 @@ function InviteForm() {
         autoCorrect="off"
         spellCheck={false}
         required
-        className="h-11 border border-line px-3"
         aria-invalid={error === null ? undefined : true}
         aria-describedby={error === null ? undefined : "teammate-error"}
       />
