@@ -115,6 +115,13 @@ describe("recording visits", () => {
     const days = await env.DB.prepare("SELECT day FROM workspace_visit ORDER BY day").all();
     expect(days.results).toEqual([{ day: "2026-10-14" }, { day: "2026-10-15" }]);
   });
+
+  it("writes the next day's row even when the visits are under 20 hours apart", async () => {
+    await touchWorkspaceSeen("v", new Date("2026-10-14T20:00:00.000Z"));
+    await touchWorkspaceSeen("v", new Date("2026-10-15T08:00:00.000Z"));
+    const days = await env.DB.prepare("SELECT day FROM workspace_visit ORDER BY day").all();
+    expect(days.results).toEqual([{ day: "2026-10-14" }, { day: "2026-10-15" }]);
+  });
 });
 
 describe("visit retention", () => {
