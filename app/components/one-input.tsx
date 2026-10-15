@@ -1,4 +1,5 @@
 import { useId, type ReactNode } from "react";
+import { Form, useNavigation } from "react-router";
 
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -27,8 +28,10 @@ export function OneInput({
   maxLength,
 }: OneInputProps) {
   const inputId = useId();
+  const navigation = useNavigation();
+  const sending = navigation.state === "submitting" && navigation.formAction === action;
   return (
-    <form method={method} action={action} className="mt-8">
+    <Form method={method} action={action} className="mt-8" aria-busy={sending}>
       <label htmlFor={inputId} className="block font-mono text-eyebrow font-medium text-ink-soft uppercase">
         {label}
       </label>
@@ -49,7 +52,7 @@ export function OneInput({
           aria-describedby={message ? "one-input-message" : undefined}
           className="sm:flex-1"
         />
-        <Button type="submit" size="lg">
+        <Button type="submit" size="lg" disabled={sending}>
           {submitLabel}
         </Button>
       </div>
@@ -58,6 +61,6 @@ export function OneInput({
           {message}
         </p>
       ) : null}
-    </form>
+    </Form>
   );
 }
