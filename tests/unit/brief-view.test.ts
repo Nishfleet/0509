@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { BriefView } from "../../app/components/brief-view";
@@ -96,7 +97,9 @@ function payload(): BriefPayload {
 }
 
 function render(overrides: Partial<BriefPayload> = {}): string {
-  return renderToStaticMarkup(createElement(BriefView, { payload: { ...payload(), ...overrides } }));
+  return renderToStaticMarkup(
+    createElement(MemoryRouter, null, createElement(BriefView, { payload: { ...payload(), ...overrides } })),
+  );
 }
 
 function blocks(html: string): string[] {

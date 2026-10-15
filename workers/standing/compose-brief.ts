@@ -3,7 +3,9 @@ import { z } from "zod";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule, BriefWeek } from "../../app/lib/brief-schedule";
 import { nextBriefAt } from "../../app/lib/brief-schedule";
-import { quietWeekLine } from "../../app/lib/quiet-week";
+import { readRivalFacts } from "../../app/lib/data/rival_baseline.server";
+import { firstBriefLine, quietWeekLine } from "../../app/lib/quiet-week";
+import { baselineLines } from "../../app/lib/rival-baseline";
 import { UNJUDGED_WEEK_LINE, readThisFirstLine } from "../../app/lib/read-this-first";
 import { effectiveKindSql } from "../../app/lib/source-kind";
 import { sourceName } from "../../app/lib/source-name";
@@ -22,7 +24,7 @@ JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.st
 WHERE s.workspace_id = ?1 AND s.week_start_at = ?2
 ORDER BY s.rank ASC, s.entity_id ASC`;
 
-const PREVIOUS_FROZEN_WEEKS = `SELECT COUNT(*) AS weeks
+const PREVIOUS_FROZEN_WEEKS = `SELECT COUNT(DISTINCT week_start_at) AS weeks
 FROM standing
 WHERE workspace_id = ?1 AND rank IS NOT NULL AND week_start_at < ?2`;
 
@@ -184,9 +186,7 @@ async function loadBriefRows(db: D1Database, input: ComposeInput) {
   ]);
   return {
     brands: rankedBrandRows.parse(required(ranked, "compose-brief.ranked").results),
-    hadPreviousWeek: frozenWeekRows
-      .parse(required(frozen, "compose-brief.frozen").results)
-      .some((row) => row.weeks > 0),
+    previousWeeks: frozenWeekRows.parse(required(frozen, "compose-brief.frozen").results)[0]?.weeks ?? 0,
     countsByEntity: new Map(
       signalCountRows.parse(required(counts, "compose-brief.counts").results).map((row) => [row.entity_id, row]),
     ),
@@ -228,11 +228,12 @@ function buildMarks(picks: readonly string[], pickedById: ReadonlyMap<string, Pi
 }
 
 async function buildLines(
-  rows: Pick<Awaited<ReturnType<typeof loadBriefRows>>, "brands" | "countsByEntity" | "hadPreviousWeek">,
+  rows: Pick<Awaited<ReturnType<typeof loadBriefRows>>, "brands" | "countsByEntity" | "previousWeeks">,
   db: D1Database,
-  input: ComposeInput,
+  input: ComposeInput & { baseline: ReadonlyMap<string, string[]> },
 ) {
-  const { brands, countsByEntity, hadPreviousWeek } = rows;
+  const { brands, countsByEntity, previousWeeks } = rows;
+  const hadPreviousWeek = previousWeeks > 0;
   const moves = await readBrandMoves(db, {
     workspaceId: input.workspaceId,
     entityIds: brands.map((brand) => brand.entity_id),
@@ -256,6 +257,7 @@ async function buildLines(
       mention_delta: count?.mentions ?? 0,
       site_change_count: count?.site_changes ?? 0,
       new_roles: count?.new_roles ?? 0,
+      baseline: input.baseline.get(brand.entity_id),
     };
   });
 }
@@ -299,14 +301,21 @@ function buildChecked(sources: readonly SourceCoverage[], totals: CheckedTotals)
   };
 }
 
-function buildHeadLine(
-  readThisFirst: JudgedWeek,
-  marks: readonly { entity_name: string }[],
-  totals: CheckedTotals,
-): string {
+interface HeadLineInput {
+  readThisFirst: JudgedWeek;
+  marks: readonly { entity_name: string }[];
+  totals: CheckedTotals;
+  startingRivals: number;
+}
+
+function buildHeadLine({ readThisFirst, marks, totals, startingRivals }: HeadLineInput): string {
   if (readThisFirst.unjudged) return UNJUDGED_WEEK_LINE;
   const lead = marks[0];
-  if (lead === undefined) return quietWeekLine(totals.mentions, totals.siteChanges, totals.newAds);
+  if (lead === undefined) {
+    return startingRivals > 0
+      ? firstBriefLine(startingRivals)
+      : quietWeekLine(totals.mentions, totals.siteChanges, totals.newAds);
+  }
   return readThisFirstLine(marks.length, readThisFirst.judged, lead.entity_name);
 }
 
@@ -328,6 +337,32 @@ async function readEarlierRank(
   return { rank: row.rank, weeks };
 }
 
+const BASELINE_WEEKS = 4;
+
+function startingRivals(previousWeeks: number, baseline: ReadonlyMap<string, string[]>): number {
+  return previousWeeks === 0 ? baseline.size : 0;
+}
+
+async function readBaseline(
+  db: D1Database,
+  input: ComposeInput & { previousWeeks: number; marks: number },
+): Promise<Map<string, string[]>> {
+  const { previousWeeks, marks } = input;
+  const wanted =
+    previousWeeks === 0 || (previousWeeks < BASELINE_WEEKS && marks === 0 && !input.readThisFirst.unjudged);
+  if (!wanted) return new Map();
+  try {
+    const facts = await readRivalFacts(db, input.workspaceId, input.week.closesAt);
+    const lines = [...facts].map(
+      ([entityId, found]) => [entityId, baselineLines(found, input.schedule.timezone)] as const,
+    );
+    return new Map(lines.filter(([, rows]) => rows.length > 0));
+  } catch (error) {
+    console.error(JSON.stringify({ event: "standing.baseline_failed", error: redactEmailShaped(String(error)) }));
+    return new Map();
+  }
+}
+
 export async function composeBrief(db: D1Database, input: ComposeInput): Promise<BriefPayload> {
   const startsAt = input.week.startsAt.toISOString();
   const closesAt = input.week.closesAt.toISOString();
@@ -335,7 +370,8 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
   const rows = await loadBriefRows(db, input);
 
   const marks = buildMarks(readThisFirst.picks, rows.pickedById);
-  const lines = await buildLines(rows, db, input);
+  const baseline = await readBaseline(db, { ...input, previousWeeks: rows.previousWeeks, marks: marks.length });
+  const lines = await buildLines(rows, db, { ...input, baseline });
   const totals: CheckedTotals = {
     mentions: lines.reduce((total, line) => total + line.mention_delta, 0),
     siteChanges: lines.reduce((total, line) => total + line.site_change_count, 0),
@@ -346,7 +382,12 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
   const self = lines.find((line) => line.entity_id === selfId);
 
   const pausedLine = pausedSentence(rows.pausedNames);
-  const headLine = buildHeadLine(readThisFirst, marks, totals);
+  const headLine = buildHeadLine({
+    readThisFirst,
+    marks,
+    totals,
+    startingRivals: startingRivals(rows.previousWeeks, baseline),
+  });
 
   return {
     workspace_id: input.workspaceId,

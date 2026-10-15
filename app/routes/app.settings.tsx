@@ -22,7 +22,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const [settings, passkeys, devices] = await Promise.all([
     readSettings(session.user),
     readPasskeys(request),
-    readDeviceList(session.user.id, session.session.id),
+    readDeviceList(session.user.id, session.session.id, new Date()),
   ]);
   return { ...settings, passkeys, devices };
 }
