@@ -63,7 +63,7 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
   return entityId;
 }
 
-test("a site change copies as one plain paragraph, by keyboard, with a toast and no overflow", async ({
+test("a site change copies as one plain paragraph, by keyboard, with a status line and no overflow", async ({
   page,
   baseURL,
 }, testInfo) => {
@@ -85,7 +85,7 @@ test("a site change copies as one plain paragraph, by keyboard, with a toast and
   await page.keyboard.press("Enter");
 
   await expect(button).toHaveText("Copied");
-  await expect(page.getByText("Copied for the team", { exact: true })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Copied for the team." })).toBeVisible();
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(copied).toMatch(/^Zephyrwear .*\(pricing page\)\. Seen .+, via Five to Nine\.$/);
   expect(copied).not.toContain("\n");
