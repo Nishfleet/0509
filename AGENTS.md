@@ -232,6 +232,7 @@ Service daily quota (Nish 2026-09-28).
 
 ## Rules that are not about code
 
+- If this repo's claim PR is already open, not a draft, not CONFLICTING, with no red required check and no open finding, only exit 0 and do not push, even when mergeable is still BLOCKED because checks are pending (0509#6993, 0509#7316).
 - Nothing merges on its own author's say-so. An independent reviewer or Nish,
   never the author reviewing itself.
 - A claim PR whose current head carries a `coordinator-approval: <head sha>`
