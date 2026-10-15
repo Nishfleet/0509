@@ -23,6 +23,7 @@ async function answers(url: string): Promise<boolean> {
 
 export async function domainAnswers(domain: string): Promise<boolean> {
   if (blankEnvString(env.RIVAL_REACH_CHECK) === "off") return true;
-  const [apex, www] = await Promise.all([answers(`https://${domain}/`), answers(`https://www.${domain}/`)]);
-  return apex || www;
+  const hosts = domain.startsWith("www.") ? [domain] : [domain, `www.${domain}`];
+  const results = await Promise.all(hosts.map((host) => answers(`https://${host}/`)));
+  return results.some(Boolean);
 }
