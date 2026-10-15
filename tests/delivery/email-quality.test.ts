@@ -4,14 +4,6 @@ import { describe, expect, it } from "vitest";
 
 import { lifecycleEmails, type LifecycleEmail } from "./email-fixtures";
 
-/**
- * Every email the product sends is rendered here from a fixture and held to
- * the same bar: a subject that fits a phone lock screen, a preview line, one
- * action, no pasted web addresses in the body, colours that survive dark mode
- * and a plain-text part that says what the html says. Source: 0509 e2e
- * coverage plan, 2026-10-14.
- */
-
 const EMAILS = lifecycleEmails();
 const SUBJECT_MAX = 60;
 const PREVIEW_MIN = 20;

@@ -5,24 +5,9 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-// A path named in the agent entry docs that does not exist sends the next agent
-// grepping for it. Only the two files every agent reads first are checked.
 const ENTRY_DOCS = ["AGENTS.md", "README.md"] as const;
 const PATH = /`((?:app|docs|workers|tests|e2e|migrations|\.agents)\/[\w./-]+[\w-])`/g;
 
-// 0509#7006: CLAUDE.md's "Rebuild rules" section claimed a hash-check mechanism
-// that exists nowhere in the repo, described retired orchestration roles, sent
-// lane posts to a closed issue, and gave a stale feature-map size. 0509#7005 then
-// made AGENTS.md the canonical doc and reduced CLAUDE.md to its `@AGENTS.md`
-// import, so this gate reads AGENTS.md, the file that now carries the rules.
-// This is a wording gate, not a mechanism check: it catches the return of those
-// exact claims. It fails on the old text and passes once the claims are gone. The
-// live rules the section carried stay, so the deletion cannot take them with it.
-// 0509#6999: "Conventions, enforced not described" listed Immutability as
-// enforced, but eslint.config.js has no mutation rule — 0509#5783 parked
-// eslint-plugin-functional until the violation count is measured. The bullet
-// stays out of the enforced list until that mechanism exists. The rule itself
-// stays in the file, stated as reviewer-only.
 const RETIRED = [
   /\bhash-checked\b/,
   /\bFable\b/,
@@ -33,9 +18,6 @@ const RETIRED = [
   /- \*\*Immutability\.\*\*/,
 ] as const;
 
-// The four live rules move from "Rebuild rules" into "Conventions", the
-// gated-site rule moves to "Rules that are not about code", and the pre-wipe
-// reuse rule stays as policy. None of them may leave the file with the section.
 const LIVE = [
   /Stock only, at the version named in `docs\/dependencies\.md`/,
   /Jev decides every typed decision/,
@@ -68,22 +50,9 @@ describe("agent entry docs", () => {
   });
 });
 
-// 0509#7018 (R7): `docs/engines/*.md` and `docs/REBUILD-*.md` are design
-// history. A citation of one that was deleted sends the next agent `grep -r`
-// for a file that is only in git history, so the two tests below gate both
-// directions: every kept doc is cited somewhere (otherwise it is orphaned, and
-// the lock has nothing to lock), and every citation outside `docs/` and
-// `migrations/` resolves (otherwise a dangling one survives the deletions).
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const MIGRATIONS = `${join(REPO_ROOT, "migrations")}/`;
-// Every tracked file at the repo root, minus the directories that cannot carry
-// a citation. A named allowlist (app/, workers/, tests/, e2e/, migrations/,
-// .github/, .agents/ plus five root files) left CLAUDE.md, every other root
-// config and any future top-level directory outside the gate, so a dangling
-// citation in one of them passed; the in-run review of #7275 found it. The list
-// comes from git, not a directory walk: another test file creates and removes a
-// scratch directory under app/ while this one runs, and a walk that listed it
-// failed with ENOENT on a shard of #7276.
+
 const SKIP_DIRS = [
   ".git",
   "node_modules",
@@ -112,9 +81,6 @@ function scanSet(): string[] {
   return scanCache;
 }
 
-// `AGENTS.md` records what was deleted and where to read it instead, so its
-// `## Docs` section is a citation of design history by intent, not a claim that
-// a live file exists. Test B reads it whole; Test A stops at that heading.
 const DOCS_SECTION = /\n## Docs/;
 
 function readSource(path: string): string {

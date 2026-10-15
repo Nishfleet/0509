@@ -3,9 +3,6 @@ import { describe, expect, it } from "vitest";
 import { cappedBody } from "../app/lib/fetch/outbound.server";
 
 function declared(contentLength: string | null, body?: string): Response {
-  // The header is set after construction on purpose: a body-less or streamed
-  // body leaves the runtime nothing to normalise the value against, and
-  // capping is exactly about a length the body never actually delivers.
   const res = body === undefined ? new Response(null) : new Response(body);
   if (contentLength !== null) res.headers.set("content-length", contentLength);
   return res;

@@ -25,8 +25,6 @@ describe("pingLiveness", () => {
     });
     vi.stubGlobal("fetch", fetchSpy);
 
-    // A plain spy calls through, so the module's AbortSignal.timeout(10_000)
-    // really runs and hands fetch a live signal.
     const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
 
     const pending = pingLiveness(PING_URL);
@@ -40,8 +38,6 @@ describe("pingLiveness", () => {
     expect(signal).toBe(timeoutSpy.mock.results[0].value);
     expect(signal?.aborted).toBe(false);
 
-    // The abort reason is proven without waiting on the clock: the spy now
-    // returns an already-aborted signal carrying the timeout's own reason.
     timeoutSpy.mockReturnValue(AbortSignal.abort(new DOMException("timed out", "TimeoutError")));
     const pendingAgain = pingLiveness(PING_URL);
     expect(pendingAgain).toBeInstanceOf(Promise);
@@ -52,7 +48,6 @@ describe("pingLiveness", () => {
     expect(abortedSignal?.reason).toBeInstanceOf(DOMException);
     expect((abortedSignal?.reason as DOMException).name).toBe("TimeoutError");
 
-    // fetch never settles, so the returned promises stay pending.
     const settled = await Promise.race([
       pending?.then(() => "resolved"),
       pendingAgain?.then(() => "resolved"),
