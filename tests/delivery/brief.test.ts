@@ -683,6 +683,21 @@ describe("the subject line", () => {
     expect(isFirstRanking(later)).toBe(false);
   });
 
+  it("is not a first ranking when the workspace has an earlier rank", () => {
+    const withHistory = payload({
+      headline_movement: null,
+      headline_earlier: { rank: 4, weeks: 3 },
+      brands: payload().brands.map((brand) => ({ ...brand, movement: null, is_new: false })),
+    });
+    expect(isFirstRanking(withHistory)).toBe(false);
+  });
+
+  it("never cuts an emoji in half when it shortens competitor wording", () => {
+    const lead = { ...payload().read_this_first[0], before: "😀".repeat(30), after: "😀".repeat(30) };
+    const { subject } = renderBrief(payload({ read_this_first: [lead] }), CONTEXT);
+    expect(subject).not.toMatch(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/);
+  });
+
   it("falls back to the title when one side of the wording is empty", () => {
     const lead = { ...payload().read_this_first[0], before: "", after: "2 tiers", title: "Pricing page changed" };
     expect(renderBrief(payload({ read_this_first: [lead] }), CONTEXT).subject).toBe("Kindred: Pricing page changed");

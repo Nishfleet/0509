@@ -9,7 +9,13 @@ const PREHEADER_MAX = 110;
 
 function clip(value: string, max: number): string {
   const flat = value.replace(/\s+/g, " ").trim();
-  return flat.length <= max ? flat : `${flat.slice(0, max - 1).trimEnd()}…`;
+  const chars = Array.from(flat);
+  return chars.length <= max
+    ? flat
+    : `${chars
+        .slice(0, max - 1)
+        .join("")
+        .trimEnd()}…`;
 }
 
 function detailOf(mark: Mark): string | null {
@@ -36,6 +42,7 @@ export function isFirstRanking(payload: BriefPayload): boolean {
   return (
     payload.brands.length > 0 &&
     payload.headline_movement === null &&
+    (payload.headline_earlier ?? null) === null &&
     payload.brands.every((brand) => brand.movement === null && !brand.is_new)
   );
 }

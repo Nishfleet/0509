@@ -242,11 +242,12 @@ async function buildMarksWithWording(
   pickedById: ReadonlyMap<string, PickedSignal>,
 ) {
   const picks = input.readThisFirst.picks;
+  const marks = buildMarks(picks, pickedById);
   const wording = await readMarkWording(db, {
     workspaceId: input.workspaceId,
-    signalIds: picks.slice(0, WORDING_LIMIT),
+    signalIds: marks.slice(0, WORDING_LIMIT).map((mark) => mark.signal_id),
   });
-  return buildMarks(picks, pickedById).map((mark) => {
+  return marks.map((mark) => {
     const change = wording.get(mark.signal_id);
     if (change === undefined) return mark;
     return { ...mark, before: redactWording(change.removed), after: redactWording(change.added) };
