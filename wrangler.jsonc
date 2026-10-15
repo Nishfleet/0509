@@ -154,7 +154,6 @@
     "DODO_PRODUCT_AGENCY_YEARLY": "",
     "DODO_PRODUCT_TESTER": "",
     "TESTER_EMAIL_HASHES": "",
-    "ADMIN_EMAIL_HASHES": "",
     // 0509#7191: the ai spend kill switch. Set AI_SPEND to "off" to make every
     // model call refuse before it reaches the gateway, on the scheduled paths and
     // the request paths alike. Any value other than "on" stops spend, and so does

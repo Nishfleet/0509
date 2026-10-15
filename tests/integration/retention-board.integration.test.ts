@@ -161,6 +161,22 @@ describe("visit retention", () => {
 });
 
 describe("the admin check", () => {
+  it("lets nobody in when the list is missing or empty", async () => {
+    const original: unknown = Reflect.get(env, "ADMIN_EMAIL_HASHES");
+    try {
+      Reflect.deleteProperty(env, "ADMIN_EMAIL_HASHES");
+      expect(await isAdminEmail("admin@0509.io")).toBe(false);
+      await expect(requireAdmin({ email: "admin@0509.io", emailVerified: true })).rejects.toMatchObject({
+        status: 404,
+      });
+      Reflect.set(env, "ADMIN_EMAIL_HASHES", "");
+      expect(await isAdminEmail("admin@0509.io")).toBe(false);
+    } finally {
+      if (original === undefined) Reflect.deleteProperty(env, "ADMIN_EMAIL_HASHES");
+      else Reflect.set(env, "ADMIN_EMAIL_HASHES", original);
+    }
+  });
+
   it("lets in only the allowed address, in any letter case", async () => {
     expect(await isAdminEmail("admin@0509.io")).toBe(true);
     expect(await isAdminEmail("  Admin@0509.IO ")).toBe(true);
