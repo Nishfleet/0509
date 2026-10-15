@@ -7,7 +7,6 @@ import { describe, expect, it } from "vitest";
 import { BANNED_PHRASES, EXEMPT_PATHS, TITLE_CASE_LABEL_EXCEPTIONS } from "./user-copy-phrases.js";
 
 const ROOTS = ["app/routes", "app/components", "app/lib", "workers"];
-const HTML_PAGES = ["public/index.html"];
 const BUTTON_TAGS = new Set(["button", "Button", "a", "Link", "NavLink"]);
 
 function sourceFiles(path: string): string[] {
@@ -53,17 +52,6 @@ describe("the copy bar", () => {
           ({ pattern, instead }) => `${file}: ${pattern} in "${text.slice(0, 80)}" (${instead})`,
         ),
       ),
-    );
-    expect(hits).toEqual([]);
-  });
-
-  it("has none of the banned phrases in the static pages", () => {
-    const hits = HTML_PAGES.flatMap((page) =>
-      readFileSync(page, "utf8")
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => BANNED_PHRASES.some(({ pattern }) => pattern.test(line)))
-        .map((line) => `${page}: "${line.slice(0, 80)}"`),
     );
     expect(hits).toEqual([]);
   });

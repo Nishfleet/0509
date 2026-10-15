@@ -12,8 +12,8 @@ const SHARED = {
 };
 
 test.describe("browser hardening headers", () => {
-  test("GET / sends the static origin's security headers", async ({ request }) => {
-    const response = await request.get("/");
+  test("GET /og.png sends the static origin's security headers", async ({ request }) => {
+    const response = await request.get("/og.png");
     expect(response.status()).toBe(200);
     const headers = response.headers();
 
@@ -22,7 +22,7 @@ test.describe("browser hardening headers", () => {
     expect(headers).toMatchObject(SHARED);
   });
 
-  for (const path of ["/pricing", "/login", "/no-such-page"]) {
+  for (const path of ["/", "/pricing", "/login", "/no-such-page"]) {
     test(`GET ${path} sends the Worker's security headers with a per-response nonce`, async ({ request }) => {
       const response = await request.get(path, { maxRedirects: 0 });
       const headers = response.headers();

@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { readBriefPayload } from "./brief-payload";
+import { activeFirstOrder } from "./data/active-workspace";
 import type { BriefPayload } from "./brief-payload";
 import type { BriefSchedule } from "./brief-schedule";
 import { readEntitlements } from "./data/plan.server";
@@ -35,9 +36,9 @@ FROM workspace w
 LEFT JOIN entity e ON e.workspace_id = w.id
 WHERE w.owner_user_id = ?1
   AND w.id = (
-    SELECT id FROM workspace
-    WHERE owner_user_id = ?1
-    ORDER BY created_at ASC
+    SELECT hw.id FROM workspace hw
+    WHERE hw.owner_user_id = ?1
+    ORDER BY ${activeFirstOrder("?1", "hw.id", "hw.created_at")}
     LIMIT 1
   )
 ORDER BY e.role DESC, e.created_at ASC`;

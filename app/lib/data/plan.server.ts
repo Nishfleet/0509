@@ -4,6 +4,7 @@ import { z } from "zod";
 import { resolveEntitlements, type Entitlements } from "../billing/entitlements";
 import { entitledTier, isWorkspacePaid } from "../billing/subscription-state";
 import { isPlanId, type PlanId, type PlanSummary } from "../billing/plans";
+import { governingWorkspace, LENDING_TIER } from "./active-workspace";
 import { readWorkspaceIdForOwner } from "./workspace.server";
 
 const planRow = z.object({
@@ -17,11 +18,10 @@ const planRow = z.object({
 
 type PlanRow = z.infer<typeof planRow>;
 
-const SELECT_PLAN =
-  "SELECT tier, status, current_period_end, trialing, limits_json, provider_customer_id FROM plan WHERE workspace_id = ?";
+const SELECT_PLAN = `SELECT tier, status, current_period_end, trialing, limits_json, provider_customer_id FROM plan WHERE workspace_id = ${governingWorkspace("?1")}`;
 
-const SELECT_WORKSPACE_PLANS =
-  "SELECT workspace_id, tier, status, current_period_end, limits_json FROM plan WHERE workspace_id IN (SELECT value FROM json_each(?1))";
+const SELECT_WORKSPACE_PLANS = `SELECT j.value AS workspace_id, p.tier, p.status, p.current_period_end, p.limits_json
+FROM json_each(?1) j JOIN plan p ON p.workspace_id = ${governingWorkspace("j.value")}`;
 
 const SELECT_WORKSPACE_BY_SUBSCRIPTION = "SELECT workspace_id FROM plan WHERE provider_subscription_id = ?";
 
@@ -196,8 +196,16 @@ const paidWorkspaceIdRow = z.object({
   current_period_end: z.string().nullable(),
 });
 
+const SELECT_PAID_CANDIDATES = `SELECT workspace_id, status, current_period_end FROM plan
+UNION ALL
+SELECT w.id, p.status, p.current_period_end
+FROM workspace w
+JOIN workspace gp ON gp.id = w.parent_workspace_id AND gp.owner_user_id = w.owner_user_id
+JOIN plan p ON p.workspace_id = gp.id AND p.tier = '${LENDING_TIER}'
+WHERE w.parent_workspace_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM plan own WHERE own.workspace_id = w.id)`;
+
 export async function readPaidWorkspaceIds(now: Date): Promise<ReadonlySet<string>> {
-  const rows = await env.DB.prepare("SELECT workspace_id, status, current_period_end FROM plan").all();
+  const rows = await env.DB.prepare(SELECT_PAID_CANDIDATES).all();
   return new Set(
     paidWorkspaceIdRow
       .array()

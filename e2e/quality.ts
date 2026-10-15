@@ -216,3 +216,24 @@ export async function signInOnLocalLane(page: Page, baseURL: string | undefined,
   });
   await signIn(page, baseURL, cookie);
 }
+
+export async function hiddenOverflow(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const width = window.innerWidth;
+    const problems: string[] = [];
+    const sideways = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+    if (sideways > 0) problems.push(`the page scrolls sideways by ${String(sideways)}px`);
+    for (const element of document.body.querySelectorAll("*")) {
+      const box = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      const shown = box.width > 0 && box.height > 0 && style.visibility !== "hidden" && style.position !== "fixed";
+      const text = (element.textContent ?? "").trim();
+      if (shown && element.children.length === 0 && text !== "" && box.right > width + 1) {
+        problems.push(
+          `${element.tagName.toLowerCase()} "${text.slice(0, 30)}" ends at ${String(Math.round(box.right))}px`,
+        );
+      }
+    }
+    return problems.slice(0, 5);
+  });
+}
