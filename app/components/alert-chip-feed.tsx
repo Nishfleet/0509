@@ -9,12 +9,12 @@ import type { AlertFeedItem } from "./alert-row";
 export function ChipFeed({
   groups,
   counts,
-  hiringCapped,
+  cappedChips,
   hasOpenIncident,
 }: {
   groups: { group: string; items: AlertFeedItem[] }[];
   counts: Record<AlertChipKey, number>;
-  hiringCapped: boolean;
+  cappedChips: readonly AlertChipKey[];
   hasOpenIncident: boolean;
 }) {
   const [searchParams] = useSearchParams();
@@ -22,7 +22,7 @@ export function ChipFeed({
   const shown = groupsInChip(groups, chip);
   return (
     <>
-      <AlertChips chip={chip} counts={counts} hiringCapped={hiringCapped} />
+      <AlertChips chip={chip} counts={counts} cappedChips={cappedChips} />
       {counts.all === 0 && !hasOpenIncident ? (
         <>
           <p className="mt-8 leading-[1.65]">
