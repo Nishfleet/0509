@@ -8,6 +8,7 @@ export function meta(_: Route.MetaArgs) {
   return [
     { title: "Status · Five to Nine" },
     { name: "description", content: "Whether Five to Nine is up right now." },
+    { name: "robots", content: "index, follow" },
     { tagName: "link", rel: "canonical", href: `${SITE_URL}/status` },
     ...shareImageMeta(),
     {
