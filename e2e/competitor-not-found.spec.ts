@@ -30,6 +30,7 @@ test("a rival whose site could not be found asks the customer to check the addre
   await expect(note).toContainText("We couldn't find their website. Check that the address is spelled right.");
   await expect(page.locator('[data-slot="site-unreadable"]')).toHaveCount(0);
   await expect(page.getByText("We couldn't find the homepage. Check the address.")).toBeVisible();
+  await expect(page.getByText("We couldn't find their website, so there is nothing to score yet.")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(
     0,
   );
