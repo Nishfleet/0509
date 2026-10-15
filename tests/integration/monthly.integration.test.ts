@@ -146,7 +146,27 @@ describe("trial recap email", () => {
     expect(sent.map((mail) => mail.to)).toEqual([TARGET]);
     expect(sent[0]?.text).toContain("caught 1 change across");
     expect(sent[0]?.text).toMatch(/Unsubscribe: https:\/\/0509\.io\/u\/[0-9a-f]{64}/);
-    expect(sent[0]?.headers?.["List-Unsubscribe"]).toMatch(/^<https:\/\/0509\.io\/u\/[0-9a-f]{64}>$/);
+    expect(sent[0]?.headers?.["List-Unsubscribe"]).toMatch(/^<https:\/\/0509\.io\/u\/[0-9a-f]{64}\?type=brief>$/);
+  });
+
+  it("follows the brief switch: an alerts-only stop still gets it, a brief stop does not", async () => {
+    await seedPlan();
+    await seedWorkspace("2026-10-04T08:00:00Z");
+    await seedChange("sig-1", "Rival change", "2026-09-03T10:00:00Z");
+    await env.DB.prepare(
+      `INSERT INTO email_suppression (address, reason, created_at, stops_brief, stops_alerts) VALUES (?, 'unsubscribed', '2026-09-01T00:00:00Z', 0, 1)`,
+    )
+      .bind(TARGET)
+      .run();
+    const alertsOnly: EmailMessageBuilder[] = [];
+    await sendMonthlies(envWith(alertsOnly), NOW, isTester);
+    expect(alertsOnly.map((mail) => mail.to)).toEqual([TARGET]);
+
+    await env.DB.exec("DELETE FROM send_attempt");
+    await env.DB.prepare("UPDATE email_suppression SET stops_brief = 1, stops_alerts = 0").run();
+    const briefStopped: EmailMessageBuilder[] = [];
+    await sendMonthlies(envWith(briefStopped), NOW, isTester);
+    expect(briefStopped).toHaveLength(0);
   });
 
   it("never mentions money or the plan", async () => {
