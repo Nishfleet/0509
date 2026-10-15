@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigation, useSubmit } from "react-router";
 
-import { MAGIC_LINK_TTL_SECONDS } from "../lib/auth/magic-link-ttl";
+import { MAGIC_LINK_TTL_SECONDS } from "../lib/auth/magic-link-email";
 import { inboxLinkFor } from "../lib/inbox-link";
 import { cn } from "../lib/utils";
 import { Footer } from "./footer";

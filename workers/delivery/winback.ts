@@ -4,7 +4,7 @@ import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server
 import { hasReminderAttempt } from "../../app/lib/data/trial_reminder.server";
 import { readWinbacks, winbackKey, type Winback } from "../../app/lib/data/winback.server";
 
-import { SETTINGS_LINK, unsubscribeHeaders } from "./alert-footer";
+import { SETTINGS_LINK, unsubscribeHeaders } from "../../app/lib/alert-footer";
 import { UNSUBSCRIBE_BASE_URL, ensureUnsubscribeToken } from "./consumer";
 import { sendOnce } from "./send-once";
 import { renderWinback } from "./winback-template";

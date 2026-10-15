@@ -1,4 +1,4 @@
-import { linkEmailHtml, linkEmailText } from "./link-email";
+import { linkEmailHtml, linkEmailText } from "../link-email";
 
 const COPY = {
   approve: {

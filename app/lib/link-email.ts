@@ -1,7 +1,7 @@
-import { SUPPORT_ADDRESS } from "../../app/components/footer";
-import { escapeHtml } from "../../app/lib/html";
+import { SUPPORT_ADDRESS } from "../components/footer";
+import { escapeHtml } from "./html";
 import { supportLineHtml } from "./alert-footer";
-import { BODY, FONT, HEADLINE, emailDocument, linkParagraph } from "./email-shell";
+import { BODY_STYLE, FONT, HEADLINE, emailDocument, linkParagraph } from "./email-shell";
 
 export interface LinkEmail {
   readonly subject: string;
@@ -34,7 +34,7 @@ export function linkEmailHtml(input: LinkEmail): string {
     input.subject,
     [
       `<p style="${HEADLINE}">${escapeHtml(input.headline)}</p>`,
-      `<p style="${BODY}">${escapeHtml(input.line)}</p>`,
+      `<p style="${BODY_STYLE}">${escapeHtml(input.line)}</p>`,
       linkParagraph(input.button, input.url),
       `<p class="brief-muted" style="${small}">If the button does not work, paste this address into your browser:<br><span style="word-break:break-all;">${url}</span></p>`,
       `<p class="brief-muted" style="${small}">${escapeHtml(input.ignore)}</p>`,

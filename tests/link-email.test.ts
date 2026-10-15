@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { linkEmailHtml } from "../workers/delivery/link-email";
-import { changeEmailEmail } from "../workers/delivery/change-email-email";
-import { magicLinkEmail } from "../workers/delivery/magic-link-email";
+import { linkEmailHtml } from "../app/lib/link-email";
+import { changeEmailEmail } from "../app/lib/auth/change-email-email";
+import { magicLinkEmail } from "../app/lib/auth/magic-link-email";
 import { SUPPORT_ADDRESS } from "../app/components/footer";
-import { verifyAddressEmail } from "../workers/delivery/verify-address-email";
+import { verifyAddressEmail } from "../app/lib/verify-address-email";
 
 const url = "https://0509.io/x?t=1";
 

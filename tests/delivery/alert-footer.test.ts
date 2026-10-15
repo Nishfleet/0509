@@ -6,7 +6,7 @@ import {
   renderAlertFooter,
   SETTINGS_LINK,
   unsubscribeHeaders,
-} from "../../workers/delivery/alert-footer";
+} from "../../app/lib/alert-footer";
 
 const UNSUBSCRIBE_URL = "https://0509.io/u/token?w=ws_1&t=abc";
 const HOSTILE_URL = 'https://0509.io/u/token?w=ws_1&t=abc"def';

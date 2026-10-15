@@ -1,7 +1,7 @@
 import { parseBriefPayload, type BriefPayload } from "../../app/lib/brief-payload";
-import { magicLinkEmail } from "../../workers/delivery/magic-link-email";
-import { changeEmailEmail } from "../../workers/delivery/change-email-email";
-import { teammateInviteEmail, verifyAddressEmail } from "../../workers/delivery/verify-address-email";
+import { magicLinkEmail } from "../../app/lib/auth/magic-link-email";
+import { changeEmailEmail } from "../../app/lib/auth/change-email-email";
+import { teammateInviteEmail, verifyAddressEmail } from "../../app/lib/verify-address-email";
 import { renderBrief } from "../../workers/delivery/brief-template";
 import { renderChange, renderChangeOverflow } from "../../workers/delivery/change-template";
 import { renderIncidentFixed, renderIncidentOpen } from "../../workers/delivery/incident-template";

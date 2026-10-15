@@ -1,7 +1,7 @@
 import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
-import { renderAlertFooter, type AlertFooterContext } from "./alert-footer";
-import { BODY, EYEBROW, HEADLINE, emailDocument, linkParagraph } from "./email-shell";
+import { renderAlertFooter, type AlertFooterContext } from "../../app/lib/alert-footer";
+import { BODY_STYLE, EYEBROW_STYLE, HEADLINE, emailDocument, linkParagraph } from "../../app/lib/email-shell";
 
 export interface WinbackContext {
   change_count: number;
@@ -28,9 +28,9 @@ export function renderWinback(ctx: WinbackContext): RenderedBrief {
     html: emailDocument(
       SUBJECT,
       [
-        `<p class="brief-muted" style="${EYEBROW}">Catch up</p>`,
+        `<p class="brief-muted" style="${EYEBROW_STYLE}">Catch up</p>`,
         `<p style="${HEADLINE}">${escapeHtml(SUBJECT)}</p>`,
-        ...body.map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`),
+        ...body.map((line) => `<p style="${BODY_STYLE}">${escapeHtml(line)}</p>`),
         linkParagraph(OPEN, ctx.link),
         footer.html,
       ].join(""),

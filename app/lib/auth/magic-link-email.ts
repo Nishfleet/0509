@@ -1,6 +1,6 @@
-import { linkEmailHtml, linkEmailText, type LinkEmail } from "./link-email";
+import { linkEmailHtml, linkEmailText, type LinkEmail } from "../link-email";
 
-import { MAGIC_LINK_TTL_SECONDS } from "../../app/lib/auth/magic-link-ttl";
+export const MAGIC_LINK_TTL_SECONDS = 5 * 60;
 const TTL_MINUTES = MAGIC_LINK_TTL_SECONDS / 60;
 
 export function magicLinkEmail(input: { email: string; url: string }): {

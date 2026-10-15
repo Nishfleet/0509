@@ -1,7 +1,7 @@
 import { describe, it } from "vitest";
 
 import { PROBE, expectNoHtmlInjection } from "../email-html-injection";
-import { changeEmailEmail } from "../../workers/delivery/change-email-email";
+import { changeEmailEmail } from "../../app/lib/auth/change-email-email";
 
 describe("every string field carries the injection probe escaped, never raw (0509#7020)", () => {
   const url = "https://0509.io/api/auth/change-email/confirm?token=abc";

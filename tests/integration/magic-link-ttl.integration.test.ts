@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 import { createAuth } from "../../app/lib/auth.server";
-import { MAGIC_LINK_TTL_SECONDS } from "../../app/lib/auth/magic-link-ttl";
+import { MAGIC_LINK_TTL_SECONDS } from "../../app/lib/auth/magic-link-email";
 
 const ORIGIN = "http://localhost:8787";
 const EMAIL = "ttl@test.dev";

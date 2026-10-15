@@ -1,8 +1,8 @@
 import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
-import { renderAlertFooter, type AlertFooterContext } from "./alert-footer";
+import { renderAlertFooter, type AlertFooterContext } from "../../app/lib/alert-footer";
 import { formatDate } from "./brief-template";
-import { BODY, EYEBROW, HEADLINE, emailDocument, linkParagraph } from "./email-shell";
+import { BODY_STYLE, EYEBROW_STYLE, HEADLINE, emailDocument, linkParagraph } from "../../app/lib/email-shell";
 
 export interface IncidentOpenContext extends AlertFooterContext {
   site: string;
@@ -59,9 +59,9 @@ export function renderIncidentOpen(ctx: IncidentOpenContext): RenderedBrief {
     html: emailDocument(
       subject,
       [
-        `<p class="brief-muted" style="${EYEBROW}">Your site</p>`,
+        `<p class="brief-muted" style="${EYEBROW_STYLE}">Your site</p>`,
         `<p style="${HEADLINE}">${escapeHtml(subject)}</p>`,
-        ...lines.slice(1).map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`),
+        ...lines.slice(1).map((line) => `<p style="${BODY_STYLE}">${escapeHtml(line)}</p>`),
         linkLine(ctx.link),
         footer.html,
       ].join(""),
@@ -80,9 +80,9 @@ export function renderIncidentFixed(ctx: IncidentFixedContext): RenderedBrief {
     html: emailDocument(
       subject,
       [
-        `<p class="brief-muted" style="${EYEBROW}">Your site</p>`,
+        `<p class="brief-muted" style="${EYEBROW_STYLE}">Your site</p>`,
         `<p style="${HEADLINE}">${escapeHtml(subject)}</p>`,
-        `<p style="${BODY}">${escapeHtml(line)}</p>`,
+        `<p style="${BODY_STYLE}">${escapeHtml(line)}</p>`,
         linkLine(ctx.link),
         footer.html,
       ].join(""),

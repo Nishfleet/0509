@@ -4,7 +4,7 @@ import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server
 import { readMonthlies, type Monthly } from "../../app/lib/data/monthly.server";
 import { hasReminderAttempt } from "../../app/lib/data/trial_reminder.server";
 
-import { SETTINGS_LINK, unsubscribeHeaders } from "./alert-footer";
+import { SETTINGS_LINK, unsubscribeHeaders } from "../../app/lib/alert-footer";
 import { UNSUBSCRIBE_BASE_URL, ensureUnsubscribeToken } from "./consumer";
 import { renderMonthly } from "./monthly-template";
 import { sendOnce } from "./send-once";

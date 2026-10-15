@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { linkParagraph } from "../../workers/delivery/email-shell";
+import { linkParagraph } from "../../app/lib/email-shell";
 import { lifecycleEmails } from "./email-fixtures";
 
 const DELIVERY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "workers", "delivery");
@@ -24,7 +24,7 @@ describe("the email family", () => {
     const files = (await readdir(DELIVERY)).filter((name) => name.endsWith("-template.ts"));
     const sources = await Promise.all(files.map((name) => readFile(path.join(DELIVERY, name), "utf8")));
     for (const source of sources) {
-      expect(source).not.toMatch(/const (HEADLINE|BODY) =/);
+      expect(source).not.toMatch(/const (HEADLINE|BODY_STYLE) =/);
     }
   });
 
