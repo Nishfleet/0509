@@ -6,7 +6,7 @@ import type { WorkLedger } from "../work-ledger";
 const CHANGE_ACTS = `EXISTS (SELECT 1 FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id = 'noteworthy_change' AND ${changeActsSql("s", "v")})`;
 const CHANGE_JUDGED = `EXISTS (SELECT 1 FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id = 'noteworthy_change')`;
 
-const SELECT_PAGES = `SELECT COUNT(DISTINCT CASE WHEN sn.id IS NOT NULL THEN e.id END) AS rivals, COUNT(sn.id) AS pages
+const SELECT_PAGES = `SELECT COUNT(DISTINCT CASE WHEN sn.id IS NOT NULL THEN e.id END) AS rivals, COUNT(DISTINCT sn.page_id) AS pages
 FROM entity e
 LEFT JOIN watch w ON w.entity_id = e.id
 LEFT JOIN snapshot sn ON sn.watch_id = w.id AND sn.page_id IS NOT NULL AND sn.fetched_at >= ?2 AND sn.fetched_at < ?3
