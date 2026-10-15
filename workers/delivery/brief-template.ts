@@ -1,5 +1,6 @@
 import { type BriefContext, type BriefPayload, type RenderedBrief } from "../../app/lib/brief-payload";
 import { briefPreheader, briefSubject, isFirstRanking } from "../../app/lib/brief-subject";
+import { nextStepLine } from "../../app/lib/next-step";
 import { COMPETITORS_LINK, newRivalLines, rankTrendLine, sinceStartedLine } from "../../app/lib/brief-since";
 import { escapeHtml } from "../../app/lib/html";
 import { countPhrase } from "../../app/lib/quiet-week";
@@ -54,6 +55,7 @@ const COPY = {
   noUnsubscribe: "Unsubscribe is not available right now. Reply to this email and we will stop sending.",
   degraded: (count: number) =>
     `${n(count)} ${count === 1 ? "source" : "sources"} could not be reached this week, so these counts may be low.`,
+  degradedNamed: (list: string) => `We could not reach ${list} this week, so these counts may be low.`,
   unnamedSource: "One of your sources",
   sources: (count: number) => (count === 1 ? "1 source" : `${n(count)} sources`),
   blind: (source: string, when: string) =>
@@ -186,6 +188,7 @@ function renderMark(
   const title = mark.title === "" ? siteName(mark.url) : mark.title;
   const href = safeUrl(mark.url);
 
+  const next = nextStepLine(mark.kind);
   const html = [
     `<div class="brief-rule" style="padding:16px 0;">`,
     `<p class="brief-muted" style="margin:0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(label)}</p>`,
@@ -196,6 +199,11 @@ function renderMark(
     renderMarkBeforeAfter(mark),
     renderMarkThumbnail(thumb, href),
     `<p style="margin:8px 0 0;font-family:${FONT};font-size:14px;line-height:20px;">${escapeHtml(mark.jev_reason)}</p>`,
+    ...(next === null
+      ? []
+      : [
+          `<p class="brief-muted" style="margin:4px 0 0;font-family:${FONT};font-size:14px;line-height:20px;">${escapeHtml(next)}</p>`,
+        ]),
     `</div>`,
   ].join("");
 
@@ -205,6 +213,7 @@ function renderMark(
     title ? `${title} — ${mark.url}` : mark.url,
     mark.before !== null && mark.after !== null ? `${mark.before} → ${mark.after}` : "",
     mark.jev_reason,
+    next ?? "",
   ]
     .filter((line) => line !== "")
     .join("\n");
@@ -393,6 +402,19 @@ function unsubscribeParagraph(href: string | null): string {
   return `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${inner}</p>`;
 }
 
+const DEGRADED_NAMES_MAX = 3;
+
+function degradedSentence(checked: BriefPayload["checked"]): string {
+  const total = checked.degraded_source_keys.length;
+  if (total === 0) return "";
+  const names = checked.degraded_sources.flatMap((source) => (source.name === null ? [] : [source.name]));
+  if (names.length === 0) return ` ${COPY.degraded(total)}`;
+  const shown = names.slice(0, DEGRADED_NAMES_MAX);
+  const rest = Math.max(total, names.length) - shown.length;
+  const list = rest > 0 ? `${shown.join(", ")} and ${n(rest)} more` : shown.join(", ").replace(/, ([^,]*)$/, " and $1");
+  return ` ${COPY.degradedNamed(list)}`;
+}
+
 function renderFooter(
   payload: BriefPayload,
   unsubscribeUrl: string | null,
@@ -407,10 +429,7 @@ function renderFooter(
     payload.next_brief_at === null
       ? COPY.noNext
       : `${COPY.next}: ${formatDate(payload.next_brief_at, payload.timezone, true)}`;
-  const degraded =
-    payload.checked.degraded_source_keys.length > 0
-      ? ` ${COPY.degraded(payload.checked.degraded_source_keys.length)}`
-      : "";
+  const degraded = degradedSentence(payload.checked);
 
   const unsubscribeHref = unsubscribeUrl === null ? null : safeUrl(unsubscribeUrl);
   const postal = postalLine();

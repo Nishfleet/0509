@@ -48,7 +48,7 @@ describe("eslint unscoped system writer route rule (#4705/#5125)", () => {
   it("keeps the paved-path sonner ban enforced on routes", { timeout: 60_000 }, async () => {
     const result = await lintTextAt("app/routes/login.tsx", PAVED_PATH_STILL_ENFORCED);
     expect(result.ignored).toBe(false);
-    expect(result.messages.some((m) => m.includes("sonner is imported in exactly one module"))).toBe(true);
+    expect(result.messages.some((m) => m.includes("sonner is removed"))).toBe(true);
   });
 
   it("does not cover non-route files", { timeout: 60_000 }, async () => {

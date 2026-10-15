@@ -103,6 +103,23 @@ test("a new account lands on the one input and an empty answer is refused", asyn
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
 
+test("opening the check-details step with no address sends a new account back to the one input", async ({
+  page,
+  baseURL,
+}) => {
+  const { cookie } = await seedPreviewSession(
+    "onboarding-identity-bare",
+    ({ db, suffix, userId }) => {
+      seedWorkspace(db, suffix, userId, "Onboarding Bare");
+    },
+    { livePlan: false },
+  );
+  await signIn(page, baseURL, cookie);
+  await page.goto("/onboarding/identity");
+  await expect(page).toHaveURL(/\/onboarding$/);
+  await expect(page.getByText("We couldn't find a website or username in that.")).toHaveCount(0);
+});
+
 test("the competitors step lists who is watched and who is a maybe, then moves on to the plan", async ({
   page,
   baseURL,
