@@ -216,7 +216,7 @@ test("a workspace shows the three mention treatments", async ({ page }, testInfo
   await expect(shown).toHaveCount(2);
   await expect(possibly).toHaveCount(1);
   await expect(held).toHaveCount(0);
-  await expect(possibly).toContainText("Possibly. We were not sure this mattered");
+  await expect(possibly).toContainText("Possibly. We weren't sure this mattered");
   await expect(possibly).toContainText(/found \d+ days ago/);
   await expect(page.getByText("News mentions", { exact: true })).toBeVisible();
   await expect(page.getByText("Hacker News mentions", { exact: true })).toBeVisible();
@@ -241,12 +241,12 @@ test("a workspace shows the three mention treatments", async ({ page }, testInfo
   await expect(reveal).toBeVisible();
   await expect(reveal).toBeFocused();
   await expect(reveal).toHaveAttribute("aria-expanded", "true");
-  await expect(reveal).toHaveText(/Hide the \d+ we think (?:do|does) not matter/);
+  await expect(reveal).toHaveText(/Hide the \d+ we think (?:do|does)n(?:'|’)t matter/);
 
   await page.keyboard.press("Enter");
   await expect(held).toHaveCount(0);
   await expect(reveal).toHaveAttribute("aria-expanded", "false");
-  await expect(reveal).toHaveText(/Show all, including \d+ we think (?:do|does) not matter/);
+  await expect(reveal).toHaveText(/Show all, including \d+ we think (?:do|does)n(?:'|’)t matter/);
 
   await page.keyboard.press("Enter");
   await expect(held).toHaveCount(1);

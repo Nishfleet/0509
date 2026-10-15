@@ -1,5 +1,6 @@
-import { createElement } from "react";
+import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { OneInput } from "../app/components/one-input";
@@ -8,8 +9,13 @@ const LABEL = "your website or social username";
 const PLACEHOLDER = "yoursite.com or @yourbrand";
 const ACTION = "/onboarding";
 
+function inRouter(element: ReactElement): string {
+  const Stub = createRoutesStub([{ path: "/", Component: () => element }]);
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
+}
+
 function render(props: Record<string, unknown>): string {
-  return renderToStaticMarkup(createElement(OneInput, props as unknown as Parameters<typeof OneInput>[0]));
+  return inRouter(createElement(OneInput, props as unknown as Parameters<typeof OneInput>[0]));
 }
 
 function baseProps(): Record<string, unknown> {

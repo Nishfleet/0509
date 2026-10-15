@@ -28,7 +28,7 @@ export const FAQ: readonly FaqEntry[] = [
     answer: `Public sources only: ${WATCHED_ORIGINS}. We never log in anywhere, never track private individuals, and never buy personal data.`,
   },
   {
-    question: "Why not just check my competitors by hand?",
+    question: "Why not check my competitors by hand?",
     answer:
       "You can, and for one competitor it works. Five to Nine does it for every competitor at once, keeps the before and after screenshot as proof, and ranks who moved most, so one Monday email replaces the tab-checking.",
   },

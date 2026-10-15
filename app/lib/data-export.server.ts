@@ -35,6 +35,8 @@ FROM signal s JOIN entity e ON e.id = s.entity_id
 WHERE s.workspace_id = ? AND s.is_tombstoned = 0
 ORDER BY s.observed_at DESC LIMIT ?`;
 
+const SELECT_VISITS = `SELECT day FROM workspace_visit WHERE workspace_id = ? ORDER BY day DESC`;
+
 const SELECT_BRIEFS = `SELECT subject, period_start, period_end, status, sent_at
 FROM digest WHERE workspace_id = ? ORDER BY period_start DESC`;
 
@@ -52,15 +54,16 @@ async function allRows<T extends Record<string, unknown>>(
 }
 
 async function readWorkspaceRows(db: D1Database, workspaceId: string) {
-  const [brands, notes, choices, decisions, incidents, briefs] = await Promise.all([
+  const [brands, notes, choices, decisions, incidents, briefs, visits] = await Promise.all([
     allRows(db, SELECT_BRANDS, workspaceId),
     allRows(db, SELECT_NOTES, workspaceId),
     allRows(db, SELECT_CHOICES, workspaceId),
     allRows(db, SELECT_DECISIONS, workspaceId),
     allRows(db, SELECT_INCIDENTS, workspaceId),
     allRows(db, SELECT_BRIEFS, workspaceId),
+    allRows<{ day: string }>(db, SELECT_VISITS, workspaceId),
   ]);
-  return { brands, notes, choices, decisions, incidents, briefs };
+  return { brands, notes, choices, decisions, incidents, briefs, daysUsed: visits.map((visit) => visit.day) };
 }
 
 async function readBriefRecipients(db: D1Database, workspaceId: string, fallbackEmail: string) {
