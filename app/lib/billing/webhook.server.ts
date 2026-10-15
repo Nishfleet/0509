@@ -86,18 +86,18 @@ export interface SubscriptionEvent {
   expectedUpdatedAt?: string;
 }
 
-export async function applySubscription(body: unknown, event: SubscriptionEvent): Promise<"done" | "retry"> {
+export async function applySubscription(body: unknown, event: SubscriptionEvent): Promise<"done" | "retry" | "hold"> {
   const { type, timestamp } = event;
   const parsed = subscriptionEvent.safeParse(body);
   if (!parsed.success) {
     fail("billing.webhook_unparsed", { type });
-    return "retry";
+    return "hold";
   }
   const { data } = parsed.data;
   const tier = planIdForProduct(data.product_id);
   if (tier === null) {
     fail("billing.webhook_unknown_product", { type, product: data.product_id });
-    return "retry";
+    return "hold";
   }
   const workspace = await resolveWorkspace(data);
   if (workspace.kind === "retry") return "retry";
@@ -185,6 +185,7 @@ export async function handleDodoWebhook(request: Request): Promise<Response> {
   if (state === "processed") return new Response(null, OK);
   const outcome = type.startsWith("subscription.") ? await applySubscription(json, { type, timestamp }) : "done";
   if (outcome === "retry") return new Response(null, { status: 500 });
+  if (outcome === "hold") return new Response(null, OK);
   await markWebhookEventProcessed(id, now);
   return new Response(null, OK);
 }
