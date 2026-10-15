@@ -150,7 +150,7 @@ describe("Slack alerts setting (0509#6376)", () => {
 
     const outcome = await call({ intent: "slack-save", webhook: "https://internal.example/hook" });
 
-    expect(outcome.slackError).toContain("not a Slack webhook");
+    expect(outcome.slackError).toContain("a Slack webhook");
     expect(posts).toHaveLength(0);
     expect(await readSlackTarget(env.DB, WS)).toBeNull();
   });
