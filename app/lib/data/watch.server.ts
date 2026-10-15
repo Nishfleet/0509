@@ -493,7 +493,8 @@ const SITE_WATCH_SUMMARY = `SELECT COUNT(*) AS pages, MAX(w.last_polled_at) AS l
         AND EXISTS (SELECT 1 FROM page hp WHERE hp.entity_id = ?2 AND hp.role = 'home' AND hp.deferred_at IS NOT NULL)
         AND NOT EXISTS (SELECT 1 FROM watch aw WHERE aw.entity_id = ?2 AND aw.is_active = 1 AND ${ALTERNATE_MARKER("aw")})) AS unreadable,
        (EXISTS (SELECT 1 FROM entity ne WHERE ne.id = ?2 AND ne.workspace_id = ?1)
-        AND EXISTS (SELECT 1 FROM page np WHERE np.entity_id = ?2 AND np.role = 'home' AND np.transport IS NULL AND np.transport_reason = '${NEVER_FOUND_REASON}')) AS not_found,
+        AND EXISTS (SELECT 1 FROM page np WHERE np.entity_id = ?2 AND np.role = 'home' AND np.transport IS NULL AND np.deferred_at IS NULL AND np.transport_reason = '${NEVER_FOUND_REASON}')
+        AND NOT EXISTS (SELECT 1 FROM watch nw WHERE nw.entity_id = ?2 AND nw.is_active = 1 AND ${ALTERNATE_MARKER("nw")})) AS not_found,
        (SELECT cw.target_key FROM watch cw JOIN entity ce ON ce.id = cw.entity_id AND ce.workspace_id = ?1 WHERE cw.entity_id = ?2 AND cw.is_active = 1 AND ${CUSTOMER_MARKER("cw")} LIMIT 1) AS customer_site
 FROM watch w
 JOIN source src ON src.id = w.source_id AND src.kind = 'site' AND src.platform <> 'feed'

@@ -102,6 +102,24 @@ describe("a rival whose site cannot be found", () => {
     expect(await readSiteWatchSummary(WS, RIVAL)).toMatchObject({ notFound: false });
   });
 
+  it("says blocked, not not-found, when the homepage is also deferred", async () => {
+    await homePage(null, null);
+    await markPageUnreachable("page-nf-home");
+    await env.DB.prepare("UPDATE page SET deferred_at = ?2 WHERE id = ?1").bind("page-nf-home", NOW).run();
+    expect(await readSiteWatchSummary(WS, RIVAL)).toMatchObject({ notFound: false });
+  });
+
+  it("stays quiet about not found while an archive copy is standing in for the homepage", async () => {
+    await homePage(null, null);
+    await markPageUnreachable("page-nf-home");
+    await env.DB.prepare(
+      "INSERT INTO watch (id, entity_id, source_id, target_key, is_active, config_json) VALUES ('w-nf-alt', ?1, (SELECT id FROM source WHERE key = 'site.web'), 'https://rival.com/', 1, '{\"alternateHome\":1}')",
+    )
+      .bind(RIVAL)
+      .run();
+    expect(await readSiteWatchSummary(WS, RIVAL)).toMatchObject({ notFound: false });
+  });
+
   it("stops saying not found as soon as a read succeeds", async () => {
     await homePage(null, null);
     await markPageUnreachable("page-nf-home");
