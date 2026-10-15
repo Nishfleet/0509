@@ -137,9 +137,9 @@ describe("withStepCheckIn on a run that finished but did not work", () => {
     expect(exception).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps the Sentry check-in green with a warning but pings the health check as down with the counts when degraded", async () => {
+  it("keeps the Sentry check-in green with a warning but pings the health check ok with a degraded body, never fail, when degraded", async () => {
     await run({ state: "degraded", reason: "2 of 40 failed: page-a, page-b" });
-    expect(ping.mock.calls).toEqual([["feed-sweep", "fail", "degraded: 2 of 40 failed: page-a, page-b"]]);
+    expect(ping.mock.calls).toEqual([["feed-sweep", "ok", "degraded: 2 of 40 failed: page-a, page-b"]]);
     expect(checkIn.mock.calls[1]?.[0]).toMatchObject({ status: "ok" });
     expect(warning).toHaveBeenCalledWith(
       "feed-sweep degraded: 2 of 40 failed: page-a, page-b",
