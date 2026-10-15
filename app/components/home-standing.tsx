@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import type { ReactElement, ReactNode } from "react";
-import { Form } from "react-router";
+import { Form, useNavigation } from "react-router";
 
 import { BrandChipRow } from "./brand-chip";
 import { EmptyState, fewerThanTwoOnBrands } from "./empty-state";
@@ -89,6 +89,22 @@ function greeting(view: HomeView): ReactElement {
   );
 }
 
+function AddFirstCompetitor(): ReactElement {
+  const navigation = useNavigation();
+  const adding = navigation.state === "submitting" && navigation.formAction === "/app/competitors";
+  return (
+    <Form method="post" action="/app/competitors" aria-busy={adding}>
+      <input type="hidden" name="intent" value="add" />
+      <fieldset disabled={adding} className="min-w-0 border-0 p-0">
+        <EmptyState {...fewerThanTwoOnBrands()} />
+      </fieldset>
+      <p role="status" className="mt-2 text-[0.88rem] text-ink-soft">
+        {adding ? "Adding. We're reading their site now." : ""}
+      </p>
+    </Form>
+  );
+}
+
 interface BodyInput {
   view: HomeView;
   howRanked: HowRanked | null | undefined;
@@ -102,10 +118,7 @@ function body({ view, howRanked, openId, evidence, firstLook }: BodyInput): Reac
   if (standing.kind === "add-competitor") {
     return (
       <div className="mt-6">
-        <Form method="post" action="/app/competitors">
-          <input type="hidden" name="intent" value="add" />
-          <EmptyState {...fewerThanTwoOnBrands()} />
-        </Form>
+        <AddFirstCompetitor />
       </div>
     );
   }
