@@ -12,7 +12,7 @@ import {
   seedPreviewSession,
   signInWithMagicLink,
 } from "./inbox";
-import { seedBareWorkspace, seedCompetitor, seedWorkspace, signIn } from "./quality";
+import { hiddenOverflow, seedBareWorkspace, seedCompetitor, seedWorkspace, signIn } from "./quality";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -111,6 +111,9 @@ async function scanMatrix(
       await scan(`${name}-${colorScheme}-${width}`);
     }
   }
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto(url);
+  expect(await hiddenOverflow(page), `${name} at 320px wide`).toEqual([]);
 }
 
 test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at both widths (#4149) @own-signin", async ({

@@ -43,6 +43,10 @@ export function linkParagraph(label: string, link: string): string {
 
 export const POSTAL_ADDRESS: string | null = null;
 
+export function marketingEmailAllowed(address: string | null = POSTAL_ADDRESS): boolean {
+  return address !== null;
+}
+
 export function postalLine(address: string | null = POSTAL_ADDRESS): { html: string; text: string } | null {
   if (address === null) return null;
   const line = `Five to Nine, ${address}`;
