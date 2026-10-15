@@ -90,6 +90,12 @@ const checkedSchema = z
     ],
   }));
 
+const newRivalSchema = z
+  .object({ name: text, domain: text, reason: optionalText })
+  .nullable()
+  .optional()
+  .catch(undefined);
+
 const briefPayloadSchema = z.object({
   workspace_id: text,
   timezone: text,
@@ -113,6 +119,7 @@ const briefPayloadSchema = z.object({
   own_site: ownSiteSchema,
   checked: checkedSchema,
   next_brief_at: optionalText,
+  new_rival: newRivalSchema,
 });
 
 export type BriefPayload = z.output<typeof briefPayloadSchema>;

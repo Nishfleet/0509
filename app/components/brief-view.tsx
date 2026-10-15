@@ -2,7 +2,7 @@ import { Fragment, type ReactElement } from "react";
 
 import { ReadThisFirst } from "./read-this-first";
 import type { BriefPayload } from "../lib/brief-payload";
-import { rankTrendLine, sinceStartedLine } from "../lib/brief-since";
+import { newRivalLines, rankTrendLine, sinceStartedLine } from "../lib/brief-since";
 
 const SECTION = "mt-5 border-t border-line pt-4";
 const HEAD = "font-mono text-eyebrow text-ink-soft uppercase";
@@ -16,6 +16,7 @@ export function BriefView({ payload }: { payload: BriefPayload }) {
       <ReadThisFirst marks={payload.read_this_first} unjudged={payload.is_unjudged} />
       {brandsBlock(payload)}
       {ownSiteBlock(payload)}
+      {newRivalBlock(payload)}
       {checkedBlock(payload)}
     </article>
   );
@@ -94,6 +95,28 @@ function ownSiteBlock(payload: BriefPayload): ReactElement {
           ))}
         </Fragment>
       )}
+    </section>
+  );
+}
+
+function newRivalBlock(payload: BriefPayload): ReactElement | null {
+  const rival = newRivalLines(payload);
+  if (rival === null) return null;
+  return (
+    <section data-brief-block="new-rival" className={SECTION}>
+      <h3 className={HEAD}>A competitor you may be missing</h3>
+      <p className={BODY}>
+        {rival.title}
+        {rival.reason === null ? "" : ` ${rival.reason}`}
+      </p>
+      <p className={BODY}>
+        <a
+          className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4"
+          href="/app/competitors"
+        >
+          Review in Competitors
+        </a>
+      </p>
     </section>
   );
 }

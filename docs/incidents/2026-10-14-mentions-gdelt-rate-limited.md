@@ -29,3 +29,29 @@ The sweep stops hammering a source that keeps refusing: three skipped targets in
 ## Same pattern: YouTube on 2026-10-10
 
 `youtube.channel_rss` answered 429 at 19:00Z on 2026-10-10, the night with no YouTube snapshots. The same code path skipped the whole target with no retry, so that night's channels were not read. The retry rounds above cover it (a skipped YouTube target is retried like any other); the 429 itself is Google's and is not preventable from here.
+
+## Second night: the fix did not hold (2026-10-14, Sentry FIVE-TO-NINE-1D)
+
+`mentions.sustained_skips` fired for `gdelt.doc`: 42 of 42 targets skipped at 19:27Z, after the breaker and retry rounds above had been deployed (09:31 to 09:38Z the same day). The alert did its job. The fix did not.
+
+### What the evidence says
+
+- The 19:00Z run logged 12 `mentions.rate_limited` lines, all status 429, the first at 19:01:58, and no other status, no timeout and no text-instead-of-JSON answer.
+- A probe from the server the next hour: 13 requests, no two overlapping, 15 to 26 s apart, after 16 minutes of rest. 6 answered 200 and 7 answered 429, alternating with no pattern by brand or by `timespan` (1 day was no faster than 7 days; 9 to 20 s each). The first request after the rest was already a 429. The 429 body is GDELT's plain text asking for one request every 5 seconds.
+- On 10-13 the first 4 targets passed and then 35 in a row were refused.
+
+So the refusal is neither our pacing (21 s apart still gets 429) nor query cost (1 day is as slow as 7 days). It is GDELT's limit on shared load: any single request has roughly an even chance of being refused, more at 19:00Z.
+
+### Root cause
+
+The first postmortem treated 429 as a ban to back away from. A random refusal needs the opposite answer: ask the same question again after a pause. The breaker made it worse. With about half of requests refused, three refusals in a row happen within a few targets, so the breaker tripped, deferred every remaining target, and the retry rounds tripped it again after three each. 42 targets never got more than a handful of real attempts each.
+
+### The fix
+
+`fetchUpstream` takes `rateLimitRetries` and `rateLimitPauseMs`. For `gdelt.doc` a 429 is asked again up to 5 more times, 8 s apart (GDELT's own message asks for at least 5 s), inside the same target. A target is only skipped when 6 asks in a row were refused, which at an even chance is about 1 in 64, and the breaker now means what it should: three targets in a row that were refused six times each. A 403 or 202 is still not retried.
+
+### What stops a repeat
+
+1. Code: `tests/mentions/gdelt.test.ts` pins the 5 s minimum gap, the 6 asks and that a 403 is not retried; `tests/integration/mentions/blocked.integration.test.ts` cases B and F pin 6 asks per target and the single `mentions.rate_limited` line.
+2. Alert: unchanged, `mentions.sustained_skips` still goes to Sentry.
+3. Open: the next nightly `mentions.sweep` line. Expect `skipped` near 0 for gdelt and a longer run (42 targets at about 15 s plus pauses, 20 to 40 minutes). If skips remain high, the next step is the shared-load assumption: spread the 42 targets across the day.
