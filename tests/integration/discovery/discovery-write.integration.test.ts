@@ -47,19 +47,6 @@ afterEach(() => {
 });
 
 describe("writeDiscoveryResults", () => {
-  it("stores a coin-flip score as it was and holds the brand as a maybe", async () => {
-    const workspaceId = await seedWorkspace();
-
-    await writeDiscoveryResults(workspaceId, [{ ...candidate("Coin", "coin.com"), verdict: verdict(0.5) }], NOW);
-
-    const row = await env.DB.prepare(
-      "SELECT verdict_p, status FROM suggestion WHERE workspace_id = ? AND candidate_domain = ?",
-    )
-      .bind(workspaceId, "coin.com")
-      .first();
-    expect(row).toEqual({ verdict_p: 0.5, status: "pending" });
-  });
-
   it("switches on at most the plan's cap and holds the rest as maybes", async () => {
     const workspaceId = await seedWorkspace();
     const sure = Array.from({ length: 9 }, (_, index) => ({

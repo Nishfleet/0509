@@ -39,6 +39,11 @@ describe("keepOnlyIfBoth", () => {
     expect(combined(0.084, 0.0469)).toBeLessThanOrEqual(REJECT_AT);
   });
 
+  it("returns the lower of two unequal answers", () => {
+    expect(combined(0.7, 0.6)).toBe(0.6);
+    expect(combined(0.6, 0.7)).toBe(0.6);
+  });
+
   it("returns the lowest of the answers and never more", () => {
     const scores = [0.5, 0.6, 0.7, 0.8, 0.9, 1];
     scores.forEach((p) => {
