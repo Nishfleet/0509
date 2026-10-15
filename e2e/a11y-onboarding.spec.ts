@@ -180,6 +180,9 @@ test("screen 2 is operable by keyboard in order, with one polite live region (#4
   await page.keyboard.press("Enter");
   const nameField = page.getByRole("textbox", { name: "name", exact: true });
   await expect(nameField).toBeFocused();
+  const popup = page.locator('[data-slot="popover-content"]');
+  await expect(popup).toHaveCSS("opacity", "1");
+  await expect(popup).not.toHaveAttribute("data-starting-style");
   await scan("identity-editor-open-light-1440");
 
   await page.keyboard.press("Escape");

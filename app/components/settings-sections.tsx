@@ -15,7 +15,8 @@ import type { ComponentProps } from "react";
 const BLOCK = "mt-10 border-t border-line pt-4";
 
 const JUMPS = [
-  { href: "#settings-brief", label: "Brief and alerts" },
+  { href: "#settings-brief", label: "Brief" },
+  { href: "#settings-alerts", label: "Alerts" },
   { href: "#settings-agents", label: "Agents and API" },
   { href: "#settings-plan", label: "Plan" },
   { href: "#settings-account", label: "Account" },
