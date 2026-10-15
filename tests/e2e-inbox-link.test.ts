@@ -6,11 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { extractMagicLink, InboxReadError, readRawMessage, staleLinks, waitForMagicLink } from "../e2e/inbox";
 
-// J1's link extraction, pinned in a merge gate so a mail-format change fails
-// here rather than as a 120s production poll timeout (0509#3927). The app
-// sends multipart/alternative (text and HTML); parts may be quoted-printable
-// or base64, and an HTML href escapes `&` as `&amp;` (0509#4355).
-
 const EXPECTED = "https://0509.io/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp";
 const PLAIN = [
   "Sign in to Five to Nine:",
@@ -82,9 +77,6 @@ const HTML_ONLY = [
   '<a href="https://0509.io/api/auth/magic-link/verify?token=abc123&amp;callbackURL=%2Fapp">Sign in</a>',
 ].join("\r\n");
 
-// The fixtures' links ride the production origin, so the default lane is the
-// one these cases need: pin both lane variables unset rather than trusting
-// the ambient environment, and let a describe's own stubs override per test.
 beforeEach(() => {
   vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "");
   vi.stubEnv("PLAYWRIGHT_LOCAL_PORT", "");
@@ -133,9 +125,6 @@ describe("extractMagicLink", () => {
   });
 });
 
-// 0509#5841: a verify link is only the lane's own origin. The production and
-// merge-queue lanes mail their own baseURL; a link on any other origin is a
-// different run's mail and returns null.
 describe("extractMagicLink on a named lane", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -162,10 +151,6 @@ describe("extractMagicLink on a named lane", () => {
     ).toBeNull();
   });
 
-  // 0509#6092: the local lane's wrangler dev mails the --var BETTER_AUTH_URL
-  // playwright.config.ts gives it, so the local link is on the pinned port.
-  // PLAYWRIGHT_TEST_BASE_URL is stubbed empty so a caller's environment cannot
-  // pull these cases onto the remote lane.
   it("returns a link on the local port when no base URL is set", () => {
     vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "");
     vi.stubEnv("PLAYWRIGHT_LOCAL_PORT", "8791");
@@ -190,9 +175,6 @@ describe("extractMagicLink on a named lane", () => {
   });
 });
 
-// The pre-send read on the sign-in path (0509#5839) must tell a missing
-// message (404) from the inbox failing, so a 500 is never read as "nothing
-// stored".
 describe("readRawMessage", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -217,11 +199,6 @@ describe("readRawMessage", () => {
   });
 });
 
-// The pre-send read on the sign-in path (0509#5839): a fixed fixture address
-// still holds the previous run's spent link, so staleLinks is what the wait
-// skips. Only a 404 is nothing stored; every other inbox answer is a failure
-// that must name itself rather than hand back the spent link. These cases pin
-// the remote lane, so they name a production base URL (0509#6092).
 describe("staleLinks", () => {
   beforeEach(() => {
     vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "https://0509.io");
@@ -258,16 +235,12 @@ describe("staleLinks", () => {
     await expect(staleLinks("e2e+stale@0509.io", "token")).rejects.toBeInstanceOf(InboxReadError);
   });
 
-  // The local lane's null marker must never reach a remote read: overloading
-  // it into a token re-read would hide the caller bug behind the environment.
   it("names the null local-lane marker instead of re-resolving the token", async () => {
     await expect(staleLinks("e2e+stale@0509.io", null)).rejects.toThrow(
       "an inbox read on a remote lane needs the E2E_INBOX_TOKEN the caller resolved",
     );
   });
 
-  // The seam itself: what the pre-read found is what the poll skips, so a fixed
-  // address lands on the newer message and not on the stored, spent one.
   it("keeps the poll off the link the pre-read found", async () => {
     const stale = "https://0509.io/api/auth/magic-link/verify?token=stale&callbackURL=%2Fapp";
     const fresh = "https://0509.io/api/auth/magic-link/verify?token=fresh&callbackURL=%2Fapp";
@@ -282,9 +255,6 @@ describe("staleLinks", () => {
   }, 20_000);
 });
 
-// 0509#6092: the local lane reads wrangler's simulated send_email output —
-// one file per part under .wrangler/tmp/email/<session>/email-{text,html}/.
-// These cases point the reader at a temp cwd carrying the same layout.
 describe("the local lane disk sink", () => {
   const TO = "e2e+local@0509.io";
   const LOCAL_LINK = "http://127.0.0.1:8791/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp";

@@ -1,16 +1,18 @@
 import { lazy, Suspense } from "react";
 import type { ReactElement, ReactNode } from "react";
-import { Form } from "react-router";
+import { Form, useNavigation } from "react-router";
 
 import { BrandChipRow } from "./brand-chip";
 import { EmptyState, fewerThanTwoOnBrands } from "./empty-state";
 import { FirstFilePanel } from "./first-file-panel";
+import { FirstLook } from "./first-look";
 import { FirstWeekSteps } from "./first-week-steps";
 import { FourWeekLine } from "./four-week-line";
 import { HowRankedSheet } from "./how-ranked-sheet";
 import { PAGE } from "./page-heading";
 import { RankedRow } from "./ranked-row";
 import { ReadThisFirst } from "./read-this-first";
+import type { FirstLookRow } from "../lib/first-look";
 import type { HomeRow, HomeView, WeekEvidence } from "../lib/home-standing";
 import type { HowRanked } from "../lib/how-ranked";
 import { cn } from "../lib/utils";
@@ -46,12 +48,14 @@ export function HomeStanding({
   howRanked,
   openId = null,
   evidence = null,
+  firstLook = [],
   showEyebrow = true,
 }: {
   view: HomeView;
   howRanked?: HowRanked | null;
   openId?: string | null;
   evidence?: readonly WeekEvidence[] | null;
+  firstLook?: readonly FirstLookRow[];
   showEyebrow?: boolean;
 }): ReactElement {
   return (
@@ -59,7 +63,7 @@ export function HomeStanding({
       {showEyebrow ? <p className={EYEBROW}>{view.eyebrow}</p> : null}
       {greeting(view)}
       {chips(view)}
-      {body({ view, howRanked, openId, evidence })}
+      {body({ view, howRanked, openId, evidence, firstLook })}
     </section>
   );
 }
@@ -85,22 +89,36 @@ function greeting(view: HomeView): ReactElement {
   );
 }
 
+function AddFirstCompetitor(): ReactElement {
+  const navigation = useNavigation();
+  const adding = navigation.state === "submitting" && navigation.formAction === "/app/competitors";
+  return (
+    <Form method="post" action="/app/competitors" aria-busy={adding}>
+      <input type="hidden" name="intent" value="add" />
+      <fieldset disabled={adding} className="min-w-0 border-0 p-0">
+        <EmptyState {...fewerThanTwoOnBrands()} />
+      </fieldset>
+      <p role="status" className="mt-2 text-[0.88rem] text-ink-soft">
+        {adding ? "Adding. We're reading their site now." : ""}
+      </p>
+    </Form>
+  );
+}
+
 interface BodyInput {
   view: HomeView;
   howRanked: HowRanked | null | undefined;
   openId: string | null;
   evidence: readonly WeekEvidence[] | null;
+  firstLook: readonly FirstLookRow[];
 }
 
-function body({ view, howRanked, openId, evidence }: BodyInput): ReactElement {
+function body({ view, howRanked, openId, evidence, firstLook }: BodyInput): ReactElement {
   const { standing } = view;
   if (standing.kind === "add-competitor") {
     return (
       <div className="mt-6">
-        <Form method="post" action="/app/competitors">
-          <input type="hidden" name="intent" value="add" />
-          <EmptyState {...fewerThanTwoOnBrands()} />
-        </Form>
+        <AddFirstCompetitor />
       </div>
     );
   }
@@ -108,6 +126,7 @@ function body({ view, howRanked, openId, evidence }: BodyInput): ReactElement {
     return (
       <div className="mt-6">
         <FirstFilePanel brands={standing.brands} firstSweepAt={standing.firstSweepAt} briefAt={standing.briefAt} />
+        <FirstLook rivals={firstLook} />
         <FirstWeekSteps />
       </div>
     );

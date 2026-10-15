@@ -7,8 +7,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import { BriefPauseSetting } from "../../app/components/brief-pause-setting";
 
-// The submitting state lives only on a live fetcher, which a static render never
-// holds, so this file swaps in a fetcher at the state the test names.
 const fetcherState = vi.hoisted(() => ({ value: "idle" as "idle" | "submitting" | "loading" }));
 
 vi.mock("react-router", async (importOriginal) => {
@@ -38,7 +36,6 @@ function renderSetting(
   return html;
 }
 
-// The opening tag only: the class list also holds the words "disabled:".
 function buttonTag(html: string): string {
   const start = html.indexOf("<button ");
   return html.slice(start, html.indexOf(">", start));

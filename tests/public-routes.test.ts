@@ -36,6 +36,8 @@ const SESSION_GATE_ALLOWLIST: Readonly<Record<string, string>> = {
   "/login": "sign-in must load without a session",
   "/api/health": "liveness probe has no cookie",
   "/api/docs": "public OpenAPI explorer",
+  "/status": "public status page; walled by Access until LAUNCH, listed in robots Disallow until then",
+  "/security": "public security page; walled by Access until LAUNCH, listed in robots Disallow until then",
   "/design/landing": "public marketing page",
   "/onboarding": "first-run flow after sign-in, not under /app layouts",
   "/onboarding/competitors": "first-run flow after sign-in, not under /app layouts",
@@ -88,17 +90,8 @@ function unguardedDisallowed(entries: RouteConfigEntry[], layouts: readonly stri
 
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
-const isDisallowed = (urlPath: string) =>
-  DISALLOWED_PREFIXES.some((prefix) => urlPath === prefix || urlPath.startsWith(`${prefix}/`));
+const isDisallowed = (urlPath: string) => DISALLOWED_PREFIXES.some((prefix) => urlPath.startsWith(prefix));
 
-// A robots directive is a robots <meta> tag in a document, and a string
-// literal in a module: a JSX attribute value, a template literal, or a plain
-// literal. Reading only string literals in a module is what keeps a "robots"
-// spelled as an identifier or a type out; reading each literal whole is what
-// keeps `content={cond ? "noindex" : "index, follow"}` in.
-// Comments are cut only where they are comments: the string-literal branch is
-// matched first and returned untouched, so the "//" in an https:// literal
-// cannot swallow the rest of its line and hide a directive below it.
 const withoutComments = (source: string) =>
   source.replace(
     /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`)|(\/\*[\s\S]*?\*\/|\/\/[^\n]*)/g,
@@ -112,10 +105,7 @@ const modulesDeclaringNoindex = (module: string) =>
   (withoutComments(module).match(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`/g) ?? []).some((literal) =>
     /\bnoindex\b/i.test(literal),
   );
-// The two modules read for a noindex: the route's own module, and app/root.tsx,
-// the document React Router wraps every route in. A meta() composed further out
-// (app/lib/legal/meta.ts builds the legal pages' meta) is past this scan's
-// reach; the served document is what e2e/seo.spec.ts fetches and reads.
+
 const servingSources = (route: RouteConfigEntry) =>
   [join("app", route.file), join("app", "root.tsx")].map((file) => [
     file,
@@ -171,15 +161,14 @@ describe("public-route manifest", () => {
     const body = robotsTxt("https://0509.io");
     expect(body).toContain("Disallow: /app");
     expect(body).toContain("Disallow: /api");
+    expect(body).toContain("Disallow: /u/");
+    expect(body).toContain("Disallow: /v/");
     expect(body).toContain("Allow: /mcp");
     expect(body).toContain("Allow: /api/v1/openapi.json");
     expect(body).not.toContain("Disallow: /mcp");
     expect(body).toContain("Sitemap: https://0509.io/sitemap.xml");
   });
 
-  // 0509#5599: /llms.txt told agents to open /mcp and the OpenAPI document
-  // while robots.txt disallowed both. The longest matching rule wins, as in
-  // RFC 9309.
   it("never links from /llms.txt a url that robots.txt disallows", () => {
     const rules = robotsTxt("https://0509.io")
       .split("\n")
@@ -220,9 +209,6 @@ describe("public-route manifest", () => {
     }
   });
 
-  // 0509#5648: /llms.txt was 200, robots-allowed, indexable and absent from the
-  // sitemap, so a crawler that starts at the sitemap never learned of it. Both
-  // halves of that failure are checked here, one direction each.
   it("names /llms.txt in the sitemap", () => {
     expect(SITEMAP_PATHS as readonly string[], "/llms.txt is missing from SITEMAP_PATHS").toContain("/llms.txt");
   });
@@ -254,8 +240,6 @@ describe("public-route manifest", () => {
     for (const path of SITEMAP_PATHS as readonly string[]) {
       expect(isDisallowed(path), `sitemap path "${path}" is disallowed by robots.txt`).toBe(false);
       if (path === "/" && existsSync(join(REPO_ROOT, "public/index.html"))) {
-        // "/" is the static rebuild notice until the landing ships an index
-        // route; the document that serves it is the one read for noindex.
         expect(
           documentsDeclaringNoindex(readFileSync(join(REPO_ROOT, "public/index.html"), "utf8")),
           "the document serving / declares a robots noindex",
@@ -283,6 +267,12 @@ describe("public-route manifest", () => {
     const staticHome = existsSync(file) ? readFileSync(file, "utf8") : "";
     const noindex = documentsDeclaringNoindex(staticHome);
     expect((SITEMAP_PATHS as readonly string[]).includes("/")).toBe(!noindex);
+  });
+
+  it("llms.txt never says public sources twice when no source is answering", () => {
+    const summary = llmsTxt("https://0509.io", [], NOW).split("\n")[2] ?? "";
+    expect(summary).toContain("watches their public sources, ranks you");
+    expect(summary).not.toContain("public sources from public sources");
   });
 
   it("llms.txt has the spec's title and summary and links every public path", () => {

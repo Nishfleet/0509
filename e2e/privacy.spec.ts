@@ -1,17 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { consoleFailures, watchConsole } from "./inbox";
-
-// The /privacy contract (0509#3986). Every assertion here is reachable from the
-// /privacy row in .agents/skills/verify/feature-map.md.
-//
-// Copy is pattern-matched, never pinned verbatim: a merge-queue proof that
-// asserts exact strings turns every wording edit into a red gate (the landing
-// h1 lesson, 2026-09-21T16:03Z). What is asserted is the contract: who we
-// refuse, what we collect, who helps run 0509, no public pages, one-year
-// retention, remove and forget, the 72-hour removal, the rights, the contents
-// list, and the footer address. The thirty-day feed rule is absent on purpose:
-// it is an R2 lifecycle rule not yet shown live.
 
 test("the privacy page renders its heading @smoke", async ({ page }) => {
   const response = await page.goto("/privacy");
@@ -97,7 +86,7 @@ test("the privacy footer carries the takedown address @smoke", async ({ page }) 
 
 test("the privacy wordmark loads the landing page @smoke", async ({ page }) => {
   await page.goto("/privacy");
-  await page.locator('a[href="/"]').click();
+  await page.getByRole("link", { name: "Five to Nine" }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.locator('a[href="mailto:support@0509.io"]')).toBeVisible();

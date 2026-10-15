@@ -1,16 +1,18 @@
 import { Footer, SupportLink } from "./footer";
+import { SiteHeader } from "./site-header";
 import { MAIN_CONTENT_ID, SkipLink } from "./skip-link";
 import type { LegalDocument, LegalSection } from "../lib/legal/document";
 import { LEGAL_UPDATED } from "../lib/legal/document";
+import { APP_LOCALE } from "../lib/locale";
 
 const body = "text-ink-soft mt-4 leading-[1.65]";
 
-const updatedLabel = new Intl.DateTimeFormat("en-GB", {
+const dateFormat = new Intl.DateTimeFormat(APP_LOCALE, {
   day: "numeric",
   month: "long",
   year: "numeric",
   timeZone: "UTC",
-}).format(new Date(`${LEGAL_UPDATED}T00:00:00Z`));
+});
 
 function Paragraphs({ items }: { items: readonly string[] | undefined }) {
   return items?.map((paragraph) => (
@@ -60,20 +62,6 @@ function Section({ section }: { section: LegalSection }) {
   );
 }
 
-function LegalLogo() {
-  return (
-    <a
-      className="inline-flex min-h-11 items-center font-display text-base font-bold tracking-[-0.03em] text-ink"
-      href="/"
-    >
-      <span className="sr-only">Five to Nine</span>
-      <span aria-hidden="true">
-        05<span className="bg-green px-[5px] text-on-green">09</span>
-      </span>
-    </a>
-  );
-}
-
 function OnThisPage({ sections }: { sections: readonly LegalSection[] }) {
   const linkClass = "inline-flex min-h-11 items-center text-ink-soft underline-offset-4 hover:text-ink hover:underline";
   return (
@@ -97,34 +85,35 @@ function OnThisPage({ sections }: { sections: readonly LegalSection[] }) {
 }
 
 export function LegalPage({ doc }: { doc: LegalDocument }) {
+  const updated = doc.updated ?? LEGAL_UPDATED;
   return (
-    <div className="mx-auto w-full max-w-[46rem] bg-bone px-6 py-16 text-ink sm:py-24">
+    <div className="bg-bone text-ink">
       <SkipLink />
-      <header>
-        <LegalLogo />
-      </header>
-      <main id={MAIN_CONTENT_ID} tabIndex={-1} className="mt-8">
-        <h1 className="font-display text-[clamp(1.75rem,3.6vw,2.9rem)] leading-[1.15] font-semibold tracking-[-0.02em]">
-          {doc.title}
-        </h1>
-        <p className="mt-4 font-mono text-[0.72rem] tracking-[0.06em] text-ink-soft">
-          Last updated <time dateTime={LEGAL_UPDATED}>{updatedLabel}</time>
-        </p>
-        <p className="mt-6 leading-[1.65] text-ink-soft">{doc.intro}</p>
-        <OnThisPage sections={doc.sections} />
-        {doc.sections.map((section) => (
-          <Section key={section.id} section={section} />
-        ))}
-        <section aria-labelledby="contact" className="mt-14 scroll-mt-6">
-          <h2 className="font-display text-[1.15rem] leading-[1.1] font-semibold tracking-[-0.02em]" id="contact">
-            Contact
-          </h2>
-          <p className={body}>
-            Email <SupportLink />. A person reads every message.
+      <SiteHeader />
+      <div className="mx-auto w-full max-w-[46rem] px-6 pt-12 pb-16 sm:pt-16 sm:pb-24">
+        <main id={MAIN_CONTENT_ID} tabIndex={-1}>
+          <h1 className="font-display text-[clamp(1.75rem,3.6vw,2.9rem)] leading-[1.15] font-semibold tracking-[-0.02em]">
+            {doc.title}
+          </h1>
+          <p className="mt-4 font-mono text-[0.72rem] tracking-[0.06em] text-ink-soft">
+            Last updated <time dateTime={updated}>{dateFormat.format(new Date(`${updated}T00:00:00Z`))}</time>
           </p>
-        </section>
-      </main>
-      <Footer />
+          <p className="mt-6 leading-[1.65] text-ink-soft">{doc.intro}</p>
+          <OnThisPage sections={doc.sections} />
+          {doc.sections.map((section) => (
+            <Section key={section.id} section={section} />
+          ))}
+          <section aria-labelledby="contact" className="mt-14 scroll-mt-6">
+            <h2 className="font-display text-[1.15rem] leading-[1.1] font-semibold tracking-[-0.02em]" id="contact">
+              Contact
+            </h2>
+            <p className={body}>
+              Email <SupportLink />. A person reads every message.
+            </p>
+          </section>
+        </main>
+        <Footer walled={doc.walled === true} />
+      </div>
     </div>
   );
 }

@@ -1,10 +1,29 @@
-import type { BriefContext, BriefPayload, RenderedBrief } from "../../app/lib/brief-payload";
+import { type BriefContext, type BriefPayload, type RenderedBrief } from "../../app/lib/brief-payload";
+import { COMPETITORS_LINK, newRivalLines, rankTrendLine, sinceStartedLine } from "../../app/lib/brief-since";
 import { escapeHtml } from "../../app/lib/html";
 import { countPhrase } from "../../app/lib/quiet-week";
-import { UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
-import { EYEBROW, FONT, MONO, emailDocument } from "./email-shell";
+import { ledgerSummary } from "../../app/lib/work-ledger";
+import { NOTHING_FIRST_LINE, UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
+import {
+  EYEBROW_STYLE,
+  FONT,
+  MONO,
+  emailDocument,
+  linkParagraph,
+  postalLine,
+  siteName,
+} from "../../app/lib/email-shell";
+import {
+  SETTINGS_LINK,
+  reasonLineHtml,
+  reasonLineText,
+  supportLineHtml,
+  supportLineText,
+} from "../../app/lib/alert-footer";
+import { APP_LOCALE } from "../../app/lib/locale";
 
 const COPY = {
+  open: "Open in Five to Nine",
   subject: (rank: number, total: number) => `You're #${n(rank)} of ${n(total)} this week`,
   subjectMoved: (rank: number, total: number, movement: string) =>
     `You're #${n(rank)} of ${n(total)} this week, ${movement}`,
@@ -16,18 +35,24 @@ const COPY = {
   down: (count: number) => `down ${n(count)}`,
   same: "holding steady",
   new: "new",
+  firstRanking: "your first ranking",
   readThisFirst: "Read this first",
-  nothingFirst: "Nothing this week needed reading first.",
+  nothingFirst: NOTHING_FIRST_LINE,
   unjudged: UNJUDGED_WEEK_LINE,
+  unjudgedNext: "The changes we have seen so far are in Alerts.",
+  unjudgedOpen: "Open Alerts",
   yourBrands: "Your tracked brands",
   ownSiteOk: "Your site looks fine.",
   ownSiteBroken: (count: number) => `Your site looks broken (${count === 1 ? "1 page" : `${n(count)} pages`}):`,
   stillBroken: "still broken",
   fixed: "fixed",
+  newRival: "A competitor you may be missing",
+  reviewRival: "Review in Competitors",
   footerTitle: "What was checked",
   next: "Next brief",
   noNext: "Next brief date not set yet",
   unsubscribe: "Unsubscribe",
+  settings: "Choose when your brief arrives in Settings",
   noUnsubscribe: "Unsubscribe is not available right now. Reply to this email and we will stop sending.",
   degraded: (count: number) =>
     `${n(count)} ${count === 1 ? "source" : "sources"} could not be reached this week, so these counts may be low.`,
@@ -38,6 +63,8 @@ const COPY = {
   blindNever: (source: string) =>
     `We have not been able to reach ${source} yet, so we cannot say this was a quiet week.`,
 } as const;
+
+const ALERTS_LINK = "https://0509.io/app/alerts";
 
 function n(value: number): string {
   return String(value);
@@ -56,7 +83,7 @@ export function formatDate(iso: string, timezone: string, withTime: boolean): st
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
   try {
-    return new Intl.DateTimeFormat("en-GB", {
+    return new Intl.DateTimeFormat(APP_LOCALE, {
       timeZone: timezone,
       ...(withTime
         ? {
@@ -111,19 +138,30 @@ function renderHeadline(payload: BriefPayload, whyLine: string): { html: string;
     };
   }
 
-  const movement = movementText(headline_movement, payload.headline_is_new);
+  const movement = payload.headline_is_new ? COPY.firstRanking : movementText(headline_movement, false);
   const period = COPY.weekOf(formatDate(payload.period_start, payload.timezone, false));
+  const trend = rankTrendLine(payload);
 
   const html = [
-    `<p class="brief-muted" style="${EYEBROW}">${escapeHtml(period)}</p>`,
+    `<p class="brief-muted" style="${EYEBROW_STYLE}">${escapeHtml(period)}</p>`,
     `<p style="margin:0;font-family:${FONT};font-size:28px;line-height:34px;font-weight:800;letter-spacing:-0.02em;">`,
     `You&#39;re <span class="brief-marker" style="padding:0 4px;">#${n(headline_rank)}</span> of ${n(headline_total)} this week`,
     `</p>`,
     `<p class="brief-muted" style="margin:4px 0 0;font-family:${MONO};font-size:13px;line-height:18px;letter-spacing:0.06em;text-transform:uppercase;">${escapeHtml(movement)}</p>`,
+    ...(trend === null
+      ? []
+      : [
+          `<p class="brief-muted" style="margin:2px 0 0;font-family:${MONO};font-size:13px;line-height:18px;letter-spacing:0.06em;text-transform:uppercase;">${escapeHtml(trend)}</p>`,
+        ]),
     `<p style="margin:14px 0 0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(whyLine)}</p>`,
   ].join("");
 
-  const text = [`${COPY.headline(headline_rank, headline_total)} — ${movement}`, period, whyLine].join("\n");
+  const text = [
+    `${COPY.headline(headline_rank, headline_total)} — ${movement}`,
+    ...(trend === null ? [] : [trend]),
+    period,
+    whyLine,
+  ].join("\n");
 
   return { html, text };
 }
@@ -135,7 +173,7 @@ function renderMarkBeforeAfter(mark: BriefPayload["read_this_first"][number]): s
 
 function renderMarkThumbnail(thumb: string | null, href: string | null): string {
   if (thumb === null || href === null) return "";
-  return `<p style="margin:10px 0 0;"><a class="brief-ink" href="${href}"><img src="${thumb}" alt="Screenshot of the change" width="${n(120)}" height="${n(90)}" style="display:block;"></a></p>`;
+  return `<p style="margin:10px 0 0;"><a class="brief-ink" href="${href}"><img src="${thumb}" alt="Screenshot of the change" width="${n(120)}" height="${n(90)}" style="display:block;font-family:${FONT};font-size:13px;line-height:18px;"></a></p>`;
 }
 
 function renderMark(
@@ -146,7 +184,7 @@ function renderMark(
   const label = mark.entity_name === "" ? mark.source : `${mark.entity_name} · ${mark.source}`;
   const when = formatDate(mark.observed_at, payload.timezone, true);
   const thumb = thumbnailSrc(mark.thumbnail_r2_key, assetBaseUrl);
-  const title = mark.title === "" ? mark.url : mark.title;
+  const title = mark.title === "" ? siteName(mark.url) : mark.title;
   const href = safeUrl(mark.url);
 
   const html = [
@@ -178,12 +216,12 @@ function renderMark(
 function renderReadThisFirst(payload: BriefPayload, assetBaseUrl: string | null): { html: string; text: string } {
   const marks = payload.read_this_first.slice(0, 3);
 
-  const heading = (text: string) => `<h2 class="brief-muted" style="${EYEBROW}">${escapeHtml(text)}</h2>`;
+  const heading = (text: string) => `<h2 class="brief-muted" style="${EYEBROW_STYLE}">${escapeHtml(text)}</h2>`;
 
   if (payload.is_unjudged) {
     return {
-      html: `${heading(COPY.readThisFirst)}<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(COPY.unjudged)}</p>`,
-      text: `${COPY.readThisFirst}\n${COPY.unjudged}`,
+      html: `${heading(COPY.readThisFirst)}<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(COPY.unjudged)} ${escapeHtml(COPY.unjudgedNext)} <a class="brief-ink" href="${ALERTS_LINK}">${escapeHtml(COPY.unjudgedOpen)}</a></p>`,
+      text: `${COPY.readThisFirst}\n${COPY.unjudged} ${COPY.unjudgedNext}\n${COPY.unjudgedOpen}: ${ALERTS_LINK}`,
     };
   }
 
@@ -214,6 +252,7 @@ function renderBrandLine(line: BriefPayload["brands"][number]): { html: string; 
 
   const rankLabel = line.rank === null ? "unranked" : `#${n(line.rank)}`;
   const movement = movementText(line.movement, line.is_new);
+  const baseline = line.baseline ?? [];
 
   const html = [
     `<div class="brief-rule" style="padding:10px 0;">`,
@@ -225,10 +264,14 @@ function renderBrandLine(line: BriefPayload["brands"][number]): { html: string; 
       ? `<p style="margin:2px 0 0;font-family:${FONT};font-size:15px;line-height:22px;">${escapeHtml(line.biggest_move)}</p>`
       : "",
     `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:14px;line-height:20px;">${escapeHtml(counts.join(" · "))}</p>`,
+    ...baseline.map(
+      (row) =>
+        `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:14px;line-height:20px;">${escapeHtml(row)}</p>`,
+    ),
     `</div>`,
   ].join("");
 
-  const text = [`${line.name} — ${rankLabel}, ${movement}`, line.biggest_move, counts.join(" · ")]
+  const text = [`${line.name} — ${rankLabel}, ${movement}`, line.biggest_move, counts.join(" · "), ...baseline]
     .filter((v): v is string => v !== null)
     .join("\n");
 
@@ -236,7 +279,7 @@ function renderBrandLine(line: BriefPayload["brands"][number]): { html: string; 
 }
 
 function renderBrands(payload: BriefPayload): { html: string; text: string } {
-  const heading = (text: string) => `<h2 class="brief-muted" style="${EYEBROW}">${escapeHtml(text)}</h2>`;
+  const heading = (text: string) => `<h2 class="brief-muted" style="${EYEBROW_STYLE}">${escapeHtml(text)}</h2>`;
 
   if (payload.brands.length === 0) {
     return {
@@ -288,40 +331,101 @@ function renderOwnSite(payload: BriefPayload): { html: string; text: string } {
   return { html, text: `${COPY.ownSiteBroken(open.length)}\n${lines}` };
 }
 
-function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { html: string; text: string } {
+function sectionBlock(inner: string): string {
+  return `<div class="brief-rule" style="padding:20px 0;">${inner}</div>`;
+}
+
+function renderNewRival(payload: BriefPayload, teammate: boolean): { html: string; text: string[] } {
+  const rival = newRivalLines(payload);
+  if (rival === null) return { html: "", text: [] };
+  const detail = rival.reason === null ? "" : ` ${rival.reason}`;
+  const link = teammate ? "" : ` <a class="brief-ink" href="${COMPETITORS_LINK}">${escapeHtml(COPY.reviewRival)}</a>`;
+  const html = [
+    `<h2 class="brief-muted" style="${EYEBROW_STYLE}">${escapeHtml(COPY.newRival)}</h2>`,
+    `<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(`${rival.title}${detail}`)}${link}</p>`,
+  ].join("");
+  const linkLine = teammate ? "" : `\n${COPY.reviewRival}: ${COMPETITORS_LINK}`;
+  const text = `${COPY.newRival}\n${rival.title}${detail}${linkLine}`;
+  return { html: sectionBlock(html), text: [text, ""] };
+}
+
+function sinceSentence(checked: BriefPayload["checked"]): string {
+  const since = sinceStartedLine(checked);
+  return since === null ? "" : ` ${since}.`;
+}
+
+function renderWork(checked: BriefPayload["checked"]): { html: string; text: string[] } {
+  const work = ledgerSummary(checked.ledger, "This week we");
+  if (work === null) return { html: "", text: [] };
+  return {
+    html: `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(work)}</p>`,
+    text: [work],
+  };
+}
+
+function settingsLine(teammate: boolean): { html: string; text: string } {
+  if (teammate) return { html: "", text: "" };
+  return {
+    html: `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;"><a class="brief-muted" href="${SETTINGS_LINK}">${escapeHtml(COPY.settings)}</a>.</p>`,
+    text: `${COPY.settings}: ${SETTINGS_LINK}`,
+  };
+}
+
+function unsubscribeParagraph(href: string | null): string {
+  const inner =
+    href === null
+      ? escapeHtml(COPY.noUnsubscribe)
+      : `<a class="brief-muted" href="${href}">${escapeHtml(COPY.unsubscribe)}</a>`;
+  return `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${inner}</p>`;
+}
+
+function renderFooter(
+  payload: BriefPayload,
+  unsubscribeUrl: string | null,
+  teammate: boolean,
+): { html: string; text: string } {
+  const settings = settingsLine(teammate);
+  const sinceTail = sinceSentence(payload.checked);
   const checked = countsSentence(payload.checked);
   const sourceCount = payload.checked.source_keys.length;
   const across = sourceCount === 0 ? "" : ` across ${COPY.sources(sourceCount)}`;
-
   const nextAt =
     payload.next_brief_at === null
       ? COPY.noNext
       : `${COPY.next}: ${formatDate(payload.next_brief_at, payload.timezone, true)}`;
-
   const degraded =
     payload.checked.degraded_source_keys.length > 0
       ? ` ${COPY.degraded(payload.checked.degraded_source_keys.length)}`
       : "";
 
   const unsubscribeHref = unsubscribeUrl === null ? null : safeUrl(unsubscribeUrl);
+  const postal = postalLine();
+  const work = renderWork(payload.checked);
   const html = [
     `<div class="brief-rule" style="padding:16px 0 0;">`,
-    `<p class="brief-muted" style="${EYEBROW}">${escapeHtml(COPY.footerTitle)}</p>`,
-    `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(`${checked}${across}.${degraded}`)}</p>`,
+    `<p class="brief-muted" style="${EYEBROW_STYLE}">${escapeHtml(COPY.footerTitle)}</p>`,
+    work.html,
+    `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(`${checked}${across}.${degraded}${sinceTail}`)}</p>`,
     `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(nextAt)}</p>`,
-    `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">`,
-    unsubscribeHref === null
-      ? escapeHtml(COPY.noUnsubscribe)
-      : `<a class="brief-muted" href="${unsubscribeHref}">${escapeHtml(COPY.unsubscribe)}</a>`,
-    `</p>`,
+    reasonLineHtml(teammate),
+    settings.html,
+    unsubscribeParagraph(unsubscribeHref),
+    supportLineHtml(),
+    postal?.html ?? "",
     `</div>`,
   ].join("");
-
   const text = [
-    `${COPY.footerTitle}: ${checked}${across}.${degraded}`,
+    ...work.text,
+    `${COPY.footerTitle}: ${checked}${across}.${degraded}${sinceTail}`,
     nextAt,
+    reasonLineText(teammate),
+    settings.text,
     unsubscribeUrl === null ? COPY.noUnsubscribe : `${COPY.unsubscribe}: ${unsubscribeUrl}`,
-  ].join("\n");
+    supportLineText(),
+    ...(postal === null ? [] : [postal.text]),
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
 
   return { html, text };
 }
@@ -347,30 +451,39 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
     .join(" ");
   const whyLine = quiet && blindLine !== "" ? blindLine : payload.why_line;
   const headline = renderHeadline(payload, whyLine);
+  const open = context.open_url == null ? null : safeUrl(context.open_url);
   const marks = renderReadThisFirst(payload, context.asset_base_url);
   const brands = renderBrands(payload);
   const ownSite = renderOwnSite(payload);
-  const footer = renderFooter(payload, context.unsubscribe_url);
+  const footer = renderFooter(payload, context.unsubscribe_url, context.teammate === true);
+  const newRival = renderNewRival(payload, context.teammate === true);
 
   const subject = briefSubject(payload);
 
-  const block = (inner: string) => `<div class="brief-rule" style="padding:20px 0;">${inner}</div>`;
-
   const html = emailDocument(
     subject,
-    [headline.html, ...(quiet ? [] : [block(marks.html)]), block(brands.html), block(ownSite.html), footer.html].join(
-      "",
-    ),
+    [
+      headline.html,
+      ...(open === null ? [] : [linkParagraph(COPY.open, open)]),
+      ...(quiet ? [] : [sectionBlock(marks.html)]),
+      sectionBlock(brands.html),
+      sectionBlock(ownSite.html),
+      newRival.html,
+      footer.html,
+    ].join(""),
+    whyLine,
   );
 
   const text = [
     headline.text,
     "",
+    ...(open === null ? [] : [`${COPY.open}: ${open}`, ""]),
     ...(quiet ? [] : [marks.text, ""]),
     brands.text,
     "",
     ownSite.text,
     "",
+    ...newRival.text,
     footer.text,
   ].join("\n");
 

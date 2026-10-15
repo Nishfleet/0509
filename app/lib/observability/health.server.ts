@@ -25,18 +25,26 @@ function failed(timestamp: string, commit: string): Response {
   return Response.json({ status: "error", app: "0509", d1: "error", timestamp, commit }, { status: 503 });
 }
 
-export async function healthResponse(db: D1Database, commit: string): Promise<Response> {
-  const timestamp = new Date().toISOString();
+export async function d1Reachable(db: D1Database): Promise<boolean> {
   try {
     const row = await firstOrTimeout(db.prepare("SELECT 1 AS ok").first<{ ok: number }>());
-    if (row?.ok !== 1) {
-      return failed(timestamp, commit);
-    }
+    return row?.ok === 1;
   } catch (error) {
     captureException(error);
+    return false;
+  }
+}
+
+export async function healthResponse(db: D1Database, commit: string): Promise<Response> {
+  const timestamp = new Date().toISOString();
+  if (!(await d1Reachable(db))) {
     return failed(timestamp, commit);
   }
   return Response.json({ status: "ok", app: "0509", d1: "ok", timestamp, commit });
+}
+
+export function currentStatus(): Promise<boolean> {
+  return d1Reachable(env.DB);
 }
 
 export function currentHealthResponse(): Promise<Response> {

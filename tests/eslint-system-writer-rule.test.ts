@@ -2,15 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { lintTextAt } from "./eslint-lint-text";
 
-// 0509#4705/#5125: send_attempt, watch, incident and snapshot are unscoped
-// system writers — they update by id alone, with no workspace_id, because only
-// workers and workflows call them. A route importing one is a cross-workspace
-// write, so app/routes/** and app/root.tsx may not import them directly; they
-// are reached through workspace-scoped layers instead. These probes boot the
-// real eslint.config.js (same rig as eslint-writer-rule.test.ts) so a restated
-// copy of the route block cannot drift from the gate — and the paved-path
-// blocks it restates stay enforced on routes.
-
 const MARKER = "Unscoped system writer";
 
 const WRITER_MODULES = ["send_attempt", "watch", "incident", "snapshot"];
@@ -20,20 +11,12 @@ const RELATIVE_IMPORT = (module: string) =>
 
 const ALIAS_IMPORT = `import * as probe from "~/lib/data/watch.server";\nexport const probeKeys = Object.keys(probe);\n`;
 
-// The workspace-scoped writer route modules are expected to use stays allowed.
 const ALLOWED_READ = `import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";\nexport const probe = readWorkspaceIdForOwner;\n`;
 
-// Restating the paved-path options in the route block must not weaken the
-// existing bans (flat config replaces a rule's options wholesale).
 const PAVED_PATH_STILL_ENFORCED = `import { toast } from "sonner";\nexport const probe = toast;\n`;
 
-// The rule is scoped to routes and root: another server module may still reach
-// these writers (that is how workers and workflows get to them via the site
-// layer).
 const NON_ROUTE_IMPORT = `import * as probe from "./data/watch.server";\nexport const probeKeys = Object.keys(probe);\n`;
 
-// Scoped by import NAME, not by module: routes legitimately import other
-// names from these two modules, so a whole-module ban would break them.
 const MARK_DIGEST_SENT = `import { markDigestSentStatement } from "../lib/data/digest.server";\nexport const probe = markDigestSentStatement;\n`;
 const MARK_DIGEST_FAILED = `import { markDigestFailed } from "../lib/data/digest.server";\nexport const probe = markDigestFailed;\n`;
 const DELETE_WORKSPACE = `import { deleteWorkspace } from "../lib/data/workspace.server";\nexport const probe = deleteWorkspace;\n`;

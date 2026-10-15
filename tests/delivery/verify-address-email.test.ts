@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { PROBE, expectNoHtmlInjection } from "../email-html-injection";
-import { verifyAddressEmail } from "../../app/lib/verify-address-email";
+import { teammateInviteEmail, verifyAddressEmail } from "../../app/lib/verify-address-email";
 
 const EMAIL = "a&b<x>@example.com";
 const LINK = "https://0509.io/v?t=1&u=2";
@@ -38,16 +38,21 @@ describe("verifyAddressEmail (0509#6554)", () => {
   });
 });
 
-/**
- * 0509#7020: the confirm-delivery email escapes both fields by hand. This
- * table plants the injection probe in every string field, one row per field,
- * so a missed escapeHtml turns CI red — the plain template module stays.
- */
 describe("every string field carries the injection probe escaped, never raw (0509#7020)", () => {
   it.each([
     ["email", { email: PROBE, url: LINK }],
     ["url", { email: EMAIL, url: PROBE }],
   ] as [string, { email: string; url: string }][])("%s lands in the html only escaped", (field, input) => {
     expectNoHtmlInjection(verifyAddressEmail(input).html, field);
+  });
+});
+
+describe("teammateInviteEmail", () => {
+  it("names who added them and escapes everything it is handed", () => {
+    const { subject, text, html } = teammateInviteEmail({ email: PROBE, url: LINK, addedBy: "boss@example.com" });
+    expect(subject).toBe("boss@example.com wants to send you the Five to Nine brief");
+    expect(text).toContain("boss@example.com added");
+    expect(text).toContain("every brief has an unsubscribe link");
+    expectNoHtmlInjection(html, "teammate email");
   });
 });

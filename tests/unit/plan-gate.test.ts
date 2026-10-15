@@ -6,16 +6,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { PlanGate, UpgradeStatus } from "../../app/components/plan-gate";
 
-// 0509#6671: the one message app.upgrade.ts ever returns is the
-// UNAVAILABLE failure, because a successful checkout redirects instead.
-// So the fetcher data this form can hold is exactly this message, and the
-// paragraph that renders it is an error line, not progress.
 const UPGRADE_UNAVAILABLE = "Upgrading isn't available right now. Try again in a few minutes.";
 
-// PlanGate reads its message off useFetcher().data, which a static
-// render never holds: the data only lands once a real submission settles.
-// So the fetcher is swapped for one pinned at the settled state the test
-// names, the way brief-pause-setting.test.ts does it.
 const fetcher = vi.hoisted(() => ({
   value: { state: "idle" as "idle" | "submitting", data: undefined as { message: string } | undefined },
 }));
@@ -36,12 +28,12 @@ vi.mock("react-router", async (importOriginal) => {
   return { ...actual, useFetcher: () => ({ state: fetcher.value.state, data: fetcher.value.data, Form }) };
 });
 
-function renderPlanGate(): string {
+function renderPlanGate(returning = false): string {
   const Stub = createRoutesStub([
     {
       id: "plan-gate",
       path: "/",
-      Component: () => createElement(PlanGate, { planId: "starter" }),
+      Component: () => createElement(PlanGate, { planId: "starter", returning }),
     },
   ]);
   const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
@@ -49,11 +41,6 @@ function renderPlanGate(): string {
   return html;
 }
 
-// The <p> that renders the text, opening tag through closing tag, so the
-// role assertions pin the region on the element that holds the message
-// rather than on any other paragraph in the markup. The searches quote the
-// unescaped text, but React does not escape the substrings that cross it, so
-// they match the static markup either way.
 function paragraphWrapping(html: string, text: string): string {
   const start = html.indexOf(text);
   if (start < 0) throw new Error(`no paragraph renders "${text}"`);
@@ -73,6 +60,13 @@ describe("PlanGate", () => {
     expect(paragraph).not.toContain('role="status"');
   });
 
+  it("promises the trial to a new customer and not to one who has had it", () => {
+    expect(renderPlanGate()).toContain("7-day trial");
+    const returning = renderPlanGate(true);
+    expect(returning).not.toContain("7-day trial");
+    expect(returning).toContain("already had your free trial");
+  });
+
   it("renders no message paragraph and no alert while the fetcher holds nothing", () => {
     const html = renderPlanGate();
 
@@ -81,8 +75,6 @@ describe("PlanGate", () => {
   });
 });
 
-// The UpgradeStatus paragraphs are progress, so they stay polite status
-// regions: these tests hold the fix to the error line in PlanGate only.
 describe("UpgradeStatus", () => {
   function renderStatus(tier: "starter", wanted: "starter" | "agency" | null): string {
     const Stub = createRoutesStub([
@@ -96,8 +88,6 @@ describe("UpgradeStatus", () => {
   }
 
   it("keeps the current-plan line a polite status region", () => {
-    // tier === wanted is the settled state: the plan turned on, so the
-    // line reports what the user is on, which is progress, not an error.
     const html = renderStatus("starter", "starter");
 
     const paragraph = paragraphWrapping(html, "It watches up to 15 competitors.");

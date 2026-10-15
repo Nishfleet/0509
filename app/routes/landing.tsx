@@ -28,7 +28,7 @@ import {
   softwareApplicationJsonLd,
   websiteJsonLd,
 } from "../lib/structured-data";
-import { tickerItems } from "../lib/ticker";
+import { tickerItems } from "../lib/ticker-items.server";
 import { watchedClaims } from "../lib/watched-claims";
 
 const PAGE_TITLE = "Competitor tracking for founders and creators | Five to Nine";

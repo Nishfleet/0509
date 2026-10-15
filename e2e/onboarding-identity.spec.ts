@@ -1,11 +1,9 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
 
 let createdEmail = "";
-// The end-of-test screenshot is report evidence, not an assertion. Playwright's
-// recorder attaches it and drops a capture that fails instead of failing the
-// test; e2e/reduced-motion.spec.ts has the why.
+
 test.use({ screenshot: "on" });
 
 test.afterEach(async ({ page }, testInfo) => {
@@ -77,9 +75,6 @@ test.describe("signed in", () => {
       await page.setViewportSize({ width, height });
       await signInWithMagicLink(page, email, token);
 
-      // Same listener the test above uses, and the same placement: the empty
-      // list is a claim about the card screen, so it starts once the signed-in
-      // session is established.
       const watched = watchConsole(page);
 
       await page.goto("/onboarding");

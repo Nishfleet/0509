@@ -2,9 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { sha256Hex } from "../app/lib/sha256";
 
-// sha256Hex wraps crypto.subtle.digest and lower-cases the bytes, so the
-// output is always a 64-char hex string. These cases pin the known vectors and
-// the UTF-8 encoding of multi-byte input.
 describe("sha256Hex", () => {
   it("hashes the empty string to its known SHA-256 digest", async () => {
     expect(await sha256Hex("")).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");

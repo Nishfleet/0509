@@ -22,11 +22,6 @@ const ONE_ARTICLE = {
 
 let runs = 0;
 
-// A mentions source row plus the workspace and competitor rows
-// sweep.integration.test.ts seeds. The platform is dedicated per suite so the
-// UNIQUE (platform, kind, plugin_key) constraint on source cannot collide with
-// the rows migrations/0001 and 0017 already insert, and so asserting on
-// degraded_reason never reads a row another test wrote.
 async function seedBlockedSource(
   slot: string,
   options: { readonly enabled: boolean },
@@ -61,9 +56,6 @@ async function seedBlockedSource(
   return { sourceId, workspaceId, competitorId, brand };
 }
 
-// planTargets() groups by (source_id, target_key), and migrations/0017 already
-// ships an enabled gdelt.doc row. Matching on sourceId as well as the brand is
-// what pins the assertion to the row this test seeded.
 async function gdeltTargetFor(sourceId: string, brand: string) {
   const targets = await planTargets();
   const target = targets.find(
@@ -83,6 +75,15 @@ async function readReason(sourceId: string): Promise<string | null> {
 afterEach(() => {
   vi.unstubAllGlobals();
 });
+
+async function settle<T>(pending: Promise<T>): Promise<T> {
+  let done = false;
+  const watched = pending.finally(() => {
+    done = true;
+  });
+  while (!done) await vi.advanceTimersByTimeAsync(1_000);
+  return watched;
+}
 
 describe("a blocking upstream degrades the source and ends the step (0509#5159)", () => {
   it("the block set is exactly 202, 403 and 429", () => {
@@ -118,15 +119,16 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
     const fetchMock = vi.fn(async () => new Response("", { status: 429 }));
     vi.stubGlobal("fetch", fetchMock);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
 
     try {
       const target = await gdeltTargetFor(sourceId, brand);
 
-      const outcome = await sweepTarget(target, NOW, null);
+      const outcome = await settle(sweepTarget(target, NOW, null));
 
       expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: target.watches.length });
       expect(await readReason(sourceId)).toBeNull();
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledTimes(6);
       expect(warn).toHaveBeenCalledTimes(1);
       expect(JSON.parse(String(warn.mock.calls[0]?.[0]))).toEqual({
         event: "mentions.rate_limited",
@@ -134,6 +136,7 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
         status: 429,
       });
     } finally {
+      vi.useRealTimers();
       warn.mockRestore();
       await env.DB.prepare("DELETE FROM source WHERE id = ?").bind(sourceId).run();
     }
@@ -144,14 +147,16 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
     const source: CanarySource = { id: sourceId, pluginKey: "gdelt.doc", canaryQuery: "google", minIntervalSeconds: 1 };
     const fetchMock = vi.fn(async () => new Response("", { status: 429 }));
     vi.stubGlobal("fetch", fetchMock);
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
 
     try {
-      const count = await runCanary(source, NOW);
+      const count = await settle(runCanary(source, NOW));
 
       expect(count).toBeNull();
       expect(await readReason(sourceId)).toBeNull();
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledTimes(6);
     } finally {
+      vi.useRealTimers();
       await env.DB.prepare("DELETE FROM source WHERE id = ?").bind(sourceId).run();
     }
   });

@@ -1,14 +1,6 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
-/**
- * v1 scoring_weight seed and the signal counting index (0509#4414, P6.1).
- *
- * The eleven rows are the weights table from docs/engines/standing-home.md §1
- * plus the version marker. They are config: no weight value lives in app code.
- * The index is the one the trailing-7-day count reads.
- */
-
 const V1_WEIGHTS: { key: string; weight: number }[] = [
   { key: "ad_copy_change", weight: 3 },
   { key: "ad_new_creative", weight: 2 },

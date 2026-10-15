@@ -21,10 +21,10 @@ export const INCIDENT_UNDELIVERED_TITLE = "We could not email you about your sit
 export const INCIDENT_UNDELIVERED_BODY =
   "Your site broke and we tried several times to email you about it, so we have stopped trying. The breakage and every check that followed are on your Alerts page.";
 
-export const CHANGE_UNDELIVERED_TITLE = "We could not email you about a rival change";
+export const CHANGE_UNDELIVERED_TITLE = "We could not email you about a competitor change";
 
 export const CHANGE_UNDELIVERED_BODY =
-  "A rival changed price or plan and we tried several times to email you about it, so we have stopped trying. The change is on your Alerts page.";
+  "A competitor changed price or plan and we tried several times to email you about it, so we have stopped trying. The change is on your Alerts page.";
 
 export function deliveryFailedAlert(input: {
   digest_id: string;
@@ -89,12 +89,34 @@ function incidentDeadLetterError(input: { message_id: string; incident_id: strin
   );
 }
 
+function digestDeadLetterError(input: { message_id: string; digest_id: string; reason: string }): Error {
+  return new Error(
+    JSON.stringify({
+      event: "send-email-dlq.dead_lettered",
+      queue: "send-email-dlq",
+      message_id: input.message_id,
+      digest_id: input.digest_id,
+      reason: input.reason,
+    }),
+  );
+}
+
 export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<string[]> {
   let ids: string[] = [];
   for (const item of batch.messages) {
     const parsed = parseMessage(item.body);
     if (parsed === null) {
       console.error("send-email-dlq: unparseable message", item.id);
+      item.ack();
+      continue;
+    }
+
+    if ("target_id" in parsed) {
+      captureException(
+        digestDeadLetterError({ message_id: item.id, digest_id: parsed.digest_id, reason: "teammate send gave up" }),
+        { tags: { queue: "send-email-dlq", lane: "teammates", digest_id: parsed.digest_id } },
+      );
+      console.error(JSON.stringify({ event: "delivery.teammate_dead_lettered", digest_id: parsed.digest_id }));
       item.ack();
       continue;
     }
@@ -113,23 +135,35 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
       continue;
     }
 
-    const deadLettered = await deadLetteredDigest(env, parsed.digest_id);
+    const deadLettered = await deadLetteredDigest(env, item.id, parsed.digest_id);
     item.ack();
     if (deadLettered !== null) ids = [...ids, deadLettered];
   }
   return ids;
 }
 
-async function deadLetteredDigest(env: Env, digestId: string): Promise<string | null> {
+async function deadLetteredDigest(env: Env, messageId: string, digestId: string): Promise<string | null> {
   const digest = await env.DB.prepare(`SELECT workspace_id FROM digest WHERE id = ?`)
     .bind(digestId)
     .first<{ workspace_id: string }>();
   if (!digest) {
+    captureException(
+      digestDeadLetterError({ message_id: messageId, digest_id: digestId, reason: "digest not found" }),
+      { tags: { queue: "send-email-dlq", digest_id: digestId } },
+    );
     console.error("send-email-dlq: digest not found", digestId);
     return null;
   }
 
   const attempt = await env.DB.prepare(SELECT_LATEST_ATTEMPT_ERROR).bind(digestId).first<{ error: string | null }>();
+  captureException(
+    digestDeadLetterError({
+      message_id: messageId,
+      digest_id: digestId,
+      reason: attempt?.error ?? "no send attempt recorded",
+    }),
+    { tags: { queue: "send-email-dlq", digest_id: digestId } },
+  );
   console.error(
     JSON.stringify({
       event: "delivery.dead_lettered",

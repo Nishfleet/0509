@@ -75,7 +75,7 @@ you.
   ESLint enforces is same-line comments and the workaround vocabulary
   (`todo`, `hack`, `for now`, `revisit`, …); the rest is the reviewer's job.
   Put the reason in the commit message, where it is read at the moment it
-  matters. Config files and tests are exempt.
+  matters. Config files are exempt.
 - **No user data in logs or Sentry.** `no-restricted-syntax` (NO_USER_DATA_IN_LOGS). Source: 0509#5776.
 - **Tests never skip, focus or sleep.** A vitest test is never focused or disabled
   (`vitest/no-focused-tests`, `vitest/no-disabled-tests`); an e2e spec is never
@@ -85,6 +85,8 @@ you.
   `playwright/no-networkidle`). Conditional `test.skip(condition, reason)` and
   `test.fail()` stay allowed. The full enforced set is the two test-lint blocks
   in `eslint.config.js`. Source: 0509#5785.
+- **An e2e name must still exist.** A name a spec looks up by string literal (`getByRole` name, `getByLabel`, `getByText`, a `button:` field) is checked against app source and e2e seed data by `tests/e2e-names-exist.test.ts`; a name the app builds at run time is listed there with its template. Source: 0509#7430.
+- **Failures reach Sentry.** An event named `_failed`, `_discarded`, `_unavailable`, `_dead_lettered`, `_unreadable`, `_unreached` or `_skipped`, and any log inside a `catch`, must use `console.warn` or `console.error`: `workers/sentry.ts` forwards only those two levels. `no-restricted-syntax` (FAILURE_EVENT_LOGGED_QUIETLY, LOG_IN_CATCH_LOGGED_QUIETLY). Source: 0509#7501.
 - **Formatting is Prettier.** `npm run lint` runs `prettier --check .`; run `npm run format` before committing.
 - **Stock only, at the version named in `docs/dependencies.md`.** `tests/stack-dependencies.test.ts` fails a dependency with no row there. A PR names the library or Cloudflare primitive it uses and what it rejected. Hand-rolled schedulers, diffing, crawlers, queues, retries, auth, billing, email, charts or home-built design systems are rejected. The official upstream shadcn skill in `.agents/skills/shadcn` and the token frontmatter in `DESIGN.md` are allowed: they are stock, not home-built (Nish, 2026-10-09). A hand-written type annotation over a framework value is a hand-rolled assertion: use the generated types.
 - **Jev decides every typed decision** (`docs/REBUILD-JEV.md`, D1–D9). Code never guesses with regexes where a judgment is needed; Jev internals are never shown to customers.
@@ -152,8 +154,8 @@ they name were plans and many never existed. The real layout is below.
 
 - `app/routes.ts` — the route registry. A route not listed here cannot be
   reached. `.agents/skills/verify/feature-map.md` describes every one of them and is updated in
-  the same PR that changes one. Search, never read whole: grep it for the
-  route path (`grep -n "app/alerts" .agents/skills/verify/feature-map.md`) and
+  the same PR that changes one, one file per row under `feature-map/` so parallel PRs never edit the same lines. Search, never read whole: grep it for the
+  route path (`grep -rn "app/alerts" .agents/skills/verify/feature-map.md .agents/skills/verify/feature-map/`) and
   read only that row.
 - `app/routes/*` — route modules: loader, action, component.
 - `app/components/` — shared UI.
@@ -162,7 +164,6 @@ they name were plans and many never existed. The real layout is below.
   `competitor/`, `feeds/`, `hiring/`, `mentions/`, `standing/`, `agent/` for the
   API and MCP, `data/` for the table writers).
 - `app/lib/*.ts` — shared pure logic.
-- `app/lib/ads/` is retained code for a dropped feature (J10, #3974); do not extend it.
 - `app/lib/public-routes.ts` — the sitemap paths, robots.txt and llms.txt.
 - `workers/app.ts` — the Worker entry and the `scheduled` handler.
 - `workers/workflows/` — the Workflows (site, feed, hiring and mentions sweeps,
@@ -190,8 +191,8 @@ rejection**, not a review comment. The row format is asserted by
 
 ## What gates a merge
 
-One required check on the `main-merge-queue` ruleset (id 21391031), **empty
-bypass list**: `ci-ok`. It is a job in `ci.yml` that needs the six gate jobs
+Three required checks on the `main-merge-queue` ruleset (id 21391031), **empty
+bypass list**: `ci-ok`, `base-fresh` and `ratchet / ratchet`. `ci-ok` is a job in `ci.yml` that needs the six gate jobs
 
 ```
 codex-node-checks   vitest-shard   Gitleaks   semgrep   preview-assert   base-fresh
@@ -203,6 +204,8 @@ never for a list of bad results: a job no runner picked up matched neither
 four-way matrix (`vitest-shard (1)` … `(4)`, vitest's own `--shard`); its
 result in `needs` is `success` only when every shard succeeded (0509#7163).
 `base-fresh` fails a PR whose head lacks the newest `main` commit that touched a gate file, and `stale-base-retest.yml` reruns it on every open PR when one lands (`docs/incidents/2026-10-07-stale-base-queue-ejections.md`).
+
+`ratchet / ratchet` (2026-10-12) is the fleet's no-glue gate: a PR's net added lines under `.github/workflows`, `.github/actions`, `scripts` and `bin` must be 0 or fewer. `.github/workflows/ratchet.yml` only calls `Nishfleet/fleet-ops/.github/workflows/ratchet.yml@main` (a SHA pin would queue forever on the runner group), so the rule is fleet-ops' main copy and a PR cannot loosen it; a PR that edits the caller's `ratchet` job fails. Ruleset before: required `ci-ok`, `base-fresh`; after: those plus `ratchet / ratchet`; nothing else changed. Bypass list: `gh api repos/Nishfleet/0509/rulesets/21391031 --jq '.bypass_actors, .current_user_can_bypass'` prints `[]` and `"never"`; it was already empty (admin `always` existed 2026-09-21 17:07 to 17:08 IST, one direct push by nish3451 in that window, none since), and no workflow or script here merges through the REST API. Undo (Nish only): `gh api repos/Nishfleet/0509/rulesets/21391031 | jq '{name,target,enforcement,bypass_actors,conditions,rules:(.rules|map(if .type=="required_status_checks" then .parameters.required_status_checks|=map(select(.context!="ratchet / ratchet")) else . end))}' | gh api -X PUT repos/Nishfleet/0509/rulesets/21391031 --input -`.
 
 Renaming `ci-ok` is not cosmetic. A required check that never reports fails
 closed and nothing can merge again, including the PR that renamed it. A
