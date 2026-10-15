@@ -105,7 +105,7 @@ function DevelopmentsSection({
           Paused {pausedOn}. We've stopped checking. Turn it back on to pick up where it left off.
         </p>
       )}
-      {notFound ? (
+      {notFound && !unreadable ? (
         <p data-slot="site-not-found" className="border-t border-ink pt-3 text-meta text-ink-soft">
           We couldn't find their website. Check that the address is spelled right. We'll keep trying, and we're still
           watching everything else about them.
