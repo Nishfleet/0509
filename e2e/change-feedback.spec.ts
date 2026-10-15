@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import type { DatabaseSync } from "node:sqlite";
 
 import { expect, test } from "./test";
@@ -107,4 +108,69 @@ test("a customer answers Was this worth telling you by keyboard, changes the ans
   );
   expect(overflow).toBe(0);
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
+});
+
+async function signInSeeded(page: Page, baseURL: string | undefined, name: string): Promise<string> {
+  const { cookie, seeded } = await seedPreviewSession(name, seed);
+  await page.context().addCookies(
+    cookie.split("; ").map((pair) => {
+      const [cookieName, ...value] = pair.split("=");
+      return { name: cookieName, value: value.join("="), url: baseURL ?? "" };
+    }),
+  );
+  return seeded;
+}
+
+test("an answer given on a rival's page returns to that page at that change", async ({ page, baseURL }) => {
+  const entityId = await signInSeeded(page, baseURL, "change-feedback-rival");
+  const rivalPath = `/app/competitors/${entityId}`;
+  await page.goto(rivalPath);
+
+  const form = page.getByTestId("change-feedback").first();
+  await form.getByRole("button", { name: "Yes" }).click();
+
+  await expect(page).toHaveURL(new RegExp(`${rivalPath}#sig-change-`));
+  await expect(page.getByTestId("change-feedback").first()).toContainText("Thanks, noted.");
+  await expect(page.getByTestId("change-feedback").first().getByRole("button", { name: "Yes" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+});
+
+test("a bad answer or an unknown change saves nothing, and a signed-out post goes to login", async ({
+  page,
+  baseURL,
+  playwright,
+}) => {
+  await signInSeeded(page, baseURL, "change-feedback-bad");
+  const options = { maxRedirects: 0, headers: { origin: baseURL ?? "" } };
+
+  const badValue = await page.request.post("/app/changes/feedback", {
+    ...options,
+    form: { signalId: "sig-change-x", value: "maybe" },
+  });
+  expect(badValue.status()).toBe(303);
+  expect(badValue.headers().location).toBe("/app/alerts");
+
+  const unknown = await page.request.post("/app/changes/feedback", {
+    ...options,
+    form: { signalId: "not-a-change", value: "useful" },
+  });
+  expect(unknown.status()).toBe(303);
+
+  await page.goto("/app/alerts");
+  const form = page.getByTestId("change-feedback");
+  await expect(form).not.toContainText("Thanks, noted.");
+  await expect(form.getByRole("button", { name: "Yes" })).toHaveAttribute("aria-pressed", "false");
+  await expect(form.getByRole("button", { name: "No" })).toHaveAttribute("aria-pressed", "false");
+
+  const anonymous = await playwright.request.newContext({ baseURL });
+  const signedOut = await anonymous.post("/app/changes/feedback", {
+    ...options,
+    form: { signalId: "sig-change-x", value: "useful" },
+  });
+  expect(signedOut.status()).toBeGreaterThanOrEqual(300);
+  expect(signedOut.status()).toBeLessThan(400);
+  expect(signedOut.headers().location).toContain("/login");
+  await anonymous.dispose();
 });

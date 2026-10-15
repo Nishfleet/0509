@@ -1,7 +1,5 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
-
-import { NEVER_FOUND_REASON } from "../page-reason";
 import {
   RANKED_PRICING_PAGES,
   resumeWantedPricingWatchesStatement,
@@ -182,8 +180,6 @@ const MARK_LINKS_RETRY = "UPDATE page SET links_retry_at = ?2 WHERE id = ?1";
 
 const MARK_DEFERRED = "UPDATE page SET deferred_at = ?2 WHERE id = ?1";
 
-const MARK_UNREACHABLE = "UPDATE page SET transport_reason = ?2 WHERE id = ?1 AND transport IS NULL";
-
 export async function recordPageTransport(input: {
   pageId: string;
   transport: "fetch" | "browser";
@@ -205,8 +201,42 @@ export async function markPageDeferred(pageId: string, at: string): Promise<void
   await env.DB.prepare(MARK_DEFERRED).bind(pageId, at).run();
 }
 
-export async function markPageUnreachable(pageId: string): Promise<void> {
-  await env.DB.prepare(MARK_UNREACHABLE).bind(pageId, NEVER_FOUND_REASON).run();
+const RECORD_FAILURE = "UPDATE page SET last_failure_reason = ?2, last_failure_at = ?3 WHERE id = ?1";
+
+const CLEAR_FAILURE =
+  "UPDATE page SET last_failure_reason = NULL, last_failure_at = NULL WHERE id = ?1 AND last_failure_at IS NOT NULL";
+
+export async function recordPageFailure(pageId: string, reason: string, at: string): Promise<void> {
+  await env.DB.prepare(RECORD_FAILURE).bind(pageId, reason, at).run();
+}
+
+export async function clearPageFailure(pageId: string): Promise<void> {
+  await env.DB.prepare(CLEAR_FAILURE).bind(pageId).run();
+}
+
+const FAILURE_REASON_BY_WATCH = `SELECT p.last_failure_reason AS reason
+FROM watch w JOIN page p ON p.entity_id = w.entity_id AND p.url = w.target_key
+WHERE w.id = ?1 LIMIT 1`;
+
+export async function readFailureReasonForWatch(watchId: string): Promise<string | null> {
+  const row = z
+    .object({ reason: z.string().nullable() })
+    .nullable()
+    .parse(await env.DB.prepare(FAILURE_REASON_BY_WATCH).bind(watchId).first());
+  return row?.reason ?? null;
+}
+
+const SILENT_RIVALS = `SELECT e.workspace_id AS workspace_id, COALESCE(p.last_failure_reason, 'none recorded') AS reason
+FROM entity e
+JOIN page p ON p.entity_id = e.id AND p.role = 'home'
+WHERE e.role = 'competitor' AND e.state = 'on' AND p.discovered_at < ?1
+  AND NOT EXISTS (SELECT 1 FROM snapshot s WHERE s.page_id = p.id AND s.fetched_at >= ?1)`;
+
+const silentRivalRows = z.array(z.object({ workspace_id: z.string(), reason: z.string() }));
+
+export async function readSilentRivals(since: string): Promise<{ workspaceId: string; reason: string }[]> {
+  const rows = await env.DB.prepare(SILENT_RIVALS).bind(since).all();
+  return silentRivalRows.parse(rows.results).map((row) => ({ workspaceId: row.workspace_id, reason: row.reason }));
 }
 
 export interface OwnSitePage {

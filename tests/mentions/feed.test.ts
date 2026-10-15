@@ -18,7 +18,7 @@ import {
 } from "../../app/lib/mention-feed";
 
 const NOW = new Date("2026-09-25T12:00:00.000Z");
-const POSSIBLY = "Possibly. We were not sure this mattered, so it sits here rather than in your brief.";
+const POSSIBLY = "Possibly. We weren't sure this mattered, so it sits here rather than in your brief.";
 const BANNED = /probability|confidence|mention_matters|mention_is_about_brand|\b0\.\d{2,}\b/i;
 
 function row(overrides: Partial<MentionReadRow> & Pick<MentionReadRow, "id" | "p">): MentionReadRow {
@@ -145,7 +145,7 @@ describe("mentions feed", () => {
     expect(html).toContain("Hacker News mentions");
     expect(html).toContain("Medium mentions");
     expect(html).toContain("found today");
-    expect(html).toContain(POSSIBLY);
+    expect(html).toContain(POSSIBLY.replaceAll("'", "&#x27;"));
     expect(html).toContain("Why we flagged this");
     expect(mentions.map((mention) => mention.whyFlagged?.reason ?? null)).toEqual([
       "A London flagship is a move worth knowing.",
@@ -210,7 +210,7 @@ describe("mentions feed", () => {
     expect(html.match(/data-testid="mention-row"/g)).toHaveLength(2);
     expect(html).toContain('data-treatment="shown"');
     expect(html).toContain('data-treatment="pending"');
-    expect(html).toContain(PENDING_LINE);
+    expect(html).toContain(PENDING_LINE.replaceAll("'", "&#x27;"));
     expect(html).toContain("Still being checked");
     expect(html).toContain("bg-bone");
     expect(html).not.toMatch(/data-treatment="pending"[^>]*bg-card/);

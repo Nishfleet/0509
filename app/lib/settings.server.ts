@@ -39,8 +39,8 @@ const EMAIL_INVALID = "Enter an email address, like you@company.com.";
 const EMAIL_FAILED = "We couldn't send the link. Try again in a minute.";
 const EMAIL_SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then change your email.";
 const EMAIL_LIMITED = "Too many tries. Wait a minute and try again.";
-const SLACK_INVALID = "That is not a Slack webhook address. It starts with https://hooks.slack.com/services/.";
-const SLACK_FAILED = "Slack did not accept a test message. Check the address and try again.";
+const SLACK_INVALID = "That isn't a Slack webhook address. It starts with https://hooks.slack.com/services/.";
+const SLACK_FAILED = "Slack didn't accept a test message. Check the address and try again.";
 const SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then delete your account.";
 const PASSKEY_SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then remove your passkey.";
 const PLAN_NOT_CANCELLED =
@@ -247,7 +247,7 @@ async function saveMail(user: SettingsUser, form: FormData): Promise<SettingsRes
   });
   if (!saved)
     return result({
-      deliveryError: `We could not change the emails for this address. Switching them back on works from your sign-in address, or write to ${SUPPORT_ADDRESS}.`,
+      deliveryError: `We couldn't change the emails for this address. Switching them back on works from your sign-in address, or write to ${SUPPORT_ADDRESS}.`,
     });
   return result({ saved: true });
 }

@@ -197,7 +197,7 @@ describe("/u/:token (0509#5761)", () => {
     ]) {
       const html = renderBoundary(error);
 
-      expect(html).toContain("Something went wrong");
+      expect(html).toContain("We hit a problem on our side");
       expect(html).not.toContain("This unsubscribe link is no longer active");
     }
   });

@@ -13,7 +13,7 @@ async function openRival(page: Page, baseURL: string | undefined, reason: string
     const entityId = seedCompetitor(db, id, seedWorkspace(db, id, userId));
     run(
       db,
-      "INSERT INTO page (id, entity_id, url, role, transport_reason, discovered_at) VALUES (?, ?, ?, 'home', ?, '2026-10-12T00:00:00.000Z')",
+      "INSERT INTO page (id, entity_id, url, role, last_failure_reason, discovered_at) VALUES (?, ?, ?, 'home', ?, '2026-10-12T00:00:00.000Z')",
       `page-nf-${id}`,
       entityId,
       `https://zephyr-${id}.example/`,

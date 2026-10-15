@@ -9,7 +9,7 @@ import {
   SITE_WAIT_ERROR,
 } from "../../../app/lib/competitor-site";
 import { saveCompetitorSite } from "../../../app/lib/competitor-site.server";
-import { markPageUnreachable, recordPageTransport } from "../../../app/lib/data/page.server";
+import { clearPageFailure, recordPageFailure } from "../../../app/lib/data/page.server";
 import { readSiteWatchSummary, retireCustomerSites } from "../../../app/lib/data/watch.server";
 
 const NOW = "2026-10-02T02:00:00Z";
@@ -92,26 +92,26 @@ describe("a rival whose site cannot be found", () => {
 
   it("says not found once a never-read homepage is marked unreachable, and not blocked", async () => {
     await homePage(null, null);
-    await markPageUnreachable("page-nf-home");
+    await recordPageFailure("page-nf-home", "unreachable", NOW);
     expect(await readSiteWatchSummary(WS, RIVAL)).toMatchObject({ notFound: true, unreadable: false });
   });
 
   it("does not call a site not found when it was read before and is only down now", async () => {
     await homePage("fetch", null);
-    await markPageUnreachable("page-nf-home");
+    await recordPageFailure("page-nf-home", "unreachable", NOW);
     expect(await readSiteWatchSummary(WS, RIVAL)).toMatchObject({ notFound: false });
   });
 
   it("says blocked, not not-found, when the homepage is also deferred", async () => {
     await homePage(null, null);
-    await markPageUnreachable("page-nf-home");
+    await recordPageFailure("page-nf-home", "unreachable", NOW);
     await env.DB.prepare("UPDATE page SET deferred_at = ?2 WHERE id = ?1").bind("page-nf-home", NOW).run();
     expect(await readSiteWatchSummary(WS, RIVAL)).toMatchObject({ notFound: false });
   });
 
   it("stays quiet about not found while an archive copy is standing in for the homepage", async () => {
     await homePage(null, null);
-    await markPageUnreachable("page-nf-home");
+    await recordPageFailure("page-nf-home", "unreachable", NOW);
     await env.DB.prepare(
       "INSERT INTO watch (id, entity_id, source_id, target_key, is_active, config_json) VALUES ('w-nf-alt', ?1, (SELECT id FROM source WHERE key = 'site.web'), 'https://rival.com/', 1, '{\"alternateHome\":1}')",
     )
@@ -122,8 +122,8 @@ describe("a rival whose site cannot be found", () => {
 
   it("stops saying not found as soon as a read succeeds", async () => {
     await homePage(null, null);
-    await markPageUnreachable("page-nf-home");
-    await recordPageTransport({ pageId: "page-nf-home", transport: "fetch", reason: null, testedAt: NOW });
+    await recordPageFailure("page-nf-home", "unreachable", NOW);
+    await clearPageFailure("page-nf-home");
     expect(await readSiteWatchSummary(WS, RIVAL)).toMatchObject({ notFound: false });
   });
 });

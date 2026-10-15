@@ -40,7 +40,7 @@ export function ChangeFeedback({
           value={choice.value}
           variant="tertiary"
           aria-pressed={shown === choice.value}
-          className={shown === choice.value ? "decoration-2" : undefined}
+          className={shown === choice.value ? "min-w-11 justify-center decoration-2" : "min-w-11 justify-center"}
         >
           {choice.label}
         </Button>
