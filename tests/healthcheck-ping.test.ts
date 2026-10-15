@@ -31,7 +31,7 @@ describe("pingCheck", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     send.mockResolvedValue(new Response("OK", { status: 200 }));
     await pingCheck("nightly", "ok");
-    expect(lines(warn)).toEqual([{ event: "healthcheck.ping_ok", slug: "nightly", signal: "ok", status: 200 }]);
+    expect(lines(warn)).toEqual([{ event: "healthcheck.ping_ok", check: "nightly", signal: "ok", status: 200 }]);
     warn.mockRestore();
   });
 
@@ -39,7 +39,7 @@ describe("pingCheck", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     send.mockResolvedValue(new Response("no", { status: 404 }));
     await pingCheck("nightly", "ok");
-    expect(lines(warn)).toEqual([{ event: "healthcheck.ping_failed", slug: "nightly", signal: "ok", status: 404 }]);
+    expect(lines(warn)).toEqual([{ event: "healthcheck.ping_failed", check: "nightly", signal: "ok", status: 404 }]);
     warn.mockRestore();
   });
 
@@ -48,7 +48,7 @@ describe("pingCheck", () => {
     send.mockRejectedValue(new TypeError("network"));
     await pingCheck("site-sweep", "fail");
     expect(lines(warn)).toEqual([
-      { event: "healthcheck.ping_failed", slug: "site-sweep", signal: "fail", kind: "TypeError" },
+      { event: "healthcheck.ping_failed", check: "site-sweep", signal: "fail", kind: "TypeError" },
     ]);
     warn.mockRestore();
   });
@@ -58,7 +58,7 @@ describe("pingCheck", () => {
     state.key = undefined;
     await pingCheck("nightly", "ok");
     expect(send).not.toHaveBeenCalled();
-    expect(lines(warn)).toEqual([{ event: "healthcheck.ping_skipped", slug: "nightly", signal: "ok" }]);
+    expect(lines(warn)).toEqual([{ event: "healthcheck.ping_skipped", check: "nightly", signal: "ok" }]);
     warn.mockRestore();
   });
 });

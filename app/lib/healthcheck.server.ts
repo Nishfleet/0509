@@ -14,23 +14,25 @@ export function checkUrl(key: string | null, slug: string, signal: CheckSignal):
   return `https://hc-ping.com/${key}/${path}?create=1`;
 }
 
-function pingEvent(event: string, slug: string, signal: CheckSignal, extra: Record<string, unknown>): void {
-  console.warn(JSON.stringify({ event, slug, signal, ...extra }));
+function pingEvent(event: string, fields: Record<string, number | string>): void {
+  console.warn(JSON.stringify({ event, ...fields }));
 }
 
-export async function pingCheck(slug: string, signal: CheckSignal): Promise<null> {
-  const url = checkUrl(blankEnvString(Reflect.get(env, "HEALTHCHECKS_PING_KEY")), slug, signal);
+export async function pingCheck(check: string, signal: CheckSignal): Promise<null> {
+  const url = checkUrl(blankEnvString(Reflect.get(env, "HEALTHCHECKS_PING_KEY")), check, signal);
   if (url === null) {
-    pingEvent("healthcheck.ping_skipped", slug, signal, {});
+    pingEvent("healthcheck.ping_skipped", { check, signal });
     return null;
   }
   try {
     const response = await fetchOutbound(url, { method: "POST", headers: {}, signal: AbortSignal.timeout(10_000) });
-    pingEvent(response.ok ? "healthcheck.ping_ok" : "healthcheck.ping_failed", slug, signal, {
+    pingEvent(response.ok ? "healthcheck.ping_ok" : "healthcheck.ping_failed", {
+      check,
+      signal,
       status: response.status,
     });
   } catch (error) {
-    pingEvent("healthcheck.ping_failed", slug, signal, { kind: error instanceof Error ? error.name : "unknown" });
+    pingEvent("healthcheck.ping_failed", { check, signal, kind: error instanceof Error ? error.name : "unknown" });
   }
   return null;
 }
