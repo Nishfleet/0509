@@ -72,7 +72,7 @@ export function SlackBriefSetting({ on }: { on: boolean }): ReactElement {
       on={on}
       intent="slack-brief"
       label="Weekly brief in Slack"
-      note="Off by default. On posts your Monday brief to the Slack channel too: your rank, why, the top three items and a link."
+      note="Off by default. On posts your weekly brief to the Slack channel too: your rank, why, the top three items and a link."
       testId="slack-brief-setting"
     />
   );
