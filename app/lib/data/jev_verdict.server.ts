@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
+import { PIPELINE_SIGNALS } from "../customer-ready";
 
 const SELECT_VERDICT = "SELECT p FROM jev_verdict WHERE question_id = ?1 AND input_hash = ?2";
 
@@ -25,7 +26,7 @@ const INSERT_VERDICT =
 const LINK_VERDICTS = `UPDATE jev_verdict SET signal_id = ?1
 WHERE workspace_id = ?2 AND signal_id IS NULL
   AND id IN (SELECT value FROM json_each(?3))
-  AND EXISTS (SELECT 1 FROM signal WHERE id = ?1)`;
+  AND EXISTS (SELECT 1 FROM ${PIPELINE_SIGNALS} WHERE id = ?1)`;
 
 const SELECT_VERDICT_IDS = `SELECT id FROM jev_verdict
 WHERE workspace_id = ?1

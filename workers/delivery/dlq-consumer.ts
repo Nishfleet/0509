@@ -4,6 +4,7 @@ import { insertDeliveryFailedAlert, type DeliveryFailedAlert } from "../../app/l
 import { markDigestFailed } from "../../app/lib/data/digest.server";
 import { dropDeadLetteredChange } from "../../app/lib/data/send_attempt.server";
 import { parseMessage } from "./consumer";
+import { PIPELINE_SIGNALS } from "../../app/lib/customer-ready";
 
 export const DELIVERY_FAILED_KIND = "delivery_failed";
 export const DLQ_ALERT_PREFIX = "dlq:";
@@ -248,7 +249,7 @@ function changeDeadLetterError(input: { message_id: string; signal_id: string; r
 
 async function deadLetteredChange(env: Env, messageId: string, signalId: string): Promise<string | null> {
   await dropDeadLetteredChange(env.DB, signalId);
-  const signal = await env.DB.prepare(`SELECT workspace_id FROM signal WHERE id = ?`)
+  const signal = await env.DB.prepare(`SELECT workspace_id FROM ${PIPELINE_SIGNALS} WHERE id = ?`)
     .bind(signalId)
     .first<{ workspace_id: string }>();
   if (!signal) {

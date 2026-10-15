@@ -3,11 +3,12 @@ import { z } from "zod";
 
 import { D6_QUESTION_ID } from "../standing-score";
 import { mentionsFromRows, type MentionReadRow, type MentionRowModel } from "../mention-feed";
+import { SHOWN_SIGNALS, alsoReportedCountSql } from "../customer-ready";
 
 const MENTION_FEED_SQL = `SELECT m.id, m.title, m.canonical_url AS url, m.published_at, m.observed_at, m.state,
-  (SELECT COUNT(*) FROM signal d WHERE d.duplicate_of = m.id AND d.is_tombstoned = 0) AS also_count,
+  ${alsoReportedCountSql("m")} AS also_count,
   s.platform, s.kind, v.p, v.reason, v.id AS verdict_id, v.decided_at AS verdict_decided_at
-FROM mention m
+FROM ${SHOWN_SIGNALS} m
 JOIN entity e ON e.id = m.entity_id AND e.workspace_id = m.workspace_id AND e.state = 'on'
 JOIN source s ON s.id = m.source_id
 LEFT JOIN jev_verdict v ON v.id = (

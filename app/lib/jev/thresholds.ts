@@ -18,6 +18,8 @@ export const ACT_AT = 0.9;
 
 export const REJECT_AT = 0.1;
 
+export const ABOUT_BRAND_KEEP_AT = 0.5;
+
 export const PRICING_ACT_AT = 0.6;
 
 export const BREAKAGE_ALERT_AT = 0.5;

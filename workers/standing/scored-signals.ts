@@ -5,6 +5,7 @@ import type { ScoredSignal } from "../../app/lib/biggest-move";
 import { isFeedKind } from "../../app/lib/developments";
 import { ACT_AT, REJECT_AT, changeActsSql } from "../../app/lib/jev/thresholds";
 import { D3_QUESTION_ID, D6_QUESTION_ID, reliabilitySchema, scoreBucketSchema } from "../../app/lib/standing-score";
+import { SHOWN_SIGNALS } from "../../app/lib/customer-ready";
 
 const SELECT_SCORED_SIGNALS_BY_ENTITY = `SELECT * FROM (SELECT s.id, s.entity_id, s.kind, s.title, s.summary, s.url, s.observed_at,
   src.platform, src.reliability,
@@ -16,7 +17,7 @@ const SELECT_SCORED_SIGNALS_BY_ENTITY = `SELECT * FROM (SELECT s.id, s.entity_id
     WHEN s.kind = 'ad' AND s.published_at >= ?3 AND s.published_at < ?4 THEN 'ad_new_creative'
     WHEN s.kind = 'hiring' THEN 'hiring_new_role'
   END AS bucket
-FROM signal s
+FROM ${SHOWN_SIGNALS} s
 JOIN source src ON src.id = s.source_id
 LEFT JOIN jev_verdict v ON v.id = (
   SELECT v2.id FROM jev_verdict v2

@@ -4,6 +4,7 @@ import { TRIAL_DAYS } from "../billing/plans";
 import { baselineLines } from "../rival-baseline";
 
 import { readRivalFacts } from "./rival_baseline.server";
+import { SENDABLE_SIGNALS } from "../customer-ready";
 
 const SELECT_RECAPS = `SELECT p.workspace_id,
        p.provider_subscription_id AS subscription_id,
@@ -11,14 +12,14 @@ const SELECT_RECAPS = `SELECT p.workspace_id,
        st.target_value,
        st.unsubscribe_token,
        COALESCE((SELECT w.timezone FROM workspace w WHERE w.id = p.workspace_id), 'UTC') AS timezone,
-       (SELECT count(*) FROM signal s
+       (SELECT count(*) FROM ${SENDABLE_SIGNALS} s
           JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.role = 'competitor' AND e.state = 'on'
          WHERE s.workspace_id = p.workspace_id AND s.kind = 'change' AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL
            AND s.observed_at >= strftime('%Y-%m-%dT%H:%M:%SZ', p.current_period_end, '-' || ?3 || ' days')) AS change_count,
        (SELECT json_object(
                  'rival', COALESCE(NULLIF(e.name, ''), e.domain),
                  'what', COALESCE(NULLIF(s.title, ''), NULLIF(s.summary, '')))
-          FROM signal s
+          FROM ${SENDABLE_SIGNALS} s
           JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.role = 'competitor' AND e.state = 'on'
          WHERE s.workspace_id = p.workspace_id AND s.kind = 'change' AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL
            AND COALESCE(NULLIF(s.title, ''), NULLIF(s.summary, '')) IS NOT NULL

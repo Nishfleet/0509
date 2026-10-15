@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import type { ScoredSignal } from "../biggest-move";
 import { isFeedKind, type DevelopmentItem } from "../developments";
+import { PIPELINE_SIGNALS, SHOWN_SIGNALS } from "../customer-ready";
 import { toIsoInstant } from "../iso-instant";
 import type { WeekEvidence } from "../home-standing";
 import { ACT_AT, REJECT_AT, changeActsSql } from "../jev/thresholds";
@@ -155,7 +156,7 @@ export async function insertContentSignals(rows: readonly NewContentSignal[]): P
   }
 }
 
-export const SELECT_HIRING_SIGNAL_STATES = `SELECT id, dedup_key, last_seen_at, payload_json FROM signal
+export const SELECT_HIRING_SIGNAL_STATES = `SELECT id, dedup_key, last_seen_at, payload_json FROM ${PIPELINE_SIGNALS}
 WHERE kind = 'hiring' AND watch_id = ?1 AND is_tombstoned = 0`;
 
 const hiringSignalStateRows = z.array(
@@ -205,10 +206,9 @@ const INSERT_MENTION = `INSERT INTO signal
 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'mention', ?7, ?8, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15, ?16, ?17, ?18, ?19)
 ON CONFLICT (source_id, dedup_key) DO NOTHING`;
 
-const SEEN_KEYS =
-  "SELECT dedup_key FROM signal WHERE source_id = ?1 AND dedup_key IN (SELECT value FROM json_each(?2))";
+const SEEN_KEYS = `SELECT dedup_key FROM ${PIPELINE_SIGNALS} WHERE source_id = ?1 AND dedup_key IN (SELECT value FROM json_each(?2))`;
 
-export const SEEN_URLS = `SELECT norm_url_hash FROM signal
+export const SEEN_URLS = `SELECT norm_url_hash FROM ${PIPELINE_SIGNALS}
 WHERE entity_id = ?1 AND kind = 'mention' AND is_tombstoned = 0
   AND norm_url_hash IN (SELECT value FROM json_each(?2))`;
 
@@ -276,7 +276,7 @@ export function insertMention(signal: MentionSignal): D1PreparedStatement {
 }
 
 const SELECT_DUPLICATE_CANDIDATE = `SELECT s.id, s.title, s.canonical_url, s.published_at, s.payload_json, src.plugin_key
-FROM signal s JOIN source src ON src.id = s.source_id
+FROM ${PIPELINE_SIGNALS} s JOIN source src ON src.id = s.source_id
 WHERE s.workspace_id = ?1 AND s.entity_id = ?2 AND s.kind = 'mention'
   AND s.duplicate_of IS NULL AND s.is_tombstoned = 0 AND s.observed_at >= ?3
   AND (s.title_hash = ?4 OR s.norm_url_hash = ?5)
@@ -329,7 +329,7 @@ export function markDuplicateOf(signalId: string, survivorId: string): D1Prepare
   return env.DB.prepare(SET_DUPLICATE_OF).bind(signalId, survivorId);
 }
 
-const SELECT_UNJUDGED_MENTIONS = `SELECT id, title, canonical_url, published_at, payload_json FROM signal
+const SELECT_UNJUDGED_MENTIONS = `SELECT id, title, canonical_url, published_at, payload_json FROM ${PIPELINE_SIGNALS}
 WHERE watch_id = ?1 AND kind = 'mention' AND state = 'unjudged'
 ORDER BY observed_at, id LIMIT ?2`;
 
@@ -376,7 +376,7 @@ const SELECT_UNJUDGED_CHANGES = `SELECT s.id AS id, s.workspace_id AS workspace_
   (SELECT p.id FROM watch w JOIN page p ON p.entity_id = w.entity_id AND p.url = w.target_key
    WHERE w.id = s.watch_id) AS page_id,
   e.role AS entity_role, e.name AS entity_name, e.domain AS entity_domain
-FROM signal s
+FROM ${PIPELINE_SIGNALS} s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.state = 'on'
 WHERE s.kind = 'change' AND s.is_tombstoned = 0
   AND (?1 IS NULL OR s.workspace_id = ?1)
@@ -455,8 +455,7 @@ export interface RecentSignal {
   observedAt: string;
 }
 
-const SELECT_RECENT_SIGNALS =
-  "SELECT kind, title, summary, url, aspect, observed_at FROM signal WHERE entity_id = ? AND observed_at >= ? AND is_tombstoned = 0 AND duplicate_of IS NULL ORDER BY observed_at DESC LIMIT 50";
+const SELECT_RECENT_SIGNALS = `SELECT kind, title, summary, url, aspect, observed_at FROM ${SHOWN_SIGNALS} WHERE entity_id = ? AND observed_at >= ? ORDER BY observed_at DESC LIMIT 50`;
 
 const recentSignalRow = z.object({
   kind: z.string(),
@@ -483,7 +482,7 @@ export async function readRecentSignals(entityId: string, since: string): Promis
 }
 
 const SELECT_RECENT_CHANGE_DIFFS = `SELECT aspect, observed_at, json_extract(CASE WHEN json_valid(payload_json) THEN payload_json ELSE '{}' END, '$.diffKey') AS diff_key
-FROM signal
+FROM ${PIPELINE_SIGNALS}
 WHERE entity_id = ? AND kind = 'change' AND observed_at >= ? AND is_tombstoned = 0 AND duplicate_of IS NULL
 ORDER BY observed_at DESC LIMIT ?`;
 
@@ -512,8 +511,8 @@ export async function readRecentChangeDiffs(
 }
 
 const SELECT_WEEK_EVIDENCE = `SELECT s.id, ${effectiveKindSql("src")} AS source_kind, s.title, s.summary, s.url, s.evidence_url, s.observed_at
-FROM signal s JOIN source src ON src.id = s.source_id
-WHERE s.workspace_id = ?1 AND s.entity_id = ?2 AND s.observed_at >= ?3 AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL
+FROM ${SHOWN_SIGNALS} s JOIN source src ON src.id = s.source_id
+WHERE s.workspace_id = ?1 AND s.entity_id = ?2 AND s.observed_at >= ?3
 ORDER BY s.observed_at DESC, s.id DESC LIMIT 100`;
 
 const weekEvidenceRow = z.object({
@@ -575,7 +574,7 @@ const SELECT_SITE_CHANGES = `SELECT s.id, s.entity_id, e.name AS entity_name, e.
   (SELECT ud.verdict FROM user_decision ud
    WHERE ud.signal_id = s.id AND ud.workspace_id = s.workspace_id AND ud.verdict IN ('change_feedback:useful', 'change_feedback:not_useful')
    ORDER BY ud.decided_at DESC LIMIT 1) AS feedback
-FROM signal s
+FROM ${SHOWN_SIGNALS} s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id
 LEFT JOIN snapshot a ON a.id = s.snapshot_id
 LEFT JOIN snapshot b ON b.id = json_extract(s.payload_json, '$.before.snapshotId')
@@ -606,7 +605,7 @@ export async function readSiteChanges(input: {
   return z.array(siteChangeRow).parse(results);
 }
 
-const SELECT_ENTITY_DEVELOPMENTS = `SELECT id, kind, title, summary, url, observed_at FROM signal
+const SELECT_ENTITY_DEVELOPMENTS = `SELECT id, kind, title, summary, url, observed_at FROM ${SHOWN_SIGNALS}
 WHERE workspace_id = ?1 AND entity_id = ?2 AND kind IN ('ad', 'change', 'mention', 'hiring', 'content')
   AND is_tombstoned = 0 AND duplicate_of IS NULL AND observed_at >= ?3 ORDER BY observed_at DESC, id DESC LIMIT ?4`;
 
@@ -647,8 +646,8 @@ export async function readEntityDevelopments(input: {
     );
 }
 
-const SELECT_SITE_CHANGE_PAYLOAD = `SELECT payload_json FROM signal
-WHERE id = ? AND workspace_id = ? AND kind = 'change' AND is_tombstoned = 0`;
+const SELECT_SITE_CHANGE_PAYLOAD = `SELECT payload_json FROM ${SHOWN_SIGNALS}
+WHERE id = ? AND workspace_id = ? AND kind = 'change'`;
 
 const readSiteChangePayloadRow = z.object({ payload_json: z.string() });
 
@@ -664,7 +663,7 @@ export interface SignalCount {
   count: number;
 }
 
-const COUNT_SIGNALS_BY_KIND = `SELECT kind, COUNT(*) AS n FROM signal WHERE workspace_id = ?1 AND entity_id = ?2 AND observed_at >= ?3 AND is_tombstoned = 0 AND duplicate_of IS NULL GROUP BY kind ORDER BY kind`;
+const COUNT_SIGNALS_BY_KIND = `SELECT kind, COUNT(*) AS n FROM ${SHOWN_SIGNALS} WHERE workspace_id = ?1 AND entity_id = ?2 AND observed_at >= ?3 GROUP BY kind ORDER BY kind`;
 
 const readSignalCountsRow = z.object({ kind: z.string(), n: z.number() });
 
@@ -690,7 +689,7 @@ const SELECT_SCORED_SIGNALS = `SELECT * FROM (SELECT s.id, s.kind, s.title, s.su
     WHEN s.kind = 'ad' AND s.published_at >= ?3 AND s.published_at < ?4 THEN 'ad_new_creative'
     WHEN s.kind = 'hiring' THEN 'hiring_new_role'
   END AS bucket
-FROM signal s
+FROM ${SHOWN_SIGNALS} s
 JOIN source src ON src.id = s.source_id
 LEFT JOIN jev_verdict v ON v.id = (
   SELECT v2.id FROM jev_verdict v2
@@ -700,7 +699,7 @@ LEFT JOIN jev_verdict v ON v.id = (
   LIMIT 1
 )
 WHERE s.workspace_id = ?1 AND s.entity_id = ?2
-  AND s.observed_at >= ?3 AND s.observed_at < ?4 AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL)
+  AND s.observed_at >= ?3 AND s.observed_at < ?4)
 WHERE bucket IS NOT NULL
 ORDER BY observed_at DESC, id DESC`;
 
@@ -747,7 +746,7 @@ export async function readScoredSignals(input: {
 }
 
 const SELECT_WORKSPACE_HIRING = `SELECT s.id, s.title, s.summary, s.url, s.published_at, s.observed_at, COALESCE(e.name, e.domain) AS brand
-FROM signal s
+FROM ${SHOWN_SIGNALS} s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.role = 'competitor' AND e.state = 'on'
 WHERE s.workspace_id = ?1 AND s.kind = 'hiring' AND s.is_tombstoned = 0 AND s.title IS NOT NULL AND s.url IS NOT NULL
   AND COALESCE(s.published_at, s.observed_at) >= ?2
@@ -773,7 +772,7 @@ export async function readWorkspaceHiring(workspaceId: string, since: string, li
 }
 
 const SELECT_WORKSPACE_CONTENT = `SELECT s.id, s.title, s.summary, s.url, s.published_at, s.observed_at, COALESCE(NULLIF(e.name, ''), e.domain) AS brand
-FROM signal s
+FROM ${SHOWN_SIGNALS} s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.role = 'competitor' AND e.state = 'on'
 WHERE s.workspace_id = ?1 AND s.kind = 'content' AND s.is_tombstoned = 0 AND s.title IS NOT NULL AND s.url IS NOT NULL
   AND COALESCE(s.published_at, s.observed_at) >= ?2
@@ -787,7 +786,7 @@ export async function readWorkspaceContent(workspaceId: string, since: string, l
 }
 
 const SELECT_CHANGES_WITHOUT_EXCERPT = `SELECT id, json_extract(payload_json, '$.diffKey') AS diff_key
-FROM signal
+FROM ${PIPELINE_SIGNALS}
 WHERE kind = 'change' AND json_valid(payload_json)
   AND json_extract(payload_json, '$.excerpt') IS NULL
   AND json_extract(payload_json, '$.diffKey') IS NOT NULL

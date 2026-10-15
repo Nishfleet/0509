@@ -3,22 +3,21 @@ import { z } from "zod";
 import { insertVerdict } from "../../app/lib/data/jev_verdict.server";
 import type { NoulVerdict } from "../../app/lib/jev/client.server";
 import { askNoul, JEV_BATCH_SIZE, JevUnavailableError } from "../../app/lib/jev/client.server";
-import { changeActsSql } from "../../app/lib/jev/thresholds";
 import type { D4Verdict } from "../../app/lib/read-this-first";
 import { pickReadThisFirst, READ_THIS_FIRST, readThisFirstState } from "../../app/lib/read-this-first";
-import { D3_QUESTION_ID, D6_QUESTION_ID } from "../../app/lib/standing-score";
 import { countUnjudgedInputs } from "../../app/lib/standing-score.server";
 import { required } from "../../app/lib/required";
+import { SENDABLE_SIGNALS } from "../../app/lib/customer-ready";
 
 const EFFECTIVE_AT = "COALESCE(datetime(s.published_at), datetime(s.observed_at))";
 
 const WEEK_ITEMS = `SELECT s.id AS signal_id, s.entity_id AS entity_id, s.kind AS kind, s.title AS title, s.summary AS summary,
        s.url AS url, s.aspect AS aspect, s.observed_at AS observed_at
-FROM signal s
+FROM ${SENDABLE_SIGNALS} s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
-WHERE s.workspace_id = ?1 AND ${EFFECTIVE_AT} >= datetime(?2) AND ${EFFECTIVE_AT} < datetime(?3) AND s.is_tombstoned = 0
+WHERE s.workspace_id = ?1 AND ${EFFECTIVE_AT} >= datetime(?2) AND ${EFFECTIVE_AT} < datetime(?3)
+  AND s.kind IN ('change', 'mention')
   AND NOT EXISTS (SELECT 1 FROM signal_delivery d WHERE d.signal_id = s.id)
-  AND EXISTS (SELECT 1 FROM jev_verdict v WHERE v.signal_id = s.id AND ((v.question_id = ?4 AND s.kind = 'change') OR (v.question_id = ?5 AND s.kind = 'mention')) AND ${changeActsSql("s", "v")})
 ORDER BY ${EFFECTIVE_AT} DESC, s.id ASC
 LIMIT 50`;
 
@@ -142,10 +141,7 @@ export async function readWeekPicks(
   input: { workspaceId: string; startsAt: string; closesAt: string },
   limit: number,
 ): Promise<string[]> {
-  const result = await db
-    .prepare(WEEK_ITEMS)
-    .bind(input.workspaceId, input.startsAt, input.closesAt, D3_QUESTION_ID, D6_QUESTION_ID)
-    .all();
+  const result = await db.prepare(WEEK_ITEMS).bind(input.workspaceId, input.startsAt, input.closesAt).all();
   return weekItemRows
     .parse(result.results)
     .slice(0, limit)
@@ -154,7 +150,7 @@ export async function readWeekPicks(
 
 export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<JudgedWeek> {
   const [weekItemResult, entityResult] = await db.batch([
-    db.prepare(WEEK_ITEMS).bind(input.workspaceId, input.startsAt, input.closesAt, D3_QUESTION_ID, D6_QUESTION_ID),
+    db.prepare(WEEK_ITEMS).bind(input.workspaceId, input.startsAt, input.closesAt),
     db.prepare(ON_ENTITIES).bind(input.workspaceId),
   ]);
   const items = weekItemRows.parse(required(weekItemResult, "read-this-first.items").results);

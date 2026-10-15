@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
+import { PIPELINE_SIGNALS } from "../customer-ready";
 
 export interface NewIncident {
   id: string;
@@ -38,7 +39,7 @@ const OPEN_BREAKAGE_BASELINES = `SELECT i.page_id AS page_id,
   (SELECT COALESCE(json_extract(s.payload_json, '$.before.textKey'),
                    json_extract(s.payload_json, '$.previousTextKey'))
    FROM alert a
-   JOIN signal s ON s.id = a.signal_id
+   JOIN ${PIPELINE_SIGNALS} s ON s.id = a.signal_id
    WHERE a.incident_id = i.id
    ORDER BY a.created_at ASC
    LIMIT 1) AS before_key

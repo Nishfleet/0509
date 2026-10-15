@@ -1,19 +1,20 @@
 import { z } from "zod";
 import { APP_LOCALE } from "../locale";
+import { SENDABLE_SIGNALS } from "../customer-ready";
 
 const SELECT_MONTHLIES = `SELECT w.id AS workspace_id,
        p.provider_subscription_id AS subscription_id,
        st.id AS target_id,
        st.target_value,
        st.unsubscribe_token,
-       (SELECT count(*) FROM signal s
+       (SELECT count(*) FROM ${SENDABLE_SIGNALS} s
           JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.role = 'competitor' AND e.state = 'on'
          WHERE s.workspace_id = w.id AND s.kind = 'change' AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL
            AND s.observed_at >= ?1 AND s.observed_at < ?2) AS change_count,
        (SELECT json_group_array(json_object('rival', rival, 'what', what))
           FROM (SELECT COALESCE(NULLIF(e.name, ''), e.domain) AS rival,
                        COALESCE(NULLIF(s.title, ''), NULLIF(s.summary, '')) AS what
-                  FROM signal s
+                  FROM ${SENDABLE_SIGNALS} s
                   JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.role = 'competitor' AND e.state = 'on'
                  WHERE s.workspace_id = w.id AND s.kind = 'change' AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL
                    AND COALESCE(NULLIF(s.title, ''), NULLIF(s.summary, '')) IS NOT NULL

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { feedFactsFrom, SELECT_FEED_SNAPSHOTS } from "../feeds/feed-facts.server";
 import { BASELINE_DAYS, type BaselineKind, type RivalFacts } from "../rival-baseline";
+import { SHOWN_SIGNALS } from "../customer-ready";
 
 const DAY_MS = 86_400_000;
 
@@ -10,7 +11,7 @@ const SELECT_KIND_FACTS = `SELECT entity_id, kind, title, at, n FROM (
          COALESCE(s.published_at, s.observed_at) AS at,
          COUNT(*) OVER (PARTITION BY s.entity_id, s.kind) AS n,
          ROW_NUMBER() OVER (PARTITION BY s.entity_id, s.kind ORDER BY COALESCE(s.published_at, s.observed_at) DESC, s.id) AS rn
-  FROM signal s
+  FROM ${SHOWN_SIGNALS} s
   JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.role = 'competitor' AND e.state = 'on'
   WHERE s.workspace_id = ?1 AND s.kind IN ('content', 'hiring', 'mention')
     AND COALESCE(s.published_at, s.observed_at) >= ?2 AND COALESCE(s.published_at, s.observed_at) < ?3
@@ -26,7 +27,7 @@ WHERE e.workspace_id = ?1 AND e.role = 'competitor' AND e.state = 'on'
 GROUP BY e.id`;
 
 const SELECT_CHANGE_FACTS = `SELECT s.entity_id AS entity_id, COUNT(*) AS changes, MAX(s.observed_at) AS last_change_at
-FROM signal s
+FROM ${SHOWN_SIGNALS} s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.role = 'competitor' AND e.state = 'on'
 WHERE s.workspace_id = ?1 AND s.kind = 'change' AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL AND s.observed_at < ?3
 GROUP BY s.entity_id`;
@@ -109,12 +110,14 @@ export async function readRivalFacts(db: D1Database, workspaceId: string, now: D
         changes: changes.get(row.entity_id)?.c1 ?? 0,
         lastChangeAt: changes.get(row.entity_id)?.c2 ?? null,
         roles: (roles.get(row.entity_id) ?? []).map((role) => role.c1),
-        kinds: (kinds.get(row.entity_id) ?? []).map((found): BaselineKind => ({
-          kind: found.c1,
-          count: found.c4,
-          latestTitle: found.c2,
-          latestAt: found.c3,
-        })),
+        kinds: (kinds.get(row.entity_id) ?? []).map(
+          (found): BaselineKind => ({
+            kind: found.c1,
+            count: found.c4,
+            latestTitle: found.c2,
+            latestAt: found.c3,
+          }),
+        ),
         feed: feeds.get(row.entity_id) ?? null,
       },
     ]),
