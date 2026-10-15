@@ -190,7 +190,7 @@ describe("handleCompetitorIntent intent=add", () => {
 
   it("asks to check the spelling when the address does not answer, and adds nothing", async () => {
     const workspaceId = await seedWorkspace();
-    const fetched = vi.fn(() => Promise.reject(new TypeError("fetch failed")));
+    const fetched = vi.fn((_input: RequestInfo | URL) => Promise.reject(new TypeError("fetch failed")));
     vi.stubGlobal("fetch", fetched);
 
     expect(await handleCompetitorIntent(workspaceId, addForm("gymshrk.com"))).toEqual({
