@@ -1,5 +1,9 @@
 import { redirect } from "react-router";
 
-export function loader() {
-  return redirect("/pricing");
+import type { Route } from "./+types/signup";
+
+import { pricingPathFor } from "../lib/signup-redirect";
+
+export function loader({ request }: Route.LoaderArgs) {
+  return redirect(pricingPathFor(request.url));
 }
