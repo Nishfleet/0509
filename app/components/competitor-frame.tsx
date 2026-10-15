@@ -7,7 +7,7 @@ import { PricingTimeline } from "./pricing-timeline";
 import { CompetitorRail, type CompetitorRailProps } from "./competitor-rail";
 import type { SiteChangeItemData } from "./site-change-item";
 import { SITE_SWEEP_UTC_LABEL } from "../lib/cadence";
-import type { BiggestMoveView } from "../lib/biggest-move";
+import { quietWithChanges, type BiggestMoveView } from "../lib/biggest-move";
 import type { DevelopmentItem } from "../lib/developments";
 import { pricingTimeline } from "../lib/pricing-timeline";
 
@@ -63,9 +63,9 @@ function SnapshotSection({ weekCount, pages, lastChecked }: SnapshotProps): Reac
   );
 }
 
-type BiggestMoveSectionProps = Pick<CompetitorFrameProps, "biggestMove" | "quiet" | "changes">;
+type BiggestMoveSectionProps = Pick<CompetitorFrameProps, "biggestMove" | "quiet" | "changes" | "weekCount">;
 
-function BiggestMoveSection({ biggestMove, quiet, changes }: BiggestMoveSectionProps): ReactElement {
+function BiggestMoveSection({ biggestMove, quiet, changes, weekCount }: BiggestMoveSectionProps): ReactElement {
   return (
     <section data-section="biggest-move" aria-labelledby="competitor-biggest-move" className="min-w-0">
       <h2 id="competitor-biggest-move" className={HEADING}>
@@ -73,7 +73,7 @@ function BiggestMoveSection({ biggestMove, quiet, changes }: BiggestMoveSectionP
       </h2>
       <BiggestMove
         move={biggestMove}
-        quiet={quiet}
+        quiet={quietWithChanges(quiet, weekCount)}
         change={changes.find((change) => change.id === biggestMove?.id) ?? null}
       />
     </section>
@@ -136,7 +136,7 @@ export function CompetitorFrame({
     <div data-slot="competitor-frame" className="grid min-w-0 gap-10 min-[1080px]:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="flex min-w-0 flex-col gap-10">
         <SnapshotSection weekCount={weekCount} pages={pages} lastChecked={lastChecked} />
-        <BiggestMoveSection biggestMove={biggestMove} quiet={quiet} changes={changes} />
+        <BiggestMoveSection biggestMove={biggestMove} quiet={quiet} changes={changes} weekCount={weekCount} />
         <PricingTimeline steps={pricingTimeline(changes)} />
         <DevelopmentsSection
           changes={changes}
