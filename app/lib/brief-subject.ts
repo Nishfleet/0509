@@ -13,9 +13,9 @@ function clip(value: string, max: number): string {
 }
 
 function detailOf(mark: Mark): string | null {
-  if (mark.before !== null && mark.after !== null) {
-    return `${clip(mark.before, SIDE_MAX)} → ${clip(mark.after, SIDE_MAX)}`;
-  }
+  const before = mark.before === null ? "" : clip(mark.before, SIDE_MAX);
+  const after = mark.after === null ? "" : clip(mark.after, SIDE_MAX);
+  if (before !== "" && after !== "") return `${before} → ${after}`;
   const title = clip(mark.title, DETAIL_MAX);
   return title === "" || /^https?:/i.test(title) ? null : title;
 }
@@ -24,8 +24,10 @@ function moveSubject(lead: Mark, total: number): string {
   const name = clip(lead.entity_name, 30);
   const detail = detailOf(lead);
   const more = total > 1 ? ` (+${(total - 1).toFixed(0)} more)` : "";
-  if (name === "")
-    return clip(detail === null ? `${total.toFixed(0)} competitor moves this week` : `${detail}${more}`, SUBJECT_MAX);
+  if (name === "") {
+    const count = `${total.toFixed(0)} ${total === 1 ? "competitor moves" : "competitors move"} this week`;
+    return clip(detail === null ? count : `${detail}${more}`, SUBJECT_MAX);
+  }
   const head = detail === null ? `${name} made a move` : `${name}: ${detail}`;
   return clip(`${head}${more}`, SUBJECT_MAX);
 }

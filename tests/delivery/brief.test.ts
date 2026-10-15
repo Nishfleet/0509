@@ -659,7 +659,26 @@ describe("inline styles survive the attribute they sit in", () => {
   });
 });
 
+describe("an unjudged week", () => {
+  it("says so and points to Alerts for what we have seen", () => {
+    const { html, text } = renderBrief(payload({ is_unjudged: true, read_this_first: [] }), CONTEXT);
+    expect(text).toContain("The changes we have seen so far are in Alerts.");
+    expect(text).toContain("Open Alerts: https://0509.io/app/alerts");
+    expect(html).toContain('href="https://0509.io/app/alerts">Open Alerts</a>');
+  });
+});
+
 describe("the subject line", () => {
+  it("falls back to the title when one side of the wording is empty", () => {
+    const lead = { ...payload().read_this_first[0], before: "", after: "2 tiers", title: "Pricing page changed" };
+    expect(renderBrief(payload({ read_this_first: [lead] }), CONTEXT).subject).toBe("Kindred: Pricing page changed");
+  });
+
+  it("says one competitor moves, not one competitors", () => {
+    const lead = { ...payload().read_this_first[0], entity_name: "", before: null, after: null, title: "" };
+    expect(renderBrief(payload({ read_this_first: [lead] }), CONTEXT).subject).toBe("1 competitor moves this week");
+  });
+
   it("names the top rival move with its before and after", () => {
     expect(renderBrief(payload(), CONTEXT).subject).toBe("Kindred: 3 tiers → 2 tiers (+1 more)");
   });
@@ -717,10 +736,16 @@ describe("the subject line", () => {
   });
 
   it("uses the top reason as the preheader and offers one link to the brief", () => {
-    const { html, text } = renderBrief(payload(), CONTEXT);
+    const { html, text } = renderBrief(payload(), { ...CONTEXT, open_url: "https://0509.io/app/brief" });
     expect(html).toContain("A competitor dropping a tier before launch week is the move.");
-    expect(html.match(/href="https:\/\/0509\.io\/app\/brief"/g)).toHaveLength(1);
+    expect(html).toContain('href="https://0509.io/app/brief">See every change in your brief</a>');
     expect(text).toContain("See every change in your brief: https://0509.io/app/brief");
+  });
+
+  it("offers no link to the brief to a copy that has no account to open it", () => {
+    const { html, text } = renderBrief(payload(), { ...CONTEXT, teammate: true });
+    expect(html).not.toContain("See every change in your brief");
+    expect(text).not.toContain("See every change in your brief");
   });
 });
 

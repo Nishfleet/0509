@@ -23,6 +23,8 @@ const COPY = {
   readThisFirst: "Read this first",
   nothingFirst: NOTHING_FIRST_LINE,
   unjudged: UNJUDGED_WEEK_LINE,
+  unjudgedNext: "The changes we have seen so far are in Alerts.",
+  unjudgedOpen: "Open Alerts",
   yourBrands: "Your tracked brands",
   ownSiteOk: "Your site looks fine.",
   ownSiteBroken: (count: number) => `Your site looks broken (${count === 1 ? "1 page" : `${n(count)} pages`}):`,
@@ -46,7 +48,7 @@ const COPY = {
     `We have not been able to reach ${source} yet, so we cannot say this was a quiet week.`,
 } as const;
 
-const BRIEF_LINK = "https://0509.io/app/brief";
+const ALERTS_LINK = "https://0509.io/app/alerts";
 
 function n(value: number): string {
   return String(value);
@@ -196,15 +198,19 @@ function renderMark(
   return { html, text };
 }
 
-function renderReadThisFirst(payload: BriefPayload, assetBaseUrl: string | null): { html: string; text: string } {
+function renderReadThisFirst(
+  payload: BriefPayload,
+  assetBaseUrl: string | null,
+  briefUrl: string | null,
+): { html: string; text: string } {
   const marks = payload.read_this_first.slice(0, 3);
 
   const heading = (text: string) => `<h2 class="brief-muted" style="${EYEBROW}">${escapeHtml(text)}</h2>`;
 
   if (payload.is_unjudged) {
     return {
-      html: `${heading(COPY.readThisFirst)}<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(COPY.unjudged)}</p>`,
-      text: `${COPY.readThisFirst}\n${COPY.unjudged}`,
+      html: `${heading(COPY.readThisFirst)}<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(COPY.unjudged)} ${escapeHtml(COPY.unjudgedNext)} <a class="brief-ink" href="${ALERTS_LINK}">${escapeHtml(COPY.unjudgedOpen)}</a></p>`,
+      text: `${COPY.readThisFirst}\n${COPY.unjudged} ${COPY.unjudgedNext}\n${COPY.unjudgedOpen}: ${ALERTS_LINK}`,
     };
   }
 
@@ -215,14 +221,22 @@ function renderReadThisFirst(payload: BriefPayload, assetBaseUrl: string | null)
     };
   }
 
+  const link =
+    briefUrl === null
+      ? ""
+      : `<p style="margin:4px 0 0;font-family:${FONT};font-size:16px;line-height:24px;"><a class="brief-ink" href="${escapeHtml(briefUrl)}">${escapeHtml(COPY.openBrief)}</a></p>`;
   const html = [
     heading(COPY.readThisFirst),
     ...marks.map((mark) => renderMark(mark, payload, assetBaseUrl).html),
-    `<p style="margin:4px 0 0;font-family:${FONT};font-size:16px;line-height:24px;"><a class="brief-ink" href="${BRIEF_LINK}">${escapeHtml(COPY.openBrief)}</a></p>`,
+    link,
   ].join("");
 
   const rendered = marks.map((mark) => renderMark(mark, payload, assetBaseUrl));
-  const text = [COPY.readThisFirst, ...rendered.map((r) => r.text), `${COPY.openBrief}: ${BRIEF_LINK}`].join("\n\n");
+  const text = [
+    COPY.readThisFirst,
+    ...rendered.map((r) => r.text),
+    ...(briefUrl === null ? [] : [`${COPY.openBrief}: ${briefUrl}`]),
+  ].join("\n\n");
 
   return { html, text };
 }
@@ -425,7 +439,7 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
   const whyLine = quiet && blindLine !== "" ? blindLine : payload.why_line;
   const headline = renderHeadline(payload, whyLine);
   const open = context.open_url == null ? null : safeUrl(context.open_url);
-  const marks = renderReadThisFirst(payload, context.asset_base_url);
+  const marks = renderReadThisFirst(payload, context.asset_base_url, open);
   const brands = renderBrands(payload);
   const ownSite = renderOwnSite(payload);
   const footer = renderFooter(payload, context.unsubscribe_url, context.teammate === true);

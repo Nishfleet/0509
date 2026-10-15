@@ -230,6 +230,10 @@ function buildMarks(picks: readonly string[], pickedById: ReadonlyMap<string, Pi
   });
 }
 
+function redactWording(value: string | null): string | null {
+  return value === null ? null : redactEmailShaped(value);
+}
+
 async function buildMarksWithWording(
   db: D1Database,
   input: ComposeInput,
@@ -239,7 +243,8 @@ async function buildMarksWithWording(
   const wording = await readMarkWording(db, { workspaceId: input.workspaceId, signalIds: picks });
   return buildMarks(picks, pickedById).map((mark) => {
     const change = wording.get(mark.signal_id);
-    return change === undefined ? mark : { ...mark, before: change.removed, after: change.added };
+    if (change === undefined) return mark;
+    return { ...mark, before: redactWording(change.removed), after: redactWording(change.added) };
   });
 }
 
