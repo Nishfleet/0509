@@ -1,5 +1,5 @@
-import { SUPPORT_ADDRESS } from "../../app/components/footer";
-import { escapeHtml } from "../../app/lib/html";
+import { SUPPORT_ADDRESS } from "../components/footer";
+import { escapeHtml } from "./html";
 import { FONT, postalLine } from "./email-shell";
 
 export const SETTINGS_LINK = "https://0509.io/app/settings";
@@ -9,7 +9,18 @@ export interface AlertFooterContext {
   settings_link: string;
 }
 
-const LINE = `margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;`;
+const FOOTER_LINE_STYLE = `margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;`;
+
+const REASON = "You get this because you watch competitors on Five to Nine.";
+const TEAMMATE_REASON = "You get this because you are a member of a Five to Nine workspace.";
+
+export function reasonLineText(teammate = false): string {
+  return teammate ? TEAMMATE_REASON : REASON;
+}
+
+export function reasonLineHtml(teammate = false): string {
+  return `<p class="brief-muted" style="${FOOTER_LINE_STYLE}">${escapeHtml(reasonLineText(teammate))}</p>`;
+}
 
 export function supportLineText(): string {
   return `Questions? Write to ${SUPPORT_ADDRESS}.`;
@@ -17,7 +28,7 @@ export function supportLineText(): string {
 
 export function supportLineHtml(): string {
   const address = escapeHtml(SUPPORT_ADDRESS);
-  return `<p class="brief-muted" style="${LINE}">Questions? Write to <a class="brief-muted" href="mailto:${address}">${address}</a>.</p>`;
+  return `<p class="brief-muted" style="${FOOTER_LINE_STYLE}">Questions? Write to <a class="brief-muted" href="mailto:${address}">${address}</a>.</p>`;
 }
 
 export function unsubscribeHeaders(unsubscribeUrl: string): Record<string, string> {
@@ -33,12 +44,14 @@ export function renderAlertFooter(ctx: AlertFooterContext): { html: string; text
   const postal = postalLine();
   return {
     html: [
-      `<p class="brief-muted" style="${LINE}">Choose which alerts you get in <a class="brief-muted" href="${settings}">Settings</a>.</p>`,
-      `<p class="brief-muted" style="${LINE}"><a class="brief-muted" href="${unsubscribe}">Unsubscribe</a></p>`,
+      reasonLineHtml(),
+      `<p class="brief-muted" style="${FOOTER_LINE_STYLE}">Choose which alerts you get in <a class="brief-muted" href="${settings}">Settings</a>.</p>`,
+      `<p class="brief-muted" style="${FOOTER_LINE_STYLE}"><a class="brief-muted" href="${unsubscribe}">Unsubscribe</a></p>`,
       supportLineHtml(),
       postal?.html ?? "",
     ].join(""),
     text: [
+      reasonLineText(),
       `Choose which alerts you get in Settings: ${ctx.settings_link}`,
       `Unsubscribe: ${ctx.unsubscribe_url}`,
       supportLineText(),

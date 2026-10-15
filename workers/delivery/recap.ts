@@ -4,7 +4,7 @@ import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server
 import { readTrialRecaps, recapKey, type TrialRecap } from "../../app/lib/data/recap.server";
 import { hasReminderAttempt } from "../../app/lib/data/trial_reminder.server";
 
-import { SETTINGS_LINK, unsubscribeHeaders } from "./alert-footer";
+import { SETTINGS_LINK, unsubscribeHeaders } from "../../app/lib/alert-footer";
 import { ensureUnsubscribeToken, unsubscribeUrlFor } from "./consumer";
 import { renderRecap } from "./recap-template";
 import { sendOnce } from "./send-once";

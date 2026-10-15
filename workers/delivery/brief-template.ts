@@ -6,8 +6,22 @@ import { escapeHtml } from "../../app/lib/html";
 import { countPhrase } from "../../app/lib/quiet-week";
 import { ledgerFooter } from "../../app/lib/work-ledger";
 import { NOTHING_FIRST_LINE, UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
-import { EYEBROW, FONT, MONO, emailDocument, linkParagraph, postalLine, siteName } from "./email-shell";
-import { SETTINGS_LINK, supportLineHtml, supportLineText } from "./alert-footer";
+import {
+  EYEBROW_STYLE,
+  FONT,
+  MONO,
+  emailDocument,
+  linkParagraph,
+  postalLine,
+  siteName,
+} from "../../app/lib/email-shell";
+import {
+  SETTINGS_LINK,
+  reasonLineHtml,
+  reasonLineText,
+  supportLineHtml,
+  supportLineText,
+} from "../../app/lib/alert-footer";
 import { APP_LOCALE } from "../../app/lib/locale";
 
 const COPY = {
@@ -129,7 +143,7 @@ function renderHeadline(payload: BriefPayload, whyLine: string): { html: string;
   const trend = rankTrendLine(payload);
 
   const html = [
-    `<p class="brief-muted" style="${EYEBROW}">${escapeHtml(period)}</p>`,
+    `<p class="brief-muted" style="${EYEBROW_STYLE}">${escapeHtml(period)}</p>`,
     `<p style="margin:0;font-family:${FONT};font-size:28px;line-height:34px;font-weight:800;letter-spacing:-0.02em;">`,
     `You&#39;re <span class="brief-marker" style="padding:0 4px;">#${n(headline_rank)}</span> of ${n(headline_total)} this week`,
     `</p>`,
@@ -213,7 +227,7 @@ function renderReadThisFirst(
 ): { html: string; text: string } {
   const marks = payload.read_this_first.slice(0, 3);
 
-  const heading = (text: string) => `<h2 class="brief-muted" style="${EYEBROW}">${escapeHtml(text)}</h2>`;
+  const heading = (text: string) => `<h2 class="brief-muted" style="${EYEBROW_STYLE}">${escapeHtml(text)}</h2>`;
 
   if (payload.is_unjudged) {
     return {
@@ -287,7 +301,7 @@ function renderBrandLine(line: BriefPayload["brands"][number], first: boolean): 
 }
 
 function renderBrands(payload: BriefPayload): { html: string; text: string } {
-  const heading = (text: string) => `<h2 class="brief-muted" style="${EYEBROW}">${escapeHtml(text)}</h2>`;
+  const heading = (text: string) => `<h2 class="brief-muted" style="${EYEBROW_STYLE}">${escapeHtml(text)}</h2>`;
 
   if (payload.brands.length === 0) {
     return {
@@ -349,7 +363,7 @@ function renderNewRival(payload: BriefPayload, teammate: boolean): { html: strin
   const detail = rival.reason === null ? "" : ` ${rival.reason}`;
   const link = teammate ? "" : ` <a class="brief-ink" href="${COMPETITORS_LINK}">${escapeHtml(COPY.reviewRival)}</a>`;
   const html = [
-    `<h2 class="brief-muted" style="${EYEBROW}">${escapeHtml(COPY.newRival)}</h2>`,
+    `<h2 class="brief-muted" style="${EYEBROW_STYLE}">${escapeHtml(COPY.newRival)}</h2>`,
     `<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(`${rival.title}${detail}`)}${link}</p>`,
   ].join("");
   const linkLine = teammate ? "" : `\n${COPY.reviewRival}: ${COMPETITORS_LINK}`;
@@ -379,6 +393,14 @@ function settingsLine(teammate: boolean): { html: string; text: string } {
   };
 }
 
+function unsubscribeParagraph(href: string | null): string {
+  const inner =
+    href === null
+      ? escapeHtml(COPY.noUnsubscribe)
+      : `<a class="brief-muted" href="${href}">${escapeHtml(COPY.unsubscribe)}</a>`;
+  return `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${inner}</p>`;
+}
+
 function renderFooter(
   payload: BriefPayload,
   unsubscribeUrl: string | null,
@@ -389,12 +411,10 @@ function renderFooter(
   const checked = countsSentence(payload.checked);
   const sourceCount = payload.checked.source_keys.length;
   const across = sourceCount === 0 ? "" : ` across ${COPY.sources(sourceCount)}`;
-
   const nextAt =
     payload.next_brief_at === null
       ? COPY.noNext
       : `${COPY.next}: ${formatDate(payload.next_brief_at, payload.timezone, true)}`;
-
   const degraded =
     payload.checked.degraded_source_keys.length > 0
       ? ` ${COPY.degraded(payload.checked.degraded_source_keys.length)}`
@@ -405,25 +425,22 @@ function renderFooter(
   const work = renderWork(payload);
   const html = [
     `<div class="brief-rule" style="padding:16px 0 0;">`,
-    `<p class="brief-muted" style="${EYEBROW}">${escapeHtml(COPY.footerTitle)}</p>`,
+    `<p class="brief-muted" style="${EYEBROW_STYLE}">${escapeHtml(COPY.footerTitle)}</p>`,
     work.html,
     `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(`${checked}${across}.${degraded}${sinceTail}`)}</p>`,
     `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(nextAt)}</p>`,
+    reasonLineHtml(teammate),
     settings.html,
-    `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">`,
-    unsubscribeHref === null
-      ? escapeHtml(COPY.noUnsubscribe)
-      : `<a class="brief-muted" href="${unsubscribeHref}">${escapeHtml(COPY.unsubscribe)}</a>`,
-    `</p>`,
+    unsubscribeParagraph(unsubscribeHref),
     supportLineHtml(),
     postal?.html ?? "",
     `</div>`,
   ].join("");
-
   const text = [
     ...work.text,
     `${COPY.footerTitle}: ${checked}${across}.${degraded}${sinceTail}`,
     nextAt,
+    reasonLineText(teammate),
     settings.text,
     unsubscribeUrl === null ? COPY.noUnsubscribe : `${COPY.unsubscribe}: ${unsubscribeUrl}`,
     supportLineText(),

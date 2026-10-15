@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Form } from "react-router";
 
 import type { SuppressionScope } from "../lib/mail-kind";
@@ -78,6 +79,14 @@ function ChangedYourMind({ teammate }: { teammate: boolean }) {
   );
 }
 
+function useFocusOnChange(key: string) {
+  const ref = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    ref.current?.focus();
+  }, [key]);
+  return ref;
+}
+
 export function UnsubscribeDone({
   scope,
   teammate,
@@ -87,9 +96,12 @@ export function UnsubscribeDone({
   teammate: boolean;
   busy: boolean;
 }) {
+  const heading = useFocusOnChange(scope);
   return (
     <main className="mx-auto max-w-xl px-4 py-16">
-      <h1 className={HEADING}>You're unsubscribed</h1>
+      <h1 ref={heading} tabIndex={-1} className={HEADING}>
+        You're unsubscribed
+      </h1>
       <p className={BODY}>
         We won't send {WHAT[scope]} to this address any more. {teammate ? "" : STILL[scope]}
         {teammate ? "" : " Sign-in links still arrive when you ask for one."}

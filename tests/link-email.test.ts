@@ -18,7 +18,7 @@ const mails = [
 describe.each(mails)("the %s email", (_name, mail) => {
   it("opens with the wordmark and a hidden preview line before the card", () => {
     expect(mail.html).toContain("max-height:0;overflow:hidden");
-    expect(mail.html.indexOf("max-height:0")).toBeLessThan(mail.html.indexOf(`class="ftn-card"`));
+    expect(mail.html.indexOf("max-height:0")).toBeLessThan(mail.html.indexOf(`class="brief-card"`));
     expect(mail.html).toContain(">09</span>");
   });
 

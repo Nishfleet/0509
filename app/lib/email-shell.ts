@@ -1,6 +1,6 @@
-import { escapeHtml } from "../../app/lib/html";
-import { normaliseSubject } from "../../app/lib/identity/normalise";
-import { preheaderHtml } from "../../app/lib/preheader";
+import { escapeHtml } from "./html";
+import { normaliseSubject } from "./identity/normalise";
+import { preheaderHtml } from "./preheader";
 
 const COLORS = {
   page: "#f4f1e8",
@@ -25,10 +25,10 @@ const DARK_COLORS = {
 
 export const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 export const MONO = "ui-monospace,'SF Mono',Menlo,Consolas,monospace";
-export const EYEBROW = `margin:0 0 8px;font-family:${MONO};font-size:12px;line-height:16px;letter-spacing:0.16em;text-transform:uppercase;font-weight:500;`;
+export const EYEBROW_STYLE = `margin:0 0 8px;font-family:${MONO};font-size:12px;line-height:16px;letter-spacing:0.16em;text-transform:uppercase;font-weight:500;`;
 
 export const HEADLINE = `margin:0;font-family:${FONT};font-size:24px;line-height:30px;font-weight:800;letter-spacing:-0.02em;`;
-export const BODY = `margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;`;
+export const BODY_STYLE = `margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;`;
 
 const BUTTON = `display:inline-block;padding:12px 20px;border-radius:6px;font-weight:700;text-decoration:none;`;
 
