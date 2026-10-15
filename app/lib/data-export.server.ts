@@ -74,17 +74,19 @@ async function readBriefRecipients(db: D1Database, workspaceId: string, fallback
   };
 }
 
+const OTHER_BRAND_SIGNAL_LIMIT = 1000;
+
 async function readOtherBrandExport(db: D1Database, workspaceId: string) {
   const [workspace, rows, signals] = await Promise.all([
     db.prepare(SELECT_WORKSPACE).bind(workspaceId).first(),
     readWorkspaceRows(db, workspaceId),
-    allRows(db, SELECT_SIGNALS, workspaceId, SIGNAL_LIMIT + 1),
+    allRows(db, SELECT_SIGNALS, workspaceId, OTHER_BRAND_SIGNAL_LIMIT + 1),
   ]);
   return {
     workspace,
     ...rows,
-    signals: signals.slice(0, SIGNAL_LIMIT),
-    signalsTruncated: signals.length > SIGNAL_LIMIT,
+    signals: signals.slice(0, OTHER_BRAND_SIGNAL_LIMIT),
+    signalsTruncated: signals.length > OTHER_BRAND_SIGNAL_LIMIT,
   };
 }
 

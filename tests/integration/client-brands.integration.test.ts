@@ -69,6 +69,22 @@ describe("client brands", () => {
     expect(await readBillingWorkspaceId(second ?? "")).toBe("ws-agency");
   });
 
+  it("nests a new brand under the Agency workspace even when the open client has its own plan row", async () => {
+    await addClientBrand(AGENCY, "Acme Foods");
+    const clientId = await readWorkspaceIdForOwner(AGENCY.id);
+    await env.DB.prepare(
+      `INSERT INTO plan (id, workspace_id, tier, status, current_period_end, updated_at)
+       VALUES ('plan-client', ?1, 'starter', 'active', ?2, '2026-10-01T00:00:00Z')`,
+    )
+      .bind(clientId, FUTURE)
+      .run();
+    expect(await addClientBrand(AGENCY, "Beta Bikes")).toEqual({ status: "added" });
+    const row = await env.DB.prepare("SELECT parent_workspace_id FROM workspace WHERE id = ?")
+      .bind(await readWorkspaceIdForOwner(AGENCY.id))
+      .first();
+    expect(row).toEqual({ parent_workspace_id: "ws-agency" });
+  });
+
   it("gives the client brand an owner email target for its brief", async () => {
     await addClientBrand(AGENCY, "Acme Foods");
     const activeId = await readWorkspaceIdForOwner(AGENCY.id);

@@ -341,6 +341,17 @@ export async function readBillingWorkspaceId(workspaceId: string): Promise<strin
   return row === null ? null : row.id;
 }
 
+const SELECT_ROOT_WORKSPACE = `SELECT COALESCE(
+  (SELECT p.id FROM workspace c JOIN workspace p ON p.id = c.parent_workspace_id AND p.owner_user_id = c.owner_user_id
+    WHERE c.id = ?1),
+  ?1
+) AS id FROM workspace WHERE id = ?1`;
+
+export async function readRootWorkspaceId(workspaceId: string): Promise<string | null> {
+  const row = workspaceIdRow.nullable().parse(await env.DB.prepare(SELECT_ROOT_WORKSPACE).bind(workspaceId).first());
+  return row === null ? null : row.id;
+}
+
 const SELECT_SCHEDULES_BY_OWNER = `SELECT id, timezone, brief_weekday, brief_hour, brief_paused_at FROM workspace WHERE owner_user_id = ?
 ORDER BY created_at`;
 

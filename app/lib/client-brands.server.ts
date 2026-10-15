@@ -7,7 +7,7 @@ import { setActiveWorkspace } from "./data/active_workspace.server";
 import { ensureOwnerEmailTarget } from "./data/send_target.server";
 import {
   insertWorkspace,
-  readBillingWorkspaceId,
+  readRootWorkspaceId,
   readOwnedWorkspaces,
   readWorkspaceIdForOwner,
   readWorkspaceTimezone,
@@ -30,7 +30,7 @@ export async function addClientBrand(user: { id: string; email: string }, name: 
   const parsed = brandNameForm.safeParse({ name });
   if (!parsed.success) return { status: "refused", message: BRAND_NAME_INVALID };
   const activeId = await readWorkspaceIdForOwner(user.id);
-  const parentId = activeId === null ? null : await readBillingWorkspaceId(activeId);
+  const parentId = activeId === null ? null : await readRootWorkspaceId(activeId);
   if (activeId === null || parentId === null) return { status: "refused", message: BRAND_FAILED };
   if ((await clientBrandCount(user.id)) >= MAX_CLIENT_BRANDS) return { status: "refused", message: BRAND_FULL };
   const id = `ws-${crypto.randomUUID()}`;
