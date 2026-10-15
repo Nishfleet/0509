@@ -1,3 +1,4 @@
+import { suppressBouncedAddress } from "../../app/lib/data/email_suppression.server";
 import { SUPPORT_ADDRESS } from "../../app/components/footer";
 
 export interface SendResult {
@@ -20,10 +21,20 @@ function errorText(end: unknown): string {
 
 export { errorText };
 
+const RECIPIENT_SUPPRESSED = "E_RECIPIENT_SUPPRESSED";
+
+function recipientAddresses(to: EmailMessageBuilder["to"]): string[] {
+  const list = Array.isArray(to) ? to : [to];
+  return list.map((one) => (typeof one === "string" ? one : one.email));
+}
+
 export async function sendMessage(email: SendEmail, message: EmailMessageBuilder): Promise<SendResult> {
   try {
     await email.send({ replyTo: SUPPORT_ADDRESS, ...message });
   } catch (end) {
+    if (end instanceof Error && "code" in end && end.code === RECIPIENT_SUPPRESSED) {
+      await Promise.all(recipientAddresses(message.to).map(suppressBouncedAddress));
+    }
     return { outcome: "failed", error: errorText(end) };
   }
   return { outcome: "sent", error: null };

@@ -32,6 +32,12 @@ ON CONFLICT(address) DO UPDATE SET
   stops_brief = 1,
   stops_alerts = 1`;
 
+const SUPPRESS_BOUNCED = `INSERT INTO email_suppression (address, reason, created_at)
+VALUES (lower(trim(?1)), 'bounced', ?2)
+ON CONFLICT(address) DO UPDATE SET
+  stops_brief = 1,
+  stops_alerts = 1`;
+
 const SELECT_SUPPRESSION = `SELECT address FROM email_suppression
  WHERE lower(trim(address)) = lower(trim(?1))
    AND CASE ?2 WHEN 'brief' THEN stops_brief WHEN 'alerts' THEN stops_alerts ELSE stops_brief AND stops_alerts END = 1
@@ -82,6 +88,10 @@ export async function isTeammateUnsubscribeToken(token: string): Promise<boolean
 
 export async function suppressWorkspaceTargets(workspaceId: string): Promise<void> {
   await env.DB.prepare(SUPPRESS_WORKSPACE_TARGETS).bind(new Date().toISOString(), workspaceId).run();
+}
+
+export async function suppressBouncedAddress(address: string): Promise<void> {
+  await env.DB.prepare(SUPPRESS_BOUNCED).bind(address, new Date().toISOString()).run();
 }
 
 const isAddressSuppressedRow = z.object({ address: z.string() });

@@ -2,7 +2,8 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { deliver, handleBatch, type DigestMessage } from "../../workers/delivery/consumer";
-import { sendOrThrow } from "../../workers/delivery/send";
+import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
+import { sendMessage, sendOrThrow } from "../../workers/delivery/send";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 
 interface Recorder {
@@ -805,5 +806,28 @@ describe("send lane (0509#3979)", () => {
     const good = recorder();
     await sendOrThrow(bindingFor(good), { to: TARGET, from: "hello@0509.io", subject: "Sign in", text: "link" });
     expect(good.sent).toHaveLength(1);
+  });
+
+  it("(bounce) a send the sender refuses as suppressed puts the address on the do-not-email list for every kind", async () => {
+    const rec = recorder();
+    rec.fail = Object.assign(new Error("recipient suppressed"), { code: "E_RECIPIENT_SUPPRESSED" });
+    const result = await sendMessage(bindingFor(rec), {
+      to: "Bounced@0509.io",
+      from: "hello@0509.io",
+      subject: "Brief",
+      text: "hi",
+    });
+    expect(result.outcome).toBe("failed");
+    expect(await isAddressSuppressed("bounced@0509.io", "brief")).toBe(true);
+    expect(await isAddressSuppressed("bounced@0509.io", "alerts")).toBe(true);
+    const row = await env.DB.prepare("SELECT reason FROM email_suppression WHERE address = 'bounced@0509.io'").first();
+    expect(row).toEqual({ reason: "bounced" });
+  });
+
+  it("(bounce) any other send failure leaves the address alone", async () => {
+    const rec = recorder();
+    rec.fail = Object.assign(new Error("rate limited"), { code: "E_RATE_LIMIT" });
+    await sendMessage(bindingFor(rec), { to: TARGET, from: "hello@0509.io", subject: "Brief", text: "hi" });
+    expect(await isAddressSuppressed(TARGET, "brief")).toBe(false);
   });
 });
