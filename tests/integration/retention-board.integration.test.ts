@@ -102,6 +102,8 @@ describe("retention board", () => {
       plan("x", "cancelled", 0, "2026-10-10T00:00:00Z"),
       sent("s-x", "x", "digest:x:1", "2026-10-13T08:00:00Z"),
     ]);
+    const created = await env.DB.prepare("SELECT fixture FROM workspace WHERE id = 'x'").first();
+    expect(created).toEqual({ fixture: 0 });
     await env.DB.exec("UPDATE workspace SET fixture = 1 WHERE id = 'x'");
     await env.DB.exec("UPDATE plan SET current_period_end = '2026-11-01T00:00:00Z' WHERE workspace_id = 'x'");
     expect(await readRetentionBoard(NOW)).toEqual(before);
