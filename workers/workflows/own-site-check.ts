@@ -10,7 +10,7 @@ import {
   planOwnSiteCheck,
   probeOwnSite,
 } from "../../app/lib/site/own-site.server";
-import { sweepFailure } from "../../app/lib/sweep-health";
+import { sweepHealth } from "../../app/lib/sweep-health";
 import { isNativeSchedule, startOwnSiteCheckHour } from "../workflow-crons";
 import { withStepCheckIn } from "../workflow-monitor";
 
@@ -33,6 +33,7 @@ export interface OwnSiteCheckOutcome {
   opened: number;
   closed: number;
   failed: number;
+  missed: string[];
 }
 
 interface Probed {
@@ -119,7 +120,7 @@ export class OwnSiteCheck extends WorkflowEntrypoint<Env> {
       {
         slug: "own-site-check",
         config: MONITOR,
-        unhealthy: (outcome) => sweepFailure({ failed: outcome.failed, attempted: outcome.pages }),
+        health: (outcome) => sweepHealth({ failed: outcome.failed, attempted: outcome.pages, missed: outcome.missed }),
       },
       () => this.runCheck(event, step),
     );
@@ -145,6 +146,7 @@ export class OwnSiteCheck extends WorkflowEntrypoint<Env> {
       opened,
       closed,
       failed: probed.filter(({ health }) => health === null).length,
+      missed: probed.filter(({ health }) => health === null).map(({ page }) => page.pageId),
     };
     console.log(JSON.stringify({ event: "site.own_check", ...summary }));
     return summary;

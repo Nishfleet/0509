@@ -77,7 +77,12 @@ export async function claimSendAttempt(
 
 export async function resolveSendAttempt(
   db: D1Database,
-  input: { attemptId: string; idempotencyKey: string; outcome: "sent" | "failed"; error: string | null },
+  input: {
+    attemptId: string;
+    idempotencyKey: string;
+    outcome: "sent" | "failed" | "unconfirmed";
+    error: string | null;
+  },
 ): Promise<void> {
   try {
     await db.prepare(RESOLVE_ATTEMPT).bind(input.outcome, input.error, input.attemptId).run();

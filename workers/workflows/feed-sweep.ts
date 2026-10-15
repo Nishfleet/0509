@@ -9,7 +9,7 @@ import { readFeed } from "../../app/lib/feeds/read-feed.server";
 import { capForNight, MAX_FEED_FINDS_PER_NIGHT, MAX_FEED_READS_PER_NIGHT } from "../../app/lib/feeds/nightly-cap";
 import type { FoundFeed } from "../../app/lib/feeds/sweep.server";
 import { findFeed, planFeedSweep } from "../../app/lib/feeds/sweep.server";
-import { sweepFailure } from "../../app/lib/sweep-health";
+import { sweepHealth } from "../../app/lib/sweep-health";
 import { isNativeSchedule } from "../workflow-crons";
 import { withStepCheckIn } from "../workflow-monitor";
 
@@ -30,6 +30,7 @@ export interface FeedSweepOutcome {
   newPosts: number;
   failed: number;
   attempted: number;
+  missed: string[];
 }
 
 const IDLE: FeedSweepOutcome = {
@@ -42,6 +43,7 @@ const IDLE: FeedSweepOutcome = {
   newPosts: 0,
   failed: 0,
   attempted: 0,
+  missed: [],
 };
 
 async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null> {
@@ -78,7 +80,8 @@ export class FeedSweep extends WorkflowEntrypoint<Env> {
       {
         slug: "feed-sweep",
         config: MONITOR,
-        unhealthy: (outcome) => sweepFailure({ failed: outcome.failed, attempted: outcome.attempted }),
+        health: (outcome) =>
+          sweepHealth({ failed: outcome.failed, attempted: outcome.attempted, missed: outcome.missed }),
       },
       () => this.runSweep(event, step),
     );
@@ -124,6 +127,10 @@ export class FeedSweep extends WorkflowEntrypoint<Env> {
       newPosts: reads.reduce((total, result) => total + (result?.newPosts ?? 0), 0),
       failed: found.filter((result) => result === null).length + reads.filter((result) => result === null).length,
       attempted: found.length + reads.length,
+      missed: [
+        ...entities.flatMap((entity, index) => (found[index] === null ? [entity.id] : [])),
+        ...targets.flatMap((target, index) => (reads[index] === null ? [target.watchId] : [])),
+      ],
     };
     console.log(JSON.stringify({ event: "feed.sweep", ...summary }));
     return summary;

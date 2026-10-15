@@ -1,22 +1,31 @@
 import { describe, expect, it } from "vitest";
 
-import { sweepFailure } from "../app/lib/sweep-health";
+import { sweepHealth } from "../app/lib/sweep-health";
 
-describe("sweepFailure", () => {
-  it("is healthy when nothing failed", () => {
-    expect(sweepFailure({ failed: 0, attempted: 40 })).toBeNull();
+describe("sweepHealth", () => {
+  it("is ok when nothing failed", () => {
+    expect(sweepHealth({ failed: 0, attempted: 40, missed: [] })).toEqual({ state: "ok" });
   });
 
-  it("is healthy when only a few of many failed", () => {
-    expect(sweepFailure({ failed: 3, attempted: 40 })).toBeNull();
+  it("is degraded, naming the pages it missed, when a few failed", () => {
+    expect(sweepHealth({ failed: 2, attempted: 40, missed: ["page-a", "page-b"] })).toEqual({
+      state: "degraded",
+      reason: "2 of 40 failed: page-a, page-b",
+    });
   });
 
-  it("is a failure when half or more failed", () => {
-    expect(sweepFailure({ failed: 20, attempted: 40 })).toBe("20 of 40 failed");
-    expect(sweepFailure({ failed: 40, attempted: 40 })).toBe("40 of 40 failed");
+  it("names at most ten missed pages and counts the rest", () => {
+    const missed = Array.from({ length: 13 }, (_, index) => `p${String(index)}`);
+    const health = sweepHealth({ failed: 13, attempted: 100, missed });
+    expect(health).toMatchObject({ state: "degraded" });
+    expect(health.state === "ok" ? "" : health.reason).toContain("p9 and 3 more");
   });
 
-  it("is a failure when the only page failed", () => {
-    expect(sweepFailure({ failed: 1, attempted: 1 })).toBe("1 of 1 failed");
+  it("is failed when half or more failed", () => {
+    expect(sweepHealth({ failed: 20, attempted: 40, missed: [] })).toEqual({
+      state: "failed",
+      reason: "20 of 40 failed",
+    });
+    expect(sweepHealth({ failed: 1, attempted: 1, missed: ["only"] })).toMatchObject({ state: "failed" });
   });
 });

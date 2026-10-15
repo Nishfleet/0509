@@ -118,6 +118,7 @@ describe("workflow Sentry cron monitors", () => {
       changed: 0,
       rechecked: 0,
       recorded: true,
+      missed: [],
     });
   });
 
@@ -128,7 +129,7 @@ describe("workflow Sentry cron monitors", () => {
       [{ monitorSlug: "mentions-sweep", status: "in_progress" }, MENTIONS_MONITOR],
       [{ checkInId: "check-in-1", monitorSlug: "mentions-sweep", status: "ok" }, MENTIONS_MONITOR],
     ]);
-    expect(outcome).toEqual({ targets: 0, swept: 0, failed: 0, stored: 0, unjudged: 0, skipped: 0 });
+    expect(outcome).toEqual({ targets: 0, swept: 0, failed: 0, missed: [], stored: 0, unjudged: 0, skipped: 0 });
   });
 
   it("checks own-site-check in on its hourly monitor and returns the zeroed check", async () => {
@@ -137,7 +138,7 @@ describe("workflow Sentry cron monitors", () => {
       [{ monitorSlug: "own-site-check", status: "in_progress" }, OWN_SITE_MONITOR],
       [{ checkInId: "check-in-1", monitorSlug: "own-site-check", status: "ok" }, OWN_SITE_MONITOR],
     ]);
-    expect(outcome).toEqual({ pages: 0, opened: 0, closed: 0, failed: 0 });
+    expect(outcome).toEqual({ pages: 0, opened: 0, closed: 0, failed: 0, missed: [] });
   });
 
   it("records an error check-in when a step fails and never sends ok", async () => {

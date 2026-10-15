@@ -18,14 +18,19 @@ function pingEvent(event: string, fields: Record<string, number | string>): void
   console.warn(JSON.stringify({ event, ...fields }));
 }
 
-export async function pingCheck(check: string, signal: CheckSignal): Promise<null> {
+export async function pingCheck(check: string, signal: CheckSignal, body?: string): Promise<null> {
   const url = checkUrl(blankEnvString(Reflect.get(env, "HEALTHCHECKS_PING_KEY")), check, signal);
   if (url === null) {
     pingEvent("healthcheck.ping_skipped", { check, signal });
     return null;
   }
   try {
-    const response = await fetchOutbound(url, { method: "POST", headers: {}, signal: AbortSignal.timeout(10_000) });
+    const response = await fetchOutbound(url, {
+      method: "POST",
+      headers: {},
+      body,
+      signal: AbortSignal.timeout(10_000),
+    });
     pingEvent(response.ok ? "healthcheck.ping_ok" : "healthcheck.ping_failed", {
       check,
       signal,

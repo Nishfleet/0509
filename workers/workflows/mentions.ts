@@ -9,7 +9,7 @@ import type { Streaks } from "../mentions/retry";
 import { deferred, retrySkipped, sustainedSkips, track, tripped } from "../mentions/retry";
 import type { MentionTarget, TargetOutcome } from "../mentions/sweep";
 import { planTargets, sweepTarget } from "../mentions/sweep";
-import { sweepFailure } from "../../app/lib/sweep-health";
+import { sweepHealth } from "../../app/lib/sweep-health";
 import { isNativeSchedule } from "../workflow-crons";
 import { withStepCheckIn } from "../workflow-monitor";
 
@@ -23,6 +23,7 @@ export interface MentionsOutcome {
   targets: number;
   swept: number;
   failed: number;
+  missed: string[];
   stored: number;
   unjudged: number;
   skipped: number;
@@ -36,7 +37,8 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
       {
         slug: "mentions-sweep",
         config: MONITOR,
-        unhealthy: (outcome) => sweepFailure({ failed: outcome.failed, attempted: outcome.targets }),
+        health: (outcome) =>
+          sweepHealth({ failed: outcome.failed, attempted: outcome.targets, missed: outcome.missed }),
       },
       () => this.runMentions(event, step),
     );
@@ -59,6 +61,7 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
       targets: targets.length,
       swept: done.length,
       failed: settled.length - done.length,
+      missed: [...new Set(targets.flatMap((target, index) => (settled[index] === null ? [target.pluginKey] : [])))],
       stored: done.reduce((sum, outcome) => sum + outcome.stored, 0),
       unjudged: done.reduce((sum, outcome) => sum + outcome.unjudged, 0),
       skipped: done.reduce((sum, outcome) => sum + outcome.skipped, 0),

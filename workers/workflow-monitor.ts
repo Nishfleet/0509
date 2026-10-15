@@ -1,7 +1,8 @@
 import type { WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
-import { captureCheckIn, captureException } from "@sentry/cloudflare";
+import { captureCheckIn, captureException, captureMessage } from "@sentry/cloudflare";
 
 import { pingCheck } from "../app/lib/healthcheck.server";
+import { RUN_OK, type RunHealth } from "../app/lib/sweep-health";
 
 type CronMonitorConfig = NonNullable<Parameters<typeof captureCheckIn>[1]>;
 
@@ -13,22 +14,30 @@ const CHECK_IN_STEP: WorkflowStepConfig = {
 interface Monitor<T> {
   slug: string;
   config: CronMonitorConfig;
-  unhealthy?: (result: T) => string | null;
+  health?: (result: T) => RunHealth;
 }
 
 function closeCheckIn(
   monitor: Pick<Monitor<never>, "slug" | "config">,
   checkInId: string,
-  status: "ok" | "error",
+  health: RunHealth,
 ): Promise<string> {
-  return pingCheck(monitor.slug, status === "ok" ? "ok" : "fail").then(() =>
-    captureCheckIn({ checkInId, monitorSlug: monitor.slug, status }, monitor.config),
+  const failed = health.state === "failed";
+  const body = health.state === "ok" ? undefined : health.reason;
+  return pingCheck(monitor.slug, failed ? "fail" : "ok", body).then(() =>
+    captureCheckIn({ checkInId, monitorSlug: monitor.slug, status: failed ? "error" : "ok" }, monitor.config),
   );
 }
 
-function reportUnhealthy(job: string, reason: string): void {
-  console.error(JSON.stringify({ event: "workflow.run_failed", job, reason }));
-  captureException(new Error(`${job} finished unhealthy: ${reason}`), { tags: { job } });
+function reportHealth(job: string, health: RunHealth): void {
+  if (health.state === "ok") return;
+  if (health.state === "degraded") {
+    console.warn(JSON.stringify({ event: "workflow.run_degraded", job, reason: health.reason }));
+    captureMessage(`${job} degraded: ${health.reason}`, { level: "warning", tags: { job } });
+    return;
+  }
+  console.error(JSON.stringify({ event: "workflow.run_failed", job, reason: health.reason }));
+  captureException(new Error(`${job} finished unhealthy: ${health.reason}`), { tags: { job } });
 }
 
 export async function withStepCheckIn<T>(step: WorkflowStep, monitor: Monitor<T>, work: () => Promise<T>): Promise<T> {
@@ -37,14 +46,16 @@ export async function withStepCheckIn<T>(step: WorkflowStep, monitor: Monitor<T>
   );
   try {
     const result = await work();
-    const reason = monitor.unhealthy?.(result) ?? null;
-    await step.do(reason === null ? "monitor ok" : "monitor error", CHECK_IN_STEP, () => {
-      if (reason !== null) reportUnhealthy(monitor.slug, reason);
-      return closeCheckIn(monitor, checkInId, reason === null ? "ok" : "error");
+    const health = monitor.health?.(result) ?? RUN_OK;
+    await step.do(health.state === "failed" ? "monitor error" : "monitor ok", CHECK_IN_STEP, () => {
+      reportHealth(monitor.slug, health);
+      return closeCheckIn(monitor, checkInId, health);
     });
     return result;
   } catch (error) {
-    await step.do("monitor error", CHECK_IN_STEP, () => closeCheckIn(monitor, checkInId, "error"));
+    await step.do("monitor error", CHECK_IN_STEP, () =>
+      closeCheckIn(monitor, checkInId, { state: "failed", reason: "threw" }),
+    );
     throw error;
   }
 }

@@ -255,6 +255,29 @@ describe("weekly brief also posts to Slack", () => {
     expect((await slackAttempt("d-sb-4"))?.status).toBe("sent");
   });
 
+  it("does not post again after a network error that may have reached Slack, and says so loudly", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await connect();
+    await turnOnSlackBrief();
+    await seedDigest("d-sb-7", "weekly");
+    const queued: unknown[] = [];
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("socket closed")));
+    await deliver(envWithQueue(queued), { digest_id: "d-sb-7" });
+
+    const first = batchFor(queued[0], 1);
+    await handleBatch(envWithQueue(), first.batch);
+
+    expect(first.acked).toEqual([0]);
+    expect(first.retryOptions).toEqual([]);
+    expect((await slackAttempt("d-sb-7"))?.status).toBe("unconfirmed");
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("delivery.slack_post_unconfirmed"));
+
+    const posts = stubSlack();
+    const again = batchFor(queued[0], 2);
+    await handleBatch(envWithQueue(), again.batch);
+    expect(posts.filter((post) => post.url === HOOK)).toHaveLength(0);
+  });
+
   it("gives up after three tries, says so loudly, and leaves the email digest sent", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     await connect();

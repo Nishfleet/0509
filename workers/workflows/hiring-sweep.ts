@@ -7,7 +7,7 @@ import type { BoardResult } from "../../app/lib/hiring/read-board.server";
 import { readBoard } from "../../app/lib/hiring/read-board.server";
 import type { FoundBoard } from "../../app/lib/hiring/sweep.server";
 import { findBoard, planHiringSweep } from "../../app/lib/hiring/sweep.server";
-import { sweepFailure } from "../../app/lib/sweep-health";
+import { sweepHealth } from "../../app/lib/sweep-health";
 import { isNativeSchedule } from "../workflow-crons";
 import { withStepCheckIn } from "../workflow-monitor";
 
@@ -27,6 +27,7 @@ export interface HiringSweepOutcome {
   newRoles: number;
   failed: number;
   attempted: number;
+  missed: string[];
 }
 
 async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null> {
@@ -52,7 +53,8 @@ export class HiringSweep extends WorkflowEntrypoint<Env> {
       {
         slug: "hiring-sweep",
         config: MONITOR,
-        unhealthy: (outcome) => sweepFailure({ failed: outcome.failed, attempted: outcome.attempted }),
+        health: (outcome) =>
+          sweepHealth({ failed: outcome.failed, attempted: outcome.attempted, missed: outcome.missed }),
       },
       () => this.runSweep(event, step),
     );
@@ -89,6 +91,10 @@ export class HiringSweep extends WorkflowEntrypoint<Env> {
       newRoles: reads.reduce((total, result) => total + (result?.newRoles ?? 0), 0),
       failed: found.filter((result) => result === null).length + reads.filter((result) => result === null).length,
       attempted: found.length + reads.length,
+      missed: [
+        ...plan.entities.flatMap((entity, index) => (found[index] === null ? [entity.id] : [])),
+        ...targets.flatMap((target, index) => (reads[index] === null ? [target.watchId] : [])),
+      ],
     };
     console.log(JSON.stringify({ event: "hiring.sweep", ...summary }));
     return summary;
