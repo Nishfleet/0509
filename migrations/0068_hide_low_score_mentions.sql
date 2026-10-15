@@ -9,13 +9,13 @@ INSERT OR IGNORE INTO mention_hidden_0067 (signal_id, state, about_brand_p)
 SELECT s.id, s.state,
   (SELECT v.p FROM jev_verdict v
    WHERE v.signal_id = s.id AND v.question_id = 'mention_is_about_brand'
-   ORDER BY v.decided_at DESC LIMIT 1)
+   ORDER BY v.decided_at DESC, v.id DESC LIMIT 1)
 FROM signal s
 WHERE s.kind = 'mention' AND s.is_tombstoned = 0 AND s.state = 'judged'
   AND (
     SELECT v.p FROM jev_verdict v
     WHERE v.signal_id = s.id AND v.question_id = 'mention_is_about_brand'
-    ORDER BY v.decided_at DESC LIMIT 1
+    ORDER BY v.decided_at DESC, v.id DESC LIMIT 1
   ) < 0.5;
 
 UPDATE signal SET is_tombstoned = 1
@@ -23,5 +23,5 @@ WHERE kind = 'mention' AND is_tombstoned = 0 AND state = 'judged'
   AND (
     SELECT v.p FROM jev_verdict v
     WHERE v.signal_id = signal.id AND v.question_id = 'mention_is_about_brand'
-    ORDER BY v.decided_at DESC LIMIT 1
+    ORDER BY v.decided_at DESC, v.id DESC LIMIT 1
   ) < 0.5;
