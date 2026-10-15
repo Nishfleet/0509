@@ -28,7 +28,6 @@ import { parseBriefPayload } from "../../app/lib/brief-payload";
 import { nextHour } from "../../app/lib/home-standing";
 import { neutralizeBareUrls, slackEscape } from "../../app/lib/slack-webhook";
 import { postToSlackOutcome } from "../../app/lib/slack.server";
-import { slackBriefText } from "../../app/lib/slack-brief";
 import {
   changeHeadline,
   markFromHunks,
@@ -380,35 +379,6 @@ async function deliverTeammate(env: Env, message: TeammateMessage): Promise<Deli
   return sendToTeammate(env, digest, mate);
 }
 
-async function postBriefToSlack(env: Env, digestId: string): Promise<void> {
-  const digest = await readDigest(env, digestId);
-  if (digest?.status !== "sent" || digest.kind !== "weekly") return;
-  const target = await readSlackTarget(env.DB, digest.workspace_id);
-  if (target === null) return;
-  const idempotencyKey = `brief-slack:${digest.id}:${target.id}`;
-  const claim = await claimSendAttempt(env.DB, {
-    idempotencyKey,
-    workspaceId: digest.workspace_id,
-    targetId: target.id,
-    digestId: digest.id,
-  });
-  if (!claim) return;
-  await sendAndResolve(env, {
-    claimId: claim.id,
-    idempotencyKey,
-    send: async () => {
-      const posted = await postToSlackOutcome(target.target_value, slackBriefText(briefOf(digest)));
-      if (posted === "revoked") {
-        await disconnectSlackTarget(env.DB, target.id);
-        return { outcome: "sent", error: "slack webhook revoked; target disconnected" };
-      }
-      return posted === "sent"
-        ? { outcome: "sent", error: null }
-        : { outcome: "failed", error: "slack did not accept the post" };
-    },
-  });
-}
-
 export async function deliver(env: Env, message: DigestMessage): Promise<DeliveryResult> {
   const result = await deliverToOwner(env, message);
   if (result.outcome === "sent" || result.outcome === "duplicate") {
@@ -416,13 +386,6 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
       const error = redactEmailShaped(errorText(cause));
       captureException(new Error(error), { tags: { lane: "teammates", digest_id: message.digest_id } });
       console.error(JSON.stringify({ event: "delivery.teammates_failed", error }));
-    });
-    await postBriefToSlack(env, message.digest_id).catch((cause: unknown) => {
-      const kind = cause instanceof Error ? cause.constructor.name : "unknown";
-      captureException(new Error(`slack brief lane failed: ${kind}`), {
-        tags: { lane: "slack_brief", digest_id: message.digest_id },
-      });
-      console.error(JSON.stringify({ event: "delivery.slack_brief_failed", kind, digest_id: message.digest_id }));
     });
   }
   return result;

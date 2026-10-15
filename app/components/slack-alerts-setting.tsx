@@ -16,7 +16,7 @@ function ReconnectNote({ show, emailAlerts }: { show: boolean; emailAlerts: bool
       Slack stopped accepting our posts, so we disconnected it. Paste a new webhook address to reconnect.{" "}
       {emailAlerts
         ? "Your alerts keep arriving by email."
-        : "Price and plan alerts are off, so they are not sent by email or to Slack. Switch them on above."}
+        : "Price and plan alerts are off, so nothing is sent by email or to Slack. Switch them on above."}
     </p>
   ) : null;
 }
@@ -65,8 +65,8 @@ export function SlackAlertsSetting({
       </h2>
       <p className="mt-2 max-w-prose leading-[1.55]">
         {connected
-          ? "Price and plan changes, and your weekly brief, also post to your Slack channel."
-          : "Post price and plan changes and your weekly brief to a Slack channel. Make an incoming webhook in Slack and paste its address here."}
+          ? "Price and plan changes also post to your Slack channel."
+          : "Post price and plan changes to a Slack channel. Make an incoming webhook in Slack and paste its address here."}
       </p>
       <ReconnectNote show={revoked && !connected} emailAlerts={emailAlerts} />
       <Form method="post" action="/app/settings" className="mt-4 flex flex-col gap-3">

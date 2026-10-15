@@ -63,9 +63,7 @@ test("a connected Slack shows Disconnect, and disconnecting brings the address f
   await page.goto("/app/settings");
 
   const section = page.getByTestId("slack-alerts-setting");
-  await expect(section).toContainText(
-    "Price and plan changes, and your weekly brief, also post to your Slack channel.",
-  );
+  await expect(section).toContainText("Price and plan changes also post to your Slack channel.");
   await expect(section.getByLabel("Slack webhook address")).toHaveCount(0);
   await expect(section.getByTestId("slack-reconnect")).toHaveCount(0);
 
@@ -115,7 +113,7 @@ test("a revoked Slack webhook with price and plan alerts off says nothing is bei
   await page.goto("/app/settings");
 
   await expect(page.getByTestId("slack-alerts-setting").getByTestId("slack-reconnect")).toHaveText(
-    "Slack stopped accepting our posts, so we disconnected it. Paste a new webhook address to reconnect. Price and plan alerts are off, so they are not sent by email or to Slack. Switch them on above.",
+    "Slack stopped accepting our posts, so we disconnected it. Paste a new webhook address to reconnect. Price and plan alerts are off, so nothing is sent by email or to Slack. Switch them on above.",
   );
   await scanPage(page, testInfo, quality, `/app/settings slack revoked alerts off ${testInfo.project.name}`, {
     screen: /^settings$/i,
