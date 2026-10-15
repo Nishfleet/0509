@@ -1,4 +1,4 @@
--- 0069_hide_low_score_mentions.sql — four judged mentions (about-brand p 0.14 to 0.20)
+-- 0068_hide_low_score_mentions.sql — four judged mentions (about-brand p 0.14 to 0.20)
 -- were stored visible at 2026-10-15 19:08Z, after 0067 ran. A mention shows only at
 -- p >= 0.5 (ABOUT_BRAND_KEEP_AT in app/lib/jev/thresholds.ts); this hides every judged
 -- mention still visible whose latest about-brand verdict is below that. Unjudged rows
