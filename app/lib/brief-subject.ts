@@ -7,23 +7,29 @@ const DETAIL_MAX = 46;
 const SIDE_MAX = 22;
 const PREHEADER_MAX = 110;
 
+const SEGMENTER = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
 function clip(value: string, max: number): string {
   const flat = value.replace(/\s+/g, " ").trim();
-  const chars = Array.from(flat);
-  return chars.length <= max
+  const graphemes = Array.from(SEGMENTER.segment(flat), (part) => part.segment);
+  return graphemes.length <= max
     ? flat
-    : `${chars
+    : `${graphemes
         .slice(0, max - 1)
         .join("")
         .trimEnd()}…`;
 }
 
+function isUrl(value: string): boolean {
+  return /^https?:/i.test(value);
+}
+
 function detailOf(mark: Mark): string | null {
   const before = mark.before === null ? "" : clip(mark.before, SIDE_MAX);
   const after = mark.after === null ? "" : clip(mark.after, SIDE_MAX);
-  if (before !== "" && after !== "") return `${before} → ${after}`;
+  if (before !== "" && after !== "" && !isUrl(before) && !isUrl(after)) return `${before} → ${after}`;
   const title = clip(mark.title, DETAIL_MAX);
-  return title === "" || /^https?:/i.test(title) ? null : title;
+  return title === "" || isUrl(title) ? null : title;
 }
 
 function moveSubject(lead: Mark, total: number): string {

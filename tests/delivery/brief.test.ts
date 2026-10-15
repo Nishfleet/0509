@@ -709,6 +709,20 @@ describe("the subject line", () => {
     expect(renderBrief(payload({ read_this_first: [lead] }), CONTEXT).subject).toBe("Kindred: Pricing page changed");
   });
 
+  it("never puts a bare link in the subject, and keeps a flag emoji whole", () => {
+    const lead = {
+      ...payload().read_this_first[0],
+      before: "https://a.example/x",
+      after: "2 tiers",
+      title: "Pricing changed",
+    };
+    expect(renderBrief(payload({ read_this_first: [lead] }), CONTEXT).subject).toBe("Kindred: Pricing changed");
+    const flags = { ...payload().read_this_first[0], before: "🇮🇳".repeat(30), after: "x" };
+    const { subject } = renderBrief(payload({ read_this_first: [flags] }), CONTEXT);
+    expect(subject.replace(/…$/, "").match(/🇮🇳/g)?.length).toBeGreaterThan(0);
+    expect(subject).not.toMatch(/🇮(?!🇳)/);
+  });
+
   it("says one competitor moves, not one competitors", () => {
     const lead = { ...payload().read_this_first[0], entity_name: "", before: null, after: null, title: "" };
     expect(renderBrief(payload({ read_this_first: [lead] }), CONTEXT).subject).toBe("1 competitor moves this week");
