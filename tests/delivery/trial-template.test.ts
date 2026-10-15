@@ -21,6 +21,10 @@ describe("trial ending email", () => {
     expect(html).toContain("Manage or cancel your plan");
   });
 
+  it("ends with a support line", () => {
+    expect(renderTrialEnding(CTX).text).toContain("write to support@0509.io.");
+  });
+
   it("dates the end in the workspace's own zone", () => {
     const { subject } = renderTrialEnding({ ...CTX, ends_at: "2026-10-15T22:30:00.000Z", timezone: "Asia/Kolkata" });
     expect(subject).toBe("Your Starter trial ends on Friday 16 October");

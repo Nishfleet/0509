@@ -227,7 +227,7 @@ describe("the day-4 recap under stress", () => {
   it("keeps non-Latin names whole", () => {
     const japanese = renderRecap({ ...RECAP, latest: { rival: JAPANESE, what: "価格ページを書き換えました" } });
     expect(japanese.subject).toBe(`3 competitor changes caught so far, latest: ${JAPANESE}`);
-    expect(japanese.text).toContain(`Most recent: ${JAPANESE}, 価格ページを書き換えました`);
+    expect(japanese.text).toContain(`Most recent: ${JAPANESE}: 価格ページを書き換えました`);
     const arabic = renderRecap({ ...RECAP, latest: { rival: ARABIC, what: "تغيير صفحة الأسعار" } });
     expect(arabic.text).toContain(`Most recent: ${ARABIC}, تغيير صفحة الأسعار`);
   });

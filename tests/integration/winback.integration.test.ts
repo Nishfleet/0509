@@ -99,7 +99,7 @@ describe("win-back email", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]?.to).toBe(TARGET);
     expect(sent[0]?.text).toContain("caught 2 changes");
-    expect(sent[0]?.text).toContain("Most recent: Acme, Homepage headline changed");
+    expect(sent[0]?.text).toContain("Most recent: Acme: Homepage headline changed");
     await expectSendRecord("winback", sent[0]?.subject);
   });
 

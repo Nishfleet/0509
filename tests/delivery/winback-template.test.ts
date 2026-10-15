@@ -15,7 +15,7 @@ describe("win-back email", () => {
     const { subject, text } = renderWinback(CTX);
     expect(subject).toBe("What your competitors did while you were away");
     expect(text).toContain("caught 3 changes");
-    expect(text).toContain("Most recent: Acme, Homepage headline changed");
+    expect(text).toContain("Most recent: Acme: Homepage headline changed");
     expect(text).toContain("https://0509.io/app/alerts");
   });
 
