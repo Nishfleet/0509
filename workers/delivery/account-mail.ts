@@ -1,7 +1,5 @@
-import { normalizeEmailAddress } from "../../app/lib/email-address";
 import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { openAccountAttempt, resolveSendAttempt, type AccountMailKind } from "../../app/lib/data/send_attempt.server";
-import { sha256Hex } from "../../app/lib/sha256";
 
 import { sendMessage, type SendResult } from "./send";
 
@@ -18,7 +16,6 @@ export async function sendAccountMail(
   const attempt = await openAccountAttempt(bindings.DB, {
     kind: input.kind,
     workspaceId: input.workspaceId,
-    recipientHash: await sha256Hex(normalizeEmailAddress(input.message.to)),
   }).catch((cause: unknown) => {
     console.error(
       JSON.stringify({
@@ -37,6 +34,13 @@ export async function sendAccountMail(
       error: result.error === null ? null : redactEmailShaped(result.error),
       subject: result.subject ?? null,
       providerId: result.provider_id ?? null,
+    }).catch((cause: unknown) => {
+      console.error(
+        JSON.stringify({
+          event: "delivery.send_record_unreadable",
+          error: redactEmailShaped(cause instanceof Error ? cause.message : "record failed").slice(0, 300),
+        }),
+      );
     });
   }
   return result;

@@ -36,7 +36,6 @@ CREATE TABLE send_attempt (
   digest_id TEXT,
   idempotency_key TEXT NOT NULL UNIQUE,
   kind TEXT NOT NULL DEFAULT 'unknown',
-  recipient_hash TEXT,
   subject TEXT,
   provider_id TEXT,
   status TEXT NOT NULL,

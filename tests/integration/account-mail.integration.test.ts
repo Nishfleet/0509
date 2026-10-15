@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { changeEmailEmail } from "../../app/lib/auth/change-email-email";
 import { magicLinkEmail } from "../../app/lib/auth/magic-link-email";
-import { sha256Hex } from "../../app/lib/sha256";
 import { sendAccountMail } from "../../workers/delivery/account-mail";
 
 import { PROVIDER_ID } from "./send-record";
@@ -30,7 +29,7 @@ describe("mail sent before an account has a workspace", () => {
   });
 
   it.each(Object.entries(rendered))(
-    "records %s with its subject, provider id and a hashed recipient",
+    "records %s with its subject, provider id and a no address",
     async (kind, message) => {
       const result = await sendAccountMail(
         { DB: env.DB, EMAIL: bindingFor(null) },
@@ -57,7 +56,6 @@ describe("mail sent before an account has a workspace", () => {
           provider_id: PROVIDER_ID,
           status: "sent",
           error: null,
-          recipient_hash: await sha256Hex("reader@0509.io"),
         }),
       ]);
       expect(JSON.stringify(rows).toLowerCase()).not.toContain("reader@0509.io");

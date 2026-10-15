@@ -24,7 +24,7 @@ const KEY_KINDS: readonly (readonly [string, string])[] = [
 export type AccountMailKind =
   "sign_in" | "change_email_approve" | "change_email_confirm" | "address_verify" | "teammate_invite";
 
-export function kindOfKey(idempotencyKey: string): string {
+function kindOfKey(idempotencyKey: string): string {
   return KEY_KINDS.find(([prefix]) => idempotencyKey.startsWith(prefix))?.[1] ?? "unknown";
 }
 
@@ -183,18 +183,18 @@ export async function claimChangeSlot(
 }
 
 const INSERT_ACCOUNT_ATTEMPT = `INSERT INTO send_attempt
-  (id, workspace_id, idempotency_key, kind, recipient_hash, status, attempted_at)
-VALUES (?, ?, ?, ?, ?, 'pending', ?)`;
+  (id, workspace_id, idempotency_key, kind, status, attempted_at)
+VALUES (?, ?, ?, ?, 'pending', ?)`;
 
 export async function openAccountAttempt(
   db: D1Database,
-  input: { kind: AccountMailKind; workspaceId: string | null; recipientHash: string },
+  input: { kind: AccountMailKind; workspaceId: string | null },
 ): Promise<{ id: string; idempotencyKey: string }> {
   const id = crypto.randomUUID();
   const idempotencyKey = `${input.kind}:${id}`;
   await db
     .prepare(INSERT_ACCOUNT_ATTEMPT)
-    .bind(id, input.workspaceId, idempotencyKey, input.kind, input.recipientHash, new Date().toISOString())
+    .bind(id, input.workspaceId, idempotencyKey, input.kind, new Date().toISOString())
     .run();
   return { id, idempotencyKey };
 }
