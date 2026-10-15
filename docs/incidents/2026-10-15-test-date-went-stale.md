@@ -30,8 +30,10 @@ The workers project (1652 tests) was run with `Date` pushed to 20 November 2027.
 
 ## Second case: a fixed date that became the past (2026-10-15)
 
-`tests/integration/recipient-cap.integration.test.ts` pinned 14 October 2026 and passed it to `takeRecipientSlot`, which stores a KV key with an expiry derived from that instant. On 15 October the expiry was in the past, KV refused it, and one vitest shard went red on `main`, so every open PR hit it. The fix moves the instant to 2036, as #7582 did for plan-line.
+`tests/integration/recipient-cap.integration.test.ts` pinned 14 October 2026 and passed it to `takeRecipientSlot`, which stores a KV key with an absolute expiry derived from that instant. On 15 October the expiry was in the past, KV refused it, and one vitest shard went red on `main`, so every open PR hit it.
 
 Why the 2027 clock sweep missed it: that sweep pushed `Date` forward, which only exposes tests that read the real clock. This test never read it; it passed a fixed date to a service (KV) whose own clock is real, and a fixed date goes stale by the calendar moving past it, which no forward shift of `Date` reveals.
 
-What stops a repeat: a lint rule on date literals is not possible, because `tests/` and `e2e/` hold about 1800 legitimate fixed instants that never reach an external clock. The guard is the rule from the first case (a time is a required argument) plus this one: a fixed instant that reaches KV, R2, queues or Workflows is placed in 2036 or later. Found by sweeping with the clock set to 2027 and again with the fixed dates read as "now"; only this file passed a fixed date to KV.
+The fix: the test's instant is the real clock plus a minute, and every other time in it is an offset from that. A far-future date (the 2036 fix of #7582) only moves the trap later, so it is not used here.
+
+What stops a repeat: a lint rule on date literals is not possible, because `tests/` and `e2e/` hold about 1800 legitimate fixed instants that never reach an external clock. In app code, `takeRecipientSlot` is the only caller that gives KV an absolute `expiration`; the rest use `expirationTtl`. A test that hands an instant to an absolute expiry derives it from the real clock.
