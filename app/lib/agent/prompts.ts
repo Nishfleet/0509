@@ -10,7 +10,7 @@ export const AGENT_PROMPTS: readonly AgentPrompt[] = [
   },
   {
     title: "Pricing check",
-    text: "Using Five to Nine, list any pricing changes my competitors made recently with the old and new line, then tell me whether my own pricing still holds up next to them.",
+    text: "Using Five to Nine, list any pricing or plan changes my competitors made recently with the old and new line, and tell me which one I should look at first.",
   },
   {
     title: "Where I stand",

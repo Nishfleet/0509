@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { Link } from "react-router";
 
 export function CompetitorCount({ line, full }: { line: string; full: boolean }): ReactElement {
   return (
@@ -7,9 +8,9 @@ export function CompetitorCount({ line, full }: { line: string; full: boolean })
       {full ? (
         <>
           {" "}
-          <a className="underline decoration-1 underline-offset-4" href="/pricing">
+          <Link className="underline decoration-1 underline-offset-4" to="/pricing">
             See plans
-          </a>
+          </Link>
         </>
       ) : null}
     </p>
