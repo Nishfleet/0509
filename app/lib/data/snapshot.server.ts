@@ -13,6 +13,9 @@ SELECT ?1, ?2, ?3, ?4, ?5, ?6, 1
 WHERE EXISTS (SELECT 1 FROM watch WHERE id = ?2) AND EXISTS (SELECT 1 FROM page WHERE id = ?3)
 ON CONFLICT (id) DO NOTHING`;
 
+const SEEN_HASH_SINCE = `SELECT 1 AS present FROM snapshot
+WHERE watch_id = ? AND page_id = ? AND payload_hash = ? AND id <> ? AND fetched_at >= ? LIMIT 1`;
+
 const SNAPSHOT_EXISTS = `SELECT 1 AS present FROM snapshot WHERE id = ?`;
 
 const snapshotExistsRow = z.object({ present: z.number() });
@@ -33,6 +36,18 @@ export async function latestSiteSnapshot(
   return siteSnapshotRow
     .nullable()
     .parse(await env.DB.prepare(LATEST_SITE_SNAPSHOT).bind(watchId, pageId, before).first());
+}
+
+export async function hashSeenSince(input: {
+  watchId: string;
+  pageId: string;
+  hash: string;
+  exceptId: string;
+  since: string;
+}): Promise<boolean> {
+  const { watchId, pageId, hash, exceptId, since } = input;
+  const row = await env.DB.prepare(SEEN_HASH_SINCE).bind(watchId, pageId, hash, exceptId, since).first();
+  return snapshotExistsRow.nullable().parse(row) !== null;
 }
 
 export async function insertSnapshot(row: {

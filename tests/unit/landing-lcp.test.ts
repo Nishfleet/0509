@@ -14,7 +14,7 @@ vi.mock("../../app/lib/auth.server", () => ({
 import { FACES_SCRIPT } from "../../app/lib/faces-script";
 import { contentSecurityPolicy } from "../../app/lib/security-headers";
 import { Layout } from "../../app/root";
-import Landing from "../../app/routes/landing";
+import Landing, { meta as landingMeta } from "../../app/routes/landing";
 
 const REPO_ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 
@@ -67,9 +67,14 @@ describe("landing LCP critical path", () => {
     expect(html).toContain(`<script>${FACES_SCRIPT}</script>`);
   });
 
-  it("shares one faces script with the static home", () => {
-    const home = readFileSync(join(REPO_ROOT, "public/index.html"), "utf8");
-    expect(home).toContain(`<script>${FACES_SCRIPT}</script>`);
+  it("serves the homepage indexable with the canonical root URL", () => {
+    const html = renderDocument("routes/landing");
+    expect(html).not.toContain("noindex");
+    expect(landingMeta({ loaderData: undefined } as unknown as Parameters<typeof landingMeta>[0])).toContainEqual({
+      tagName: "link",
+      rel: "canonical",
+      href: "https://0509.io/",
+    });
   });
 
   it("pins the shared faces script by hash in the document CSP", () => {
@@ -106,40 +111,5 @@ describe("landing LCP critical path", () => {
     const shipped = readFileSync(join(REPO_ROOT, "public/fonts/bricolage-hero.woff2"));
     expect(shipped.subarray(0, 4).toString("ascii")).toBe("wOF2");
     expect(shipped.length).toBeLessThan(12_000);
-  });
-});
-
-describe("static home LCP critical path", () => {
-  const html = readFileSync(join(REPO_ROOT, "public/index.html"), "utf8");
-  const faces = readFileSync(join(REPO_ROOT, "public/home-faces.css"), "utf8");
-
-  it("paints the headline before the brand faces are requested", () => {
-    expect(html).toContain("Quietly, we");
-    expect(html).not.toContain("@font-face");
-    expect(html).not.toContain("/fonts/");
-    expect(html).not.toContain("<link");
-    expect(html).not.toContain("<script src");
-    const scriptAt = html.indexOf("<script>");
-    expect(scriptAt).toBeGreaterThan(html.lastIndexOf("</main>"));
-    const script = html.slice(scriptAt, html.indexOf("</script>", scriptAt));
-    expect(script).toContain('addEventListener("load"');
-    expect(script).toContain('faces.href = "/home-faces.css"');
-
-    expect(script).toContain("first-contentful-paint");
-    expect(faces).toContain("/fonts/bricolage-hero.woff2");
-    expect(faces).toContain("/fonts/instrument-sans-latin.woff2");
-    expect(faces).toContain("/fonts/ibm-plex-mono-latin-400.woff2");
-    expect(faces).toContain("font-display: swap");
-    for (const family of ["Bricolage Grotesque", "Instrument Sans", "IBM Plex Mono"]) {
-      expect(html).toContain(`"${family}"`);
-      expect(faces).toContain(`font-family: "${family}"`);
-    }
-    expect(html).not.toContain("data:font");
-    expect(faces).not.toContain("data:font");
-    expect(html).not.toContain("bricolage-grotesque-latin");
-    expect(faces).not.toContain("bricolage-grotesque-latin");
-    expect(html).not.toContain("/*");
-    expect(html).not.toContain("ui-sans-serif, system-ui, sans-serif");
-    expect(Buffer.byteLength(html)).toBeLessThan(8_000);
   });
 });

@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { type DeliveryFailureItem, type SignalAlertItem, type TakedownNoteItem } from "../components/alert-row";
 import { type ContentAlertItem } from "../components/content-row";
 import { type HiringAlertItem } from "../components/hiring-row";
-import { type AlertChipKey, countAlertChips, itemInChip } from "./alert-chips";
+import { countAlertChips, type AlertChipKey } from "./alert-chips";
 import { groupByDay } from "./alert-day";
 import {
   acknowledgeIncidentAlert,
@@ -26,6 +26,8 @@ import { daysBefore, readSiteChangeViews } from "./site-changes.server";
 import { APP_LOCALE } from "./locale";
 
 const HIRING_LIMIT = 100;
+
+const CHANGES_LIMIT = 30;
 
 const CONTENT_LIMIT = 100;
 
@@ -53,7 +55,7 @@ async function readWorkspaceAlertInputs(workspaceId: string, now: Date) {
     readWorkspaceHiring(workspaceId, daysBefore(now, 30), HIRING_LIMIT),
     readWorkspaceContent(workspaceId, daysBefore(now, 30), CONTENT_LIMIT),
     readWorkspaceMentionSources(workspaceId),
-    readSiteChangeViews({ workspaceId, entityId: null, since: daysBefore(now, 30), limit: 30 }),
+    readSiteChangeViews({ workspaceId, entityId: null, since: daysBefore(now, 30), limit: CHANGES_LIMIT }),
     readWorkspaceTimezone(workspaceId),
     readOpenIncidentBlock(env.DB, workspaceId),
   ]);
@@ -209,23 +211,25 @@ function buildPastIncidents(inputs: AlertInputs, now: Date) {
     }));
 }
 
-export async function loadAlertsPage(workspaceId: string | null, chip: AlertChipKey) {
+function cappedChipKeys(inputs: AlertInputs): AlertChipKey[] {
+  return [
+    ...(inputs.hiring.length === HIRING_LIMIT ? (["hiring"] as const) : []),
+    ...(inputs.changes.length === CHANGES_LIMIT ? (["site-changes"] as const) : []),
+  ];
+}
+
+export async function loadAlertsPage(workspaceId: string | null) {
   const now = new Date();
   const inputs = await readAlertInputs(workspaceId, now);
   const items = buildAlertItems(inputs, now);
   return {
     incidents: buildPastIncidents(inputs, now),
-    chip,
-    hiringCapped: inputs.hiring.length === HIRING_LIMIT,
+    cappedChips: cappedChipKeys(inputs),
     chipCounts: countAlertChips(
       items.map((item) => item.kind),
       inputs.incidents.length,
     ),
-    groups: groupByDay(
-      items.filter((item) => itemInChip(item.kind, chip)),
-      now,
-      inputs.timeZone,
-    ),
+    groups: groupByDay(items, now, inputs.timeZone),
     sources: inputs.sources,
     now: now.getTime(),
     openIncident: buildOpenIncident(inputs, now),

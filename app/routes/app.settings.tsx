@@ -1,5 +1,6 @@
 import type { Route } from "./+types/app.settings";
 
+import { ClientBrands } from "../components/client-brands";
 import { DeleteAccount, ExportData } from "../components/account-settings";
 import { DismissedBrands } from "../components/dismissed-brands";
 import { Footer } from "../components/footer";
@@ -8,6 +9,7 @@ import { SlackAlertsSetting } from "../components/slack-alerts-setting";
 import { PlanSection } from "../components/plan-settings";
 import { PageHeading } from "../components/page-heading";
 import { AccountSection, AgentsSection, BriefSection, SettingsJumps } from "../components/settings-sections";
+import { readBrandPanel } from "../lib/client-brands.server";
 import { sessionContext } from "../lib/require-session.server";
 import { readDeviceList } from "../lib/devices.server";
 import { readPasskeys } from "../lib/passkeys.server";
@@ -19,12 +21,13 @@ export function meta() {
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const session = context.get(sessionContext);
-  const [settings, passkeys, devices] = await Promise.all([
+  const [settings, passkeys, devices, brandPanel] = await Promise.all([
     readSettings(session.user),
     readPasskeys(request),
     readDeviceList(session.user.id, session.session.id, new Date()),
+    readBrandPanel(session.user.id),
   ]);
-  return { ...settings, passkeys, devices };
+  return { ...settings, passkeys, devices, brandPanel };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -55,6 +58,13 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
             {loaderData.slackConnected ? <SlackBriefSetting on={loaderData.slackBrief} /> : null}
           </div>
           <DismissedBrands dismissed={loaderData.dismissed} />
+          {loaderData.brandPanel.canAdd || loaderData.brandPanel.full || loaderData.brandPanel.brands.length > 1 ? (
+            <ClientBrands
+              brands={loaderData.brandPanel.brands}
+              canAdd={loaderData.brandPanel.canAdd}
+              full={loaderData.brandPanel.full}
+            />
+          ) : null}
           <AgentsSection />
           <PlanSection plan={loaderData.plan} countLine={loaderData.countLine} returning={loaderData.returning} />
           <AccountSection
@@ -70,7 +80,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           <DeleteAccount email={loaderData.email} error={actionData?.deleteError ?? null} />
         </div>
       </div>
-      <Footer walled />
+      <Footer />
     </main>
   );
 }

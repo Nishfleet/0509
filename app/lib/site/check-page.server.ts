@@ -84,12 +84,16 @@ interface CheckPageInput {
 
 async function storeNewSnapshot(
   input: CheckPageInput,
-  extracted: { text: string; hash: string },
+  extracted: { text: string; hash: string; lang: string | null },
   stamp: { id: string; fetchedAt: string },
 ): Promise<{ textKey: string; screenshotKey: string | null } | null> {
   const { id, fetchedAt } = stamp;
   const textKey = `snapshot/site/${input.watchId}/${id}.txt`;
-  await env.SNAPSHOTS.put(textKey, extracted.text);
+  await env.SNAPSHOTS.put(
+    textKey,
+    extracted.text,
+    extracted.lang === null ? undefined : { customMetadata: { lang: extracted.lang } },
+  );
   const screenshotKey = await captureScreenshot(
     input.url,
     `snapshot/site/${input.watchId}/${id}.png`,

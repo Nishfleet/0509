@@ -105,9 +105,9 @@ test("GET /llms.txt serves the manifest-generated summary @smoke", async ({ requ
   expect(body).toMatch(/^- \[[^\]]+\]\(https?:\/\/[^)]+\/privacy\): \S/m);
 });
 
-test("the sitemap leaves out the noindex rebuild notice at / @smoke", async ({ request }) => {
+test("the sitemap lists the homepage at / @smoke", async ({ request }) => {
   const body = await (await request.get("/sitemap.xml")).text();
-  expect(body).not.toMatch(/<loc>https?:\/\/[^<]+\/<\/loc>/);
+  expect(body).toMatch(/<loc>https?:\/\/[^<]+\/<\/loc>/);
 });
 
 test("both legal routes carry the one robots policy @smoke", async ({ page }) => {

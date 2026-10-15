@@ -228,6 +228,18 @@ describe("/u/:token (0509#5761)", () => {
     expect(renderConfirm(false, "brief", false)).toContain("Alerts keep coming.");
   });
 
+  it("tells a teammate they stop the weekly brief only, never alerts or sign-in links", () => {
+    const confirm = renderConfirm(false, "all", true);
+    const done = renderConfirm(true, "all", true);
+
+    expect(confirm).toContain("You will stop getting the weekly brief from Five to Nine at this address.");
+    expect(confirm).not.toContain("all alerts");
+    expect(confirm).not.toContain("Sign-in links");
+    expect(done).toContain("We won&#x27;t send the weekly brief to this address any more.");
+    expect(done).not.toContain("all alerts");
+    expect(renderConfirm(false, "all", false)).toContain("the weekly brief and all alerts");
+  });
+
   it("renders the confirmation after a POST that suppressed the address", () => {
     const html = renderConfirm(true);
 

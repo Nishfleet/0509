@@ -57,7 +57,7 @@ describe("nightly standing enqueue (0509#5753)", () => {
     await loadNightlyPlan(db, NOW);
     const select = prepares.find((sql) => sql.includes("FROM entity"));
     expect(select).toContain("w.fixture = 0");
-    expect(select).toContain("INNER JOIN plan p ON p.workspace_id = w.id");
+    expect(select).toContain("INNER JOIN plan p ON p.workspace_id = COALESCE(");
   });
 
   it("loads every due workspace with two queries and one createBatch, never per-workspace scoring", async () => {
