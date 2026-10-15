@@ -6,7 +6,9 @@
 -- them) and judged rows whose about-brand p is below 0.5 (the old line was
 -- p > 0.1, which let unrelated Hacker News posts onto a competitor's page).
 -- mention_hidden_0067 records exactly which rows this file hid, so it can be
--- undone row by row: UPDATE signal SET is_tombstoned = 0 WHERE id IN (SELECT signal_id FROM mention_hidden_0067).
+-- undone row by row. Undo only the judged rows (the re-judge owns the unjudged ones):
+-- UPDATE signal SET is_tombstoned = 0 WHERE id IN (SELECT signal_id FROM mention_hidden_0067 WHERE state IS NOT 'unjudged').
+
 CREATE TABLE mention_hidden_0067 AS
 SELECT s.id AS signal_id, s.workspace_id, s.state,
   (SELECT v.p FROM jev_verdict v
