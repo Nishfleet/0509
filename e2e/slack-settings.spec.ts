@@ -131,3 +131,32 @@ test("a revoked Slack webhook with price and plan alerts off says nothing is bei
     keyboard: true,
   });
 });
+
+test("the weekly brief in Slack switch turns off again, and disconnecting Slack removes it", async ({
+  page,
+  baseURL,
+}) => {
+  const { cookie } = await seedPreviewSession("slack-brief", ({ db, suffix, userId }) => {
+    const workspaceId = seedWorkspace(db, suffix, userId);
+    seedCompetitor(db, suffix, workspaceId);
+    seedSlackTarget(db, workspaceId, true);
+  });
+  await signIn(page, baseURL, cookie);
+  await page.goto("/app/settings");
+
+  const briefSwitch = page.getByRole("switch", { name: /Weekly brief in Slack/ });
+  await expect(page.getByTestId("slack-brief-setting")).toContainText("Off by default.");
+  for (const wanted of [true, false]) {
+    const saved = page.waitForResponse(
+      (response) => response.request().method() === "POST" && response.url().includes("/app/settings"),
+    );
+    await briefSwitch.click();
+    await saved;
+    await page.reload();
+    if (wanted) await expect(briefSwitch).toBeChecked();
+    else await expect(briefSwitch).not.toBeChecked();
+  }
+
+  await page.getByTestId("slack-alerts-setting").getByRole("button", { name: "Disconnect Slack" }).click();
+  await expect(page.getByRole("switch", { name: /Weekly brief in Slack/ })).toHaveCount(0);
+});
