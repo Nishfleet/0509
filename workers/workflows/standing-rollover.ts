@@ -160,10 +160,12 @@ function pausedSkip(paused: boolean): RolloverOutcome["skipped"] {
 
 function isSendable(step: WorkflowStep, readThisFirst: JudgedWeek, closesAt: Date): Promise<boolean> {
   return step.do("hold-check", RETRY, () =>
-    weekSendable({
-      unjudgedInputs: readThisFirst.unjudged ? 1 : 0,
-      holdDeadlinePassed: holdDeadlinePassed(closesAt, new Date()),
-    }),
+    Promise.resolve(
+      weekSendable({
+        unjudgedInputs: readThisFirst.unjudged ? 1 : 0,
+        holdDeadlinePassed: holdDeadlinePassed(closesAt, new Date()),
+      }),
+    ),
   );
 }
 
