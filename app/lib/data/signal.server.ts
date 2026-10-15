@@ -5,7 +5,7 @@ import type { ScoredSignal } from "../biggest-move";
 import { isFeedKind, type DevelopmentItem } from "../developments";
 import { toIsoInstant } from "../iso-instant";
 import type { WeekEvidence } from "../home-standing";
-import { ACT_AT, REJECT_AT, changeActsSql } from "../jev/thresholds";
+import { ABOUT_BRAND_KEEP_AT, ACT_AT, changeActsSql } from "../jev/thresholds";
 import { CHANGE_HAS_STORED_EVIDENCE, changeJudgedSql } from "../site-change";
 import {
   D3_QUESTION_ID,
@@ -719,7 +719,7 @@ const SELECT_SCORED_SIGNALS = `SELECT * FROM (SELECT s.id, s.kind, s.title, s.su
   src.platform, src.reliability,
   CASE
     WHEN s.kind = 'mention' AND v.p >= ${String(ACT_AT)} THEN 'mention_matters'
-    WHEN s.kind = 'mention' AND v.p > ${String(REJECT_AT)} THEN 'mention_normal'
+    WHEN s.kind = 'mention' AND v.p >= ${String(ABOUT_BRAND_KEEP_AT)} THEN 'mention_normal'
     WHEN s.kind = 'change' AND ${changeActsSql("s", "v")} THEN 'site_change_noteworthy'
     WHEN s.kind = 'ad' AND s.aspect IS NOT NULL THEN 'ad_copy_change'
     WHEN s.kind = 'ad' AND s.published_at >= ?3 AND s.published_at < ?4 THEN 'ad_new_creative'
