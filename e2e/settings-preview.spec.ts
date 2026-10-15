@@ -145,3 +145,10 @@ test("a teammate invitation shows as waiting and clears the field", async ({ pag
   await expect(page.getByText("waiting for them to confirm")).toBeVisible();
   await expect(page.getByLabel("Teammate's email")).toHaveValue("");
 });
+
+test("the Alerts jump on Settings puts the next Tab on the first alert switch", async ({ page, baseURL }) => {
+  await signIn(page, baseURL);
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("link", { name: "Alerts" }).click();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("switch", { name: /Immediate alerts for your own site/ })).toBeFocused();
+});
