@@ -60,6 +60,7 @@ export interface CompetitorRailProps {
   now: number;
   sweepClock?: string;
   unreadable?: boolean;
+  notFound?: boolean;
 }
 
 export function verdictWords(choice: string): string | null {
@@ -122,36 +123,39 @@ function Facts({ facts }: { facts: readonly RailFact[] }): ReactElement {
   );
 }
 
+function homepageLine(state: {
+  lastChecked: string | null;
+  sweepClock: string;
+  unreadable: boolean;
+  notFound: boolean;
+}): string {
+  if (state.notFound) return "We couldn't find the homepage. Check the address. We try again every night.";
+  if (state.unreadable) return "We couldn't read the homepage. We try again every night.";
+  return state.lastChecked === null
+    ? `Homepage, read every night. First read tonight at ${state.sweepClock}.`
+    : `Homepage, read every night. Last read ${state.lastChecked}.`;
+}
+
 function Sources({
   sources,
   lastChecked,
   now,
   sweepClock = SITE_SWEEP_UTC_LABEL,
   unreadable = false,
+  notFound = false,
 }: {
   sources: readonly RailSource[];
   lastChecked: string | null;
   now: number;
   sweepClock?: string;
   unreadable?: boolean;
+  notFound?: boolean;
 }): ReactElement {
-  if (sources.length === 0 && unreadable) {
-    return (
-      <>
-        <p className="font-display text-[1.02rem]">Website</p>
-        <p className="text-meta text-ink-soft">We couldn't read the homepage. We try again every night.</p>
-      </>
-    );
-  }
   if (sources.length === 0) {
     return (
       <>
         <p className="font-display text-[1.02rem]">Website</p>
-        <p className="text-meta text-ink-soft">
-          {lastChecked === null
-            ? `Homepage, read every night. First read tonight at ${sweepClock}.`
-            : `Homepage, read every night. Last read ${lastChecked}.`}
-        </p>
+        <p className="text-meta text-ink-soft">{homepageLine({ lastChecked, sweepClock, unreadable, notFound })}</p>
       </>
     );
   }
@@ -192,6 +196,7 @@ export function CompetitorRail({
   now,
   sweepClock = SITE_SWEEP_UTC_LABEL,
   unreadable = false,
+  notFound = false,
 }: CompetitorRailProps): ReactElement {
   return (
     <aside data-slot="competitor-rail" className="flex min-w-0 flex-col gap-10">
@@ -217,6 +222,7 @@ export function CompetitorRail({
           now={now}
           sweepClock={sweepClock}
           unreadable={unreadable}
+          notFound={notFound}
         />
       </section>
       <section data-section="still-competitor" aria-labelledby="competitor-still" className="min-w-0">

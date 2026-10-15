@@ -265,6 +265,21 @@ describe("readPage (0509#5299)", () => {
     expect(browserHolder.current?.calls).toEqual([]);
   });
 
+  it("records unreachable as the failure reason when the address cannot be connected to", async () => {
+    const url = "https://rival-typo.com/";
+    const [target] = await seed("ent-read-page-unreachable", [url]);
+    if (target === undefined) throw new Error("expected a sweep target");
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("fetch failed")));
+
+    const result = await readPage(target, NOW, { browser: false });
+
+    expect(result).toMatchObject({ ok: false, reason: "unreachable" });
+    const row = await env.DB.prepare("SELECT transport, last_failure_reason FROM page WHERE id = ?")
+      .bind(target.pageId)
+      .first<{ transport: string | null; last_failure_reason: string | null }>();
+    expect(row).toEqual({ transport: null, last_failure_reason: "unreachable" });
+  });
+
   it("clears the failure reason after the next good read", async () => {
     const url = "https://rival.com/recovers";
     fetchState.responses.set(url, THIN_PAGE);
