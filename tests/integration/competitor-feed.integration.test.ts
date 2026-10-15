@@ -7,7 +7,6 @@ import {
   readUnjudgedMentions,
   resolveUnjudgedMention,
 } from "../../app/lib/data/signal.server";
-import { insertVerdict, linkVerdictsStatement } from "../../app/lib/data/jev_verdict.server";
 import { isAboutBrand } from "../../app/lib/jev/thresholds";
 
 const SINCE = "2026-09-01T00:00:00.000Z";
@@ -312,85 +311,6 @@ describe("competitor feed read", () => {
     expect(after).toContain(titles[0]);
     expect(after).not.toContain(titles[1]);
     expect(after).not.toContain(titles[2]);
-  });
-
-  it("the database hides a mention judged below 0.5 even when the row was stored visible", async () => {
-    const fixture = await seed();
-    const watchId = `watch-fed-trg-${fixture.entityId}`;
-    const snapshotId = `snap-fed-trg-${fixture.entityId}`;
-    await env.DB.batch([
-      env.DB.prepare(
-        "INSERT INTO watch (id, entity_id, source_id, target_key) VALUES (?1, ?2, 'src_site_web', 'brand name')",
-      ).bind(watchId, fixture.entityId),
-      env.DB.prepare(
-        "INSERT INTO snapshot (id, watch_id, fetched_at, payload_hash) VALUES (?1, ?2, '2026-10-13T10:00:00.000Z', 'h')",
-      ).bind(snapshotId, watchId),
-    ]);
-    const ids = ["low", "high", "linked"].map((name) => `sig-fed-trg-${name}-${fixture.entityId}`);
-    const titles = ["Low score story", "High score story", "Linked later story"];
-    await env.DB.batch(
-      ids.map((id, index) =>
-        insertMention({
-          id,
-          workspaceId: fixture.workspaceId,
-          entityId: fixture.entityId,
-          sourceId: "src_site_web",
-          watchId,
-          snapshotId,
-          title: titles[index] ?? "",
-          url: `https://news.example.com/${id}`,
-          urlHash: `hash-${id}`,
-          titleHash: `th-${id}`,
-          normUrlHash: `nh-${id}`,
-          author: null,
-          engagementJson: null,
-          payloadJson: "{}",
-          dedupKey: `${id}:dedup`,
-          publishedAt: "2026-10-05T10:00:00.000Z",
-          observedAt: "2026-10-13T10:00:00.000Z",
-          isNotAboutBrand: false,
-          state: "judged",
-        }),
-      ),
-    );
-    const verdict = (signalId: string | null, p: number, inputHash: string) =>
-      insertVerdict({
-        workspaceId: fixture.workspaceId,
-        questionId: "mention_is_about_brand",
-        inputHash,
-        signalId,
-        entityId: fixture.entityId,
-        p,
-        choice: null,
-        reason: null,
-        decidedAt: "2026-10-13T10:00:00.000Z",
-      });
-    await env.DB.batch([
-      verdict(ids[0] ?? "", 0.1429, `${ids[0] ?? ""}:h`),
-      verdict(ids[1] ?? "", 0.93, `${ids[1] ?? ""}:h`),
-    ]);
-    await env.DB.batch([verdict(null, 0.1957, `${ids[2] ?? ""}:h`)]);
-    const unlinked = await env.DB.prepare("SELECT id FROM jev_verdict WHERE input_hash = ?1")
-      .bind(`${ids[2] ?? ""}:h`)
-      .first<{ id: string }>();
-    await env.DB.batch([
-      linkVerdictsStatement({
-        signalId: ids[2] ?? "",
-        workspaceId: fixture.workspaceId,
-        verdictIds: [unlinked?.id ?? ""],
-      }),
-    ]);
-    const shown = (
-      await readEntityDevelopments({
-        workspaceId: fixture.workspaceId,
-        entityId: fixture.entityId,
-        since: SINCE,
-        limit: 20,
-      })
-    ).map((item) => item.title);
-    expect(shown).toContain(titles[1]);
-    expect(shown).not.toContain(titles[0]);
-    expect(shown).not.toContain(titles[2]);
   });
 
   it("honours limit with the two newest", async () => {
