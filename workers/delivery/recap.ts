@@ -14,7 +14,7 @@ const ALERTS_LINK = "https://0509.io/app/alerts";
 type TesterCheck = (subscriptionId: string) => Promise<boolean | null>;
 
 async function eligible(env: Env, recap: TrialRecap, isTester: TesterCheck): Promise<boolean> {
-  if (recap.subscription_id === null || recap.change_count === 0) return false;
+  if (recap.subscription_id === null || (recap.change_count === 0 && recap.standing.length === 0)) return false;
   if (await hasReminderAttempt(env.DB, recapKey(recap))) return false;
   if ((await isTester(recap.subscription_id)) !== false) return false;
   return !(await isAddressSuppressed(recap.target_value, env.DB));
@@ -36,6 +36,7 @@ async function recapOne(env: Env, recap: TrialRecap, isTester: TesterCheck): Pro
       renderRecap({
         change_count: recap.change_count,
         latest: recap.latest,
+        standing: recap.standing,
         link: ALERTS_LINK,
         footer: { unsubscribe_url: unsubscribeUrl, settings_link: SETTINGS_LINK },
       }),

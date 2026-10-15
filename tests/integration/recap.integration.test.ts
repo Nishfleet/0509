@@ -154,6 +154,19 @@ describe("trial recap email", () => {
     expect(sent[0]?.headers?.["List-Unsubscribe"]).toMatch(/^<https:\/\/0509\.io\/u\/[0-9a-f]{64}>$/);
   });
 
+  it("shows where the rivals stand when nothing has changed", async () => {
+    await env.DB.exec(
+      `UPDATE entity SET identity_json = '{"description":"Invoices for freelancers"}' WHERE id = 'ent-r1'`,
+    );
+    await seedPlan();
+    const sent: EmailMessageBuilder[] = [];
+
+    expect(await sendRecaps(envWith(sent), NOW, isTester)).toBe(1);
+    expect(sent[0]?.text).toContain("Where your competitors stand today");
+    expect(sent[0]?.text).toContain("Acme\nIn its own words: Invoices for freelancers");
+    expect(sent[0]?.text).not.toContain("caught");
+  });
+
   it("our own copy never mentions money or the end of the trial", async () => {
     await seedPlan();
     await seedChange("sig-1", "Pricing page now lists a free tier", "2026-10-10T10:00:00Z");
