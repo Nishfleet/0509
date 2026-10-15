@@ -79,6 +79,7 @@ export interface TargetOutcome {
   stored: number;
   unjudged: number;
   skipped: number;
+  ms?: number;
 }
 
 export async function planTargets(): Promise<MentionTarget[]> {

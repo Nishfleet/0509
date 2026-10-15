@@ -128,7 +128,7 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
 
       expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: target.watches.length });
       expect(await readReason(sourceId)).toBeNull();
-      expect(fetchMock).toHaveBeenCalledTimes(6);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
       expect(warn).toHaveBeenCalledTimes(1);
       expect(JSON.parse(String(warn.mock.calls[0]?.[0]))).toEqual({
         event: "mentions.rate_limited",
@@ -154,7 +154,7 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
 
       expect(count).toBeNull();
       expect(await readReason(sourceId)).toBeNull();
-      expect(fetchMock).toHaveBeenCalledTimes(6);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
     } finally {
       vi.useRealTimers();
       await env.DB.prepare("DELETE FROM source WHERE id = ?").bind(sourceId).run();
