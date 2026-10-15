@@ -87,7 +87,7 @@ describe("runEval ceiling fit", () => {
   });
 
   it("counts neurons already spent in the same process", async () => {
-    const { postWorkersAi, runEval } = await started("300");
+    const { postWorkersAi, runEval } = await started("250");
     await postWorkersAi(MODEL, {});
     await postWorkersAi(MODEL, {});
     const rows = [{ id: "a", split: "test" as const, why: "w" }];
@@ -95,6 +95,48 @@ describe("runEval ceiling fit", () => {
     await expect(runEval("probe", rows, asked, scored, 60)).rejects.toThrow(/refused before any paid call/);
 
     expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it("lets a run through whose exact plan fits although the padded call budget does not", async () => {
+    const { runEval } = await started("230");
+    const rows = Array.from({ length: 4 }, (_, index) => ({
+      id: `row-${String(index)}`,
+      split: "test" as const,
+      why: "w",
+    }));
+
+    const report = await runEval("probe", rows, asked, scored);
+
+    expect(report.questionId).toBe("probe");
+    expect(report.neuronCeiling).toBe(230);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("ignores a row whose split the run does not select", async () => {
+    const { runEval } = await started("100");
+    const rows = [
+      { id: "t", split: "test" as const, why: "w" },
+      { id: "r", split: "train" as const, why: "w" },
+    ];
+
+    const report = await runEval("probe", rows, asked, scored);
+
+    expect(report.questionId).toBe("probe");
+    expect(report.splits.map((split) => split.split)).toEqual(["test"]);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("counts the rows of every selected split in the plan", async () => {
+    const { runEval } = await started("100");
+    vi.stubEnv("EVAL_SPLIT", "all");
+    const rows = [
+      { id: "t", split: "test" as const, why: "w" },
+      { id: "r", split: "train" as const, why: "w" },
+    ];
+
+    await expect(runEval("probe", rows, asked, scored)).rejects.toThrow(/refused before any paid call/);
+
+    expect(run).not.toHaveBeenCalled();
   });
 
   it("lets a run go ahead when its call budget fits the ceiling", async () => {

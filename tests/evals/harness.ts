@@ -540,11 +540,12 @@ export async function runEval<T extends EvalRow>(
   const splits: SplitScore[] = [];
   const wanted = selectedSplits();
   callsUsed = 0;
-  callBudget = Math.ceil(rows.filter((row) => wanted.includes(row.split)).length * REPEATS * BUDGET_MARGIN);
-  const plannedNeurons = callBudget * neuronsPerCall;
+  const selectedRows = rows.filter((row) => wanted.includes(row.split)).length;
+  callBudget = Math.ceil(selectedRows * REPEATS * BUDGET_MARGIN);
+  const plannedNeurons = selectedRows * REPEATS * neuronsPerCall;
   if (NEURON_CEILING > 0 && neuronsSpent + plannedNeurons > NEURON_CEILING) {
     throw new Error(
-      `eval refused before any paid call: ${questionId} needs about ${String(plannedNeurons)} neurons (${String(callBudget)} calls x ${String(neuronsPerCall)}) on top of ${String(neuronsSpent)} already spent, over the ceiling of ${String(NEURON_CEILING)}; narrow the run with the evals.yml split or filter input, or EVAL_SPLIT here (0509#7249)`,
+      `eval refused before any paid call: ${questionId} needs about ${String(plannedNeurons)} neurons (${String(selectedRows)} rows x ${String(REPEATS)} repeats x ${String(neuronsPerCall)} per call) on top of ${String(neuronsSpent)} already spent, over the ceiling of ${String(NEURON_CEILING)}; narrow the run with the evals.yml split or filter input, or EVAL_SPLIT here (0509#7249)`,
     );
   }
   for (const split of wanted) {
