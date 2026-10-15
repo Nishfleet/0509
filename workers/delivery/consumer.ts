@@ -19,6 +19,7 @@ import {
   readSlackTarget,
   writeUnsubscribeToken,
 } from "../../app/lib/data/send_target.server";
+import type { SuppressionScope } from "../../app/lib/mail-kind";
 import { readSlackBrief } from "../../app/lib/data/workspace.server";
 import { insertSignalDeliveries } from "../../app/lib/data/signal_delivery.server";
 import { localDay, startOfLocalDay } from "../../app/lib/alert-day";
@@ -226,7 +227,11 @@ export async function ensureUnsubscribeToken(
   return row.unsubscribe_token;
 }
 
-export const UNSUBSCRIBE_BASE_URL = "https://0509.io/u/";
+const UNSUBSCRIBE_BASE_URL = "https://0509.io/u/";
+
+export function unsubscribeUrlFor(token: string, scope: SuppressionScope): string {
+  return `${UNSUBSCRIBE_BASE_URL}${token}?type=${scope}`;
+}
 
 function briefOf(message: MessageRow): BriefPayload {
   try {
@@ -242,7 +247,7 @@ const BRIEF_OPEN_URL = "https://0509.io/app/brief";
 function render(message: MessageRow, recipient: { to: string; token: string; owner: boolean }): EmailMessageBuilder {
   const { to, token, owner } = recipient;
   const payload = briefOf(message);
-  const unsubscribeUrl = `${UNSUBSCRIBE_BASE_URL}${token}`;
+  const unsubscribeUrl = unsubscribeUrlFor(token, "brief");
   const rendered = renderBrief(payload, {
     unsubscribe_url: unsubscribeUrl,
     asset_base_url: null,
@@ -308,7 +313,7 @@ async function deliverToOwner(env: Env, message: DigestMessage): Promise<Deliver
     return noTarget(env, digest.workspace_id, { digest_id: digest.id });
   }
 
-  if (await isAddressSuppressed(target.target_value, env.DB)) {
+  if (await isAddressSuppressed(target.target_value, "brief", env.DB)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
 
@@ -336,7 +341,7 @@ async function deliverToOwner(env: Env, message: DigestMessage): Promise<Deliver
 }
 
 async function sendToTeammate(env: Env, digest: MessageRow, mate: TargetRow): Promise<DeliveryResult> {
-  if (await isAddressSuppressed(mate.target_value, env.DB)) {
+  if (await isAddressSuppressed(mate.target_value, "brief", env.DB)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
   const idempotencyKey = `digest:${digest.id}:${mate.id}`;
@@ -465,7 +470,7 @@ async function recordBriefSent(env: Env, input: BriefSent): Promise<void> {
 }
 
 function renderIncidentEmail(incident: IncidentRow, to: string, token: string) {
-  const unsubscribeUrl = `${UNSUBSCRIBE_BASE_URL}${token}`;
+  const unsubscribeUrl = unsubscribeUrlFor(token, "alerts");
   const site = pageHost(incident.page_url);
   const rendered =
     incident.closed_at === null
@@ -529,7 +534,7 @@ export async function deliverIncident(env: Env, message: IncidentMessage): Promi
     return noTarget(env, incident.workspace_id, { incident_id: incident.id });
   }
 
-  if (await isAddressSuppressed(target.target_value, env.DB)) {
+  if (await isAddressSuppressed(target.target_value, "alerts", env.DB)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
 
@@ -655,7 +660,7 @@ async function sendChange(
     idempotencyKey,
     send: async () => {
       const token = await ensureUnsubscribeToken(env, target);
-      const footer = { unsubscribe_url: `${UNSUBSCRIBE_BASE_URL}${token}`, settings_link: SETTINGS_LINK };
+      const footer = { unsubscribe_url: unsubscribeUrlFor(token, "alerts"), settings_link: SETTINGS_LINK };
       const rendered = await renderChangeEmail(env, { change, payload, capped, footer });
       return sendMessage(env.EMAIL, {
         to: target.target_value,
@@ -721,7 +726,7 @@ async function emailChange(
   if (!target) {
     return noTarget(env, change.workspace_id, { signal_id: change.id });
   }
-  if (await isAddressSuppressed(target.target_value, env.DB)) {
+  if (await isAddressSuppressed(target.target_value, "alerts", env.DB)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
   return sendChange(env, { change, payload, target });

@@ -123,6 +123,26 @@ describe("trial ending reminder", () => {
     expect(sent).toHaveLength(0);
   });
 
+  it("still sends when only one of the two switches is off", async () => {
+    await seedPlan({ status: "active", trialing: 1, periodEnd: IN_36_HOURS });
+    await env.DB.prepare(
+      "INSERT INTO email_suppression (address, reason, created_at, stops_brief, stops_alerts) VALUES (?, 'unsubscribed', '2026-10-10T00:00:00Z', 1, 0)",
+    )
+      .bind(TARGET)
+      .run();
+    const sent: EmailMessageBuilder[] = [];
+
+    expect(await sendTrialReminders(envWith(sent), NOW, isTester)).toBe(1);
+    expect(sent).toHaveLength(1);
+
+    await env.DB.exec("DELETE FROM send_attempt");
+    await env.DB.prepare("UPDATE email_suppression SET stops_alerts = 1").run();
+    const stopped: EmailMessageBuilder[] = [];
+
+    expect(await sendTrialReminders(envWith(stopped), NOW, isTester)).toBe(0);
+    expect(stopped).toHaveLength(0);
+  });
+
   it("tries again the next night when the send failed", async () => {
     await seedPlan({ status: "active", trialing: 1, periodEnd: IN_36_HOURS });
     const failing = {
