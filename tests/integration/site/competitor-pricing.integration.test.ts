@@ -105,6 +105,90 @@ describe("a competitor's pricing page", () => {
     expect(run).not.toHaveBeenCalled();
   });
 
+  it("is read once more when it has judged pages but none is a pricing page, then left alone", async () => {
+    const quiet = HOME_HTML.replace("/plans", "/team");
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const body = url === HOME ? quiet : "";
+      return Promise.resolve(new Response(body, { status: url === HOME ? 200 : 404 }));
+    });
+    await classifyCompetitorSites(NOW);
+    await env.DB.prepare("UPDATE page SET links_read_at = NULL WHERE entity_id = ?1").bind(RIVAL).run();
+
+    const footerHome = quiet.replace("</body>", '<footer><a href="/plans">Plans</a></footer></body>');
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      return Promise.resolve(
+        url === HOME
+          ? new Response(footerHome, { status: 200, headers: { "content-type": "text/html" } })
+          : new Response("", { status: 404 }),
+      );
+    });
+
+    expect(await classifyCompetitorSites("2026-10-05T02:00:00Z")).toBe(1);
+    const targets = await planSiteSweep("2026-10-05T02:00:00Z");
+    expect(targets.filter((target) => target.entityId === RIVAL).map((target) => target.url)).toContain(PLANS);
+
+    expect(await classifyCompetitorSites("2026-10-06T02:00:00Z")).toBe(0);
+  });
+
+  it("keeps the verdicts that landed when Jev refuses the pricing link, keeps the home page readable, and retries it after three days", async () => {
+    Reflect.set(env, "AI", {
+      run(_model: string, request: { questions: Record<string, { type: string }> }) {
+        if (JSON.stringify(request).includes("/plans")) return Promise.reject(new Error("2003: Rate limit exceeded"));
+        return Promise.resolve({ answers: { page_role: { type: "choice", choice: "other" } } });
+      },
+    });
+    const pages = async (): Promise<string[]> => {
+      const rows = await env.DB.prepare("SELECT url, role, links_read_at FROM page WHERE entity_id = ?1 ORDER BY url")
+        .bind(RIVAL)
+        .all<{ url: string; role: string; links_read_at: string | null }>();
+      return rows.results.map((row) => `${row.url}:${row.role}:${row.links_read_at === null ? "unread" : "read"}`);
+    };
+
+    expect(await classifyCompetitorSites(NOW)).toBe(1);
+    expect(await pages()).toEqual([`${HOME}:home:unread`, `https://rival-shop.com/about:other:unread`]);
+
+    installJev();
+    expect(await classifyCompetitorSites("2026-10-03T02:00:00Z")).toBe(0);
+    expect(await classifyCompetitorSites("2026-10-06T02:00:00Z")).toBe(1);
+    expect(await pages()).toEqual([
+      `${HOME}:home:read`,
+      `https://rival-shop.com/about:other:unread`,
+      `${PLANS}:pricing:unread`,
+    ]);
+  });
+
+  it("backs off three days and keeps the home page readable when Jev answers nothing at all", async () => {
+    Reflect.set(env, "AI", { run: () => Promise.reject(new Error("2003: Rate limit exceeded")) });
+    const deferred = async (): Promise<string | null> =>
+      (
+        await env.DB.prepare("SELECT deferred_at FROM page WHERE entity_id = ?1 AND role = 'home'").bind(RIVAL).first<{
+          deferred_at: string | null;
+        }>()
+      )?.deferred_at ?? null;
+
+    expect(await classifyCompetitorSites(NOW)).toBe(1);
+    expect(await deferred()).toBeNull();
+    expect(await classifyCompetitorSites("2026-10-03T02:00:00Z")).toBe(0);
+    expect(await classifyCompetitorSites("2026-10-06T02:00:00Z")).toBe(1);
+  });
+
+  it("marks the home page as read after a pass that finds no pricing page, so it is not read again", async () => {
+    const quiet = HOME_HTML.replace("/plans", "/team");
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      return Promise.resolve(
+        url === HOME
+          ? new Response(quiet, { status: 200, headers: { "content-type": "text/html" } })
+          : new Response("", { status: 404 }),
+      );
+    });
+
+    expect(await classifyCompetitorSites(NOW)).toBe(1);
+    expect(await classifyCompetitorSites("2026-10-05T02:00:00Z")).toBe(0);
+  });
+
   it("is not fetched again for three days when its home page cannot be read", async () => {
     const homeFetches = vi.fn();
     vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
@@ -417,7 +501,7 @@ describe("a competitor's pricing page", () => {
     it("lists rivals to read without failing on one whose saved identity is not valid JSON", async () => {
       await env.DB.prepare("UPDATE entity SET identity_json = 'not json' WHERE id = ?1").bind(RIVAL).run();
       await env.DB.prepare(
-        "INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('pg-bad-json', ?1, ?2, 'home', ?3)",
+        "INSERT INTO page (id, entity_id, url, role, discovered_at, links_read_at) VALUES ('pg-bad-json', ?1, ?2, 'home', ?3, ?3)",
       )
         .bind(RIVAL, HOME, NOW)
         .run();
@@ -429,5 +513,55 @@ describe("a competitor's pricing page", () => {
 
       await expect(readCompetitorsToClassify(10, NOW)).resolves.toEqual([]);
     });
+  });
+
+  it("is found at a common address when the navigation does not link it, and judged like any other page", async () => {
+    const PRICING = "https://rival-shop.com/pricing";
+    const probed: string[] = [];
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      probed.push(url);
+      const page = (title: string) =>
+        new Response(
+          `<html><head><title>${title}</title></head><body><main><p>${"We make training clothes for people who train hard and rest harder. ".repeat(6)}</p></main></body></html>`,
+          { status: 200, headers: { "content-type": "text/html" } },
+        );
+      if (url === HOME) return Promise.resolve(page("Rival"));
+      if (url === PRICING) return Promise.resolve(page("Pricing - Rival"));
+      if (url === "https://rival-shop.com/plans") return Promise.resolve(page("Rival"));
+      return Promise.resolve(new Response("", { status: 404 }));
+    });
+    Reflect.set(env, "AI", {
+      run(_model: string, request: { questions: Record<string, { type: string }> }) {
+        const text = JSON.stringify(request);
+        const choice = text.includes("/pricing") ? "pricing" : "other";
+        return Promise.resolve({ answers: { page_role: { type: "choice", choice } } });
+      },
+    });
+
+    await classifyCompetitorSites(NOW);
+
+    const rival = (await planSiteSweep(NOW)).filter((target) => target.entityId === RIVAL);
+    expect(rival.map((target) => [target.url, target.pageRole])).toEqual([
+      [HOME, "home"],
+      [PRICING, "pricing"],
+    ]);
+  });
+
+  it("does not probe common addresses when a pricing page was already found in the navigation", async () => {
+    const probed: string[] = [];
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      probed.push(url);
+      if (url === HOME) {
+        return Promise.resolve(new Response(HOME_HTML, { status: 200, headers: { "content-type": "text/html" } }));
+      }
+      return Promise.resolve(new Response("", { status: 404 }));
+    });
+
+    await classifyCompetitorSites(NOW);
+
+    expect(probed).not.toContain("https://rival-shop.com/pricing");
+    expect(probed).not.toContain("https://rival-shop.com/prices");
   });
 });

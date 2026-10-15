@@ -6,8 +6,6 @@ import { describe, expect, it, vi } from "vitest";
 import { SIGN_IN_LEDE, SIGN_IN_SHELL, SIGN_IN_TITLE, SignInSent } from "../app/components/sign-in-sent";
 import { MAGIC_LINK_TTL_SECONDS } from "../app/lib/auth/magic-link-email";
 
-// No turnstile script loads in the test runner, so the widget is replaced by
-// nothing and its response reader stays a stub.
 vi.mock("../app/components/turnstile-widget", () => ({
   TurnstileWidget: () => null,
 }));

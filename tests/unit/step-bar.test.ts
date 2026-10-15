@@ -10,8 +10,6 @@ function markup(current: OnboardingStep): string {
   return renderToStaticMarkup(createElement(StepBar, { current }));
 }
 
-// The done state is a nested <span>, so a step's inner HTML is captured whole
-// and the tags are stripped to get the text a screen reader reads.
 const ITEMS = /<li\b([^>]*)>([\s\S]*?)<\/li>/g;
 
 function steps(html: string): { attrs: string; text: string }[] {
@@ -53,8 +51,6 @@ describe("StepBar", () => {
   });
 
   it("announces every finished step as done for a screen reader", () => {
-    // A finished step and an upcoming step differ only in text colour, so the
-    // " (done)" span is the only thing a screen reader has to tell them apart.
     expect(steps(markup(4))[0]?.text).toBe("1 Your site (done)");
     expect(steps(markup(4))[1]?.text).toBe("2 Check details (done)");
     expect(steps(markup(4))[2]?.text).toBe("3 Competitors (done)");

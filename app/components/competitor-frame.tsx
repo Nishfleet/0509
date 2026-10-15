@@ -106,13 +106,14 @@ function DevelopmentsSection({
       {unreadable ? (
         <p data-slot="site-unreadable" className="border-t border-ink pt-3 text-meta text-ink-soft">
           We couldn't read their website. It may block automated visits. We'll keep trying, and we're still watching
-          everything else about them.
+          everything else about them. If you know another website of theirs, add it under Another website of theirs
+          below.
         </p>
       ) : null}
-      {developments.length === 0 ? (
-        <EmptyState sentence={developmentsEmpty(lastChecked, sweepClock)} />
-      ) : (
+      {developments.length > 0 ? (
         <DevelopmentsFeed items={developments} changes={changes} />
+      ) : unreadable ? null : (
+        <EmptyState sentence={developmentsEmpty(lastChecked, sweepClock)} />
       )}
     </section>
   );
@@ -146,7 +147,7 @@ export function CompetitorFrame({
           sweepClock={sweepClock}
         />
       </div>
-      <CompetitorRail {...rail} lastChecked={lastChecked} sweepClock={sweepClock} />
+      <CompetitorRail {...rail} lastChecked={lastChecked} sweepClock={sweepClock} unreadable={unreadable} />
     </div>
   );
 }

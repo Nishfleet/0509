@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { FIXTURE_ACCOUNTS, isFixtureAccount, isPerRunFixtureEmail } from "../app/lib/fixture-accounts";
 
-// 0509#6020: the fixed journey accounts are literals here so a typo in
-// the module fails this test instead of passing through it.
 const FIXED = [
   "e2e+j7@0509.io",
   "e2e+j8-hard-v2@0509.io",

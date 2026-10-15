@@ -67,7 +67,7 @@ export async function readArchiveCopy(url: string, now: Date): Promise<ReadUrlRe
       fromArchive: true,
     };
   } catch (error) {
-    console.log(
+    console.warn(
       JSON.stringify({ event: "archive.read_failed", error: error instanceof Error ? error.name : "unknown" }),
     );
     return null;

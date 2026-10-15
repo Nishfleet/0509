@@ -41,7 +41,7 @@ function parseJson(json: string, what: string): unknown {
   try {
     return JSON.parse(json);
   } catch (err) {
-    console.log(JSON.stringify({ event: "site_change.unreadable", what, error: String(err) }));
+    console.warn(JSON.stringify({ event: "site_change.unreadable", what, error: String(err) }));
     return null;
   }
 }
@@ -129,6 +129,8 @@ export function provenanceNote(source: { viaArchive: boolean; seenOn: string | n
   return parts.length === 0 ? null : parts.join(" · ");
 }
 
+export type ChangeFeedback = "useful" | "not_useful";
+
 export interface SiteChangeView {
   id: string;
   entityId: string;
@@ -142,9 +144,11 @@ export interface SiteChangeView {
   provenance: string | null;
   sentence: string;
   mark: ChangeMark | null;
+  detailsUnavailable?: boolean;
   before: ChangeShot;
   after: ChangeShot;
   whyFlagged: WhyFlagged | null;
+  feedback?: ChangeFeedback | null;
 }
 
 export interface PairedSiteChange extends SiteChangeView {

@@ -146,7 +146,7 @@ export async function readBoard(target: HiringTarget, tick: SweepTick): Promise<
     await markWatchPolled(target.watchId, now);
     return { outcome: "changed", newRoles };
   } catch (error) {
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "hiring.read_failed",
         watchId: target.watchId,

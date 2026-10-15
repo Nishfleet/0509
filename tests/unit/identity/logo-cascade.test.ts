@@ -2,12 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { logoCandidatesFor, logoCandidateUrls } from "../../../app/lib/identity/logo-cascade";
 
-/**
- * The cascade is a pure ordered list; the guarded fetch lives in storeLogo.
- * Order is ld_organization, og_image, apple_touch_icon, and the DuckDuckGo
- * proxy leg is the always-present tail built from the registrable domain.
- */
-
 const candidates = {
   ldOrganizationLogo: "https://a.test/logo.png",
   ogImage: "https://a.test/og.jpg",

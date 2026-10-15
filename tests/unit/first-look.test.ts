@@ -11,10 +11,10 @@ describe("first look", () => {
   it("says what has been read and how long ago, or that it is still reading", () => {
     const rows = firstLookRows(
       [
-        { id: "a", name: "Acme", pages: 3, checkedAt: "2026-10-14T11:48:00.000Z", blocked: false },
-        { id: "b", name: "Beta", pages: 1, checkedAt: "2026-10-14T09:00:00.000Z", blocked: false },
-        { id: "c", name: "Gamma", pages: 0, checkedAt: null, blocked: false },
-        { id: "d", name: "Delta", pages: 0, checkedAt: null, blocked: true },
+        { id: "a", name: "Acme", pages: 3, checkedAt: "2026-10-14T11:48:00.000Z", unreadable: false },
+        { id: "b", name: "Beta", pages: 1, checkedAt: "2026-10-14T09:00:00.000Z", unreadable: false },
+        { id: "c", name: "Gamma", pages: 0, checkedAt: null, unreadable: false },
+        { id: "d", name: "Delta", pages: 0, checkedAt: null, unreadable: true },
       ],
       NOW,
     );
@@ -22,7 +22,7 @@ describe("first look", () => {
       "Read 3 pages, 12m ago",
       "Read 1 page, 3h ago",
       "Reading its site now",
-      "Its site didn't open for us yet. We try again on the next nightly read",
+      "We couldn't read their website. We keep trying.",
     ]);
   });
 
@@ -30,7 +30,7 @@ describe("first look", () => {
     const html = renderToStaticMarkup(
       createElement(FirstLook, { rivals: [{ id: "a", name: "Acme", line: "Read 3 pages, 12m ago" }] }),
     );
-    expect(html).toContain("Where your rivals stand today");
+    expect(html).toContain("Where your competitors stand today");
     expect(html).toContain("Acme");
     expect(html).toContain("Read 3 pages, 12m ago");
     expect(renderToStaticMarkup(createElement(FirstLook, { rivals: [] }))).toBe("");
@@ -39,8 +39,8 @@ describe("first look", () => {
   it("adds what is already held under a rival, and nothing for a rival with no facts", () => {
     const rows = firstLookRows(
       [
-        { id: "a", name: "Acme", pages: 2, checkedAt: "2026-10-14T11:48:00.000Z", blocked: false },
-        { id: "b", name: "Beta", pages: 0, checkedAt: null, blocked: false },
+        { id: "a", name: "Acme", pages: 2, checkedAt: "2026-10-14T11:48:00.000Z", unreadable: false },
+        { id: "b", name: "Beta", pages: 0, checkedAt: null, unreadable: false },
       ],
       NOW,
       new Map([

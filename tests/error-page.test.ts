@@ -25,7 +25,7 @@ describe("error page by cause", () => {
   const response = (status: number) => ({ status, statusText: LEAK, internal: true, data: LEAK });
 
   it.each([
-    [403, "You cannot open this page", false],
+    [403, "You can&#x27;t open this page", false],
     [401, "Sign in to continue", false],
     [429, "Too many requests", true],
     [500, "Something went wrong", true],
@@ -39,7 +39,14 @@ describe("error page by cause", () => {
     expect(html).not.toContain("/app/alerts");
     expect(html.includes('href=""')).toBe(retry);
     expect(html.includes("Try again")).toBe(retry);
-    expect(html).toContain("Back to home");
+    expect(html.includes("support@0509.io")).toBe(retry);
+    if (status === 401) {
+      expect(html).toContain('href="/login"');
+      expect(html).toContain(">Sign in<");
+      expect(html).not.toContain("Back to home");
+    } else {
+      expect(html).toContain("Back to home");
+    }
   });
 
   it("treats a thrown Error as a problem on our side and offers a retry", () => {
@@ -114,7 +121,8 @@ describe("error page", () => {
     expect(html).toContain('href="/"');
     expect(html).not.toContain("blow-up");
     expect(html).toContain('href=""');
-    expect(html.match(/<a /g)).toHaveLength(2);
+    expect(html.match(/<a /g)).toHaveLength(3);
+    expect(html).toContain('href="mailto:support@0509.io"');
   });
 
   it("treats a non-404 route error as the problem page", () => {

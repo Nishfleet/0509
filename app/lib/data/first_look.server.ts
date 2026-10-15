@@ -2,11 +2,13 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import type { FirstLookRival } from "../first-look";
+import { ALTERNATE_MARKER } from "./watch.server";
 
 const SELECT_FIRST_LOOK = `SELECT e.id, COALESCE(NULLIF(e.name, ''), e.domain) AS name,
        COUNT(DISTINCT sn.page_id) AS pages,
        MAX(sn.fetched_at) AS checked_at,
-       EXISTS (SELECT 1 FROM page hp WHERE hp.entity_id = e.id AND hp.role = 'home' AND hp.deferred_at IS NOT NULL) AS deferred
+       (EXISTS (SELECT 1 FROM page hp WHERE hp.entity_id = e.id AND hp.role = 'home' AND hp.deferred_at IS NOT NULL)
+        AND NOT EXISTS (SELECT 1 FROM watch aw WHERE aw.entity_id = e.id AND aw.is_active = 1 AND ${ALTERNATE_MARKER("aw")})) AS unreadable
   FROM entity e
   LEFT JOIN watch w ON w.entity_id = e.id AND w.is_active = 1
   LEFT JOIN snapshot sn ON sn.watch_id = w.id
@@ -20,7 +22,7 @@ const firstLookRow = z.object({
   name: z.string(),
   pages: z.number(),
   checked_at: z.string().nullable(),
-  deferred: z.number(),
+  unreadable: z.number(),
 });
 
 export async function readFirstLook(workspaceId: string): Promise<FirstLookRival[]> {
@@ -33,6 +35,6 @@ export async function readFirstLook(workspaceId: string): Promise<FirstLookRival
       name: row.name,
       pages: row.pages,
       checkedAt: row.checked_at,
-      blocked: row.deferred === 1,
+      unreadable: row.unreadable === 1,
     }));
 }

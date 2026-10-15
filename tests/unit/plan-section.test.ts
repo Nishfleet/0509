@@ -7,17 +7,8 @@ import { describe, expect, it, vi } from "vitest";
 import { PlanSection } from "../../app/components/plan-settings";
 import type { PlanSummary } from "../../app/lib/billing/plans";
 
-// 0509#6741: the only message settings.billing.ts ever returns is the
-// UNAVAILABLE failure, because a successful portal call redirects instead.
-// So the fetcher data this form can hold is exactly this message, and the
-// paragraph that renders it is an error line, not progress. The sibling
-// failure on the same page moved to an alert for the same reason in #6671.
 const PORTAL_UNAVAILABLE = "We couldn't open your billing page. Try again in a few minutes.";
 
-// PlanSection reads its message off useFetcher().data, which a static
-// render never holds: the data only lands once a real submission settles.
-// So the fetcher is swapped for one pinned at the settled state the test
-// names, the way plan-gate.test.ts does it for the sibling form.
 const fetcher = vi.hoisted(() => ({
   value: { state: "idle" as "idle" | "submitting", data: undefined as { message: string } | undefined },
 }));
@@ -38,8 +29,8 @@ vi.mock("react-router", async (importOriginal) => {
   return { ...actual, useFetcher: () => ({ state: fetcher.value.state, data: fetcher.value.data, Form }) };
 });
 
-function render(plan: PlanSummary): string {
-  const Stub = createRoutesStub([{ path: "/", Component: () => createElement(PlanSection, { plan }) }]);
+function render(plan: PlanSummary, countLine: string | null = null): string {
+  const Stub = createRoutesStub([{ path: "/", Component: () => createElement(PlanSection, { plan, countLine }) }]);
   const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
   fetcher.value = { state: "idle", data: undefined };
   return html;
@@ -53,11 +44,6 @@ const BILLED: PlanSummary = {
   billed: true,
 };
 
-// The <p> that renders the text, opening tag through closing tag, so the
-// role assertions pin the region on the element that holds the message
-// rather than on any other paragraph in the markup. The searches quote the
-// unescaped text, but React does not escape the substrings that cross it, so
-// they match the static markup either way.
 function paragraphWrapping(html: string, text: string): string {
   const start = html.indexOf(text);
   if (start < 0) throw new Error(`no paragraph renders "${text}"`);
@@ -68,10 +54,17 @@ function paragraphWrapping(html: string, text: string): string {
 }
 
 describe("PlanSection", () => {
+  it("shows how many competitors the plan is watching, and nothing when it has no count", () => {
+    const line = "Watching 3 of 15 competitors on your plan.";
+    expect(render(BILLED, line)).toContain(`data-slot="plan-usage"`);
+    expect(render(BILLED, line)).toContain(line);
+    expect(render(BILLED)).not.toContain("plan-usage");
+  });
+
   it("offers the next plan to someone with no payment set up", () => {
     const html = render({ tier: "scout", status: "none", currentPeriodEnd: null, trialing: false, billed: false });
     expect(html).toContain("Upgrade to Starter");
-    expect(html).toContain("€46/mo");
+    expect(html).toContain("€46/month");
   });
 
   it("offers the next plan again, and keeps billing history, once a paid plan has ended", () => {

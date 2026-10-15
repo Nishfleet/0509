@@ -7,12 +7,14 @@ import { deleteAccount } from "./account-delete.server";
 import { cancelPlanForDelete } from "./billing/cancel.server";
 import { returningForGate } from "./billing/returning.server";
 import { oauthHelpersContext } from "./agent/context.server";
-import { hasFreshSession, removeSignedInPasskey, requestEmailChange, signOut } from "./auth.server";
+import { hasFreshSession, removeSignedInPasskey, requestEmailChange, signOut, signOutEverywhere } from "./auth.server";
 import { nextBriefAt } from "./brief-schedule";
 import { formatBriefAt } from "./brief-settings";
 import { parseBriefSchedule } from "./brief-schedule-input";
-import { readPlanSummary } from "./data/plan.server";
-import { readSlackTarget, removeSlackTarget, saveSlackTarget } from "./data/send_target.server";
+import { competitorCountLine } from "./competitor-count";
+import { readCompetitors } from "./data/entity.server";
+import { readEntitlements, readPlanSummary } from "./data/plan.server";
+import { readSlackDisconnected, readSlackTarget, removeSlackTarget, saveSlackTarget } from "./data/send_target.server";
 import { readUserDismissed, restoreSuggestion } from "./data/suggestion.server";
 import {
   readBriefScheduleForOwner,
@@ -88,23 +90,54 @@ const NO_WORKSPACE_SETTINGS = {
   ownSiteAlerts: true,
   changeAlerts: true,
   slackConnected: false,
+  slackRevoked: false,
   dismissed: [],
   teammates: [],
   plan: null,
   returning: false,
+  countLine: null,
 };
 
+async function readCountLine(workspaceId: string): Promise<string | null> {
+  try {
+    const [{ competitors }, entitlements] = await Promise.all([
+      readCompetitors(workspaceId),
+      readEntitlements(workspaceId),
+    ]);
+    const watching = competitors.filter((competitor) => competitor.state === "on").length;
+    return competitorCountLine(watching, entitlements.competitors);
+  } catch (error) {
+    console.warn(
+      JSON.stringify({ event: "settings.count_line_failed", error: error instanceof Error ? error.name : "unknown" }),
+    );
+    return null;
+  }
+}
+
 async function readWorkspaceSettings(workspaceId: string) {
-  const [ownSiteAlerts, changeAlerts, slackTarget, dismissed, plan, teammates] = await Promise.all([
-    readOwnSiteAlerts(workspaceId),
-    readChangeAlerts(workspaceId),
-    readSlackTarget(env.DB, workspaceId),
-    readUserDismissed(workspaceId),
-    readPlanSummary(workspaceId),
-    readTeammates(workspaceId),
-  ]);
+  const [ownSiteAlerts, changeAlerts, slackTarget, slackRevoked, dismissed, plan, teammates, countLine] =
+    await Promise.all([
+      readOwnSiteAlerts(workspaceId),
+      readChangeAlerts(workspaceId),
+      readSlackTarget(env.DB, workspaceId),
+      readSlackDisconnected(env.DB, workspaceId),
+      readUserDismissed(workspaceId),
+      readPlanSummary(workspaceId),
+      readTeammates(workspaceId),
+      readCountLine(workspaceId),
+    ]);
   const returning = await returningForGate(workspaceId, plan);
-  return { ownSiteAlerts, changeAlerts, slackConnected: slackTarget !== null, dismissed, teammates, plan, returning };
+  return {
+    ownSiteAlerts,
+    changeAlerts,
+    slackConnected: slackTarget !== null,
+    slackRevoked,
+    dismissed,
+    teammates,
+    plan,
+    returning,
+    countLine,
+  };
 }
 
 export async function readSettings(user: SettingsUser) {
@@ -121,19 +154,30 @@ export async function readSettings(user: SettingsUser) {
           nextLine: formatBriefAt(nextBriefAt(owned.schedule, new Date()), owned.schedule.timezone),
         };
   const workspace = workspaceId === null ? null : await readWorkspaceSettings(workspaceId);
-  const { ownSiteAlerts, changeAlerts, slackConnected, dismissed, teammates, plan, returning } =
-    workspace ?? NO_WORKSPACE_SETTINGS;
+  const {
+    ownSiteAlerts,
+    changeAlerts,
+    slackConnected,
+    slackRevoked,
+    dismissed,
+    teammates,
+    plan,
+    returning,
+    countLine,
+  } = workspace ?? NO_WORKSPACE_SETTINGS;
   return {
     email: user.email,
     schedule,
     ownSiteAlerts,
     changeAlerts,
     slackConnected,
+    slackRevoked,
     dismissed,
     delivery,
     teammates,
     plan,
     returning,
+    countLine,
   };
 }
 
@@ -233,6 +277,10 @@ async function removeAccount(
   throw redirect(`/login?deleted=${encodeURIComponent(deleted.instanceId)}`, { headers: deleted.headers });
 }
 
+async function leaveEverywhere(request: Request): Promise<never> {
+  throw redirect("/login", { headers: await signOutEverywhere(env, request) });
+}
+
 async function removePasskey(request: Request, form: FormData): Promise<SettingsResult> {
   const parsed = passkeyForm.safeParse(Object.fromEntries(form));
   const id = parsed.success ? parsed.data.passkeyId : "";
@@ -283,6 +331,7 @@ const INTENTS = new Map<string, (call: IntentCall) => Promise<SettingsResult>>([
   ["teammate-add", (c) => inviteTeammate(c.user, c.form)],
   ["teammate-remove", (c) => dropTeammate(c.user.id, c.form)],
   ["change-email", (c) => changeEmail(c.request, c.form)],
+  ["sign-out-everywhere", (c) => leaveEverywhere(c.request)],
   ["delete-account", (c) => removeAccount(c.user, c.form, c)],
   ["passkey-remove", (c) => removePasskey(c.request, c.form)],
   ["restore-suggestion", (c) => restore(c.user.id, c.form)],
