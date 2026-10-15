@@ -5,7 +5,7 @@ export const YOUTUBE_LINK_ERROR =
 export const YOUTUBE_VIDEO_ERROR =
   "That looks like a video. Paste the channel link, not a video, like youtube.com/@theirname.";
 export const YOUTUBE_TOO_LONG_ERROR =
-  "That link is too long. Paste just the channel link, like youtube.com/@theirname.";
+  "That link is too long. Paste the channel link only, like youtube.com/@theirname.";
 
 const VIDEO_PATH = /^\/(?:watch|shorts|live|embed|playlist|v)(?:\/|$)/;
 
