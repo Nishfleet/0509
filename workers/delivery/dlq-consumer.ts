@@ -283,7 +283,7 @@ async function deadLetteredChange(env: Env, messageId: string, signalId: string)
     workspace_id: signal.workspace_id,
     now: new Date().toISOString(),
   });
-  const emailReached = attempt === null || attempt.status === "sent";
+  const emailReached = attempt?.status === "sent";
   await insertDeliveryFailedAlert(
     env.DB,
     emailReached ? { ...alert, title: CHANGE_SLACK_UNDELIVERED_TITLE, body: CHANGE_SLACK_UNDELIVERED_BODY } : alert,
