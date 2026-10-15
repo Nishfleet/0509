@@ -12,7 +12,7 @@ import {
 } from "../../app/lib/client-brands.server";
 import { MAX_CLIENT_BRANDS } from "../../app/lib/client-brands";
 import { readWorkspaceExport } from "../../app/lib/data-export.server";
-import { readEntitlements } from "../../app/lib/data/plan.server";
+import { readEntitlements, readPlanSubscription } from "../../app/lib/data/plan.server";
 import {
   readBriefSchedulesForOwner,
   readBillingWorkspaceId,
@@ -161,5 +161,26 @@ describe("client brands", () => {
       "SELECT count(*) AS n FROM workspace WHERE parent_workspace_id = 'ws-agency'",
     ).first();
     expect(count).toEqual({ n: MAX_CLIENT_BRANDS });
+  });
+
+  it("falls back to the first brand and refuses to open clients once the owner leaves Agency", async () => {
+    await addClientBrand(AGENCY, "Acme Foods");
+    await env.DB.exec("UPDATE plan SET tier = 'starter' WHERE workspace_id = 'ws-agency'");
+    expect(await readWorkspaceIdForOwner(AGENCY.id)).toBe("ws-agency");
+    const panel = await readBrandPanel(AGENCY.id);
+    expect(panel.brands.map((brand) => [brand.name, brand.paused])).toEqual([
+      ["Home", false],
+      ["Acme Foods", true],
+    ]);
+    const client = panel.brands.find((brand) => brand.paused);
+    expect(await switchClientBrand(AGENCY.id, client?.id ?? "")).toBe(false);
+    expect(await readOtherBrands(AGENCY.id)).toEqual([]);
+  });
+
+  it("keeps the subscription on the Agency workspace only, so deleting the account cancels it once", async () => {
+    await addClientBrand(AGENCY, "Acme Foods");
+    const activeId = await readWorkspaceIdForOwner(AGENCY.id);
+    expect(await readPlanSubscription(activeId ?? "")).toBeNull();
+    expect(await readPlanSubscription("ws-agency")).not.toBeNull();
   });
 });

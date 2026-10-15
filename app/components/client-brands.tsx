@@ -9,6 +9,7 @@ export interface BrandChoice {
   id: string;
   name: string;
   current: boolean;
+  paused: boolean;
 }
 
 function SwitchForm({ brand, label }: { brand: BrandChoice; label: string }) {
@@ -19,7 +20,7 @@ function SwitchForm({ brand, label }: { brand: BrandChoice; label: string }) {
       <Button
         type="submit"
         variant="secondary"
-        className="max-w-full py-2 text-left whitespace-normal [overflow-wrap:anywhere]"
+        className="max-w-full py-2 text-left [overflow-wrap:anywhere] whitespace-normal"
       >
         {label}
       </Button>
@@ -82,11 +83,11 @@ export function ClientBrands({ brands, canAdd, full }: { brands: BrandChoice[]; 
         {brands.map((brand) => (
           <li key={brand.id} className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <span className="min-w-0 font-semibold [overflow-wrap:anywhere]">{brand.name}</span>
-            {brand.current ? (
-              <span className="font-mono text-meta text-ink-soft uppercase">Viewing now</span>
-            ) : (
-              <SwitchForm brand={brand} label={`Open ${brand.name}`} />
-            )}
+            {brand.current ? <span className="font-mono text-meta text-ink-soft uppercase">Viewing now</span> : null}
+            {brand.paused ? (
+              <span className="text-body-sm text-ink-soft">Paused. Client brands need the Agency plan.</span>
+            ) : null}
+            {brand.current || brand.paused ? null : <SwitchForm brand={brand} label={`Open ${brand.name}`} />}
           </li>
         ))}
       </ul>

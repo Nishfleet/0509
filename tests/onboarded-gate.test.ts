@@ -150,7 +150,11 @@ describe("app layout middleware", () => {
   });
 
   it("gates share.png and logos with session-only middleware, not the onboarding gate", () => {
-    expect(childPathsOf("routes/app-session-layout.tsx")).toEqual(["app/share.png", "app/logos/:entityId"]);
+    expect(childPathsOf("routes/app-session-layout.tsx")).toEqual([
+      "app/share.png",
+      "app/logos/:entityId",
+      "app/brands",
+    ]);
     expect(appSessionLayout.middleware).toEqual([sessionMocks.requireSessionMiddleware]);
     expect(appSessionLayout.middleware).not.toContain(requireOnboarded);
   });

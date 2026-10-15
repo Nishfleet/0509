@@ -274,7 +274,7 @@ describe("ensureWorkspace", () => {
     await ensureWorkspace(base, { ...input, timezone: null });
     const racing: WorkspaceDb = {
       prepare(query: string) {
-        if (query.startsWith("SELECT id, name")) {
+        if (query.startsWith("SELECT w.id AS id, w.name")) {
           return {
             bind: () => ({
               first: async <T>() =>

@@ -1,7 +1,19 @@
 export const LENDING_TIER = "agency";
 
-export function activeFirstOrder(ownerExpr: string, idExpr = "id", createdExpr = "created_at"): string {
-  return `(${idExpr} = (SELECT workspace_id FROM active_workspace WHERE user_id = ${ownerExpr})) DESC, ${createdExpr} ASC`;
+export function coveredWorkspace(idExpr: string): string {
+  return `(SELECT cw.parent_workspace_id IS NULL
+      OR EXISTS (SELECT 1 FROM plan cp WHERE cp.workspace_id = cw.id)
+      OR EXISTS (
+        SELECT 1 FROM workspace cpar
+        JOIN plan cpp ON cpp.workspace_id = cpar.id AND cpp.tier = '${LENDING_TIER}'
+        WHERE cpar.id = cw.parent_workspace_id AND cpar.owner_user_id = cw.owner_user_id
+      )
+    FROM workspace cw WHERE cw.id = ${idExpr})`;
+}
+
+export function activeFirstOrder(ownerExpr: string, idExpr = "w.id", createdExpr = "w.created_at"): string {
+  const active = `(SELECT workspace_id FROM active_workspace WHERE user_id = ${ownerExpr})`;
+  return `(COALESCE(${idExpr} = ${active}, 0) AND ${coveredWorkspace(idExpr)}) DESC, ${createdExpr} ASC`;
 }
 
 export function governingWorkspace(idExpr: string): string {

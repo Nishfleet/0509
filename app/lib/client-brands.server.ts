@@ -62,13 +62,15 @@ async function clientBrandCount(userId: string): Promise<number> {
 }
 
 export async function switchClientBrand(userId: string, workspaceId: string): Promise<boolean> {
-  return setActiveWorkspace(userId, workspaceId);
+  const target = (await readOwnedWorkspaces(userId)).find((row) => row.id === workspaceId);
+  return target?.covered === 1 && (await setActiveWorkspace(userId, workspaceId));
 }
 
 export interface BrandOption {
   id: string;
   name: string;
   current: boolean;
+  paused: boolean;
 }
 
 export interface BrandPanel {
@@ -79,7 +81,12 @@ export interface BrandPanel {
 
 export async function readBrandPanel(userId: string): Promise<BrandPanel> {
   const [owned, activeId] = await Promise.all([readOwnedWorkspaces(userId), readWorkspaceIdForOwner(userId)]);
-  const brands = owned.map((row) => ({ id: row.id, name: row.name, current: row.id === activeId }));
+  const brands = owned.map((row) => ({
+    id: row.id,
+    name: row.name,
+    current: row.id === activeId,
+    paused: row.covered !== 1,
+  }));
   if (activeId === null) return { brands, canAdd: false, full: false };
   const { workspaces_max: max } = await readEntitlements(activeId);
   const planAllows = max === null || max > brands.length;
@@ -89,5 +96,7 @@ export async function readBrandPanel(userId: string): Promise<BrandPanel> {
 
 export async function readOtherBrands(userId: string): Promise<BrandOption[]> {
   const [owned, activeId] = await Promise.all([readOwnedWorkspaces(userId), readWorkspaceIdForOwner(userId)]);
-  return owned.filter((row) => row.id !== activeId).map((row) => ({ id: row.id, name: row.name, current: false }));
+  return owned
+    .filter((row) => row.id !== activeId && row.covered === 1)
+    .map((row) => ({ id: row.id, name: row.name, current: false, paused: false }));
 }

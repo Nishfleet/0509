@@ -5,7 +5,7 @@ import { resolveEntitlements } from "../billing/entitlements";
 import { entitledTier } from "../billing/subscription-state";
 import { MAX_CLIENT_BRANDS } from "../client-brands";
 import { canonicalTimezone } from "../timezone";
-import { activeFirstOrder, governingWorkspace } from "./active-workspace";
+import { activeFirstOrder, coveredWorkspace, governingWorkspace } from "./active-workspace";
 
 const SELECT_WORKSPACE_TIMEZONE = "SELECT timezone FROM workspace WHERE id = ?";
 
@@ -25,7 +25,7 @@ ORDER BY w.id`;
 
 const DELETE_WORKSPACE = "DELETE FROM workspace WHERE id = ?";
 
-const SELECT_WORKSPACE_BY_OWNER = `SELECT id FROM workspace WHERE owner_user_id = ?1
+const SELECT_WORKSPACE_BY_OWNER = `SELECT w.id AS id FROM workspace w WHERE w.owner_user_id = ?1
 ORDER BY ${activeFirstOrder("?1")} LIMIT 1`;
 
 const workspaceIdRow = z.object({ id: z.string() });
@@ -191,7 +191,7 @@ export async function deleteWorkspace(workspaceId: string): Promise<void> {
   await env.DB.prepare(DELETE_WORKSPACE).bind(workspaceId).run();
 }
 
-const SELECT_SCHEDULE_BY_OWNER = `SELECT id, timezone, brief_weekday, brief_hour, brief_paused_at FROM workspace WHERE owner_user_id = ?1
+const SELECT_SCHEDULE_BY_OWNER = `SELECT w.id AS id, w.timezone AS timezone, w.brief_weekday AS brief_weekday, w.brief_hour AS brief_hour, w.brief_paused_at AS brief_paused_at FROM workspace w WHERE w.owner_user_id = ?1
 ORDER BY ${activeFirstOrder("?1")} LIMIT 1`;
 
 const UPDATE_SCHEDULE = `UPDATE workspace SET timezone = ?, brief_weekday = ?, brief_hour = ? WHERE id = ?`;
@@ -308,7 +308,8 @@ export async function touchWorkspaceSeen(workspaceId: string, now: Date): Promis
 
 const SELECT_OWNED_WORKSPACES = `SELECT w.id AS id,
   COALESCE((SELECT e.name FROM entity e WHERE e.workspace_id = w.id AND e.role = 'self' ORDER BY e.created_at ASC LIMIT 1), w.name) AS name,
-  w.parent_workspace_id AS parent_workspace_id
+  w.parent_workspace_id AS parent_workspace_id,
+  ${coveredWorkspace("w.id")} AS covered
 FROM workspace w
 WHERE w.owner_user_id = ?
 ORDER BY w.created_at ASC`;
@@ -317,6 +318,7 @@ const ownedWorkspaceRow = z.object({
   id: z.string(),
   name: z.string(),
   parent_workspace_id: z.string().nullable(),
+  covered: z.number(),
 });
 
 export async function readOwnedWorkspaces(userId: string) {

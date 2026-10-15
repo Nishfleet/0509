@@ -46,6 +46,7 @@ describe("Agency client workspaces", () => {
   });
 
   it("opens the chosen workspace", async () => {
+    await seedPlan("ws-agency", "agency", "active", FUTURE);
     await env.DB.exec("INSERT INTO active_workspace (user_id, workspace_id) VALUES ('agency-owner', 'ws-client')");
     expect(await readWorkspaceIdForOwner("agency-owner")).toBe("ws-client");
     expect((await readWorkspaceLanding(env.DB, "agency-owner"))?.id).toBe("ws-client");
