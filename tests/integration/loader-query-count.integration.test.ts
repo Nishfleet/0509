@@ -1,18 +1,26 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
+import { loadAlertsPage } from "../../app/lib/alerts-page.server";
 import { readCompetitorPage } from "../../app/lib/competitor-page.server";
+import { listWorkspaceBriefs, readWorkspaceBrief } from "../../app/lib/data/digest.server";
+import { readCompetitors } from "../../app/lib/data/entity.server";
+import { readDeviceList } from "../../app/lib/devices.server";
 import { readHomeReads } from "../../app/lib/home-page.server";
 import { readHomeStandingInputs } from "../../app/lib/home-standing.server";
+import { readSettings } from "../../app/lib/settings.server";
 
 let runs = 0;
 
-async function seed(rivals: number) {
+async function seed(rivals: number, weeks: number) {
   runs += 1;
   const ws = `ws_qc_${String(runs)}`;
   const user = `user_qc_${String(runs)}`;
   const at = "2026-10-05T00:00:00.000Z";
   const stmts = [
+    env.DB.prepare(
+      "INSERT OR IGNORE INTO source (id, key, kind, platform, plugin_key, reliability) VALUES ('src_qc', 'qc', 'mentions', 'gdelt', 'gdelt', 'best_effort')",
+    ),
     env.DB.prepare(
       "INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, 'q', ?2, 1, ?3, ?3)",
     ).bind(user, `${user}@example.test`, at),
@@ -35,7 +43,25 @@ async function seed(rivals: number) {
       ).bind(`${ws}_s${String(i)}`, ws, `${ws}_r${String(i)}`, at, i + 1),
     );
   }
-  await env.DB.batch(stmts);
+  const day = 24 * 60 * 60 * 1000;
+  for (let w = 0; w < weeks; w += 1) {
+    const start = new Date(Date.parse("2026-10-05T00:00:00.000Z") - w * 7 * day).toISOString();
+    stmts.push(
+      env.DB.prepare(
+        "INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status, subject, payload_json, sent_at) VALUES (?1, ?2, 'weekly', ?3, ?3, 'sent', 's', '{}', ?3)",
+      ).bind(`${ws}_d${String(w)}`, ws, start),
+    );
+    for (let i = 0; i < rivals; i += 1) {
+      for (const kind of ["mention", "hiring", "change"]) {
+        stmts.push(
+          env.DB.prepare(
+            "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, aspect, canonical_url, url_hash, dedup_key, observed_at, published_at) VALUES (?1, ?2, ?3, 'src_qc', ?4, 't', 'price', 'https://e.example/x', ?1, ?1, ?5, ?5)",
+          ).bind(`${ws}_g${String(w)}_${String(i)}_${kind}`, ws, `${ws}_r${String(i)}`, kind, start),
+        );
+      }
+    }
+  }
+  for (let from = 0; from < stmts.length; from += 100) await env.DB.batch(stmts.slice(from, from + 100));
   return { ws, user };
 }
 
@@ -55,24 +81,46 @@ async function count(fn: () => Promise<unknown>): Promise<number> {
   return n;
 }
 
+type Page = "home" | "competitor" | "alerts" | "brief" | "settings" | "competitors";
+
+const BUDGET: Record<Page, number> = {
+  home: 10,
+  competitor: 13,
+  alerts: 15,
+  brief: 2,
+  settings: 20,
+  competitors: 4,
+};
+
 describe("loader query counts", () => {
-  it("Home and the competitor page prepare the same number of statements for 2 rivals as for 40", async () => {
-    const counts: Record<"home" | "competitor", number[]> = { home: [], competitor: [] };
-    for (const rivals of [2, 40]) {
-      const { ws, user } = await seed(rivals);
-      counts.home.push(
-        await count(async () => {
+  it("every signed-in page prepares the same number of statements for 2 rivals and 2 weeks as for 40 rivals and 26 weeks, within its budget", async () => {
+    const counts = {} as Record<Page, number[]>;
+    for (const page of Object.keys(BUDGET) as Page[]) counts[page] = [];
+    for (const [rivals, weeks] of [
+      [2, 2],
+      [40, 26],
+    ]) {
+      const { ws, user } = await seed(rivals, weeks);
+      const owner = { id: user, email: `${user}@example.test`, name: "q" } as Parameters<typeof readSettings>[0];
+      const measured: Record<Page, () => Promise<unknown>> = {
+        home: async () => {
           const inputs = await readHomeStandingInputs(user, ws);
           await readHomeReads(ws, inputs?.payload ?? null, null);
-        }),
-      );
-      counts.competitor.push(
-        await count(() => readCompetitorPage(ws, `${ws}_r0`, new Date("2026-10-12T00:00:00.000Z"))),
-      );
+        },
+        competitor: () => readCompetitorPage(ws, `${ws}_r0`, new Date("2026-10-12T00:00:00.000Z")),
+        alerts: () => loadAlertsPage(ws),
+        brief: async () => {
+          const weeksList = await listWorkspaceBriefs(ws);
+          await readWorkspaceBrief(ws, weeksList[0]?.id ?? "none");
+        },
+        settings: () => Promise.all([readSettings(owner), readDeviceList(user, "session", new Date())]),
+        competitors: () => readCompetitors(ws),
+      };
+      for (const page of Object.keys(BUDGET) as Page[]) counts[page].push(await count(measured[page]));
     }
-    expect(counts.home[1]).toBe(counts.home[0]);
-    expect(counts.competitor[1]).toBe(counts.competitor[0]);
-    expect(counts.home[1]).toBeLessThanOrEqual(10);
-    expect(counts.competitor[1]).toBeLessThanOrEqual(15);
+    for (const page of Object.keys(BUDGET) as Page[]) {
+      expect(counts[page][1], `${page} at 40 rivals and 26 weeks`).toBe(counts[page][0]);
+      expect(counts[page][1], `${page} budget`).toBeLessThanOrEqual(BUDGET[page]);
+    }
   });
 });
