@@ -187,7 +187,13 @@ export const PRIVACY: LegalDocument = {
         {
           term: "Do-not-email record",
           details: [
-            "When you unsubscribe, we keep the email address and the reason on a do-not-email list, so we never email it again. It holds nothing else. When you delete your account we add the address the same way, and we remove that delete record if you sign up again with the same address.",
+            "When you unsubscribe, we keep the email address and the reason on a do-not-email list, so we never email it again. It holds nothing else. When you delete your account we add the address the same way, and we remove that delete record if you sign up again with the same address. When our email sender reports that an address is suppressed because it bounced or its owner marked a message as spam, we add it the same way and stop emailing it.",
+          ],
+        },
+        {
+          term: "Deleted rows in the database history",
+          details: [
+            "The database keeps a 30-day point-in-time history. A row you delete, or that is deleted with your account, stays in that history for up to 30 days before it is gone.",
           ],
         },
         {
