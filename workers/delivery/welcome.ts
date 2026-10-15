@@ -28,7 +28,7 @@ async function eligible(env: Env, trial: NewTrial, isTester: TesterCheck): Promi
   if (trial.subscription_id === null) return false;
   if (await hasReminderAttempt(env.DB, welcomeKey(trial))) return false;
   if ((await isTester(trial.subscription_id)) !== false) return false;
-  return !(await isAddressSuppressed(trial.target_value, env.DB));
+  return !(await isAddressSuppressed(trial.target_value, "all", env.DB));
 }
 
 async function welcome(env: Env, trial: NewTrial, when: { now: Date; isTester: TesterCheck }): Promise<boolean> {

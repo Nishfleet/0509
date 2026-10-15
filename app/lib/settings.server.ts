@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { RouterContextProvider } from "react-router";
 
 import { deleteAccount } from "./account-delete.server";
+import { SUPPORT_ADDRESS } from "../components/footer";
 import { cancelPlanForDelete } from "./billing/cancel.server";
 import { returningForGate } from "./billing/returning.server";
 import { oauthHelpersContext } from "./agent/context.server";
@@ -24,7 +25,8 @@ import {
   setChangeAlerts,
   setOwnSiteAlerts,
 } from "./data/workspace.server";
-import { readDeliveryAddress, saveDeliveryAddress } from "./delivery-address.server";
+import { readMailKinds } from "./data/email_suppression.server";
+import { readDeliveryAddress, saveDeliveryAddress, saveMailKinds } from "./delivery-address.server";
 import { addTeammateByOwner, readTeammates, removeTeammateByOwner } from "./teammates.server";
 import { parseSlackWebhook } from "./slack-webhook";
 import { postToSlack } from "./slack.server";
@@ -46,6 +48,7 @@ const PASSKEY_FAILED = "The passkey wasn't removed. Try again.";
 const alertSwitchForm = z.object({ value: z.enum(["on", "off"]) });
 const slackSaveForm = z.object({ webhook: z.string() });
 const deliveryForm = z.object({ address: z.string().optional(), resume: z.string().optional() });
+const mailKindsForm = z.object({ brief: z.string().optional(), alerts: z.string().optional() });
 const teammateAddForm = z.object({ address: z.string() });
 const teammateRemoveForm = z.object({ targetId: z.string() });
 const emailChangeForm = z.object({ newEmail: z.string() });
@@ -153,7 +156,10 @@ export async function readSettings(user: SettingsUser) {
           ...owned.schedule,
           nextLine: formatBriefAt(nextBriefAt(owned.schedule, new Date()), owned.schedule.timezone),
         };
-  const workspace = workspaceId === null ? null : await readWorkspaceSettings(workspaceId);
+  const [workspace, mail] = await Promise.all([
+    workspaceId === null ? null : readWorkspaceSettings(workspaceId),
+    readMailKinds(delivery.address),
+  ]);
   const {
     ownSiteAlerts,
     changeAlerts,
@@ -174,6 +180,7 @@ export async function readSettings(user: SettingsUser) {
     slackRevoked,
     dismissed,
     delivery,
+    mail,
     teammates,
     plan,
     returning,
@@ -221,6 +228,21 @@ async function saveAddress(user: SettingsUser, form: FormData): Promise<Settings
     resume: parsed.success && parsed.data.resume === "yes",
   });
   return result({ deliveryError: saved.error, deliverySuppressed: saved.suppressed });
+}
+
+async function saveMail(user: SettingsUser, form: FormData): Promise<SettingsResult> {
+  const parsed = mailKindsForm.safeParse(Object.fromEntries(form));
+  const saved = await saveMailKinds({
+    userId: user.id,
+    signInEmail: user.email,
+    brief: parsed.success && parsed.data.brief === "yes",
+    alerts: parsed.success && parsed.data.alerts === "yes",
+  });
+  if (!saved)
+    return result({
+      deliveryError: `We could not change the emails for this address. Switching them back on works from your sign-in address, or write to ${SUPPORT_ADDRESS}.`,
+    });
+  return result({ saved: true });
 }
 
 async function inviteTeammate(user: SettingsUser, form: FormData): Promise<SettingsResult> {
@@ -328,6 +350,7 @@ const INTENTS = new Map<string, (call: IntentCall) => Promise<SettingsResult>>([
   ["slack-save", (c) => connectSlack(c.user.id, c.form)],
   ["slack-remove", (c) => disconnectSlack(c.user.id)],
   ["delivery-address", (c) => saveAddress(c.user, c.form)],
+  ["mail-kinds", (c) => saveMail(c.user, c.form)],
   ["teammate-add", (c) => inviteTeammate(c.user, c.form)],
   ["teammate-remove", (c) => dropTeammate(c.user.id, c.form)],
   ["change-email", (c) => changeEmail(c.request, c.form)],
