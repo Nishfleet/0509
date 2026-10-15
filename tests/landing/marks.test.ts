@@ -1,5 +1,6 @@
-import { createElement } from "react";
+import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { Hero } from "../../app/components/landing/hero";
@@ -50,6 +51,11 @@ const ROWS: SiteChangeView[] = [
 
 function markup(rows: readonly SiteChangeView[]): string {
   return renderToStaticMarkup(createElement(Marks, { marks: pickLandingMarks(rows), now: Date.parse(NOW) }));
+}
+
+function inRouter(element: ReactElement): string {
+  const Stub = createRoutesStub([{ path: "/", Component: () => element }]);
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
 }
 
 describe("pickLandingMarks", () => {
@@ -125,7 +131,7 @@ describe("landing marks", () => {
   });
 
   it("names the hero's three literal pairs as examples, so a live mark is never mistaken for one", () => {
-    const hero = renderToStaticMarkup(createElement(Hero));
+    const hero = inRouter(createElement(Hero));
     expect(hero).toContain("Examples, not real changes.");
     expect(hero).not.toContain("screenshot");
   });
