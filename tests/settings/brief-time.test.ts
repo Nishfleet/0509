@@ -28,14 +28,18 @@ describe("parseBriefSchedule", () => {
 
 describe("formatBriefAt", () => {
   it("renders an instant in the named IANA zone", () => {
-    expect(formatBriefAt(new Date("2026-10-05T07:00:00Z"), "Europe/London")).toBe(
-      "Monday 5 October 2026, 08:00 Europe/London",
+    expect(formatBriefAt(new Date("2026-10-05T07:00:00Z"), "Europe/London")).toBe("Monday 5 October 2026, 08:00 BST");
+  });
+
+  it("never shows a raw zone id such as Asia/Calcutta", () => {
+    expect(formatBriefAt(new Date("2026-10-19T02:30:00Z"), "Asia/Calcutta")).toBe(
+      "Monday 19 October 2026, 08:00 GMT+5:30",
     );
   });
 
   it("renders the next brief of a schedule", () => {
     const next = nextBriefAt({ timezone: "America/New_York", weekday: 1, hour: 8 }, new Date("2026-09-24T12:00:00Z"));
-    expect(formatBriefAt(next, "America/New_York")).toBe("Monday 28 September 2026, 08:00 America/New_York");
+    expect(formatBriefAt(next, "America/New_York")).toBe("Monday 28 September 2026, 08:00 GMT-4");
   });
 });
 
