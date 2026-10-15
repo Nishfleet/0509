@@ -3,6 +3,7 @@ import { captureException } from "@sentry/cloudflare";
 import { checkStuckWebhooks } from "../app/lib/billing/stuck-webhooks.server";
 import { deleteExpiredAuthRows } from "../app/lib/data/auth_expiry.server";
 import { deleteExpiredJevFailures } from "../app/lib/data/jev_failure.server";
+import { backfillChangeExcerpts } from "../app/lib/site/backfill-excerpts.server";
 import { checkSilentRivals } from "../app/lib/site/silent-rivals.server";
 
 export function nightlyDataChecks(db: D1Database, now: Date): Promise<unknown>[] {
@@ -11,6 +12,7 @@ export function nightlyDataChecks(db: D1Database, now: Date): Promise<unknown>[]
     deleteExpiredJevFailures(db, now),
     checkStuckWebhooks(db, now),
     checkSilentRivals(now),
+    backfillChangeExcerpts(),
   ];
 }
 

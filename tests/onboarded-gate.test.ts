@@ -137,6 +137,8 @@ describe("app layout middleware", () => {
       "app/upgrade",
       "app/tester",
       "app/alerts",
+      "app/changes/feedback",
+      "app/brief-preview",
       "app/brief/:digestId?",
     ]);
   });

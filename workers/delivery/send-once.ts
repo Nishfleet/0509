@@ -10,6 +10,7 @@ export interface SendOnceInput {
   targetId: string;
   to: string;
   render: () => RenderedBrief;
+  headers?: Record<string, string>;
 }
 
 export async function sendOnce(env: Env, input: SendOnceInput): Promise<boolean> {
@@ -29,12 +30,18 @@ export async function sendOnce(env: Env, input: SendOnceInput): Promise<boolean>
         subject: rendered.subject,
         html: rendered.html,
         text: rendered.text,
+        ...(input.headers === undefined ? {} : { headers: input.headers }),
       });
     })
     .catch((error: unknown) => ({
       outcome: "failed" as const,
       error: redactEmailShaped(error instanceof Error ? error.message : "render failed"),
     }));
-  await resolveSendAttempt(env.DB, { attemptId: claim.id, outcome: result.outcome, error: result.error });
+  await resolveSendAttempt(env.DB, {
+    attemptId: claim.id,
+    idempotencyKey: input.key,
+    outcome: result.outcome,
+    error: result.error,
+  });
   return result.outcome === "sent";
 }

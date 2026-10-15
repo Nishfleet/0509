@@ -1,3 +1,5 @@
+import { SUPPORT_ADDRESS } from "../../app/components/footer";
+
 export interface SendResult {
   outcome: "sent" | "failed";
   error: string | null;
@@ -20,7 +22,7 @@ export { errorText };
 
 export async function sendMessage(email: SendEmail, message: EmailMessageBuilder): Promise<SendResult> {
   try {
-    await email.send(message);
+    await email.send({ replyTo: SUPPORT_ADDRESS, ...message });
   } catch (end) {
     return { outcome: "failed", error: errorText(end) };
   }

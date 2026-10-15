@@ -95,9 +95,7 @@ describe("startScheduledWorkflow", () => {
     const { createBatch, env } = fakeEnv();
     const results = await startMissedDailyWorkflows(env, Date.UTC(2026, 9, 2, 2, 10, 0));
     expect(results.every((result) => result.status === "fulfilled")).toBe(true);
-    // The overnight block runs 19:00 to 01:00 UTC, so before the 03:00 refresh
-    // the catch-up covers the previous evening's sweeps and today's feed sweep
-    // (0509#7191). Tonight's 19:00 slots are not due yet.
+
     expect(createBatch.mock.calls.flat().flat()).toEqual([
       { id: "mentions-sweep-2026-10-01T19" },
       { id: "site-sweep-2026-10-01T21" },
@@ -132,7 +130,7 @@ describe("startScheduledWorkflow", () => {
       .flat()
       .map((entry) => entry.id);
     expect(ids).toEqual([]);
-    // The same minute, a tick before the refresh, still covers the evening.
+
     const { createBatch: after, env: envAfter } = fakeEnv();
     await startMissedDailyWorkflows(envAfter, Date.UTC(2026, 9, 2, 2, 55, 0));
     expect(

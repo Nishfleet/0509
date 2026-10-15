@@ -84,6 +84,9 @@ const readEntityDomainRow = z.object({ domain: z.string() });
 const SET_COMPETITOR_STATE =
   "UPDATE entity SET state = ?1, state_changed_at = ?2, state_changed_by = 'user', state_reason = NULL WHERE id = ?3 AND workspace_id = ?4 AND role = 'competitor' AND state IN ('on', 'off') AND state <> ?1 AND (?1 = 'off' OR (SELECT count(*) FROM entity WHERE workspace_id = ?4 AND role = 'competitor' AND state = 'on') < ?5)";
 
+const RENAME_COMPETITOR =
+  "UPDATE entity SET name = ?1 WHERE id = ?2 AND workspace_id = ?3 AND role = 'competitor' AND state IN ('on', 'off')";
+
 const DELETE_COMPETITOR = "DELETE FROM entity WHERE id = ? AND workspace_id = ? AND role = 'competitor'";
 
 const INSERT_COMPETITOR_FROM_SUGGESTION =
@@ -174,6 +177,14 @@ export async function setCompetitorState(input: {
   const cap = (await readEntitlements(workspaceId)).competitors;
   const result = await tryWhile(
     () => env.DB.prepare(SET_COMPETITOR_STATE).bind(state, now, entityId, workspaceId, cap).run(),
+    shouldRetryD1,
+  );
+  return result.meta.changes === 1;
+}
+
+export async function renameCompetitor(workspaceId: string, entityId: string, name: string): Promise<boolean> {
+  const result = await tryWhile(
+    () => env.DB.prepare(RENAME_COMPETITOR).bind(name, entityId, workspaceId).run(),
     shouldRetryD1,
   );
   return result.meta.changes === 1;
@@ -553,6 +564,21 @@ export async function fillCompetitorSocials(input: {
 }): Promise<boolean> {
   const result = await env.DB.prepare(FILL_COMPETITOR_SOCIALS)
     .bind(input.entityId, input.workspaceId, input.socialsJson, input.readAt)
+    .run();
+  return result.meta.changes === 1;
+}
+
+const SET_COMPETITOR_DESCRIPTION =
+  "UPDATE entity SET identity_json = json_set(identity_json, '$.description', ?3, '$.descriptionReadAt', ?4) WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor' AND json_valid(identity_json) AND coalesce(json_extract(identity_json, '$.description'), '') <> ?3";
+
+export async function setCompetitorDescription(input: {
+  workspaceId: string;
+  entityId: string;
+  description: string;
+  readAt: string;
+}): Promise<boolean> {
+  const result = await env.DB.prepare(SET_COMPETITOR_DESCRIPTION)
+    .bind(input.entityId, input.workspaceId, input.description, input.readAt)
     .run();
   return result.meta.changes === 1;
 }

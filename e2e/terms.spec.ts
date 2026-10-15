@@ -2,16 +2,6 @@ import { expect, test } from "./test";
 
 import { consoleFailures, watchConsole } from "./inbox";
 
-// The /terms contract. Every assertion here is reachable from the /terms row in
-// .agents/skills/verify/feature-map.md.
-//
-// Copy is pattern-matched, never pinned verbatim (the landing h1 lesson,
-// 2026-09-21T16:03Z). What is asserted is the contract: business use only,
-// public sources with no completeness promise, fair use, read-only agent keys,
-// generic plans with cancel-any-time, the liability cap, the governing law, the
-// link to /privacy, and the footer address. No plan name or price is pinned:
-// billing is undecided, and prices live in app/lib/billing/plans.ts.
-
 test("the terms page renders its heading and date @smoke", async ({ page }) => {
   const response = await page.goto("/terms");
   expect(response?.status()).toBe(200);

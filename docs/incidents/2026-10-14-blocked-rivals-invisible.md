@@ -24,7 +24,7 @@ By reading the server logs and D1 on 2026-10-14. Nothing alerted.
 
 ## The fix
 
-Migration `0062_page_last_failure.sql` and the page writer keep the reason and time of the latest failed read and clear them on the next good read. The queue lane no longer stamps `deferred_at`, and acks a `deferred` result (the nightly sweep reads it with the browser) while still retrying a timeout. The dead-letter event names the stored reason. A nightly check, `site.rivals_silent`, raises a Sentry error when a paid rival has had no snapshot for 7 days and logs the count per reason.
+Migration `0064_page_last_failure.sql` and the page writer keep the reason and time of the latest failed read and clear them on the next good read. The queue lane no longer stamps `deferred_at`, and acks a `deferred` result (the nightly sweep reads it with the browser) while still retrying a timeout. The dead-letter event names the stored reason. A nightly check, `site.rivals_silent`, raises a Sentry error when a paid rival has had no snapshot for 7 days and logs the count per reason.
 
 ## What stops a repeat
 

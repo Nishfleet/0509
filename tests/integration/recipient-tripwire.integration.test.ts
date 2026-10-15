@@ -1,14 +1,3 @@
-// Tripwire for the per-channel `signal_delivery` key (parent: 0509#4063).
-//
-// `signal_delivery` is UNIQUE on `(signal_id, channel_id)`. The contract
-// (`docs/REBUILD-DELIVERY.md` rule 3, `docs/engines/delivery.md` §1) wants the
-// recipient in the key, and v1 Settings offers one address. Today the pair
-// and the triple coincide, so nothing is wrong. The first time a workspace
-// holds two `send_target` rows for one channel, the second recipient's send
-// is suppressed by a constraint that was meant to prevent a duplicate, not a
-// delivery. That is silent under-delivery — worse than a duplicate.
-//
-// When this test has to change, widen the key first.
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 

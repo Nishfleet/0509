@@ -2,35 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { gzipAccepted, withCompressedDocument } from "../app/lib/document-compression.server";
 
-/*
- * 0509#7323: gzip the three Worker-rendered documents.
- *
- * The wrapper's own file is app/lib/document-compression.server.ts, which
- * carries no comments (AGENTS.md bans them in app/). The reasons belong with
- * the code, so they live here, where the diff a review reads can see them.
- *
- * Measured on the live documents at 2026-10-12T07:24:52Z, with
- * `curl -s -o /dev/null -D - -H 'Accept-Encoding: gzip, br'` against
- * https://0509.io/privacy, /terms and /design/landing: each answers 200 with
- * `cache-control: no-transform` and no content-encoding, content-length or
- * vary header. The no-transform directive added in 0509#6066 keeps Cloudflare
- * from injecting its analytics module, and it also switches the edge's Brotli
- * off, so the edge does not compress these documents today. The Worker is the
- * only place the gzip can be added, and `Vary: Accept-Encoding` is the cache
- * contract a negotiated response needs.
- *
- * What this file cannot prove: the runtime response encoder. The #7323 blocker
- * was the preview lane gzipping a body that already carried
- * `Content-Encoding: gzip`, which Node's Response does not do. That failure is
- * exercised end to end by e2e/privacy.spec.ts and e2e/terms.spec.ts in preview
- * mode, the repo's own proof for a change under app/.
- *
- * The negotiation contract is deliberately narrow, and pinned here: only an
- * explicit `gzip` member counts — `*` and `x-gzip` do not — and a member whose
- * weight is present but unparseable or outside 0 < q <= 1 is refused. Where the
- * contract is unclear the wrapper sends plain, which every client decodes.
- */
-
 const DOCUMENT_URL = "https://0509.io/privacy";
 
 function documentRequest(acceptEncoding: string | null = "gzip", method = "GET"): Request {
@@ -233,22 +204,6 @@ describe("withCompressedDocument", () => {
   });
 });
 
-/*
- * 0509#7328: the 404 document ships plain.
- *
- * The 404 is the one document whose bytes a requester chooses: the root
- * ErrorBoundary puts the requested pathname in the page, and every document
- * embeds the per-request CSP nonce. Compressing it would give a compressed-size
- * side channel that tracks bytes the attacker supplied, the BREACH shape. The
- * guard is one status check, so the rest of the negotiation above is untouched.
- *
- * The property the guard rests on, "a document that echoes request input is
- * never compressed", is pinned from both sides: this block for the 404, and
- * tests/error-page.test.ts, which renders the other ErrorBoundary branch and
- * asserts the requested pathname and the upstream message are absent from it.
- * A 200 route that starts echoing request input would need its own pin here,
- * because a status check cannot see it.
- */
 describe("withCompressedDocument on the 404 document", () => {
   it("ships the 404 body plain even when the client accepts gzip", async () => {
     const shipped = withCompressedDocument(documentRequest("gzip"), notFoundResponse());

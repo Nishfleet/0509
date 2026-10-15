@@ -19,7 +19,7 @@ import { handleBatch } from "./delivery/consumer";
 import { handleDlqBatch } from "./delivery/dlq-consumer";
 import { sweepPending } from "./delivery/sweeper";
 import { sendTrialReminders } from "./delivery/trial-reminder";
-import { sendWelcomes } from "./delivery/welcome";
+import { sendLifecycleEmails } from "./delivery/lifecycle";
 import { sentryOptions } from "./sentry";
 import { runNightlyStanding } from "./standing/nightly";
 import { IdentityTail } from "./identity-tail-workflow";
@@ -94,11 +94,7 @@ const handler = {
         await startScheduledWorkflow(env, controller.cron, controller.scheduledTime);
         if (controller.cron === OWN_SITE_CHECK_CRON) {
           reportMissedWorkflows(await startMissedWorkflows(env, controller.scheduledTime));
-          await sendWelcomes(env, new Date(controller.scheduledTime)).catch((error: unknown) => {
-            console.error(
-              JSON.stringify({ event: "delivery.welcome_cron_failed", error: String(error).slice(0, 200) }),
-            );
-          });
+          await sendLifecycleEmails(env, new Date(controller.scheduledTime));
         }
         return;
       }

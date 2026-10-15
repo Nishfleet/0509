@@ -1,8 +1,8 @@
 import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
-import { renderAlertFooter, type AlertFooterContext } from "./alert-footer";
+import { renderAlertFooter, type AlertFooterContext } from "../../app/lib/alert-footer";
 import { formatDate } from "./brief-template";
-import { EYEBROW, FONT, emailDocument } from "./email-shell";
+import { BODY_STYLE, EYEBROW_STYLE, HEADLINE, emailDocument, linkParagraph } from "../../app/lib/email-shell";
 
 export interface IncidentOpenContext extends AlertFooterContext {
   site: string;
@@ -40,12 +40,8 @@ const COPY = {
     `We re-checked ${site} at ${formatDate(closed_at, timezone, true)} and it looks fixed.`,
 } as const;
 
-const HEADLINE = `margin:0;font-family:${FONT};font-size:24px;line-height:30px;font-weight:800;letter-spacing:-0.02em;`;
-const BODY = `margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;`;
-
 function linkLine(link: string): string {
-  const href = escapeHtml(link);
-  return `<p style="${BODY}">See it in Five to Nine: <a class="brief-ink" href="${href}">${href}</a></p>`;
+  return linkParagraph("See it in Five to Nine", link);
 }
 
 export function renderIncidentOpen(ctx: IncidentOpenContext): RenderedBrief {
@@ -59,17 +55,17 @@ export function renderIncidentOpen(ctx: IncidentOpenContext): RenderedBrief {
   const footer = renderAlertFooter(ctx);
   return {
     subject,
-    text: [...lines, COPY.openLink(ctx.link), footer.text].join("\n"),
+    text: [...lines, COPY.openLink(ctx.link), footer.text].join("\n\n"),
     html: emailDocument(
       subject,
       [
-        `<p class="brief-muted" style="${EYEBROW}">Your site</p>`,
+        `<p class="brief-muted" style="${EYEBROW_STYLE}">Your site</p>`,
         `<p style="${HEADLINE}">${escapeHtml(subject)}</p>`,
-        ...lines.slice(1).map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`),
+        ...lines.slice(1).map((line) => `<p style="${BODY_STYLE}">${escapeHtml(line)}</p>`),
         linkLine(ctx.link),
         footer.html,
       ].join(""),
-      lines[1],
+      lines.slice(1).join(" "),
     ),
   };
 }
@@ -80,13 +76,13 @@ export function renderIncidentFixed(ctx: IncidentFixedContext): RenderedBrief {
   const footer = renderAlertFooter(ctx);
   return {
     subject,
-    text: `${line} ${ctx.link}\n${footer.text}`,
+    text: [subject, line, COPY.openLink(ctx.link), footer.text].join("\n\n"),
     html: emailDocument(
       subject,
       [
-        `<p class="brief-muted" style="${EYEBROW}">Your site</p>`,
+        `<p class="brief-muted" style="${EYEBROW_STYLE}">Your site</p>`,
         `<p style="${HEADLINE}">${escapeHtml(subject)}</p>`,
-        `<p style="${BODY}">${escapeHtml(line)}</p>`,
+        `<p style="${BODY_STYLE}">${escapeHtml(line)}</p>`,
         linkLine(ctx.link),
         footer.html,
       ].join(""),

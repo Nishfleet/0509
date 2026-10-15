@@ -29,8 +29,7 @@ const auth = createAuth({
 });
 
 const NOW = "2026-09-21T12:00:00.000Z";
-// Always inside the trailing-week window readCompetitorPage measures against
-// Date.now(); a fixed date goes stale the way NOW did on 2026-09-28.
+
 const CHANGE_SEEN_AT = new Date().toISOString();
 
 const PAYLOAD = {
@@ -420,6 +419,28 @@ describe("agent access, scoped to one workspace", () => {
     expect(limited.headers.get("retry-after")).toBe("60");
   });
 
+  it("stops serving a key on both the REST and MCP paths the moment it is deleted", async () => {
+    const { key, id } = await auth.api.createApiKey({ body: { userId: a.userId, name: "to revoke" } });
+    const rest = () =>
+      apiResponse(
+        new Request("http://localhost/api/v1/brief", {
+          headers: { authorization: `Bearer ${key}`, "cf-connecting-ip": "203.0.113.203" },
+        }),
+        readAgentBrief,
+      );
+    const mcp = () =>
+      oauthBearerMcp(
+        new Request("http://localhost/mcp", {
+          headers: { authorization: `Bearer ${key}`, "cf-connecting-ip": "203.0.113.204" },
+        }),
+      );
+    expect((await rest()).status).toBe(200);
+    expect((await mcp()).status).toBe(200);
+    await env.DB.prepare('DELETE FROM "apikey" WHERE id = ?1').bind(id).run();
+    expect((await rest()).status).toBe(401);
+    expect((await mcp()).status).toBe(401);
+  });
+
   it("refuses an MCP request from a foreign origin and serves one from the product's own", async () => {
     const from = (origin: string) =>
       new Request("http://localhost/mcp", {
@@ -452,11 +473,6 @@ describe("agent access, scoped to one workspace", () => {
     expect(own.status).toBe(204);
   });
 
-  // #5757: no test in this file runs without a cf-connecting-ip header after
-  // this one — the loop drains the shared unidentified bucket (AGENT_LIMIT,
-  // 120/min), so anything after it sending no IP would 429 with no visible
-  // cause. Tests that want their own budget send a per-IP key like
-  // "203.0.113.<unique>".
   it("limits a request that carries no client IP, never waving it through", async () => {
     const bare = new Request("http://localhost/api/v1/brief");
     expect(clientIp(bare)).toBeNull();
@@ -479,8 +495,6 @@ describe("agent access, scoped to one workspace", () => {
     expect(statuses.slice(0, first).every((status) => status === 401)).toBe(true);
     expect(await withinLimit(env.AGENT_LIMIT, null)).toBe(false);
 
-    // A caller the edge did identify spends its own bucket, not the one the
-    // flood above emptied.
     expect(await withinLimit(env.AGENT_LIMIT, "203.0.113.210")).toBe(true);
   });
 });

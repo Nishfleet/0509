@@ -8,7 +8,7 @@ import { readNewTrials, welcomeKey, type NewTrial } from "../../app/lib/data/wel
 import { sendOnce } from "./send-once";
 import { renderWelcome } from "./welcome-template";
 
-const ALERTS_LINK = "https://0509.io/app/alerts";
+const HOME_LINK = "https://0509.io/app";
 
 type TesterCheck = (subscriptionId: string) => Promise<boolean | null>;
 
@@ -28,7 +28,7 @@ async function eligible(env: Env, trial: NewTrial, isTester: TesterCheck): Promi
   if (trial.subscription_id === null) return false;
   if (await hasReminderAttempt(env.DB, welcomeKey(trial))) return false;
   if ((await isTester(trial.subscription_id)) !== false) return false;
-  return !(await isAddressSuppressed(trial.target_value, env.DB));
+  return !(await isAddressSuppressed(trial.target_value, "all", env.DB));
 }
 
 async function welcome(env: Env, trial: NewTrial, when: { now: Date; isTester: TesterCheck }): Promise<boolean> {
@@ -44,7 +44,7 @@ async function welcome(env: Env, trial: NewTrial, when: { now: Date; isTester: T
         rival_count: trial.rival_count,
         first_brief_at: firstBriefAt(trial, when.now),
         timezone: trial.timezone,
-        alerts_link: ALERTS_LINK,
+        home_link: HOME_LINK,
       }),
   });
 }

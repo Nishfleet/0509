@@ -204,7 +204,7 @@ describe("incident lane (0509#4364)", () => {
     expect(rec.sent[0].text).toContain("What changed: Checkout was 500ing");
     expect(rec.sent[0].html).toContain("https://0509.io/app/alerts");
     expect(rec.sent[0].headers?.["List-Unsubscribe-Post"]).toBe("List-Unsubscribe=One-Click");
-    expect(rec.sent[0].headers?.["List-Unsubscribe"]).toMatch(/^<https:\/\/0509\.io\/u\/[0-9a-f]{64}>$/);
+    expect(rec.sent[0].headers?.["List-Unsubscribe"]).toMatch(/^<https:\/\/0509\.io\/u\/[0-9a-f]{64}\?type=alerts>$/);
     expect(rec.sent[0].text).toContain("Settings: https://0509.io/app/settings");
 
     const attempts = await readAttempts();
@@ -218,6 +218,20 @@ describe("incident lane (0509#4364)", () => {
     expect(notices?.[0]?.is_resolution).toBe(0);
     expect(notices?.[0]?.incident_id).toBe(INCIDENT_A);
     expect(notices?.[0]?.sent_on).toBe(DAY);
+  });
+
+  it("never mails an incident notice to a confirmed teammate, only to the owner", async () => {
+    await env.DB.prepare(
+      `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at, role)
+       VALUES ('mate-incident', ?, ?, 'mate@0509.io', 1, '2026-09-23T00:00:02Z', 'teammate')`,
+    )
+      .bind(WS, CHANNEL)
+      .run();
+    const rec = recorder();
+
+    await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
+
+    expect(rec.sent.map((mail) => mail.to)).toEqual([TARGET]);
   });
 
   it("(b) drops a re-enqueued open notice as a duplicate", async () => {

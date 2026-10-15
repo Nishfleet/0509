@@ -7,12 +7,6 @@ import type { AlertFeedItem } from "../../app/components/alert-row";
 import { countAlertChips, type AlertChipKey, type AlertItemKind } from "../../app/lib/alert-chips";
 import Page from "../../app/routes/app.alerts";
 
-// Nishfleet/0509#6617. A bookmarked or shared /app/alerts?kind=<chip> used to
-// render the heading and the chips and then nothing when that one chip held no
-// rows and the workspace held other alerts. DESIGN.md 7: every empty surface
-// says what will fill it. The route decides between the all-zero sentence it
-// already carried and this per-chip sentence, and never both.
-
 const NOTE: AlertFeedItem = {
   kind: "note",
   id: "note-1",

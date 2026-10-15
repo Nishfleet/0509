@@ -7,7 +7,8 @@ const slots = vi.hoisted(() => ({
   resolveSendAttempt: vi.fn(),
   writeUnsubscribeToken: vi.fn(),
   readSlackTarget: vi.fn(),
-  postToSlack: vi.fn(),
+  postToSlackOutcome: vi.fn(),
+  disconnectSlackTarget: vi.fn(),
 }));
 
 vi.mock("../../app/lib/data/send_attempt.server", () => ({
@@ -18,8 +19,9 @@ vi.mock("../../app/lib/data/send_attempt.server", () => ({
 vi.mock("../../app/lib/data/send_target.server", () => ({
   writeUnsubscribeToken: slots.writeUnsubscribeToken,
   readSlackTarget: slots.readSlackTarget,
+  disconnectSlackTarget: slots.disconnectSlackTarget,
 }));
-vi.mock("../../app/lib/slack.server", () => ({ postToSlack: slots.postToSlack }));
+vi.mock("../../app/lib/slack.server", () => ({ postToSlackOutcome: slots.postToSlackOutcome }));
 
 import { deliverChange, handleBatch, parseMessage } from "../../workers/delivery/consumer";
 
@@ -109,7 +111,7 @@ beforeEach(() => {
   slots.claimChangeSlot.mockResolvedValue({ kind: "claimed", id: "att-1" });
   slots.claimSendAttempt.mockResolvedValue({ id: "att-over" });
   slots.readSlackTarget.mockResolvedValue(null);
-  slots.postToSlack.mockResolvedValue(true);
+  slots.postToSlackOutcome.mockResolvedValue("sent");
 });
 
 describe("parseMessage", () => {
@@ -117,6 +119,8 @@ describe("parseMessage", () => {
     expect(parseMessage(JSON.stringify({ digest_id: "d" }))).toEqual({ digest_id: "d" });
     expect(parseMessage({ incident_id: "i" })).toEqual({ incident_id: "i" });
     expect(parseMessage({ signal_id: "s" })).toEqual({ signal_id: "s" });
+    expect(parseMessage({ digest_id: "d", slack_target_id: "t" })).toEqual({ digest_id: "d", slack_target_id: "t" });
+    expect(parseMessage({ digest_id: "d", target_id: "t" })).toEqual({ digest_id: "d", target_id: "t" });
   });
 
   it("returns null for anything else", () => {
@@ -209,7 +213,7 @@ describe("deliverChange", () => {
     const first = await deliverChange(fakeEnv(), { signal_id: "sig-1" });
     expect(first.outcome).toBe("capped");
     expect(sent).toHaveLength(1);
-    expect(sent[0]?.subject).toBe("More rivals changed price or plan today");
+    expect(sent[0]?.subject).toBe("More competitors changed price or plan today");
 
     slots.claimSendAttempt.mockResolvedValue(null);
     const second = await deliverChange(fakeEnv(), { signal_id: "sig-2" });
@@ -238,6 +242,7 @@ describe("deliverChange", () => {
     expect(result.outcome).toBe("failed");
     expect(slots.resolveSendAttempt).toHaveBeenCalledWith(expect.anything(), {
       attemptId: "att-1",
+      idempotencyKey: "change:sig-1:tgt-1",
       outcome: "failed",
       error: "smtp down",
     });
@@ -252,7 +257,7 @@ describe("deliverChange to Slack", () => {
     const result = await deliverChange(fakeEnv(), { signal_id: "sig-1" });
     expect(result.outcome).toBe("sent");
     expect(sent).toHaveLength(1);
-    const [url, text] = slots.postToSlack.mock.calls[0] ?? [];
+    const [url, text] = slots.postToSlackOutcome.mock.calls[0] ?? [];
     expect(url).toBe(SLACK.target_value);
     expect(text).toContain("Before: Pro $12 a month");
     expect(text).toContain("After: Pro $15 a month");
@@ -270,28 +275,37 @@ describe("deliverChange to Slack", () => {
     slots.readSlackTarget.mockResolvedValue(SLACK);
     world.diff = null;
     await deliverChange(fakeEnv(), { signal_id: "sig-1" });
-    expect(String(slots.postToSlack.mock.calls[0]?.[1])).not.toContain("Before:");
+    expect(String(slots.postToSlackOutcome.mock.calls[0]?.[1])).not.toContain("Before:");
   });
 
   it("does not post twice for the same change", async () => {
     slots.readSlackTarget.mockResolvedValue(SLACK);
     slots.claimSendAttempt.mockResolvedValue(null);
     await deliverChange(fakeEnv(), { signal_id: "sig-1" });
-    expect(slots.postToSlack).not.toHaveBeenCalled();
+    expect(slots.postToSlackOutcome).not.toHaveBeenCalled();
     expect(sent).toHaveLength(1);
   });
 
   it("reports failed so the queue retries when Slack refuses the post", async () => {
     slots.readSlackTarget.mockResolvedValue(SLACK);
-    slots.postToSlack.mockResolvedValue(false);
+    slots.postToSlackOutcome.mockResolvedValue("retry");
     expect((await deliverChange(fakeEnv(), { signal_id: "sig-1" })).outcome).toBe("failed");
-    slots.postToSlack.mockRejectedValue(new Error("network"));
+    slots.postToSlackOutcome.mockRejectedValue(new Error("network"));
     expect((await deliverChange(fakeEnv(), { signal_id: "sig-1" })).outcome).toBe("failed");
+  });
+
+  it("stops retrying and disconnects Slack when the webhook is revoked", async () => {
+    slots.readSlackTarget.mockResolvedValue(SLACK);
+    slots.postToSlackOutcome.mockResolvedValue("revoked");
+    const result = await deliverChange(fakeEnv(), { signal_id: "sig-1" });
+    expect(result.outcome).toBe("sent");
+    expect(slots.disconnectSlackTarget).toHaveBeenCalledWith(expect.anything(), "tgt-slack");
+    expect(sent).toHaveLength(1);
   });
 
   it("still emails when there is no Slack channel", async () => {
     await deliverChange(fakeEnv(), { signal_id: "sig-1" });
-    expect(slots.postToSlack).not.toHaveBeenCalled();
+    expect(slots.postToSlackOutcome).not.toHaveBeenCalled();
     expect(sent).toHaveLength(1);
   });
 });

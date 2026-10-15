@@ -30,16 +30,30 @@ function billingLabel(plan: PlanSummary, retryable: boolean): string {
   return plan.status === "cancelled" ? "Manage billing" : "Manage or cancel plan";
 }
 
-export function PlanSection({ plan, returning = false }: { plan: PlanSummary | null; returning?: boolean }) {
+export function PlanSection({
+  plan,
+  countLine,
+  returning = false,
+}: {
+  plan: PlanSummary | null;
+  countLine: string | null;
+  returning?: boolean;
+}) {
   if (plan === null) return null;
-  const retryable = isPlanLapsed(plan, new Date()) || isPaymentFailed(plan);
+  const now = new Date();
+  const retryable = isPlanLapsed(plan, now) || isPaymentFailed(plan);
   const upgrade = nextPlan(plan.tier);
   return (
     <section aria-labelledby="settings-plan" className="mt-10 border-t border-line pt-4">
       <h2 id="settings-plan" className={BLOCK_HEADING}>
         Your plan
       </h2>
-      <p className="mt-2 max-w-prose leading-[1.55]">{planLine(plan)}</p>
+      <p className="mt-2 max-w-prose leading-[1.55]">{planLine(plan, now)}</p>
+      {countLine === null ? null : (
+        <p data-slot="plan-usage" className="mt-1 text-body-sm text-ink-soft">
+          {countLine}
+        </p>
+      )}
       {plan.billed ? <BillingButton label={billingLabel(plan, retryable)} /> : null}
       {plan.billed && !retryable ? null : (
         <>

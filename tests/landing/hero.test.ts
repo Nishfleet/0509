@@ -1,5 +1,6 @@
-import { createElement } from "react";
+import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { Hero } from "../../app/components/landing/hero";
@@ -9,8 +10,13 @@ const HEADLINE = "Know where you stand. And who’s gaining on you.";
 const SENTENCE = `We watch ${WATCHED_NOUNS} across your market. We find your competitors for you, so you do not need to know who they are.`;
 const MICROCOPY = "One box to fill in. About a minute to see who’s gaining on you.";
 
+function inRouter(element: ReactElement): string {
+  const Stub = createRoutesStub([{ path: "/", Component: () => element }]);
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
+}
+
 function markup(): string {
-  return renderToStaticMarkup(createElement(Hero, { nouns: WATCHED_NOUNS }));
+  return inRouter(createElement(Hero, { nouns: WATCHED_NOUNS }));
 }
 
 describe("landing hero", () => {
@@ -34,7 +40,7 @@ describe("landing hero", () => {
     expect(html).not.toContain("aria-label=");
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*>/);
     expect(html.match(/<button/g)).toHaveLength(1);
-    expect(html).toContain("€10/mo");
+    expect(html).toContain("€10/month");
     expect(html).toContain(MICROCOPY);
     expect(html).not.toContain("7-day trial");
   });

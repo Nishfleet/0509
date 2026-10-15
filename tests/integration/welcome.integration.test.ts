@@ -75,8 +75,8 @@ describe("welcome email", () => {
     expect(await sendWelcomes(envWith(sent), new Date("2026-10-13T13:00:00.000Z"), isTester)).toBe(0);
     expect(sent).toHaveLength(1);
     expect(sent[0]?.to).toBe(TARGET);
-    expect(sent[0]?.subject).toBe("Welcome to Five to Nine");
-    expect(sent[0]?.text).toContain("We're watching Acme.");
+    expect(sent[0]?.subject).toBe("We're watching Acme");
+    expect(sent[0]?.text).toContain("We read each site every night.");
     expect(sent[0]?.text).toContain("Monday 19 October");
   });
 
@@ -159,6 +159,26 @@ describe("welcome email", () => {
 
     expect(await sendWelcomes(envWith(sent), NOW, isTester)).toBe(0);
     expect(sent).toHaveLength(0);
+  });
+
+  it("still sends when only one of the two switches is off", async () => {
+    await seedPlan({});
+    await env.DB.prepare(
+      "INSERT INTO email_suppression (address, reason, created_at, stops_brief, stops_alerts) VALUES (?, 'unsubscribed', '2026-10-10T00:00:00Z', 1, 0)",
+    )
+      .bind(TARGET)
+      .run();
+    const sent: EmailMessageBuilder[] = [];
+
+    expect(await sendWelcomes(envWith(sent), NOW, isTester)).toBe(1);
+    expect(sent).toHaveLength(1);
+
+    await env.DB.exec("DELETE FROM send_attempt");
+    await env.DB.prepare("UPDATE email_suppression SET stops_alerts = 1").run();
+    const stopped: EmailMessageBuilder[] = [];
+
+    expect(await sendWelcomes(envWith(stopped), NOW, isTester)).toBe(0);
+    expect(stopped).toHaveLength(0);
   });
 
   it("tries again on the next run when the send failed", async () => {

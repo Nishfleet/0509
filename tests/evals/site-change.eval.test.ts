@@ -1,12 +1,16 @@
+import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { D3S_BREAKAGE, D3_NOTEWORTHY, D3_KIND, changeState } from "../../app/lib/site/judge.server";
 import type { ChangeStateInput } from "../../app/lib/site/judge.server";
+import { formatCuts, kindCuts, type CutSample } from "./cuts";
 import {
   choiceScore,
   formatReport,
   jevKeyPresent,
+  loadProdRows,
   loadSiteRows,
+  mapLimit,
   makeChoiceAsk,
   makeNoulAsk,
   noulScore,
@@ -14,8 +18,6 @@ import {
   type SiteRow,
 } from "./harness";
 
-// The shipped production state builder, fed the same fields a site sweep hands
-// judgeChange, so the judged state is the state production judges.
 function stateFor(row: SiteRow<boolean | string>): unknown {
   const input: ChangeStateInput = {
     isSelf: row.isSelf,
@@ -53,5 +55,22 @@ describe.skipIf(!jevKeyPresent())("eval: site-change judge questions against Jev
     const report = await runEval(D3_KIND.id, rows, (row) => ask(stateFor(row)), choiceScore);
     console.log(formatReport(report));
     expect(report.splits.length).toBeGreaterThan(0);
+  });
+});
+
+const PROD_FILE = new URL("./cases/site-change-prod.json", import.meta.url);
+
+describe.skipIf(!jevKeyPresent() || !existsSync(PROD_FILE))("eval: labelled production changes, per-kind cuts", () => {
+  it("prints the best noteworthy cut for each predicted kind", async () => {
+    const rows = await loadProdRows();
+    const noteworthy = makeNoulAsk(D3_NOTEWORTHY);
+    const kind = makeChoiceAsk(D3_KIND);
+    const samples = await mapLimit(rows, 4, async (row): Promise<CutSample> => {
+      const state = stateFor(row);
+      const [asked, kinded] = await Promise.all([noteworthy(state), kind(state)]);
+      return { kind: kinded.choice ?? "noise", label: row.label, p: asked.p ?? 0 };
+    });
+    console.log(formatCuts(kindCuts(samples)));
+    expect(samples).toHaveLength(rows.length);
   });
 });
