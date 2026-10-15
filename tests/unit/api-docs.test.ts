@@ -6,6 +6,7 @@ import { ApiReference } from "../../app/components/api-reference";
 import { schemaFields, schemaLabel, type JsonRecord } from "../../app/lib/agent/api-docs";
 import { openApiDocument } from "../../app/lib/agent/openapi";
 import { MCP_PATH } from "../../app/lib/agent/paths";
+import { PROBLEMS } from "../../app/lib/agent/problems";
 
 const ORIGIN = "https://0509.io";
 const SETTINGS = "/app/settings/agents";
@@ -45,9 +46,16 @@ describe("the API reference page", () => {
     expect(html).toContain("Authorization: Bearer");
     expect(html).toContain(`${ORIGIN}${MCP_PATH}`);
     expect(html).toContain(`href="${SETTINGS}"`);
-    expect(html).toContain("per colo");
-    expect(html).toContain("eventually consistent");
-    expect(html).toContain("120");
+    expect(html).toContain("120 requests a minute");
+    expect(html).toContain("Retry-After");
+  });
+
+  it("lists every error code the API can return with its status and sentence", () => {
+    const html = page();
+    for (const [code, problem] of Object.entries(PROBLEMS)) {
+      expect(html, code).toContain(code);
+      expect(html, code).toContain(problem.description.replaceAll("<", "&lt;").replaceAll(">", "&gt;"));
+    }
   });
 
   it("shows each path's parameters, response descriptions, and referenced fields", () => {
