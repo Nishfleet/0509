@@ -16,6 +16,18 @@ for (const path of PAGES) {
   });
 }
 
+test("/ carries a Site nav with Pricing and Sign in, and Pricing opens the price page @smoke", async ({ page }) => {
+  await page.goto("/");
+
+  const nav = page.getByRole("navigation", { name: "Site" });
+  await expect(nav.getByRole("link", { name: "Pricing", exact: true })).toHaveAttribute("href", "/pricing");
+  await expect(nav.getByRole("link", { name: "Sign in", exact: true })).toHaveAttribute("href", "/login");
+
+  await nav.getByRole("link", { name: "Pricing", exact: true }).click();
+  await page.waitForURL(/\/pricing$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Pick how closely you watch.");
+});
+
 test("pricing opens on one headline and shows the plan buttons without scrolling on a laptop @smoke", async ({
   page,
 }) => {
