@@ -322,6 +322,25 @@ describe("nightly site sweep", () => {
     expect(await signals()).toEqual([]);
   });
 
+  it("files nothing when a rival's page goes back to wording it showed within two weeks", async () => {
+    const [rival] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
+    if (rival === undefined) throw new Error("expected the rival's homepage");
+    const page = (word: string) =>
+      `<!doctype html><html><body><p>Plans start at ten dollars a month. ${word}</p><p>${PAD}</p></body></html>`;
+    const publish = async (html: string, tick: string) => {
+      readHolder.html = html;
+      const result = await checkSitePage(rival, await nextTick(tick));
+      if (result.outcome === "changed") await publishSiteChange(rival, result);
+    };
+    await publish(page("Sort by relevance."), "flap-1");
+    await publish(page("Sort by featured."), "flap-2");
+    expect(await signals()).toHaveLength(1);
+    await publish(page("Sort by relevance."), "flap-3");
+    expect(await signals()).toHaveLength(1);
+    await publish(page("Sort by newest."), "flap-4");
+    expect(await signals()).toHaveLength(2);
+  });
+
   it("judges the filed change signal, and a retried publish judges the same signal", async () => {
     Reflect.set(env, "AI", {
       async run(_model: string, request: { questions: Record<string, { type: string }> }) {

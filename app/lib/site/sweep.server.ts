@@ -12,7 +12,7 @@ import {
 } from "../data/page.server";
 import { linkVerdictsStatement } from "../data/jev_verdict.server";
 import { insertChangeSignalStatement } from "../data/signal.server";
-import { readCoveredPagePairs } from "../data/snapshot.server";
+import { hashSeenSince, readCoveredPagePairs } from "../data/snapshot.server";
 import { readEnabledSourceId } from "../data/source.server";
 import type { SiteSweepTarget } from "../data/watch.server";
 import { readPaidWorkspaceIds } from "../data/plan.server";
@@ -54,6 +54,19 @@ function squash(text: string | null): string | null {
 
 function sameVisibleText(changed: ChangedPage, before: string | null, after: string | null): boolean {
   return changed.previousTextKey !== changed.textKey && before !== null && squash(before) === squash(after);
+}
+
+const FLAP_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+async function isFlapBack(target: SiteSweepTarget, changed: ChangedPage): Promise<boolean> {
+  if (target.entityRole !== "competitor" || target.pageRole === "pricing") return false;
+  return hashSeenSince({
+    watchId: target.watchId,
+    pageId: target.pageId,
+    hash: changed.hash,
+    exceptId: changed.snapshotId,
+    since: new Date(Date.now() - FLAP_WINDOW_MS).toISOString(),
+  });
 }
 
 async function readVisibleText(key: string): Promise<string | null> {
@@ -430,6 +443,10 @@ export async function publishSiteChange(target: SiteSweepTarget, changed: Change
   ]);
   if (sameVisibleText(changed, before, after)) {
     console.log(JSON.stringify({ event: "site.change_same_text", pageId: target.pageId }));
+    return changed.snapshotId;
+  }
+  if (await isFlapBack(target, changed)) {
+    console.log(JSON.stringify({ event: "site.change_flap", pageId: target.pageId }));
     return changed.snapshotId;
   }
   const diff = pageTextDiff(before, after, changed);
