@@ -162,7 +162,7 @@ describe("visit retention", () => {
 
 describe("the admin check", () => {
   it("lets nobody in when the list is missing or empty", async () => {
-    const original = env.ADMIN_EMAIL_HASHES;
+    const original: unknown = Reflect.get(env, "ADMIN_EMAIL_HASHES");
     try {
       Reflect.deleteProperty(env, "ADMIN_EMAIL_HASHES");
       expect(await isAdminEmail("admin@0509.io")).toBe(false);
@@ -172,7 +172,8 @@ describe("the admin check", () => {
       Reflect.set(env, "ADMIN_EMAIL_HASHES", "");
       expect(await isAdminEmail("admin@0509.io")).toBe(false);
     } finally {
-      Reflect.set(env, "ADMIN_EMAIL_HASHES", original);
+      if (original === undefined) Reflect.deleteProperty(env, "ADMIN_EMAIL_HASHES");
+      else Reflect.set(env, "ADMIN_EMAIL_HASHES", original);
     }
   });
 

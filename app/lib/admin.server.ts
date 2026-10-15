@@ -1,10 +1,9 @@
 import { env } from "cloudflare:workers";
 
-import { z } from "zod";
-
+import { blankEnvString } from "./env.server";
 import { sha256Hex } from "./sha256";
 
-const adminHashes = () => z.string().default("").parse(Reflect.get(env, "ADMIN_EMAIL_HASHES"));
+const adminHashes = () => blankEnvString(Reflect.get(env, "ADMIN_EMAIL_HASHES")) ?? "";
 
 export async function isAdminEmail(email: string): Promise<boolean> {
   const allowed = adminHashes()
