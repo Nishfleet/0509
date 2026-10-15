@@ -154,7 +154,7 @@ test("the hero's first viewport holds the outcome and the one priced input @smok
   const pieces = [
     hero.getByText("For founders, brands and creators"),
     hero.getByRole("heading", { level: 1, name: "Know where you stand. And who’s gaining on you." }),
-    hero.getByText(/we find your competitors for you, so you do not need to know who they are/i),
+    hero.getByText(/we find your competitors for you, so you don't need to know who they are/i),
     hero.getByRole("textbox", { name: /your website address or social username/i }),
     hero.getByRole("button", { name: /€\d+\/month/ }),
     hero.getByText("One box to fill in. About a minute to see who’s gaining on you."),

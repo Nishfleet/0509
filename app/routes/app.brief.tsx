@@ -66,6 +66,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   return (
     <main className={PAGE}>
       <PageHeading title="Your weekly brief" />
+      <p className="mt-3">
+        <Link className={PREVIOUS_LINK} to="/app/brief-preview">
+          See this week’s brief so far
+        </Link>
+      </p>
       {selected === null ? (
         <div className="mt-6">
           <FirstBriefNote arrivesAt={loaderData.firstBriefAt} />

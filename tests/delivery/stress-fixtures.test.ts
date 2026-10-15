@@ -123,10 +123,10 @@ describe("the weekly brief under stress", () => {
         }),
         CONTEXT,
       ).text;
-    expect(blind(["Casetta"])).toContain("We could not reach Casetta this week, so these counts may be low.");
-    expect(blind(["Casetta", "Kindred"])).toContain("We could not reach Casetta and Kindred this week");
-    expect(blind(["A", "B", "C"])).toContain("We could not reach A, B and C this week");
-    expect(blind(["A", "B", "C", "D", "E"])).toContain("We could not reach A, B, C and 2 more this week");
+    expect(blind(["Casetta"])).toContain("We couldn't reach Casetta this week, so these counts may be low.");
+    expect(blind(["Casetta", "Kindred"])).toContain("We couldn't reach Casetta and Kindred this week");
+    expect(blind(["A", "B", "C"])).toContain("We couldn't reach A, B and C this week");
+    expect(blind(["A", "B", "C", "D", "E"])).toContain("We couldn't reach A, B, C and 2 more this week");
   });
 
   it("falls back to a count when the unreachable source has no name", () => {
@@ -168,6 +168,23 @@ describe("the weekly brief under stress", () => {
     expect(text).toContain(`${JAPANESE} — #1, up 1`);
     expect(text).toContain(`${ARABIC} — #2, up 1`);
     expect(text).toContain("Яндекс — #3, up 1");
+  });
+
+  it("gives a teammate the same long and non-Latin brief with no link into the app", () => {
+    const { html, text } = renderBrief(
+      payload({
+        read_this_first: [mark(1, LONG), mark(2, JAPANESE)],
+        brands: [brand(1, LONG), brand(2, JAPANESE), brand(3, ARABIC)],
+        why_line: `${LONG} is the mover`,
+      }),
+      { ...CONTEXT, open_url: null, teammate: true },
+    );
+    expect(html).toContain("overflow-wrap:anywhere");
+    expect(text).toContain(`${JAPANESE} — #2, up 1`);
+    expect(text).toContain(`${ARABIC} — #3, up 1`);
+    expect(text).not.toContain("/app/brief");
+    expect(html).not.toContain("/app/brief");
+    expect(text).toContain(CONTEXT.unsubscribe_url);
   });
 });
 

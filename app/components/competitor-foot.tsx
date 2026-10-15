@@ -16,7 +16,11 @@ export function CompetitorFoot(props: {
   return (
     <>
       <CompetitorRename name={props.name} domain={props.domain} result={props.errors} />
-      <CompetitorNote note={props.note} error={props.errors?.noteError ?? null} />
+      <CompetitorNote
+        note={props.note}
+        error={props.errors?.noteError ?? null}
+        saved={props.errors?.noteSaved === true}
+      />
       <CompetitorSite url={props.siteUrl} error={props.errors?.siteError ?? null} />
       <CompetitorYoutube url={props.youtubeUrl} error={props.errors?.youtubeError ?? null} />
       <CompetitorForget name={props.name} error={props.errors?.forgetError ?? null} />

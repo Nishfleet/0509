@@ -36,7 +36,7 @@ export function linkEmailHtml(input: LinkEmail): string {
       `<p style="${HEADLINE}">${escapeHtml(input.headline)}</p>`,
       `<p style="${BODY_STYLE}">${escapeHtml(input.line)}</p>`,
       linkParagraph(input.button, input.url),
-      `<p class="brief-muted" style="${small}">If the button does not work, paste this address into your browser:<br><span style="word-break:break-all;">${url}</span></p>`,
+      `<p class="brief-muted" style="${small}">If the button doesn't work, paste this address into your browser:<br><span style="word-break:break-all;">${url}</span></p>`,
       `<p class="brief-muted" style="${small}">${escapeHtml(input.ignore)}</p>`,
       supportLineHtml(),
     ].join(""),

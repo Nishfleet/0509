@@ -1,4 +1,4 @@
--- 0064_agency_client_workspaces.sql — several client brands under one Agency account.
+-- 0066_agency_client_workspaces.sql — several client brands under one Agency account.
 -- active_workspace remembers which of an owner's workspaces they are looking at;
 -- readers fall back to the oldest when the row is missing or not theirs.
 -- parent_workspace_id marks a client workspace; it has no plan row of its own and

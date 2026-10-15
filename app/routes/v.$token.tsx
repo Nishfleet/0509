@@ -67,16 +67,16 @@ function Expired() {
     <Page>
       <h1 className={H1}>This link has expired or was already used</h1>
       <p className={BODY}>
-        Confirmation links work once and last a day. If you have not confirmed yet, ask whoever sent it for a new one.
+        Confirmation links work once and last a day. If you haven't confirmed yet, ask whoever sent it for a new one.
       </p>
     </Page>
   );
 }
 
 const ASK_OWNER =
-  "Your weekly brief and alerts will go to this email address once you confirm. If you did not ask for this, you can close this page.";
+  "Your weekly brief and alerts will go to this email address once you confirm. If you didn't ask for this, you can close this page.";
 const ASK_TEAMMATE =
-  "The weekly brief will go to this email address once you confirm. If you did not expect this, you can close this page and nothing is sent.";
+  "The weekly brief will go to this email address once you confirm. If you didn't expect this, you can close this page and nothing is sent.";
 
 export default function VerifyAddress({ actionData, loaderData }: Route.ComponentProps) {
   const confirming = useNavigation().state !== "idle";

@@ -27,9 +27,11 @@ const INSERT_ORDER = [
   "send_attempt",
   "signal_delivery",
   "active_workspace",
+  "workspace_visit",
 ] as const;
 
 const SEED: Readonly<Record<string, string>> = {
+  workspace_visit: `INSERT INTO workspace_visit (workspace_id, day) VALUES ('ws-cascade', '2026-10-14')`,
   plan: `INSERT INTO plan (id, workspace_id, updated_at) VALUES ('plan-cascade', 'ws-cascade', '${NOW}')`,
   entity: `INSERT INTO entity (id, workspace_id, role, domain, name, created_at)
     VALUES ('ent-cascade', 'ws-cascade', 'competitor', 'cascade.example', 'Cascade', '${NOW}')`,

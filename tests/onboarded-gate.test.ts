@@ -138,6 +138,7 @@ describe("app layout middleware", () => {
       "app/tester",
       "app/alerts",
       "app/changes/feedback",
+      "app/brief-preview",
       "app/brief/:digestId?",
     ]);
   });
@@ -154,6 +155,7 @@ describe("app layout middleware", () => {
       "app/share.png",
       "app/logos/:entityId",
       "app/brands",
+      "app/admin/retention",
     ]);
     expect(appSessionLayout.middleware).toEqual([sessionMocks.requireSessionMiddleware]);
     expect(appSessionLayout.middleware).not.toContain(requireOnboarded);
