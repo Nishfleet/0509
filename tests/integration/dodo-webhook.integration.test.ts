@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { Webhook } from "standardwebhooks";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { checkoutProof } from "../../app/lib/billing/checkout-proof.server";
 import { readEntitlements } from "../../app/lib/data/plan.server";
@@ -63,6 +63,10 @@ const eventRow = (id: string) =>
     .first<{ event_type: string; processed_at: string | null }>();
 
 describe("Dodo webhook (J13)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   beforeEach(async () => {
     await env.DB.prepare("DELETE FROM plan").run();
     await env.DB.prepare("DELETE FROM dodo_webhook_event").run();
@@ -288,7 +292,6 @@ describe("Dodo webhook (J13)", () => {
     expect(await planRow()).toBeNull();
     expect((await eventRow("evt_product"))?.processed_at).toBeNull();
     expect(reported).toHaveBeenCalledWith(expect.stringContaining("billing.webhook_unknown_product"));
-    reported.mockRestore();
   });
 
   it("answers 200, leaves the event unprocessed and reports to Sentry for a subscription body it cannot read", async () => {
@@ -300,7 +303,6 @@ describe("Dodo webhook (J13)", () => {
     expect(response.status).toBe(200);
     expect((await eventRow("evt_unreadable"))?.processed_at).toBeNull();
     expect(reported).toHaveBeenCalledWith(expect.stringContaining("billing.webhook_unparsed"));
-    reported.mockRestore();
   });
 
   it("answers 500 and leaves the event unprocessed when no workspace exists yet, then applies it on redelivery", async () => {
