@@ -11,3 +11,5 @@ CREATE TABLE active_workspace (
   FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE,
   FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE CASCADE
 );
+CREATE INDEX idx_workspace_parent ON workspace(parent_workspace_id);
+CREATE INDEX idx_active_workspace_workspace ON active_workspace(workspace_id);

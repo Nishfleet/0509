@@ -92,8 +92,8 @@ export class WorkspaceCapError extends Error {
   }
 }
 
-const INSERT_WORKSPACE = `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at, fixture)
-SELECT ?, ?, ?, ?, 1, 8, ?, ?
+const INSERT_WORKSPACE = `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at, fixture, parent_workspace_id)
+SELECT ?, ?, ?, ?, 1, 8, ?, ?, ?
 WHERE ? = 1
 OR (
   SELECT count(*) FROM workspace WHERE owner_user_id = ?
@@ -132,7 +132,15 @@ async function ownerWorkspacesMax(db: WorkspaceDb, ownerUserId: string): Promise
 
 export async function insertWorkspace(
   db: WorkspaceDb,
-  input: { id: string; name: string; ownerUserId: string; timezone: string; createdAt: string; fixture: boolean },
+  input: {
+    id: string;
+    name: string;
+    ownerUserId: string;
+    timezone: string;
+    createdAt: string;
+    fixture: boolean;
+    parentWorkspaceId?: string | null;
+  },
 ): Promise<void> {
   const cap = await ownerWorkspacesMax(db, input.ownerUserId);
   const result = await db
@@ -144,6 +152,7 @@ export async function insertWorkspace(
       input.timezone,
       input.createdAt,
       input.fixture ? 1 : 0,
+      input.parentWorkspaceId ?? null,
       cap === null ? 1 : 0,
       input.ownerUserId,
       cap ?? 0,
@@ -201,11 +210,7 @@ const readBriefScheduleForOwnerRow = z.object({
   brief_paused_at: z.string().nullable(),
 });
 
-export async function readBriefScheduleForOwner(userId: string): Promise<OwnedSchedule | null> {
-  const row = readBriefScheduleForOwnerRow
-    .nullable()
-    .parse(await env.DB.prepare(SELECT_SCHEDULE_BY_OWNER).bind(userId).first());
-  if (row === null) return null;
+function ownedScheduleFromRow(row: z.infer<typeof readBriefScheduleForOwnerRow>): OwnedSchedule {
   return {
     workspaceId: row.id,
     schedule: {
@@ -215,6 +220,13 @@ export async function readBriefScheduleForOwner(userId: string): Promise<OwnedSc
       pausedAt: row.brief_paused_at,
     },
   };
+}
+
+export async function readBriefScheduleForOwner(userId: string): Promise<OwnedSchedule | null> {
+  const row = readBriefScheduleForOwnerRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_SCHEDULE_BY_OWNER).bind(userId).first());
+  return row === null ? null : ownedScheduleFromRow(row);
 }
 
 export async function updateBriefSchedule(
@@ -293,4 +305,37 @@ WHERE id = ?2 AND (last_seen_at IS NULL OR last_seen_at < ?3)`;
 export async function touchWorkspaceSeen(workspaceId: string, now: Date): Promise<void> {
   const stale = new Date(now.getTime() - SEEN_DEBOUNCE_MS).toISOString();
   await env.DB.prepare(TOUCH_WORKSPACE_SEEN).bind(now.toISOString(), workspaceId, stale).run();
+}
+
+const SELECT_OWNED_WORKSPACES = `SELECT w.id AS id,
+  COALESCE((SELECT e.name FROM entity e WHERE e.workspace_id = w.id AND e.role = 'self' ORDER BY e.created_at ASC LIMIT 1), w.name) AS name,
+  w.parent_workspace_id AS parent_workspace_id
+FROM workspace w
+WHERE w.owner_user_id = ?
+ORDER BY w.created_at ASC`;
+
+const ownedWorkspaceRow = z.object({
+  id: z.string(),
+  name: z.string(),
+  parent_workspace_id: z.string().nullable(),
+});
+
+export async function readOwnedWorkspaces(userId: string) {
+  const { results } = await env.DB.prepare(SELECT_OWNED_WORKSPACES).bind(userId).all();
+  return ownedWorkspaceRow.array().parse(results);
+}
+
+const SELECT_CLIENT_PARENT = "SELECT COALESCE(parent_workspace_id, id) AS id FROM workspace WHERE id = ?";
+
+export async function readGoverningWorkspaceId(workspaceId: string): Promise<string | null> {
+  const row = workspaceIdRow.nullable().parse(await env.DB.prepare(SELECT_CLIENT_PARENT).bind(workspaceId).first());
+  return row === null ? null : row.id;
+}
+
+const SELECT_SCHEDULES_BY_OWNER = `SELECT id, timezone, brief_weekday, brief_hour, brief_paused_at FROM workspace WHERE owner_user_id = ?
+ORDER BY created_at`;
+
+export async function readBriefSchedulesForOwner(userId: string): Promise<OwnedSchedule[]> {
+  const { results } = await env.DB.prepare(SELECT_SCHEDULES_BY_OWNER).bind(userId).all();
+  return readBriefScheduleForOwnerRow.array().parse(results).map(ownedScheduleFromRow);
 }

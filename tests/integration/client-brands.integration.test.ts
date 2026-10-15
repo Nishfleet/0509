@@ -1,0 +1,113 @@
+import { env } from "cloudflare:test";
+import { beforeEach, describe, expect, it } from "vitest";
+
+import {
+  BRAND_NAME_INVALID,
+  BRAND_NEEDS_AGENCY,
+  addClientBrand,
+  readBrandPanel,
+  readOtherBrands,
+  switchClientBrand,
+} from "../../app/lib/client-brands.server";
+import { readEntitlements } from "../../app/lib/data/plan.server";
+import {
+  readBriefSchedulesForOwner,
+  readGoverningWorkspaceId,
+  readWorkspaceIdForOwner,
+} from "../../app/lib/data/workspace.server";
+
+const FUTURE = "2099-01-01T00:00:00Z";
+
+const AGENCY = { id: "agency-owner", email: "agency-owner@example.test" };
+const SOLO = { id: "solo-owner", email: "solo-owner@example.test" };
+
+async function seedOwner(user: { id: string; email: string }, workspaceId: string, tier: string): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt)
+       VALUES (?1, 'U', ?2, 1, '2026-10-01T00:00:00Z', '2026-10-01T00:00:00Z')`,
+    ).bind(user.id, user.email),
+    env.DB.prepare(
+      `INSERT INTO workspace (id, name, owner_user_id, timezone, created_at)
+       VALUES (?1, 'Home', ?2, 'Asia/Kolkata', '2026-10-01T00:00:00Z')`,
+    ).bind(workspaceId, user.id),
+    env.DB.prepare(
+      `INSERT INTO plan (id, workspace_id, tier, status, current_period_end, updated_at)
+       VALUES (?1, ?2, ?3, 'active', ?4, '2026-10-01T00:00:00Z')`,
+    ).bind(`plan-${workspaceId}`, workspaceId, tier, FUTURE),
+  ]);
+}
+
+describe("client brands", () => {
+  beforeEach(async () => {
+    for (const table of ["send_target", "active_workspace", "plan", "workspace"]) {
+      await env.DB.exec(`DELETE FROM ${table}`);
+    }
+    await env.DB.exec('DELETE FROM "user"');
+    await seedOwner(AGENCY, "ws-agency", "agency");
+    await seedOwner(SOLO, "ws-solo", "starter");
+  });
+
+  it("adds a client brand under the Agency workspace and opens it", async () => {
+    expect(await addClientBrand(AGENCY, "Acme Foods")).toEqual({ status: "added" });
+    const activeId = await readWorkspaceIdForOwner(AGENCY.id);
+    expect(activeId).not.toBe("ws-agency");
+    const row = await env.DB.prepare("SELECT name, parent_workspace_id, timezone FROM workspace WHERE id = ?")
+      .bind(activeId)
+      .first();
+    expect(row).toEqual({ name: "Acme Foods", parent_workspace_id: "ws-agency", timezone: "Asia/Kolkata" });
+    expect((await readEntitlements(activeId ?? "")).competitors).toBe(50);
+  });
+
+  it("points a second client at the Agency workspace, not at the first client", async () => {
+    await addClientBrand(AGENCY, "One");
+    await addClientBrand(AGENCY, "Two");
+    const second = await readWorkspaceIdForOwner(AGENCY.id);
+    expect(await readGoverningWorkspaceId(second ?? "")).toBe("ws-agency");
+  });
+
+  it("gives the client brand an owner email target for its brief", async () => {
+    await addClientBrand(AGENCY, "Acme Foods");
+    const activeId = await readWorkspaceIdForOwner(AGENCY.id);
+    const target = await env.DB.prepare("SELECT target_value FROM send_target WHERE workspace_id = ?")
+      .bind(activeId)
+      .first();
+    expect(target).toEqual({ target_value: AGENCY.email });
+  });
+
+  it("refuses a client brand on a plan without workspaces", async () => {
+    expect(await addClientBrand(SOLO, "Acme Foods")).toEqual({ status: "refused", message: BRAND_NEEDS_AGENCY });
+    expect(await readWorkspaceIdForOwner(SOLO.id)).toBe("ws-solo");
+  });
+
+  it("refuses an empty or very long name", async () => {
+    expect(await addClientBrand(AGENCY, "   ")).toEqual({ status: "refused", message: BRAND_NAME_INVALID });
+    expect(await addClientBrand(AGENCY, "x".repeat(61))).toEqual({ status: "refused", message: BRAND_NAME_INVALID });
+  });
+
+  it("switches only between the owner's own workspaces", async () => {
+    await addClientBrand(AGENCY, "Acme Foods");
+    expect(await switchClientBrand(AGENCY.id, "ws-agency")).toBe(true);
+    expect(await readWorkspaceIdForOwner(AGENCY.id)).toBe("ws-agency");
+    expect(await switchClientBrand(AGENCY.id, "ws-solo")).toBe(false);
+    expect(await readWorkspaceIdForOwner(AGENCY.id)).toBe("ws-agency");
+  });
+
+  it("lists brands, marks the open one, and only offers adding where the plan allows", async () => {
+    await addClientBrand(AGENCY, "Acme Foods");
+    const panel = await readBrandPanel(AGENCY.id);
+    expect(panel.canAdd).toBe(true);
+    expect(panel.brands.map((brand) => [brand.name, brand.current])).toEqual([
+      ["Home", false],
+      ["Acme Foods", true],
+    ]);
+    expect((await readOtherBrands(AGENCY.id)).map((brand) => brand.name)).toEqual(["Home"]);
+    expect((await readBrandPanel(SOLO.id)).canAdd).toBe(false);
+  });
+
+  it("lists every owned workspace for account deletion", async () => {
+    await addClientBrand(AGENCY, "Acme Foods");
+    expect((await readBriefSchedulesForOwner(AGENCY.id)).length).toBe(2);
+    expect((await readBriefSchedulesForOwner(SOLO.id)).length).toBe(1);
+  });
+});

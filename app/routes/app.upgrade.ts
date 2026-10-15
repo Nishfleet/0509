@@ -8,6 +8,7 @@ import { isSubscriptionLive } from "../lib/billing/subscription-state";
 import { returningLookup } from "../lib/billing/returning.server";
 import { isBillingInterval, isPlanId } from "../lib/billing/plans";
 import { readPlanSubscription } from "../lib/data/plan.server";
+import { readGoverningWorkspaceId } from "../lib/data/workspace.server";
 import { onboardedContext } from "../lib/require-onboarded.server";
 
 const UNAVAILABLE = { message: "Upgrading isn't available right now. Try again in a few minutes." };
@@ -23,8 +24,13 @@ export function loader() {
   return redirect("/app/settings");
 }
 
+async function billingWorkspace(opened: string | null): Promise<string | null> {
+  return opened === null ? null : readGoverningWorkspaceId(opened);
+}
+
 export async function action({ request, context }: Route.ActionArgs) {
-  const { session, workspaceId } = context.get(onboardedContext);
+  const { session, workspaceId: opened } = context.get(onboardedContext);
+  const workspaceId = await billingWorkspace(opened);
   const parsed = upgradeForm.safeParse(Object.fromEntries(await request.formData()));
   const planId = parsed.success ? parsed.data.plan : null;
   const interval = parsed.success ? parsed.data.interval : "monthly";

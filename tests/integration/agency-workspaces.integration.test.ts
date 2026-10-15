@@ -84,4 +84,11 @@ describe("Agency client workspaces", () => {
     await seedPlan("ws-agency", "agency", "active", FUTURE);
     expect((await readEntitlements("ws-other")).competitors).toBe(5);
   });
+
+  it("ignores a parent that belongs to a different owner", async () => {
+    await seedPlan("ws-agency", "agency", "active", FUTURE);
+    await env.DB.exec("UPDATE workspace SET parent_workspace_id = 'ws-agency' WHERE id = 'ws-other'");
+    expect((await readEntitlements("ws-other")).competitors).toBe(5);
+    expect((await readPaidWorkspaceIds(new Date())).has("ws-other")).toBe(false);
+  });
 });
