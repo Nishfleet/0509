@@ -133,7 +133,7 @@ describe("teammates on the brief", () => {
   });
 
   it("stops inviting one address once it has had three emails from us in a day", async () => {
-    for (let round = 0; round < 3; round += 1) expect(await takeRecipientSlot("loop@0509.io")).toBe(true);
+    for (let round = 0; round < 3; round += 1) expect(await takeRecipientSlot("loop@0509.io", new Date())).toBe(true);
 
     expect(await add("loop@0509.io")).toMatch(/several emails/);
     expect(sentMail).toHaveLength(0);
