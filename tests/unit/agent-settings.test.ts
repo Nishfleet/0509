@@ -676,4 +676,16 @@ describe("the copy button wires a refused write to the failure sentence", () => 
     const html = await clickAndRender(async () => createElement(ClickedConnect, { mcpUrl: MCP_URL, origin: ORIGIN }));
     expect(html).toContain("Copy failed. Select the connector address and copy it by hand.");
   });
+
+  it("names the prompt when a prompt Copy write is refused and shows Copied when it works", async () => {
+    stubCopyClick("rejects");
+    const { AgentPrompts: ClickedPrompts } = await import("../../app/components/agent-prompts");
+    const failed = await clickAndRender(async () => createElement(ClickedPrompts));
+    expect(failed).toContain("Copy failed. Select the prompt above and copy it by hand.");
+    stubCopyClick("resolves");
+    const { AgentPrompts: OkPrompts } = await import("../../app/components/agent-prompts");
+    const ok = await clickAndRender(async () => createElement(OkPrompts));
+    expect(ok).toContain("Copied");
+    expect(ok).not.toContain("Copy failed");
+  });
 });

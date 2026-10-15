@@ -1,9 +1,8 @@
-import { useState } from "react";
 import type { ReactElement } from "react";
 
 import { AGENT_PROMPTS } from "../lib/agent/prompts";
 import type { AgentPrompt } from "../lib/agent/prompts";
-import { copyToClipboard } from "../lib/copy-to-clipboard";
+import { useCopyState } from "../lib/use-copy-state";
 import { CopyFailureNote } from "./agent-settings";
 import { BLOCK_HEADING } from "./page-heading";
 import { Button } from "./ui/button";
@@ -11,7 +10,7 @@ import { Button } from "./ui/button";
 const BLOCK = "mt-10 border-t border-line pt-4";
 
 function PromptRow({ prompt }: { prompt: AgentPrompt }): ReactElement {
-  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const [state, copy] = useCopyState();
   return (
     <li
       data-testid="agent-prompt"
@@ -26,7 +25,7 @@ function PromptRow({ prompt }: { prompt: AgentPrompt }): ReactElement {
         variant="tertiary"
         aria-label={`Copy prompt: ${prompt.title}`}
         onClick={() => {
-          void copyToClipboard(prompt.text).then(setState);
+          void copy(prompt.text);
         }}
       >
         {state === "copied" ? "Copied" : "Copy"}
