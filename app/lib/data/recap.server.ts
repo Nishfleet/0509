@@ -62,7 +62,7 @@ const recapRow = z.object({
   latest: z.string().nullable().transform(parseLatest),
 });
 
-export interface RivalStanding {
+interface RivalStanding {
   rival: string;
   lines: string[];
 }
