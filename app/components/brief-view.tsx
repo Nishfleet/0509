@@ -163,6 +163,11 @@ function standingText(brand: BriefPayload["brands"][number], first: boolean): st
 function nextBriefLine(payload: BriefPayload): string | null {
   if (payload.next_brief_at === null) return null;
   const at = new Date(payload.next_brief_at);
-  if (Number.isNaN(at.getTime())) return null;
-  return `Next brief: ${formatBriefAt(at, payload.timezone)}`;
+  if (Number.isNaN(at.getTime()) || at.getTime() <= Date.now()) return null;
+  try {
+    return `Next brief: ${formatBriefAt(at, payload.timezone)}`;
+  } catch (error) {
+    console.warn(JSON.stringify({ event: "brief.next_brief_unreadable", error: String(error) }));
+    return null;
+  }
 }
