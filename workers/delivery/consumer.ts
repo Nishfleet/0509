@@ -410,7 +410,7 @@ async function deliverSlackBrief(env: Env, message: SlackBriefMessage): Promise<
     return { outcome: "muted", attempt_id: null, idempotency_key: null };
   }
   const target = await readSlackTarget(env.DB, digest.workspace_id);
-  if (target === null || target.id !== message.slack_target_id) {
+  if (target?.id !== message.slack_target_id) {
     return { outcome: "no_target", attempt_id: null, idempotency_key: null };
   }
   const idempotencyKey = slackBriefKey(digest.id, target.id);
