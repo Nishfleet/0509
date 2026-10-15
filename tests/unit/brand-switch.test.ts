@@ -40,9 +40,6 @@ describe("the brand switch", () => {
   });
 
   it("resets the outline style so the focus ring actually paints", () => {
-    // ui/switch carries `outline-none`, which sets --tw-outline-style: none.
-    // focus-visible:outline-2 only reads that variable, so without a matching
-    // focus-visible:outline-solid the ring is width 2px of style none: invisible.
     const html = render("on");
     expect(html).toContain("focus-visible:outline-2");
     expect(html).toContain("focus-visible:outline-solid");
@@ -152,7 +149,6 @@ describe("the brand switch geometry (0509#7071)", () => {
   });
 
   it("carries the checked thumb translate that keeps the thumb inside a 38px track", () => {
-    // 1.5 inset + 16 thumb + 17.5 travel = 35 <= 38 - 2*1.5 = 35. Any larger leaves the track.
     const html = render("on").replace(/&amp;/g, "&");
     expect(switchClass(html)).toContain("data-checked:[&_[data-slot=switch-thumb]]:translate-x-[17.5px]");
   });

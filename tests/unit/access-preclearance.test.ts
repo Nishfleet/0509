@@ -15,9 +15,6 @@ afterEach(() => {
 
 const AUD = "b4fa400a1848c913b92c3212dc0714fcdbd1b1b66eb24659e4a7cc01c790575d";
 
-// A fresh issuer per test keeps the module-level JWKS cache honest: every
-// case fetches its own key set, so a pass can never ride a previous case's
-// cached keys.
 let issuerSeq = 0;
 function freshIssuer() {
   issuerSeq += 1;

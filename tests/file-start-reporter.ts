@@ -2,16 +2,6 @@ import { execFileSync } from "node:child_process";
 
 import type { Reporter, TestModule } from "vitest/node";
 
-// Vitest's default reporter prints a file only when it finishes, so a file that
-// never finishes leaves no line (docs/incidents/2026-10-09-vitest-shard-2-stall.md).
-// "queued" prints right before vitest imports the setup file and the test file,
-// "start" when its tests begin. The last "queued" with no matching "✓" in the
-// log is the file that hung, even if it hung while importing.
-//
-// A shard that stalls after every file finished prints nothing at all, so a
-// watchdog also prints what the vitest process is still holding and every live
-// process once the run has been silent for STALL_AFTER_MS. A healthy gap
-// between two files is about 10 seconds.
 const STALL_AFTER_MS = 90_000;
 
 function listProcesses(): string {

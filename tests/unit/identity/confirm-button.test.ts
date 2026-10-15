@@ -33,7 +33,7 @@ function routerWithCard(action: () => Promise<unknown>): ReturnType<typeof creat
             draft: {},
             message: undefined,
           }),
-        // The card's submit button posts back to this route.
+
         action,
       },
     ],
@@ -41,9 +41,6 @@ function routerWithCard(action: () => Promise<unknown>): ReturnType<typeof creat
   );
 }
 
-// IdentityCard draws its fields through `Await`, so the promise has to resolve
-// before the markup exists: `allReady` is the public render entry that waits
-// for every Suspense boundary instead of only the shell.
 async function renderCard(router: ReturnType<typeof createMemoryRouter>): Promise<string> {
   const stream = await renderToReadableStream(createElement(RouterProvider, { router }));
   await stream.allReady;
@@ -63,8 +60,7 @@ function confirmButton(html: string): string {
 }
 
 const NEVER = () => new Promise<undefined>(() => undefined);
-// A failed confirm in the real route returns a message, which keeps the card
-// mounted, so the route's action resolves instead of throwing.
+
 const FAILS = () => Promise.resolve({ message: "Add your brand's name, then tap That's me." });
 
 describe("the onboarding confirm button", () => {
