@@ -752,6 +752,25 @@ describe("nightly site sweep", () => {
       expect(unlinked?.n).toBe(0);
     });
 
+    it("queues the email when the publish is retried after the first enqueue failed", async () => {
+      installJev(0.8);
+      await baseline("ent-self", SELF_BEFORE_HTML);
+      const target = (await planSiteSweep(NOW)).find((t) => t.entityId === "ent-self");
+      if (target === undefined) throw new Error("expected the ent-self homepage");
+      readHolder.html = SELF_BROKEN_HTML;
+      const changed = await checkSitePage(target, await nextTick("self-broken-retry"));
+      if (changed.outcome !== "changed") throw new Error("expected a change");
+      send.mockRejectedValueOnce(new Error("queue down"));
+
+      await expect(publishSiteChange(target, changed)).rejects.toThrow("queue down");
+      await publishSiteChange(target, changed);
+
+      const filed = await rows();
+      expect(filed.incidents).toHaveLength(1);
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(send).toHaveBeenLastCalledWith({ incident_id: filed.incidents[0]?.id });
+    });
+
     it("still opens the incident and queues the email when the brand's budget went on mention verdicts", async () => {
       installJev(0.8);
       for (let index = 0; index < 17; index += 1) {

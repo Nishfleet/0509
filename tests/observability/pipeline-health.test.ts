@@ -14,6 +14,7 @@ const tick = (overrides: Partial<SourceTick> & { itemCount: number }): SourceTic
   platform: "reddit",
   watchId: "watch_a",
   fetchedAt: "2026-09-22T00:00:00.000Z",
+  canaryCount: 0,
   ...overrides,
 });
 
@@ -33,6 +34,22 @@ describe("blindSources", () => {
         lastGoodAt: "2026-09-20T12:00:00.000Z",
       },
     ]);
+  });
+
+  it("does not flag a quiet brand while the source's canary still returns results", () => {
+    const ticks: SourceTick[] = [
+      tick({ itemCount: 0, canaryCount: 4, fetchedAt: "2026-09-22T00:00:00.000Z" }),
+      tick({ itemCount: 0, canaryCount: 4, fetchedAt: "2026-09-21T00:00:00.000Z" }),
+    ];
+    expect(blindSources(ticks, new Map())).toEqual([]);
+  });
+
+  it("does not flag a source that has no canary to prove it is blind", () => {
+    const ticks: SourceTick[] = [
+      tick({ itemCount: 0, canaryCount: null, fetchedAt: "2026-09-22T00:00:00.000Z" }),
+      tick({ itemCount: 0, canaryCount: null, fetchedAt: "2026-09-21T00:00:00.000Z" }),
+    ];
+    expect(blindSources(ticks, new Map())).toEqual([]);
   });
 
   it("does not flag a watch whose latest tick is 0 but previous is 3", () => {
