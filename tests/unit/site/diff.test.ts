@@ -22,8 +22,7 @@ describe("diffPageText", () => {
 
     expect(toSentenceLines(prev.text)).toBe("Plans start at $10.\nCancel any time.");
     expect(toSentenceLines(next.text)).toBe("Plans start at $12.\nCancel any time.");
-    // diff@9.0.0 attaches "$" to the preceding token. The unchanged word is
-    // "Plans start at $" and the removed and added words are "10" and "12".
+
     expect(pageDiff.words.some((change) => change.removed && change.value.includes("10"))).toBe(true);
     expect(pageDiff.words.some((change) => change.added && change.value.includes("12"))).toBe(true);
     expect(pageDiff.words.some((change) => !change.added && !change.removed && change.value.endsWith("$"))).toBe(true);

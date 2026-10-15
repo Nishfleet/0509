@@ -16,16 +16,6 @@ function inRouter(element: ReactElement): string {
   return renderToStaticMarkup(createElement(MemoryRouter, null, element));
 }
 
-/**
- * Nishfleet/0509#4020. DESIGN.md 7: "Never 'No data'. Every empty state says
- * what will fill it and when, or gives the one action that fills it."
- *
- * Four of the seven surfaces DESIGN.md 7 names are rendered here through the
- * component that ships their copy. The seventh, Home's second zero, ships
- * through first-file-panel.tsx and takes its brief time from the real schedule
- * (tests/home/arrival-estimate.test.ts), so no factory here guesses a date.
- */
-
 const NOW = new Date(2026, 8, 24, 10, 0, 0, 0);
 const DAY_MS = 86_400_000;
 
@@ -136,10 +126,7 @@ describe("the component renders a sentence and at most one action, nothing else"
     const html = emptyState(sentence, action);
     expect(html).not.toMatch(/<a\b/);
     expect([...html.matchAll(/<input\b/g)]).toHaveLength(1);
-    // Mobile keyboard hints (0509#6701). React 19 renders these props verbatim
-    // (camelCase) in static markup, so assert the exact string it writes; the HTML
-    // parser lowercases the attribute names when a phone loads the page, which is
-    // what turns spell-checking off and puts "go" on the Enter key.
+
     expect(html).toContain('autoComplete="off"');
     expect(html).toContain('autoCapitalize="none"');
     expect(html).toContain('autoCorrect="off"');
@@ -204,20 +191,6 @@ describe("a bare empty sentence is impossible", () => {
   });
 });
 
-/**
- * Nishfleet/0509#5862. DESIGN.md 7's "Home, second zero" row used to be
- * served by a dead `homeSecondZero()` factory in empty-state.tsx that guessed
- * the brief time as `shift(now, 6)` with no timeZone. Nothing rendered it —
- * the shipped second zero is FirstFilePanel, which takes the brief time from
- * the real schedule.
- *
- * The row-vs-copy half of this gate read DESIGN.md to compare the doc row
- * against the shipped copy. docs/REBUILD-DONE.md D moves that doc-vs-code
- * check to review, so what remains here is the shipped path end to end:
- * homeView turns a schedule into one exact day and time, and FirstFilePanel
- * renders that string into the sentence a customer reads. A guessed date
- * cannot reach the copy without failing one of those two assertions.
- */
 describe("the Home second-zero copy comes from the real schedule (#5862)", () => {
   it("homeView emits one brief time and FirstFilePanel renders it", async () => {
     const { FirstFilePanel } = await import("../../app/components/first-file-panel");
@@ -245,24 +218,13 @@ describe("the Home second-zero copy comes from the real schedule (#5862)", () =>
         briefAt: view.standing.briefAt,
       }),
     );
-    // weekday 1, hour 8 in Europe/London is Monday 08:00 — one real Workflow
-    // time, never "soon", and the panel writes it into the sentence verbatim.
+
     expect(view.standing.briefAt).toBe("Monday 08:00");
     expect(html).toContain(`arrives with your brief on ${view.standing.briefAt}`);
     expect(html).not.toContain("soon");
   });
 });
 
-/**
- * Nishfleet/0509#5963. DESIGN.md 7's rows quoted the strings customers can
- * reach, so a row that drifted from the shipped copy was a doc bug. Reading the
- * table to compare the two is the doc-vs-code check docs/REBUILD-DONE.md D
- * moves to review (the alerts and competitor-page sentences are pinned by
- * tests/alerts/alert-chip-empty.test.ts and tests/competitor/*). What this
- * gate keeps is the shipped side: every sentence the copy factories emit is a
- * full sentence, not a bare "No data", so the row review compares the doc
- * against is one the component actually renders.
- */
 describe("the strings customers can reach are full sentences (#5963)", () => {
   it("both competitor-page sentences render through the component", async () => {
     const { developmentsEmpty } = await import("../../app/components/competitor-frame");

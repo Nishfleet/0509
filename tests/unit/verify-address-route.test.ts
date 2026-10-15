@@ -13,11 +13,6 @@ vi.mock("../../app/lib/verify-delivery-address.server", () => ({
 
 import VerifyAddress, { action, headers, loader, meta } from "../../app/routes/v.$token";
 
-// The Confirm button must be disabled while the form's own submission runs, so
-// the navigation mock carries the state the route's other forms only touch via
-// their intents: the only post on this route is the confirm itself (the
-// harness in tests/competitor/competitor-pending-buttons.test.ts drives the
-// same pattern).
 const harness = vi.hoisted(() => ({
   state: "idle" as Navigation["state"],
 }));
@@ -26,8 +21,7 @@ vi.mock("react-router", async (importOriginal) => {
   const actual = await importOriginal<typeof ReactRouterModule>();
   return {
     ...actual,
-    // The stub's own navigation is idle, so only the pending states are
-    // replaced. Every other test in this file keeps the real hook.
+
     useNavigation: (...args: Parameters<typeof actual.useNavigation>) =>
       harness.state === "idle" ? actual.useNavigation(...args) : { state: harness.state },
   };
@@ -56,8 +50,7 @@ function renderPending(state: Exclude<Navigation["state"], "idle">): string {
 function expectDisabledButton(html: string): void {
   const disabledButton = /<button\b[^>]*\bdisabled\b[^>]*>/.exec(html);
   expect(disabledButton).not.toBeNull();
-  // The disabled button is the one that reads Confirm, so an unrelated
-  // disabled button elsewhere in the page cannot pass this assertion.
+
   const fromButton = disabledButton && html.slice(disabledButton.index);
   expect(fromButton).toMatch(/Confirm/);
 }
@@ -83,9 +76,6 @@ describe("/v/:token (0509#5811)", () => {
   });
 
   it("links on to the app after POST, so the page is not a dead end (0509#6762)", () => {
-    // The person arrives from an email link, often on a phone, with no tab
-    // open on the app. The pre-confirm page keeps its single action, so this
-    // link is the confirmed view's only way back in.
     const html = renderPage(true);
 
     expect(html).toMatch(/<a\b[^>]*href="\/app"/);
@@ -101,16 +91,12 @@ describe("/v/:token (0509#5811)", () => {
   });
 
   it("keeps the Confirm button disabled while the navigation settles after the post", () => {
-    // The reached page drops the form, so this is the defensive half of the
-    // disable: the state the router is in while the action completes.
     const html = renderPending("loading");
     expect(html).toContain("Confirming…");
     expectDisabledButton(html);
   });
 
   it("keeps the Confirm button disabled while a revalidation runs with no form in flight", () => {
-    // Keyed on the navigation state alone, as the issue asks, not on the
-    // submission's own form metadata.
     const html = renderPending("loading");
     expect(html).toContain("Confirming…");
     expectDisabledButton(html);

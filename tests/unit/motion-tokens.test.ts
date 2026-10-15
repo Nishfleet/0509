@@ -4,12 +4,6 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-// DESIGN.md §9 allows push, sheet and fade and says nothing scales, nothing
-// bounces; §3 says radius 0 and never a shadow. The shadcn dialog and popover
-// shipped with a zoom, a slide, rounded corners, a ring shadow and a blurred
-// backdrop, and three link classes ran 150ms on the browser's default curve.
-// This pins the surfaces to the §9 durations and the push curve.
-
 const APP = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "app");
 const BUDGET_MS = new Set([140, 160, 180, 220, 280, 320, 380]);
 

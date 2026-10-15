@@ -183,6 +183,7 @@ export function lifecycleEmails(): readonly LifecycleEmail[] {
       renderRecap({
         change_count: 3,
         latest: { rival: "Kindred", what: "changed its pricing page" },
+        standing: [],
         link: ALERTS,
         footer: FOOTER,
       }),
@@ -190,7 +191,18 @@ export function lifecycleEmails(): readonly LifecycleEmail[] {
     ),
     email(
       "renderRecap, one change and no latest",
-      renderRecap({ change_count: 1, latest: null, link: ALERTS, footer: FOOTER }),
+      renderRecap({ change_count: 1, latest: null, standing: [], link: ALERTS, footer: FOOTER }),
+      [ALERTS],
+    ),
+    email(
+      "renderRecap, nothing changed and where rivals stand",
+      renderRecap({
+        change_count: 0,
+        latest: null,
+        standing: [{ rival: "Kindred", lines: ["In its own words: Invoices for freelancers"] }],
+        link: ALERTS,
+        footer: FOOTER,
+      }),
       [ALERTS],
     ),
     email(
