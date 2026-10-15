@@ -85,7 +85,8 @@ ORDER BY state_changed_at ASC`;
 const PICKED_SIGNALS = `SELECT s.id AS signal_id, s.entity_id AS entity_id, COALESCE(NULLIF(e.name, ''), e.domain) AS entity_name,
        s.title AS title, s.summary AS summary, s.url AS url, s.observed_at AS observed_at,
        ${effectiveKindSql("src")} AS source_kind, src.platform AS source_platform,
-       (SELECT v.reason FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id IN ('noteworthy_change', 'mention_matters') AND v.reason IS NOT NULL ORDER BY v.decided_at DESC LIMIT 1) AS verdict_reason
+       (SELECT v.reason FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id IN ('noteworthy_change', 'mention_matters') AND v.reason IS NOT NULL ORDER BY v.decided_at DESC LIMIT 1) AS verdict_reason,
+       (SELECT k.choice FROM jev_verdict k WHERE k.signal_id = s.id AND k.question_id = 'change_kind' AND k.choice IS NOT NULL ORDER BY k.decided_at DESC LIMIT 1) AS change_kind
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1
 JOIN source src ON src.id = s.source_id
@@ -152,6 +153,7 @@ const pickedSignalRows = z.array(
     source_kind: z.string(),
     source_platform: z.string(),
     verdict_reason: z.string().nullable(),
+    change_kind: z.string().nullable(),
   }),
 );
 
@@ -225,6 +227,7 @@ function buildMarks(picks: readonly string[], pickedById: ReadonlyMap<string, Pi
         before: null,
         after: null,
         jev_reason: row.verdict_reason ?? row.summary ?? row.title ?? "",
+        kind: row.change_kind,
       },
     ];
   });

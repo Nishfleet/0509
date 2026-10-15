@@ -31,6 +31,7 @@ const markSchema = z.object({
   before: z.string().nullable().catch(null),
   after: z.string().nullable().catch(null),
   jev_reason: z.string(),
+  kind: z.string().nullable().optional().catch(undefined),
 });
 
 const brandLineSchema = z
