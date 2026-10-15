@@ -71,14 +71,14 @@ export const D3_KIND: ChoiceQuestion = {
   id: D3_KIND_QID,
   instructions: "What kind of change is this?",
   options: {
-    offer: "a new promotion or discount",
+    offer: "a time-limited promotion, sale, discount code or banner with a deadline",
     pricing: "a price or plan change",
-    copy: "a messaging or positioning change",
-    launch: "a new product, feature or collection",
+    copy: "reworded headlines, taglines or positioning with no new product or price",
+    launch: "a new product, feature, collection or menu entry being added",
     removal: "a product, plan or section removed",
     breakage: "the page looks broken",
-    unintended: "a change that looks accidental",
-    noise: "nothing meaningful changed",
+    unintended: "a change a visitor would not notice on purpose: only a stylesheet, script or file name changed",
+    noise: "rotating or personalised content, counters, dates, ads or layout shuffling with nothing new",
   },
 };
 
