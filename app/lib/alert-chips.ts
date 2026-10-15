@@ -63,3 +63,13 @@ export function countAlertChips(kinds: readonly AlertItemKind[], incidentCount: 
     "your-site": incidentCount,
   };
 }
+
+export function groupsInChip<Item extends { kind: AlertItemKind }>(
+  groups: readonly { group: string; items: Item[] }[],
+  chip: AlertChipKey,
+): { group: string; items: Item[] }[] {
+  if (chip === "all") return [...groups];
+  return groups
+    .map((entry) => ({ group: entry.group, items: entry.items.filter((item) => itemInChip(item.kind, chip)) }))
+    .filter((entry) => entry.items.length > 0);
+}
