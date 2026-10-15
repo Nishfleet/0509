@@ -36,13 +36,13 @@ export interface MentionRowModel {
   alsoCount: number;
 }
 
-export const POSSIBLY_LINE = "Possibly. We were not sure this mattered, so it sits here rather than in your brief.";
+export const POSSIBLY_LINE = "Possibly. We weren't sure this mattered, so it sits here rather than in your brief.";
 
 export const UNREVIEWED_LINE =
-  "Not reviewed yet. We have not looked at this one, so it sits here rather than in your brief.";
+  "Not reviewed yet. We haven't looked at this one, so it sits here rather than in your brief.";
 
 export const PENDING_LINE =
-  "Still being checked. We have not decided yet whether this matters, so it sits here rather than in your brief.";
+  "Still being checked. We haven't decided yet whether this matters, so it sits here rather than in your brief.";
 
 export function alsoReportedLine(count: number): string {
   return `Also reported by ${String(count)} other ${count === 1 ? "source" : "sources"}`;

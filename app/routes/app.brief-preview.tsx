@@ -38,7 +38,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       </p>
       <p className="mt-3 max-w-prose leading-[1.55] text-ink-soft">
         {loaderData.paused
-          ? "This is your brief as it would read today. Your weekly brief is paused, so it will not be sent."
+          ? "This is your brief as it would read today. Your weekly brief is paused, so it won't be sent."
           : `This is your brief as it would read today. The real one goes out ${loaderData.sendsAt}, and by then it may have more in it.`}
       </p>
       <div className="mt-6">

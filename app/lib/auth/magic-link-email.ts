@@ -14,7 +14,7 @@ export function magicLinkEmail(input: { email: string; url: string }): {
     line: `We sent this link to ${input.email}. It works once and expires in ${String(TTL_MINUTES)} minutes.`,
     button: "Sign in",
     url: input.url,
-    ignore: "If you did not ask to sign in, ignore this email. Nothing happens until the link is used.",
+    ignore: "If you didn't ask to sign in, ignore this email. Nothing happens until the link is used.",
     preheader: `Works once, expires in ${String(TTL_MINUTES)} minutes.`,
   };
   return { subject: message.subject, text: linkEmailText(message), html: linkEmailHtml(message) };

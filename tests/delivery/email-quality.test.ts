@@ -70,7 +70,7 @@ function styleBlocks(html: string): string {
 }
 
 function withoutFallback(email: LifecycleEmail, blocks: string[]): string[] {
-  return email.fallbackAddress ? blocks.filter((block) => !block.startsWith("If the button does not work")) : blocks;
+  return email.fallbackAddress ? blocks.filter((block) => !block.startsWith("If the button doesn't work")) : blocks;
 }
 
 describe.each(EMAILS.map((email) => [email.name, email] as const))("%s", (_name, email) => {
