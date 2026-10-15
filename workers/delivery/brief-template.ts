@@ -154,7 +154,7 @@ function renderMarkBeforeAfter(mark: BriefPayload["read_this_first"][number]): s
 
 function renderMarkThumbnail(thumb: string | null, href: string | null): string {
   if (thumb === null || href === null) return "";
-  return `<p style="margin:10px 0 0;"><a class="brief-ink" href="${href}"><img src="${thumb}" alt="Screenshot of the change" width="${n(120)}" height="${n(90)}" style="display:block;"></a></p>`;
+  return `<p style="margin:10px 0 0;"><a class="brief-ink" href="${href}"><img src="${thumb}" alt="Screenshot of the change" width="${n(120)}" height="${n(90)}" style="display:block;font-family:${FONT};font-size:13px;line-height:18px;"></a></p>`;
 }
 
 function renderMark(

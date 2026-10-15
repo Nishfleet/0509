@@ -291,6 +291,11 @@ describe("screenshots are linked, never inlined", () => {
     expect(html).toContain('<img src="https://assets.0509.io/captures/ws_1/sig_1/before.png"');
   });
 
+  it("sets a sans font on the thumbnail so its alt text is not default serif when images are off", () => {
+    const { html } = renderBrief(payload(), CONTEXT);
+    expect(html).toMatch(/<img [^>]*alt="Screenshot of the change"[^>]*style="[^"]*font-family:-apple-system/);
+  });
+
   it("keeps an already percent-encoded key byte-for-byte, never re-encoding it", () => {
     const { html } = renderBrief(
       payload({
