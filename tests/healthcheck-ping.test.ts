@@ -17,8 +17,8 @@ import { pingCheck } from "../app/lib/healthcheck.server";
 
 const send = vi.mocked(fetchOutbound);
 
-function lines(spy: ReturnType<typeof vi.spyOn>): unknown[] {
-  return spy.mock.calls.map((call) => JSON.parse(String(call[0])));
+function lines(spy: { mock: { calls: unknown[][] } }): unknown[] {
+  return spy.mock.calls.map((call): unknown => JSON.parse(String(call[0])));
 }
 
 describe("pingCheck", () => {
