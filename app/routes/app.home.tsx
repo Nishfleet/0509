@@ -4,6 +4,7 @@ import { data, Link, redirect } from "react-router";
 
 import { FreshnessLine } from "../components/freshness-line";
 import { HomePageFrame, HomeStanding } from "../components/home-standing";
+import { RivalNudge } from "../components/rival-nudge";
 import { ShareButton } from "../components/share-button";
 import { formatPausedSince } from "../lib/brief-settings";
 import { readBriefScheduleForOwner } from "../lib/data/workspace.server";
@@ -30,7 +31,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   if (inputs === null) throw redirect("/onboarding");
   const payload = inputs.payload;
   const openId = resolveOpenId(new URL(request.url).searchParams.get("open"), payload, inputs.entities);
-  const { sources, siteFill, howRanked, moves, evidence, firstLook } = await timings.measure(
+  const { sources, siteFill, howRanked, moves, evidence, firstLook, fewRivals } = await timings.measure(
     "reads",
     readHomeReads(workspaceId, payload, openId),
   );
@@ -40,6 +41,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
       open: openId,
       evidence,
       firstLook,
+      fewRivals,
       howRanked,
       freshness: freshnessEntries(sources, Date.now()),
       siteFill,
@@ -102,6 +104,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         <SiteFillLine state={loaderData.siteFill} />
       ) : null}
       {loaderData.pausedSince === null ? null : <BriefPausedLine since={loaderData.pausedSince} />}
+      {loaderData.fewRivals === null ? null : <RivalNudge rivals={loaderData.fewRivals} />}
       <FreshnessLine entries={loaderData.freshness} />
       {loaderData.view.standing.kind === "ranked" ? <ShareButton /> : null}
     </HomePageFrame>

@@ -7,29 +7,60 @@ import { describe, expect, it } from "vitest";
 import { registeredToolDescriptors } from "../../app/lib/agent/mcp-tools";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const MAP = path.join(REPO_ROOT, ".agents", "skills", "verify", "feature-map.md");
-
+const MAP_DIR = path.join(REPO_ROOT, ".agents", "skills", "verify", "feature-map");
+const MAP_INDEX = path.join(REPO_ROOT, ".agents", "skills", "verify", "feature-map.md");
 const SPEC_REF = /e2e\/[A-Za-z0-9_./-]+\.spec\.ts/g;
-
 const TOOL_CLAUSE = "tools, each with an output schema:";
 
+interface MapFile {
+  name: string;
+  text: string;
+}
+
+async function mapFiles(): Promise<MapFile[]> {
+  const entries = await readdir(MAP_DIR, { recursive: true, withFileTypes: true });
+  return Promise.all(
+    entries
+      .filter((entry) => entry.isFile())
+      .map(async (entry) => {
+        const full = path.join(entry.parentPath, entry.name);
+        return { name: path.relative(MAP_DIR, full).split(path.sep).join("/"), text: await readFile(full, "utf8") };
+      }),
+  );
+}
+
+async function allMapFiles(): Promise<MapFile[]> {
+  return [{ name: "feature-map.md", text: await readFile(MAP_INDEX, "utf8") }, ...(await mapFiles())];
+}
+
+async function readMap(): Promise<string> {
+  return (await allMapFiles()).map((file) => file.text).join("\n");
+}
+
+function routeRows(text: string): string[][] {
+  return text
+    .split("\n")
+    .filter((line) => line.startsWith("|"))
+    .map((line) =>
+      line
+        .replace(/^\|/, "")
+        .replace(/\|$/, "")
+        .split("|")
+        .map((cell) => cell.trim()),
+    )
+    .filter((cells) => cells.length >= 2 && !/^(Route|Surface|:?-+:?)$/.test(cells[0]));
+}
+
 async function e2eSpecFiles(dir: string): Promise<string[]> {
-  const found: string[] = [];
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      found.push(...(await e2eSpecFiles(full)));
-      continue;
-    }
-    if (!entry.name.endsWith(".spec.ts")) continue;
-    found.push(path.relative(REPO_ROOT, full).split(path.sep).join("/"));
-  }
-  return found;
+  const entries = await readdir(dir, { recursive: true, withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".spec.ts"))
+    .map((entry) => path.relative(REPO_ROOT, path.join(entry.parentPath, entry.name)).split(path.sep).join("/"));
 }
 
 describe("feature map proof coverage", () => {
   it("names every spec on disk", async () => {
-    const map = await readFile(MAP, "utf8");
+    const map = await readMap();
     const unnamed = (await e2eSpecFiles(path.join(REPO_ROOT, "e2e"))).filter((rel) => !map.includes(rel));
     expect(
       unnamed,
@@ -38,7 +69,7 @@ describe("feature map proof coverage", () => {
   });
 
   it("names no spec that is not on disk", async () => {
-    const map = await readFile(MAP, "utf8");
+    const map = await readMap();
     const onDisk = new Set(await e2eSpecFiles(path.join(REPO_ROOT, "e2e")));
     const dead = [...new Set(map.match(SPEC_REF) ?? [])].filter((ref) => !onDisk.has(ref));
     expect(
@@ -50,26 +81,19 @@ describe("feature map proof coverage", () => {
   });
 
   it("has no duplicate route row", async () => {
-    const map = await readFile(MAP, "utf8");
-    const seen = new Map<string, number>();
+    const seen = new Map<string, string>();
     const duplicates: string[] = [];
-    map.split("\n").forEach((line, index) => {
-      if (!line.startsWith("|")) return;
-      const cells = line
-        .replace(/^\|/, "")
-        .replace(/\|$/, "")
-        .split("|")
-        .map((cell) => cell.trim());
-      if (cells.length < 2 || !cells[0].startsWith("`")) return;
-      const key = `${cells[0]}\t${cells[1]}`;
-      const first = seen.get(key);
-      if (first !== undefined) {
-        duplicates.push(`lines ${first} and ${index + 1} both claim ${cells[0]} in ${cells[1]}`);
-        return;
+    for (const file of await allMapFiles()) {
+      for (const cells of routeRows(file.text)) {
+        const key = `${cells[0]}\t${cells[1]}`;
+        const first = seen.get(key);
+        if (first !== undefined) {
+          duplicates.push(`${first} and ${file.name} both claim ${cells[0]} in ${cells[1]}`);
+          continue;
+        }
+        seen.set(key, file.name);
       }
-      seen.set(key, index + 1);
-    });
-
+    }
     expect(seen.size, "the parser must have read rows from the map").toBeGreaterThan(0);
     expect(
       [...seen.keys()].some((key) => key.startsWith("`/`\t")),
@@ -78,16 +102,24 @@ describe("feature map proof coverage", () => {
     expect(duplicates, duplicates.join("\n")).toEqual([]);
   });
 
+  it("holds exactly one row in each file", async () => {
+    const files = await mapFiles();
+    expect(files.length, "the map must have row files").toBeGreaterThan(0);
+    const wrong = files
+      .map((file) => ({ name: file.name, rows: file.text.split("\n").filter((line) => line.startsWith("|")).length }))
+      .filter((file) => file.rows !== 3)
+      .map((file) => `${file.name} has ${file.rows} table lines; a file is a header, a separator and one row`);
+    expect(wrong, wrong.join("\n")).toEqual([]);
+  });
+
   it("names every registered MCP tool in the `/mcp` row", async () => {
-    const map = await readFile(MAP, "utf8");
+    const map = await readMap();
     const row = map.split("\n").find((line) => line.startsWith("| `/mcp`"));
     expect(row, "the map has no `/mcp` row").toBeDefined();
     const names: string[] = Object.keys(registeredToolDescriptors);
-
     expect(names.length, "registeredToolDescriptors must not be empty").toBeGreaterThan(0);
     const missing = names.filter((name) => !row?.includes(`\`${name}\``));
     expect(missing, missing.map((name) => `name \`${name}\` in the /mcp row`).join("\n")).toEqual([]);
-
     const clause = row?.split(TOOL_CLAUSE)[1]?.split("(")[0] ?? "";
     const named = [...clause.matchAll(/`([a-z][a-z_]+)`/g)].map((match) => match[1]);
     expect(named.length, `the /mcp row must name its tools after \`${TOOL_CLAUSE}\``).toBeGreaterThan(0);

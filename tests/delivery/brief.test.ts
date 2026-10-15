@@ -272,7 +272,9 @@ describe("read this first is D4's, verbatim", () => {
   it("still renders the block when D4 picked nothing", () => {
     const { html, text } = renderBrief(payload({ read_this_first: [] }), CONTEXT);
     expect(html).toContain("Read this first");
-    expect(html).toContain("Nothing needed your attention this week. We keep watching rival sites, ads and mentions.");
+    expect(html).toContain(
+      "Nothing needed your attention this week. We keep watching competitor sites, ads and mentions.",
+    );
     expect(text).toContain("Read this first");
   });
 });
@@ -796,6 +798,15 @@ describe("inbox preview and the Settings link (Mobbin benchmark)", () => {
     expect(html).toContain('href="https://0509.io/app/settings"');
     expect(text).toContain("Choose when your brief arrives in Settings: https://0509.io/app/settings");
   });
+
+  it("leaves the Settings link out of a teammate's copy, which keeps its unsubscribe link", () => {
+    const { html, text } = renderBrief(payload(), { ...CONTEXT, teammate: true });
+
+    expect(html).not.toContain("/app/settings");
+    expect(text).not.toContain("Settings");
+    expect(text).toContain("Next brief: Mon 28 Sept, 08:00\nUnsubscribe: https://0509.io/u/opaque-token");
+    expect(html).toContain("Unsubscribe");
+  });
 });
 
 describe("the since-you-started line", () => {
@@ -839,6 +850,46 @@ describe("the rank-over-time line", () => {
   ])("is left out of the email for %s, as it is in the app", (_name, change) => {
     const { text } = renderBrief(payload({ headline_earlier: { rank: 5, weeks: 6 }, ...change }), CONTEXT);
     expect(text).not.toContain("Up from");
+  });
+});
+
+describe("the rival-you-may-be-missing block", () => {
+  const rival = { name: "Northwind", domain: "northwind.example", reason: "Named alongside you by 3 publishers" };
+
+  it("names the rival, why, and where to review it, in html and text", () => {
+    const { html, text } = renderBrief(payload({ new_rival: rival }), CONTEXT);
+    for (const out of [html, text]) {
+      expect(out).toContain("A competitor you may be missing");
+      expect(out).toContain("Northwind (northwind.example) may be a competitor you are missing.");
+      expect(out).toContain("Named alongside you by 3 publishers");
+      expect(out).toContain("https://0509.io/app/competitors");
+    }
+  });
+
+  it("names the competitor in a teammate's copy without a link to the sign-in wall", () => {
+    const { html, text } = renderBrief(payload({ new_rival: rival }), { ...CONTEXT, teammate: true });
+    for (const out of [html, text]) {
+      expect(out).toContain("Northwind (northwind.example) may be a competitor you are missing.");
+      expect(out).not.toContain("https://0509.io/app/competitors");
+    }
+  });
+
+  it.each([
+    ["none found", null],
+    ["a digest saved before it existed", undefined],
+  ])("is left out for %s", (_name, none) => {
+    const { html, text } = renderBrief(payload({ new_rival: none }), CONTEXT);
+    expect(html).not.toContain("may be missing");
+    expect(text).not.toContain("may be missing");
+  });
+
+  it("escapes what the rival is called", () => {
+    const { html } = renderBrief(
+      payload({ new_rival: { name: "<b>x</b>", domain: "x.example", reason: null } }),
+      CONTEXT,
+    );
+    expect(html).not.toContain("<b>x</b>");
+    expect(html).toContain("&lt;b&gt;x&lt;/b&gt;");
   });
 });
 

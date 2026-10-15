@@ -3,11 +3,12 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { expect, type Page, type TestInfo } from "@playwright/test";
 
-import { consoleFailures, run, watchConsole, watchRequests } from "./inbox";
+import { consoleFailures, isLocalLane, run, seedPreviewSession, watchConsole, watchRequests } from "./inbox";
 
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const MAX_TAB_STOPS = 60;
 const MAX_LAYOUT_SHIFT = 0.02;
+const ACTION_WINDOW_MS = 3000;
 const STAMP = "2026-10-12T00:00:00.000Z";
 
 export interface Quality {
@@ -16,16 +17,26 @@ export interface Quality {
 }
 
 export async function startQuality(page: Page): Promise<Quality> {
-  await page.addInitScript(() => {
+  await page.addInitScript((actionWindow) => {
     Reflect.set(window, "__cls", 0);
+    let lastInput = Number.NEGATIVE_INFINITY;
+    for (const type of ["pointerdown", "keydown", "submit"]) {
+      document.addEventListener(
+        type,
+        () => {
+          lastInput = performance.now();
+        },
+        { capture: true },
+      );
+    }
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
-        if (!Reflect.get(entry, "hadRecentInput")) {
+        if (!Reflect.get(entry, "hadRecentInput") && entry.startTime - lastInput > actionWindow) {
           Reflect.set(window, "__cls", Number(Reflect.get(window, "__cls")) + Number(Reflect.get(entry, "value")));
         }
       }
     }).observe({ type: "layout-shift", buffered: true });
-  });
+  }, ACTION_WINDOW_MS);
   const failedRequests = watchRequests(page);
   return { watched: watchConsole(page), failedRequests };
 }
@@ -112,8 +123,12 @@ export async function scanPage(
   testInfo: TestInfo,
   quality: Quality,
   label: string,
-  options: { keyboard: boolean } = { keyboard: true },
+  options: { screen: RegExp; keyboard: boolean },
 ): Promise<void> {
+  await expect(
+    page.getByRole("heading", { name: options.screen }).first(),
+    `${label}: the screen under test`,
+  ).toBeVisible();
   await animationsSettled(page);
   await expectNoAxeViolations(page, testInfo, label);
   await expectQuiet(page, testInfo, quality, label);
@@ -137,6 +152,19 @@ export function seedWorkspace(db: DatabaseSync, suffix: string, userId: string, 
     `ent-self-${suffix}`,
     workspaceId,
     `self-${suffix}.example`,
+    STAMP,
+  );
+  return workspaceId;
+}
+
+export function seedBareWorkspace(db: DatabaseSync, suffix: string, userId: string): string {
+  const workspaceId = `ws-${suffix}`;
+  run(
+    db,
+    "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?, ?, ?, 'UTC', 1, 8, ?)",
+    workspaceId,
+    "Onboarding",
+    userId,
     STAMP,
   );
   return workspaceId;
@@ -179,4 +207,12 @@ export async function signIn(page: Page, baseURL: string | undefined, cookie: st
       return { name, value: value.join("="), url: baseURL ?? "" };
     }),
   );
+}
+
+export async function signInOnLocalLane(page: Page, baseURL: string | undefined, prefix: string): Promise<void> {
+  if (!isLocalLane()) return;
+  const { cookie } = await seedPreviewSession(prefix, ({ db, suffix, userId }) => {
+    seedCompetitor(db, suffix, seedWorkspace(db, suffix, userId));
+  });
+  await signIn(page, baseURL, cookie);
 }

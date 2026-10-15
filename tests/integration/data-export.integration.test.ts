@@ -105,6 +105,28 @@ describe("workspace export", () => {
     expect(text).not.toContain("key-mine");
   });
 
+  it("includes the caller's competitor notes and no one else's", async () => {
+    const mine = await seed("notes-mine");
+    const theirs = await seed("notes-theirs");
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO entity_note (workspace_id, entity_id, body, updated_at) VALUES (?1, ?2, 'my private note', ?3)",
+      ).bind(mine.workspaceId, "ent-notes-mine", NOW),
+      env.DB.prepare(
+        "INSERT INTO entity_note (workspace_id, entity_id, body, updated_at) VALUES (?1, ?2, 'their private note', ?3)",
+      ).bind(theirs.workspaceId, "ent-notes-theirs", NOW),
+    ]);
+    const data = await readWorkspaceExport({
+      workspaceId: mine.workspaceId,
+      userId: mine.userId,
+      email: "notes-mine@test.dev",
+      now: new Date(NOW),
+    });
+    if (data === null) throw new Error("expected export");
+    expect(data.notes).toEqual([{ brand: "notes-mine.example", body: "my private note", updated_at: NOW }]);
+    expect(JSON.stringify(data)).not.toContain("their private note");
+  });
+
   it("returns null when the owner row is gone", async () => {
     const mine = await seed("no-owner");
     await expect(

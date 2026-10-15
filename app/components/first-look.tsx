@@ -8,7 +8,7 @@ export function FirstLook({ rivals }: { rivals: readonly FirstLookRow[] }): Reac
   return (
     <section data-home="first-look" aria-labelledby="first-look-heading" className="mt-10">
       <h2 id="first-look-heading" className={BLOCK_HEADING}>
-        Where your rivals stand today
+        Where your competitors stand today
       </h2>
       <ul className="mt-2 border-b border-line">
         {rivals.map((rival) => (

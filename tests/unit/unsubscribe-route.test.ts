@@ -7,6 +7,7 @@ const holder = vi.hoisted(() => ({ known: false, outcome: "invalid_token" as str
 
 vi.mock("../../app/lib/data/email_suppression.server", () => ({
   isUnsubscribeTokenKnown: () => Promise.resolve(holder.known),
+  isTeammateUnsubscribeToken: () => Promise.resolve(false),
   suppressByUnsubscribeToken: () => Promise.resolve(),
 }));
 
@@ -136,13 +137,13 @@ describe("/u/:token (0509#5761)", () => {
 
     const data = await action({ params: { token: "a".repeat(64) } } as never);
 
-    expect(data).toEqual({ unsubscribed: true });
+    expect(data).toEqual({ unsubscribed: true, teammate: false });
   });
 
-  it("renders 'This link is not valid' with no unsubscribe claim in it", () => {
+  it("renders 'This unsubscribe link is no longer active' with no unsubscribe claim in it", () => {
     const html = renderBoundary({ status: 404, statusText: "Not Found", internal: true, data: "" });
 
-    expect(html).toContain("This link is not valid");
+    expect(html).toContain("This unsubscribe link is no longer active");
     expect(html).not.toContain("You&#x27;re unsubscribed");
     expect(html).not.toContain("Unsubscribe from Five to Nine emails?");
   });
@@ -155,7 +156,7 @@ describe("/u/:token (0509#5761)", () => {
       const html = renderBoundary(error);
 
       expect(html).toContain("Something went wrong");
-      expect(html).not.toContain("This link is not valid");
+      expect(html).not.toContain("This unsubscribe link is no longer active");
     }
   });
 
@@ -163,7 +164,7 @@ describe("/u/:token (0509#5761)", () => {
     const html = renderConfirm(false);
 
     expect(html).toContain("Unsubscribe from Five to Nine emails?");
-    expect(html).not.toContain("This link is not valid");
+    expect(html).not.toContain("This unsubscribe link is no longer active");
   });
 
   it("renders the confirmation after a POST that suppressed the address", () => {
@@ -173,7 +174,7 @@ describe("/u/:token (0509#5761)", () => {
     expect(html).toContain("Changed your mind?");
     expect(html).toContain('href="/app/settings"');
     expect(html).not.toContain("No more email");
-    expect(html).not.toContain("This link is not valid");
+    expect(html).not.toContain("This unsubscribe link is no longer active");
   });
 
   it("gives the Settings link a 44px-tall tap target", () => {

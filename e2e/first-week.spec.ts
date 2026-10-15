@@ -3,7 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { type Page } from "@playwright/test";
 
 import { isLocalLane, run, seedPreviewSession, writePreview } from "./inbox";
-import { scanPage, seedCompetitor, seedWorkspace, signIn, startQuality } from "./quality";
+import { SCHEMES, scanPage, seedCompetitor, seedWorkspace, signIn, startQuality } from "./quality";
 import { expect, test } from "./test";
 
 test.skip(!isLocalLane(), "seeds one customer's week in the local preview database; never run against production");
@@ -111,11 +111,14 @@ test("one customer's first week: gathering, a second rival, a first alert, the f
 
   await page.goto("/app");
   const firstLook = page.locator('[data-home="first-look"]');
-  await expect(firstLook.getByRole("heading", { name: "Where your rivals stand today" })).toBeVisible();
+  await expect(firstLook.getByRole("heading", { name: "Where your competitors stand today" })).toBeVisible();
   await expect(firstLook).toContainText("Zephyrwear");
   await expect(page.locator('[data-home="first-week-steps"]')).toBeVisible();
   await expectNoSideways(page);
-  await scanPage(page, testInfo, quality, `week day 0 Home ${testInfo.project.name}`, { keyboard: true });
+  await scanPage(page, testInfo, quality, `week day 0 Home ${testInfo.project.name}`, {
+    screen: /^good (morning|afternoon|evening)/i,
+    keyboard: true,
+  });
 
   await openPlace(page, "Competitors");
   const count = page.locator('[data-slot="competitor-count"]');
@@ -135,7 +138,10 @@ test("one customer's first week: gathering, a second rival, a first alert, the f
   await openPlace(page, "Alerts");
   await expect(page.getByText("Zephyrwear opens a London flagship")).toBeVisible();
   await expect(page.getByTestId("alert-chip-mentions")).toContainText("1");
-  await scanPage(page, testInfo, quality, `week day 4 Alerts ${testInfo.project.name}`, { keyboard: false });
+  await scanPage(page, testInfo, quality, `week day 4 Alerts ${testInfo.project.name}`, {
+    screen: /^alerts$/i,
+    keyboard: false,
+  });
 
   await page.goto("/app/brief");
   await expect(page.getByText(/first brief/i)).toBeVisible();
@@ -147,7 +153,10 @@ test("one customer's first week: gathering, a second rival, a first alert, the f
   await expect(page.locator("[data-brief-state=sent]")).toHaveText(/Week of 5 Oct · Sent 12 Oct/);
   await expect(page.getByText("Zephyrwear led the first week and you are one place behind.")).toBeVisible();
   await expectNoSideways(page);
-  await scanPage(page, testInfo, quality, `week day 7 Brief ${testInfo.project.name}`, { keyboard: false });
+  await scanPage(page, testInfo, quality, `week day 7 Brief ${testInfo.project.name}`, {
+    screen: /^your weekly brief$/i,
+    keyboard: false,
+  });
 
   await openPlace(page, "Settings");
   const teammate = `mate-${Date.now().toString(36)}-${testInfo.project.name}@example.com`;
@@ -165,4 +174,51 @@ test("one customer's first week: gathering, a second rival, a first alert, the f
   await page.goto("/app");
   await expect(page.getByText(/Your weekly brief has been paused since/)).toHaveCount(0);
   await expect(page.getByText("Zephyrwear").first()).toBeVisible();
+});
+
+const SCREENS = [
+  { path: "/app", says: "Add a competitor to see where you stand." },
+  { path: "/app/competitors", says: "Add a competitor to see where you stand. We also look for new ones every week." },
+  { path: "/app/brief", says: "Your weekly brief" },
+  { path: "/app/alerts", says: "Nothing yet. When a competitor changes its website, gets a mention or posts a job" },
+  { path: "/app/settings", says: "Also send the brief to" },
+] as const;
+
+test("a brand-new workspace with no competitors explains every screen and passes the quality checks", async ({
+  page,
+  baseURL,
+}, testInfo) => {
+  const quality = await startQuality(page);
+  const { cookie } = await seedPreviewSession("quality-empty", ({ db, suffix, userId }) => {
+    const workspaceId = seedWorkspace(db, suffix, userId);
+    run(
+      db,
+      "INSERT INTO onboarding_run (id, workspace_id, user_id, input_raw, started_at, watching_started_at) SELECT ?, ?, owner_user_id, 'self.example', ?, ? FROM workspace WHERE id = ?",
+      `run-${suffix}`,
+      workspaceId,
+      "2026-09-25T00:00:00.000Z",
+      "2026-09-25T00:00:00.000Z",
+      workspaceId,
+    );
+  });
+  await signIn(page, baseURL, cookie);
+
+  for (const screen of SCREENS) {
+    const response = await page.goto(screen.path);
+    expect(response?.status(), screen.path).toBe(200);
+    await expect(page.getByRole("main"), screen.path).toContainText(screen.says);
+    await expect(page.getByRole("main"), screen.path).not.toContainText(/\b(?:undefined|null|NaN)\b|\{\{/);
+    const width = await page.evaluate(() => ({
+      scroll: document.documentElement.scrollWidth,
+      inner: window.innerWidth,
+    }));
+    expect(width.scroll, `${screen.path}: no sideways scroll`).toBeLessThanOrEqual(width.inner);
+    for (const colorScheme of SCHEMES) {
+      await page.emulateMedia({ colorScheme });
+      await scanPage(page, testInfo, quality, `${screen.path} empty ${colorScheme} ${testInfo.project.name}`, {
+        screen: /\S/,
+        keyboard: false,
+      });
+    }
+  }
 });
