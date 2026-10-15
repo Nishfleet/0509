@@ -50,7 +50,7 @@ test("a brief's unsubscribe link stops only the brief, offers stopping everythin
   await page.goto("/app/settings");
   const before = page.getByRole("region", { name: "Emails to this address" });
   await expect(before.getByLabel("The weekly brief")).toBeChecked();
-  await expect(before.getByLabel("Alerts, when a rival changes or your site has trouble")).toBeChecked();
+  await expect(before.getByLabel("Alerts, when a competitor changes or your site has trouble")).toBeChecked();
 
   await page.goto(`/u/${seeded}?type=brief`);
   await page.getByRole("button", { name: "Unsubscribe" }).click();
@@ -61,7 +61,7 @@ test("a brief's unsubscribe link stops only the brief, offers stopping everythin
   await page.goto("/app/settings");
   const after = page.getByRole("region", { name: "Emails to this address" });
   await expect(after.getByLabel("The weekly brief")).not.toBeChecked();
-  await expect(after.getByLabel("Alerts, when a rival changes or your site has trouble")).toBeChecked();
+  await expect(after.getByLabel("Alerts, when a competitor changes or your site has trouble")).toBeChecked();
   await scanPage(page, testInfo, quality, "Settings with the brief stopped", {
     screen: /^settings$/i,
     keyboard: false,
@@ -78,7 +78,7 @@ test("a brief's unsubscribe link stops only the brief, offers stopping everythin
   await page.goto("/app/settings");
   const none = page.getByRole("region", { name: "Emails to this address" });
   await expect(none.getByLabel("The weekly brief")).not.toBeChecked();
-  await expect(none.getByLabel("Alerts, when a rival changes or your site has trouble")).not.toBeChecked();
+  await expect(none.getByLabel("Alerts, when a competitor changes or your site has trouble")).not.toBeChecked();
 });
 
 test("an alerts link stops only alerts, and an old link without a type stops both", async ({ page, baseURL }) => {
@@ -97,7 +97,7 @@ test("an alerts link stops only alerts, and an old link without a type stops bot
   await page.goto("/app/settings");
   const kinds = page.getByRole("region", { name: "Emails to this address" });
   await expect(kinds.getByLabel("The weekly brief")).toBeChecked();
-  await expect(kinds.getByLabel("Alerts, when a rival changes or your site has trouble")).not.toBeChecked();
+  await expect(kinds.getByLabel("Alerts, when a competitor changes or your site has trouble")).not.toBeChecked();
 
   await page.goto(`/u/${seeded}`);
   await expect(page.getByRole("heading", { level: 1, name: "Unsubscribe from Five to Nine emails?" })).toBeVisible();
