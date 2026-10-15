@@ -10,6 +10,7 @@ import { isWorkspacePaid } from "../lib/billing/subscription-state";
 import { reconcileCheckoutReturn } from "../lib/billing/reconcile.server";
 import { isBillingInterval, isPlanId, TRIAL_TERMS } from "../lib/billing/plans";
 import { readPlanSubscription, readPlanTier } from "../lib/data/plan.server";
+import { readBillingWorkspaceId } from "../lib/data/workspace.server";
 import { readPlanIntent } from "../lib/plan-intent.server";
 import { inPickedOrder, planName } from "../lib/plan-order";
 import { requireFreshSession, requireSession, signOutToLogin } from "../lib/require-session.server";
@@ -28,7 +29,7 @@ async function workspaceFor(request: Request, fresh = false): Promise<{ workspac
   if (workspaceId === null) return await signOutToLogin(request);
   if (landing === null) throw redirect("/app");
   if (landing !== ONBOARDING_PLAN) throw redirect(landing);
-  return { workspaceId, email: session.user.email };
+  return { workspaceId: (await readBillingWorkspaceId(workspaceId)) ?? workspaceId, email: session.user.email };
 }
 
 export function meta() {

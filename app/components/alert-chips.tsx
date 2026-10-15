@@ -23,7 +23,7 @@ export function AlertChips({
         setSearchParams(next === "all" ? {} : { kind: next }, { preventScrollReset: true });
       }}
       data-testid="alert-chips"
-      className="mt-8 flex w-full flex-wrap gap-2"
+      className="mt-8 grid w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap"
     >
       {ALERT_CHIPS.filter((entry) => counts[entry.key] > 0 || entry.key === chip).map((entry) => (
         <ToggleGroupItem

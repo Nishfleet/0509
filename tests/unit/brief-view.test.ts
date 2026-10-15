@@ -119,8 +119,20 @@ describe("the brief view", () => {
     expect(html).toContain("You&#x27;re #2 of 6 this week");
     expect(html).toContain("12 mentions · 3 site changes<");
     expect(html).toContain("cart 500s on https://drylight.example/, still broken");
-    expect(html).toMatch(/<p>Oaks: #1<\/p><p class="text-ink-soft">Oaks shipped a 2026 pricing page<\/p>/);
+    expect(html).toMatch(
+      /<p>Oaks: #1, holding steady<\/p><p class="text-ink-soft">Oaks shipped a 2026 pricing page<\/p>/,
+    );
     expect(html).toContain("Drylight: unranked");
+  });
+
+  it("names how each brand moved and when the next brief arrives", () => {
+    const html = render({ timezone: "UTC" });
+    expect(html).toContain("Oaks: #1, holding steady");
+    expect(html).toContain("Next brief: Monday 28 September 2026, 13:00 UTC");
+  });
+
+  it("leaves out the next brief line when none is scheduled", () => {
+    expect(render({ next_brief_at: null })).not.toContain("Next brief");
   });
 
   it("shows the struck before and the no-mark row as a link", () => {
