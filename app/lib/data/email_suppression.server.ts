@@ -33,7 +33,7 @@ ON CONFLICT(address) DO UPDATE SET
   stops_alerts = 1`;
 
 const SUPPRESS_BOUNCED = `INSERT INTO email_suppression (address, reason, created_at)
-VALUES (lower(trim(?1)), 'bounced', ?2)
+VALUES (lower(trim(?1)), 'bounce', ?2)
 ON CONFLICT(address) DO UPDATE SET
   stops_brief = 1,
   stops_alerts = 1`;

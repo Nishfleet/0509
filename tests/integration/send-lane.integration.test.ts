@@ -821,7 +821,7 @@ describe("send lane (0509#3979)", () => {
     expect(await isAddressSuppressed("bounced@0509.io", "brief")).toBe(true);
     expect(await isAddressSuppressed("bounced@0509.io", "alerts")).toBe(true);
     const row = await env.DB.prepare("SELECT reason FROM email_suppression WHERE address = 'bounced@0509.io'").first();
-    expect(row).toEqual({ reason: "bounced" });
+    expect(row).toEqual({ reason: "bounce" });
   });
 
   it("(bounce) any other send failure leaves the address alone", async () => {
