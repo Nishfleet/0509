@@ -2,6 +2,7 @@ import { captureException } from "@sentry/cloudflare";
 
 import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { isWorkspacePaid } from "../../app/lib/billing/subscription-state";
+import { governingWorkspace } from "../../app/lib/data/active-workspace";
 import { markDigestSentStatement } from "../../app/lib/data/digest.server";
 import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
 import { claimIncidentNotice, incidentWasAnnounced } from "../../app/lib/data/incident_notice.server";
@@ -202,7 +203,9 @@ async function noTarget(
 }
 
 async function isUnpaidWorkspace(env: Env, workspaceId: string): Promise<boolean> {
-  const row = await env.DB.prepare("SELECT status, current_period_end FROM plan WHERE workspace_id = ?")
+  const row = await env.DB.prepare(
+    `SELECT status, current_period_end FROM plan WHERE workspace_id = ${governingWorkspace("?1")}`,
+  )
     .bind(workspaceId)
     .first<{ status: string; current_period_end: string | null }>();
   return !isWorkspacePaid(

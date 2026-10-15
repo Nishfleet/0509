@@ -154,6 +154,7 @@ describe("app layout middleware", () => {
     expect(childPathsOf("routes/app-session-layout.tsx")).toEqual([
       "app/share.png",
       "app/logos/:entityId",
+      "app/brands",
       "app/admin/retention",
     ]);
     expect(appSessionLayout.middleware).toEqual([sessionMocks.requireSessionMiddleware]);

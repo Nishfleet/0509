@@ -43,3 +43,25 @@ export async function settledVitals(page: Page): Promise<{ lcp: number; cls: num
     .toBeGreaterThan(0);
   return page.evaluate(() => (window as unknown as { __vitals: { lcp: number; cls: number } }).__vitals);
 }
+
+export const TAP_BUDGET_MS = 200;
+
+export async function chipTapDurations(page: Page, chips: readonly string[]): Promise<number[]> {
+  await page.evaluate(() => {
+    const taps = new Map<number, number>();
+    Object.assign(window, { __taps: taps });
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        const { interactionId } = entry as PerformanceEntry & { interactionId: number };
+        if (interactionId > 0) taps.set(interactionId, Math.max(taps.get(interactionId) ?? 0, entry.duration));
+      }
+    }).observe({ type: "event", durationThreshold: 16, buffered: false } as PerformanceObserverInit & {
+      durationThreshold: number;
+    });
+  });
+  for (const chip of chips) {
+    await page.getByTestId(`alert-chip-${chip}`).click();
+    await expect(page.getByTestId(`alert-chip-${chip}`)).toHaveAttribute("aria-pressed", "true");
+  }
+  return page.evaluate(() => [...(window as unknown as { __taps: Map<number, number> }).__taps.values()]);
+}

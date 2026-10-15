@@ -3,7 +3,7 @@ import { expect, test } from "./test";
 import { expectFaceLoaded } from "./fonts";
 import { consoleFailures, watchConsole } from "./inbox";
 
-const PATH = "/design/landing";
+const PATH = "/";
 
 test("the landing document paints without a module graph @smoke", async ({ page }) => {
   const response = await page.goto(PATH);
@@ -35,7 +35,7 @@ test("the landing route data and document carry no disabled source's internal no
   const response = await page.goto(PATH);
   expect(response?.status()).toBe(200);
 
-  const data = await request.get(`${PATH}.data`);
+  const data = await request.get("/_.data");
   expect(data.status()).toBe(200);
   const payload = await data.text();
   const document = await page.content();
