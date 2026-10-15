@@ -102,9 +102,6 @@ describe("the brief page's Your briefs heading", () => {
   });
 });
 
-// `min-h-11` is the unit of 44px in this repo (tests/unit/onboarding-competitors.test.ts).
-// The display that makes the box real is asserted with it, so dropping
-// `inline-flex` does not leave a gate that still passes.
 describe("the brief page's Your briefs links", () => {
   it("keeps aria-current and gives each Week of link a 44px-tall tap target", async () => {
     const html = await briefHtml();
@@ -139,9 +136,6 @@ describe("the brief page's list of weeks", () => {
 });
 
 describe("the brief page's week label", () => {
-  // period_start is the week-start instant (workers/standing/compose-brief.ts),
-  // the same value the email formats in payload.timezone. 2026-09-14T00:00Z is
-  // 13 Sept in America/New_York, so a UTC label would disagree with the email.
   it("finishes every week's label in the workspace zone, and the selected one's", async () => {
     const data = await loader(loaderArgs({ digestId: "dig_1" }));
     expect(data.weeks.map((week) => week.weekLabel)).toEqual(["An earlier week", "Week of 13 Sept"]);

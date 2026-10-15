@@ -221,4 +221,10 @@ test("a brand-new workspace with no competitors explains every screen and passes
       });
     }
   }
+
+  await page.goto("/app");
+  await page.context().setOffline(true);
+  await expect(page.getByText("You're offline")).toBeVisible();
+  await page.context().setOffline(false);
+  await expect(page.getByText("You're offline")).toBeHidden();
 });
