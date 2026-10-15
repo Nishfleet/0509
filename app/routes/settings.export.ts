@@ -1,6 +1,6 @@
 import type { Route } from "./+types/settings.export";
 
-import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
+import { readOwnedWorkspaces, readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { readWorkspaceExport } from "../lib/data-export.server";
 import { requireFreshSession } from "../lib/require-session.server";
 
@@ -9,8 +9,10 @@ export async function loader({ request }: Route.LoaderArgs) {
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   if (workspaceId === null) throw new Response("There is nothing to export yet.", { status: 404 });
   const now = new Date();
+  const owned = await readOwnedWorkspaces(session.user.id);
   const data = await readWorkspaceExport({
     workspaceId,
+    otherWorkspaceIds: owned.map((row) => row.id).filter((id) => id !== workspaceId),
     userId: session.user.id,
     email: session.user.email,
     now,

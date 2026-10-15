@@ -13,10 +13,14 @@ export interface BrandChoice {
 
 function SwitchForm({ brand, label }: { brand: BrandChoice; label: string }) {
   return (
-    <form method="post" action="/app/brands">
+    <form method="post" action="/app/brands" className="max-w-full min-w-0">
       <input type="hidden" name="intent" value="switch" />
       <input type="hidden" name="workspaceId" value={brand.id} />
-      <Button type="submit" variant="secondary">
+      <Button
+        type="submit"
+        variant="secondary"
+        className="max-w-full py-2 text-left whitespace-normal [overflow-wrap:anywhere]"
+      >
         {label}
       </Button>
     </form>

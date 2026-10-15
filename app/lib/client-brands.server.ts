@@ -7,7 +7,7 @@ import { setActiveWorkspace } from "./data/active_workspace.server";
 import { ensureOwnerEmailTarget } from "./data/send_target.server";
 import {
   insertWorkspace,
-  readGoverningWorkspaceId,
+  readBillingWorkspaceId,
   readOwnedWorkspaces,
   readWorkspaceIdForOwner,
   readWorkspaceTimezone,
@@ -30,7 +30,7 @@ export async function addClientBrand(user: { id: string; email: string }, name: 
   const parsed = brandNameForm.safeParse({ name });
   if (!parsed.success) return { status: "refused", message: BRAND_NAME_INVALID };
   const activeId = await readWorkspaceIdForOwner(user.id);
-  const parentId = activeId === null ? null : await readGoverningWorkspaceId(activeId);
+  const parentId = activeId === null ? null : await readBillingWorkspaceId(activeId);
   if (activeId === null || parentId === null) return { status: "refused", message: BRAND_FAILED };
   if ((await clientBrandCount(user.id)) >= MAX_CLIENT_BRANDS) return { status: "refused", message: BRAND_FULL };
   const id = `ws-${crypto.randomUUID()}`;
@@ -46,7 +46,10 @@ export async function addClientBrand(user: { id: string; email: string }, name: 
       parentWorkspaceId: parentId,
     });
   } catch (error) {
-    if (error instanceof WorkspaceCapError) return { status: "refused", message: BRAND_NEEDS_AGENCY };
+    if (error instanceof WorkspaceCapError) {
+      const full = (await clientBrandCount(user.id)) >= MAX_CLIENT_BRANDS;
+      return { status: "refused", message: full ? BRAND_FULL : BRAND_NEEDS_AGENCY };
+    }
     throw error;
   }
   await ensureOwnerEmailTarget(env.DB, { workspaceId: id, now });

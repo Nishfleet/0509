@@ -1,7 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import { isLocalLane, run, seedPreviewSession } from "./inbox";
-import { scanPage, seedWorkspace, signIn, startQuality } from "./quality";
+import { hiddenOverflow, scanPage, seedWorkspace, signIn, startQuality } from "./quality";
 import { expect, test } from "./test";
 
 test.skip(!isLocalLane(), "seeds a workspace in the local preview database; never run against production");
@@ -60,6 +60,30 @@ test("an Agency owner adds a client brand from the keyboard and can get back to 
   await page.goto("/app/settings");
   await expect(page.getByText("Viewing now")).toHaveCount(1);
   await expect(page.getByRole("button", { name: /^Open Acme/ })).toBeVisible();
+});
+
+test("client brands and the way back reflow at 320px and 640px", async ({ page, baseURL }) => {
+  const { cookie } = await seedPreviewSession(
+    "client-brands-reflow",
+    ({ db, suffix, userId }) => {
+      seedPlan(db, seedWorkspace(db, suffix, userId), "agency");
+    },
+    { livePlan: false },
+  );
+  await signIn(page, baseURL, cookie);
+  await page.goto("/app/settings");
+  await page.getByLabel("Add a client brand").fill("A client brand with a rather long name that has to wrap");
+  await page.getByRole("button", { name: "Add client brand" }).click();
+  await expect(page).toHaveURL(/\/onboarding$/);
+  for (const width of [320, 640]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("/onboarding");
+    expect.soft(await hiddenOverflow(page), `/onboarding at ${String(width)}px wide`).toEqual([]);
+    await page.getByRole("button", { name: /^Back to / }).click();
+    await page.goto("/app/settings");
+    expect.soft(await hiddenOverflow(page), `/app/settings at ${String(width)}px wide`).toEqual([]);
+    await page.getByRole("button", { name: /^Open / }).click();
+  }
 });
 
 test("a Starter owner is not offered client brands", async ({ page, baseURL }) => {

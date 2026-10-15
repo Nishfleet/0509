@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { resolveEntitlements } from "../billing/entitlements";
 import { entitledTier } from "../billing/subscription-state";
+import { MAX_CLIENT_BRANDS } from "../client-brands";
 import { canonicalTimezone } from "../timezone";
 import { activeFirstOrder, governingWorkspace } from "./active-workspace";
 
@@ -93,11 +94,9 @@ export class WorkspaceCapError extends Error {
 }
 
 const INSERT_WORKSPACE = `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at, fixture, parent_workspace_id)
-SELECT ?, ?, ?, ?, 1, 8, ?, ?, ?
-WHERE ? = 1
-OR (
-  SELECT count(*) FROM workspace WHERE owner_user_id = ?
-) < ?
+SELECT ?1, ?2, ?3, ?4, 1, 8, ?5, ?6, ?7
+WHERE (?8 = 1 OR (SELECT count(*) FROM workspace WHERE owner_user_id = ?3) < ?9)
+AND (?7 IS NULL OR (SELECT count(*) FROM workspace WHERE parent_workspace_id = ?7) < ?10)
 ON CONFLICT(id) DO NOTHING`;
 
 const FILL_TIMEZONE = `UPDATE workspace SET timezone = ? WHERE id = ? AND timezone = 'UTC'`;
@@ -154,8 +153,8 @@ export async function insertWorkspace(
       input.fixture ? 1 : 0,
       input.parentWorkspaceId ?? null,
       cap === null ? 1 : 0,
-      input.ownerUserId,
       cap ?? 0,
+      MAX_CLIENT_BRANDS,
     )
     .run();
   if (result.meta.changes === 1) return;
@@ -325,10 +324,15 @@ export async function readOwnedWorkspaces(userId: string) {
   return ownedWorkspaceRow.array().parse(results);
 }
 
-const SELECT_CLIENT_PARENT = "SELECT COALESCE(parent_workspace_id, id) AS id FROM workspace WHERE id = ?";
+const SELECT_BILLING_WORKSPACE = `SELECT COALESCE(
+  (SELECT gw.parent_workspace_id FROM workspace gw
+     JOIN workspace par ON par.id = gw.parent_workspace_id AND par.owner_user_id = gw.owner_user_id
+    WHERE gw.id = ?1 AND NOT EXISTS (SELECT 1 FROM plan own WHERE own.workspace_id = gw.id)),
+  ?1
+) AS id FROM workspace WHERE id = ?1`;
 
-export async function readGoverningWorkspaceId(workspaceId: string): Promise<string | null> {
-  const row = workspaceIdRow.nullable().parse(await env.DB.prepare(SELECT_CLIENT_PARENT).bind(workspaceId).first());
+export async function readBillingWorkspaceId(workspaceId: string): Promise<string | null> {
+  const row = workspaceIdRow.nullable().parse(await env.DB.prepare(SELECT_BILLING_WORKSPACE).bind(workspaceId).first());
   return row === null ? null : row.id;
 }
 

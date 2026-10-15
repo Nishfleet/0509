@@ -290,6 +290,13 @@ async function changeEmail(request: Request, form: FormData): Promise<SettingsRe
   return result({ emailChangeSent: true });
 }
 
+async function cancelEveryPlan(userId: string): Promise<boolean> {
+  for (const { id } of await readOwnedWorkspaces(userId)) {
+    if (!(await cancelPlanForDelete(id))) return false;
+  }
+  return true;
+}
+
 async function removeAccount(
   user: SettingsUser,
   form: FormData,
@@ -299,9 +306,7 @@ async function removeAccount(
   const typed = parsed.success ? parsed.data.confirm.trim().toLowerCase() : "";
   if (typed !== user.email.toLowerCase()) return result({ deleteError: MISMATCH });
   if (!(await hasFreshSession(env, call.request, new Date()))) return result({ deleteError: SIGN_IN_AGAIN });
-  const planOwners = (await readOwnedWorkspaces(user.id)).filter((row) => row.parent_workspace_id === null);
-  const cancelled = await Promise.all(planOwners.map((row) => cancelPlanForDelete(row.id)));
-  if (cancelled.includes(false)) return result({ deleteError: PLAN_NOT_CANCELLED });
+  if (!(await cancelEveryPlan(user.id))) return result({ deleteError: PLAN_NOT_CANCELLED });
   const deleted = await deleteAccount(call.context.get(oauthHelpersContext), call.request, user.id);
   if (deleted === null) return result({ deleteError: SIGN_IN_AGAIN });
   throw redirect(`/login?deleted=${encodeURIComponent(deleted.instanceId)}`, { headers: deleted.headers });

@@ -91,4 +91,12 @@ describe("Agency client workspaces", () => {
     expect((await readEntitlements("ws-other")).competitors).toBe(5);
     expect((await readPaidWorkspaceIds(new Date())).has("ws-other")).toBe(false);
   });
+
+  it("stops lending the plan once the parent is no longer on a plan with client brands", async () => {
+    await seedPlan("ws-agency", "starter", "active", FUTURE);
+    expect((await readEntitlements("ws-client")).competitors).toBe(5);
+    const paid = await readPaidWorkspaceIds(new Date());
+    expect(paid.has("ws-agency")).toBe(true);
+    expect(paid.has("ws-client")).toBe(false);
+  });
 });

@@ -11,10 +11,11 @@ import {
   switchClientBrand,
 } from "../../app/lib/client-brands.server";
 import { MAX_CLIENT_BRANDS } from "../../app/lib/client-brands";
+import { readWorkspaceExport } from "../../app/lib/data-export.server";
 import { readEntitlements } from "../../app/lib/data/plan.server";
 import {
   readBriefSchedulesForOwner,
-  readGoverningWorkspaceId,
+  readBillingWorkspaceId,
   readWorkspaceIdForOwner,
 } from "../../app/lib/data/workspace.server";
 
@@ -65,7 +66,7 @@ describe("client brands", () => {
     await addClientBrand(AGENCY, "One");
     await addClientBrand(AGENCY, "Two");
     const second = await readWorkspaceIdForOwner(AGENCY.id);
-    expect(await readGoverningWorkspaceId(second ?? "")).toBe("ws-agency");
+    expect(await readBillingWorkspaceId(second ?? "")).toBe("ws-agency");
   });
 
   it("gives the client brand an owner email target for its brief", async () => {
@@ -128,5 +129,37 @@ describe("client brands", () => {
     expect(panel.canAdd).toBe(false);
     expect(panel.full).toBe(true);
     expect(MAX_CLIENT_BRANDS).toBe(25);
+  });
+
+  it("exports every brand the owner has, not only the open one", async () => {
+    await addClientBrand(AGENCY, "Acme Foods");
+    const open = await readWorkspaceIdForOwner(AGENCY.id);
+    const others = (await readOtherBrands(AGENCY.id)).map((brand) => brand.id);
+    const data = await readWorkspaceExport({
+      workspaceId: open ?? "",
+      otherWorkspaceIds: others,
+      userId: AGENCY.id,
+      email: AGENCY.email,
+      now: new Date(),
+    });
+    expect(data?.workspace).toMatchObject({ name: "Acme Foods" });
+    expect(data?.otherBrands?.map((brand) => brand.workspace)).toEqual([expect.objectContaining({ name: "Home" })]);
+  });
+
+  it("never lets two requests at once pass the limit", async () => {
+    await env.DB.batch(
+      Array.from({ length: MAX_CLIENT_BRANDS - 1 }, (_, index) =>
+        env.DB.prepare(
+          `INSERT INTO workspace (id, name, owner_user_id, timezone, created_at, parent_workspace_id)
+           VALUES (?1, 'Client', ?2, 'UTC', '2026-10-02T00:00:00Z', 'ws-agency')`,
+        ).bind(`ws-race-${String(index)}`, AGENCY.id),
+      ),
+    );
+    const outcomes = await Promise.all([addClientBrand(AGENCY, "First"), addClientBrand(AGENCY, "Second")]);
+    expect(outcomes.map((outcome) => outcome.status).sort()).toEqual(["added", "refused"]);
+    const count = await env.DB.prepare(
+      "SELECT count(*) AS n FROM workspace WHERE parent_workspace_id = 'ws-agency'",
+    ).first();
+    expect(count).toEqual({ n: MAX_CLIENT_BRANDS });
   });
 });
