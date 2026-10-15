@@ -123,6 +123,25 @@ describe("re-judging a closing week's mentions before the freeze", () => {
     ]);
   });
 
+  it("writes one verdict and one alert per mention when two re-judges overlap", async () => {
+    const { workspaceId, competitorId, brand } = await seedWorkspace();
+    stubGdelt();
+    Reflect.set(env, "AI", { run: jevDown() });
+    await sweepTarget(await gdeltTargetFor(brand), NIGHT_ONE, null);
+
+    Reflect.set(env, "AI", { run: jevAnswering() });
+    const window = { workspaceId, windowStartAt: "2026-09-17T00:00:00.000Z", windowEndAt: NIGHT_TWO, limit: 10 };
+    await Promise.all([rejudgeWindowMentions(window), rejudgeWindowMentions(window)]);
+
+    const counts = await env.DB.prepare(
+      "SELECT (SELECT COUNT(*) FROM jev_verdict WHERE entity_id = ?1) AS verdicts, (SELECT COUNT(*) FROM alert WHERE entity_id = ?1 AND kind = 'mention') AS alerts",
+    )
+      .bind(competitorId)
+      .first<{ verdicts: number; alerts: number }>();
+    expect(counts?.verdicts).toBe(3);
+    expect(counts?.alerts).toBe(1);
+  });
+
   it("leaves them unjudged, without throwing, while Jev is down", async () => {
     const { workspaceId, competitorId, brand } = await seedWorkspace();
     stubGdelt();
