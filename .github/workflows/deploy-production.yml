@@ -201,15 +201,15 @@ jobs:
     uses: Nishfleet/fleet-ops/.github/workflows/lighthouse.yml@main
     with:
       # The public pages: no Access, no session, so a deploy sends no
-      # email and needs no secret. /design/landing is the staged homepage
-      # (the landing LCP bar in docs/REBUILD-DONE.md B) and is public until
-      # 0509#4834 moves it to /. The signed-in pages are measured by the
+      # email and needs no secret. / is the homepage (the landing LCP bar in
+      # docs/REBUILD-DONE.md B) since 0509#4834 moved it there, and /pricing is
+      # the public price page. The signed-in pages are measured by the
       # scheduled suite once 0509#6034 lands.
       urls: |
         https://0509.io/
         https://0509.io/privacy
         https://0509.io/terms
-        https://0509.io/design/landing
+        https://0509.io/pricing
 
   lighthouse-report:
     name: lighthouse-report
