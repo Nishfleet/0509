@@ -14,11 +14,11 @@ describe("planLine", () => {
       planLine({
         tier: "starter",
         status: "active",
-        currentPeriodEnd: "2026-10-15T00:00:00.000Z",
+        currentPeriodEnd: "2036-10-15T00:00:00.000Z",
         trialing: false,
         billed: true,
       }),
-    ).toBe("You're on Starter. It renews on 15 October 2026.");
+    ).toBe("You're on Starter. It renews on 15 October 2036.");
   });
 
   it("says when a cancelled plan stops", () => {
@@ -26,11 +26,11 @@ describe("planLine", () => {
       planLine({
         tier: "agency",
         status: "cancelled",
-        currentPeriodEnd: "2026-10-15T00:00:00.000Z",
+        currentPeriodEnd: "2036-10-15T00:00:00.000Z",
         trialing: false,
         billed: true,
       }),
-    ).toBe("You're on Agency until 15 October 2026, then it stops.");
+    ).toBe("You're on Agency until 15 October 2036, then it stops.");
   });
 
   it("says a lapsed plan has ended and what the customer is on now", () => {
