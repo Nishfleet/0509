@@ -10,7 +10,7 @@
 -- UPDATE signal SET is_tombstoned = 0 WHERE id IN (SELECT signal_id FROM mention_hidden_0067 WHERE state IS NOT 'unjudged').
 
 CREATE TABLE mention_hidden_0067 AS
-SELECT s.id AS signal_id, s.workspace_id, s.state,
+SELECT s.id AS signal_id, s.state,
   (SELECT v.p FROM jev_verdict v
    WHERE v.signal_id = s.id AND v.question_id = 'mention_is_about_brand'
    ORDER BY v.decided_at DESC LIMIT 1) AS about_brand_p
