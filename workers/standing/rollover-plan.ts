@@ -3,6 +3,7 @@ import { z } from "zod";
 import { isWorkspacePaid } from "../../app/lib/billing/subscription-state";
 import type { BriefSchedule, RolloverInstance, RolloverParams } from "../../app/lib/brief-schedule";
 import { openWeek, previousBriefAt, rolloverInstance } from "../../app/lib/brief-schedule";
+import { governingWorkspace } from "../../app/lib/data/active-workspace";
 
 export interface WorkspaceSchedule {
   workspaceId: string;
@@ -17,7 +18,7 @@ const WORKSPACE_SCHEDULES = `SELECT DISTINCT w.id, w.timezone, w.brief_weekday, 
        p.status AS status, p.current_period_end AS current_period_end
 FROM entity e
 INNER JOIN workspace w ON w.id = e.workspace_id
-INNER JOIN plan p ON p.workspace_id = w.id
+INNER JOIN plan p ON p.workspace_id = ${governingWorkspace("w.id")}
 WHERE e.role = 'self' AND e.state = 'on' AND w.fixture = 0
 ORDER BY w.id`;
 

@@ -8,6 +8,7 @@ import { z } from "zod";
 import { IdentityCard } from "../components/identity-card";
 import { OnboardingFrame } from "../components/onboarding-frame";
 import { OneInput } from "../components/one-input";
+import { readOtherBrands } from "../lib/client-brands.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { executionContext } from "../lib/agent/context.server";
 import { creatorRows, editedFields, isDraftSave } from "../lib/identity/card-fields";
@@ -36,12 +37,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const timings = createTimings();
   const { raw, subject, taken, landing, workspaceId, userId } = await readSubjectAccess(request, timings);
   if (!landing) throw redirect("/app");
-  if (subject === null) {
-    if (raw === "") throw redirect("/onboarding");
-    return { card: null, limited: false };
-  }
+  const otherBrands = await readOtherBrands(userId);
+  if (subject === null && raw === "") throw redirect("/onboarding");
+  if (subject === null) return { card: null, limited: false, otherBrands };
   if (taken || workspaceId === null) throw redirect("/onboarding");
-  if (!(await timings.measure("limit", withinProbeLimit(userId)))) return { card: null, limited: true };
+  if (!(await timings.measure("limit", withinProbeLimit(userId)))) return { card: null, limited: true, otherBrands };
   const draft = await readDraft(workspaceId, subject.registrable);
   const shown = subject.kind === "domain" ? subject.registrable : (subject.url ?? `@${subject.registrable}`);
   const started = startCard(workspaceId, subject, editedFields(draft));
@@ -61,6 +61,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
         draft,
       },
       limited: false,
+      otherBrands,
     },
     { headers: timings.header() },
   );
@@ -112,7 +113,7 @@ export function shouldRevalidate({ formData, defaultShouldRevalidate }: ShouldRe
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
-  const { card, limited } = loaderData;
+  const { card, limited, otherBrands } = loaderData;
   const message = limited
     ? "You've tried a lot of addresses in the last minute. Wait a minute, then try again."
     : "We couldn't find a website or username in that. Try an address like yourbrand.com or a username like @yourbrand.";
@@ -121,6 +122,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       step={2}
       heading={card === null ? "Your website or social username" : "Check your details. Fix anything that's wrong."}
       hideHeading={card === null}
+      otherBrands={otherBrands}
     >
       {card === null ? (
         <OneInput

@@ -23,7 +23,11 @@ const INCLUDES: Record<PlanId, readonly (string | { line: string; needs: Coverag
     { line: "Google Search results and LinkedIn ads", needs: "ads.linkedin" },
     "A year of before-and-afters and standing",
   ],
-  agency: ["Everything in Starter, plus", "50 competitors per workspace", "As many workspaces as you set up"],
+  agency: [
+    "Everything in Starter, plus",
+    "50 competitors per workspace",
+    "Unlimited client brands (fair use 25, more on request)",
+  ],
 };
 
 function includes(plan: PlanId): string[] {

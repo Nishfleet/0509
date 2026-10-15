@@ -74,12 +74,35 @@ async function readBriefRecipients(db: D1Database, workspaceId: string, fallback
   };
 }
 
-export async function readWorkspaceExport(input: { workspaceId: string; userId: string; email: string; now: Date }) {
+const OTHER_BRAND_SIGNAL_LIMIT = 1000;
+
+async function readOtherBrandExport(db: D1Database, workspaceId: string) {
+  const [workspace, rows, signals] = await Promise.all([
+    db.prepare(SELECT_WORKSPACE).bind(workspaceId).first(),
+    readWorkspaceRows(db, workspaceId),
+    allRows(db, SELECT_SIGNALS, workspaceId, OTHER_BRAND_SIGNAL_LIMIT + 1),
+  ]);
+  return {
+    workspace,
+    ...rows,
+    signals: signals.slice(0, OTHER_BRAND_SIGNAL_LIMIT),
+    signalsTruncated: signals.length > OTHER_BRAND_SIGNAL_LIMIT,
+  };
+}
+
+export async function readWorkspaceExport(input: {
+  workspaceId: string;
+  otherWorkspaceIds?: string[];
+  userId: string;
+  email: string;
+  now: Date;
+}) {
   const { workspaceId, userId } = input;
+  const otherIds = input.otherWorkspaceIds ?? [];
   const db = env.DB;
   const owner = await db.prepare(SELECT_OWNER).bind(userId).first<{ name: string; email: string }>();
   if (owner === null) return null;
-  const [workspace, rows, signals, mail, sessions, passkeys, keys, plan] = await Promise.all([
+  const [workspace, rows, signals, mail, sessions, passkeys, keys, plan, otherBrands] = await Promise.all([
     db.prepare(SELECT_WORKSPACE).bind(workspaceId).first(),
     readWorkspaceRows(db, workspaceId),
     allRows(db, SELECT_SIGNALS, workspaceId, SIGNAL_LIMIT + 1),
@@ -88,6 +111,7 @@ export async function readWorkspaceExport(input: { workspaceId: string; userId: 
     allRows(db, SELECT_PASSKEYS, userId),
     allRows(db, SELECT_KEYS, userId),
     readPlanSummary(workspaceId, db),
+    Promise.all(otherIds.map((id) => readOtherBrandExport(db, id))),
   ]);
   return {
     exportedAt: input.now.toISOString(),
@@ -104,5 +128,6 @@ export async function readWorkspaceExport(input: { workspaceId: string; userId: 
     ...rows,
     signals: signals.slice(0, SIGNAL_LIMIT),
     signalsTruncated: signals.length > SIGNAL_LIMIT,
+    ...(otherBrands.length > 0 ? { otherBrands } : {}),
   };
 }
