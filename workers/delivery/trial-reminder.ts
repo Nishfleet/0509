@@ -23,7 +23,7 @@ async function reminderPlan(env: Env, trial: TrialEnding, isTester: TesterCheck)
   const tester = await isTester(trial.subscription_id);
   if (tester === null) console.error(JSON.stringify({ event: "delivery.trial_reminder_tester_unknown" }));
   if (tester !== false) return null;
-  if (await isAddressSuppressed(trial.target_value, env.DB)) return null;
+  if (await isAddressSuppressed(trial.target_value, "all", env.DB)) return null;
   return plan;
 }
 

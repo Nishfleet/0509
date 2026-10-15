@@ -100,7 +100,7 @@ describe("rival change email lane (0509#6375)", () => {
       unsubscribe_token: string;
     }>();
     expect(sent[0].headers).toEqual({
-      "List-Unsubscribe": `<https://0509.io/u/${token?.unsubscribe_token ?? ""}>`,
+      "List-Unsubscribe": `<https://0509.io/u/${token?.unsubscribe_token ?? ""}?type=alerts>`,
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
     });
   });
