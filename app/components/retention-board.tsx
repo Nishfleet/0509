@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 
+import { ACTIVATION_STEPS, AT_RISK_ROWS } from "../lib/activation-board";
 import { percent, type RetentionBoard } from "../lib/retention-board";
 
 const CELL = "border-t border-line px-3 py-2 text-right font-mono text-meta tabular-nums";
@@ -62,6 +63,23 @@ function emailRows(board: RetentionBoard): string[][] {
   return board.emails.map((row) => [row.kind, String(row.sent), String(row.visited), percent(row.visited, row.sent)]);
 }
 
+function activationRows(board: RetentionBoard): string[][] {
+  return board.activation.cohorts.map((row) => [
+    row.week,
+    String(row.signed_up),
+    String(row.watching),
+    String(row.briefed),
+    String(row.came_back),
+    String(row.activated),
+    percent(row.activated, row.signed_up),
+  ]);
+}
+
+function atRiskRows(board: RetentionBoard): string[][] {
+  const { atRisk } = board.activation;
+  return AT_RISK_ROWS.map(([label, key]) => [label, String(atRisk[key]), percent(atRisk[key], atRisk.live)]);
+}
+
 export function RetentionBoardView({ board }: { board: RetentionBoard }): ReactElement {
   return (
     <main className="mx-auto w-full max-w-4xl min-w-0 px-4 py-10 sm:px-8">
@@ -82,6 +100,16 @@ export function RetentionBoardView({ board }: { board: RetentionBoard }): ReactE
           "Paid or tester of started",
         ]}
         rows={funnelRows(board)}
+      />
+      <Table
+        title="Activation, by signup week"
+        head={["Week of", ...ACTIVATION_STEPS, "Activated of signed up"]}
+        rows={activationRows(board)}
+      />
+      <Table
+        title="At risk, live workspaces"
+        head={["Signal", "Workspaces", "Share of live"]}
+        rows={atRiskRows(board)}
       />
       <Table title="Last seen, live workspaces" head={["When", "Workspaces"]} rows={lastSeenRows(board)} />
       <Table

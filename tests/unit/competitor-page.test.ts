@@ -173,6 +173,15 @@ describe("the competitor page frame", () => {
     expect(off).toContain("Paused 22 Sept");
   });
 
+  it("reconciles the week's change count with a quiet biggest move", () => {
+    const many = frame({ weekCount: 3, biggestMove: null });
+    expect(many).toContain("We saw 3 page changes in that time; none stood out.");
+    expect(frame({ weekCount: 1, biggestMove: null })).toContain(
+      "We saw 1 page change in that time; it did not stand out.",
+    );
+    expect(frame({ weekCount: 0, biggestMove: null })).not.toContain("We saw");
+  });
+
   it("names every snapshot cell with a real value and never says no data", () => {
     const html = frame({ weekCount: 2, pages: 1, lastChecked: "2026-09-24 02:09 UTC" });
     for (const label of ["Site changes", "Pages watched", "Last checked", "2026-09-24 02:09 UTC"]) {

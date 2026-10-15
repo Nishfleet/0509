@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { Price } from "../../app/components/landing/price";
+import { MAX_CLIENT_BRANDS } from "../../app/lib/client-brands";
 import { monthlyPrice, PLANS, TRIAL_TERMS } from "../../app/lib/billing/plans";
 
 function markup(): string {
@@ -37,6 +38,10 @@ describe("landing price", () => {
     expect(cardOf("scout")).not.toContain("Everything in");
     expect(cardOf("starter")).toContain("Everything in Scout, plus");
     expect(cardOf("agency")).toContain("Everything in Starter, plus");
+  });
+
+  it("states the client brand fair use limit the app enforces", () => {
+    expect(markup()).toContain(`Unlimited client brands (fair use ${String(MAX_CLIENT_BRANDS)}, more on request)`);
   });
 
   it("draws every plan card the same, with no plan marked as the one to pick", () => {

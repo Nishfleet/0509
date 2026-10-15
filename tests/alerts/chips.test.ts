@@ -4,6 +4,8 @@ import {
   ALERT_CHIPS,
   chipOfKind,
   countAlertChips,
+  groupsInChip,
+  isChipCapped,
   itemInChip,
   parseAlertChip,
   type AlertItemKind,
@@ -117,5 +119,36 @@ describe("countAlertChips", () => {
     expect(other).not.toBe(empty);
     other.hiring = 5;
     expect(countAlertChips([], 0).hiring).toBe(0);
+  });
+});
+
+describe("groupsInChip", () => {
+  const groups = [
+    {
+      group: "Today",
+      items: [
+        { kind: "mention" as const, id: "m1" },
+        { kind: "hiring" as const, id: "h1" },
+      ],
+    },
+    { group: "Yesterday", items: [{ kind: "hiring" as const, id: "h2" }] },
+  ];
+
+  it("keeps every group for All", () => {
+    expect(groupsInChip(groups, "all")).toEqual(groups);
+  });
+
+  it("keeps only the chip's items and drops a day left empty", () => {
+    expect(groupsInChip(groups, "mentions")).toEqual([{ group: "Today", items: [{ kind: "mention", id: "m1" }] }]);
+    expect(groupsInChip(groups, "hiring").map((entry) => entry.group)).toEqual(["Today", "Yesterday"]);
+  });
+});
+
+describe("isChipCapped", () => {
+  it("marks the capped chip and All, and nothing when no feed is capped", () => {
+    expect(isChipCapped(["site-changes"], "site-changes")).toBe(true);
+    expect(isChipCapped(["site-changes"], "all")).toBe(true);
+    expect(isChipCapped(["site-changes"], "hiring")).toBe(false);
+    expect(isChipCapped([], "all")).toBe(false);
   });
 });
