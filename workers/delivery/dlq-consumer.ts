@@ -26,9 +26,9 @@ export const CHANGE_UNDELIVERED_TITLE = "We couldn't email you about a competito
 export const CHANGE_UNDELIVERED_BODY =
   "A competitor changed price or plan and we tried several times to email you about it, so we have stopped trying. The change is on your Alerts page.";
 
-export const CHANGE_SLACK_UNDELIVERED_TITLE = "We couldn't post a competitor change to Slack";
+const CHANGE_SLACK_UNDELIVERED_TITLE = "We couldn't post a competitor change to Slack";
 
-export const CHANGE_SLACK_UNDELIVERED_BODY =
+const CHANGE_SLACK_UNDELIVERED_BODY =
   "Slack did not take our post after several tries, so we have stopped trying. The change is on your Alerts page.";
 
 export function deliveryFailedAlert(input: {
