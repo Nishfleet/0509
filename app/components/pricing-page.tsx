@@ -1,5 +1,5 @@
 import type { StartSource } from "../lib/pricing-page";
-import { Footer } from "./footer";
+import { Footer, SupportLink } from "./footer";
 import { Faq } from "./landing/faq";
 import { Price } from "./landing/price";
 import { pageWidth } from "./landing/section";
@@ -17,11 +17,7 @@ export function PricingPage({ source }: { source: StartSource | null }) {
           Prices are in euros. At checkout you see your local currency where we can offer it.
         </p>
         <p className={`${pageWidth} pb-12 font-mono text-meta text-ink-soft`}>
-          We're rebuilding, so sign-in is closed for now. Email{" "}
-          <a className="underline decoration-1 underline-offset-4 hover:text-ink" href="mailto:support@0509.io">
-            support@0509.io
-          </a>{" "}
-          and we'll tell you when it opens.
+          We're rebuilding, so sign-in is closed for now. Email <SupportLink /> and we'll tell you when it opens.
         </p>
         <Faq />
       </main>
