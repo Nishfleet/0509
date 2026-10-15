@@ -42,6 +42,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const draft = await readDraft(workspaceId, subject.registrable);
   const shown = subject.kind === "domain" ? subject.registrable : (subject.url ?? `@${subject.registrable}`);
   const started = startCard(workspaceId, subject, editedFields(draft));
+  context.get(executionContext).waitUntil(started.settled);
   context.get(executionContext).waitUntil(
     warmDiscovery(workspaceId, subject, started.site).catch((error: unknown) => {
       captureException(error, { tags: { step: "discovery-warm" } });

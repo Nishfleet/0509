@@ -4,7 +4,8 @@ import { redirect } from "react-router";
 import { z } from "zod";
 
 import { createCheckoutUrl } from "../lib/billing/checkout.server";
-import { isSubscriptionLive } from "../lib/billing/entitlements";
+import { isSubscriptionLive } from "../lib/billing/subscription-state";
+import { returningLookup } from "../lib/billing/returning.server";
 import { isBillingInterval, isPlanId } from "../lib/billing/plans";
 import { readPlanSubscription } from "../lib/data/plan.server";
 import { onboardedContext } from "../lib/require-onboarded.server";
@@ -30,6 +31,8 @@ export async function action({ request, context }: Route.ActionArgs) {
   if (workspaceId === null || !isPlanId(planId) || !isBillingInterval(interval)) return UNAVAILABLE;
   const current = await readPlanSubscription(workspaceId);
   if (current !== null && isSubscriptionLive(current, new Date())) return HAS_PLAN;
-  const url = await createCheckoutUrl({ planId, interval, workspaceId, email: session.user.email });
+  const returning = await returningLookup(current);
+  if (returning === null) return UNAVAILABLE;
+  const url = await createCheckoutUrl({ planId, interval, workspaceId, email: session.user.email, returning });
   return url === null ? UNAVAILABLE : redirect(url);
 }

@@ -5,12 +5,14 @@ import { data, Form, redirect, useNavigation, useRevalidator } from "react-route
 import { z } from "zod";
 
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
+import { DiscoverySkeleton } from "../components/discovery-skeleton";
 import { Monogram } from "../components/monogram";
 import { OnboardingFrame } from "../components/onboarding-frame";
 import { Button } from "../components/ui/button";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import { markCompetitorsReady, markWatchingStarted } from "../lib/data/onboarding_run.server";
 import { readOnboardingScreen } from "../lib/discovery/start.server";
+import { TRIAL_DAYS } from "../lib/billing/plans";
 import { discoveryNotice, type DiscoveryState } from "../lib/discovery/state";
 import { requireFreshSession, requireSession, signOutToLogin } from "../lib/require-session.server";
 import { createTimings } from "../lib/server-timing.server";
@@ -82,7 +84,8 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   const { on, maybes, discovery } = loaderData;
   const navigation = useNavigation();
   const starting = navigation.state !== "idle" && navigation.formData?.get("intent") === "start";
-  const notice = discoveryNotice(useDiscoveryPolling(discovery), on.length + maybes.length);
+  const state = useDiscoveryPolling(discovery);
+  const notice = discoveryNotice(state, on.length + maybes.length);
 
   return (
     <OnboardingFrame step={3} heading="Your competitors">
@@ -91,6 +94,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           {notice}
         </p>
       )}
+      {state === "looking" && on.length + maybes.length === 0 ? <DiscoverySkeleton /> : null}
       {on.length === 0 ? null : (
         <ul aria-label="Watching" aria-live="polite" aria-relevant="additions" className="mt-8 border-b border-line">
           {on.map((competitor) => (
@@ -114,7 +118,10 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         <Button type="submit" size="lg" disabled={starting}>
           {starting ? "Starting…" : "Start watching"}
         </Button>
-        <p className="mt-3 text-body-sm text-ink-soft">You can switch any of them on or off later in Competitors.</p>
+        <p className="mt-3 text-body-sm text-ink-soft">
+          You can switch any of them on or off later in Competitors. Next you'll choose a plan and start your{" "}
+          {String(TRIAL_DAYS)}-day trial.
+        </p>
       </Form>
     </OnboardingFrame>
   );

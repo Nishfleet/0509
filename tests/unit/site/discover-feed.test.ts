@@ -11,11 +11,6 @@ const HOME = "https://rival.com/";
 
 const HOSTILE_CEILING_MS = 10_000;
 
-// This suite runs in the workers project because feed discovery is one
-// HTMLRewriter selector, and HTMLRewriter is the runtime's, not the platform's
-// general. A node-environment stand-in would assert against a fake, which is
-// the exact class of check the hand-rolled parser got wrong.
-
 describe("feedLinksFromHtml", () => {
   it("finds RSS and Atom alternates, in either attribute order, with relative and absolute hrefs", async () => {
     const html = `<head>
@@ -42,9 +37,6 @@ describe("feedLinksFromHtml", () => {
   });
 
   it("reads upper-case tags and ignores a tag that only starts with link", async () => {
-    // The old scanner compared a lower-cased copy of the document, so <LINK>
-    // matched and <linkage> did not. HTMLRewriter's selector does both
-    // correctly against real HTML tokenisation.
     const html = `<LINK REL="alternate" TYPE="application/atom+xml" HREF="/atom.xml"><linkage rel="alternate" type="application/rss+xml" href="/nope">`;
     expect(await feedLinksFromHtml(html, HOME)).toEqual([new URL("/atom.xml", HOME).href]);
   });
@@ -124,8 +116,7 @@ describe("feedCandidates", () => {
 
   it("returns nothing for a plain-http homepage and every common path for an https one", async () => {
     expect(await feedCandidates(null, "http://rival.com/")).toEqual([]);
-    // The declared feed goes through the same https only guard: a site that
-    // serves its whole page over plain http contributes no https candidate.
+
     expect(
       await feedCandidates(`<link rel="alternate" type="application/rss+xml" href="/feed.xml">`, "http://rival.com/"),
     ).toEqual([]);

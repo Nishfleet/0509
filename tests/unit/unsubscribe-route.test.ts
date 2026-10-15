@@ -3,18 +3,25 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createRoutesStub, NavigationType, UNSAFE_DataRouterNavigationContext, type Navigation } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
-const holder = vi.hoisted(() => ({ known: false, outcome: "invalid_token" as string }));
+const holder = vi.hoisted(() => ({ known: false, teammate: false, outcome: "invalid_token" as string }));
 
 vi.mock("../../app/lib/data/email_suppression.server", () => ({
   isUnsubscribeTokenKnown: () => Promise.resolve(holder.known),
+  isTeammateUnsubscribeToken: () => Promise.resolve(holder.teammate),
   suppressByUnsubscribeToken: () => Promise.resolve(),
 }));
 
 vi.mock("../../app/lib/unsubscribe.server", () => ({
   unsubscribe: () => Promise.resolve(holder.outcome),
+  unsubscribeScope: (value: unknown) => (value === "brief" || value === "alerts" ? value : "all"),
 }));
 
 import Unsubscribe, { ErrorBoundary, action, loader } from "../../app/routes/u.$token";
+
+function postOf(token: string, url: string, body = new URLSearchParams("List-Unsubscribe=One-Click")) {
+  const request = new Request(url, { method: "POST", body });
+  return { params: { token }, request } as never;
+}
 
 async function statusOf(run: () => Promise<unknown>): Promise<number> {
   const outcome = await run().then(
@@ -32,14 +39,14 @@ function renderBoundary(error: unknown): string {
   return renderToStaticMarkup(createElement(ErrorBoundary, { error } as never));
 }
 
-function renderConfirm(unsubscribed: boolean): string {
+function renderConfirm(unsubscribed: boolean, scope = "all", teammate = false): string {
   const Stub = createRoutesStub([{ id: "routes/u.$token", path: "/u/:token", Component: Unsubscribe }]);
   return renderToStaticMarkup(
     createElement(Stub, {
       initialEntries: ["/u/t"],
       hydrationData: {
-        loaderData: { "routes/u.$token": { link: "confirm" } },
-        ...(unsubscribed ? { actionData: { "routes/u.$token": { unsubscribed: true } } } : {}),
+        loaderData: { "routes/u.$token": { link: "confirm", scope, teammate } },
+        ...(unsubscribed ? { actionData: { "routes/u.$token": { unsubscribed: true, scope, teammate } } } : {}),
       },
     }),
   );
@@ -97,7 +104,10 @@ function renderFormAt(state: Navigation["state"]): string {
         createElement(
           UNSAFE_DataRouterNavigationContext.Provider,
           { value: { navigation: navigationAt(state), revalidation: "idle" } },
-          createElement(Unsubscribe, { actionData: undefined } as never),
+          createElement(Unsubscribe, {
+            actionData: undefined,
+            loaderData: { link: "confirm", scope: "all", teammate: false },
+          } as never),
         ),
     },
   ]);
@@ -120,29 +130,62 @@ describe("/u/:token (0509#5761)", () => {
   it("serves the confirm page for a live token", async () => {
     holder.known = true;
 
-    const data = await loader({ params: { token: "a".repeat(64) } } as never);
+    const request = new Request("https://0509.io/u/t");
+    const data = await loader({ params: { token: "a".repeat(64) }, request } as never);
 
-    expect(data).toEqual({ link: "confirm" });
+    expect(data).toEqual({ link: "confirm", scope: "all", teammate: false });
+  });
+
+  it("reads which email the link is for from its type", async () => {
+    holder.known = true;
+    const params = { token: "a".repeat(64) };
+
+    const brief = await loader({ params, request: new Request("https://0509.io/u/t?type=brief") } as never);
+    const alerts = await loader({ params, request: new Request("https://0509.io/u/t?type=alerts") } as never);
+    const odd = await loader({ params, request: new Request("https://0509.io/u/t?type=nope") } as never);
+
+    expect([brief, alerts, odd]).toEqual([
+      { link: "confirm", scope: "brief", teammate: false },
+      { link: "confirm", scope: "alerts", teammate: false },
+      { link: "confirm", scope: "all", teammate: false },
+    ]);
   });
 
   it("answers a POST with a bogus token as a 404 instead of claiming success", async () => {
     holder.outcome = "invalid_token";
 
-    expect(await statusOf(() => action({ params: { token: "deadbeef" } } as never))).toBe(404);
+    expect(await statusOf(() => action(postOf("deadbeef", "https://0509.io/u/deadbeef")))).toBe(404);
   });
 
   it("answers a POST with a live token as success", async () => {
     holder.outcome = "unsubscribed";
 
-    const data = await action({ params: { token: "a".repeat(64) } } as never);
+    const data = await action(postOf("a".repeat(64), "https://0509.io/u/t?type=brief"));
 
-    expect(data).toEqual({ unsubscribed: true });
+    expect(data).toEqual({ unsubscribed: true, scope: "brief", teammate: false });
   });
 
-  it("renders 'This link is not valid' with no unsubscribe claim in it", () => {
+  it("treats a link with no type as everything", async () => {
+    holder.outcome = "unsubscribed";
+
+    const data = await action(postOf("a".repeat(64), "https://0509.io/u/t"));
+
+    expect(data).toEqual({ unsubscribed: true, scope: "all", teammate: false });
+  });
+
+  it("lets the second step widen a brief-only unsubscribe to everything", async () => {
+    holder.outcome = "unsubscribed";
+    const body = new URLSearchParams({ scope: "all" });
+
+    const data = await action(postOf("a".repeat(64), "https://0509.io/u/t?type=brief", body));
+
+    expect(data).toEqual({ unsubscribed: true, scope: "all", teammate: false });
+  });
+
+  it("renders 'This unsubscribe link is no longer active' with no unsubscribe claim in it", () => {
     const html = renderBoundary({ status: 404, statusText: "Not Found", internal: true, data: "" });
 
-    expect(html).toContain("This link is not valid");
+    expect(html).toContain("This unsubscribe link is no longer active");
     expect(html).not.toContain("You&#x27;re unsubscribed");
     expect(html).not.toContain("Unsubscribe from Five to Nine emails?");
   });
@@ -155,7 +198,7 @@ describe("/u/:token (0509#5761)", () => {
       const html = renderBoundary(error);
 
       expect(html).toContain("Something went wrong");
-      expect(html).not.toContain("This link is not valid");
+      expect(html).not.toContain("This unsubscribe link is no longer active");
     }
   });
 
@@ -163,7 +206,26 @@ describe("/u/:token (0509#5761)", () => {
     const html = renderConfirm(false);
 
     expect(html).toContain("Unsubscribe from Five to Nine emails?");
-    expect(html).not.toContain("This link is not valid");
+    expect(html).not.toContain("This unsubscribe link is no longer active");
+  });
+
+  it("names the one email a brief or alerts link stops, and offers everything as a second step", () => {
+    const confirm = renderConfirm(false, "brief");
+    expect(confirm).toContain("Stop the weekly brief?");
+    expect(confirm).toContain("Alerts keep coming.");
+
+    const done = renderConfirm(true, "alerts");
+    expect(done).toContain("The weekly brief keeps coming.");
+    expect(done).toContain("Stop everything instead");
+    expect(done).toContain('name="scope"');
+
+    expect(renderConfirm(true, "all")).not.toContain("Stop everything instead");
+  });
+
+  it("does not tell a teammate that alerts keep coming, before or after the stop", () => {
+    expect(renderConfirm(false, "brief", true)).not.toContain("Alerts keep coming.");
+    expect(renderConfirm(true, "brief", true)).not.toContain("Alerts keep coming.");
+    expect(renderConfirm(false, "brief", false)).toContain("Alerts keep coming.");
   });
 
   it("renders the confirmation after a POST that suppressed the address", () => {
@@ -173,12 +235,9 @@ describe("/u/:token (0509#5761)", () => {
     expect(html).toContain("Changed your mind?");
     expect(html).toContain('href="/app/settings"');
     expect(html).not.toContain("No more email");
-    expect(html).not.toContain("This link is not valid");
+    expect(html).not.toContain("This unsubscribe link is no longer active");
   });
 
-  // DESIGN.md: tap targets are 44px minimum. min-h-11 is 44px in this repo
-  // (tests/unit/onboarding-competitors.test.ts); inline-flex and items-center
-  // are what make the line box reach that height.
   it("gives the Settings link a 44px-tall tap target", () => {
     const html = renderConfirm(true);
 

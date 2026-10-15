@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import {
   decodedBodies,
@@ -14,9 +14,7 @@ let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
   if (createdEmail === "") return;
   testInfo.setTimeout(testInfo.timeout + 60_000);
-  // The delete failing is a test failure, not a reason to keep the address:
-  // clearing in finally means the next test in this worker cannot try to
-  // delete an account that is already gone.
+
   try {
     await deleteCreatedAccount(page, createdEmail);
   } finally {
@@ -24,17 +22,8 @@ test.afterEach(async ({ page }, testInfo) => {
   }
 });
 
-// Remote lanes only: this spec reads the raw MIME message back from the inbox
-// Worker, which has no local-lane counterpart — wrangler's simulated send_email
-// (0509#6092) writes text/html part files under .wrangler/tmp/email/, not a raw
-// message, so nothing here can run against the preview Worker. Skipping beats
-// faking the copy.
 test.skip(isLocalLane(), "the sign-in email only exists on the production mail path");
 
-// The HTML part, doctype through the closing tag, recovered the same way J1
-// recovers the link: decodedBodies, so a mail-format change fails this spec and
-// the merge gate's extractor tests together. Nothing when the message carries
-// no HTML part.
 function htmlBodyFrom(raw: string): string {
   for (const body of decodedBodies(raw)) {
     const hay = body.toLowerCase();
@@ -47,9 +36,6 @@ function htmlBodyFrom(raw: string): string {
   return "";
 }
 
-// The email a real address actually receives, asserted against the template
-// module rather than against the inbox's rendering: the copy has to survive a
-// mail client that shows the HTML part at 600 px in either colour scheme.
 test("the sign-in email names the address, the expiry and the ignore line, and renders at 600 px in light and dark @own-signin", async ({
   page,
 }, testInfo) => {
@@ -62,14 +48,10 @@ test("the sign-in email names the address, the expiry and the ignore line, and r
   await page.locator('input[name="email"]').fill(email);
   await settleSignInWidget(page);
   await page.locator('button[type="submit"]').click();
-  // The send replaces the form; asserting the field is gone asserts the swap
-  // without pinning the "Check your email" copy (smoke.spec.ts's
-  // contract-not-copy convention).
+
   await expect(page.locator('input[name="email"]')).toHaveCount(0);
   await waitForMagicLink(email, token);
 
-  // The raw message, not the parsed one: Message-ID and Date live in the
-  // headers, and the deploy report's receipt is these two values.
   const raw = await readRawMessage(email, token);
   const messageId = /^message-id:\s*(.+)$/im.exec(raw)?.[1]?.trim();
   const sentUtc = /^date:\s*(.+)$/im.exec(raw)?.[1]?.trim();
@@ -96,9 +78,6 @@ test("the sign-in email names the address, the expiry and the ignore line, and r
     contentType: "image/png",
   });
 
-  // The template's dark answer is the ink ground #14130f, set on the same
-  // body the light lane screenshotted — the media query is the only
-  // difference, so a colour-scheme emulation is the whole transformation.
   await page.emulateMedia({ colorScheme: "dark" });
   expect(await page.locator("body").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(20, 19, 15)");
   await testInfo.attach("sign-in-email-dark-600", {

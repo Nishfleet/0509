@@ -4,31 +4,12 @@ import { describe, expect, it } from "vitest";
 import worker from "../../workers/e2e-inbox";
 import type { InboxMailbox } from "../../workers/e2e-inbox";
 
-/**
- * The mail-sink Worker's token gate and mailbox write, in real workerd
- * against a real local SQLite Durable Object. The same binding kinds
- * production gets. A missing or wrong secret must fail loudly (0509#3927),
- * which is what the 503/403 rows pin. The read-after-write row pins the
- * reason KV was removed (0509#4210): a read before the write is 404, and
- * the next read is 200 with no wait.
- */
 type EmailMessage = Parameters<typeof worker.email>[0];
 
-/**
- * The e2e-inbox project's bindings, from
- * tests/integration/wrangler.e2e-inbox.test.jsonc. `env` from cloudflare:test
- * is typed as the app Worker's Env, which has no INBOX namespace, so it is
- * narrowed here once for the whole file.
- */
 type InboxEnv = Parameters<typeof worker.email>[1];
 
 const env = workerdEnv as unknown as InboxEnv;
 
-/**
- * The runtime always hands `fetch` an ExecutionContext. The module's own export
- * type keeps `fetch` at the two parameters it declares, so this alias carries
- * the third argument the runtime passes and the handler ignores.
- */
 const callFetch = worker.fetch as (request: Request, env: InboxEnv, ctx: ExecutionContext) => Promise<Response>;
 const callEmail = worker.email as (message: EmailMessage, env: InboxEnv, ctx: ExecutionContext) => Promise<void>;
 

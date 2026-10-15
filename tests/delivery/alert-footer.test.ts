@@ -6,7 +6,7 @@ import {
   renderAlertFooter,
   SETTINGS_LINK,
   unsubscribeHeaders,
-} from "../../workers/delivery/alert-footer";
+} from "../../app/lib/alert-footer";
 
 const UNSUBSCRIBE_URL = "https://0509.io/u/token?w=ws_1&t=abc";
 const HOSTILE_URL = 'https://0509.io/u/token?w=ws_1&t=abc"def';
@@ -39,16 +39,15 @@ describe("the alert email's footer html (0509#6511)", () => {
 describe("the alert email's footer text (0509#6511)", () => {
   it("spells out both raw URLs on their own lines", () => {
     expect(renderAlertFooter(CTX).text).toBe(
-      `Choose which alerts you get in Settings: ${SETTINGS_LINK}\nUnsubscribe: ${UNSUBSCRIBE_URL}`,
+      `You get this because you watch competitors on Five to Nine.\nChoose which alerts you get in Settings: ${SETTINGS_LINK}\nUnsubscribe: ${UNSUBSCRIBE_URL}\nQuestions? Write to support@0509.io.`,
     );
+  });
+
+  it("ends the html with a clickable support address", () => {
+    expect(renderAlertFooter(CTX).html).toContain('href="mailto:support@0509.io"');
   });
 });
 
-/**
- * 0509#7020: the footer escapes both links by hand. This table plants the
- * injection probe in every string field, one row per field, so a missed
- * escapeHtml turns CI red — the plain template module stays.
- */
 describe("every string field carries the injection probe escaped, never raw (0509#7020)", () => {
   it.each([
     ["settings_link", { ...CTX, settings_link: PROBE }],

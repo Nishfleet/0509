@@ -14,6 +14,7 @@ function page(): string {
   return renderToStaticMarkup(
     createElement(ApiReference, {
       document: openApiDocument(ORIGIN) as unknown as JsonRecord,
+      exampleUrl: `${ORIGIN}/api/v1/brief`,
       mcpUrl: `${ORIGIN}${MCP_PATH}`,
       settingsHref: SETTINGS,
     }),
@@ -21,6 +22,14 @@ function page(): string {
 }
 
 describe("the API reference page", () => {
+  it("shows a copy-paste curl line with the bearer header", () => {
+    expect(page()).toContain(`curl -H &quot;Authorization: Bearer &lt;key&gt;&quot; ${ORIGIN}/api/v1/brief`);
+  });
+
+  it("shows a Claude Code line that adds the MCP server by its address", () => {
+    expect(page()).toContain(`claude mcp add --transport http five-to-nine ${ORIGIN}${MCP_PATH}`);
+  });
+
   it("renders every path key of the OpenAPI document", () => {
     const document = openApiDocument(ORIGIN);
     const html = page();

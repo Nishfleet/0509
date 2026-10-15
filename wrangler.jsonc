@@ -164,6 +164,12 @@
     // the id stays "default" until it exists and both model call sites read it
     // from here rather than each pinning their own.
     "AI_GATEWAY_ID": "default",
+    // 0509#7497: the shared rival check switch. "on" lets workspaces that watch the
+    // same rival URL reuse one nightly read and one judge answer. Any other value,
+    // unset or blank included, keeps every workspace reading and judging for
+    // itself. Changing the value takes a deploy of this file, with no code change.
+    // Off until the site-change eval passes.
+    "SHARED_RIVAL_CHECKS": "off",
     "ACCESS_TEAM_DOMAIN": "https://nish345.cloudflareaccess.com",
     "ACCESS_AUD": "b4fa400a1848c913b92c3212dc0714fcdbd1b1b66eb24659e4a7cc01c790575d",
   },
@@ -335,6 +341,11 @@
   // which skips an id that already exists, so a lost instance is replaced
   // within a day and a live one is never started twice.
   "workflows": [
+    {
+      "name": "billing-reconcile",
+      "binding": "BILLING_RECONCILE",
+      "class_name": "BillingReconcileWorkflow",
+    },
     {
       "name": "standing-rollover",
       "binding": "STANDING_ROLLOVER",

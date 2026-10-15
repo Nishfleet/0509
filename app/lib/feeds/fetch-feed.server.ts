@@ -7,7 +7,7 @@ export interface FeedValidators {
 }
 
 export type FeedFetch =
-  | { outcome: "ok"; body: string; validators: FeedValidators }
+  | { outcome: "ok"; body: string; truncated: boolean; validators: FeedValidators }
   | { outcome: "not-modified" }
   | { outcome: "gone" }
   | { outcome: "unreadable" };
@@ -33,9 +33,12 @@ async function classify(response: Response): Promise<FeedFetch> {
     await response.body?.cancel();
     return { outcome: response.status === 404 || response.status === 410 ? "gone" : "unreadable" };
   }
+  const read = await leadingText(response, MAX_FEED_BYTES + 1);
+  const truncated = new TextEncoder().encode(read).byteLength > MAX_FEED_BYTES;
   return {
     outcome: "ok",
-    body: await leadingText(response, MAX_FEED_BYTES),
+    body: truncated ? read.slice(0, -1) : read,
+    truncated,
     validators: { etag: response.headers.get("etag"), lastModified: response.headers.get("last-modified") },
   };
 }
@@ -49,7 +52,9 @@ export async function fetchFeed(url: string, validators: FeedValidators | null):
     });
     return await classify(response);
   } catch (error) {
-    console.log(JSON.stringify({ event: "feed.fetch_failed", error: error instanceof Error ? error.name : "unknown" }));
+    console.warn(
+      JSON.stringify({ event: "feed.fetch_failed", error: error instanceof Error ? error.name : "unknown" }),
+    );
     return { outcome: "unreadable" };
   }
 }
@@ -67,7 +72,7 @@ export async function fetchHomepage(url: string): Promise<string | null> {
     }
     return await cappedText(response, MAX_FEED_BYTES);
   } catch (error) {
-    console.log(
+    console.warn(
       JSON.stringify({ event: "feed.homepage_failed", error: error instanceof Error ? error.name : "unknown" }),
     );
     return null;

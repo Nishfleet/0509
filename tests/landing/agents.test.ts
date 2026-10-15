@@ -25,7 +25,7 @@ describe("landing agents", () => {
     expect(html).toContain('href="/api/docs"');
     expect(html).toContain("Read the API docs");
     expect(html).not.toContain("<iframe");
-    // The three names are text pills, never another company's mark.
+
     expect(html).not.toContain("<img");
     expect(html).toContain("part of every plan");
   });

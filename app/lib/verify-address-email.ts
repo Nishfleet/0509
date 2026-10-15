@@ -1,20 +1,37 @@
-import { escapeHtml } from "./html";
+import { linkEmailHtml, linkEmailText, type LinkEmail } from "./link-email";
 
 export function verifyAddressEmail(input: { email: string; url: string }): {
   subject: string;
   text: string;
   html: string;
 } {
-  const email = escapeHtml(input.email);
-  const url = escapeHtml(input.url);
-  const subject = "Confirm your delivery email for Five to Nine";
-  const text = [
-    `We sent this to ${input.email}. Confirm it and the weekly brief goes there.`,
-    "",
-    input.url,
-    "",
-    "If you did not change your delivery address on Five to Nine, ignore this email. Nothing happens until the link is used.",
-  ].join("\n");
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>Confirm your delivery email for Five to Nine</title><style>@media (prefers-color-scheme: dark){.ftn-ground{background:#14130f!important}.ftn-card{background:#1c1a15!important;border-color:#322e25!important}.ftn-ink{color:#f2efe4!important}.ftn-soft{color:#a9a294!important}.ftn-button{background:#f2efe4!important;color:#14130f!important}}</style></head><body class="ftn-ground" style="margin:0;padding:24px 12px;background:#f4f1e8;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;"><tr><td class="ftn-card" style="background:#fffdf6;border:1px solid #ddd6c6;padding:32px;font-family:'Bricolage Grotesque',ui-sans-serif,sans-serif;"><p class="ftn-ink" style="margin:0 0 16px;font-size:22px;font-weight:800;color:#0e0d0a;">Confirm your delivery email</p><p class="ftn-soft" style="margin:0 0 24px;font-size:16px;line-height:1.5;color:#55524a;">We sent this to ${email}. Confirm it and the weekly brief goes there.</p><p style="margin:0 0 24px;"><a class="ftn-button" href="${url}" style="display:inline-block;background:#0e0d0a;color:#f4f1e8;padding:12px 20px;font-size:16px;font-weight:700;text-decoration:none;">Confirm this address</a></p><p class="ftn-soft" style="margin:0 0 16px;font-size:14px;line-height:1.5;color:#55524a;">If the button does not work, paste this address into your browser:<br><span style="word-break:break-all;">${url}</span></p><p class="ftn-soft" style="margin:0;font-size:14px;line-height:1.5;color:#55524a;">If you did not change your delivery address on Five to Nine, ignore this email. Nothing happens until the link is used.</p></td></tr></table></body></html>`;
-  return { subject, text, html };
+  const message: LinkEmail = {
+    subject: "Confirm your delivery email for Five to Nine",
+    headline: "Confirm your delivery email",
+    line: `We sent this to ${input.email}. Confirm it and the weekly brief goes there.`,
+    button: "Confirm this address",
+    url: input.url,
+    ignore:
+      "If you did not change your delivery address on Five to Nine, ignore this email. Nothing happens until the link is used.",
+    preheader: "Confirm it and the weekly brief goes there.",
+  };
+  return { subject: message.subject, text: linkEmailText(message), html: linkEmailHtml(message) };
+}
+
+export function teammateInviteEmail(input: { email: string; url: string; addedBy: string }): {
+  subject: string;
+  text: string;
+  html: string;
+} {
+  const message: LinkEmail = {
+    subject: `${input.addedBy} wants to send you the Five to Nine brief`,
+    headline: "Get the weekly brief",
+    line: `${input.addedBy} added ${input.email} to receive their weekly Five to Nine brief: what their competitors changed and how they rank. Confirm to start getting it.`,
+    button: "Yes, send me the brief",
+    url: input.url,
+    ignore:
+      "If you do not want it, ignore this email. Nothing is sent until you use the link, and every brief has an unsubscribe link.",
+    preheader: "Confirm to start getting their weekly brief.",
+  };
+  return { subject: message.subject, text: linkEmailText(message), html: linkEmailHtml(message) };
 }

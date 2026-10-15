@@ -4,6 +4,7 @@ export default [
   route("login", "routes/login.tsx"),
   route("privacy", "routes/privacy.tsx"),
   route("terms", "routes/terms.tsx"),
+  route("security", "routes/security.tsx"),
   route("pricing", "routes/pricing.tsx"),
   route("robots.txt", "routes/robots[.]txt.ts"),
   route("sitemap.xml", "routes/sitemap[.]xml.ts"),
@@ -15,6 +16,7 @@ export default [
     route("app/upgrade", "routes/app.upgrade.ts"),
     route("app/tester", "routes/app.tester.ts"),
     route("app/alerts", "routes/app.alerts.tsx"),
+    route("app/changes/feedback", "routes/app.change-feedback.ts"),
     route("app/brief/:digestId?", "routes/app.brief.tsx"),
   ]),
   layout("routes/app-settings-layout.tsx", [
@@ -32,6 +34,7 @@ export default [
   route("u/:token", "routes/u.$token.tsx"),
   route("v/:token", "routes/v.$token.tsx"),
   route("api/health", "routes/api.health.ts"),
+  route("status", "routes/status.tsx"),
   route("api/auth/*", "routes/api.auth.$.ts"),
   route("api/webhooks/dodo", "routes/api.webhooks.dodo.ts"),
   route("mcp", "routes/mcp.ts"),

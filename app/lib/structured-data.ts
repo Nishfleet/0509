@@ -43,14 +43,14 @@ export function websiteJsonLd() {
   };
 }
 
-export function softwareApplicationJsonLd(features: readonly string[]) {
+export function softwareApplicationJsonLd(features: readonly string[], offerPath = "/") {
   return {
     "@type": "SoftwareApplication",
     name: "Five to Nine",
     url: SITE_URL,
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web",
-    featureList: features,
+    ...(features.length > 0 ? { featureList: features } : {}),
     publisher: { "@id": ORGANIZATION_ID },
     offers: PLANS.map((plan) => ({
       "@type": "Offer",
@@ -64,7 +64,7 @@ export function softwareApplicationJsonLd(features: readonly string[]) {
         unitCode: "MON",
         referenceQuantity: { "@type": "QuantitativeValue", value: 1, unitCode: "MON" },
       },
-      url: `${SITE_URL}/`,
+      url: `${SITE_URL}${offerPath}`,
     })),
   };
 }

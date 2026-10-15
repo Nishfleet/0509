@@ -72,6 +72,7 @@ const pricingSection = (variant: PriceVariant): string => `    <section id="pric
 
 const renderPage = (mode: BreakMode, variant: PriceVariant, flippedAt: string): string => {
   const pricing = mode === "soft" ? "" : pricingSection(variant);
+  const headline = mode === "soft" ? "" : "      <h1>Track every competitor move, in one weekly brief</h1>\n";
   const marker =
     `    <p id="mode" data-mode="${mode}" aria-hidden="true">` +
     `fixture site, mode: ${mode}</p>\n` +
@@ -87,8 +88,7 @@ const renderPage = (mode: BreakMode, variant: PriceVariant, flippedAt: string): 
   </head>
   <body>
     <main>
-      <h1>Track every competitor move, in one weekly brief</h1>
-${marker}
+${headline}${marker}
 ${pricing}
     </main>
   </body>

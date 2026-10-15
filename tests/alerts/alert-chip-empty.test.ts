@@ -7,12 +7,6 @@ import type { AlertFeedItem } from "../../app/components/alert-row";
 import { countAlertChips, type AlertChipKey, type AlertItemKind } from "../../app/lib/alert-chips";
 import Page from "../../app/routes/app.alerts";
 
-// Nishfleet/0509#6617. A bookmarked or shared /app/alerts?kind=<chip> used to
-// render the heading and the chips and then nothing when that one chip held no
-// rows and the workspace held other alerts. DESIGN.md 7: every empty surface
-// says what will fill it. The route decides between the all-zero sentence it
-// already carried and this per-chip sentence, and never both.
-
 const NOTE: AlertFeedItem = {
   kind: "note",
   id: "note-1",
@@ -88,5 +82,27 @@ describe("an Alerts chip with no rows of its own (0509#6617)", () => {
 
     expect(html).toContain("Nothing yet. When a competitor changes its website");
     expect(html).not.toContain("No hiring alerts yet.");
+    expect(html).toContain('href="/app/competitors"');
+    expect(html).toContain("See who you are watching");
+  });
+
+  it("draws no row of zero-count chips when the workspace holds no alerts at all", () => {
+    const html = render("all", counts([]), []);
+
+    expect(html).not.toContain('data-testid="alert-chips"');
+    expect(html).toContain("Nothing yet.");
+  });
+
+  it("keeps the chips once any alert exists", () => {
+    const html = render("all", counts(["note"]), NOTE_GROUP);
+
+    expect(html).toContain('data-testid="alert-chips"');
+  });
+
+  it("draws no chips for a bookmarked filter when the workspace holds no alerts at all", () => {
+    const html = render("hiring", counts([]), []);
+
+    expect(html).not.toContain('data-testid="alert-chips"');
+    expect(html).toContain("Nothing yet.");
   });
 });

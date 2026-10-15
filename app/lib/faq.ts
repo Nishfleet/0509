@@ -6,7 +6,7 @@ export interface FaqEntry {
   answer: string;
 }
 
-const priceList = PLANS.map((plan) => `${plan.name} €${String(plan.monthlyPriceEur)} a month`).join(", ");
+const priceList = PLANS.map((plan) => `${plan.name} €${String(plan.monthlyPriceEur)}/month`).join(", ");
 
 export const FAQ: readonly FaqEntry[] = [
   {

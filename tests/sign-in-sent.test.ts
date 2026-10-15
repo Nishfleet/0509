@@ -6,8 +6,6 @@ import { describe, expect, it, vi } from "vitest";
 import { SIGN_IN_LEDE, SIGN_IN_SHELL, SIGN_IN_TITLE, SignInSent } from "../app/components/sign-in-sent";
 import { MAGIC_LINK_TTL_SECONDS } from "../app/lib/auth/magic-link-email";
 
-// No turnstile script loads in the test runner, so the widget is replaced by
-// nothing and its response reader stays a stub.
 vi.mock("../app/components/turnstile-widget", () => ({
   TurnstileWidget: () => null,
 }));
@@ -61,6 +59,14 @@ describe("SignInSent names the recipient and the expiry (0509#6886)", () => {
 
     expect(status).toContain('role="status"');
     expect(status).toContain("You can send it again in 30 seconds.");
+  });
+
+  it("offers one click to the inbox for a Gmail address and none for a work address", () => {
+    const gmail = render("ada@gmail.com");
+    expect(gmail).toContain("Open Gmail");
+    expect(gmail).toContain('href="https://mail.google.com/');
+    expect(gmail).toContain('rel="noopener noreferrer"');
+    expect(render("ada@acme.com")).not.toContain("Open ");
   });
 
   it("offers a different email, ready to click", () => {

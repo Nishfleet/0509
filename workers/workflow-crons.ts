@@ -39,7 +39,7 @@ function entryFor(cron: WorkflowCron) {
 
 function instanceId(cron: WorkflowCron, scheduledTime: number) {
   const instant = new Date(scheduledTime).toISOString();
-  return `${entryFor(cron).name}-${cron === OWN_SITE_CHECK_CRON ? instant.slice(0, 13) : instant.slice(0, 10)}`;
+  return `${entryFor(cron).name}-${instant.slice(0, 13)}`;
 }
 
 async function createOnce(workflow: Pick<Env["OWN_SITE_CHECK"], "createBatch">, id: string) {
@@ -82,6 +82,7 @@ export async function startScheduledWorkflow(env: CronEnv, cron: WorkflowCron, s
 const HOUR_MS = 3_600_000;
 const MINUTE_MS = 60_000;
 const DAY_MS = 24 * HOUR_MS;
+const CATCH_UP_GRACE_MS = 5 * MINUTE_MS;
 
 function cronMinuteOfDay(cron: string): number {
   const [minute = "0", hour = "0"] = cron.split(" ");
@@ -110,7 +111,7 @@ export function startMissedDailyWorkflows(env: CronEnv, now: number) {
   const due = dailyCrons().flatMap((cron) =>
     [midnight, midnight - DAY_MS].flatMap((dayStart) => {
       const scheduledTime = dayStart + cronMinuteOfDay(cron) * MINUTE_MS;
-      return scheduledTime > windowStart && scheduledTime < now ? [{ cron, scheduledTime }] : [];
+      return scheduledTime > windowStart && scheduledTime < now - CATCH_UP_GRACE_MS ? [{ cron, scheduledTime }] : [];
     }),
   );
   return Promise.allSettled(due.map(({ cron, scheduledTime }) => startMissedInstance(env, cron, scheduledTime)));

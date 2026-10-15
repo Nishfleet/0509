@@ -9,6 +9,11 @@ const SELECT_PROCESSED = "SELECT processed_at FROM dodo_webhook_event WHERE id =
 
 const MARK_PROCESSED = "UPDATE dodo_webhook_event SET processed_at = ? WHERE id = ?";
 
+const COUNT_UNPROCESSED = `SELECT COUNT(*) AS total FROM dodo_webhook_event
+WHERE processed_at IS NULL AND received_at < ?1 AND received_at >= ?2`;
+
+const countRow = z.object({ total: z.number() });
+
 const recordWebhookEventRow = z.object({ processed_at: z.string().nullable() });
 
 export async function recordWebhookEvent(input: {
@@ -24,4 +29,14 @@ export async function recordWebhookEvent(input: {
 
 export async function markWebhookEventProcessed(id: string, processedAt: string): Promise<void> {
   await env.DB.prepare(MARK_PROCESSED).bind(processedAt, id).run();
+}
+
+export async function countUnprocessedWebhookEvents(
+  db: D1Database,
+  input: { receivedBefore: string; receivedSince: string },
+): Promise<number> {
+  const row = countRow.parse(
+    await db.prepare(COUNT_UNPROCESSED).bind(input.receivedBefore, input.receivedSince).first(),
+  );
+  return row.total;
 }

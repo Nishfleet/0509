@@ -1,14 +1,19 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
-import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+import {
+  confirmPublicSubject,
+  consoleFailures,
+  deleteCreatedAccount,
+  requireInboxToken,
+  signInWithMagicLink,
+  watchConsole,
+} from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
   if (createdEmail === "") return;
   testInfo.setTimeout(testInfo.timeout + 60_000);
-  // The delete failing is a test failure, not a reason to keep the address:
-  // clearing in finally means the next test in this worker cannot try to
-  // delete an account that is already gone.
+
   try {
     await deleteCreatedAccount(page, createdEmail);
   } finally {
@@ -58,11 +63,7 @@ test.describe("J5", () => {
     await input.fill("j5.fixture.0509.in");
     await input.press("Enter");
 
-    const business = page.getByRole("button", { name: "Yes, a business or creator" });
-    await expect(async () => {
-      if (await business.isVisible()) await business.click();
-      await expect(page).toHaveURL(/\/onboarding\/identity\?subject=j5\.fixture\.0509\.in$/, { timeout: 3_000 });
-    }).toPass({ timeout: 30_000 });
+    await confirmPublicSubject(page, "j5.fixture.0509.in");
     await expect(page.getByRole("status")).toHaveText("We couldn't read that site, so fill in what you can.", {
       timeout: 45_000,
     });
