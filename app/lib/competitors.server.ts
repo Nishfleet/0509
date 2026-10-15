@@ -1,4 +1,4 @@
-import { env } from "cloudflare:workers";
+import { env, waitUntil } from "cloudflare:workers";
 import { z } from "zod";
 
 import { nameFromDomain } from "./competitor/domain-name";
@@ -121,7 +121,7 @@ async function addCompetitor(workspaceId: string, raw: string, now: string): Pro
     cap,
   });
   if (outcome === "at_cap") return capRefusal(workspaceId, cap);
-  await tryFirstLook(workspaceId, domain);
+  waitUntil(tryFirstLook(workspaceId, domain));
   return ADDED;
 }
 
