@@ -10,7 +10,6 @@ const ORIGIN_DNS_ERROR_STATUS = 530;
 async function answers(url: string): Promise<boolean> {
   try {
     const res = await fetchOutbound(url, {
-      method: "HEAD",
       headers: { "User-Agent": CRAWLER_USER_AGENT },
       signal: AbortSignal.timeout(REACH_TIMEOUT_MS),
     });
@@ -24,6 +23,6 @@ async function answers(url: string): Promise<boolean> {
 export async function domainAnswers(domain: string): Promise<boolean> {
   if (blankEnvString(env.RIVAL_REACH_CHECK) === "off") return true;
   const hosts = domain.startsWith("www.") ? [domain] : [domain, `www.${domain}`];
-  const results = await Promise.all(hosts.map((host) => answers(`https://${host}/`)));
+  const results = await Promise.all(hosts.map((host) => answers(`https://${host}/robots.txt`)));
   return results.some(Boolean);
 }
