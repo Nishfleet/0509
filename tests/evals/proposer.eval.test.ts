@@ -10,6 +10,7 @@ import {
   proposalBody,
 } from "../../app/lib/discovery/generators/ai.server";
 import {
+  NEURONS_PER_MODEL_CALL,
   formatReport,
   loadCases,
   postWorkersAi,
@@ -63,7 +64,7 @@ const recall: Score<ProposerCase> = (row, call) => {
 describe.skipIf(!workersAiPresent())("eval: discovery proposer recall against Workers AI", () => {
   it("proposer_recall: scores the shipped proposer prompt on both splits", async () => {
     const rows = await loadCases<ProposerCase>("proposer_recall", ["self", "site", "expected"]);
-    const report = await runEval("proposer_recall", rows, ask, recall);
+    const report = await runEval("proposer_recall", rows, ask, recall, NEURONS_PER_MODEL_CALL);
     console.log(formatReport(report));
     expect(report.splits.length).toBeGreaterThan(0);
   });

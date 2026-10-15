@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { pageRoleInScope, paidSourceAllowed } from "../billing/entitlements";
+import { NEVER_FOUND_REASON } from "../page-reason";
 import { readWorkspaceEntitlements } from "./plan.server";
 
 export interface NewWatch {
@@ -491,6 +492,9 @@ const SITE_WATCH_SUMMARY = `SELECT COUNT(*) AS pages, MAX(w.last_polled_at) AS l
        (EXISTS (SELECT 1 FROM entity ue WHERE ue.id = ?2 AND ue.workspace_id = ?1)
         AND EXISTS (SELECT 1 FROM page hp WHERE hp.entity_id = ?2 AND hp.role = 'home' AND hp.deferred_at IS NOT NULL)
         AND NOT EXISTS (SELECT 1 FROM watch aw WHERE aw.entity_id = ?2 AND aw.is_active = 1 AND ${ALTERNATE_MARKER("aw")})) AS unreadable,
+       (EXISTS (SELECT 1 FROM entity ne WHERE ne.id = ?2 AND ne.workspace_id = ?1)
+        AND EXISTS (SELECT 1 FROM page np WHERE np.entity_id = ?2 AND np.role = 'home' AND np.transport IS NULL AND np.deferred_at IS NULL AND np.last_failure_reason = '${NEVER_FOUND_REASON}')
+        AND NOT EXISTS (SELECT 1 FROM watch nw WHERE nw.entity_id = ?2 AND nw.is_active = 1 AND ${ALTERNATE_MARKER("nw")})) AS not_found,
        (SELECT cw.target_key FROM watch cw JOIN entity ce ON ce.id = cw.entity_id AND ce.workspace_id = ?1 WHERE cw.entity_id = ?2 AND cw.is_active = 1 AND ${CUSTOMER_MARKER("cw")} LIMIT 1) AS customer_site
 FROM watch w
 JOIN source src ON src.id = w.source_id AND src.kind = 'site' AND src.platform <> 'feed'
@@ -501,6 +505,7 @@ export interface SiteWatchSummary {
   pages: number;
   lastPolledAt: string | null;
   unreadable: boolean;
+  notFound: boolean;
   customerSite: string | null;
 }
 
@@ -508,6 +513,7 @@ const readSiteWatchSummaryRow = z.object({
   pages: z.number(),
   last_polled_at: z.string().nullable(),
   unreadable: z.number(),
+  not_found: z.number(),
   customer_site: z.string().nullable(),
 });
 
@@ -519,6 +525,7 @@ export async function readSiteWatchSummary(workspaceId: string, entityId: string
     pages: row?.pages ?? 0,
     lastPolledAt: row?.last_polled_at ?? null,
     unreadable: row?.unreadable === 1,
+    notFound: row?.not_found === 1,
     customerSite: row?.customer_site ?? null,
   };
 }

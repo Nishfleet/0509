@@ -60,6 +60,23 @@ function row(html: string, ariaLabel: string): string {
   return found;
 }
 
+describe("the Add a competitor field when the address does not answer", () => {
+  it("offers Add it anyway as a submit button that sends anyway=1, only for an unreachable address", () => {
+    const reached = render(
+      createElement(AddCompetitor, {
+        message: "We couldn't reach that address. Check the spelling?",
+        unreachable: true,
+      }),
+      null,
+    );
+    const button = /<button\b[^>]*name="anyway"[^>]*>[\s\S]*?<\/button>/.exec(reached);
+    expect(button?.[0]).toContain('value="1"');
+    expect(button?.[0]).toContain('type="submit"');
+    expect(button?.[0]).toContain("Add it anyway");
+    expect(addForm("We couldn't read that. Try their main website, like brand.com.")).not.toContain("Add it anyway");
+  });
+});
+
 describe("the Add a competitor field and its error", () => {
   const ERROR = "We couldn't read that. Try their main website, like brand.com.";
   const ERROR_ESCAPED = "We couldn&#x27;t read that. Try their main website, like brand.com.";

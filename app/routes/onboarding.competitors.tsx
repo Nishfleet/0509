@@ -116,7 +116,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         </ul>
       )}
       <CompetitorMaybes maybes={maybes} />
-      <AddCompetitor message={actionData?.message} />
+      <AddCompetitor message={actionData?.message} unreachable={actionData?.unreachable} />
       <Form method="post" className="mt-12 border-t border-line pt-8">
         <input type="hidden" name="intent" value="start" />
         <Button type="submit" size="lg" disabled={starting}>

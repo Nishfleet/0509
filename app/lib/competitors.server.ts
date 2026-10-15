@@ -18,12 +18,14 @@ import { isTakenDown } from "./data/takedown.server";
 import { resolveDomain } from "./discovery/resolve-domain.server";
 import { normaliseSubject } from "./identity/normalise";
 import { tryFirstLook } from "./site/first-look.server";
+import { domainAnswers } from "./competitor/reach.server";
 
 export interface CompetitorActionResult {
   message: string | null;
   upgradePlanId?: PlanId | null;
   returning?: boolean;
   added?: boolean;
+  unreachable?: boolean;
 }
 
 const DONE: CompetitorActionResult = { message: null };
@@ -37,6 +39,10 @@ const EMPTY: CompetitorActionResult = {
 const UNRESOLVED: CompetitorActionResult = {
   message: "We couldn't find that brand's website. Try their main website, like brand.com.",
 };
+const UNREACHABLE: CompetitorActionResult = {
+  message: "We couldn't reach that address. Check the spelling?",
+  unreachable: true,
+};
 const PROBE_LIMITED: CompetitorActionResult = {
   message: "You've tried a lot of addresses in the last minute. Wait a minute, then try again.",
 };
@@ -48,6 +54,7 @@ const competitorIntentForm = z.object({
   suggestionId: z.string().trim().default(""),
   entityId: z.string().trim().default(""),
   competitor: z.string().trim().default(""),
+  anyway: z.string().trim().default(""),
 });
 
 async function upgradePlanIdFor(workspaceId: string): Promise<PlanId | null> {
@@ -99,7 +106,13 @@ async function refusedBeforeFetch(
   return null;
 }
 
-async function addCompetitor(workspaceId: string, raw: string, now: string): Promise<CompetitorActionResult> {
+async function addCompetitor(input: {
+  workspaceId: string;
+  raw: string;
+  now: string;
+  anyway: boolean;
+}): Promise<CompetitorActionResult> {
+  const { workspaceId, raw, now, anyway } = input;
   const normalised = normaliseSubject(raw);
   const unread = unreadableAdd(normalised);
   if (unread !== null) return unread;
@@ -112,6 +125,7 @@ async function addCompetitor(workspaceId: string, raw: string, now: string): Pro
   const { domain, name } = target;
 
   if (await isTakenDown(domain)) return { message: "That brand asked not to be tracked, so we can't add it." };
+  if (!anyway && !(await domainAnswers(domain))) return UNREACHABLE;
   const outcome = await addManualCompetitor({
     workspaceId,
     domain,
@@ -145,12 +159,12 @@ async function switchRival(input: { workspaceId: string; entityId: string; state
 
 function parsedCompetitorIntent(form: FormData) {
   const parsed = competitorIntentForm.safeParse(Object.fromEntries(form));
-  return parsed.success ? parsed.data : { intent: "", suggestionId: "", entityId: "", competitor: "" };
+  return parsed.success ? parsed.data : { intent: "", suggestionId: "", entityId: "", competitor: "", anyway: "" };
 }
 
 export async function handleCompetitorIntent(workspaceId: string, form: FormData): Promise<CompetitorActionResult> {
   const now = new Date().toISOString();
-  const { intent, suggestionId, entityId, competitor } = parsedCompetitorIntent(form);
+  const { intent, suggestionId, entityId, competitor, anyway } = parsedCompetitorIntent(form);
   const suggestionAction = SUGGESTION_INTENTS.get(intent);
   if (suggestionAction !== undefined && suggestionId !== "") {
     await suggestionAction({ workspaceId, suggestionId, now });
@@ -162,6 +176,6 @@ export async function handleCompetitorIntent(workspaceId: string, form: FormData
   }
   if ((intent === "on" || intent === "off") && entityId !== "")
     return switchRival({ workspaceId, entityId, state: intent, now });
-  if (intent === "add") return addCompetitor(workspaceId, competitor, now);
+  if (intent === "add") return addCompetitor({ workspaceId, raw: competitor, now, anyway: anyway === "1" });
   return DONE;
 }

@@ -111,6 +111,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         upgradePlanId={actionData?.upgradePlanId}
         returning={actionData?.returning}
         added={actionData?.added}
+        unreachable={actionData?.unreachable}
       />
       {competitors.length === 0 ? (
         <div className="mt-8">
