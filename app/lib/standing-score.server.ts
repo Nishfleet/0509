@@ -33,12 +33,12 @@ HAVING bucket IS NOT NULL`;
 const COUNT_UNJUDGED_INPUTS = `SELECT COUNT(*) AS n
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
-WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.is_tombstoned = 0
+WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3
   AND (
-    (s.kind = 'mention' AND NOT EXISTS (
+    (s.kind = 'mention' AND (s.is_tombstoned = 0 OR s.state = 'unjudged') AND NOT EXISTS (
       SELECT 1 FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id = ?4
     ))
-    OR (s.kind = 'change' AND (e.role <> 'self' OR ${CHANGE_HAS_STORED_EVIDENCE}) AND NOT ${changeJudgedSql({ noteworthy: "?5", breakage: "?6" })})
+    OR (s.kind = 'change' AND s.is_tombstoned = 0 AND (e.role <> 'self' OR ${CHANGE_HAS_STORED_EVIDENCE}) AND NOT ${changeJudgedSql({ noteworthy: "?5", breakage: "?6" })})
   )`;
 
 export async function countUnjudgedInputs(

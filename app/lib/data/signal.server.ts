@@ -334,7 +334,7 @@ WHERE watch_id = ?1 AND kind = 'mention' AND state = 'unjudged'
 ORDER BY observed_at, id LIMIT ?2`;
 
 const SELECT_UNJUDGED_MENTIONS_IN_WINDOW = `SELECT id, watch_id, title, canonical_url, published_at, payload_json FROM signal
-WHERE workspace_id = ?1 AND kind = 'mention' AND state = 'unjudged' AND is_tombstoned = 0 AND watch_id IS NOT NULL
+WHERE workspace_id = ?1 AND kind = 'mention' AND state = 'unjudged' AND watch_id IS NOT NULL
   AND observed_at >= ?2 AND observed_at < ?3
 ORDER BY observed_at, id LIMIT ?4`;
 

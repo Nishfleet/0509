@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { countUnjudgedInputs } from "../../../app/lib/standing-score.server";
 import { planTargets, rejudgeWindowMentions, sweepTarget } from "../../../workers/mentions/sweep";
 
 const NIGHT_ONE = "2026-09-24T03:00:00.000Z";
@@ -96,6 +97,9 @@ describe("re-judging a closing week's mentions before the freeze", () => {
     Reflect.set(env, "AI", { run: jevDown() });
     await sweepTarget(await gdeltTargetFor(brand), NIGHT_ONE, null);
 
+    const window = { workspaceId, windowStartAt: "2026-09-17T00:00:00.000Z", windowEndAt: NIGHT_TWO };
+    expect(await countUnjudgedInputs(env.DB, window)).toBe(2);
+
     Reflect.set(env, "AI", { run: jevAnswering() });
     const outside = await rejudgeWindowMentions({
       workspaceId,
@@ -112,6 +116,7 @@ describe("re-judging a closing week's mentions before the freeze", () => {
       limit: 10,
     });
     expect(judged).toBeGreaterThan(0);
+    expect(await countUnjudgedInputs(env.DB, window)).toBe(0);
     expect((await signalRows(competitorId)).map((row) => [row.title, row.state, row.is_tombstoned])).toEqual([
       ["Quill winds expected this weekend", "judged", 1],
       ["Quillon opens a London flagship", "judged", 0],

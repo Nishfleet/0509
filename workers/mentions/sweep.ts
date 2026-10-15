@@ -319,7 +319,7 @@ export async function rejudgeWindowMentions(input: {
     const verdicts = await judgeOrNull(watch, context, row);
     if (verdicts === null) break;
     judged += 1;
-    const rejected = noulAction(verdicts.about.p) === "reject";
+    const rejected = !isAboutBrand(verdicts.about.p);
     statements.push(
       resolveUnjudgedMention(row.id, rejected),
       ...judgedStatements({ watch, signalId: row.id, item: row, verdicts, now, alert: !rejected }),
