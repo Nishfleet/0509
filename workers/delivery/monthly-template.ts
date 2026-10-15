@@ -26,7 +26,9 @@ export function renderMonthly(ctx: MonthlyContext): RenderedBrief {
   const footer = renderAlertFooter(ctx.footer);
   return {
     subject: SUBJECT,
-    text: [SUBJECT, ...body, `${OPEN}: ${ctx.link}`, footer.text].join("\n"),
+    text: [SUBJECT, body[0], body.slice(1).join("\n"), `${OPEN}: ${ctx.link}`, footer.text]
+      .filter((block) => block !== "")
+      .join("\n\n"),
     html: emailDocument(
       SUBJECT,
       [

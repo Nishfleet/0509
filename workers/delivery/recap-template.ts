@@ -35,7 +35,7 @@ export function renderRecap(ctx: RecapContext): RenderedBrief {
   const footer = renderAlertFooter(ctx.footer);
   return {
     subject: subjectFor(ctx),
-    text: [SUBJECT, ...body, `${OPEN}: ${ctx.link}`, footer.text].join("\n"),
+    text: [SUBJECT, ...body, `${OPEN}: ${ctx.link}`, footer.text].join("\n\n"),
     html: emailDocument(
       SUBJECT,
       [

@@ -15,7 +15,7 @@ import {
 } from "./data/send_target.server";
 import { readWorkspaceIdForOwner } from "./data/workspace.server";
 import { RECIPIENT_CAPPED, takeRecipientSlot } from "./recipient-cap.server";
-import { teammateInviteEmail, verifyAddressEmail } from "./verify-address-email";
+import { teammateInviteEmail, verifyAddressEmail } from "../../workers/delivery/verify-address-email";
 
 const INVALID = "Enter an email address, like you@company.com.";
 const SUPPRESSED =

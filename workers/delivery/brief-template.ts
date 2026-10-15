@@ -4,7 +4,7 @@ import { escapeHtml } from "../../app/lib/html";
 import { countPhrase } from "../../app/lib/quiet-week";
 import { NOTHING_FIRST_LINE, UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
 import { EYEBROW, FONT, MONO, emailDocument, linkParagraph, postalLine, siteName } from "./email-shell";
-import { SETTINGS_LINK, supportLineHtml, supportLineText } from "./alert-footer";
+import { SETTINGS_LINK, reasonLineHtml, reasonLineText, supportLineHtml, supportLineText } from "./alert-footer";
 import { APP_LOCALE } from "../../app/lib/locale";
 
 const COPY = {
@@ -371,6 +371,7 @@ function renderFooter(
     `<p class="brief-muted" style="${EYEBROW}">${escapeHtml(COPY.footerTitle)}</p>`,
     `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(`${checked}${across}.${degraded}${sinceTail}`)}</p>`,
     `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(nextAt)}</p>`,
+    reasonLineHtml(teammate),
     settings.html,
     `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">`,
     unsubscribeHref === null
@@ -385,6 +386,7 @@ function renderFooter(
   const text = [
     `${COPY.footerTitle}: ${checked}${across}.${degraded}${sinceTail}`,
     nextAt,
+    reasonLineText(teammate),
     settings.text,
     unsubscribeUrl === null ? COPY.noUnsubscribe : `${COPY.unsubscribe}: ${unsubscribeUrl}`,
     supportLineText(),

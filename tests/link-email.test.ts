@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { linkEmailHtml } from "../app/lib/link-email";
-import { changeEmailEmail } from "../app/lib/auth/change-email-email";
-import { magicLinkEmail } from "../app/lib/auth/magic-link-email";
+import { linkEmailHtml } from "../workers/delivery/link-email";
+import { changeEmailEmail } from "../workers/delivery/change-email-email";
+import { magicLinkEmail } from "../workers/delivery/magic-link-email";
 import { SUPPORT_ADDRESS } from "../app/components/footer";
-import { verifyAddressEmail } from "../app/lib/verify-address-email";
+import { verifyAddressEmail } from "../workers/delivery/verify-address-email";
 
 const url = "https://0509.io/x?t=1";
 
@@ -18,7 +18,7 @@ const mails = [
 describe.each(mails)("the %s email", (_name, mail) => {
   it("opens with the wordmark and a hidden preview line before the card", () => {
     expect(mail.html).toContain("max-height:0;overflow:hidden");
-    expect(mail.html.indexOf("max-height:0")).toBeLessThan(mail.html.indexOf(`class="ftn-card"`));
+    expect(mail.html.indexOf("max-height:0")).toBeLessThan(mail.html.indexOf(`class="brief-card"`));
     expect(mail.html).toContain(">09</span>");
   });
 

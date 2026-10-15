@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { linkParagraph } from "../../workers/delivery/email-shell";
+import { lifecycleEmails } from "./email-fixtures";
 
 const DELIVERY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "workers", "delivery");
 
@@ -24,6 +25,15 @@ describe("the email family", () => {
     const sources = await Promise.all(files.map((name) => readFile(path.join(DELIVERY, name), "utf8")));
     for (const source of sources) {
       expect(source).not.toMatch(/const (HEADLINE|BODY) =/);
+    }
+  });
+
+  it("says why the reader is getting every email that offers an unsubscribe", () => {
+    const withUnsubscribe = lifecycleEmails().filter((email) => /^Unsubscribe:/m.test(email.text));
+    expect(withUnsubscribe.length).toBeGreaterThan(5);
+    for (const email of withUnsubscribe) {
+      expect(email.text, `${email.name} text`).toContain("You get this because");
+      expect(email.html, `${email.name} html`).toContain("You get this because");
     }
   });
 });

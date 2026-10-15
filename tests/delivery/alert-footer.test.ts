@@ -39,7 +39,7 @@ describe("the alert email's footer html (0509#6511)", () => {
 describe("the alert email's footer text (0509#6511)", () => {
   it("spells out both raw URLs on their own lines", () => {
     expect(renderAlertFooter(CTX).text).toBe(
-      `Choose which alerts you get in Settings: ${SETTINGS_LINK}\nUnsubscribe: ${UNSUBSCRIBE_URL}\nQuestions? Write to support@0509.io.`,
+      `You get this because you watch competitors on Five to Nine.\nChoose which alerts you get in Settings: ${SETTINGS_LINK}\nUnsubscribe: ${UNSUBSCRIBE_URL}\nQuestions? Write to support@0509.io.`,
     );
   });
 

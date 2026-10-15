@@ -55,7 +55,7 @@ export function renderIncidentOpen(ctx: IncidentOpenContext): RenderedBrief {
   const footer = renderAlertFooter(ctx);
   return {
     subject,
-    text: [...lines, COPY.openLink(ctx.link), footer.text].join("\n"),
+    text: [...lines, COPY.openLink(ctx.link), footer.text].join("\n\n"),
     html: emailDocument(
       subject,
       [
@@ -76,7 +76,7 @@ export function renderIncidentFixed(ctx: IncidentFixedContext): RenderedBrief {
   const footer = renderAlertFooter(ctx);
   return {
     subject,
-    text: [subject, line, COPY.openLink(ctx.link), footer.text].join("\n"),
+    text: [subject, line, COPY.openLink(ctx.link), footer.text].join("\n\n"),
     html: emailDocument(
       subject,
       [

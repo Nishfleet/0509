@@ -24,7 +24,7 @@ export function renderWinback(ctx: WinbackContext): RenderedBrief {
   const footer = renderAlertFooter(ctx.footer);
   return {
     subject: SUBJECT,
-    text: [SUBJECT, ...body, `${OPEN}: ${ctx.link}`, footer.text].join("\n"),
+    text: [SUBJECT, ...body, `${OPEN}: ${ctx.link}`, footer.text].join("\n\n"),
     html: emailDocument(
       SUBJECT,
       [

@@ -64,7 +64,7 @@ export function renderChangeOverflow(ctx: ChangeOverflowContext): RenderedBrief 
   const footer = renderAlertFooter(ctx);
   return {
     subject,
-    text: [subject, ...lines, `See them in Five to Nine: ${ctx.link}`, footer.text].join("\n"),
+    text: [subject, ...lines, `See them in Five to Nine: ${ctx.link}`, footer.text].join("\n\n"),
     html: emailDocument(
       subject,
       [
@@ -87,7 +87,7 @@ export function renderChange(ctx: ChangeContext): RenderedBrief {
   const footer = renderAlertFooter(ctx);
   return {
     subject: subjectFor(ctx.headline, ctx.mark),
-    text: [ctx.headline, ...lines, SO_WHAT, `${OPEN}: ${ctx.link}`, footer.text].join("\n"),
+    text: [ctx.headline, ...lines, SO_WHAT, `${OPEN}: ${ctx.link}`, footer.text].join("\n\n"),
     html: emailDocument(
       ctx.headline,
       [

@@ -4,7 +4,7 @@ import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
 import { SIGN_IN_LEDE, SIGN_IN_SHELL, SIGN_IN_TITLE, SignInSent } from "../app/components/sign-in-sent";
-import { MAGIC_LINK_TTL_SECONDS } from "../app/lib/auth/magic-link-email";
+import { MAGIC_LINK_TTL_SECONDS } from "../app/lib/auth/magic-link-ttl";
 
 vi.mock("../app/components/turnstile-widget", () => ({
   TurnstileWidget: () => null,

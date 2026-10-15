@@ -1595,9 +1595,11 @@ export default tseslint.config(
             },
             {
               from: { file: { path: "app/lib/delivery-address.server.ts" } },
-              allow: { to: { file: { path: "workers/delivery/send.ts" } } },
+              allow: {
+                to: { file: { path: ["workers/delivery/send.ts", "workers/delivery/verify-address-email.ts"] } },
+              },
               message:
-                "The delivery-address save is the second app-side sender after app/lib/auth.server.ts, and it goes through the one paved path (workers/delivery/send.ts) instead of calling env.EMAIL.send a second time. Only that one file reaches the worker; every other server leaf keeps the boundary. Source: 0509#5811.",
+                "The delivery-address save is the second app-side sender after app/lib/auth.server.ts, and it goes through the one paved path (workers/delivery/send.ts) instead of calling env.EMAIL.send a second time. Only that sender and the delivery-address email it renders (workers/delivery/verify-address-email.ts, moved onto the shared email shell in the Stripe-bar email pass) reach the worker; every other server leaf keeps the boundary. Source: 0509#5811.",
             },
             {
               from: { element: { type: "data-writer" } },

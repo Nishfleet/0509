@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { extractMagicLink } from "../../e2e/inbox";
 import { PROBE, expectNoHtmlInjection } from "../email-html-injection";
-import { magicLinkEmail } from "../../app/lib/auth/magic-link-email";
+import { magicLinkEmail } from "../../workers/delivery/magic-link-email";
 
 const email = "reader@0509.io";
 const url = "https://0509.io/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp";

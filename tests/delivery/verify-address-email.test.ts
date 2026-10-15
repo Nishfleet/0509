@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { PROBE, expectNoHtmlInjection } from "../email-html-injection";
-import { teammateInviteEmail, verifyAddressEmail } from "../../app/lib/verify-address-email";
+import { teammateInviteEmail, verifyAddressEmail } from "../../workers/delivery/verify-address-email";
 
 const EMAIL = "a&b<x>@example.com";
 const LINK = "https://0509.io/v?t=1&u=2";
