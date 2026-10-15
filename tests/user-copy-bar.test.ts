@@ -60,11 +60,10 @@ describe("the copy bar", () => {
   it("has none of the banned phrases in the static pages", () => {
     const hits = HTML_PAGES.flatMap((page) =>
       readFileSync(page, "utf8")
-        .replace(/<(script|style)[\s\S]*?<\/\1>/g, "")
-        .split(/<[^>]+>/)
-        .map((text) => text.trim())
-        .filter((text) => BANNED_PHRASES.some(({ pattern }) => pattern.test(text)))
-        .map((text) => `${page}: "${text.slice(0, 80)}"`),
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => BANNED_PHRASES.some(({ pattern }) => pattern.test(line)))
+        .map((line) => `${page}: "${line.slice(0, 80)}"`),
     );
     expect(hits).toEqual([]);
   });
