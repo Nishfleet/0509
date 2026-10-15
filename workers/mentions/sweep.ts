@@ -312,10 +312,13 @@ export async function rejudgeWindowMentions(input: {
   const byId = new Map(watches.map((watch) => [watch.watch_id, watch]));
   const now = new Date().toISOString();
   const statements: D1PreparedStatement[] = [];
+  let judged = 0;
   for (const row of pending) {
     const watch = byId.get(row.watchId);
-    const verdicts = watch === undefined ? null : await judgeOrNull(watch, context, row);
-    if (watch === undefined || verdicts === null) break;
+    if (watch === undefined) continue;
+    const verdicts = await judgeOrNull(watch, context, row);
+    if (verdicts === null) break;
+    judged += 1;
     const rejected = noulAction(verdicts.about.p) === "reject";
     statements.push(
       resolveUnjudgedMention(row.id, rejected),
@@ -323,7 +326,7 @@ export async function rejudgeWindowMentions(input: {
     );
   }
   if (statements.length > 0) await env.DB.batch(statements);
-  return statements.length;
+  return judged;
 }
 
 function mentionSignal(input: {

@@ -11,6 +11,7 @@ import {
   rolloverInstance,
 } from "../../../app/lib/brief-schedule";
 import { nightlyCatchUpInstance, runNightlyStanding } from "../../../workers/standing/nightly";
+import { loadNightlyPlan } from "../../../workers/standing/rollover-plan";
 
 let runs = 0;
 let WS = "";
@@ -715,7 +716,7 @@ describe("the nightly standing cron (0509#3978)", () => {
     await using introspector = await introspectWorkflow(env.STANDING_ROLLOVER);
     const result = await runNightlyStanding(env, now);
 
-    expect(result).toMatchObject({ catchUps: 1 });
+    expect(result.catchUps).toBeGreaterThanOrEqual(1);
     expect(await standingFor(week.startsAt.toISOString())).toEqual([]);
 
     const scheduled = rolloverInstance(WS, week.closesAt, "scheduled");
@@ -735,8 +736,34 @@ describe("the nightly standing cron (0509#3978)", () => {
       [SELF, 4],
     ]);
 
-    const again = await runNightlyStanding(env, now);
-    expect(again).toMatchObject({ catchUps: 0 });
+    const again = await loadNightlyPlan(env.DB, now);
+    expect(again.catchUpAt.filter((entry) => entry.workspaceId === WS)).toEqual([]);
+  });
+
+  it("catches up a week whose ranks froze but whose brief was held, until a brief exists", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    await seedWorkspace(schedule);
+    const now = new Date();
+    const week = openWeek(schedule, now);
+    const heldWeek = previousBriefAt(schedule, week.startsAt).toISOString();
+    await seedFrozenWeek(heldWeek, [
+      [SELF, 1],
+      [RIVAL_A, 2],
+    ]);
+
+    const before = await loadNightlyPlan(env.DB, now);
+    expect(before.catchUpAt.filter((entry) => entry.workspaceId === WS)).toEqual([
+      { workspaceId: WS, closesAt: week.startsAt },
+    ]);
+
+    await env.DB.prepare(
+      "INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status) VALUES (?1, ?2, 'weekly', ?3, ?4, 'sent')",
+    )
+      .bind(`digest-${WS}-held`, WS, heldWeek, week.startsAt.toISOString())
+      .run();
+
+    const after = await loadNightlyPlan(env.DB, now);
+    expect(after.catchUpAt.filter((entry) => entry.workspaceId === WS)).toEqual([]);
   });
 
   it("does not enqueue a workspace with no self entity", async () => {

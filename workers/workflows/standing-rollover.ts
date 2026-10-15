@@ -98,30 +98,31 @@ async function writeDigest(
   return id;
 }
 
+async function tolerateJevFailure(workspaceId: string, work: () => Promise<unknown>): Promise<void> {
+  try {
+    await work();
+  } catch (error) {
+    if (!(error instanceof JevRateLimitedError)) throw error;
+    console.error(JSON.stringify({ event: "standing.rejudge_failed", workspaceId }));
+  }
+}
+
 async function rejudgeClosingWeek(
   step: WorkflowStep,
   input: { workspaceId: string; startsAt: string; closesAt: string },
 ): Promise<void> {
-  try {
-    await step.do("rejudge-mentions", RETRY, () =>
-      rejudgeWindowMentions({
-        workspaceId: input.workspaceId,
-        windowStartAt: input.startsAt,
-        windowEndAt: input.closesAt,
-        limit: REJUDGE_MENTIONS_LIMIT,
+  const window = { workspaceId: input.workspaceId, windowStartAt: input.startsAt, windowEndAt: input.closesAt };
+  await tolerateJevFailure(input.workspaceId, () =>
+    step
+      .do("rejudge-mentions", RETRY, () => rejudgeWindowMentions({ ...window, limit: REJUDGE_MENTIONS_LIMIT }))
+      .catch((error: unknown) => {
+        if (error instanceof JevRateLimitedError) throw error;
+        console.error(JSON.stringify({ event: "standing.rejudge_mentions_failed", workspaceId: input.workspaceId }));
       }),
-    );
-    await step.do("rejudge-changes", RETRY, () =>
-      rejudgeUnjudgedChanges({
-        workspaceId: input.workspaceId,
-        windowStartAt: input.startsAt,
-        windowEndAt: input.closesAt,
-      }),
-    );
-  } catch (error) {
-    if (!(error instanceof JevRateLimitedError)) throw error;
-    console.error(JSON.stringify({ event: "standing.rejudge_failed", workspaceId: input.workspaceId }));
-  }
+  );
+  await tolerateJevFailure(input.workspaceId, () =>
+    step.do("rejudge-changes", RETRY, () => rejudgeUnjudgedChanges(window)),
+  );
 }
 
 function refreshClosingWeek(

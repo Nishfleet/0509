@@ -17,7 +17,7 @@ The brief for the week of 5 Oct (sent 12 Oct) said "We haven't finished reviewin
 
 ## Fix
 
-- `weekSendable` (`app/lib/customer-ready.ts`): the rollover holds an unjudged week, writes no digest and sends nothing, for up to 72 hours. The nightly catch-up gets a new instance id each night. After the hold it sends an honest brief with no rank words.
+- `weekSendable` (`app/lib/customer-ready.ts`): the rollover holds an unjudged week, writes no digest and sends nothing, for up to 72 hours. The nightly catch-up picks weeks with no weekly digest (not weeks with no rank, so a held week whose ranks froze is retried too), for at most 5 days after the close, with a new instance id each night. After the hold it sends an honest brief with no rank words.
 - Before freezing, the rollover judges the closing week's unjudged mentions (up to 60 per workspace) the same way it re-judges changes (`rejudgeWindowMentions`), and `judgeWeek` logs `standing.read_this_first_unavailable` with the reason when Jev refuses.
 - One own-site line per page, in plain words with when we saw it and when we re-checked (`app/lib/own-site-lines.ts`, used by the page and the email). A fixed page reads "Your site looks fine now."
 - Email subject for an unjudged week is "Your weekly brief". The quiet-week line says what was checked and that none of it needed attention. The digest row stores the subject that was sent. Marks say "Captured <time>".
