@@ -46,11 +46,11 @@ async function seedWorkspace(ws: string, rival: string): Promise<void> {
   ]);
 }
 
-async function snapshot(id: string, ws: string, at: string): Promise<void> {
+async function snapshot(id: string, ws: string, at: string, page = `pg-${ws}`): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO snapshot (id, watch_id, page_id, fetched_at, payload_hash) VALUES (?1, ?2, ?3, ?4, ?1)`,
   )
-    .bind(id, `w-${ws}`, `pg-${ws}`, at)
+    .bind(id, `w-${ws}`, page, at)
     .run();
 }
 
@@ -127,7 +127,7 @@ describe("the work ledger against real D1", () => {
 
     expect(await readWorkLedger(env.DB, { workspaceId: "ws-a", from: FROM, until: UNTIL })).toEqual({
       rivals: 1,
-      pages_read: 2,
+      pages_read: 1,
       changes_seen: 3,
       changes_told: 1,
       changes_set_aside: 1,
@@ -145,6 +145,21 @@ describe("the work ledger against real D1", () => {
     expect(await readWorkLedger(env.DB, { workspaceId: "ws-a", from: FROM, until: UNTIL })).toMatchObject({
       rivals: 0,
       pages_read: 0,
+    });
+  });
+
+  it("counts a page once however many times it was read, and each page that was read", async () => {
+    await env.DB.prepare(
+      `INSERT INTO page (id, entity_id, url, discovered_at) VALUES ('pg-two', 'rv-a', 'https://r.example/pricing', ?1)`,
+    )
+      .bind(BEFORE)
+      .run();
+    await snapshot("s1", "ws-a", IN);
+    await snapshot("s2", "ws-a", "2026-09-17T10:00:00.000Z");
+    await snapshot("s3", "ws-a", IN, "pg-two");
+    expect(await readWorkLedger(env.DB, { workspaceId: "ws-a", from: FROM, until: UNTIL })).toMatchObject({
+      rivals: 1,
+      pages_read: 2,
     });
   });
 
@@ -169,13 +184,13 @@ describe("the work ledger against real D1", () => {
       readThisFirst: { picks: [], judged: 1, unjudged: false },
     });
     expect(payload.why_line).toBe(
-      "Quiet week: we read 2 pages across 1 competitor; saw 1 change, none worth your time.",
+      "Quiet week: we read 1 page across 1 competitor; saw 1 change, none worth your time.",
     );
     const { text } = renderBrief(parseBriefPayload(JSON.stringify(payload)), {
       unsubscribe_url: "https://0509.io/u/t",
       asset_base_url: "https://assets.0509.io",
     });
     expect(text).toContain("1 change judged too small to interrupt you stayed off the brief.");
-    expect(text).not.toContain("This week we read 2 pages");
+    expect(text).not.toContain("This week we read 1 page");
   });
 });
