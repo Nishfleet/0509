@@ -153,7 +153,7 @@ describe("win-back email", () => {
 
     expect(sent[0]?.text).toContain("caught 1 change across");
     expect(sent[0]?.text).toMatch(/Unsubscribe: https:\/\/0509\.io\/u\/[0-9a-f]{64}/);
-    expect(sent[0]?.headers?.["List-Unsubscribe"]).toMatch(/^<https:\/\/0509\.io\/u\/[0-9a-f]{64}>$/);
+    expect(sent[0]?.headers?.["List-Unsubscribe"]).toMatch(/^<https:\/\/0509\.io\/u\/[0-9a-f]{64}\?type=all>$/);
   });
 
   it("never mentions money or the plan", async () => {

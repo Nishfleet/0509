@@ -5,7 +5,7 @@ import { readRivalNudges, rivalNudgeKey, type RivalNudge } from "../../app/lib/d
 import { hasReminderAttempt } from "../../app/lib/data/trial_reminder.server";
 
 import { SETTINGS_LINK, unsubscribeHeaders } from "../../app/lib/alert-footer";
-import { UNSUBSCRIBE_BASE_URL, ensureUnsubscribeToken } from "./consumer";
+import { ensureUnsubscribeToken, unsubscribeUrlFor } from "./consumer";
 import { renderRivalNudge } from "./rival-nudge-template";
 import { sendOnce } from "./send-once";
 
@@ -17,15 +17,13 @@ async function eligible(env: Env, nudge: RivalNudge, isTester: TesterCheck): Pro
   if (nudge.subscription_id === null) return false;
   if (await hasReminderAttempt(env.DB, rivalNudgeKey(nudge))) return false;
   if ((await isTester(nudge.subscription_id)) !== false) return false;
-  return !(await isAddressSuppressed(nudge.target_value, env.DB));
+  return !(await isAddressSuppressed(nudge.target_value, "brief", env.DB));
 }
 
 async function nudgeOne(env: Env, nudge: RivalNudge, isTester: TesterCheck): Promise<boolean> {
   if (!(await eligible(env, nudge, isTester))) return false;
-  const unsubscribeUrl = `${UNSUBSCRIBE_BASE_URL}${await ensureUnsubscribeToken(env, {
-    id: nudge.target_id,
-    unsubscribe_token: nudge.unsubscribe_token,
-  })}`;
+  const token = await ensureUnsubscribeToken(env, { id: nudge.target_id, unsubscribe_token: nudge.unsubscribe_token });
+  const unsubscribeUrl = unsubscribeUrlFor(token, "brief");
   return sendOnce(env, {
     key: rivalNudgeKey(nudge),
     workspaceId: nudge.workspace_id,

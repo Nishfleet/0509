@@ -2,6 +2,7 @@ import { type BriefContext, type BriefPayload, type RenderedBrief } from "../../
 import { COMPETITORS_LINK, newRivalLines, rankTrendLine, sinceStartedLine } from "../../app/lib/brief-since";
 import { escapeHtml } from "../../app/lib/html";
 import { countPhrase } from "../../app/lib/quiet-week";
+import { ledgerSummary } from "../../app/lib/work-ledger";
 import { NOTHING_FIRST_LINE, UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
 import {
   EYEBROW_STYLE,
@@ -38,6 +39,8 @@ const COPY = {
   readThisFirst: "Read this first",
   nothingFirst: NOTHING_FIRST_LINE,
   unjudged: UNJUDGED_WEEK_LINE,
+  unjudgedNext: "The changes we have seen so far are in Alerts.",
+  unjudgedOpen: "Open Alerts",
   yourBrands: "Your tracked brands",
   ownSiteOk: "Your site looks fine.",
   ownSiteBroken: (count: number) => `Your site looks broken (${count === 1 ? "1 page" : `${n(count)} pages`}):`,
@@ -60,6 +63,8 @@ const COPY = {
   blindNever: (source: string) =>
     `We have not been able to reach ${source} yet, so we cannot say this was a quiet week.`,
 } as const;
+
+const ALERTS_LINK = "https://0509.io/app/alerts";
 
 function n(value: number): string {
   return String(value);
@@ -168,7 +173,7 @@ function renderMarkBeforeAfter(mark: BriefPayload["read_this_first"][number]): s
 
 function renderMarkThumbnail(thumb: string | null, href: string | null): string {
   if (thumb === null || href === null) return "";
-  return `<p style="margin:10px 0 0;"><a class="brief-ink" href="${href}"><img src="${thumb}" alt="Screenshot of the change" width="${n(120)}" height="${n(90)}" style="display:block;"></a></p>`;
+  return `<p style="margin:10px 0 0;"><a class="brief-ink" href="${href}"><img src="${thumb}" alt="Screenshot of the change" width="${n(120)}" height="${n(90)}" style="display:block;font-family:${FONT};font-size:13px;line-height:18px;"></a></p>`;
 }
 
 function renderMark(
@@ -215,8 +220,8 @@ function renderReadThisFirst(payload: BriefPayload, assetBaseUrl: string | null)
 
   if (payload.is_unjudged) {
     return {
-      html: `${heading(COPY.readThisFirst)}<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(COPY.unjudged)}</p>`,
-      text: `${COPY.readThisFirst}\n${COPY.unjudged}`,
+      html: `${heading(COPY.readThisFirst)}<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(COPY.unjudged)} ${escapeHtml(COPY.unjudgedNext)} <a class="brief-ink" href="${ALERTS_LINK}">${escapeHtml(COPY.unjudgedOpen)}</a></p>`,
+      text: `${COPY.readThisFirst}\n${COPY.unjudged} ${COPY.unjudgedNext}\n${COPY.unjudgedOpen}: ${ALERTS_LINK}`,
     };
   }
 
@@ -349,12 +354,29 @@ function sinceSentence(checked: BriefPayload["checked"]): string {
   return since === null ? "" : ` ${since}.`;
 }
 
+function renderWork(checked: BriefPayload["checked"]): { html: string; text: string[] } {
+  const work = ledgerSummary(checked.ledger, "This week we");
+  if (work === null) return { html: "", text: [] };
+  return {
+    html: `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(work)}</p>`,
+    text: [work],
+  };
+}
+
 function settingsLine(teammate: boolean): { html: string; text: string } {
   if (teammate) return { html: "", text: "" };
   return {
     html: `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;"><a class="brief-muted" href="${SETTINGS_LINK}">${escapeHtml(COPY.settings)}</a>.</p>`,
     text: `${COPY.settings}: ${SETTINGS_LINK}`,
   };
+}
+
+function unsubscribeParagraph(href: string | null): string {
+  const inner =
+    href === null
+      ? escapeHtml(COPY.noUnsubscribe)
+      : `<a class="brief-muted" href="${href}">${escapeHtml(COPY.unsubscribe)}</a>`;
+  return `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${inner}</p>`;
 }
 
 function renderFooter(
@@ -367,12 +389,10 @@ function renderFooter(
   const checked = countsSentence(payload.checked);
   const sourceCount = payload.checked.source_keys.length;
   const across = sourceCount === 0 ? "" : ` across ${COPY.sources(sourceCount)}`;
-
   const nextAt =
     payload.next_brief_at === null
       ? COPY.noNext
       : `${COPY.next}: ${formatDate(payload.next_brief_at, payload.timezone, true)}`;
-
   const degraded =
     payload.checked.degraded_source_keys.length > 0
       ? ` ${COPY.degraded(payload.checked.degraded_source_keys.length)}`
@@ -380,24 +400,22 @@ function renderFooter(
 
   const unsubscribeHref = unsubscribeUrl === null ? null : safeUrl(unsubscribeUrl);
   const postal = postalLine();
+  const work = renderWork(payload.checked);
   const html = [
     `<div class="brief-rule" style="padding:16px 0 0;">`,
     `<p class="brief-muted" style="${EYEBROW_STYLE}">${escapeHtml(COPY.footerTitle)}</p>`,
+    work.html,
     `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(`${checked}${across}.${degraded}${sinceTail}`)}</p>`,
     `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(nextAt)}</p>`,
     reasonLineHtml(teammate),
     settings.html,
-    `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">`,
-    unsubscribeHref === null
-      ? escapeHtml(COPY.noUnsubscribe)
-      : `<a class="brief-muted" href="${unsubscribeHref}">${escapeHtml(COPY.unsubscribe)}</a>`,
-    `</p>`,
+    unsubscribeParagraph(unsubscribeHref),
     supportLineHtml(),
     postal?.html ?? "",
     `</div>`,
   ].join("");
-
   const text = [
+    ...work.text,
     `${COPY.footerTitle}: ${checked}${across}.${degraded}${sinceTail}`,
     nextAt,
     reasonLineText(teammate),

@@ -291,6 +291,11 @@ describe("screenshots are linked, never inlined", () => {
     expect(html).toContain('<img src="https://assets.0509.io/captures/ws_1/sig_1/before.png"');
   });
 
+  it("sets a sans font on the thumbnail so its alt text is not default serif when images are off", () => {
+    const { html } = renderBrief(payload(), CONTEXT);
+    expect(html).toMatch(/<img [^>]*alt="Screenshot of the change"[^>]*style="[^"]*font-family:-apple-system/);
+  });
+
   it("keeps an already percent-encoded key byte-for-byte, never re-encoding it", () => {
     const { html } = renderBrief(
       payload({
@@ -473,7 +478,8 @@ describe("inline-styled html, and the voice", () => {
     expect(html).toContain(".brief-card{background-color:#1c1a15;color:#f2efe4;}");
     expect(html).toContain(".brief-muted{color:#a9a294;}");
     expect(html).toContain(".brief-page{background-color:#14130f;}");
-    expect(html).toContain('max-width:600px;margin:0 auto;padding:24px;"');
+    expect(html).toContain('width="600"');
+    expect(html).toContain('max-width:600px;margin:0 auto;"');
     expect(html).not.toContain("border-radius");
     expect(html.match(/<style>/g)).toHaveLength(1);
   });
@@ -656,6 +662,15 @@ describe("inline styles survive the attribute they sit in", () => {
     expect(html).toContain('<span class="brief-marker" style="padding:0 4px;">#3</span>');
     expect(html).toContain(".brief-marker{background-color:#16c47f;");
     expect(html).toContain(".brief-strike{color:#55524a;text-decoration-color:#e0442c;}");
+  });
+});
+
+describe("an unjudged week", () => {
+  it("says so and points to Alerts for what we have seen", () => {
+    const { html, text } = renderBrief(payload({ is_unjudged: true, read_this_first: [] }), CONTEXT);
+    expect(text).toContain("The changes we have seen so far are in Alerts.");
+    expect(text).toContain("Open Alerts: https://0509.io/app/alerts");
+    expect(html).toContain('href="https://0509.io/app/alerts">Open Alerts</a>');
   });
 });
 

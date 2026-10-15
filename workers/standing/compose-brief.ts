@@ -6,6 +6,8 @@ import { nextBriefAt } from "../../app/lib/brief-schedule";
 import { readRivalFacts } from "../../app/lib/data/rival_baseline.server";
 import { firstBriefLine, quietWeekLine } from "../../app/lib/quiet-week";
 import { baselineLines } from "../../app/lib/rival-baseline";
+import { quietLedgerLine, type WorkLedger } from "../../app/lib/work-ledger";
+import { readWorkLedger } from "../../app/lib/data/work_ledger.server";
 import { UNJUDGED_WEEK_LINE, readThisFirstLine } from "../../app/lib/read-this-first";
 import { effectiveKindSql } from "../../app/lib/source-kind";
 import { sourceName } from "../../app/lib/source-name";
@@ -284,13 +286,14 @@ interface CheckedTotals {
   allChanges: number;
 }
 
-function buildChecked(sources: readonly SourceCoverage[], totals: CheckedTotals) {
+function buildChecked(sources: readonly SourceCoverage[], totals: CheckedTotals, ledger: WorkLedger | undefined) {
   const degraded = sources.filter((source) => source.answered === 0);
   return {
     mention_count: totals.mentions,
     site_change_count: totals.siteChanges,
     new_ad_count: totals.newAds,
     total_change_count: totals.allChanges,
+    ledger,
     source_keys: sources.map((source) => source.key),
     degraded_source_keys: degraded.map((source) => source.key),
     degraded_sources: degraded.map((source) => ({
@@ -306,16 +309,22 @@ interface HeadLineInput {
   marks: readonly { entity_name: string }[];
   totals: CheckedTotals;
   startingRivals: number;
+  ledger: WorkLedger | undefined;
 }
 
-function buildHeadLine({ readThisFirst, marks, totals, startingRivals }: HeadLineInput): string {
+function quietLine({ totals, startingRivals, ledger }: HeadLineInput): string {
+  if (startingRivals > 0) return firstBriefLine(startingRivals);
+  return (
+    (ledger === undefined ? null : quietLedgerLine(ledger)) ??
+    quietWeekLine(totals.mentions, totals.siteChanges, totals.newAds)
+  );
+}
+
+function buildHeadLine(input: HeadLineInput): string {
+  const { readThisFirst, marks } = input;
   if (readThisFirst.unjudged) return UNJUDGED_WEEK_LINE;
   const lead = marks[0];
-  if (lead === undefined) {
-    return startingRivals > 0
-      ? firstBriefLine(startingRivals)
-      : quietWeekLine(totals.mentions, totals.siteChanges, totals.newAds);
-  }
+  if (lead === undefined) return quietLine(input);
   return readThisFirstLine(marks.length, readThisFirst.judged, lead.entity_name);
 }
 
@@ -363,8 +372,20 @@ async function readBaseline(
   }
 }
 
+async function readLedger(db: D1Database, input: ComposeInput): Promise<WorkLedger | undefined> {
+  try {
+    return await readWorkLedger(db, {
+      workspaceId: input.workspaceId,
+      from: input.week.startsAt.toISOString(),
+      until: input.week.closesAt.toISOString(),
+    });
+  } catch (error) {
+    console.error(JSON.stringify({ event: "standing.ledger_failed", error: redactEmailShaped(String(error)) }));
+    return undefined;
+  }
+}
+
 export async function composeBrief(db: D1Database, input: ComposeInput): Promise<BriefPayload> {
-  const startsAt = input.week.startsAt.toISOString();
   const closesAt = input.week.closesAt.toISOString();
   const { readThisFirst } = input;
   const rows = await loadBriefRows(db, input);
@@ -382,7 +403,9 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
   const self = lines.find((line) => line.entity_id === selfId);
 
   const pausedLine = pausedSentence(rows.pausedNames);
+  const ledger = await readLedger(db, input);
   const headLine = buildHeadLine({
+    ledger,
     readThisFirst,
     marks,
     totals,
@@ -392,7 +415,7 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
   return {
     workspace_id: input.workspaceId,
     timezone: input.schedule.timezone,
-    period_start: startsAt,
+    period_start: input.week.startsAt.toISOString(),
     period_end: closesAt,
     headline_rank: self?.rank ?? null,
     headline_total: lines.length,
@@ -410,7 +433,7 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
     read_this_first: marks,
     brands: lines,
     own_site: buildOwnSite(rows.ownSite, closesAt),
-    checked: buildChecked(rows.sources, totals),
+    checked: buildChecked(rows.sources, totals, ledger),
     next_brief_at: nextBriefAt(input.schedule, input.week.closesAt).toISOString(),
     new_rival: rows.newRival,
   };

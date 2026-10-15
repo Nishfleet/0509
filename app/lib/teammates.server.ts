@@ -24,7 +24,7 @@ export async function readTeammates(workspaceId: string) {
       id: mate.id,
       address: mate.target_value,
       confirmed: mate.is_verified === 1,
-      unsubscribed: mate.is_verified === 1 && (await isAddressSuppressed(mate.target_value)),
+      unsubscribed: mate.is_verified === 1 && (await isAddressSuppressed(mate.target_value, "brief")),
     })),
   );
 }
@@ -60,7 +60,7 @@ async function inviteAndCount(input: {
   used: number;
 }): Promise<string | null> {
   const { workspaceId, targetId, address, now, used } = input;
-  const failure = (await isAddressSuppressed(address))
+  const failure = (await isAddressSuppressed(address, "brief"))
     ? null
     : await sendTeammateInvite({
         email: input.email,

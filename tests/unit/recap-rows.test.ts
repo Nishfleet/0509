@@ -8,6 +8,7 @@ const row = (latest: string | null) => ({
   target_id: "t",
   target_value: "a@0509.io",
   unsubscribe_token: null,
+  timezone: "UTC",
   change_count: 1,
   latest,
 });
