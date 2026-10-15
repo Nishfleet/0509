@@ -1,6 +1,6 @@
 import { expect, test } from "./test";
 
-import { expectElementFaceLoaded, expectFaceLoaded } from "./fonts";
+import { expectFaceLoaded } from "./fonts";
 import { consoleFailures, watchConsole } from "./inbox";
 
 test("the landing page renders its headline and its contact link @smoke", async ({ page }) => {
@@ -14,13 +14,6 @@ test("the landing page renders its headline and its contact link @smoke", async 
   const contact = page.locator('a[href="mailto:support@0509.io"]');
   await expect(contact).toBeVisible();
   await expect(contact).toHaveAccessibleName(/\S/);
-});
-
-test("the rebuild notice renders in the three brand faces @smoke", async ({ page }) => {
-  await page.goto("/");
-  await expectElementFaceLoaded(page, "header .font-display");
-  await expectElementFaceLoaded(page, "main p");
-  await expectElementFaceLoaded(page, "footer");
 });
 
 test("the landing page does not scroll horizontally @smoke", async ({ page }) => {

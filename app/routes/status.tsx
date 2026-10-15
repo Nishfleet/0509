@@ -1,13 +1,12 @@
 import type { Route } from "./+types/status";
 
 import { StatusPage } from "../components/status-page";
+import { pageMeta } from "../lib/legal/meta";
 import { currentStatus } from "../lib/observability/health.server";
+import { STATUS_META } from "../lib/public-routes";
 
 export function meta(_: Route.MetaArgs) {
-  return [
-    { title: "Status · Five to Nine" },
-    { name: "description", content: "Whether Five to Nine is up right now." },
-  ];
+  return pageMeta(STATUS_META);
 }
 
 export async function loader() {

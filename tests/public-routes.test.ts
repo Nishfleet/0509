@@ -1,6 +1,6 @@
 import type { RouteConfigEntry } from "@react-router/dev/routes";
 import { strict as assert } from "node:assert";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -36,9 +36,9 @@ const SESSION_GATE_ALLOWLIST: Readonly<Record<string, string>> = {
   "/login": "sign-in must load without a session",
   "/api/health": "liveness probe has no cookie",
   "/api/docs": "public OpenAPI explorer",
-  "/status": "public status page; walled by Access until LAUNCH, listed in robots Disallow until then",
-  "/security": "public security page; walled by Access until LAUNCH, listed in robots Disallow until then",
-  "/design/landing": "public marketing page",
+  "/status": "public status page, in the sitemap",
+  "/security": "public security page, in the sitemap",
+  "/signup": "no page of its own; redirects to /login, which signs a new visitor up as well as in",
   "/onboarding": "first-run flow after sign-in, not under /app layouts",
   "/onboarding/competitors": "first-run flow after sign-in, not under /app layouts",
   "/onboarding/identity": "first-run flow after sign-in, not under /app layouts",
@@ -92,19 +92,8 @@ const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const isDisallowed = (urlPath: string) => DISALLOWED_PREFIXES.some((prefix) => urlPath.startsWith(prefix));
 
-const withoutComments = (source: string) =>
-  source.replace(
-    /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`)|(\/\*[\s\S]*?\*\/|\/\/[^\n]*)/g,
-    (_match: string, literal: string | undefined) => literal ?? " ",
-  );
-const documentsDeclaringNoindex = (document: string) =>
-  (withoutComments(document).match(/<meta\b[^>]*>/gi) ?? [])
-    .filter((tag) => /\bname\s*=\s*["']robots["']/i.test(tag))
-    .some((tag) => /\bnoindex\b/i.test(tag));
 const modulesDeclaringNoindex = (module: string) =>
-  (withoutComments(module).match(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`/g) ?? []).some((literal) =>
-    /\bnoindex\b/i.test(literal),
-  );
+  (module.match(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`/g) ?? []).some((literal) => /\bnoindex\b/i.test(literal));
 
 const servingSources = (route: RouteConfigEntry) =>
   [join("app", route.file), join("app", "root.tsx")].map((file) => [
@@ -239,13 +228,6 @@ describe("public-route manifest", () => {
     }
     for (const path of SITEMAP_PATHS as readonly string[]) {
       expect(isDisallowed(path), `sitemap path "${path}" is disallowed by robots.txt`).toBe(false);
-      if (path === "/" && existsSync(join(REPO_ROOT, "public/index.html"))) {
-        expect(
-          documentsDeclaringNoindex(readFileSync(join(REPO_ROOT, "public/index.html"), "utf8")),
-          "the document serving / declares a robots noindex",
-        ).toBe(false);
-        continue;
-      }
       const route = routesByUrl.get(path);
       assert(route !== undefined, `sitemap path "${path}" is not a route in app/routes.ts`);
       expect(
@@ -263,9 +245,7 @@ describe("public-route manifest", () => {
   });
 
   it("keeps a noindex page out of the sitemap", () => {
-    const file = join(REPO_ROOT, "public/index.html");
-    const staticHome = existsSync(file) ? readFileSync(file, "utf8") : "";
-    const noindex = documentsDeclaringNoindex(staticHome);
+    const noindex = modulesDeclaringNoindex(readFileSync(join(REPO_ROOT, "app/routes/landing.tsx"), "utf8"));
     expect((SITEMAP_PATHS as readonly string[]).includes("/")).toBe(!noindex);
   });
 

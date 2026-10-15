@@ -23,12 +23,12 @@ for (const route of PUBLIC_ROUTES) {
     await expect(support).toBeVisible();
     await expect(support).toHaveAccessibleName(/\S/);
 
-    await expect(footer.locator('a[href="/security"]')).toHaveCount(route === "/security" ? 1 : 0);
+    await expect(footer.locator('a[href="/security"]')).toHaveCount(1);
+    await expect(footer.locator('a[href="/status"]')).toHaveCount(1);
 
     if (route !== "/") {
       await expect(footer.locator('a[href="/pricing"]')).toBeVisible();
       await expect(footer.locator('a[href="/api/docs"]')).toBeVisible();
-      await expect(footer.locator('a[href="/status"]')).toHaveCount(route === "/security" ? 1 : 0);
     }
 
     const [supportIndex, privacyIndex, termsIndex] = await Promise.all([

@@ -293,14 +293,14 @@ describe("bot wall", () => {
 
   it("walls the page with a 403 Cloudflare-style challenge, then unwalls it", async () => {
     expect((await setWall("on")).status).toBe(200);
-    const walled = await get();
-    expect(walled.status).toBe(403);
-    expect(await walled.text()).toContain("Just a moment...");
+    const challenged = await get();
+    expect(challenged.status).toBe(403);
+    expect(await challenged.text()).toContain("Just a moment...");
 
     expect((await setWall("off")).status).toBe(200);
-    const unwalled = await get();
-    expect(unwalled.status).toBe(200);
-    expect(readPricing(await unwalled.text())).not.toBeNull();
+    const cleared = await get();
+    expect(cleared.status).toBe(200);
+    expect(readPricing(await cleared.text())).not.toBeNull();
   });
 
   it("leaves the break mode alone while the wall turns on and off", async () => {

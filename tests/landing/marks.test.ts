@@ -94,7 +94,7 @@ describe("landing marks", () => {
     expect(html).toContain("2 days ago");
     expect(html).toContain("/app/changes/sig-own/after?w=208");
     expect(html).not.toContain("sig-fourth");
-    expect(html).not.toContain("/design/landing/changes/");
+    expect(html).not.toContain('src="changes/');
 
     const items = html.split('data-signal-id="').slice(1);
     expect(items[0]).toContain('loading="eager"');

@@ -112,7 +112,7 @@ export function LegalPage({ doc }: { doc: LegalDocument }) {
             </p>
           </section>
         </main>
-        <Footer walled={doc.walled === true} />
+        <Footer />
       </div>
     </div>
   );

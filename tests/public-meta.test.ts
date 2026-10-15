@@ -1,18 +1,24 @@
 import { describe, expect, it } from "vitest";
 
 import { PRIVACY } from "../app/lib/legal/privacy";
+import { SECURITY } from "../app/lib/legal/security";
 import { TERMS } from "../app/lib/legal/terms";
-import { legalMeta } from "../app/lib/legal/meta";
+import { legalMeta, pageMeta } from "../app/lib/legal/meta";
 import { pricingMeta } from "../app/lib/pricing-page";
-import type { PUBLIC_PATHS } from "../app/lib/public-routes";
+import { STATUS_META, type PUBLIC_PATHS } from "../app/lib/public-routes";
 import { SITE_URL } from "../app/lib/structured-data";
+import { watchedClaims } from "../app/lib/watched-claims";
+import { meta as landingMeta } from "../app/routes/landing";
 
 type Entry = Record<string, unknown>;
 
 const PAGES: Record<(typeof PUBLIC_PATHS)[number], readonly Entry[]> = {
+  "/": landingMeta({ loaderData: { claims: watchedClaims([], 0) } } as never) as readonly Entry[],
   "/pricing": pricingMeta(),
   "/privacy": legalMeta(PRIVACY),
   "/terms": legalMeta(TERMS),
+  "/security": legalMeta(SECURITY),
+  "/status": pageMeta(STATUS_META),
 };
 
 function field(entries: readonly Entry[], key: string, value: string): Entry[] {
@@ -56,11 +62,16 @@ describe.each(Object.entries(PAGES))("search and AI-answer meta for %s", (path, 
 
   it("ends its breadcrumb on this page and ties its organization to the site", () => {
     const nodes = graph(entries);
+    expect(nodes.some((node) => node["@type"] === "Organization")).toBe(true);
     const crumbs = nodes.find((node) => node["@type"] === "BreadcrumbList");
-    const items = (crumbs?.itemListElement ?? []) as { item: string; position: number }[];
+    if (path === "/") {
+      expect(crumbs).toBeUndefined();
+      return;
+    }
+    if (crumbs === undefined) throw new Error(`${path} has no BreadcrumbList`);
+    const items = (crumbs.itemListElement ?? []) as { item: string; position: number }[];
     expect(items.at(-1)?.item).toBe(`${SITE_URL}${path}`);
     expect(items.map((entry) => entry.position)).toEqual(items.map((_, index) => index + 1));
-    expect(nodes.some((node) => node["@type"] === "Organization")).toBe(true);
   });
 });
 

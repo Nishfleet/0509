@@ -31,6 +31,3 @@
 
 /home-faces.css
   Cache-Control: public, max-age=86400
-
-/
-  Cache-Control: public, max-age=300, no-transform

@@ -1,4 +1,4 @@
-import { type RouteConfig, layout, route } from "@react-router/dev/routes";
+import { type RouteConfig, index, layout, route } from "@react-router/dev/routes";
 
 export default [
   route("login", "routes/login.tsx"),
@@ -6,6 +6,7 @@ export default [
   route("terms", "routes/terms.tsx"),
   route("security", "routes/security.tsx"),
   route("pricing", "routes/pricing.tsx"),
+  route("signup", "routes/signup.ts"),
   route("robots.txt", "routes/robots[.]txt.ts"),
   route("sitemap.xml", "routes/sitemap[.]xml.ts"),
   route(".well-known/http-message-signatures-directory", "routes/[.]well-known.http-message-signatures-directory.ts"),
@@ -54,6 +55,6 @@ export default [
   route("onboarding/competitors", "routes/onboarding.competitors.tsx"),
   route("onboarding/plan", "routes/onboarding.plan.tsx"),
   route("llms.txt", "routes/llms[.]txt.ts"),
-  route("design/landing", "routes/landing.tsx"),
   route("onboarding/identity", "routes/onboarding.identity.tsx"),
+  index("routes/landing.tsx"),
 ] satisfies RouteConfig;

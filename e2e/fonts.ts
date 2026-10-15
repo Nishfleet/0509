@@ -37,7 +37,3 @@ export function expectFaceLoaded(page: Page, family: string, weight?: number) {
     })
     .toBe(true);
 }
-
-export function expectElementFaceLoaded(page: Page, selector: string) {
-  return expect.poll(() => page.evaluate(faceProbe, { selector }), { message: `${selector} resolved face` }).toBe(true);
-}
