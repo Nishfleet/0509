@@ -16,7 +16,7 @@ const OPEN = "Add a competitor";
 function lines(ctx: RivalNudgeContext): string[] {
   const watching =
     ctx.rivals === 0 || ctx.rival_name === null
-      ? "You are not watching a competitor yet, so there is nobody to rank you against."
+      ? "You're not watching a competitor yet, so there is nobody to rank you against."
       : `You are watching ${ctx.rival_name}, so your ranking compares you with one competitor.`;
   return [watching, "Each competitor you add is read the same way and joins your weekly ranking and brief."];
 }

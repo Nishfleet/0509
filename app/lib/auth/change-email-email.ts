@@ -9,7 +9,7 @@ const COPY = {
     button: "Approve change",
     preheader: "Nothing changes until you approve it.",
     ignore:
-      "If this was not you, ignore this message. Nothing changes until both links are used, and your sign-in email stays as it is.",
+      "If this wasn't you, ignore this message. Nothing changes until both links are used, and your sign-in email stays as it is.",
   },
   confirm: {
     subject: "Confirm your new sign-in email for Five to Nine",
@@ -18,7 +18,7 @@ const COPY = {
     button: "Confirm email",
     preheader: "Confirm it and it becomes your sign-in address.",
     ignore:
-      "If you did not ask to change your sign-in email, ignore this message. Nothing changes until the link is used.",
+      "If you didn't ask to change your sign-in email, ignore this message. Nothing changes until the link is used.",
   },
 } as const;
 
