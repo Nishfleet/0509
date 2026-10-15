@@ -114,6 +114,24 @@ describe("the brief preview, against real D1", () => {
     expect(quiet.is_quiet_week).toBe(true);
   });
 
+  it("leaves out a rival that was paused or deleted this week and still reads every mark", async () => {
+    const workspaceId = await seed(4);
+    const run = workspaceId.replace("prev-ws-", "");
+    await env.DB.batch([
+      env.DB.prepare("UPDATE entity SET state = 'off', state_changed_at = ?1 WHERE id = ?2").bind(
+        "2026-10-06T12:00:00.000Z",
+        `prev-r1-${run}`,
+      ),
+      env.DB.prepare("DELETE FROM jev_verdict WHERE signal_id = ?1").bind(`prev-sig2-${run}`),
+      env.DB.prepare("DELETE FROM signal WHERE id = ?1").bind(`prev-sig2-${run}`),
+      env.DB.prepare("DELETE FROM entity WHERE id = ?1").bind(`prev-r2-${run}`),
+    ]);
+    const payload = await previewBrief(workspaceId, SCHEDULE, NOW);
+    expect(payload.brands.map((brand) => brand.name).sort()).toEqual(["Rival 0", "Rival 3", "Self Brand"]);
+    expect(payload.read_this_first.map((mark) => mark.entity_name)).not.toContain("Rival 2");
+    expect(payload.is_quiet_week).toBe(false);
+  });
+
   it("prepares the same number of statements for 2 rivals as for 40, within the ceiling", async () => {
     const smallId = await seed(2);
     const largeId = await seed(40);
