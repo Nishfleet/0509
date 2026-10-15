@@ -8,6 +8,7 @@ import {
   resolveUnjudgedMention,
 } from "../../app/lib/data/signal.server";
 import { isAboutBrand } from "../../app/lib/jev/thresholds";
+import { D6_QUESTION_ID } from "../../app/lib/standing-score";
 
 const SINCE = "2026-09-01T00:00:00.000Z";
 
@@ -321,9 +322,23 @@ describe("competitor feed read", () => {
       [titles[1] ?? "", 0.1929],
       [titles[2] ?? "", 0.1378],
     ]);
-    await env.DB.batch(
-      pending.map((row) => resolveUnjudgedMention(row.id, !isAboutBrand(aboutBrandP.get(row.title) ?? 0))),
-    );
+    await env.DB.batch([
+      ...pending.map((row) =>
+        env.DB.prepare(
+          "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        ).bind(
+          `jv-${row.id}`,
+          fixture.workspaceId,
+          D6_QUESTION_ID,
+          `jh-${row.id}`,
+          row.id,
+          fixture.entityId,
+          aboutBrandP.get(row.title) ?? 0,
+          SINCE,
+        ),
+      ),
+      ...pending.map((row) => resolveUnjudgedMention(row.id, !isAboutBrand(aboutBrandP.get(row.title) ?? 0))),
+    ]);
     const after = await read();
     expect(after).toContain(titles[0]);
     expect(after).not.toContain(titles[1]);

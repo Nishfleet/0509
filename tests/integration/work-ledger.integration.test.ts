@@ -128,7 +128,7 @@ describe("the work ledger against real D1", () => {
     expect(await readWorkLedger(env.DB, { workspaceId: "ws-a", from: FROM, until: UNTIL })).toEqual({
       rivals: 1,
       pages_read: 1,
-      changes_seen: 3,
+      changes_seen: 2,
       changes_told: 1,
       changes_set_aside: 1,
       mentions_read: 2,

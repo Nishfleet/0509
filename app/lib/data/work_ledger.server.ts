@@ -14,7 +14,7 @@ LEFT JOIN snapshot sn ON sn.watch_id = w.id AND sn.page_id IS NOT NULL AND sn.fe
 WHERE e.workspace_id = ?1 AND e.role = 'competitor' AND e.state = 'on'`;
 
 const SELECT_SIGNALS = `SELECT
-  SUM(CASE WHEN s.kind = 'change' THEN 1 ELSE 0 END) AS changes_seen,
+  SUM(CASE WHEN s.kind = 'change' AND ${CHANGE_JUDGED} THEN 1 ELSE 0 END) AS changes_seen,
   SUM(CASE WHEN s.kind = 'change' AND ${CHANGE_ACTS} THEN 1 ELSE 0 END) AS changes_told,
   SUM(CASE WHEN s.kind = 'change' AND ${CHANGE_JUDGED} AND NOT ${CHANGE_ACTS} THEN 1 ELSE 0 END) AS changes_set_aside,
   SUM(CASE WHEN s.kind = 'mention' AND (s.state IS NULL OR s.state <> 'unjudged') THEN 1 ELSE 0 END) AS mentions_read,
