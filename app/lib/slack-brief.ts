@@ -4,6 +4,9 @@ import { neutralizeBareUrls, slackEscape } from "./slack-webhook";
 const BRIEF_LINK = "https://0509.io/app/brief";
 const MAX_MARKS = 3;
 
+export const SLACK_BRIEF_SEND_TRIES = 3;
+export const SLACK_BRIEF_RETRY_DELAY_SECONDS = 10 * 60;
+
 function movementPhrase(payload: BriefPayload): string | null {
   if (payload.headline_is_new) return "your first ranking";
   const movement = payload.headline_movement;

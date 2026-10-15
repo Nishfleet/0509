@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { saveSlackTarget } from "../../app/lib/data/send_target.server";
-import { deliver } from "../../workers/delivery/consumer";
+import { deliver, handleBatch } from "../../workers/delivery/consumer";
 
 const WS = "ws-slack-brief";
 const USER = "user-slack-brief";
@@ -24,7 +24,42 @@ const PAYLOAD = JSON.stringify({
 });
 
 const email = (): SendEmail => ({ send: () => Promise.resolve({ messageId: "unused" }) });
-const envWithEmail = (): Env => ({ ...env, EMAIL: email() }) as Env;
+
+const envWithQueue = (queued: unknown[] = [], sendBatch?: () => Promise<void>): Env =>
+  ({
+    ...env,
+    EMAIL: email(),
+    SEND_EMAIL: {
+      sendBatch:
+        sendBatch ??
+        ((msgs: { body: unknown }[]) => {
+          queued.push(...msgs.map((msg) => msg.body));
+          return Promise.resolve();
+        }),
+    },
+  }) as unknown as Env;
+
+const batchFor = (body: unknown, attempts = 1) => {
+  const acked: number[] = [];
+  const retryOptions: unknown[] = [];
+  const batch: MessageBatch = {
+    queue: "send-email",
+    messages: [
+      {
+        id: "msg-0",
+        timestamp: new Date("2026-09-22T00:00:03Z"),
+        body,
+        attempts,
+        ack: () => acked.push(0),
+        retry: (options?: unknown) => retryOptions.push(options),
+      },
+    ],
+    metadata: { metrics: { backlogCount: 1, backlogBytes: 0 } },
+    ackAll: () => acked.push(0),
+    retryAll: () => retryOptions.push(undefined),
+  };
+  return { batch, acked, retryOptions };
+};
 
 const stubSlack = () => {
   const posts: { url: string; body: string }[] = [];
@@ -82,64 +117,175 @@ describe("weekly brief also posts to Slack", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
-  it("posts the brief once to the connected channel, and a second delivery posts nothing", async () => {
+  const connect = () => saveSlackTarget(env.DB, { workspaceId: WS, webhookUrl: HOOK, now: "2026-09-14T00:00:00Z" });
+
+  const targetId = async () =>
+    (
+      await env.DB.prepare(`SELECT id FROM send_target WHERE workspace_id = ? AND id <> 't-email'`).bind(WS).first<{
+        id: string;
+      }>()
+    )?.id ?? "";
+
+  const slackAttempt = (digestId: string) =>
+    env.DB.prepare(`SELECT status FROM send_attempt WHERE idempotency_key LIKE ?`)
+      .bind(`brief-slack:${digestId}:%`)
+      .first<{ status: string }>();
+
+  it("queues one Slack post after the owner's email, and posting it twice posts once", async () => {
     const posts = stubSlack();
-    await saveSlackTarget(env.DB, { workspaceId: WS, webhookUrl: HOOK, now: "2026-09-14T00:00:00Z" });
+    await connect();
     await turnOnSlackBrief();
     await seedDigest("d-sb-1", "weekly");
+    const queued: unknown[] = [];
 
-    await deliver(envWithEmail(), { digest_id: "d-sb-1" });
-    await deliver(envWithEmail(), { digest_id: "d-sb-1" });
+    const result = await deliver(envWithQueue(queued), { digest_id: "d-sb-1" });
+
+    expect(result.outcome).toBe("sent");
+    expect(queued).toEqual([{ digest_id: "d-sb-1", slack_target_id: await targetId() }]);
+    expect(posts).toHaveLength(0);
+
+    const first = batchFor(queued[0]);
+    await handleBatch(envWithQueue(), first.batch);
+    await handleBatch(envWithQueue(), batchFor(queued[0]).batch);
 
     const slackPosts = posts.filter((post) => post.url === HOOK);
     expect(slackPosts).toHaveLength(1);
     expect(JSON.parse(slackPosts[0]?.body ?? "{}").text).toContain("You're #1 of 3 this week");
+    expect(first.acked).toEqual([0]);
+    expect((await slackAttempt("d-sb-1"))?.status).toBe("sent");
   });
 
-  it("posts nothing while the weekly brief in Slack switch is off, which is the default", async () => {
-    const posts = stubSlack();
-    await saveSlackTarget(env.DB, { workspaceId: WS, webhookUrl: HOOK, now: "2026-09-14T00:00:00Z" });
-    await seedDigest("d-sb-0", "weekly");
+  it("queues nothing again once the Slack post is done", async () => {
+    stubSlack();
+    await connect();
+    await turnOnSlackBrief();
+    await seedDigest("d-sb-1", "weekly");
+    const queued: unknown[] = [];
+    await deliver(envWithQueue(queued), { digest_id: "d-sb-1" });
+    await handleBatch(envWithQueue(), batchFor(queued[0]).batch);
 
-    const result = await deliver(envWithEmail(), { digest_id: "d-sb-0" });
+    const again: unknown[] = [];
+    await deliver(envWithQueue(again), { digest_id: "d-sb-1" });
+
+    expect(again).toEqual([]);
+  });
+
+  it("queues and posts nothing while the weekly brief in Slack switch is off, which is the default", async () => {
+    const posts = stubSlack();
+    await connect();
+    await seedDigest("d-sb-0", "weekly");
+    const queued: unknown[] = [];
+
+    const result = await deliver(envWithQueue(queued), { digest_id: "d-sb-0" });
 
     expect(result.outcome).toBe("sent");
+    expect(queued).toEqual([]);
     expect(posts.filter((post) => post.url === HOOK)).toHaveLength(0);
   });
 
-  it("posts nothing when Slack is not connected", async () => {
+  it("does not post a queued brief if the owner switched it off meanwhile", async () => {
     const posts = stubSlack();
+    await connect();
     await turnOnSlackBrief();
-    await seedDigest("d-sb-2", "weekly");
+    await seedDigest("d-sb-5", "weekly");
+    const queued: unknown[] = [];
+    await deliver(envWithQueue(queued), { digest_id: "d-sb-5" });
+    await env.DB.prepare(`UPDATE workspace SET slack_brief = 0 WHERE id = ?`).bind(WS).run();
 
-    await deliver(envWithEmail(), { digest_id: "d-sb-2" });
+    const switchedOff = batchFor(queued[0]);
+    await handleBatch(envWithQueue(), switchedOff.batch);
 
-    expect(posts).toHaveLength(0);
+    expect(posts.filter((post) => post.url === HOOK)).toHaveLength(0);
+    expect(switchedOff.acked).toEqual([0]);
   });
 
-  it("disconnects Slack when the channel link is revoked, and the brief still counts as sent", async () => {
+  it("queues nothing when Slack is not connected", async () => {
+    stubSlack();
+    await turnOnSlackBrief();
+    await seedDigest("d-sb-2", "weekly");
+    const queued: unknown[] = [];
+
+    await deliver(envWithQueue(queued), { digest_id: "d-sb-2" });
+
+    expect(queued).toEqual([]);
+  });
+
+  it("disconnects Slack when the channel link is revoked, and settles the message", async () => {
     stubSlackStatus(404);
-    await saveSlackTarget(env.DB, { workspaceId: WS, webhookUrl: HOOK, now: "2026-09-14T00:00:00Z" });
+    await connect();
     await turnOnSlackBrief();
     await seedDigest("d-sb-3", "weekly");
+    const queued: unknown[] = [];
+    await deliver(envWithQueue(queued), { digest_id: "d-sb-3" });
 
-    const result = await deliver(envWithEmail(), { digest_id: "d-sb-3" });
+    const run = batchFor(queued[0]);
+    await handleBatch(envWithQueue(), run.batch);
 
-    expect(result.outcome).toBe("sent");
+    expect(run.acked).toEqual([0]);
+    expect(run.retryOptions).toEqual([]);
     expect((await slackConnected(WS))?.is_verified).toBe(0);
   });
 
-  it("keeps Slack connected and still counts the brief as sent when Slack is briefly down", async () => {
-    stubSlackStatus(503);
-    await saveSlackTarget(env.DB, { workspaceId: WS, webhookUrl: HOOK, now: "2026-09-14T00:00:00Z" });
+  it("retries a Slack outage on its own, and the retry posts once", async () => {
+    await connect();
     await turnOnSlackBrief();
     await seedDigest("d-sb-4", "weekly");
+    const queued: unknown[] = [];
+    stubSlackStatus(503);
+    const owner = await deliver(envWithQueue(queued), { digest_id: "d-sb-4" });
 
-    const result = await deliver(envWithEmail(), { digest_id: "d-sb-4" });
+    const down = batchFor(queued[0], 1);
+    await handleBatch(envWithQueue(), down.batch);
+
+    expect(owner.outcome).toBe("sent");
+    expect(down.acked).toEqual([]);
+    expect(down.retryOptions).toEqual([{ delaySeconds: 600 }]);
+    expect((await slackAttempt("d-sb-4"))?.status).toBe("failed");
+    expect((await slackConnected(WS))?.is_verified).toBe(1);
+
+    const posts = stubSlack();
+    const retry = batchFor(queued[0], 2);
+    await handleBatch(envWithQueue(), retry.batch);
+
+    expect(posts.filter((post) => post.url === HOOK)).toHaveLength(1);
+    expect(retry.acked).toEqual([0]);
+    expect((await slackAttempt("d-sb-4"))?.status).toBe("sent");
+  });
+
+  it("gives up after three tries, says so loudly, and leaves the email digest sent", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await connect();
+    await turnOnSlackBrief();
+    await seedDigest("d-sb-6", "weekly");
+    const queued: unknown[] = [];
+    stubSlackStatus(503);
+    await deliver(envWithQueue(queued), { digest_id: "d-sb-6" });
+
+    const last = batchFor(queued[0], 3);
+    await handleBatch(envWithQueue(), last.batch);
+
+    expect(last.acked).toEqual([0]);
+    expect(last.retryOptions).toEqual([]);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("delivery.slack_brief_gave_up"));
+    const digest = await env.DB.prepare(`SELECT status FROM digest WHERE id = 'd-sb-6'`).first<{ status: string }>();
+    expect(digest?.status).toBe("sent");
+  });
+
+  it("never lets a queue failure for the Slack post fail the owner's email", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await connect();
+    await turnOnSlackBrief();
+    await seedDigest("d-sb-7", "weekly");
+
+    const result = await deliver(
+      envWithQueue([], () => Promise.reject(new Error("queue down"))),
+      { digest_id: "d-sb-7" },
+    );
 
     expect(result.outcome).toBe("sent");
-    expect((await slackConnected(WS))?.is_verified).toBe(1);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("delivery.slack_brief_failed"));
   });
 });
