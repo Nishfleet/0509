@@ -419,7 +419,7 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
     });
     await postBriefToSlack(env, message.digest_id).catch((cause: unknown) => {
       const kind = cause instanceof Error ? cause.constructor.name : "unknown";
-      console.error(JSON.stringify({ event: "delivery.slack_brief_failed", kind }));
+      console.error(JSON.stringify({ event: "delivery.slack_brief_failed", kind, digest_id: message.digest_id }));
     });
   }
   return result;
