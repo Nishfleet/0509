@@ -29,6 +29,8 @@ vi.mock("../app/lib/auth.server", () => ({
     },
   }),
   signOut,
+  hasSessionCookie: (request: Request) =>
+    Promise.resolve((request.headers.get("cookie") ?? "").includes("session_token")),
 }));
 
 const env = {} as never;
