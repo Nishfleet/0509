@@ -666,6 +666,53 @@ describe("inline styles survive the attribute they sit in", () => {
   });
 });
 
+describe("what to do next", () => {
+  it("adds one fixed line under a mark whose judged kind has a next step, and nothing otherwise", () => {
+    const [first, second] = payload().read_this_first;
+    const withKinds = payload({
+      read_this_first:
+        first && second
+          ? [
+              { ...first, kind: "pricing" },
+              { ...second, kind: "noise" },
+            ]
+          : [],
+    });
+    const { html, text } = renderBrief(withKinds, CONTEXT);
+    expect(text).toContain("Compare it with your own pricing.");
+    expect(html).toContain("Compare it with your own pricing.");
+    expect(text.match(/Compare it with|Decide whether|Check whether/g)).toHaveLength(1);
+  });
+
+  const LINES: readonly (readonly [string, string])[] = [
+    ["pricing", "Compare it with your own pricing."],
+    ["offer", "Decide whether your customers will notice it and whether to answer."],
+    ["launch", "Check whether it overlaps with what you are building."],
+    ["removal", "See whether their customers now have a reason to look at you."],
+    ["copy", "Read how they now describe themselves and compare it with how you do."],
+    ["breakage", "Their page looks broken. Worth a look if you compete on reliability."],
+    ["unintended", "This looks accidental. It needs no action unless it stays."],
+  ];
+
+  it.each(LINES)(
+    "a %s mark carries its own line in the email and the plain text, and no other kind's",
+    (kind, line) => {
+      const [first] = payload().read_this_first;
+      const { html, text } = renderBrief(payload({ read_this_first: first ? [{ ...first, kind }] : [] }), CONTEXT);
+      expect(html).toContain(line);
+      expect(text).toContain(line);
+      LINES.filter(([other]) => other !== kind).forEach(([, otherLine]) => {
+        expect(html).not.toContain(otherLine);
+        expect(text).not.toContain(otherLine);
+      });
+    },
+  );
+
+  it("says nothing about a mark with no kind, as in briefs composed before this existed", () => {
+    expect(renderBrief(payload(), CONTEXT).text).not.toMatch(/Compare it with|Decide whether|Check whether/);
+  });
+});
+
 describe("an unjudged week", () => {
   it("says so and points to Alerts for what we have seen", () => {
     const { html, text } = renderBrief(payload({ is_unjudged: true, read_this_first: [] }), CONTEXT);

@@ -17,6 +17,7 @@ export default [
     route("app/tester", "routes/app.tester.ts"),
     route("app/alerts", "routes/app.alerts.tsx"),
     route("app/changes/feedback", "routes/app.change-feedback.ts"),
+    route("app/brief-preview", "routes/app.brief-preview.tsx"),
     route("app/brief/:digestId?", "routes/app.brief.tsx"),
   ]),
   layout("routes/app-settings-layout.tsx", [

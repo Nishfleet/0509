@@ -1,5 +1,6 @@
 import { type BriefContext, type BriefPayload, type RenderedBrief } from "../../app/lib/brief-payload";
 import { briefPreheader, briefSubject, isFirstRanking } from "../../app/lib/brief-subject";
+import { nextStepLine } from "../../app/lib/next-step";
 import { COMPETITORS_LINK, newRivalLines, rankTrendLine, sinceStartedLine } from "../../app/lib/brief-since";
 import { escapeHtml } from "../../app/lib/html";
 import { countPhrase } from "../../app/lib/quiet-week";
@@ -54,13 +55,13 @@ const COPY = {
   noUnsubscribe: "Unsubscribe is not available right now. Reply to this email and we will stop sending.",
   degraded: (count: number) =>
     `${n(count)} ${count === 1 ? "source" : "sources"} could not be reached this week, so these counts may be low.`,
-  degradedNamed: (list: string) => `We could not reach ${list} this week, so these counts may be low.`,
+  degradedNamed: (list: string) => `We couldn't reach ${list} this week, so these counts may be low.`,
   unnamedSource: "One of your sources",
   sources: (count: number) => (count === 1 ? "1 source" : `${n(count)} sources`),
   blind: (source: string, when: string) =>
-    `We could not reach ${source} since ${when}, so we cannot say this was a quiet week.`,
+    `We couldn't reach ${source} since ${when}, so we can't say this was a quiet week.`,
   blindNever: (source: string) =>
-    `We have not been able to reach ${source} yet, so we cannot say this was a quiet week.`,
+    `We have not been able to reach ${source} yet, so we can't say this was a quiet week.`,
 } as const;
 
 const ALERTS_LINK = "https://0509.io/app/alerts";
@@ -187,6 +188,7 @@ function renderMark(
   const title = mark.title === "" ? siteName(mark.url) : mark.title;
   const href = safeUrl(mark.url);
 
+  const next = nextStepLine(mark.kind);
   const html = [
     `<div class="brief-rule" style="padding:16px 0;">`,
     `<p class="brief-muted" style="margin:0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(label)}</p>`,
@@ -197,6 +199,11 @@ function renderMark(
     renderMarkBeforeAfter(mark),
     renderMarkThumbnail(thumb, href),
     `<p style="margin:8px 0 0;font-family:${FONT};font-size:14px;line-height:20px;">${escapeHtml(mark.jev_reason)}</p>`,
+    ...(next === null
+      ? []
+      : [
+          `<p class="brief-muted" style="margin:4px 0 0;font-family:${FONT};font-size:14px;line-height:20px;">${escapeHtml(next)}</p>`,
+        ]),
     `</div>`,
   ].join("");
 
@@ -206,6 +213,7 @@ function renderMark(
     title ? `${title} — ${mark.url}` : mark.url,
     mark.before !== null && mark.after !== null ? `${mark.before} → ${mark.after}` : "",
     mark.jev_reason,
+    next ?? "",
   ]
     .filter((line) => line !== "")
     .join("\n");

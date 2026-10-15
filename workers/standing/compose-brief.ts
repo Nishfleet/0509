@@ -11,6 +11,7 @@ import { readWorkLedger } from "../../app/lib/data/work_ledger.server";
 import { UNJUDGED_WEEK_LINE, readThisFirstLine } from "../../app/lib/read-this-first";
 import { effectiveKindSql } from "../../app/lib/source-kind";
 import { sourceName } from "../../app/lib/source-name";
+import type { RankedEntity } from "../../app/lib/standing-score";
 import type { JudgedWeek } from "./read-this-first";
 import { readBrandMoves } from "./brand-moves";
 import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
@@ -26,6 +27,10 @@ FROM standing s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.state = 'on'
 WHERE s.workspace_id = ?1 AND s.week_start_at = ?2
 ORDER BY s.rank ASC, s.entity_id ASC`;
+
+const PREVIEW_ENTITIES = `SELECT e.id AS entity_id, COALESCE(e.name, e.domain) AS name, e.role AS role, NULL AS rank, NULL AS movement
+FROM entity e
+WHERE e.workspace_id = ?1 AND e.state = 'on'`;
 
 const PREVIOUS_FROZEN_WEEKS = `SELECT COUNT(DISTINCT week_start_at) AS weeks
 FROM standing
@@ -85,7 +90,8 @@ ORDER BY state_changed_at ASC`;
 const PICKED_SIGNALS = `SELECT s.id AS signal_id, s.entity_id AS entity_id, COALESCE(NULLIF(e.name, ''), e.domain) AS entity_name,
        s.title AS title, s.summary AS summary, s.url AS url, s.observed_at AS observed_at,
        ${effectiveKindSql("src")} AS source_kind, src.platform AS source_platform,
-       (SELECT v.reason FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id IN ('noteworthy_change', 'mention_matters') AND v.reason IS NOT NULL ORDER BY v.decided_at DESC LIMIT 1) AS verdict_reason
+       (SELECT v.reason FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id IN ('noteworthy_change', 'mention_matters') AND v.reason IS NOT NULL ORDER BY v.decided_at DESC LIMIT 1) AS verdict_reason,
+       (SELECT k.choice FROM jev_verdict k WHERE k.signal_id = s.id AND k.question_id = 'change_kind' AND k.choice IS NOT NULL ORDER BY k.decided_at DESC LIMIT 1) AS change_kind
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1
 JOIN source src ON src.id = s.source_id
@@ -152,6 +158,7 @@ const pickedSignalRows = z.array(
     source_kind: z.string(),
     source_platform: z.string(),
     verdict_reason: z.string().nullable(),
+    change_kind: z.string().nullable(),
   }),
 );
 
@@ -160,6 +167,7 @@ export interface ComposeInput {
   schedule: BriefSchedule;
   week: BriefWeek;
   readThisFirst: JudgedWeek;
+  standing?: readonly RankedEntity[];
 }
 
 export function pausedSentence(names: readonly string[]): string | null {
@@ -167,6 +175,14 @@ export function pausedSentence(names: readonly string[]): string | null {
   const last = required(names.at(-1), "compose-brief.paused-names");
   if (names.length === 1) return `${last} paused, so every brand below it moved up.`;
   return `${names.slice(0, -1).join(", ")} and ${last} paused, so every brand below them moved up.`;
+}
+
+function brandsFromStanding(results: unknown, standing: readonly RankedEntity[]) {
+  const entities = new Map(rankedBrandRows.parse(results).map((row) => [row.entity_id, row]));
+  return standing.flatMap((ranked) => {
+    const entity = entities.get(ranked.entity_id);
+    return entity === undefined ? [] : [{ ...entity, rank: ranked.rank, movement: ranked.movement }];
+  });
 }
 
 type SourceCoverage = z.infer<typeof sourceCoverageRows>[number];
@@ -177,7 +193,9 @@ async function loadBriefRows(db: D1Database, input: ComposeInput) {
   const startsAt = input.week.startsAt.toISOString();
   const closesAt = input.week.closesAt.toISOString();
   const [ranked, frozen, counts, coverage, incidents, pausedRows, pickedRows, totalRows, rivalRows] = await db.batch([
-    db.prepare(RANKED_BRANDS).bind(input.workspaceId, startsAt),
+    input.standing === undefined
+      ? db.prepare(RANKED_BRANDS).bind(input.workspaceId, startsAt)
+      : db.prepare(PREVIEW_ENTITIES).bind(input.workspaceId),
     db.prepare(PREVIOUS_FROZEN_WEEKS).bind(input.workspaceId, startsAt),
     db.prepare(SIGNAL_COUNTS).bind(input.workspaceId, startsAt, closesAt),
     db.prepare(SOURCE_COVERAGE).bind(input.workspaceId, startsAt, closesAt),
@@ -188,7 +206,10 @@ async function loadBriefRows(db: D1Database, input: ComposeInput) {
     db.prepare(NEW_RIVAL).bind(input.workspaceId),
   ]);
   return {
-    brands: rankedBrandRows.parse(required(ranked, "compose-brief.ranked").results),
+    brands:
+      input.standing === undefined
+        ? rankedBrandRows.parse(required(ranked, "compose-brief.ranked").results)
+        : brandsFromStanding(required(ranked, "compose-brief.ranked").results, input.standing),
     previousWeeks: frozenWeekRows.parse(required(frozen, "compose-brief.frozen").results)[0]?.weeks ?? 0,
     countsByEntity: new Map(
       signalCountRows.parse(required(counts, "compose-brief.counts").results).map((row) => [row.entity_id, row]),
@@ -225,6 +246,7 @@ function buildMarks(picks: readonly string[], pickedById: ReadonlyMap<string, Pi
         before: null,
         after: null,
         jev_reason: row.verdict_reason ?? row.summary ?? row.title ?? "",
+        kind: row.change_kind,
       },
     ];
   });

@@ -117,9 +117,9 @@ describe("the quiet week brief", () => {
       }),
       CONTEXT,
     );
-    expect(text).toContain("We could not reach Reddit mentions since");
+    expect(text).toContain("We couldn't reach Reddit mentions since");
     expect(text).not.toContain("reddit.search");
-    expect(text).toContain("so we cannot say this was a quiet week.");
+    expect(text).toContain("so we can't say this was a quiet week.");
     expect(text).not.toContain("Quiet week");
     expect(text).not.toContain("2026-09-19T08:00:00.000Z");
   });
@@ -149,7 +149,7 @@ describe("the quiet week brief", () => {
       }),
       CONTEXT,
     );
-    expect(text).toContain("so we cannot say this was a quiet week.");
+    expect(text).toContain("so we can't say this was a quiet week.");
     expect(text).toContain("This week we read 31 pages across 5 competitors; saw no changes.");
   });
 

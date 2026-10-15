@@ -30,7 +30,7 @@ export const EYEBROW_STYLE = `margin:0 0 8px;font-family:${MONO};font-size:12px;
 export const HEADLINE = `margin:0;font-family:${FONT};font-size:24px;line-height:30px;font-weight:800;letter-spacing:-0.02em;`;
 export const BODY_STYLE = `margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;`;
 
-const BUTTON = `display:inline-block;padding:12px 20px;border-radius:6px;font-weight:700;text-decoration:none;`;
+const BUTTON = `display:inline-block;padding:12px 20px;border-radius:6px;font-family:${FONT};font-size:16px;line-height:20px;font-weight:700;text-decoration:none;`;
 
 export function linkParagraph(label: string, link: string): string {
   return [
