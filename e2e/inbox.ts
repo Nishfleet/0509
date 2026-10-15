@@ -611,10 +611,10 @@ export function run(db: DatabaseSync, sql: string, ...values: (string | number |
 async function seedPreviewSessionOnce<T>(
   prefix: string,
   seed: (context: { db: DatabaseSync; suffix: string; userId: string }) => T,
-  options: { livePlan: boolean } = { livePlan: true },
+  options: { livePlan: boolean; email?: string } = { livePlan: true },
 ): Promise<{ cookie: string; seeded: T }> {
   const suffix = crypto.randomUUID().slice(0, 8);
-  const email = `${prefix}-${suffix}@0509.io`;
+  const email = options.email ?? `${prefix}-${suffix}@0509.io`;
   const db = new DatabaseSync(previewDatabasePath(), { timeout: 15_000 });
   db.exec("PRAGMA busy_timeout = 15000");
   db.exec("PRAGMA foreign_keys = ON");
@@ -658,7 +658,7 @@ async function seedPreviewSessionOnce<T>(
 export async function seedPreviewSession<T = void>(
   prefix: string,
   seed: (context: { db: DatabaseSync; suffix: string; userId: string }) => T,
-  options: { livePlan: boolean } = { livePlan: true },
+  options: { livePlan: boolean; email?: string } = { livePlan: true },
 ): Promise<{ cookie: string; seeded: T }> {
   let seeded: { cookie: string; seeded: T } | undefined;
   await expect(async () => {
