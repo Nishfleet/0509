@@ -137,6 +137,21 @@ async function judgeAll(context: JudgeContext, located: readonly LocatedItem[]):
   return collected;
 }
 
+export async function readWeekPicks(
+  db: D1Database,
+  input: { workspaceId: string; startsAt: string; closesAt: string },
+  limit: number,
+): Promise<string[]> {
+  const result = await db
+    .prepare(WEEK_ITEMS)
+    .bind(input.workspaceId, input.startsAt, input.closesAt, D3_QUESTION_ID, D6_QUESTION_ID)
+    .all();
+  return weekItemRows
+    .parse(result.results)
+    .slice(0, limit)
+    .map((row) => row.signal_id);
+}
+
 export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<JudgedWeek> {
   const [weekItemResult, entityResult] = await db.batch([
     db.prepare(WEEK_ITEMS).bind(input.workspaceId, input.startsAt, input.closesAt, D3_QUESTION_ID, D6_QUESTION_ID),

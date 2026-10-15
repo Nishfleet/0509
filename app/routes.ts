@@ -17,6 +17,7 @@ export default [
     route("app/tester", "routes/app.tester.ts"),
     route("app/alerts", "routes/app.alerts.tsx"),
     route("app/changes/feedback", "routes/app.change-feedback.ts"),
+    route("app/brief-preview", "routes/app.brief-preview.tsx"),
     route("app/brief/:digestId?", "routes/app.brief.tsx"),
   ]),
   layout("routes/app-settings-layout.tsx", [
@@ -29,6 +30,7 @@ export default [
   layout("routes/app-session-layout.tsx", [
     route("app/share.png", "routes/app.share[.]png.ts"),
     route("app/logos/:entityId", "routes/app.logo.ts"),
+    route("app/admin/retention", "routes/app.admin.retention.tsx"),
   ]),
   route("app/changes/:signalId/:side", "routes/app.change-shot.ts"),
   route("u/:token", "routes/u.$token.tsx"),

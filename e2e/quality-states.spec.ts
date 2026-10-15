@@ -95,10 +95,12 @@ async function scanBothSchemes(
   testInfo: TestInfo,
   quality: Awaited<ReturnType<typeof startQuality>>,
   label: string,
+  screen: RegExp,
 ): Promise<void> {
   for (const colorScheme of SCHEMES) {
     await page.emulateMedia({ colorScheme });
     await scanPage(page, testInfo, quality, `${label} ${colorScheme} ${testInfo.project.name}`, {
+      screen,
       keyboard: colorScheme === "light",
     });
   }
@@ -119,7 +121,7 @@ test("the competitors and plan steps of onboarding pass the quality checks", asy
   await page.goto("/app");
   await expect(page).toHaveURL(/\/onboarding\/competitors$/);
   await expect(page.getByRole("list", { name: "Watching" })).toBeVisible();
-  await scanBothSchemes(page, testInfo, quality, "/onboarding/competitors");
+  await scanBothSchemes(page, testInfo, quality, "/onboarding/competitors", /competitors|watching/i);
 
   await page.context().clearCookies();
   const plan = await seedPreviewSession(
@@ -133,7 +135,7 @@ test("the competitors and plan steps of onboarding pass the quality checks", asy
   await page.goto("/app");
   await expect(page).toHaveURL(/\/onboarding\/plan$/);
   await expect(page.getByRole("heading", { name: "Start your trial" })).toBeVisible();
-  await scanBothSchemes(page, testInfo, quality, "/onboarding/plan");
+  await scanBothSchemes(page, testInfo, quality, "/onboarding/plan", /start your trial/i);
 });
 
 for (const state of BILLING_STATES) {
@@ -154,7 +156,7 @@ for (const state of BILLING_STATES) {
     const plan = page.getByRole("region", { name: "Your plan" });
     await expect(plan).toContainText(state.line);
     await expect(plan.getByRole("button", { name: state.button })).toBeVisible();
-    await scanBothSchemes(page, testInfo, quality, `/app/settings ${state.name}`);
+    await scanBothSchemes(page, testInfo, quality, `/app/settings ${state.name}`, /^settings$/i);
   });
 }
 
@@ -174,13 +176,13 @@ test("a refused delete and a refused add show their alert and pass the quality c
   await page.getByRole("button", { name: "Delete my account" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "doesn't match your email" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Delete your account" })).toBeVisible();
-  await scanBothSchemes(page, testInfo, quality, "/app/settings delete refused");
+  await scanBothSchemes(page, testInfo, quality, "/app/settings delete refused", /^settings$/i);
 
   await page.goto("/app/competitors");
-  await page.getByLabel("Add a competitor we missed").fill("not a website");
+  await page.getByLabel("Add a competitor we missed").fill("@refused");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.locator("#add-competitor-error")).toBeVisible();
-  await scanBothSchemes(page, testInfo, quality, "/app/competitors add refused");
+  await scanBothSchemes(page, testInfo, quality, "/app/competitors add refused", /^competitors$/i);
 });
 
 test("teammates: an invited address, a refused repeat and a removal pass the quality checks", async ({
@@ -203,12 +205,12 @@ test("teammates: an invited address, a refused repeat and a removal pass the qua
   await invite();
   const row = page.getByRole("listitem").filter({ hasText: teammate });
   await expect(row).toContainText("waiting for them to confirm");
-  await scanBothSchemes(page, testInfo, quality, "/app/settings teammate invited");
+  await scanBothSchemes(page, testInfo, quality, "/app/settings teammate invited", /^settings$/i);
 
   await invite();
   await expect(page.locator("#teammate-error")).toBeVisible();
   await expect(page.getByLabel("Teammate's email")).toHaveAttribute("aria-invalid", "true");
-  await scanBothSchemes(page, testInfo, quality, "/app/settings teammate refused");
+  await scanBothSchemes(page, testInfo, quality, "/app/settings teammate refused", /^settings$/i);
 
   await page.getByRole("button", { name: `Remove ${teammate}` }).click();
   await expect(row).toBeHidden();
@@ -228,6 +230,7 @@ test("the how this is ranked dialog opens, passes the quality checks and returns
   for (const colorScheme of SCHEMES) {
     await page.emulateMedia({ colorScheme });
     await scanPage(page, testInfo, quality, `how ranked dialog ${colorScheme} ${testInfo.project.name}`, {
+      screen: /how this is ranked/i,
       keyboard: false,
     });
   }

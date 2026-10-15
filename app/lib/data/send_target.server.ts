@@ -49,6 +49,9 @@ WHERE workspace_id = ?
 const CONFIRM_EMAIL_TARGET_BY_TOKEN = `UPDATE send_target SET is_verified = 1, verify_token = NULL, verify_token_expires_at = NULL
 WHERE verify_token = ? AND verify_token_expires_at > ?`;
 
+const SELECT_ROLE_BY_TOKEN = `SELECT role FROM send_target
+WHERE verify_token = ? AND verify_token_expires_at > ?`;
+
 const SELECT_EMAIL_TARGET_BY_TOKEN = `SELECT target_value FROM send_target
 WHERE verify_token = ? AND verify_token_expires_at > ?`;
 
@@ -118,6 +121,19 @@ export async function readEmailTargetByToken(
   return row?.target_value ?? null;
 }
 
+const roleByTokenRow = z.object({ role: z.enum(["owner", "teammate"]) });
+
+export async function readTargetRoleByToken(
+  db: TargetDb,
+  input: { token: string; now: string },
+): Promise<"owner" | "teammate" | null> {
+  const tokenHash = await sha256Hex(input.token);
+  const row = roleByTokenRow
+    .nullable()
+    .parse(await db.prepare(SELECT_ROLE_BY_TOKEN).bind(tokenHash, input.now).first());
+  return row?.role ?? null;
+}
+
 export async function confirmEmailTargetByToken(db: TargetDb, input: { token: string; now: string }): Promise<void> {
   const tokenHash = await sha256Hex(input.token);
   await db.prepare(CONFIRM_EMAIL_TARGET_BY_TOKEN).bind(tokenHash, input.now).run();
@@ -127,6 +143,15 @@ const SELECT_SLACK_TARGET = `SELECT st.id, st.target_value FROM send_target st
 JOIN channel c ON c.id = st.channel_id
 WHERE st.workspace_id = ? AND c.key = 'slack' AND c.is_enabled = 1 AND st.is_verified = 1
 ORDER BY st.created_at ASC
+LIMIT 1`;
+
+const readSlackDisconnectedRow = z.object({ found: z.number() });
+
+const DISCONNECT_SLACK_TARGET = `UPDATE send_target SET is_verified = 0 WHERE id = ?`;
+
+const SELECT_DISCONNECTED_SLACK = `SELECT 1 AS found FROM send_target st
+JOIN channel c ON c.id = st.channel_id
+WHERE st.workspace_id = ? AND c.key = 'slack' AND st.is_verified = 0
 LIMIT 1`;
 
 const DELETE_SLACK_TARGET = `DELETE FROM send_target
@@ -301,6 +326,17 @@ export async function runNightlySlackBackfill(db: D1Database, options: { maxRows
 
 export async function removeSlackTarget(db: D1Database, workspaceId: string): Promise<void> {
   await db.prepare(DELETE_SLACK_TARGET).bind(workspaceId).run();
+}
+
+export async function disconnectSlackTarget(db: D1Database, targetId: string): Promise<void> {
+  await db.prepare(DISCONNECT_SLACK_TARGET).bind(targetId).run();
+}
+
+export async function readSlackDisconnected(db: D1Database, workspaceId: string): Promise<boolean> {
+  return (
+    readSlackDisconnectedRow.nullable().parse(await db.prepare(SELECT_DISCONNECTED_SLACK).bind(workspaceId).first()) !==
+    null
+  );
 }
 
 export async function saveSlackTarget(

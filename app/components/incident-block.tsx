@@ -62,7 +62,7 @@ export function IncidentBlock({
       aria-labelledby="incident-block-title"
       className="mt-8 border border-ink p-6 shadow-[5px_5px_0_0_var(--color-red)]"
     >
-      <p className="font-mono text-[0.75rem] tracking-[0.04em]">OPEN PROBLEM</p>
+      <p className="font-mono text-[0.75rem] tracking-[0.04em] uppercase">Open problem</p>
       <h2 id="incident-block-title" className="mt-2 font-display text-row-name font-bold [overflow-wrap:anywhere]">
         {title}
       </h2>
@@ -79,8 +79,8 @@ export function IncidentBlock({
           Why we flagged this
         </summary>
         <p className="mt-2 leading-[1.65]">
-          We count your homepage as broken when it shows a server error, a page not found error (404 or 410), or does
-          not load at all, two checks in a row, five minutes apart.
+          We count your homepage as broken when it shows a server error, a page not found error (404 or 410), or doesn't
+          load at all, two checks in a row, five minutes apart.
         </p>
       </details>
     </section>

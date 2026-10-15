@@ -5,10 +5,6 @@ import { describe, expect, it } from "vitest";
 import { LegalPage } from "../../app/components/legal-page";
 import { PRIVACY } from "../../app/lib/legal/privacy";
 
-// 0509#6532: the on-this-page links on /privacy and /terms were one text line
-// (~15px) tall, under the 44px minimum in DESIGN.md:473. This renders the real
-// page and measures the nav's own anchors, so a future edit that drops the
-// class is red here rather than only on a phone.
 describe("the legal page on-this-page list", () => {
   const html = renderToStaticMarkup(createElement(LegalPage, { doc: PRIVACY }));
   const nav = /<nav aria-label="On this page"[\s\S]*?<\/nav>/.exec(html)?.[0] ?? "";

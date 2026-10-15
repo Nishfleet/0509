@@ -75,8 +75,9 @@ you.
   ESLint enforces is same-line comments and the workaround vocabulary
   (`todo`, `hack`, `for now`, `revisit`, …); the rest is the reviewer's job.
   Put the reason in the commit message, where it is read at the moment it
-  matters. Config files and tests are exempt.
+  matters. Config files are exempt.
 - **No user data in logs or Sentry.** `no-restricted-syntax` (NO_USER_DATA_IN_LOGS). Source: 0509#5776.
+- **Copy has a bar.** `tests/user-copy-bar.test.ts` scans every string people read (routes, components, `app/lib`, all of `workers/`, `public/index.html`) for the phrases in `tests/user-copy-phrases.ts`, for Title Case button labels and for "rival" in screen text. To ban a phrase, add a line to that file; to exempt a path, add it there with the reason. Source: coordinator ask under Nish's polish goal, 2026-10-15.
 - **Tests never skip, focus or sleep.** A vitest test is never focused or disabled
   (`vitest/no-focused-tests`, `vitest/no-disabled-tests`); an e2e spec is never
   focused or unconditionally skipped, never waits on a fixed sleep and never
@@ -142,7 +143,7 @@ workers out on 2026-09-23. Chromium is already installed on this host
 ## Reproducing a user report
 
 1. **Read the raw report.** `npx wrangler d1 execute 0509 --remote --command "select raw from support_report where id = '<id>'"`, where `<id>` is the report id in the issue body. This is a read; never run any other statement against `--remote`. Never paste any of the raw text into the issue, the PR, a commit message or a spec.
-2. **Map the report to rows of `.agents/skills/verify/feature-map.md`** by the paths in the issue body and the words in the raw text, following the procedure in `.agents/skills/verify/SKILL.md#reproduce-a-vague-user-report` — link it, do not restate it. If no row matches, say in the issue whether the map is missing a feature or the report is not about this product, and stop.
+2. **Map the report to rows of `.agents/skills/verify/feature-map.md` and `.agents/skills/verify/feature-map/`** by the paths in the issue body and the words in the raw text, following the procedure in `.agents/skills/verify/SKILL.md#reproduce-a-vague-user-report` — link it, do not restate it. If no row matches, say in the issue whether the map is missing a feature or the report is not about this product, and stop.
 3. **Drive the local lane through the e2e suite.** `PLAYWRIGHT_TEST_BASE_URL` unset, then `npm run e2e -- e2e/report-<id>.spec.ts` (simulated email, local D1, AI off). Do not run it against https://0509.io: each production sign-in sends a real email and churns production D1. If the report depends on production-only data, say so in the issue instead. The deliverable is one spec `e2e/report-<id>.spec.ts` whose test title contains the report id. If the report reproduces, the test asserts the correct behaviour and is marked `test.fail()`, so CI stays green until the fix lands. If it does not reproduce, the test has no `test.fail()` and the issue gets a no-repro comment listing each step tried with its UTC timestamp.
 4. **The PR that fixes the report** removes the `test.fail()` from that spec and keeps the spec.
 
@@ -154,8 +155,8 @@ they name were plans and many never existed. The real layout is below.
 
 - `app/routes.ts` — the route registry. A route not listed here cannot be
   reached. `.agents/skills/verify/feature-map.md` describes every one of them and is updated in
-  the same PR that changes one. Search, never read whole: grep it for the
-  route path (`grep -n "app/alerts" .agents/skills/verify/feature-map.md`) and
+  the same PR that changes one, one file per row under `feature-map/` so parallel PRs never edit the same lines. Search, never read whole: grep it for the
+  route path (`grep -rn "app/alerts" .agents/skills/verify/feature-map.md .agents/skills/verify/feature-map/`) and
   read only that row.
 - `app/routes/*` — route modules: loader, action, component.
 - `app/components/` — shared UI.
@@ -176,7 +177,7 @@ they name were plans and many never existed. The real layout is below.
   `tests/integration/` and `tests/unit/site/` run in the workers project.
   The site tests need HTMLRewriter, which exists only in workerd. The
   integration project also applies migrations to local D1.
-- `e2e/` — Playwright. Every test traces to a row in `.agents/skills/verify/feature-map.md`.
+- `e2e/` — Playwright. Every test traces to a row in `.agents/skills/verify/feature-map.md` or `.agents/skills/verify/feature-map/`.
 
 ## Stack
 
@@ -233,6 +234,11 @@ Service daily quota (Nish 2026-09-28).
 
 - Nothing merges on its own author's say-so. An independent reviewer or Nish,
   never the author reviewing itself.
+- A claim PR whose current head carries a `coordinator-approval: <head sha>`
+  comment and has no red required check on the PR itself is finished: exit 0
+  without pushing. A push to that head invalidates the approval, restarts the
+  review loop and can strand the PR after a merge-queue dequeue (0509#7084,
+  0509#7323).
 - A feature's finish line cites a real production record — a row id, a Workflow instance id or a run URL — created after the merge, not only a green test (0509#5736).
 - Production state stays gated: secrets and provider mutations need Nish's
   explicit authorization. Merging a reviewed green PR is ordinary work.

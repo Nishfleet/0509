@@ -39,8 +39,8 @@ export function errorCopy(error: unknown, pathname: string): ErrorCopy {
     };
   }
   return {
-    title: "Something went wrong",
-    detail: "This is a problem on our side and we have been alerted. Please try again in a minute.",
+    title: "We hit a problem on our side",
+    detail: "We have been alerted. Try again in a minute.",
     retry: true,
   };
 }

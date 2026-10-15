@@ -8,16 +8,6 @@ import {
   type IncidentOpenContext,
 } from "../../workers/delivery/incident-template";
 
-/**
- * The P7.5 slice: the open-incident email and its one-line "fixed" follow-up
- * are pure renders of plain values — no database, no send. The contract in
- * docs/REBUILD-DELIVERY.md line 42 is what these cases pin: say what broke,
- * when it was seen, what changed, when we re-check, and where to look.
- *
- * 0509#4751: the moments are the workspace's own wall clock, not UTC, so
- * OPEN/FIXED carry a timezone and the two pinned instants prove the shift.
- */
-
 const OPEN: IncidentOpenContext = {
   site: "shop.example",
   kind: "pricing section missing",
@@ -95,9 +85,10 @@ describe("fixed incident email", () => {
     expect(renderIncidentFixed({ ...FIXED, kind: "breakage" }).subject).toBe("shop.example looks fixed");
   });
 
-  it("is one line of news before the footer and support line", () => {
+  it("is its subject, one line of news and the link before the footer and support line", () => {
     const { text } = renderIncidentFixed(FIXED);
-    expect(text.split("\n")).toHaveLength(4);
+    expect(text.split("\n\n")).toHaveLength(4);
+    expect(text.split("\n")[0]).toBe("shop.example looks fixed: pricing section missing");
     expect(text).toContain("We re-checked shop.example at Wed 23 Sept, 05:52 and it looks fixed.");
     expect(text).toContain("https://0509.io/site/inc_1");
   });
@@ -189,11 +180,6 @@ describe("the voice", () => {
   });
 });
 
-/**
- * 0509#7020: the incident emails escape their sites by hand. These tables
- * plant the injection probe in every string field, one row per field, so a
- * missed escapeHtml turns CI red — the plain template modules stay.
- */
 describe("every string field carries the injection probe escaped, never raw (0509#7020)", () => {
   const openRows: [string, Partial<IncidentOpenContext>][] = [
     ["site", { site: PROBE }],

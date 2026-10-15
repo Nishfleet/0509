@@ -95,7 +95,7 @@ export function Hero({ nouns }: { nouns: string }) {
             Know where you stand. And who’s gaining on you.
           </h1>
           <p className="mt-6 max-w-[38rem] text-[clamp(1.05rem,1.4vw,1.2rem)] leading-[1.55] text-ink-soft">
-            We watch {nouns} across your market. We find your competitors for you, so you do not need to know who they
+            We watch {nouns} across your market. We find your competitors for you, so you don't need to know who they
             are.
           </p>
           <div className="max-w-[38rem]">

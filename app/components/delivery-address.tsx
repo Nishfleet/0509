@@ -2,6 +2,7 @@ import { Form, useNavigation } from "react-router";
 
 import { BLOCK_HEADING } from "./page-heading";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 
 function describedByIds(hasError: boolean, showUnconfirmed: boolean): string | undefined {
   const ids = [
@@ -36,7 +37,7 @@ function AddressFields({
       <label htmlFor="delivery-address-input" className="font-mono text-meta text-ink-soft uppercase">
         Send the brief to
       </label>
-      <input
+      <Input
         id="delivery-address-input"
         name="address"
         type="email"
@@ -47,7 +48,6 @@ function AddressFields({
         spellCheck={false}
         required
         defaultValue={delivery.address}
-        className="h-11 border border-line px-3"
         aria-invalid={hasError ? true : undefined}
         aria-describedby={describedByIds(hasError, showUnconfirmed)}
       />
@@ -55,7 +55,7 @@ function AddressFields({
       {suppressed ? (
         <label className="flex min-h-11 items-center gap-3 leading-[1.55]">
           <input type="checkbox" name="resume" value="yes" className="size-5 shrink-0 accent-green" />
-          Send the brief to this address again
+          Send the brief and alerts to this address again
         </label>
       ) : null}
       {hasError ? (

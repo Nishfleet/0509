@@ -74,11 +74,13 @@ describe("change sign-in email", () => {
     expect(linkTo(old)).toContain("verify-email");
     expect(await exists(old)).toBe(true);
 
-    await open(linkTo(old), cookie);
+    const approved = await open(linkTo(old), cookie);
+    expect(approved.headers.get("location")).toContain("/app/settings?email=approved");
     expect(mailCount(next)).toBe(1);
     expect(await exists(next)).toBe(false);
 
-    await open(linkTo(next), cookie);
+    const confirmed = await open(linkTo(next), cookie);
+    expect(confirmed.headers.get("location")).toContain("/app/settings?email=changed");
     expect(await exists(next)).toBe(true);
     expect(await exists(old)).toBe(false);
   });

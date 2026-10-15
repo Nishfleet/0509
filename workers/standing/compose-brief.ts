@@ -3,14 +3,20 @@ import { z } from "zod";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule, BriefWeek } from "../../app/lib/brief-schedule";
 import { nextBriefAt } from "../../app/lib/brief-schedule";
-import { quietWeekLine } from "../../app/lib/quiet-week";
+import { readRivalFacts } from "../../app/lib/data/rival_baseline.server";
+import { firstBriefLine, quietWeekLine } from "../../app/lib/quiet-week";
+import { baselineLines } from "../../app/lib/rival-baseline";
+import { quietLedgerLine, type WorkLedger } from "../../app/lib/work-ledger";
+import { readWorkLedger } from "../../app/lib/data/work_ledger.server";
 import { UNJUDGED_WEEK_LINE, readThisFirstLine } from "../../app/lib/read-this-first";
 import { effectiveKindSql } from "../../app/lib/source-kind";
 import { sourceName } from "../../app/lib/source-name";
+import type { RankedEntity } from "../../app/lib/standing-score";
 import type { JudgedWeek } from "./read-this-first";
 import { readBrandMoves } from "./brand-moves";
 import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { required } from "../../app/lib/required";
+import { readMarkWording } from "../../app/lib/data/mark_wording.server";
 
 const RANKED_BRANDS = `SELECT s.entity_id AS entity_id,
        COALESCE(e.name, e.domain) AS name,
@@ -22,7 +28,11 @@ JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.st
 WHERE s.workspace_id = ?1 AND s.week_start_at = ?2
 ORDER BY s.rank ASC, s.entity_id ASC`;
 
-const PREVIOUS_FROZEN_WEEKS = `SELECT COUNT(*) AS weeks
+const PREVIEW_ENTITIES = `SELECT e.id AS entity_id, COALESCE(e.name, e.domain) AS name, e.role AS role, NULL AS rank, NULL AS movement
+FROM entity e
+WHERE e.workspace_id = ?1 AND e.state = 'on'`;
+
+const PREVIOUS_FROZEN_WEEKS = `SELECT COUNT(DISTINCT week_start_at) AS weeks
 FROM standing
 WHERE workspace_id = ?1 AND rank IS NOT NULL AND week_start_at < ?2`;
 
@@ -44,6 +54,13 @@ WHERE s.workspace_id = ?1 AND s.kind = 'change' AND s.observed_at < ?2 AND s.is_
 const EARLIER_RANK = `SELECT rank, week_start_at FROM standing
 WHERE workspace_id = ?1 AND entity_id = ?2 AND rank IS NOT NULL AND week_start_at <= ?3
 ORDER BY week_start_at DESC LIMIT 1`;
+
+const NEW_RIVAL = `SELECT COALESCE(NULLIF(candidate_name, ''), candidate_domain) AS name, candidate_domain AS domain, verdict_reason AS reason
+FROM suggestion
+WHERE workspace_id = ?1 AND kind = 'add' AND status = 'pending' AND candidate_domain IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity e WHERE e.workspace_id = suggestion.workspace_id AND e.domain = suggestion.candidate_domain)
+ORDER BY verdict_p IS NULL, verdict_p DESC, created_at ASC
+LIMIT 1`;
 
 const SOURCE_COVERAGE = `SELECT src.key AS key,
        ${effectiveKindSql("src")} AS kind,
@@ -73,7 +90,8 @@ ORDER BY state_changed_at ASC`;
 const PICKED_SIGNALS = `SELECT s.id AS signal_id, s.entity_id AS entity_id, COALESCE(NULLIF(e.name, ''), e.domain) AS entity_name,
        s.title AS title, s.summary AS summary, s.url AS url, s.observed_at AS observed_at,
        ${effectiveKindSql("src")} AS source_kind, src.platform AS source_platform,
-       (SELECT v.reason FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id IN ('noteworthy_change', 'mention_matters') AND v.reason IS NOT NULL ORDER BY v.decided_at DESC LIMIT 1) AS verdict_reason
+       (SELECT v.reason FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id IN ('noteworthy_change', 'mention_matters') AND v.reason IS NOT NULL ORDER BY v.decided_at DESC LIMIT 1) AS verdict_reason,
+       (SELECT k.choice FROM jev_verdict k WHERE k.signal_id = s.id AND k.question_id = 'change_kind' AND k.choice IS NOT NULL ORDER BY k.decided_at DESC LIMIT 1) AS change_kind
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1
 JOIN source src ON src.id = s.source_id
@@ -122,6 +140,8 @@ const incidentRows = z.array(
 
 const earlierRankRows = z.array(z.object({ rank: z.number().int(), week_start_at: z.string() }));
 
+const newRivalRows = z.array(z.object({ name: z.string(), domain: z.string(), reason: z.string().nullable() }));
+
 const totalChangeRows = z.array(z.object({ total: z.number() }));
 
 const pausedCompetitorRows = z.array(z.object({ name: z.string() }));
@@ -138,6 +158,7 @@ const pickedSignalRows = z.array(
     source_kind: z.string(),
     source_platform: z.string(),
     verdict_reason: z.string().nullable(),
+    change_kind: z.string().nullable(),
   }),
 );
 
@@ -146,6 +167,7 @@ export interface ComposeInput {
   schedule: BriefSchedule;
   week: BriefWeek;
   readThisFirst: JudgedWeek;
+  standing?: readonly RankedEntity[];
 }
 
 export function pausedSentence(names: readonly string[]): string | null {
@@ -155,6 +177,14 @@ export function pausedSentence(names: readonly string[]): string | null {
   return `${names.slice(0, -1).join(", ")} and ${last} paused, so every brand below them moved up.`;
 }
 
+function brandsFromStanding(results: unknown, standing: readonly RankedEntity[]) {
+  const entities = new Map(rankedBrandRows.parse(results).map((row) => [row.entity_id, row]));
+  return standing.flatMap((ranked) => {
+    const entity = entities.get(ranked.entity_id);
+    return entity === undefined ? [] : [{ ...entity, rank: ranked.rank, movement: ranked.movement }];
+  });
+}
+
 type SourceCoverage = z.infer<typeof sourceCoverageRows>[number];
 type OwnSiteIncident = z.infer<typeof incidentRows>[number];
 type PickedSignal = z.infer<typeof pickedSignalRows>[number];
@@ -162,8 +192,10 @@ type PickedSignal = z.infer<typeof pickedSignalRows>[number];
 async function loadBriefRows(db: D1Database, input: ComposeInput) {
   const startsAt = input.week.startsAt.toISOString();
   const closesAt = input.week.closesAt.toISOString();
-  const [ranked, frozen, counts, coverage, incidents, pausedRows, pickedRows, totalRows] = await db.batch([
-    db.prepare(RANKED_BRANDS).bind(input.workspaceId, startsAt),
+  const [ranked, frozen, counts, coverage, incidents, pausedRows, pickedRows, totalRows, rivalRows] = await db.batch([
+    input.standing === undefined
+      ? db.prepare(RANKED_BRANDS).bind(input.workspaceId, startsAt)
+      : db.prepare(PREVIEW_ENTITIES).bind(input.workspaceId),
     db.prepare(PREVIOUS_FROZEN_WEEKS).bind(input.workspaceId, startsAt),
     db.prepare(SIGNAL_COUNTS).bind(input.workspaceId, startsAt, closesAt),
     db.prepare(SOURCE_COVERAGE).bind(input.workspaceId, startsAt, closesAt),
@@ -171,12 +203,14 @@ async function loadBriefRows(db: D1Database, input: ComposeInput) {
     db.prepare(PAUSED_COMPETITORS).bind(input.workspaceId, startsAt, closesAt),
     db.prepare(PICKED_SIGNALS).bind(input.workspaceId, JSON.stringify(input.readThisFirst.picks)),
     db.prepare(TOTAL_CHANGES).bind(input.workspaceId, closesAt),
+    db.prepare(NEW_RIVAL).bind(input.workspaceId),
   ]);
   return {
-    brands: rankedBrandRows.parse(required(ranked, "compose-brief.ranked").results),
-    hadPreviousWeek: frozenWeekRows
-      .parse(required(frozen, "compose-brief.frozen").results)
-      .some((row) => row.weeks > 0),
+    brands:
+      input.standing === undefined
+        ? rankedBrandRows.parse(required(ranked, "compose-brief.ranked").results)
+        : brandsFromStanding(required(ranked, "compose-brief.ranked").results, input.standing),
+    previousWeeks: frozenWeekRows.parse(required(frozen, "compose-brief.frozen").results)[0]?.weeks ?? 0,
     countsByEntity: new Map(
       signalCountRows.parse(required(counts, "compose-brief.counts").results).map((row) => [row.entity_id, row]),
     ),
@@ -186,6 +220,7 @@ async function loadBriefRows(db: D1Database, input: ComposeInput) {
       .parse(required(pausedRows, "compose-brief.pausedRows").results)
       .map((row) => row.name),
     totalChanges: totalChangeRows.parse(required(totalRows, "compose-brief.totalRows").results)[0]?.total ?? 0,
+    newRival: newRivalRows.parse(required(rivalRows, "compose-brief.rivalRows").results)[0] ?? null,
     pickedById: new Map(
       pickedSignalRows
         .parse(required(pickedRows, "compose-brief.pickedRows").results)
@@ -211,17 +246,43 @@ function buildMarks(picks: readonly string[], pickedById: ReadonlyMap<string, Pi
         before: null,
         after: null,
         jev_reason: row.verdict_reason ?? row.summary ?? row.title ?? "",
+        kind: row.change_kind,
       },
     ];
   });
 }
 
-async function buildLines(
-  rows: Pick<Awaited<ReturnType<typeof loadBriefRows>>, "brands" | "countsByEntity" | "hadPreviousWeek">,
+const WORDING_LIMIT = 3;
+
+function redactWording(value: string | null): string | null {
+  return value === null ? null : redactEmailShaped(value);
+}
+
+async function buildMarksWithWording(
   db: D1Database,
   input: ComposeInput,
+  pickedById: ReadonlyMap<string, PickedSignal>,
 ) {
-  const { brands, countsByEntity, hadPreviousWeek } = rows;
+  const picks = input.readThisFirst.picks;
+  const marks = buildMarks(picks, pickedById);
+  const wording = await readMarkWording(db, {
+    workspaceId: input.workspaceId,
+    signalIds: marks.slice(0, WORDING_LIMIT).map((mark) => mark.signal_id),
+  });
+  return marks.map((mark) => {
+    const change = wording.get(mark.signal_id);
+    if (change === undefined) return mark;
+    return { ...mark, before: redactWording(change.removed), after: redactWording(change.added) };
+  });
+}
+
+async function buildLines(
+  rows: Pick<Awaited<ReturnType<typeof loadBriefRows>>, "brands" | "countsByEntity" | "previousWeeks">,
+  db: D1Database,
+  input: ComposeInput & { baseline: ReadonlyMap<string, string[]> },
+) {
+  const { brands, countsByEntity, previousWeeks } = rows;
+  const hadPreviousWeek = previousWeeks > 0;
   const moves = await readBrandMoves(db, {
     workspaceId: input.workspaceId,
     entityIds: brands.map((brand) => brand.entity_id),
@@ -245,6 +306,7 @@ async function buildLines(
       mention_delta: count?.mentions ?? 0,
       site_change_count: count?.site_changes ?? 0,
       new_roles: count?.new_roles ?? 0,
+      baseline: input.baseline.get(brand.entity_id),
     };
   });
 }
@@ -271,13 +333,14 @@ interface CheckedTotals {
   allChanges: number;
 }
 
-function buildChecked(sources: readonly SourceCoverage[], totals: CheckedTotals) {
+function buildChecked(sources: readonly SourceCoverage[], totals: CheckedTotals, ledger: WorkLedger | undefined) {
   const degraded = sources.filter((source) => source.answered === 0);
   return {
     mention_count: totals.mentions,
     site_change_count: totals.siteChanges,
     new_ad_count: totals.newAds,
     total_change_count: totals.allChanges,
+    ledger,
     source_keys: sources.map((source) => source.key),
     degraded_source_keys: degraded.map((source) => source.key),
     degraded_sources: degraded.map((source) => ({
@@ -288,14 +351,27 @@ function buildChecked(sources: readonly SourceCoverage[], totals: CheckedTotals)
   };
 }
 
-function buildHeadLine(
-  readThisFirst: JudgedWeek,
-  marks: readonly { entity_name: string }[],
-  totals: CheckedTotals,
-): string {
+interface HeadLineInput {
+  readThisFirst: JudgedWeek;
+  marks: readonly { entity_name: string }[];
+  totals: CheckedTotals;
+  startingRivals: number;
+  ledger: WorkLedger | undefined;
+}
+
+function quietLine({ totals, startingRivals, ledger }: HeadLineInput): string {
+  if (startingRivals > 0) return firstBriefLine(startingRivals);
+  return (
+    (ledger === undefined ? null : quietLedgerLine(ledger)) ??
+    quietWeekLine(totals.mentions, totals.siteChanges, totals.newAds)
+  );
+}
+
+function buildHeadLine(input: HeadLineInput): string {
+  const { readThisFirst, marks } = input;
   if (readThisFirst.unjudged) return UNJUDGED_WEEK_LINE;
   const lead = marks[0];
-  if (lead === undefined) return quietWeekLine(totals.mentions, totals.siteChanges, totals.newAds);
+  if (lead === undefined) return quietLine(input);
   return readThisFirstLine(marks.length, readThisFirst.judged, lead.entity_name);
 }
 
@@ -317,14 +393,52 @@ async function readEarlierRank(
   return { rank: row.rank, weeks };
 }
 
+const BASELINE_WEEKS = 4;
+
+function startingRivals(previousWeeks: number, baseline: ReadonlyMap<string, string[]>): number {
+  return previousWeeks === 0 ? baseline.size : 0;
+}
+
+async function readBaseline(
+  db: D1Database,
+  input: ComposeInput & { previousWeeks: number; marks: number },
+): Promise<Map<string, string[]>> {
+  const { previousWeeks, marks } = input;
+  const wanted =
+    previousWeeks === 0 || (previousWeeks < BASELINE_WEEKS && marks === 0 && !input.readThisFirst.unjudged);
+  if (!wanted) return new Map();
+  try {
+    const facts = await readRivalFacts(db, input.workspaceId, input.week.closesAt);
+    const lines = [...facts].map(
+      ([entityId, found]) => [entityId, baselineLines(found, input.schedule.timezone)] as const,
+    );
+    return new Map(lines.filter(([, rows]) => rows.length > 0));
+  } catch (error) {
+    console.error(JSON.stringify({ event: "standing.baseline_failed", error: redactEmailShaped(String(error)) }));
+    return new Map();
+  }
+}
+
+async function readLedger(db: D1Database, input: ComposeInput): Promise<WorkLedger | undefined> {
+  try {
+    return await readWorkLedger(db, {
+      workspaceId: input.workspaceId,
+      from: input.week.startsAt.toISOString(),
+      until: input.week.closesAt.toISOString(),
+    });
+  } catch (error) {
+    console.error(JSON.stringify({ event: "standing.ledger_failed", error: redactEmailShaped(String(error)) }));
+    return undefined;
+  }
+}
+
 export async function composeBrief(db: D1Database, input: ComposeInput): Promise<BriefPayload> {
-  const startsAt = input.week.startsAt.toISOString();
   const closesAt = input.week.closesAt.toISOString();
   const { readThisFirst } = input;
   const rows = await loadBriefRows(db, input);
-
-  const marks = buildMarks(readThisFirst.picks, rows.pickedById);
-  const lines = await buildLines(rows, db, input);
+  const marks = await buildMarksWithWording(db, input, rows.pickedById);
+  const baseline = await readBaseline(db, { ...input, previousWeeks: rows.previousWeeks, marks: marks.length });
+  const lines = await buildLines(rows, db, { ...input, baseline });
   const totals: CheckedTotals = {
     mentions: lines.reduce((total, line) => total + line.mention_delta, 0),
     siteChanges: lines.reduce((total, line) => total + line.site_change_count, 0),
@@ -333,14 +447,20 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
   };
   const selfId = rows.brands.find((brand) => brand.role === "self")?.entity_id;
   const self = lines.find((line) => line.entity_id === selfId);
-
   const pausedLine = pausedSentence(rows.pausedNames);
-  const headLine = buildHeadLine(readThisFirst, marks, totals);
+  const ledger = await readLedger(db, input);
+  const headLine = buildHeadLine({
+    ledger,
+    readThisFirst,
+    marks,
+    totals,
+    startingRivals: startingRivals(rows.previousWeeks, baseline),
+  });
 
   return {
     workspace_id: input.workspaceId,
     timezone: input.schedule.timezone,
-    period_start: startsAt,
+    period_start: input.week.startsAt.toISOString(),
     period_end: closesAt,
     headline_rank: self?.rank ?? null,
     headline_total: lines.length,
@@ -358,7 +478,8 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
     read_this_first: marks,
     brands: lines,
     own_site: buildOwnSite(rows.ownSite, closesAt),
-    checked: buildChecked(rows.sources, totals),
+    checked: buildChecked(rows.sources, totals, ledger),
     next_brief_at: nextBriefAt(input.schedule, input.week.closesAt).toISOString(),
+    new_rival: rows.newRival,
   };
 }

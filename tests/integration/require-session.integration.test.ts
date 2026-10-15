@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getSession = vi.hoisted(() => vi.fn());
 
-vi.mock("../../app/lib/auth.server", () => ({ createAuth: () => ({ api: { getSession } }) }));
+vi.mock("../../app/lib/auth.server", () => ({
+  createAuth: () => ({ api: { getSession } }),
+  hasSessionCookie: (req: Request) => Promise.resolve((req.headers.get("cookie") ?? "").includes("session_token")),
+}));
 
 import { requireFreshSession, requireSession } from "../../app/lib/require-session.server";
 
@@ -27,5 +30,19 @@ describe("requireSession and requireFreshSession", () => {
   it("sends a missing session to the login page", async () => {
     getSession.mockResolvedValue(null);
     await expect(requireFreshSession(request, "/app/upgrade")).rejects.toMatchObject({ status: 302 });
+  });
+
+  it("says the session ended only when a session cookie was sent", async () => {
+    getSession.mockResolvedValue(null);
+    const stale: unknown = await requireSession(request).then(
+      () => null,
+      (thrown: unknown) => thrown,
+    );
+    expect((stale as Response).headers.get("location")).toBe("/login?ended=1");
+    const bare: unknown = await requireSession(new Request("https://0509.io/app")).then(
+      () => null,
+      (thrown: unknown) => thrown,
+    );
+    expect((bare as Response).headers.get("location")).toBe("/login");
   });
 });

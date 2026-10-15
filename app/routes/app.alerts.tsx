@@ -4,6 +4,7 @@ import { Link, type ShouldRevalidateFunctionArgs } from "react-router";
 import { z } from "zod";
 
 import { ChipFeed } from "../components/alert-chip-feed";
+import { AlertsFoot } from "../components/alert-help";
 import { IncidentSlot } from "../components/incident-block";
 import { PAGE, PageHeading } from "../components/page-heading";
 import { SourcePill } from "../components/source-pill";
@@ -122,11 +123,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         hiringCapped={loaderData.hiringCapped}
         hasOpenIncident={loaderData.openIncident !== null}
       />
-      {loaderData.offLine === null ? null : (
-        <p data-testid="alerts-off-footer" className="mt-10 border-t border-line pt-6 leading-[1.65] text-ink-soft">
-          {loaderData.offLine}
-        </p>
-      )}
+      <AlertsFoot offLine={loaderData.offLine} />
     </main>
   );
 }
