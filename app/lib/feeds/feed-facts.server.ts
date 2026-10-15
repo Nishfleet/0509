@@ -5,7 +5,7 @@ import type { FeedFacts } from "../rival-baseline";
 
 const MAX_FEEDS = 30;
 
-const SELECT_FEED_SNAPSHOTS = `SELECT w.entity_id AS entity_id, sn.item_count AS item_count, sn.payload_r2_key AS r2_key
+export const SELECT_FEED_SNAPSHOTS = `SELECT w.entity_id AS entity_id, sn.item_count AS item_count, sn.payload_r2_key AS r2_key
 FROM watch w
 JOIN source src ON src.id = w.source_id AND src.key = 'feed.rss'
 JOIN entity e ON e.id = w.entity_id AND e.workspace_id = ?1 AND e.role = 'competitor' AND e.state = 'on'
@@ -13,9 +13,11 @@ JOIN snapshot sn ON sn.id = (SELECT x.id FROM snapshot x WHERE x.watch_id = w.id
 WHERE w.is_active = 1
 LIMIT ${String(MAX_FEEDS)}`;
 
-const snapshotRows = z.array(
-  z.object({ entity_id: z.string(), item_count: z.number().int(), r2_key: z.string().nullable() }),
-);
+export interface FeedSnapshotRow {
+  entity_id: string;
+  item_count: number;
+  r2_key: string | null;
+}
 
 const storedPosts = z.array(z.object({ title: z.string().catch(""), publishedAt: z.string().nullable().catch(null) }));
 
@@ -27,7 +29,7 @@ function newest(posts: z.infer<typeof storedPosts>): { title: string | null; at:
   return { title: latest?.title ?? null, at: latest?.publishedAt ?? null };
 }
 
-async function factsOf(row: z.infer<typeof snapshotRows>[number]): Promise<FeedFacts> {
+async function factsOf(row: FeedSnapshotRow): Promise<FeedFacts> {
   const none = { posts: row.item_count, latestTitle: null, latestAt: null };
   if (row.r2_key === null) return none;
   try {
@@ -42,9 +44,7 @@ async function factsOf(row: z.infer<typeof snapshotRows>[number]): Promise<FeedF
   }
 }
 
-export async function readFeedFacts(db: D1Database, workspaceId: string): Promise<Map<string, FeedFacts>> {
-  const { results } = await db.prepare(SELECT_FEED_SNAPSHOTS).bind(workspaceId).all();
-  const rows = snapshotRows.parse(results);
+export async function feedFactsFrom(rows: readonly FeedSnapshotRow[]): Promise<Map<string, FeedFacts>> {
   const facts = await Promise.all(rows.map(async (row) => [row.entity_id, await factsOf(row)] as const));
   return new Map(facts);
 }

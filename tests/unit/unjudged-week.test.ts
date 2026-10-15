@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createMemoryRouter, RouterProvider } from "react-router";
+import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { BriefView } from "../../app/components/brief-view";
@@ -124,7 +124,7 @@ describe("unjudged week readers", () => {
     const payload = unjudgedPayload();
 
     const email = renderBrief(payload, CONTEXT);
-    const brief = renderToStaticMarkup(createElement(BriefView, { payload }));
+    const brief = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(BriefView, { payload })));
     const first = renderToStaticMarkup(
       createElement(ReadThisFirst, { marks: payload.read_this_first, unjudged: true }),
     );
@@ -157,7 +157,7 @@ describe("unjudged week readers", () => {
   it("prints the unjudged line once in the brief headline block (0509#6624)", () => {
     const payload = unjudgedPayload();
 
-    const brief = renderToStaticMarkup(createElement(BriefView, { payload }));
+    const brief = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(BriefView, { payload })));
 
     expect(visible(headline(brief)).split(UNJUDGED_WEEK_LINE).length - 1).toBe(1);
   });
@@ -171,7 +171,7 @@ describe("unjudged week readers", () => {
       is_unjudged: false,
     };
 
-    const brief = renderToStaticMarkup(createElement(BriefView, { payload }));
+    const brief = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(BriefView, { payload })));
 
     expect(visible(headline(brief))).toContain("You're #2 of 3 this week");
     expect(visible(headline(brief))).toContain(WHY_LINE);

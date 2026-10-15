@@ -50,6 +50,13 @@ const EARLIER_RANK = `SELECT rank, week_start_at FROM standing
 WHERE workspace_id = ?1 AND entity_id = ?2 AND rank IS NOT NULL AND week_start_at <= ?3
 ORDER BY week_start_at DESC LIMIT 1`;
 
+const NEW_RIVAL = `SELECT COALESCE(NULLIF(candidate_name, ''), candidate_domain) AS name, candidate_domain AS domain, verdict_reason AS reason
+FROM suggestion
+WHERE workspace_id = ?1 AND kind = 'add' AND status = 'pending' AND candidate_domain IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity e WHERE e.workspace_id = suggestion.workspace_id AND e.domain = suggestion.candidate_domain)
+ORDER BY verdict_p IS NULL, verdict_p DESC, created_at ASC
+LIMIT 1`;
+
 const SOURCE_COVERAGE = `SELECT src.key AS key,
        ${effectiveKindSql("src")} AS kind,
        src.platform AS platform,
@@ -127,6 +134,8 @@ const incidentRows = z.array(
 
 const earlierRankRows = z.array(z.object({ rank: z.number().int(), week_start_at: z.string() }));
 
+const newRivalRows = z.array(z.object({ name: z.string(), domain: z.string(), reason: z.string().nullable() }));
+
 const totalChangeRows = z.array(z.object({ total: z.number() }));
 
 const pausedCompetitorRows = z.array(z.object({ name: z.string() }));
@@ -167,7 +176,7 @@ type PickedSignal = z.infer<typeof pickedSignalRows>[number];
 async function loadBriefRows(db: D1Database, input: ComposeInput) {
   const startsAt = input.week.startsAt.toISOString();
   const closesAt = input.week.closesAt.toISOString();
-  const [ranked, frozen, counts, coverage, incidents, pausedRows, pickedRows, totalRows] = await db.batch([
+  const [ranked, frozen, counts, coverage, incidents, pausedRows, pickedRows, totalRows, rivalRows] = await db.batch([
     db.prepare(RANKED_BRANDS).bind(input.workspaceId, startsAt),
     db.prepare(PREVIOUS_FROZEN_WEEKS).bind(input.workspaceId, startsAt),
     db.prepare(SIGNAL_COUNTS).bind(input.workspaceId, startsAt, closesAt),
@@ -176,6 +185,7 @@ async function loadBriefRows(db: D1Database, input: ComposeInput) {
     db.prepare(PAUSED_COMPETITORS).bind(input.workspaceId, startsAt, closesAt),
     db.prepare(PICKED_SIGNALS).bind(input.workspaceId, JSON.stringify(input.readThisFirst.picks)),
     db.prepare(TOTAL_CHANGES).bind(input.workspaceId, closesAt),
+    db.prepare(NEW_RIVAL).bind(input.workspaceId),
   ]);
   return {
     brands: rankedBrandRows.parse(required(ranked, "compose-brief.ranked").results),
@@ -189,6 +199,7 @@ async function loadBriefRows(db: D1Database, input: ComposeInput) {
       .parse(required(pausedRows, "compose-brief.pausedRows").results)
       .map((row) => row.name),
     totalChanges: totalChangeRows.parse(required(totalRows, "compose-brief.totalRows").results)[0]?.total ?? 0,
+    newRival: newRivalRows.parse(required(rivalRows, "compose-brief.rivalRows").results)[0] ?? null,
     pickedById: new Map(
       pickedSignalRows
         .parse(required(pickedRows, "compose-brief.pickedRows").results)
@@ -389,11 +400,9 @@ async function readLedger(db: D1Database, input: ComposeInput): Promise<WorkLedg
 }
 
 export async function composeBrief(db: D1Database, input: ComposeInput): Promise<BriefPayload> {
-  const startsAt = input.week.startsAt.toISOString();
   const closesAt = input.week.closesAt.toISOString();
   const { readThisFirst } = input;
   const rows = await loadBriefRows(db, input);
-
   const marks = await buildMarksWithWording(db, input, rows.pickedById);
   const baseline = await readBaseline(db, { ...input, previousWeeks: rows.previousWeeks, marks: marks.length });
   const lines = await buildLines(rows, db, { ...input, baseline });
@@ -405,7 +414,6 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
   };
   const selfId = rows.brands.find((brand) => brand.role === "self")?.entity_id;
   const self = lines.find((line) => line.entity_id === selfId);
-
   const pausedLine = pausedSentence(rows.pausedNames);
   const ledger = await readLedger(db, input);
   const headLine = buildHeadLine({
@@ -419,7 +427,7 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
   return {
     workspace_id: input.workspaceId,
     timezone: input.schedule.timezone,
-    period_start: startsAt,
+    period_start: input.week.startsAt.toISOString(),
     period_end: closesAt,
     headline_rank: self?.rank ?? null,
     headline_total: lines.length,
@@ -439,5 +447,6 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
     own_site: buildOwnSite(rows.ownSite, closesAt),
     checked: buildChecked(rows.sources, totals, ledger),
     next_brief_at: nextBriefAt(input.schedule, input.week.closesAt).toISOString(),
+    new_rival: rows.newRival,
   };
 }
