@@ -1,8 +1,8 @@
 import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
 import { formatDate } from "./brief-template";
-import { supportLineHtml, supportLineText } from "./alert-footer";
-import { BODY, EYEBROW, HEADLINE, emailDocument, linkParagraph } from "./email-shell";
+import { supportLineHtml, supportLineText } from "../../app/lib/alert-footer";
+import { BODY_STYLE, EYEBROW_STYLE, HEADLINE, emailDocument, linkParagraph } from "../../app/lib/email-shell";
 
 export interface WelcomeContext {
   rivals: readonly string[];
@@ -59,9 +59,9 @@ export function renderWelcome(ctx: WelcomeContext): RenderedBrief {
     html: emailDocument(
       subject,
       [
-        `<p class="brief-muted" style="${EYEBROW}">You're in</p>`,
+        `<p class="brief-muted" style="${EYEBROW_STYLE}">You're in</p>`,
         `<p style="${HEADLINE}">${escapeHtml(subject)}</p>`,
-        ...lines.map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`),
+        ...lines.map((line) => `<p style="${BODY_STYLE}">${escapeHtml(line)}</p>`),
         linkParagraph("Open your first look", ctx.home_link),
         supportLineHtml(),
       ].join(""),

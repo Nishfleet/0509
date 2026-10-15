@@ -819,7 +819,9 @@ describe("inbox preview and the Settings link (Mobbin benchmark)", () => {
 
     expect(html).not.toContain("/app/settings");
     expect(text).not.toContain("Settings");
-    expect(text).toContain("Next brief: Mon 28 Sept, 08:00\nUnsubscribe: https://0509.io/u/opaque-token");
+    expect(text).toContain(
+      "Next brief: Mon 28 Sept, 08:00\nYou get this because you are a member of a Five to Nine workspace.\nUnsubscribe: https://0509.io/u/opaque-token",
+    );
     expect(html).toContain("Unsubscribe");
   });
 });

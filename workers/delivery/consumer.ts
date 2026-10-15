@@ -39,7 +39,7 @@ import {
 import { pageHost } from "../../app/lib/site/own-site.server";
 
 import { renderBrief } from "./brief-template";
-import { SETTINGS_LINK, unsubscribeHeaders, type AlertFooterContext } from "./alert-footer";
+import { SETTINGS_LINK, unsubscribeHeaders, type AlertFooterContext } from "../../app/lib/alert-footer";
 import { renderChange, renderChangeOverflow } from "./change-template";
 import { renderIncidentFixed, renderIncidentOpen } from "./incident-template";
 import { BRIEF_SENDER, errorText, sendMessage, type SendResult } from "./send";

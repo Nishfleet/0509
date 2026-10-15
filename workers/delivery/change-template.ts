@@ -1,9 +1,9 @@
 import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
 import type { ChangeMark } from "../../app/lib/site-change";
-import { renderAlertFooter, type AlertFooterContext } from "./alert-footer";
+import { renderAlertFooter, type AlertFooterContext } from "../../app/lib/alert-footer";
 import { formatDate } from "./brief-template";
-import { BODY, EYEBROW, HEADLINE, emailDocument, linkParagraph, siteName } from "./email-shell";
+import { BODY_STYLE, EYEBROW_STYLE, HEADLINE, emailDocument, linkParagraph, siteName } from "../../app/lib/email-shell";
 
 export interface ChangeContext extends AlertFooterContext {
   headline: string;
@@ -52,7 +52,7 @@ export interface ChangeOverflowContext extends AlertFooterContext {
 }
 
 function paragraphs(lines: readonly string[]): string {
-  return lines.map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`).join("");
+  return lines.map((line) => `<p style="${BODY_STYLE}">${escapeHtml(line)}</p>`).join("");
 }
 
 export function renderChangeOverflow(ctx: ChangeOverflowContext): RenderedBrief {
@@ -64,11 +64,11 @@ export function renderChangeOverflow(ctx: ChangeOverflowContext): RenderedBrief 
   const footer = renderAlertFooter(ctx);
   return {
     subject,
-    text: [subject, ...lines, `See them in Five to Nine: ${ctx.link}`, footer.text].join("\n"),
+    text: [subject, ...lines, `See them in Five to Nine: ${ctx.link}`, footer.text].join("\n\n"),
     html: emailDocument(
       subject,
       [
-        `<p class="brief-muted" style="${EYEBROW}">Price or plan changes</p>`,
+        `<p class="brief-muted" style="${EYEBROW_STYLE}">Price or plan changes</p>`,
         `<p style="${HEADLINE}">${escapeHtml(subject)}</p>`,
         paragraphs(lines),
         linkParagraph("See them in Five to Nine", ctx.link),
@@ -87,11 +87,11 @@ export function renderChange(ctx: ChangeContext): RenderedBrief {
   const footer = renderAlertFooter(ctx);
   return {
     subject: subjectFor(ctx.headline, ctx.mark),
-    text: [ctx.headline, ...lines, SO_WHAT, `${OPEN}: ${ctx.link}`, footer.text].join("\n"),
+    text: [ctx.headline, ...lines, SO_WHAT, `${OPEN}: ${ctx.link}`, footer.text].join("\n\n"),
     html: emailDocument(
       ctx.headline,
       [
-        `<p class="brief-muted" style="${EYEBROW}">Price or plan change</p>`,
+        `<p class="brief-muted" style="${EYEBROW_STYLE}">Price or plan change</p>`,
         `<p style="${HEADLINE}">${escapeHtml(ctx.headline)}</p>`,
         paragraphs(lines),
         paragraphs([SO_WHAT]),
