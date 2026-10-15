@@ -13,7 +13,7 @@ import { onboardedContext } from "../lib/require-onboarded.server";
 
 const UNAVAILABLE = { message: "Upgrading isn't available right now. Try again in a few minutes." };
 
-const HAS_PLAN = { message: "This workspace already has a plan. Change it from Settings." };
+const HAS_PLAN = { message: "You already have a plan. To change it, use Manage or cancel plan on this page." };
 
 const upgradeForm = z.object({
   plan: z.string(),

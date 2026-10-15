@@ -67,7 +67,7 @@ describe("landing what we watch", () => {
       entry({ source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
     ]);
     expect(html).toContain('data-state="degraded"');
-    expect(html).toContain("· not answering right now");
+    expect(html).toContain("· could not be checked right now");
     expect(html).toContain("last updated 2026-09-20 03:04 UTC");
   });
 
@@ -98,7 +98,7 @@ describe("landing what we watch", () => {
     ]);
     expect(html.match(/data-state="degraded"/g)).toHaveLength(2);
     expect(html).toContain("· no new data yet");
-    expect(html).toContain("· not answering right now");
+    expect(html).toContain("· could not be checked right now");
   });
 
   it("replaces the pill row with the one rebuilding line when every visible mentions source is degraded and site changes are live", () => {
@@ -161,7 +161,7 @@ describe("landing what we watch", () => {
     ]);
     const text = decoded(html);
     expect(text).not.toContain("We're rebuilding coverage of news mentions");
-    expect(html).toContain("· not answering right now");
+    expect(html).toContain("· could not be checked right now");
     expect(html).toContain("· not updating right now");
     expect(html).not.toContain("rate limited");
     expect(html.match(/data-state="degraded"/g)).toHaveLength(2);
@@ -189,7 +189,7 @@ describe("landing what we watch", () => {
     expect(text).not.toContain("We're rebuilding coverage of news mentions");
     expect(html).toContain('data-state="degraded"');
     expect(html).toContain('data-state="none"');
-    expect(html).toContain("· not answering right now");
+    expect(html).toContain("· could not be checked right now");
   });
 
   it("does not replace the row when every source is disabled", () => {
