@@ -5,12 +5,6 @@ import type { BriefSchedule } from "../../../app/lib/brief-schedule";
 import { nextBriefAt, rolloverInstance } from "../../../app/lib/brief-schedule";
 import { rescheduleRollover } from "../../../app/lib/standing/reschedule";
 
-/**
- * The reschedule path against real workerd and the real Workflows binding
- * (0509#5161). No D1 rows are needed: a sleeping instance never reads the
- * database, which is what makes a terminate-then-create observable here.
- */
-
 function scheduleOffsetFromToday(days: number, hour: number): BriefSchedule {
   return { timezone: "UTC", weekday: (new Date().getUTCDay() + days) % 7, hour };
 }

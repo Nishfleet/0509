@@ -2,15 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
-// #7027 / #7033: 16 of 17 action modules read form fields with formData.get
-// instead of a zod parse. #7111: the gate was selector-based on the receiver
-// NAME (form or formData), so a receiver called anything else read fields by
-// hand with the gate green. It is now form-rules/form-data-get in
-// eslint.config.js, which reads the receiver's TypeScript type. Identifier
-// form.get / formData.get is the action-input shape; navigation.formData?.get
-// (pending UI) is FormData | undefined and stays allowed. These probes boot the
-// real eslint.config.js (same rig as tests/eslint-catch-null-rule.test.ts).
-
 const FORM_GET_MESSAGE = "formData.get by hand";
 
 const HAND_GET = `export function readField(formData: FormData): unknown {

@@ -9,7 +9,7 @@ import { DeliveryAddress } from "./delivery-address";
 import { DevicesList } from "./devices-list";
 import { Teammates } from "./teammates";
 import { MAX_TEAMMATES } from "../lib/teammate-limit";
-import { SignOut } from "./account-settings";
+import { SignOut, SignOutEverywhere } from "./account-settings";
 import type { ComponentProps } from "react";
 
 const BLOCK = "mt-10 border-t border-line pt-4";
@@ -130,12 +130,17 @@ export function AccountSection({
       <p className="mt-2 leading-[1.55] [overflow-wrap:anywhere]">
         Signed in as <strong className="font-semibold">{email}</strong>
       </p>
-      <ChangeSignInEmail sent={result?.emailChangeSent ?? false} error={result?.emailChangeError ?? null} />
+      <ChangeSignInEmail
+        email={email}
+        sent={result?.emailChangeSent ?? false}
+        error={result?.emailChangeError ?? null}
+      />
       <DeliverySettings delivery={delivery} teammates={teammates} result={result} />
       <PasskeyList passkeys={passkeys} />
       <div className="mt-2 flex flex-wrap items-start gap-x-6">
         <AddPasskey />
         <SignOut />
+        <SignOutEverywhere />
       </div>
       <DevicesList devices={devices} />
     </section>

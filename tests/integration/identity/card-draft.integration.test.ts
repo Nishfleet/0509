@@ -9,15 +9,6 @@ import {
   saveDraftField,
 } from "../../../app/lib/identity/card-draft.server";
 
-/**
- * The onboarding card's name/about draft (0509#5238), pinned against the real
- * local KV namespace the workers project provisions from
- * tests/integration/wrangler.test.jsonc. Every edit saves on change and a
- * Back or reload reads the draft instead of losing it; "use what we found"
- * clears one field so the next card load judges it again; a value that is not
- * a CardDraft-shaped object reads as an empty draft, so a poisoned entry
- * cannot surface a field the form never wrote.
- */
 const WORKSPACE = "ws-card-draft";
 const REGISTRABLE = "gymshark.com";
 const KEY = draftKey(WORKSPACE, REGISTRABLE);

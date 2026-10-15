@@ -3,25 +3,6 @@ import { expect, test } from "./test";
 import { expectElementFaceLoaded, expectFaceLoaded } from "./fonts";
 import { consoleFailures, watchConsole } from "./inbox";
 
-// The smallest suite that is still an honest answer to "does the thing we are
-// about to ship start and serve". It runs twice: against the built Worker on
-// every PR, and against production on every successful deployment.
-//
-// Every assertion here is reachable from .agents/skills/verify/feature-map.md. A test that
-// cannot be traced to a row in that file is testing something a user cannot do.
-//
-// What is deliberately NOT here: anything that needs a row in D1. `wrangler dev
-// --local` starts with an empty database and `preview-assert` applies no
-// migrations, so a session assertion would be testing the empty state, not the
-// product. The gated surfaces are J1-J14 in docs/REBUILD-DONE.md and they land
-// with the engines that fill those tables.
-//
-// Nothing below pins human-facing copy. A merge-queue proof that asserts exact
-// strings turns every copy edit into a red gate (2026-09-21T16:03Z: runs
-// 35623125629 and 35623124105 failed on the landing h1 copy, fixed by
-// 5aa0e76a9). What is asserted is the contract: the element exists, is
-// labelled, is enabled, or points at the right destination.
-
 test("the landing page renders its headline and its contact link @smoke", async ({ page }) => {
   const response = await page.goto("/");
   expect(response?.status()).toBe(200);
@@ -29,8 +10,7 @@ test("the landing page renders its headline and its contact link @smoke", async 
   const headline = page.getByRole("heading", { level: 1 });
   await expect(headline).toBeVisible();
   await expect(headline).not.toBeEmpty();
-  // The contract is the destination (the support address) plus a real
-  // accessible name — the display text itself stays unasserted.
+
   const contact = page.locator('a[href="mailto:support@0509.io"]');
   await expect(contact).toBeVisible();
   await expect(contact).toHaveAccessibleName(/\S/);
@@ -105,15 +85,12 @@ test("the login page renders the one input that signs you in @smoke", async ({ p
   const heading = page.getByRole("heading", { level: 1 });
   await expect(heading).toBeVisible();
   await expect(heading).not.toBeEmpty();
-  // "labelled input" in feature-map.md, proven directly on the field: a visible
-  // email input with any programmatic accessible name. Label text and button
-  // copy stay unasserted.
+
   const email = page.locator('input[type="email"][name="email"]');
   await expect(email).toBeVisible();
   await expect(email).toHaveAccessibleName(/\S/);
   await expect(page.locator('button[type="submit"]')).toBeEnabled();
-  // The J2 affordance: a labelled, enabled passkey sign-in control. Its name is
-  // pattern-matched, not verbatim-pinned; the ceremony itself is J2's spec.
+
   await expect(page.getByRole("button", { name: /passkey/i })).toBeEnabled();
   await expect(page.locator('link[rel="modulepreload"]')).not.toHaveCount(0);
   const contact = page.locator('footer a[href="mailto:support@0509.io"]');

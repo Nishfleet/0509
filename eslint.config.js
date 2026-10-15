@@ -145,6 +145,24 @@ const CATCH_RETURNS_NULL = {
     "A catch whose only statement is `return null` swallows the error, so a thrown fetch or a bug fails as silently as a real 'not found'. Give the clause an error binding and a logged failure path (or rethrow). Source: 0509#4462.",
 };
 
+// console.log, console.info and console.debug reach Workers Logs but never
+// Sentry, so a failure logged at that level is invisible to the alerting that
+// watches console.warn and console.error. 2026-10-13: site.change_discarded,
+// site.check_failed and archive.read_failed all logged at info level and
+// nobody was paged. An event named for a failure, or any log inside a catch
+// clause, must use console.warn or console.error. Source: 0509#7501.
+const QUIET_LOG_LEVEL = "[callee.object.name='console'][callee.property.name=/^(log|info|debug)$/]";
+const FAILURE_EVENT_LOGGED_QUIETLY = {
+  selector: `CallExpression${QUIET_LOG_LEVEL}:has(Property[key.name='event'] > Literal[value=/(failed|discarded|unavailable|dead_lettered|unreadable|unreached|skipped)$/])`,
+  message:
+    "An event named for a failure (_failed, _discarded, _unavailable, _dead_lettered, _unreadable, _unreached, _skipped) logged with console.log, console.info or console.debug never reaches Sentry. Use console.warn or console.error. Source: 0509#7501 (site.change_discarded, site.check_failed and archive.read_failed went unseen on 2026-10-13).",
+};
+const LOG_IN_CATCH_LOGGED_QUIETLY = {
+  selector: `CatchClause CallExpression${QUIET_LOG_LEVEL}`,
+  message:
+    "A log written inside a catch clause records a failure, and console.log, console.info and console.debug never reach Sentry. Use console.warn or console.error. Source: 0509#7501.",
+};
+
 const SCORE_NAME = "/^(points|weight|multiplier|score|total)$/";
 
 const RAW_SCORE_STRING = {
@@ -365,13 +383,50 @@ const HAND_ROLLED_ARIA_TAB = {
     "Tabs come from app/components/ui/tabs.tsx (shadcn on @base-ui/react/tabs). A hand-rolled role=tab/tablist/tabpanel has no arrow keys and no roving tabIndex. Source: 0509#7014.",
 };
 
+const APP_LOCALE_ONLY = {
+  selector:
+    "NewExpression[callee.object.name='Intl'][callee.property.name=/^(DateTimeFormat|NumberFormat|RelativeTimeFormat)$/][arguments.0.type='Literal']",
+  message:
+    "A literal locale gives this screen its own month abbreviation and clock: en-US printed 'Sep' and '3:30 PM' where the rest of the app printed 'Sept' and '15:30'. Pass APP_LOCALE from app/lib/locale.ts. Source: ci/stripe-bar consistency sweep, 0509#7540.",
+};
+
+const COPY_NAME = (word) =>
+  [
+    `Literal[value=/^(?=.*\\s)(?=.*${word})/i]`,
+    `TemplateElement[value.raw=/^(?=.*\\s)(?=.*${word})/i]`,
+    `JSXText[value=/^(?=.*\\s)(?=.*${word})/i]`,
+  ].join(", ");
+
+const RIVAL_COPY = {
+  selector: COPY_NAME("\\brivals?\\b"),
+  message:
+    "Customer copy calls them competitors, as the nav, the URLs and the buttons do; eight lines said 'rival' until the sweep in 0509#7540. A prompt for Jev is exempt in the block that lists it. Source: 0509#7540.",
+};
+
+const WEEKLY_REPORT_COPY = {
+  selector: COPY_NAME("\\bweekly reports?\\b"),
+  message: "The weekly email and its page are the brief. 'Report' is a second name for one thing. Source: 0509#7540.",
+};
+
+const PRICE_SUFFIX_COPY = {
+  selector: `Literal[value=/€\\s?\\d+\\s?(\\/mo\\b|a month|per month)/i], TemplateElement[value.raw=/€\\s?\\d+\\s?(\\/mo\\b|a month|per month)/i], JSXText[value=/€\\s?\\d+\\s?(\\/mo\\b|a month|per month)/i]`,
+  message:
+    "A price reads '€10/month', from monthlyPrice() in app/lib/billing/plans.ts. '/mo' and 'a month' were three spellings of one price until 0509#7540. The trial email is billing copy and is worded by Nish.",
+};
+
 const BANNED_SYNTAX = [
+  APP_LOCALE_ONLY,
+  RIVAL_COPY,
+  WEEKLY_REPORT_COPY,
+  PRICE_SUFFIX_COPY,
   HAND_ROLLED_ARIA_TAB,
   BARE_TOAST,
   SUPPORT_ADDRESS_BAN,
   GOOGLE_FONTS_BAN,
   CRAWLER_USER_AGENT_BAN,
   CATCH_RETURNS_NULL,
+  FAILURE_EVENT_LOGGED_QUIETLY,
+  LOG_IN_CATCH_LOGGED_QUIETLY,
   RAW_SCORE_STRING,
   XML_PARSER_CONSTRUCTOR,
   DOMAIN_HOSTNAME_BAN,
@@ -477,7 +532,7 @@ export const TABLE_WRITER_BLOCKS = readdirSync(new URL("./app/lib/data/", import
     rules: {
       "no-restricted-syntax": [
         "error",
-        ...BANNED_SYNTAX,
+        ...BANNED_SYNTAX.filter((rule) => rule !== RIVAL_COPY),
         ...NO_USER_DATA_IN_LOGS,
         FEED_STATE_LITERAL,
         D1_ROW_TYPE_ARGUMENT,
@@ -1046,6 +1101,19 @@ export default tseslint.config(
     rules: {
       "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, RAW_DML_WRITER, FEED_STATE_LITERAL],
       "form-rules/form-data-get": "error",
+    },
+  },
+
+  {
+    files: ["app/lib/discovery/run.server.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== RIVAL_COPY),
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+      ],
     },
   },
 

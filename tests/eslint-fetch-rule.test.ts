@@ -2,16 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
-// #4951: the logo store grew a second outbound-fetch wrapper beside the one in
-// app/lib/fetch/transport.server.ts — its own public-host guard, its own
-// capped reader, its own copy of the bot user-agent and 8 s deadline, already
-// drifted (https-only vs http-or-https, byte cap vs text cap). The transport
-// primitives now live in app/lib/fetch/outbound.server.ts and the BARE_FETCH
-// selector in eslint.config.js makes a third copy red instead of a review
-// note. Client code is exempt (a browser fetch goes to our own origin; SSRF is server-side),
-// the same shape DOMAIN_HOSTNAME_BAN landed in 0509#4371. These probes boot
-// the real eslint.config.js (same rig as eslint-writer-rule.test.ts).
-
 const FETCH_MESSAGE = "Outbound fetch is owned by app/lib/fetch/";
 
 const BARE_FETCH_CALL = `export async function probe(): Promise<Response> {

@@ -2,6 +2,7 @@ import type { BriefPayload } from "./brief-payload";
 import type { BriefSchedule } from "./brief-schedule";
 import { homeStanding } from "./home-standing";
 import type { HomeEntity, HomeHistoryRow } from "./home-standing";
+import { APP_LOCALE } from "./locale";
 
 export interface ShareCard {
   brand: string;
@@ -13,7 +14,7 @@ export interface ShareCard {
 function weekLabel(periodEnd: string, timezone: string): string {
   const end = new Date(periodEnd);
   if (Number.isNaN(end.getTime())) return "This week";
-  const day = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, day: "numeric", month: "long" }).format(end);
+  const day = new Intl.DateTimeFormat(APP_LOCALE, { timeZone: timezone, day: "numeric", month: "long" }).format(end);
   return `Week to ${day}`;
 }
 

@@ -153,7 +153,7 @@ describe("a rival's starting point in the brief", () => {
 
     const payload = await compose("ws-a");
     expect(payload.why_line).toBe(
-      "This is your starting point: where your rival stands today, before anything changes. When one moves, your next brief says so.",
+      "This is your starting point: where your competitor stands today, before anything changes. When one moves, your next brief says so.",
     );
     expect(payload.brands[0]?.baseline).toEqual([
       "In its own words: Lifting gear for everyone",

@@ -25,7 +25,7 @@ function moveSubject(lead: Mark, total: number): string {
   const detail = detailOf(lead);
   const more = total > 1 ? ` (+${(total - 1).toFixed(0)} more)` : "";
   if (name === "")
-    return clip(detail === null ? `${total.toFixed(0)} rival moves this week` : `${detail}${more}`, SUBJECT_MAX);
+    return clip(detail === null ? `${total.toFixed(0)} competitor moves this week` : `${detail}${more}`, SUBJECT_MAX);
   const head = detail === null ? `${name} made a move` : `${name}: ${detail}`;
   return clip(`${head}${more}`, SUBJECT_MAX);
 }

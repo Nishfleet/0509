@@ -40,7 +40,6 @@ function requestLink(auth: ReturnType<typeof createAuth>, email: string, ip: str
   );
 }
 
-// Values from tests/integration/wrangler.test.jsonc:65-66.
 const EMAIL_LIMIT_PER_WINDOW = 5;
 const IP_LIMIT_PER_WINDOW = 20;
 
@@ -95,8 +94,6 @@ describe("sign-in link limits", () => {
     expect(first429).toBeLessThan(maxAttempts);
     expect(sent).toHaveLength(first429);
 
-    // The edge-identified caller keeps its own bucket and is unaffected by the
-    // shared bucket the unidentified spray emptied above.
     const identified = await requestLink(auth, "identified-again@test.dev", "203.0.113.11");
     expect(identified.status).toBe(200);
   });
