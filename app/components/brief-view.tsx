@@ -65,6 +65,11 @@ function brandsBlock(payload: BriefPayload): ReactElement {
               {brand.name}: {rankText(brand.rank)}
             </p>
             {brand.biggest_move === null ? null : <p className="text-ink-soft">{brand.biggest_move}</p>}
+            {(brand.baseline ?? []).map((row) => (
+              <p key={row} className="text-ink-soft">
+                {row}
+              </p>
+            ))}
           </div>
         ))
       )}
