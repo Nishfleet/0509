@@ -9,6 +9,7 @@ test("the status page says the app is working @smoke", async ({ page }, testInfo
   expect(response?.status()).toBe(200);
   await expect(page.getByRole("heading", { level: 1, name: "Status" })).toBeVisible();
   await expect(page.getByRole("main").getByText(/are working/)).toBeVisible();
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "index, follow");
   await expect(page.locator("time")).toHaveAttribute("datetime", /^\d{4}-\d{2}-\d{2}T/);
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

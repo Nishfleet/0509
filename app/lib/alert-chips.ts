@@ -10,6 +10,10 @@ export const ALERT_CHIPS = [
 
 export type AlertChipKey = (typeof ALERT_CHIPS)[number]["key"];
 
+export function isChipCapped(capped: readonly AlertChipKey[], key: AlertChipKey): boolean {
+  return key === "all" ? capped.length > 0 : capped.includes(key);
+}
+
 export type AlertItemKind = "change" | "note" | "failure" | "signal" | "mention" | "hiring" | "content";
 
 export function parseAlertChip(value: string | null): AlertChipKey {
@@ -62,4 +66,14 @@ export function countAlertChips(kinds: readonly AlertItemKind[], incidentCount: 
     content,
     "your-site": incidentCount,
   };
+}
+
+export function groupsInChip<Item extends { kind: AlertItemKind }>(
+  groups: readonly { group: string; items: Item[] }[],
+  chip: AlertChipKey,
+): { group: string; items: Item[] }[] {
+  if (chip === "all") return [...groups];
+  return groups
+    .map((entry) => ({ group: entry.group, items: entry.items.filter((item) => itemInChip(item.kind, chip)) }))
+    .filter((entry) => entry.items.length > 0);
 }

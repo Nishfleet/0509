@@ -54,7 +54,7 @@ const FOOTER_LINKS = [
 ] as const;
 
 const WALK_PAGES = [
-  { path: "/", skip: false, links: FOOTER_LINKS.slice(0, 2) },
+  { path: "/", skip: false, links: FOOTER_LINKS },
   { path: "/pricing", skip: true, links: FOOTER_LINKS },
   { path: "/privacy", skip: true, links: FOOTER_LINKS },
   { path: "/terms", skip: true, links: FOOTER_LINKS },

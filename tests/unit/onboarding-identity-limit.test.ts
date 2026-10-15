@@ -41,6 +41,9 @@ vi.mock("../../app/lib/identity/confirm.server", () => ({
 vi.mock("../../app/lib/data/workspace.server", () => ({
   readWorkspaceIdForOwner: vi.fn(),
 }));
+vi.mock("../../app/lib/client-brands.server", () => ({
+  readOtherBrands: vi.fn(() => Promise.resolve([])),
+}));
 vi.mock("../../app/lib/require-session.server", () => ({
   requireFreshSession: vi.fn(),
 }));
@@ -89,7 +92,7 @@ describe("onboarding identity GET paid work", () => {
   it("returns limited without screening, starting a run, probing the site, or warming", async () => {
     mocks.withinProbeLimit.mockResolvedValue(false);
 
-    await expect(load()).resolves.toEqual({ card: null, limited: true });
+    await expect(load()).resolves.toEqual({ card: null, limited: true, otherBrands: [] });
 
     expect(mocks.withinProbeLimit).toHaveBeenCalledWith("user-1");
     expect(mocks.screenOnboardingSubject).not.toHaveBeenCalled();

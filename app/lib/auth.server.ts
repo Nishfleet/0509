@@ -8,7 +8,7 @@ import { passkey } from "@better-auth/passkey";
 import { API_KEY_PREFIX, READ_SCOPE } from "./agent/paths";
 import { cancelPendingDigests } from "./data/digest.server";
 import { suppressWorkspaceTargets } from "./data/email_suppression.server";
-import { readWorkspaceIdForOwner } from "./data/workspace.server";
+import { readOwnedWorkspaces } from "./data/workspace.server";
 import { withEmailLanding } from "./email-change-landing";
 import { ensureWorkspaceForSignIn } from "./workspace.server";
 import { accessPrecleared } from "./auth/access-preclearance.server";
@@ -238,10 +238,10 @@ export async function signOutEverywhere(env: AuthEnv, request: Request): Promise
 }
 
 async function silenceWorkspace(db: D1Database, userId: string): Promise<void> {
-  const workspaceId = await readWorkspaceIdForOwner(userId);
-  if (workspaceId === null) return;
-  await suppressWorkspaceTargets(workspaceId);
-  await cancelPendingDigests(db, workspaceId);
+  for (const { id: workspaceId } of await readOwnedWorkspaces(userId)) {
+    await suppressWorkspaceTargets(workspaceId);
+    await cancelPendingDigests(db, workspaceId);
+  }
 }
 
 export async function hasFreshSession(env: AuthEnv, request: Request, now: Date): Promise<boolean> {
