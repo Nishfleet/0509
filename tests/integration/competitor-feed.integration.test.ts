@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { readEntityDevelopments } from "../../app/lib/data/signal.server";
+import { insertMention, readEntityDevelopments, resolveUnjudgedMention } from "../../app/lib/data/signal.server";
 
 const SINCE = "2026-09-01T00:00:00.000Z";
 
@@ -239,6 +239,53 @@ describe("competitor feed read", () => {
     expect(feed.map((item) => item.id)).not.toContain(fixture.tombstoned);
     expect(feed.map((item) => item.id)).not.toContain(fixture.stale);
     expect(feed.map((item) => item.id)).not.toContain(fixture.foreign);
+  });
+
+  it("hides Hacker News titles nobody has judged yet, then shows only the one judged about the brand", async () => {
+    const fixture = await seed();
+    const titles = ["Flock: A Flock of Birds in your Browser", "Libron E-Reader Font", "List of April Fools RFCs"];
+    const ids = titles.map((_, index) => `sig-fed-hn-${fixture.entityId}-${index}`);
+    await env.DB.batch(
+      titles.map((title, index) =>
+        insertMention({
+          id: ids[index] ?? "",
+          workspaceId: fixture.workspaceId,
+          entityId: fixture.entityId,
+          sourceId: "src_site_web",
+          watchId: null,
+          snapshotId: null,
+          title,
+          url: `https://news.ycombinator.com/item?id=${String(4100 + index)}`,
+          urlHash: `hash-${ids[index] ?? ""}`,
+          titleHash: `th-${ids[index] ?? ""}`,
+          normUrlHash: `nh-${ids[index] ?? ""}`,
+          author: null,
+          engagementJson: null,
+          payloadJson: "{}",
+          dedupKey: `${ids[index] ?? ""}:dedup`,
+          publishedAt: "2026-10-05T10:00:00.000Z",
+          observedAt: "2026-10-13T10:00:00.000Z",
+          isNotAboutBrand: false,
+          state: "unjudged",
+        }),
+      ),
+    );
+    const read = async () =>
+      (
+        await readEntityDevelopments({
+          workspaceId: fixture.workspaceId,
+          entityId: fixture.entityId,
+          since: SINCE,
+          limit: 20,
+        })
+      ).map((item) => item.title);
+    const before = await read();
+    for (const title of titles) expect(before).not.toContain(title);
+    await env.DB.batch([resolveUnjudgedMention(ids[0] ?? "", false), resolveUnjudgedMention(ids[1] ?? "", true)]);
+    const after = await read();
+    expect(after).toContain(titles[0]);
+    expect(after).not.toContain(titles[1]);
+    expect(after).not.toContain(titles[2]);
   });
 
   it("honours limit with the two newest", async () => {

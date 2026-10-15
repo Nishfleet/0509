@@ -21,7 +21,7 @@ describe("plainSourceReason", () => {
 
   it("maps the channel reasons to plain words", () => {
     expect(plainSourceReason(LOST_CHANNEL_REASON)).toBe("finding the channel again");
-    expect(plainSourceReason(NO_CHANNEL_REASON)).toBe("no YouTube channel on your profile");
+    expect(plainSourceReason(NO_CHANNEL_REASON)).toBe("no YouTube channel found");
   });
 
   it("falls back to not updating right now", () => {

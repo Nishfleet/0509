@@ -8,7 +8,7 @@ const WORDS: Readonly<Record<string, string>> = Object.fromEntries(
     "not answering": "not answering right now",
     "timed out": "slow to answer",
     [LOST_CHANNEL_REASON]: "finding the channel again",
-    [NO_CHANNEL_REASON]: "no YouTube channel on your profile",
+    [NO_CHANNEL_REASON]: "no YouTube channel found",
   }).map(([key, words]) => [key.trim().toLowerCase(), words]),
 );
 

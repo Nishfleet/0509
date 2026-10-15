@@ -217,8 +217,8 @@ export interface MentionSignal {
   workspaceId: string;
   entityId: string;
   sourceId: string;
-  watchId: string;
-  snapshotId: string;
+  watchId: string | null;
+  snapshotId: string | null;
   title: string;
   url: string;
   urlHash: string;
@@ -268,7 +268,7 @@ export function insertMention(signal: MentionSignal): D1PreparedStatement {
     signal.dedupKey,
     toIsoInstant(signal.publishedAt),
     signal.observedAt,
-    signal.isNotAboutBrand ? 1 : 0,
+    signal.isNotAboutBrand || signal.state === "unjudged" ? 1 : 0,
     signal.state,
     signal.titleHash,
     signal.normUrlHash,
