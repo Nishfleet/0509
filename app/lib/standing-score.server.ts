@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { countIncompleteMentionRuns } from "./data/sweep_run.server";
 import { ABOUT_BRAND_KEEP_AT, ACT_AT, changeActsSql } from "./jev/thresholds";
 import { CHANGE_HAS_STORED_EVIDENCE, changeJudgedSql } from "./site-change";
 import {
@@ -33,12 +34,12 @@ HAVING bucket IS NOT NULL`;
 const COUNT_UNJUDGED_INPUTS = `SELECT COUNT(*) AS n
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
-WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3
+WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.is_tombstoned = 0
   AND (
-    (s.kind = 'mention' AND (s.is_tombstoned = 0 OR s.state = 'unjudged') AND NOT EXISTS (
+    (s.kind = 'mention' AND NOT EXISTS (
       SELECT 1 FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id = ?4
     ))
-    OR (s.kind = 'change' AND s.is_tombstoned = 0 AND (e.role <> 'self' OR ${CHANGE_HAS_STORED_EVIDENCE}) AND NOT ${changeJudgedSql({ noteworthy: "?5", breakage: "?6" })})
+    OR (s.kind = 'change' AND (e.role <> 'self' OR ${CHANGE_HAS_STORED_EVIDENCE}) AND NOT ${changeJudgedSql({ noteworthy: "?5", breakage: "?6" })})
   )`;
 
 export async function countUnjudgedInputs(
@@ -52,7 +53,8 @@ export async function countUnjudgedInputs(
   if (row === null) {
     throw new Error("countUnjudgedInputs returned no row");
   }
-  return row.n;
+  const missed = await countIncompleteMentionRuns(db, { startAt: input.windowStartAt, endAt: input.windowEndAt });
+  return row.n + missed;
 }
 
 export const ALL_WEIGHTS = `SELECT key, weight, effective_from FROM scoring_weight`;

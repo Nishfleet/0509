@@ -9,6 +9,7 @@ import { readFeed } from "../../app/lib/feeds/read-feed.server";
 import { capForNight, MAX_FEED_FINDS_PER_NIGHT, MAX_FEED_READS_PER_NIGHT } from "../../app/lib/feeds/nightly-cap";
 import type { FoundFeed } from "../../app/lib/feeds/sweep.server";
 import { findFeed, planFeedSweep } from "../../app/lib/feeds/sweep.server";
+import { sweepHealth } from "../../app/lib/sweep-health";
 import { isNativeSchedule } from "../workflow-crons";
 import { withStepCheckIn } from "../workflow-monitor";
 
@@ -28,6 +29,8 @@ export interface FeedSweepOutcome {
   unreadable: number;
   newPosts: number;
   failed: number;
+  attempted: number;
+  missed: string[];
 }
 
 const IDLE: FeedSweepOutcome = {
@@ -39,6 +42,8 @@ const IDLE: FeedSweepOutcome = {
   unreadable: 0,
   newPosts: 0,
   failed: 0,
+  attempted: 0,
+  missed: [],
 };
 
 async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null> {
@@ -70,7 +75,16 @@ function capLogged<T>(kind: keyof typeof NIGHTLY_CAPS, items: readonly T[], now:
 export class FeedSweep extends WorkflowEntrypoint<Env> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<FeedSweepOutcome | null> {
     if (isNativeSchedule(event)) return null;
-    return withStepCheckIn(step, { slug: "feed-sweep", config: MONITOR }, () => this.runSweep(event, step));
+    return withStepCheckIn(
+      step,
+      {
+        slug: "feed-sweep",
+        config: MONITOR,
+        health: (outcome) =>
+          sweepHealth({ failed: outcome.failed, attempted: outcome.attempted, missed: outcome.missed }),
+      },
+      () => this.runSweep(event, step),
+    );
   }
 
   private async runSweep(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<FeedSweepOutcome> {
@@ -112,6 +126,11 @@ export class FeedSweep extends WorkflowEntrypoint<Env> {
       unreadable: outcome("unreadable"),
       newPosts: reads.reduce((total, result) => total + (result?.newPosts ?? 0), 0),
       failed: found.filter((result) => result === null).length + reads.filter((result) => result === null).length,
+      attempted: found.length + reads.length,
+      missed: [
+        ...entities.flatMap((entity, index) => (found[index] === null ? [entity.id] : [])),
+        ...targets.flatMap((target, index) => (reads[index] === null ? [target.watchId] : [])),
+      ],
     };
     console.log(JSON.stringify({ event: "feed.sweep", ...summary }));
     return summary;

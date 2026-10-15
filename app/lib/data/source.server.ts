@@ -17,7 +17,7 @@ const LATEST_SNAPSHOT_COLUMN = (column: string) =>
 
 const SELECT_WORKSPACE_MENTION_SOURCES = `SELECT s.key, s.platform, ${SOURCE_KIND} AS kind, s.is_enabled, s.config_json, s.degraded_reason, s.last_good_at, ${LATEST_SNAPSHOT_COLUMN("fetched_at")}, ${LATEST_SNAPSHOT_COLUMN("item_count")}, ${LATEST_SNAPSHOT_COLUMN("canary_count")}, (SELECT w3.config_json FROM watch w3 JOIN entity e3 ON e3.id = w3.entity_id WHERE e3.workspace_id = ?1 AND w3.source_id = s.id AND w3.is_active = 1 ORDER BY CASE WHEN 'degraded' IN (json_extract(CASE WHEN json_valid(w3.config_json) THEN w3.config_json ELSE '{}' END, '$.degraded.state'), json_extract(CASE WHEN json_valid(w3.config_json) THEN w3.config_json ELSE '{}' END, '$.noChannel.state')) THEN 0 ELSE 1 END, w3.last_polled_at DESC LIMIT 1) AS watch_config_json FROM source s WHERE (s.kind = 'mentions' OR s.degraded_reason IS NOT NULL) AND s.id IN (SELECT w.source_id FROM watch w JOIN entity e ON e.id = w.entity_id WHERE e.workspace_id = ?1 AND w.is_active = 1) ORDER BY s.key`;
 
-const SELECT_SOURCE_TICKS = `SELECT source_id, source_key, kind, platform, watch_id, fetched_at, item_count FROM (SELECT s.id AS source_id, s.key AS source_key, ${SOURCE_KIND} AS kind, s.platform, w.id AS watch_id, sn.fetched_at, sn.item_count, ROW_NUMBER() OVER (PARTITION BY w.id ORDER BY sn.fetched_at DESC) AS rn FROM snapshot sn JOIN watch w ON w.id = sn.watch_id JOIN source s ON s.id = w.source_id WHERE s.is_enabled = 1 AND w.is_active = 1) WHERE rn <= 2 ORDER BY source_key, watch_id, fetched_at DESC`;
+const SELECT_SOURCE_TICKS = `SELECT source_id, source_key, kind, platform, watch_id, fetched_at, item_count, canary_count FROM (SELECT s.id AS source_id, s.key AS source_key, ${SOURCE_KIND} AS kind, s.platform, w.id AS watch_id, sn.fetched_at, sn.item_count, sn.canary_count, ROW_NUMBER() OVER (PARTITION BY w.id ORDER BY sn.fetched_at DESC) AS rn FROM snapshot sn JOIN watch w ON w.id = sn.watch_id JOIN source s ON s.id = w.source_id WHERE s.is_enabled = 1 AND w.is_active = 1) WHERE rn <= 2 ORDER BY source_key, watch_id, fetched_at DESC`;
 
 const SELECT_SOURCE_LAST_GOOD = `SELECT w.source_id AS source_id, MAX(sn.fetched_at) AS at FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE sn.item_count > 0 GROUP BY w.source_id`;
 
@@ -33,6 +33,7 @@ const sourceTickRow = z.object({
   watch_id: z.string(),
   fetched_at: z.string(),
   item_count: z.number(),
+  canary_count: z.number().nullable(),
 });
 
 const sourceLastGoodRow = z.object({
@@ -191,6 +192,7 @@ export async function readSourceTicks(): Promise<SourceTick[]> {
       watchId: row.watch_id,
       fetchedAt: row.fetched_at,
       itemCount: row.item_count,
+      canaryCount: row.canary_count,
     }));
 }
 

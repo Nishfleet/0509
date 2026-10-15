@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-const STALE_CLAIM_MS = 60 * 60 * 1000;
+export const STALE_CLAIM_MS = 60 * 60 * 1000;
 const SENT_MARKER_TTL_SECONDS = 8 * 24 * 60 * 60;
 
 const sentMarkerKey = (idempotencyKey: string): string => `send-sent:${idempotencyKey}`;
@@ -77,7 +77,12 @@ export async function claimSendAttempt(
 
 export async function resolveSendAttempt(
   db: D1Database,
-  input: { attemptId: string; idempotencyKey: string; outcome: "sent" | "failed"; error: string | null },
+  input: {
+    attemptId: string;
+    idempotencyKey: string;
+    outcome: "sent" | "failed" | "unconfirmed";
+    error: string | null;
+  },
 ): Promise<void> {
   try {
     await db.prepare(RESOLVE_ATTEMPT).bind(input.outcome, input.error, input.attemptId).run();

@@ -1,4 +1,3 @@
-import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { isTesterSubscription } from "../../app/lib/billing/returning.server";
 import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
 import { hasReminderAttempt } from "../../app/lib/data/trial_reminder.server";
@@ -6,6 +5,7 @@ import { readWinbacks, winbackKey, type Winback } from "../../app/lib/data/winba
 
 import { SETTINGS_LINK, unsubscribeHeaders } from "../../app/lib/alert-footer";
 import { ensureUnsubscribeToken, unsubscribeUrlFor } from "./consumer";
+import { reportLifecycleFailure } from "./lifecycle-failure";
 import { sendOnce } from "./send-once";
 import { renderWinback } from "./winback-template";
 
@@ -50,7 +50,7 @@ export async function sendWinbacks(env: Env, now: Date, isTester: TesterCheck = 
   let sent = 0;
   for (const winback of await readWinbacks(env.DB, now)) {
     const done = await winbackOne(env, winback, isTester).catch((error: unknown) => {
-      console.error(JSON.stringify({ event: "delivery.winback_failed", error: redactEmailShaped(String(error)) }));
+      reportLifecycleFailure("delivery.winback_failed", error);
       return false;
     });
     if (done) sent += 1;

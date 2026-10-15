@@ -1,4 +1,3 @@
-import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { PLANS } from "../../app/lib/billing/plans";
 import { isTesterSubscription } from "../../app/lib/billing/returning.server";
 import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
@@ -9,6 +8,7 @@ import {
   type TrialEnding,
 } from "../../app/lib/data/trial_reminder.server";
 
+import { reportLifecycleFailure } from "./lifecycle-failure";
 import { sendOnce } from "./send-once";
 import { renderTrialEnding } from "./trial-template";
 
@@ -54,9 +54,7 @@ export async function sendTrialReminders(
   let sent = 0;
   for (const trial of await readTrialsEnding(env.DB, now)) {
     const done = await remind(env, trial, isTester).catch((error: unknown) => {
-      console.error(
-        JSON.stringify({ event: "delivery.trial_reminder_failed", error: redactEmailShaped(String(error)) }),
-      );
+      reportLifecycleFailure("delivery.trial_reminder_failed", error);
       return false;
     });
     if (done) sent += 1;
