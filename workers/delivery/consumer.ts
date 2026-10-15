@@ -27,7 +27,7 @@ import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
 import { nextHour } from "../../app/lib/home-standing";
 import { neutralizeBareUrls, slackEscape } from "../../app/lib/slack-webhook";
-import { postToSlack, postToSlackOutcome } from "../../app/lib/slack.server";
+import { postToSlackOutcome } from "../../app/lib/slack.server";
 import { slackBriefText } from "../../app/lib/slack-brief";
 import {
   changeHeadline,
@@ -397,8 +397,14 @@ async function postBriefToSlack(env: Env, digestId: string): Promise<void> {
     claimId: claim.id,
     idempotencyKey,
     send: async () => {
-      const posted = await postToSlack(target.target_value, slackBriefText(briefOf(digest)));
-      return posted ? { outcome: "sent", error: null } : { outcome: "failed", error: "slack did not accept the post" };
+      const posted = await postToSlackOutcome(target.target_value, slackBriefText(briefOf(digest)));
+      if (posted === "revoked") {
+        await disconnectSlackTarget(env.DB, target.id);
+        return { outcome: "sent", error: "slack webhook revoked; target disconnected" };
+      }
+      return posted === "sent"
+        ? { outcome: "sent", error: null }
+        : { outcome: "failed", error: "slack did not accept the post" };
     },
   });
 }
@@ -412,9 +418,8 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
       console.error(JSON.stringify({ event: "delivery.teammates_failed", error }));
     });
     await postBriefToSlack(env, message.digest_id).catch((cause: unknown) => {
-      console.error(
-        JSON.stringify({ event: "delivery.slack_brief_failed", error: redactEmailShaped(errorText(cause)) }),
-      );
+      const kind = cause instanceof Error ? cause.constructor.name : "unknown";
+      console.error(JSON.stringify({ event: "delivery.slack_brief_failed", kind }));
     });
   }
   return result;

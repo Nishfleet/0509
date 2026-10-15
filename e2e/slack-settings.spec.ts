@@ -115,7 +115,7 @@ test("a revoked Slack webhook with price and plan alerts off says nothing is bei
   await page.goto("/app/settings");
 
   await expect(page.getByTestId("slack-alerts-setting").getByTestId("slack-reconnect")).toHaveText(
-    "Slack stopped accepting our posts, so we disconnected it. Paste a new webhook address to reconnect. Price and plan alerts are off, so nothing is sent by email or to Slack. Switch them on above.",
+    "Slack stopped accepting our posts, so we disconnected it. Paste a new webhook address to reconnect. Price and plan alerts are off, so they are not sent by email or to Slack. Switch them on above.",
   );
   await scanPage(page, testInfo, quality, `/app/settings slack revoked alerts off ${testInfo.project.name}`, {
     screen: /^settings$/i,

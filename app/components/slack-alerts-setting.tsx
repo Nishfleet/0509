@@ -16,7 +16,7 @@ function ReconnectNote({ show, emailAlerts }: { show: boolean; emailAlerts: bool
       Slack stopped accepting our posts, so we disconnected it. Paste a new webhook address to reconnect.{" "}
       {emailAlerts
         ? "Your alerts keep arriving by email."
-        : "Price and plan alerts are off, so nothing is sent by email or to Slack. Switch them on above."}
+        : "Price and plan alerts are off, so they are not sent by email or to Slack. Switch them on above."}
     </p>
   ) : null;
 }

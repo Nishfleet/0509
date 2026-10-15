@@ -47,7 +47,7 @@ ORDER BY week_start_at DESC LIMIT 1`;
 
 const NEW_RIVAL = `SELECT COALESCE(NULLIF(candidate_name, ''), candidate_domain) AS name, candidate_domain AS domain, verdict_reason AS reason
 FROM suggestion
-WHERE workspace_id = ?1 AND kind = 'add' AND status = 'pending'
+WHERE workspace_id = ?1 AND kind = 'add' AND status = 'pending' AND candidate_domain IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM entity e WHERE e.workspace_id = suggestion.workspace_id AND e.domain = suggestion.candidate_domain)
 ORDER BY verdict_p IS NULL, verdict_p DESC, created_at ASC
 LIMIT 1`;
