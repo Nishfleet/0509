@@ -28,11 +28,11 @@ test.describe("J15 a signed-in customer changes settings", () => {
     const next = options.find((value) => value !== before);
     expect(next).toBeDefined();
     await day.selectOption(next ?? before);
-    await expect(page.getByText("Brief time saved")).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: "Brief time saved." })).toBeVisible();
     await page.reload();
     await expect(page.getByRole("combobox", { name: "Day", exact: true })).toHaveValue(next ?? before);
     await page.getByRole("combobox", { name: "Day", exact: true }).selectOption(before);
-    await expect(page.getByText("Brief time saved")).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: "Brief time saved." })).toBeVisible();
   });
 
   test("J15 pausing the brief says so, survives a reload, and resuming undoes it", async ({ page }) => {
