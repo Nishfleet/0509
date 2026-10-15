@@ -44,7 +44,7 @@ function visibleBlocks(html: string): string[] {
   const body = html
     .replace(/<head>.*?<\/head>/s, "")
     .replace(/<div style="display:none[^"]*">.*?<\/div>/s, "")
-    .replace(/<a [^>]*class="ftn-button"[^>]*>.*?<\/a>/gs, "");
+    .replace(/<a [^>]*class="brief-button"[^>]*>.*?<\/a>/gs, "");
   return body
     .replace(/<p class="brief-muted" style="[^"]*letter-spacing:0\.16em[^"]*">.*?<\/p>/gs, "")
     .split(/<\/(?:p|h1|h2|li|td)>/)
@@ -87,11 +87,11 @@ describe.each(EMAILS.map((email) => [email.name, email] as const))("%s", (_name,
   });
 
   it("has exactly the action buttons it should, none for a teammate copy of the brief", () => {
-    const actions = [...email.html.matchAll(/<a [^>]*class="(?:brief-button|ftn-button)"[^>]*href="([^"]+)"/g)].map(
-      (match) => decode(match[1]),
+    const actions = [...email.html.matchAll(/<a [^>]*class="brief-button"[^>]*href="([^"]+)"/g)].map((match) =>
+      decode(match[1]),
     );
-    const href = [...email.html.matchAll(/<a [^>]*href="([^"]+)"[^>]*class="(?:brief-button|ftn-button)"/g)].map(
-      (match) => decode(match[1]),
+    const href = [...email.html.matchAll(/<a [^>]*href="([^"]+)"[^>]*class="brief-button"/g)].map((match) =>
+      decode(match[1]),
     );
     expect([...actions, ...href]).toEqual([...email.links]);
   });

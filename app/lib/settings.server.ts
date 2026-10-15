@@ -253,7 +253,7 @@ async function inviteTeammate(user: SettingsUser, form: FormData): Promise<Setti
     address: parsed.success ? parsed.data.address : "",
     email: env.EMAIL,
   });
-  return result({ teammateError });
+  return result({ teammateError, saved: teammateError === null ? true : null });
 }
 
 async function dropTeammate(userId: string, form: FormData): Promise<SettingsResult> {
