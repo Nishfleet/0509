@@ -123,7 +123,7 @@ export function AddCompetitor({
   const adding = navigation.state !== "idle" && navigation.formData?.get("intent") === "add";
   const formRef = useClearedAfterAdd(adding, message);
   return (
-    <div className="mt-12">
+    <div className="mt-8">
       <Form method="post" ref={formRef}>
         <input type="hidden" name="intent" value="add" />
         <label htmlFor="add-competitor" className={BLOCK_HEADING}>

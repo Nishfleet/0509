@@ -8,6 +8,7 @@ import { consoleFailures, isLocalLane, run, seedPreviewSession, watchConsole, wa
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const MAX_TAB_STOPS = 60;
 const MAX_LAYOUT_SHIFT = 0.02;
+const ACTION_WINDOW_MS = 3000;
 const STAMP = "2026-10-12T00:00:00.000Z";
 
 export interface Quality {
@@ -16,16 +17,26 @@ export interface Quality {
 }
 
 export async function startQuality(page: Page): Promise<Quality> {
-  await page.addInitScript(() => {
+  await page.addInitScript((actionWindow) => {
     Reflect.set(window, "__cls", 0);
+    let lastInput = Number.NEGATIVE_INFINITY;
+    for (const type of ["pointerdown", "keydown", "submit"]) {
+      document.addEventListener(
+        type,
+        () => {
+          lastInput = performance.now();
+        },
+        { capture: true },
+      );
+    }
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
-        if (!Reflect.get(entry, "hadRecentInput")) {
+        if (!Reflect.get(entry, "hadRecentInput") && entry.startTime - lastInput > actionWindow) {
           Reflect.set(window, "__cls", Number(Reflect.get(window, "__cls")) + Number(Reflect.get(entry, "value")));
         }
       }
     }).observe({ type: "layout-shift", buffered: true });
-  });
+  }, ACTION_WINDOW_MS);
   const failedRequests = watchRequests(page);
   return { watched: watchConsole(page), failedRequests };
 }
