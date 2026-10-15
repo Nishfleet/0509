@@ -3,45 +3,56 @@ import { describe, expect, it } from "vitest";
 import { planLine } from "../../app/lib/billing/plan-line";
 
 describe("planLine", () => {
+  const NOW = new Date("2026-10-01T00:00:00.000Z");
+
   it("says no payment is set up when nothing is billed", () => {
-    expect(planLine({ tier: "scout", status: "none", currentPeriodEnd: null, trialing: false, billed: false })).toBe(
-      "You're on Scout. No payment is set up.",
-    );
+    expect(
+      planLine({ tier: "scout", status: "none", currentPeriodEnd: null, trialing: false, billed: false }, NOW),
+    ).toBe("You're on Scout. No payment is set up.");
   });
 
   it("gives the renewal date of an active plan", () => {
     expect(
-      planLine({
-        tier: "starter",
-        status: "active",
-        currentPeriodEnd: "2036-10-15T00:00:00.000Z",
-        trialing: false,
-        billed: true,
-      }),
-    ).toBe("You're on Starter. It renews on 15 October 2036.");
+      planLine(
+        {
+          tier: "starter",
+          status: "active",
+          currentPeriodEnd: "2026-10-15T00:00:00.000Z",
+          trialing: false,
+          billed: true,
+        },
+        NOW,
+      ),
+    ).toBe("You're on Starter. It renews on 15 October 2026.");
   });
 
   it("says when a cancelled plan stops", () => {
     expect(
-      planLine({
-        tier: "agency",
-        status: "cancelled",
-        currentPeriodEnd: "2036-10-15T00:00:00.000Z",
-        trialing: false,
-        billed: true,
-      }),
-    ).toBe("You're on Agency until 15 October 2036, then it stops.");
+      planLine(
+        {
+          tier: "agency",
+          status: "cancelled",
+          currentPeriodEnd: "2026-10-15T00:00:00.000Z",
+          trialing: false,
+          billed: true,
+        },
+        NOW,
+      ),
+    ).toBe("You're on Agency until 15 October 2026, then it stops.");
   });
 
   it("says a lapsed plan has ended and what the customer is on now", () => {
     expect(
-      planLine({
-        tier: "scout",
-        status: "cancelled",
-        currentPeriodEnd: "2026-09-15T00:00:00.000Z",
-        trialing: false,
-        billed: true,
-      }),
+      planLine(
+        {
+          tier: "scout",
+          status: "cancelled",
+          currentPeriodEnd: "2026-09-15T00:00:00.000Z",
+          trialing: false,
+          billed: true,
+        },
+        NOW,
+      ),
     ).toBe("Your paid plan ended on 15 September 2026. You're on Scout.");
   });
 
