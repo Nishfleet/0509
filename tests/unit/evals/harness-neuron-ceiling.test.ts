@@ -36,8 +36,9 @@ afterEach(() => {
 
 const MODEL = "@cf/openai/gpt-oss-120b";
 
-async function started(): Promise<Pick<typeof Harness, "postWorkersAi" | "runEval">> {
+async function started(startupCeiling: string): Promise<Pick<typeof Harness, "postWorkersAi" | "runEval">> {
   vi.resetModules();
+  vi.stubEnv("EVAL_MAX_NEURONS", startupCeiling);
   const { postWorkersAi, runEval } = await import("../../evals/harness");
   await runEval(
     "probe",
@@ -50,8 +51,7 @@ async function started(): Promise<Pick<typeof Harness, "postWorkersAi" | "runEva
 
 describe("EVAL_MAX_NEURONS", () => {
   it("refuses the call that would pass the ceiling and never reaches Workers AI for it", async () => {
-    vi.stubEnv("EVAL_MAX_NEURONS", "100");
-    const { postWorkersAi } = await started();
+    const { postWorkersAi } = await started("100");
 
     await postWorkersAi(MODEL, {});
     await expect(postWorkersAi(MODEL, {})).rejects.toThrow(/neuron ceiling of 100/);
@@ -60,8 +60,7 @@ describe("EVAL_MAX_NEURONS", () => {
   });
 
   it("is off when unset", async () => {
-    vi.stubEnv("EVAL_MAX_NEURONS", "");
-    const { postWorkersAi } = await started();
+    const { postWorkersAi } = await started("");
 
     for (let index = 0; index < 3; index += 1) await postWorkersAi(MODEL, {});
 
@@ -74,8 +73,7 @@ describe("runEval ceiling fit", () => {
   const asked = () => Promise.resolve({ model: "m", p: null, choice: "x" });
 
   it("refuses a run whose call budget cannot fit before any paid call", async () => {
-    vi.stubEnv("EVAL_MAX_NEURONS", "100");
-    const { runEval } = await started();
+    const { runEval } = await started("100");
     const rows = Array.from({ length: 4 }, (_, index) => ({
       id: `row-${String(index)}`,
       split: "test" as const,
@@ -89,8 +87,7 @@ describe("runEval ceiling fit", () => {
   });
 
   it("counts neurons already spent in the same process", async () => {
-    vi.stubEnv("EVAL_MAX_NEURONS", "300");
-    const { postWorkersAi, runEval } = await started();
+    const { postWorkersAi, runEval } = await started("300");
     await postWorkersAi(MODEL, {});
     await postWorkersAi(MODEL, {});
     const rows = [{ id: "a", split: "test" as const, why: "w" }];
@@ -101,8 +98,7 @@ describe("runEval ceiling fit", () => {
   });
 
   it("lets a run go ahead when its call budget fits the ceiling", async () => {
-    vi.stubEnv("EVAL_MAX_NEURONS", "100");
-    const { runEval } = await started();
+    const { runEval } = await started("100");
     const rows = [{ id: "a", split: "test" as const, why: "w" }];
 
     const report = await runEval("probe", rows, asked, scored);
@@ -120,7 +116,7 @@ describe("EVAL_DAILY_NEURON_CEILING", () => {
 
   it("goes ahead when today's neurons plus the run ceiling fit, asking GraphQL once", async () => {
     graphql.mockImplementation(() => Promise.resolve(reply(7000)));
-    const { postWorkersAi } = await started();
+    const { postWorkersAi } = await started("2000");
 
     await postWorkersAi(MODEL, {});
     await postWorkersAi(MODEL, {});
@@ -131,7 +127,7 @@ describe("EVAL_DAILY_NEURON_CEILING", () => {
 
   it("stops before any call when today's neurons plus the run ceiling pass the daily ceiling", async () => {
     graphql.mockImplementation(() => Promise.resolve(reply(7001)));
-    const { postWorkersAi } = await started();
+    const { postWorkersAi } = await started("2000");
 
     await expect(postWorkersAi(MODEL, {})).rejects.toThrow(/daily ceiling of 9000/);
 
@@ -140,7 +136,7 @@ describe("EVAL_DAILY_NEURON_CEILING", () => {
 
   it("stops before any call when GraphQL answers an error status", async () => {
     graphql.mockImplementation(() => Promise.resolve(new Response("no", { status: 403 })));
-    const { postWorkersAi } = await started();
+    const { postWorkersAi } = await started("2000");
 
     await expect(postWorkersAi(MODEL, {})).rejects.toThrow(/cannot read today's neurons/);
 
@@ -149,7 +145,7 @@ describe("EVAL_DAILY_NEURON_CEILING", () => {
 
   it("stops before any call when GraphQL is unreachable", async () => {
     graphql.mockImplementation(() => Promise.reject(new Error("offline")));
-    const { postWorkersAi } = await started();
+    const { postWorkersAi } = await started("2000");
 
     await expect(postWorkersAi(MODEL, {})).rejects.toThrow(/cannot read today's neurons/);
 
@@ -160,7 +156,7 @@ describe("EVAL_DAILY_NEURON_CEILING", () => {
     graphql.mockImplementation(() =>
       Promise.resolve(new Response(JSON.stringify({ errors: [{ message: "denied" }] }), { status: 200 })),
     );
-    const { postWorkersAi } = await started();
+    const { postWorkersAi } = await started("2000");
 
     await expect(postWorkersAi(MODEL, {})).rejects.toThrow(/cannot read today's neurons/);
 
