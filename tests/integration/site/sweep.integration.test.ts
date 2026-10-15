@@ -341,6 +341,23 @@ describe("nightly site sweep", () => {
     expect(await signals()).toHaveLength(2);
   });
 
+  it("files nothing when a rival's page switches language and files the next real change in that language", async () => {
+    const [rival] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
+    if (rival === undefined) throw new Error("expected the rival's homepage");
+    const page = (lang: string, word: string) =>
+      `<!doctype html><html lang="${lang}"><body><p>${word} plans start soon.</p><p>${PAD}</p></body></html>`;
+    const publish = async (html: string, tick: string) => {
+      readHolder.html = html;
+      const result = await checkSitePage(rival, await nextTick(tick));
+      if (result.outcome === "changed") await publishSiteChange(rival, result);
+    };
+    await publish(page("en-US", "Monthly"), "lang-1");
+    await publish(page("de-DE", "Monatliche"), "lang-2");
+    expect(await signals()).toHaveLength(0);
+    await publish(page("de-DE", "Jaehrliche"), "lang-3");
+    expect(await signals()).toHaveLength(1);
+  });
+
   it("judges the filed change signal, and a retried publish judges the same signal", async () => {
     Reflect.set(env, "AI", {
       async run(_model: string, request: { questions: Record<string, { type: string }> }) {

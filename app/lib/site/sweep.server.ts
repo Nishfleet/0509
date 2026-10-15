@@ -69,6 +69,17 @@ async function isFlapBack(target: SiteSweepTarget, changed: ChangedPage): Promis
   });
 }
 
+async function storedLang(key: string): Promise<string | null> {
+  const head = await env.SNAPSHOTS.head(key);
+  return head?.customMetadata?.lang ?? null;
+}
+
+async function isLocaleSwitch(target: SiteSweepTarget, changed: ChangedPage): Promise<boolean> {
+  if (target.entityRole !== "competitor") return false;
+  const [before, after] = await Promise.all([storedLang(changed.previousTextKey), storedLang(changed.textKey)]);
+  return before !== null && after !== null && before !== after;
+}
+
 async function readVisibleText(key: string): Promise<string | null> {
   const raw = await readText(key);
   return raw === null ? null : decodeHtmlEntities(raw);
@@ -443,6 +454,10 @@ export async function publishSiteChange(target: SiteSweepTarget, changed: Change
   ]);
   if (sameVisibleText(changed, before, after)) {
     console.log(JSON.stringify({ event: "site.change_same_text", pageId: target.pageId }));
+    return changed.snapshotId;
+  }
+  if (await isLocaleSwitch(target, changed)) {
+    console.log(JSON.stringify({ event: "site.change_locale_switch", pageId: target.pageId }));
     return changed.snapshotId;
   }
   if (await isFlapBack(target, changed)) {
