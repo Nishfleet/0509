@@ -38,7 +38,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const { raw, subject, taken, landing, workspaceId, userId } = await readSubjectAccess(request, timings);
   if (!landing) throw redirect("/app");
   const otherBrands = await readOtherBrands(userId);
-  if (subject === null) return { card: null, limited: false, otherBrands };
+  if (subject === null) {
+    if (raw === "") throw redirect("/onboarding");
+    return { card: null, limited: false, otherBrands };
+  }
   if (taken || workspaceId === null) throw redirect("/onboarding");
   if (!(await timings.measure("limit", withinProbeLimit(userId)))) return { card: null, limited: true, otherBrands };
   const draft = await readDraft(workspaceId, subject.registrable);
