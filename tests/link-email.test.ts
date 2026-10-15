@@ -29,6 +29,11 @@ describe.each(mails)("the %s email", (_name, mail) => {
     expect(mail.text).toContain(`Questions? Write to ${SUPPORT_ADDRESS}.`);
   });
 
+  it("sets the sans font on the button so mail clients do not fall back to a serif", () => {
+    const first = mail.html.slice(mail.html.indexOf("<a "), mail.html.indexOf("</a>"));
+    expect(first).toContain("font-family:-apple-system");
+  });
+
   it("keeps exclamation marks out of every part", () => {
     expect(mail.subject + mail.text).not.toContain("!");
   });
