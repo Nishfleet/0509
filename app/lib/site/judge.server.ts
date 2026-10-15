@@ -400,7 +400,7 @@ async function rejudgeStoredChange(row: UnjudgedChange): Promise<boolean> {
   const judged = await judgeChange(input);
   const band = judged.selfBreakage?.band;
   if (row.entityRole === "self" && (band === "alert" || band === "check") && showsBreakage(input.evidence)) {
-    await openLateBreakage(row, band, new Date());
+    await openLateBreakage(row, { band, evidence: input.evidence }, new Date());
   }
   if (judged.verdictIds.length > 0) {
     await linkVerdictsStatement({

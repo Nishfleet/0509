@@ -208,6 +208,11 @@ describe("own-site alert in one sweep pass", () => {
       .bind(WS)
       .all<{ incident_id: string | null; kind: string; severity: string }>();
     expect(alerts.results).toEqual([{ incident_id: incident.id, kind: "own_site_broken", severity: "high" }]);
+    const proof = await env.DB.prepare("SELECT body FROM alert WHERE incident_id = ?")
+      .bind(incident.id)
+      .first<{ body: string }>();
+    expect(proof?.body).toContain("status 200");
+    expect(proof?.body).toContain("prices went from 2 to none");
 
     expect(send).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledWith({ incident_id: incident.id });

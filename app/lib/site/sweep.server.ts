@@ -25,6 +25,7 @@ import { takeBrowserScreenshot } from "./browser-budget.server";
 import { computeBreakageEvidence } from "./breakage-evidence";
 import type { CheckPageResult } from "./check-page.server";
 import { checkPage } from "./check-page.server";
+import { breakageProof } from "./breakage-evidence";
 import { breakageConfirmed } from "./breakage-recheck.server";
 import { changedWordCounts, diffPageText } from "./diff";
 import type { JudgedChange, JudgeInput } from "./judge.server";
@@ -395,7 +396,7 @@ function breakageStatements(
       incidentId: ids.incident,
       severity: filing.band === "alert" ? "high" : "normal",
       title: `${subject.domain} looks broken: breakage`,
-      body: null,
+      body: breakageProof(change.evidence),
       createdAt: now,
     }),
   ];

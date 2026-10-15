@@ -18,9 +18,7 @@ import { PROBE_HEADERS, PROBE_TIMEOUT_MS } from "./breakage-recheck.server";
 import { ensureHomePages } from "./sweep.server";
 
 export type OwnSiteHealth =
-  | { state: "healthy" }
-  | { state: "unknown"; reason: string }
-  | { state: "broken"; kind: string };
+  { state: "healthy" } | { state: "unknown"; reason: string } | { state: "broken"; kind: string };
 
 export interface OwnSitePlan {
   pages: OwnSitePage[];
@@ -115,7 +113,7 @@ export async function openOwnSiteIncident(page: OwnSitePage, kind: string): Prom
     incidentId,
     severity: "high",
     title: `${pageHost(page.url)} looks broken: ${kind}`,
-    body: null,
+    body: `Two reads of the page in a row failed: ${kind}.`,
     createdAt: openedAt,
   }).run();
   await env.SEND_EMAIL.send({ incident_id: incidentId });
