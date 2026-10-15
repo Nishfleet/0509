@@ -473,7 +473,8 @@ describe("inline-styled html, and the voice", () => {
     expect(html).toContain(".brief-card{background-color:#1c1a15;color:#f2efe4;}");
     expect(html).toContain(".brief-muted{color:#a9a294;}");
     expect(html).toContain(".brief-page{background-color:#14130f;}");
-    expect(html).toContain('max-width:600px;margin:0 auto;padding:24px;"');
+    expect(html).toContain('width="600"');
+    expect(html).toContain('max-width:600px;margin:0 auto;"');
     expect(html).not.toContain("border-radius");
     expect(html.match(/<style>/g)).toHaveLength(1);
   });
