@@ -195,6 +195,7 @@ function rankedRows({ payload, entities, sources, counts, moves }: RankedRowsInp
     .map((brand) => {
       const entity = byId.get(brand.entity_id);
       const activity = brand.ad_delta + brand.mention_delta + brand.site_change_count + brand.new_roles;
+      const self = entity?.role === "self";
       const pills = sources.map((source) => {
         const count =
           counts.find((entry) => entry.entityId === brand.entity_id && entry.sourceKey === source.key)?.count ?? 0;
@@ -208,11 +209,11 @@ function rankedRows({ payload, entities, sources, counts, moves }: RankedRowsInp
       });
       return {
         entityId: brand.entity_id,
-        position: activity === 0 ? null : brand.rank,
+        position: activity === 0 && !self ? null : brand.rank,
         name: brand.name,
         domain: entity?.domain ?? null,
         movement: movementLabel(brand.movement, brand.is_new),
-        self: entity?.role === "self",
+        self,
         signals: pills.reduce((sum, pill) => sum + pill.count, 0),
         why: brand.biggest_move,
         move: moves.find((move) => move.entityId === brand.entity_id) ?? null,

@@ -156,7 +156,7 @@ function RowMove({ move }: { move: SiteChangeView }): ReactElement | null {
 }
 
 function positionLabel(row: HomeRow): React.ReactNode {
-  if (row.signals === 0 || row.position === null) {
+  if ((row.signals === 0 && !row.self) || row.position === null) {
     return (
       <>
         <span aria-hidden="true">—</span>
@@ -169,6 +169,6 @@ function positionLabel(row: HomeRow): React.ReactNode {
 
 function pillText(pill: HomePill): string {
   if (pill.state === "live") return `${pill.label} · ${String(pill.count)}`;
-  if (pill.state === "degraded") return `${pill.label} · not answering`;
+  if (pill.state === "degraded") return `${pill.label} · could not be checked right now`;
   return `${pill.label} · nothing new`;
 }
