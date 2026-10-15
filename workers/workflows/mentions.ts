@@ -6,11 +6,11 @@ import { MENTIONS_SWEEP_CRON, sweepMonitor } from "../../app/lib/cadence";
 import { readCanarySources } from "../../app/lib/data/source.server";
 import { FAILED_TARGET_MS, SweepBudget, timed } from "../mentions/budget";
 import { runCanary } from "../mentions/canary";
+import { lostSources, mentionsHealth, skippedTargets } from "../mentions/health";
 import type { Streaks } from "../mentions/retry";
 import { deferred, retrySkipped, sustainedSkips, track, tripped } from "../mentions/retry";
 import type { MentionTarget, TargetOutcome } from "../mentions/sweep";
 import { planTargets, sweepTarget } from "../mentions/sweep";
-import { sweepHealth } from "../../app/lib/sweep-health";
 import { isNativeSchedule } from "../workflow-crons";
 import { withStepCheckIn } from "../workflow-monitor";
 
@@ -25,6 +25,7 @@ export interface MentionsOutcome {
   swept: number;
   failed: number;
   missed: string[];
+  skippedTargets: number;
   stored: number;
   unjudged: number;
   skipped: number;
@@ -38,8 +39,7 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
       {
         slug: "mentions-sweep",
         config: MONITOR,
-        health: (outcome) =>
-          sweepHealth({ failed: outcome.failed, attempted: outcome.targets, missed: outcome.missed }),
+        health: mentionsHealth,
       },
       () => this.runMentions(event, step),
     );
@@ -66,7 +66,8 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
       targets: targets.length,
       swept: done.length,
       failed: settled.length - done.length,
-      missed: [...new Set(targets.flatMap((target, index) => (settled[index] === null ? [target.pluginKey] : [])))],
+      missed: lostSources(targets, settled),
+      skippedTargets: skippedTargets(settled),
       stored: done.reduce((sum, outcome) => sum + outcome.stored, 0),
       unjudged: done.reduce((sum, outcome) => sum + outcome.unjudged, 0),
       skipped: done.reduce((sum, outcome) => sum + outcome.skipped, 0),
