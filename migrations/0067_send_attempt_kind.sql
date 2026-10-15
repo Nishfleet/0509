@@ -1,7 +1,7 @@
 -- 0067_send_attempt_kind.sql — every email kind leaves one send_attempt row
 -- that says what it was, what subject went out and which provider id the
--- send returned. Sign-in, change-email and address mail has no workspace
--- yet, so workspace_id becomes nullable; recipient_hash identifies those.
+-- send returned. Sign-in and change-email mail has no workspace yet, so
+-- workspace_id becomes nullable; those rows hold no address at all.
 --
 -- SQLite cannot drop NOT NULL in place, so send_attempt is rebuilt. Its only
 -- child is signal_delivery (send_attempt_id ON DELETE SET NULL), and
