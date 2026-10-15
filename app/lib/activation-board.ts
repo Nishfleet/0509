@@ -1,4 +1,4 @@
-export interface ActivationWeek {
+interface ActivationWeek {
   week: string;
   signed_up: number;
   watching: number;
