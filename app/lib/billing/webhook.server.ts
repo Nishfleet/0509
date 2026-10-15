@@ -36,6 +36,14 @@ function log(event: string, fields: Record<string, string>): void {
   console.log(JSON.stringify({ event, ...fields }));
 }
 
+function warn(event: string, fields: Record<string, string>): void {
+  console.warn(JSON.stringify({ event, ...fields }));
+}
+
+function fail(event: string, fields: Record<string, string>): void {
+  console.error(JSON.stringify({ event, ...fields }));
+}
+
 type Workspace = { kind: "found"; id: string } | { kind: "retry" } | { kind: "ignore" };
 
 async function resolveWorkspace(data: z.infer<typeof subscriptionData>): Promise<Workspace> {
@@ -47,7 +55,7 @@ async function resolveWorkspace(data: z.infer<typeof subscriptionData>): Promise
     return { kind: "retry" };
   }
   if (!(await isCheckoutProof(claimed, data.product_id, data.metadata?.proof))) {
-    log("billing.webhook_unproven", { subscription: data.subscription_id });
+    warn("billing.webhook_unproven", { subscription: data.subscription_id });
     return { kind: "ignore" };
   }
   return { kind: "found", id: claimed };
@@ -84,14 +92,14 @@ export async function applySubscription(body: unknown, event: SubscriptionEvent)
   const { type, timestamp } = event;
   const parsed = subscriptionEvent.safeParse(body);
   if (!parsed.success) {
-    log("billing.webhook_unparsed", { type });
-    return "done";
+    fail("billing.webhook_unparsed", { type });
+    return "retry";
   }
   const { data } = parsed.data;
   const tier = planIdForProduct(data.product_id);
   if (tier === null) {
-    log("billing.webhook_unknown_product", { type, product: data.product_id });
-    return "done";
+    fail("billing.webhook_unknown_product", { type, product: data.product_id });
+    return "retry";
   }
   const workspace = await resolveWorkspace(data);
   if (workspace.kind === "retry") return "retry";
@@ -105,7 +113,7 @@ export async function applySubscription(body: unknown, event: SubscriptionEvent)
     timestamp,
   });
   if (change === "stale") {
-    log("billing.webhook_other_subscription_ignored", { type, subscription: data.subscription_id });
+    warn("billing.webhook_other_subscription_ignored", { type, subscription: data.subscription_id });
     return "done";
   }
   const cancelledNow = data.status === "cancelled" && data.cancel_at_next_billing_date !== true;
@@ -165,7 +173,7 @@ export async function handleDodoWebhook(request: Request): Promise<Response> {
   const json = readJson(body);
   const event = envelope.safeParse(json);
   if (!event.success) {
-    log("billing.webhook_ignored", { reason: "unexpected_payload" });
+    warn("billing.webhook_ignored", { reason: "unexpected_payload" });
     return new Response(null, OK);
   }
   const { type, timestamp, data } = event.data;
