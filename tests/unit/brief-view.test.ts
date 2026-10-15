@@ -120,7 +120,7 @@ describe("the brief view", () => {
     expect(html).toContain("You&#x27;re #2 of 6 this week");
     expect(html).toContain("12 mentions · 3 site changes<");
     expect(html).toContain(
-      "We saw a problem on https://drylight.example/ at Friday 18 September 2026, 05:00 America/New_York. It isn&#x27;t fixed yet.",
+      "We saw a problem on https://drylight.example/ at Friday 18 September 2026, 05:00 GMT-4. It isn&#x27;t fixed yet.",
     );
     expect(html).toMatch(
       /<p>Oaks: #1, holding steady<\/p><p class="text-ink-soft">Oaks shipped a 2026 pricing page<\/p>/,
