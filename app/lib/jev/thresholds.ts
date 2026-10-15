@@ -18,6 +18,8 @@ export const ACT_AT = 0.9;
 
 export const REJECT_AT = 0.1;
 
+const ABOUT_BRAND_KEEP_AT = 0.5;
+
 export const PRICING_ACT_AT = 0.6;
 
 export const BREAKAGE_ALERT_AT = 0.5;
@@ -35,4 +37,8 @@ export function noulAction(p: number): NoulAction {
   if (p >= ACT_AT) return "act";
   if (p <= REJECT_AT) return "reject";
   return "maybe";
+}
+
+export function isAboutBrand(p: number): boolean {
+  return p >= ABOUT_BRAND_KEEP_AT;
 }
