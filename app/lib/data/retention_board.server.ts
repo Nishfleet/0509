@@ -47,7 +47,7 @@ const EMAIL_TO_VISIT = `SELECT substr(a.idempotency_key, 1, instr(a.idempotency_
   FROM send_attempt a
  WHERE a.status = 'sent' AND a.workspace_id IS NOT NULL AND a.attempted_at >= ?1 AND instr(a.idempotency_key, ':') > 1
    AND NOT EXISTS (SELECT 1 FROM workspace f WHERE f.id = a.workspace_id AND f.fixture = 1)
- GROUP BY kind
+ GROUP BY 1
  ORDER BY sent DESC`;
 
 const funnelRow = z.object({
