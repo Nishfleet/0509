@@ -33,7 +33,13 @@ export type MentionsAdapter = (target: MentionsTarget, cursor: MentionsCursor) =
 export const BLOCKING_STATUSES: ReadonlySet<number> = new Set([202, 403, 429]);
 
 export const SOURCE_SETTINGS = {
-  "gdelt.doc": { timeoutMs: 24_000, timeoutRetries: 1, retryBackoffMs: 1_000 },
+  "gdelt.doc": {
+    timeoutMs: 24_000,
+    timeoutRetries: 1,
+    retryBackoffMs: 1_000,
+    rateLimitRetries: 5,
+    rateLimitPauseMs: 8_000,
+  },
 } as const;
 
 export class UpstreamBlockedError extends Error {
@@ -47,12 +53,28 @@ export function isUpstreamTimeout(error: unknown): boolean {
   return typeof error === "object" && error !== null && (error as { name: unknown }).name === "TimeoutError";
 }
 
-export async function fetchUpstream(
-  url: string,
-  timeoutMs = 8000,
-  { retries = 0, backoffMs = 0 }: { retries?: number; backoffMs?: number } = {},
-): Promise<Response> {
-  for (let attempt = 0; ; attempt += 1) {
+function pause(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+interface UpstreamRetry {
+  retries?: number;
+  backoffMs?: number;
+  rateLimitRetries?: number;
+  rateLimitPauseMs?: number;
+}
+
+type RetryKind = "timeouts" | "limited";
+
+function retryKind(error: unknown, used: Record<RetryKind, number>, options: UpstreamRetry): RetryKind | null {
+  if (isUpstreamTimeout(error)) return used.timeouts < (options.retries ?? 0) ? "timeouts" : null;
+  const rateLimited = error instanceof UpstreamBlockedError && error.status === 429;
+  return rateLimited && used.limited < (options.rateLimitRetries ?? 0) ? "limited" : null;
+}
+
+export async function fetchUpstream(url: string, timeoutMs = 8000, options: UpstreamRetry = {}): Promise<Response> {
+  let used: Record<RetryKind, number> = { timeouts: 0, limited: 0 };
+  for (;;) {
     try {
       const response = await fetchOutbound(url, {
         headers: { "user-agent": CRAWLER_USER_AGENT },
@@ -61,8 +83,10 @@ export async function fetchUpstream(
       if (BLOCKING_STATUSES.has(response.status)) throw new UpstreamBlockedError(response.status);
       return response;
     } catch (error) {
-      if (!isUpstreamTimeout(error) || attempt >= retries) throw error;
-      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      const kind = retryKind(error, used, options);
+      if (kind === null) throw error;
+      used = { ...used, [kind]: used[kind] + 1 };
+      await pause((kind === "timeouts" ? options.backoffMs : options.rateLimitPauseMs) ?? 0);
     }
   }
 }

@@ -97,3 +97,21 @@ test("a site change copies as one plain paragraph, by keyboard, with a toast and
   expect(overflow).toBe(0);
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
+
+test("pointing at a capture plate loads the before-and-after dialog before the click", async ({ page, baseURL }) => {
+  const { cookie } = await seedPreviewSession("plate-preload", seed);
+  await page.context().addCookies(
+    cookie.split("; ").map((pair) => {
+      const [name, ...value] = pair.split("=");
+      return { name, value: value.join("="), url: baseURL ?? "" };
+    }),
+  );
+
+  await page.goto("/app/alerts");
+  const plate = page.getByRole("button", { name: /^Open before and after: / });
+  const chunk = page.waitForRequest((request) => request.url().includes("capture-dialog"));
+  await plate.hover();
+  await chunk;
+  await plate.click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+});

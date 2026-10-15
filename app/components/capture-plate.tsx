@@ -7,7 +7,8 @@ import type { CaptureShot } from "./capture-shot";
 export { shotSrc };
 export type { CaptureShot };
 
-const CaptureDialog = lazy(() => import("./capture-dialog").then((module) => ({ default: module.CaptureDialog })));
+const loadCaptureDialog = () => import("./capture-dialog");
+const CaptureDialog = lazy(() => loadCaptureDialog().then((module) => ({ default: module.CaptureDialog })));
 
 export interface CapturePlateProps {
   label: string;
@@ -26,6 +27,8 @@ export function CapturePlate({ label, before, after, eager = false }: CapturePla
         aria-label={`Open before and after: ${label}`}
         className="relative block h-[74px] w-[104px] shrink-0 overflow-hidden rounded-none border-[1.5px] border-line bg-card max-[859px]:h-[56px] max-[859px]:w-[76px]"
         data-slot="capture-plate"
+        onPointerEnter={() => void loadCaptureDialog()}
+        onFocus={() => void loadCaptureDialog()}
         onClick={() => {
           setOpened(true);
         }}
