@@ -172,7 +172,7 @@ export async function saveDeliveryAddress(input: {
     return { error: null, suppressed: false };
   }
 
-  if (!(await takeRecipientSlot(address))) return { error: RECIPIENT_CAPPED, suppressed: false };
+  if (!(await takeRecipientSlot(address, new Date()))) return { error: RECIPIENT_CAPPED, suppressed: false };
   const error = await sendVerifyConfirmation(input.email, workspaceId, address);
   return { error, suppressed: false };
 }

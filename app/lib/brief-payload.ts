@@ -45,6 +45,7 @@ const brandLineSchema = z
     mention_delta: count,
     site_change_count: count,
     new_roles: count,
+    baseline: z.array(z.string()).optional().catch(undefined),
   })
   .transform((line) => ({ ...line, name: line.name.length > 0 ? line.name : line.entity_id }));
 
@@ -89,6 +90,12 @@ const checkedSchema = z
     ],
   }));
 
+const newRivalSchema = z
+  .object({ name: text, domain: text, reason: optionalText })
+  .nullable()
+  .optional()
+  .catch(undefined);
+
 const briefPayloadSchema = z.object({
   workspace_id: text,
   timezone: text,
@@ -112,6 +119,7 @@ const briefPayloadSchema = z.object({
   own_site: ownSiteSchema,
   checked: checkedSchema,
   next_brief_at: optionalText,
+  new_rival: newRivalSchema,
 });
 
 export type BriefPayload = z.output<typeof briefPayloadSchema>;

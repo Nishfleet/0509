@@ -44,7 +44,7 @@ function runningLine(plan: PlanSummary, name: string, now: Date): string {
   return date === null ? `You're on ${name}.` : `You're on ${name}. It renews on ${date}.`;
 }
 
-export function planLine(plan: PlanSummary, now: Date = new Date()): string {
+export function planLine(plan: PlanSummary, now: Date): string {
   const name = PLANS.find((entry) => entry.id === plan.tier)?.name ?? "Scout";
   if (!isPlanLapsed(plan, now)) return runningLine(plan, name, now);
   return endedLine(name, formatDay(plan.currentPeriodEnd));
