@@ -34,9 +34,15 @@ describe("requireSession and requireFreshSession", () => {
 
   it("says the session ended only when a session cookie was sent", async () => {
     getSession.mockResolvedValue(null);
-    const stale = await requireSession(request).catch((thrown: Response) => thrown);
+    const stale: unknown = await requireSession(request).then(
+      () => null,
+      (thrown: unknown) => thrown,
+    );
     expect((stale as Response).headers.get("location")).toBe("/login?ended=1");
-    const bare = await requireSession(new Request("https://0509.io/app")).catch((thrown: Response) => thrown);
+    const bare: unknown = await requireSession(new Request("https://0509.io/app")).then(
+      () => null,
+      (thrown: unknown) => thrown,
+    );
     expect((bare as Response).headers.get("location")).toBe("/login");
   });
 });
