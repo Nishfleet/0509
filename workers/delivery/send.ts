@@ -25,7 +25,7 @@ const RECIPIENT_SUPPRESSED = "E_RECIPIENT_SUPPRESSED";
 
 function recipientAddresses(to: EmailMessageBuilder["to"]): string[] {
   const list = Array.isArray(to) ? to : [to];
-  return list.map((one) => (typeof one === "string" ? one : one.email));
+  return list.flatMap((one) => (one === undefined ? [] : [typeof one === "string" ? one : one.email]));
 }
 
 export async function sendMessage(email: SendEmail, message: EmailMessageBuilder): Promise<SendResult> {
@@ -33,9 +33,9 @@ export async function sendMessage(email: SendEmail, message: EmailMessageBuilder
     await email.send({ replyTo: SUPPORT_ADDRESS, ...message });
   } catch (end) {
     if (end instanceof Error && "code" in end && end.code === RECIPIENT_SUPPRESSED) {
-      const addresses = recipientAddresses(message.to);
-      if (addresses.length === 1) {
-        await suppressBouncedAddress(addresses[0]).catch((failure: unknown) => {
+      const [only, ...others] = recipientAddresses(message.to);
+      if (only !== undefined && others.length === 0) {
+        await suppressBouncedAddress(only).catch((failure: unknown) => {
           console.error({ event: "send.suppression_record_failed", error: errorText(failure) });
         });
       }
