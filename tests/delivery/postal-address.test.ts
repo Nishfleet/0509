@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { renderAlertFooter, SETTINGS_LINK } from "../../workers/delivery/alert-footer";
-import { POSTAL_ADDRESS, postalLine } from "../../workers/delivery/email-shell";
+import { renderAlertFooter, SETTINGS_LINK } from "../../app/lib/alert-footer";
+import { POSTAL_ADDRESS, postalLine } from "../../app/lib/email-shell";
 
 describe("the postal address line in every email footer", () => {
   it("is left out while no address is set", () => {
@@ -29,7 +29,7 @@ describe("the postal address line in every email footer", () => {
       );
     expect(
       !launched || POSTAL_ADDRESS !== null,
-      "launch edit routes the landing at /: set POSTAL_ADDRESS in workers/delivery/email-shell.ts first",
+      "launch edit routes the landing at /: set POSTAL_ADDRESS in app/lib/email-shell.ts first",
     ).toBe(true);
   });
 });

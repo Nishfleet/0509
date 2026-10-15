@@ -18,17 +18,11 @@ test.afterEach(async ({ page }, testInfo) => {
   createdEmail = "";
 });
 
-// The sign-in link's real contract, proven on production every deploy: one use,
-// a TTL it cannot outlive, and a request path that stays silent about whether
-// an address exists. Production only for the same reason as J1 — the preview
-// lane has no EMAIL binding and no inbox to read.
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "proves the production mail path; the local preview Worker can neither send nor receive email",
 );
-// The expiry probe owes the token's real 300 s TTL (better-auth's expiresIn
-// default; auth.server.ts does not override it) — a wait no viewport can
-// shrink, so it runs on one lane per deploy instead of once per viewport.
+
 test.skip(({ viewport }) => viewport?.width !== 1440, "expiry costs five real minutes; one lane per deploy proves it");
 test.describe.configure({ retries: 1 });
 
@@ -41,17 +35,12 @@ function freshAddress(tag: string): string {
   return `e2e+${tag}-${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
 }
 
-// An isolated cookie jar per follow attempt: replay and expiry must prove the
-// link itself is dead, which a context already holding a session cannot show.
-// The Access cookie comes back in from the setup project's storageState.
 function freshContext(browser: Browser): Promise<BrowserContext> {
   return browser.newContext({
     storageState: process.env.CF_ACCESS_CLIENT_ID ? accessStatePath : undefined,
   });
 }
 
-// One follow, stopped before the redirect: the verify endpoint's own 302 is
-// the verdict, and its Set-Cookie is where a session would appear.
 async function followOnce(context: BrowserContext, link: string) {
   const response = await context.request.get(link, { maxRedirects: 0 });
   const cookies = response
@@ -71,14 +60,10 @@ async function followOnce(context: BrowserContext, link: string) {
   };
 }
 
-// The same request path the /login form drives, called directly so the answer
-// a requester sees can be compared byte for byte between a known and an
-// unknown address. Origin is sent because the Access cookie rides along and
-// better-auth's CSRF check validates Origin whenever a cookie is present.
 async function requestMagicLink(page: Page, baseURL: string, email: string) {
   const captcha = await turnstileToken(page);
   const sentAt = new Date().toISOString();
-  // The pre-cleared lane sends no token: its captcha field is empty by design.
+
   const headers: Record<string, string> = { origin: baseURL };
   if (captcha) headers["x-captcha-response"] = captcha;
   const response = await page.request.post(`${baseURL}/api/auth/sign-in/magic-link`, {
@@ -94,8 +79,6 @@ async function requestMagicLink(page: Page, baseURL: string, email: string) {
   return { body, sentAt };
 }
 
-// The session authority's own answer: /api/auth/get-session returns the
-// session's user when the jar holds one and null when it does not.
 async function sessionEmail(context: BrowserContext, baseURL: string): Promise<string | null> {
   const response = await context.request.get(`${baseURL}/api/auth/get-session`);
   if (response.status() !== 200)
@@ -121,7 +104,6 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
   createdEmail = email;
   const stranger = freshAddress("stranger");
 
-  // First follow: the full J1 journey — real form, real email, real link.
   const verifyResponse = page.waitForResponse((r) => r.url().includes("/api/auth/magic-link/verify"), {
     timeout: 240_000,
   });
@@ -134,7 +116,6 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
     `magic-link-expiry follow=first verifyStatus=${verifyStatus} email=${email} landed=${page.url()} at=${new Date().toISOString()}`,
   );
 
-  // Replay: the same link a second time, in a jar that has no session.
   const replayContext = await freshContext(browser);
   const replay = await followOnce(replayContext, first.link);
   expect(replay.status).toBe(302);
@@ -146,11 +127,6 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
   );
   await replayContext.close();
 
-  // email is a known address now; stranger never signs in. The request path
-  // must answer both identically. The requests go from their own signed-out
-  // jar: turnstileToken signs a signed-in page out to reach the /login
-  // widget, and a signed-out page left the afterEach no session to delete
-  // this account with (0509#6968).
   const requesterContext = await freshContext(browser);
   const requester = await requesterContext.newPage();
   const known = await requestMagicLink(requester, baseURL, email);
@@ -167,10 +143,6 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
     `magic-link-expiry request-opacity known=${known.body} unknown=${unknown.body} at=${new Date().toISOString()}`,
   );
 
-  // Measured invalidation behaviour, better-auth 1.7.5: each request mints an
-  // independent verification row keyed by its own token, so requesting a newer
-  // link does NOT invalidate an older one. Assert what is true, not what would
-  // be nice — the older link still signs in after the newer requests exist.
   const olderContext = await freshContext(browser);
   const olderFollow = await followOnce(olderContext, secondLink);
   expect(olderFollow.status).toBe(302);
@@ -190,7 +162,6 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
   console.log(`magic-link-expiry follow=newer status=${newerFollow.status} session=${email} at=${newerFollow.at}`);
   await newerContext.close();
 
-  // Expiry: the fourth link is never followed until its TTL has fully elapsed.
   const remaining = Math.max(expiresAfter - Date.now(), 0);
   await expect
     .poll(() => Date.now(), {

@@ -31,9 +31,7 @@ for (const target of targets) {
 
     const status = response?.status() ?? 0;
     const pageDocument404 = ownDocument404For(new URL(page.url()).pathname);
-    // The status conjunct stays outside the shared predicate: the exclusion
-    // holds only when the page itself answered 404 — a 200 page that logged a
-    // "status of 404" line for the same path still fails.
+
     const ownDocument404 = (entry: ConsoleEntry) => status === 404 && pageDocument404(entry);
 
     if (status === 404) {
@@ -43,9 +41,6 @@ for (const target of targets) {
       ).toHaveLength(1);
     }
 
-    // The shared same-origin gate keeps this spec's own policy through its
-    // `exclude` predicate: the document's own 404 line is expected (asserted
-    // above), never a failure.
     const failures = await consoleFailures(page, watched, testInfo, ownDocument404);
     expect(failures, testInfo.project.name).toEqual([]);
   });
@@ -68,9 +63,7 @@ test.fail("the collector catches a deliberate page error @smoke", async ({ page 
 
   await page.goto("/");
   const caught = page.waitForEvent("pageerror");
-  // A synchronous throw inside evaluate is marshaled back to the evaluate
-  // promise and never emits pageerror; a deferred throw is uncaught in the
-  // page and does.
+
   await page.evaluate(() => {
     setTimeout(() => {
       throw new Error("deliberate page error");

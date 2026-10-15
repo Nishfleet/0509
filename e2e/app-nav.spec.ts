@@ -3,8 +3,6 @@ import { expect, test } from "./test";
 import { onboardedStatePath } from "../playwright.config";
 import { consoleFailures, isLocalLane, run, seedPreviewSession, watchConsole } from "./inbox";
 
-// Production reads the onboarded storageState; the preview lane has none, so
-// the beforeEach below signs in with a seeded session.
 test.use({
   storageState: async ({}, use, testInfo) => {
     await use(
@@ -15,9 +13,6 @@ test.use({
   },
 });
 
-// The signed-in nav walk. Production uses the already-onboarded session that
-// `e2e/onboarded.setup.ts` mints per lane; the preview lane signs in with a
-// seeded session (`seedPreviewSession`), so every PR walks the nav too.
 test.beforeEach(async ({ page, baseURL }) => {
   if (!isLocalLane()) return;
   const { cookie } = await seedPreviewSession("nav", ({ db, suffix, userId }) => {
@@ -48,8 +43,6 @@ test.beforeEach(async ({ page, baseURL }) => {
 });
 
 test("a signed-in user reaches the four places by tapping and by Tab+Enter", async ({ page }, testInfo) => {
-  // Production lane: the nav walk overruns the 30 s
-  // default (0509#5681).
   test.setTimeout(120_000);
   const watched = watchConsole(page);
 
@@ -57,11 +50,8 @@ test("a signed-in user reaches the four places by tapping and by Tab+Enter", asy
   const noOverflow = () =>
     page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
-  // Tapping: start at Competitors by URL, then walk the nav by click, and end
-  // on Home.
   await page.goto("/app/competitors");
-  // level 1 only: "Possible competitors" is also a heading and a substring match
-  // fails the walk whenever that block is on the page (0509#6912).
+
   await expect(page.getByRole("heading", { level: 1, name: "Competitors", exact: true })).toBeVisible();
   expect(await noOverflow()).toBe(0);
   await page.screenshot({ path: test.info().outputPath("competitors.png") });
@@ -83,9 +73,6 @@ test("a signed-in user reaches the four places by tapping and by Tab+Enter", asy
   await nav.getByRole("link", { name: "Home" }).click();
   await page.waitForURL(/\/app$/);
 
-  // Keyboard: a fresh page load before tabbing pins the count from the top of
-  // the document — the skip link is first, then the four Places, so
-  // Home = 2 Tabs, Competitors = 3, Alerts = 4, Settings = 5.
   for (const [, path, tabs] of [
     ["Competitors", "/app/competitors", 3],
     ["Alerts", "/app/alerts", 4],
@@ -111,4 +98,20 @@ test("a signed-in user reaches the four places by tapping and by Tab+Enter", asy
   await page.waitForURL(/\/app$/);
 
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
+});
+
+test("the skip link jumps to the page content and back keeps the right place marked", async ({ page }) => {
+  const nav = page.getByRole("navigation", { name: "Primary" });
+  await page.goto("/app/alerts");
+  await page.keyboard.press("Tab");
+  await expect(page.locator(":focus")).toHaveAttribute("href", "#app-content");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#app-content$/);
+
+  await nav.getByRole("link", { name: "Settings" }).click();
+  await page.waitForURL(/\/app\/settings$/);
+  await page.goBack();
+  await page.waitForURL(/\/app\/alerts/);
+  await expect(nav.getByRole("link", { name: "Alerts" })).toHaveAttribute("aria-current", "page");
+  await expect(nav.getByRole("link", { name: "Settings" })).not.toHaveAttribute("aria-current", "page");
 });

@@ -4,14 +4,6 @@ import { type BriefPayload } from "../../app/lib/brief-payload";
 import { renderBrief } from "../../workers/delivery/brief-template";
 import { pausedSentence } from "../../workers/standing/compose-brief";
 
-/**
- * The quiet week is the one block the brief is allowed to drop: an empty
- * read-this-first would render as "the nothing-needed-reading line",
- * which is a lie on a week D4 had nothing to say. And when engine 5's
- * canaries are red the brief must not claim a quiet week at all — it names
- * the blind sources and when they last landed, per docs/engines/standing-home.md §7.
- */
-
 const CONTEXT = {
   unsubscribe_url: "https://0509.io/u/opaque-token",
   asset_base_url: "https://assets.0509.io",
@@ -130,6 +122,35 @@ describe("the quiet week brief", () => {
     expect(text).toContain("so we cannot say this was a quiet week.");
     expect(text).not.toContain("Quiet week");
     expect(text).not.toContain("2026-09-19T08:00:00.000Z");
+  });
+
+  it("keeps the work line in the footer when the headline is replaced by the blind-source line", () => {
+    const ledger = {
+      rivals: 5,
+      pages_read: 31,
+      changes_seen: 0,
+      changes_told: 0,
+      changes_set_aside: 0,
+      mentions_read: 0,
+      mentions_kept: 0,
+    };
+    const base = quiet();
+    const { text } = renderBrief(
+      quiet({
+        why_line: "Quiet week: we read 31 pages across 5 competitors; saw no changes.",
+        checked: {
+          ...base.checked,
+          ledger,
+          degraded_source_keys: ["reddit"],
+          degraded_sources: [
+            { key: "reddit.search", name: "Reddit mentions", last_landed_at: "2026-09-19T08:00:00.000Z" },
+          ],
+        },
+      }),
+      CONTEXT,
+    );
+    expect(text).toContain("so we cannot say this was a quiet week.");
+    expect(text).toContain("This week we read 31 pages across 5 competitors; saw no changes.");
   });
 
   it("says a blind source has not answered yet when it never landed", () => {

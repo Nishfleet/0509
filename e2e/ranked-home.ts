@@ -2,19 +2,6 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { run, seedPreviewSession } from "./inbox";
 
-// The ranked Home the moved /app specs read. The static /design/ranked-rows
-// route used to render a fixed three-row standing to anyone; 0509#5657 removed
-// it and moved both specs onto /app, so the standing they assert now has to be
-// seeded. This is the one fixture: Loopwell is the self row, Kindred ranks
-// first with two site changes and a mention, Casetta has no signals this week
-// and reads a dash, one mentions source is degraded so the degraded pill is in
-// the Axe scan, and four frozen weeks feed the four-week chart. Both specs read
-// it, so the two cannot drift into different standings.
-//
-// kind 'change' needs an aspect and kind 'mention' needs a canonical_url and a
-// url_hash; both are the schema's own CHECK constraints, not this fixture's
-// rules. Module-private: only seedRankedHomeSession below calls it, and knip
-// rightly fails the build on an export nothing imports.
 function seedRankedHome({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId: string }): void {
   const workspaceId = `ws-${suffix}`;
   const selfId = `ent_self-${suffix}`;
@@ -126,8 +113,6 @@ function seedRankedHome({ db, suffix, userId }: { db: DatabaseSync; suffix: stri
     JSON.stringify(payload),
   );
 
-  // Four frozen weeks, oldest first: Loopwell 3,3,2,2; Kindred 2,1,1,1;
-  // Casetta 1,2,3,3. The /app row's four-week table asserts these.
   const weeks = [
     "2026-08-24T07:00:00.000Z",
     "2026-08-31T07:00:00.000Z",
@@ -166,9 +151,7 @@ function seedRankedHome({ db, suffix, userId }: { db: DatabaseSync; suffix: stri
     `watch_hn-${suffix}`,
     `watch_youtube-${suffix}`,
   );
-  // Kindred's week: three signals since the period's start, so its row's pills
-  // read site checks 2 live, news 1 live, Hacker News degraded and YouTube
-  // none, and its opened row carries the Site changes 2 / Mentions 1 tabs.
+
   run(
     db,
     `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, dedup_key, observed_at, is_tombstoned, title, summary, url, evidence_url, payload_json) VALUES

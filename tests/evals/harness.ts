@@ -9,11 +9,6 @@ import { noulAction } from "../../app/lib/jev/thresholds";
 import type { NoulAction } from "../../app/lib/jev/thresholds";
 import type { BreakageEvidence } from "../../app/lib/site/breakage-evidence";
 
-// The one eval harness. Every Jev question in this repo scores through it, so the
-// case loader, the live call, the cutoffs, the repeats and the report have exactly
-// one implementation. A question that wanted its own copy of any of those is the
-// second paved path docs/REBUILD-TRUST.md §C1(3) rules out.
-
 const REPEATS = 3;
 
 const CONCURRENCY = 8;
@@ -36,20 +31,10 @@ const GATEWAY_MODEL = "@cf/cloudflare/clef";
 
 const JEV_URL = VIA_GATEWAY ? "workers-ai binding" : (process.env.JEV_URL ?? "http://127.0.0.1:4000/jev");
 
-// One descriptor holds the whole spelling of the yes/no-probability primitive for the
-// endpoint this run posts to, so the request type and the answer field stay paired
-// (0509#7177): the Workers AI binding path (VIA_GATEWAY) is the production call in
-// app/lib/jev/client.server.ts:140,149,218 and Clef keeps `noul`, while the /jev route
-// on this box goes to the Vercel AI Gateway evaluation model, which dropped `noul` and
-// answers `probability`.
 export const NOUL_WIRE: { type: string; field: string; value: (answer: JevAnswer) => number | undefined } = VIA_GATEWAY
   ? { type: "noul", field: "noul", value: (answer) => answer.noul }
   : { type: "boolean", field: "probability", value: (answer) => answer.probability };
 
-// Eval calls skip AI Gateway on purpose: error 2003 is the gateway's own rate limit,
-// and sharing the gateway `default` with customers failed two sign-ups on 2026-10-04
-// (docs/incidents/2026-10-04-signup-judge-failure.md). EVAL_MAX_NEURONS caps the spend per run (0509#7249): no Cloudflare
-// control caps neurons for the account, and a gateway limit needs a token scope CI did not have.
 const WRANGLER_CONFIG = path.join(HERE, "..", "..", "wrangler.jsonc");
 
 let platform: Promise<PlatformProxy<{ AI: Ai }>> | undefined;
@@ -180,25 +165,12 @@ const JEV_TIMEOUT_MS = 60_000;
 
 const BUDGET_MARGIN = 1.2;
 
-// Per-run neuron ceiling (0509#7249). Workers AI has no account spend cap, and 96 manual
-// dispatches burned 1,113,645 neurons on 2026-10-02 (111x the 10k/day free line). The
-// harness cannot read the meter, so it spends an estimate per call and refuses the call
-// that would pass EVAL_MAX_NEURONS. The estimate is deliberately above what the meter
-// showed over 10-01..10-07: Clef 10.9 per call (21,818 per million input tokens, 17 at
-// the 750 tokens docs/REBUILD-COST.md assumes) and gpt-oss-120b 58.4 per call. Unset or
-// blank turns the ceiling off, which is what a local run against the /jev route wants.
 const NEURONS_PER_CLEF_CALL = 17;
 
 const NEURONS_PER_MODEL_CALL = 60;
 
 const NEURON_CEILING = Number(process.env.EVAL_MAX_NEURONS ?? "") || 0;
 
-// Per-day ceiling (0509#7249). A per-run cap alone lets 96 dispatches spend 96 times the cap.
-// Before the first Workers AI call of a run the harness asks Cloudflare's GraphQL
-// aiInferenceAdaptiveGroups for the account's neurons so far this UTC day, and refuses to
-// start when that plus EVAL_MAX_NEURONS would pass EVAL_DAILY_NEURON_CEILING. Any failure of
-// the query refuses too: a guard that cannot read the meter does not guess. Only the
-// Workers AI path is guarded; a run against the /jev route spends no neurons.
 const DAILY_CEILING = Number(process.env.EVAL_DAILY_NEURON_CEILING ?? "") || 9000;
 
 const GRAPHQL_URL = "https://api.cloudflare.com/client/v4/graphql";
@@ -271,7 +243,6 @@ let callBudget = 0;
 
 let callsUsed = 0;
 
-// Never reset: callsUsed restarts per question, this one runs for the whole process.
 let neuronsSpent = 0;
 
 function withoutModel(body: unknown): unknown {
@@ -365,8 +336,6 @@ export type SiteRow<L extends boolean | string> = Omit<SiteChangeCase, "labels" 
   why: string;
 };
 
-// The three site questions judge one shared state, so they share one case
-// file; each question reads its own label and its own why out of it.
 export function loadSiteRows<L extends boolean | string>(caseFile: string, questionId: string): Promise<SiteRow<L>[]> {
   return loadCases<SiteRow<L>>(questionId, ["subject", "pageUrl", "hunks", "evidence", "label"], {
     file: caseFile,
@@ -388,8 +357,6 @@ export function loadProdRows(): Promise<SiteRow<boolean>[]> {
   });
 }
 
-// One place builds the noul question body, so the request type and the answer field read
-// back cannot drift apart.
 function noulQuestions(questions: readonly NoulEvalQuestion[]): Record<string, unknown> {
   return Object.fromEntries(
     questions.map((question) => [

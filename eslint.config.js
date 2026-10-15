@@ -37,7 +37,7 @@ const PAVED_PATH_PATTERNS = [
 const SONNER_IMPORT = {
   name: "sonner",
   message:
-    "sonner is imported in exactly one module, app/components/toaster.tsx, which owns every toast() call behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo' — a second import site is a second toast authority. Source: 0509#4116.",
+    "sonner is removed. Its toast is a tabindex=0 list item at the end of the page, shows no focus ring, and sends focus back to the previous element when you Tab out, which loops a keyboard user at the end of the page. Show 'saved' as an inline role=status line beside the control. Source: 0509#4116 (the toaster this replaces), polish/accessibility.md 2026-10-15.",
 };
 
 const UPLOT_IMPORT = {
@@ -161,6 +161,17 @@ const LOG_IN_CATCH_LOGGED_QUIETLY = {
   selector: `CatchClause CallExpression${QUIET_LOG_LEVEL}`,
   message:
     "A log written inside a catch clause records a failure, and console.log, console.info and console.debug never reach Sentry. Use console.warn or console.error. Source: 0509#7501.",
+};
+
+// A parameter that defaults to the real clock lets a test lean on today's date
+// without saying so. 2026-10-15: tests/unit/plan-line.test.ts used 15 October
+// 2026 as a plan end in the future; at midnight UTC it became the past and the
+// merge queue went red for every PR. The caller passes the time in, and a test
+// passes a fixed one. Source: docs/incidents/2026-10-15-test-date-went-stale.md.
+const DEFAULT_CLOCK_PARAMETER = {
+  selector: "AssignmentPattern > NewExpression.right[callee.name='Date'][arguments.length=0]",
+  message:
+    "A parameter that defaults to new Date() reads the real clock where a test cannot see it. Make the time a required argument; the caller passes new Date() and a test passes a fixed instant. Source: docs/incidents/2026-10-15-test-date-went-stale.md (plan-line tests broke the merge queue at midnight).",
 };
 
 const SCORE_NAME = "/^(points|weight|multiplier|score|total)$/";
@@ -373,7 +384,7 @@ const ESLINT_DISK_PROBE_BAN = {
 const BARE_TOAST = {
   selector: "CallExpression[callee.name='toast'], MemberExpression[object.name='toast']",
   message:
-    "toast() is called in exactly one module, app/components/toaster.tsx, behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo'. The sonner import ban does not catch a toast reached another way, so the call shape is banned too. Source: 0509#4116, 0509#7007.",
+    "No toast() call: toasts are removed (focus loop at the end of the page, no focus ring). Show 'saved' as an inline role=status line beside the control. The sonner import ban does not catch a toast reached another way, so the call shape is banned too. Source: 0509#4116, 0509#7007, polish/accessibility.md 2026-10-15.",
 };
 
 const HAND_ROLLED_ARIA_TAB = {
@@ -383,7 +394,42 @@ const HAND_ROLLED_ARIA_TAB = {
     "Tabs come from app/components/ui/tabs.tsx (shadcn on @base-ui/react/tabs). A hand-rolled role=tab/tablist/tabpanel has no arrow keys and no roving tabIndex. Source: 0509#7014.",
 };
 
+const APP_LOCALE_ONLY = {
+  selector:
+    "NewExpression[callee.object.name='Intl'][callee.property.name=/^(DateTimeFormat|NumberFormat|RelativeTimeFormat)$/][arguments.0.type='Literal']",
+  message:
+    "A literal locale gives this screen its own month abbreviation and clock: en-US printed 'Sep' and '3:30 PM' where the rest of the app printed 'Sept' and '15:30'. Pass APP_LOCALE from app/lib/locale.ts. Source: ci/stripe-bar consistency sweep, 0509#7540.",
+};
+
+const COPY_NAME = (word) =>
+  [
+    `Literal[value=/^(?=.*\\s)(?=.*${word})/i]`,
+    `TemplateElement[value.raw=/^(?=.*\\s)(?=.*${word})/i]`,
+    `JSXText[value=/^(?=.*\\s)(?=.*${word})/i]`,
+  ].join(", ");
+
+const RIVAL_COPY = {
+  selector: COPY_NAME("\\brivals?\\b"),
+  message:
+    "Customer copy calls them competitors, as the nav, the URLs and the buttons do; eight lines said 'rival' until the sweep in 0509#7540. A prompt for Jev is exempt in the block that lists it. Source: 0509#7540.",
+};
+
+const WEEKLY_REPORT_COPY = {
+  selector: COPY_NAME("\\bweekly reports?\\b"),
+  message: "The weekly email and its page are the brief. 'Report' is a second name for one thing. Source: 0509#7540.",
+};
+
+const PRICE_SUFFIX_COPY = {
+  selector: `Literal[value=/€\\s?\\d+\\s?(\\/mo\\b|a month|per month)/i], TemplateElement[value.raw=/€\\s?\\d+\\s?(\\/mo\\b|a month|per month)/i], JSXText[value=/€\\s?\\d+\\s?(\\/mo\\b|a month|per month)/i]`,
+  message:
+    "A price reads '€10/month', from monthlyPrice() in app/lib/billing/plans.ts. '/mo' and 'a month' were three spellings of one price until 0509#7540. The trial email is billing copy and is worded by Nish.",
+};
+
 const BANNED_SYNTAX = [
+  APP_LOCALE_ONLY,
+  RIVAL_COPY,
+  WEEKLY_REPORT_COPY,
+  PRICE_SUFFIX_COPY,
   HAND_ROLLED_ARIA_TAB,
   BARE_TOAST,
   SUPPORT_ADDRESS_BAN,
@@ -392,6 +438,7 @@ const BANNED_SYNTAX = [
   CATCH_RETURNS_NULL,
   FAILURE_EVENT_LOGGED_QUIETLY,
   LOG_IN_CATCH_LOGGED_QUIETLY,
+  DEFAULT_CLOCK_PARAMETER,
   RAW_SCORE_STRING,
   XML_PARSER_CONSTRUCTOR,
   DOMAIN_HOSTNAME_BAN,
@@ -497,7 +544,7 @@ export const TABLE_WRITER_BLOCKS = readdirSync(new URL("./app/lib/data/", import
     rules: {
       "no-restricted-syntax": [
         "error",
-        ...BANNED_SYNTAX,
+        ...BANNED_SYNTAX.filter((rule) => rule !== RIVAL_COPY),
         ...NO_USER_DATA_IN_LOGS,
         FEED_STATE_LITERAL,
         D1_ROW_TYPE_ARGUMENT,
@@ -1070,6 +1117,19 @@ export default tseslint.config(
   },
 
   {
+    files: ["app/lib/discovery/run.server.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== RIVAL_COPY),
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  {
     // app/lib/data/** is the only D1 row reader, so it is the only place a row
     // schema lives. `.catch(...)` on one silences the row-parse contract.
     // `row-rules/d1-row-parse` requires `.first` / `.all` / `.raw` to be
@@ -1199,22 +1259,6 @@ export default tseslint.config(
   },
 
   {
-    // The one toast() call site, behind toastSaved(). It is client code, so
-    // BARE_FETCH stays off as in the client block above. Flat config replaces
-    // no-restricted-syntax wholesale, so this restates the list. 0509#7007.
-    files: ["app/components/toaster.tsx"],
-    rules: {
-      "no-restricted-syntax": [
-        "error",
-        ...BANNED_SYNTAX.filter((rule) => rule !== BARE_FETCH && rule !== BARE_TOAST),
-        ...NO_USER_DATA_IN_LOGS,
-        RAW_DML_WRITER,
-        FEED_STATE_LITERAL,
-      ],
-    },
-  },
-
-  {
     // The browser paved path, where the bounded calls live by definition. The
     // array restates the shared list because a later matching block's
     // no-restricted-syntax entry replaces the earlier one wholesale. 0509#7296.
@@ -1286,7 +1330,7 @@ export default tseslint.config(
 
   {
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
-    ignores: ["app/lib/auth.server.ts", "app/lib/auth-client.ts", "app/components/toaster.tsx"],
+    ignores: ["app/lib/auth.server.ts", "app/lib/auth-client.ts"],
     rules: {
       "no-restricted-imports": ["error", { paths: ONE_PAVED_PATH_IMPORTS, patterns: PAVED_PATH_PATTERNS }],
     },
@@ -1309,14 +1353,7 @@ export default tseslint.config(
 
   {
     files: ["app/**/*.{ts,tsx}"],
-    ignores: [
-      "app/**/*.server.ts",
-      "app/routes/**",
-      "app/root.tsx",
-      "app/entry.*.tsx",
-      "app/lib/auth-client.ts",
-      "app/components/toaster.tsx",
-    ],
+    ignores: ["app/**/*.server.ts", "app/routes/**", "app/root.tsx", "app/entry.*.tsx", "app/lib/auth-client.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -1330,7 +1367,7 @@ export default tseslint.config(
 
   {
     files: ["app/components/**/*.{ts,tsx}"],
-    ignores: ["app/components/toaster.tsx", "app/components/four-week-plot.tsx"],
+    ignores: ["app/components/four-week-plot.tsx"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -1355,24 +1392,6 @@ export default tseslint.config(
         "error",
         {
           paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT],
-        },
-      ],
-    },
-  },
-
-  {
-    files: ["app/components/toaster.tsx"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          paths: [
-            ...ONE_PAVED_PATH_IMPORTS.filter((p) => p !== SONNER_IMPORT),
-            CLOUDFLARE_WORKERS_IMPORT,
-            FULL_ZOD_IMPORT,
-            ...CHART_IMPORTS,
-          ],
-          patterns: PAVED_PATH_PATTERNS,
         },
       ],
     },
@@ -1762,15 +1781,26 @@ export default tseslint.config(
   },
 
   // 0509#7073 / #7233: type-aware lint is on for e2e, tests and *.config.ts.
-  // The comment exemption used to live on the disableTypeChecked block that
-  // also listed those globs; keep it here so inline comments in specs,
-  // configs and tests stay allowed (AGENTS.md: config files and tests are
-  // exempt).
+  // Only config files are exempt from the comment rules; tests are not
+  // (0509#7469, Nish 2026-10-14).
   {
-    files: ["e2e/**/*.ts", "tests/**/*.ts", "*.config.ts"],
+    files: ["*.config.ts"],
     rules: {
       "no-inline-comments": "off",
       "no-warning-comments": "off",
+    },
+  },
+
+  {
+    files: ["e2e/**/*.ts", "tests/**/*.{ts,tsx}"],
+    plugins: { "no-comments": noComments },
+    rules: {
+      "no-comments/disallowComments": [
+        "error",
+        { allow: ["eslint-(?:disable|enable|env)", "global ", "@ts-", "@vite-ignore", "/\\s*<reference"] },
+      ],
+      "no-inline-comments": ["error", { ignorePattern: "@vite-ignore" }],
+      "no-warning-comments": ["error", { terms: WORKAROUND_TERMS, location: "anywhere" }],
     },
   },
 

@@ -1,12 +1,11 @@
-import { useState } from "react";
 import type { ReactElement } from "react";
 
 import { changeSummary, type SummarisableChange } from "../lib/change-summary";
-import { copyToClipboard } from "../lib/copy-to-clipboard";
+import { useCopyState } from "../lib/use-copy-state";
 import { Button } from "./ui/button";
 
 export function CopyChangeButton({ change }: { change: SummarisableChange }): ReactElement {
-  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const [state, copy] = useCopyState();
   return (
     <div className="mt-3">
       <Button
@@ -14,22 +13,15 @@ export function CopyChangeButton({ change }: { change: SummarisableChange }): Re
         data-testid="copy-change"
         variant="secondary"
         onClick={() => {
-          void copyToClipboard(changeSummary(change)).then((result) => {
-            setState(result);
-            if (result === "copied")
-              void import("./toaster").then((module) => {
-                module.toastSaved("Copied for the team");
-              });
-          });
+          void copy(changeSummary(change));
         }}
       >
         {state === "copied" ? "Copied" : "Copy for the team"}
       </Button>
-      {state === "failed" ? (
-        <p role="status" className="mt-2 text-body-sm text-ink-soft">
-          Copy failed. Select the text above and copy it by hand.
-        </p>
-      ) : null}
+      <p role="status" className="mt-2 text-body-sm text-ink-soft">
+        {state === "copied" ? "Copied for the team." : null}
+        {state === "failed" ? "Copy failed. Select the text above and copy it by hand." : null}
+      </p>
     </div>
   );
 }

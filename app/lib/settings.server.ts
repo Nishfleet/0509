@@ -4,10 +4,11 @@ import { z } from "zod";
 import type { RouterContextProvider } from "react-router";
 
 import { deleteAccount } from "./account-delete.server";
+import { SUPPORT_ADDRESS } from "../components/footer";
 import { cancelPlanForDelete } from "./billing/cancel.server";
 import { returningForGate } from "./billing/returning.server";
 import { oauthHelpersContext } from "./agent/context.server";
-import { hasFreshSession, removeSignedInPasskey, requestEmailChange, signOut } from "./auth.server";
+import { hasFreshSession, removeSignedInPasskey, requestEmailChange, signOut, signOutEverywhere } from "./auth.server";
 import { nextBriefAt } from "./brief-schedule";
 import { formatBriefAt } from "./brief-settings";
 import { parseBriefSchedule } from "./brief-schedule-input";
@@ -20,11 +21,14 @@ import {
   readBriefScheduleForOwner,
   readChangeAlerts,
   readOwnSiteAlerts,
+  readSlackBrief,
   readWorkspaceIdForOwner,
   setChangeAlerts,
   setOwnSiteAlerts,
+  setSlackBrief,
 } from "./data/workspace.server";
-import { readDeliveryAddress, saveDeliveryAddress } from "./delivery-address.server";
+import { readMailKinds } from "./data/email_suppression.server";
+import { readDeliveryAddress, saveDeliveryAddress, saveMailKinds } from "./delivery-address.server";
 import { addTeammateByOwner, readTeammates, removeTeammateByOwner } from "./teammates.server";
 import { parseSlackWebhook } from "./slack-webhook";
 import { postToSlack } from "./slack.server";
@@ -46,6 +50,7 @@ const PASSKEY_FAILED = "The passkey wasn't removed. Try again.";
 const alertSwitchForm = z.object({ value: z.enum(["on", "off"]) });
 const slackSaveForm = z.object({ webhook: z.string() });
 const deliveryForm = z.object({ address: z.string().optional(), resume: z.string().optional() });
+const mailKindsForm = z.object({ brief: z.string().optional(), alerts: z.string().optional() });
 const teammateAddForm = z.object({ address: z.string() });
 const teammateRemoveForm = z.object({ targetId: z.string() });
 const emailChangeForm = z.object({ newEmail: z.string() });
@@ -91,6 +96,7 @@ const NO_WORKSPACE_SETTINGS = {
   changeAlerts: true,
   slackConnected: false,
   slackRevoked: false,
+  slackBrief: false,
   dismissed: [],
   teammates: [],
   plan: null,
@@ -115,12 +121,13 @@ async function readCountLine(workspaceId: string): Promise<string | null> {
 }
 
 async function readWorkspaceSettings(workspaceId: string) {
-  const [ownSiteAlerts, changeAlerts, slackTarget, slackRevoked, dismissed, plan, teammates, countLine] =
+  const [ownSiteAlerts, changeAlerts, slackTarget, slackRevoked, slackBrief, dismissed, plan, teammates, countLine] =
     await Promise.all([
       readOwnSiteAlerts(workspaceId),
       readChangeAlerts(workspaceId),
       readSlackTarget(env.DB, workspaceId),
       readSlackDisconnected(env.DB, workspaceId),
+      readSlackBrief(env.DB, workspaceId),
       readUserDismissed(workspaceId),
       readPlanSummary(workspaceId),
       readTeammates(workspaceId),
@@ -132,6 +139,7 @@ async function readWorkspaceSettings(workspaceId: string) {
     changeAlerts,
     slackConnected: slackTarget !== null,
     slackRevoked,
+    slackBrief,
     dismissed,
     teammates,
     plan,
@@ -153,12 +161,16 @@ export async function readSettings(user: SettingsUser) {
           ...owned.schedule,
           nextLine: formatBriefAt(nextBriefAt(owned.schedule, new Date()), owned.schedule.timezone),
         };
-  const workspace = workspaceId === null ? null : await readWorkspaceSettings(workspaceId);
+  const [workspace, mail] = await Promise.all([
+    workspaceId === null ? null : readWorkspaceSettings(workspaceId),
+    readMailKinds(delivery.address),
+  ]);
   const {
     ownSiteAlerts,
     changeAlerts,
     slackConnected,
     slackRevoked,
+    slackBrief,
     dismissed,
     teammates,
     plan,
@@ -172,8 +184,10 @@ export async function readSettings(user: SettingsUser) {
     changeAlerts,
     slackConnected,
     slackRevoked,
+    slackBrief,
     dismissed,
     delivery,
+    mail,
     teammates,
     plan,
     returning,
@@ -223,6 +237,21 @@ async function saveAddress(user: SettingsUser, form: FormData): Promise<Settings
   return result({ deliveryError: saved.error, deliverySuppressed: saved.suppressed });
 }
 
+async function saveMail(user: SettingsUser, form: FormData): Promise<SettingsResult> {
+  const parsed = mailKindsForm.safeParse(Object.fromEntries(form));
+  const saved = await saveMailKinds({
+    userId: user.id,
+    signInEmail: user.email,
+    brief: parsed.success && parsed.data.brief === "yes",
+    alerts: parsed.success && parsed.data.alerts === "yes",
+  });
+  if (!saved)
+    return result({
+      deliveryError: `We could not change the emails for this address. Switching them back on works from your sign-in address, or write to ${SUPPORT_ADDRESS}.`,
+    });
+  return result({ saved: true });
+}
+
 async function inviteTeammate(user: SettingsUser, form: FormData): Promise<SettingsResult> {
   const parsed = teammateAddForm.safeParse(Object.fromEntries(form));
   const teammateError = await addTeammateByOwner({
@@ -231,7 +260,7 @@ async function inviteTeammate(user: SettingsUser, form: FormData): Promise<Setti
     address: parsed.success ? parsed.data.address : "",
     email: env.EMAIL,
   });
-  return result({ teammateError });
+  return result({ teammateError, saved: teammateError === null ? true : null });
 }
 
 async function dropTeammate(userId: string, form: FormData): Promise<SettingsResult> {
@@ -275,6 +304,10 @@ async function removeAccount(
   const deleted = await deleteAccount(call.context.get(oauthHelpersContext), call.request, user.id);
   if (deleted === null) return result({ deleteError: SIGN_IN_AGAIN });
   throw redirect(`/login?deleted=${encodeURIComponent(deleted.instanceId)}`, { headers: deleted.headers });
+}
+
+async function leaveEverywhere(request: Request): Promise<never> {
+  throw redirect("/login", { headers: await signOutEverywhere(env, request) });
 }
 
 async function removePasskey(request: Request, form: FormData): Promise<SettingsResult> {
@@ -321,12 +354,15 @@ interface IntentCall {
 const INTENTS = new Map<string, (call: IntentCall) => Promise<SettingsResult>>([
   ["own-site-alerts", (c) => saveSwitch(c.user.id, c.form, setOwnSiteAlerts)],
   ["change-alerts", (c) => saveSwitch(c.user.id, c.form, setChangeAlerts)],
+  ["slack-brief", (c) => saveSwitch(c.user.id, c.form, setSlackBrief)],
   ["slack-save", (c) => connectSlack(c.user.id, c.form)],
   ["slack-remove", (c) => disconnectSlack(c.user.id)],
   ["delivery-address", (c) => saveAddress(c.user, c.form)],
+  ["mail-kinds", (c) => saveMail(c.user, c.form)],
   ["teammate-add", (c) => inviteTeammate(c.user, c.form)],
   ["teammate-remove", (c) => dropTeammate(c.user.id, c.form)],
   ["change-email", (c) => changeEmail(c.request, c.form)],
+  ["sign-out-everywhere", (c) => leaveEverywhere(c.request)],
   ["delete-account", (c) => removeAccount(c.user, c.form, c)],
   ["passkey-remove", (c) => removePasskey(c.request, c.form)],
   ["restore-suggestion", (c) => restore(c.user.id, c.form)],

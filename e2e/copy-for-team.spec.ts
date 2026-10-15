@@ -63,7 +63,7 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
   return entityId;
 }
 
-test("a site change copies as one plain paragraph, by keyboard, with a toast and no overflow", async ({
+test("a site change copies as one plain paragraph, by keyboard, with a status line and no overflow", async ({
   page,
   baseURL,
 }, testInfo) => {
@@ -85,14 +85,33 @@ test("a site change copies as one plain paragraph, by keyboard, with a toast and
   await page.keyboard.press("Enter");
 
   await expect(button).toHaveText("Copied");
-  await expect(page.getByText("Copied for the team", { exact: true })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Copied for the team." })).toBeVisible();
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(copied).toMatch(/^Zephyrwear .*\(pricing page\)\. Seen .+, via Five to Nine\.$/);
   expect(copied).not.toContain("\n");
+  await expect(button).toHaveText("Copy for the team");
 
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(overflow).toBe(0);
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
+});
+
+test("pointing at a capture plate loads the before-and-after dialog before the click", async ({ page, baseURL }) => {
+  const { cookie } = await seedPreviewSession("plate-preload", seed);
+  await page.context().addCookies(
+    cookie.split("; ").map((pair) => {
+      const [name, ...value] = pair.split("=");
+      return { name, value: value.join("="), url: baseURL ?? "" };
+    }),
+  );
+
+  await page.goto("/app/alerts");
+  const plate = page.getByRole("button", { name: /^Open before and after: / });
+  const chunk = page.waitForRequest((request) => request.url().includes("capture-dialog"));
+  await plate.hover();
+  await chunk;
+  await plate.click();
+  await expect(page.getByRole("dialog")).toBeVisible();
 });

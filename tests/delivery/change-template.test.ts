@@ -81,18 +81,13 @@ describe("the daily cap notice", () => {
 
   it("says why the emails stopped and where every change still is", () => {
     const { subject, text } = renderChangeOverflow(OVERFLOW);
-    expect(subject).toBe("More rivals changed price or plan today");
+    expect(subject).toBe("More competitors changed price or plan today");
     expect(text).toContain("5 price or plan emails today");
     expect(text).toContain("Alerts and in your Monday brief");
     expect(text).toContain("Unsubscribe: https://0509.io/u/opaque-token");
   });
 });
 
-/**
- * 0509#7020: the change email escapes its sites by hand. This table plants the
- * injection probe in every string field, one row per field, so a missed
- * escapeHtml turns CI red — the plain template module stays.
- */
 describe("every string field carries the injection probe escaped, never raw (0509#7020)", () => {
   const rows: [string, Partial<typeof CTX>][] = [
     ["headline", { headline: PROBE }],
@@ -130,5 +125,12 @@ describe("every string field carries the injection probe escaped, never raw (050
   it("opens with a hidden inbox preview of what changed, then when it was seen", () => {
     const { html } = renderChange(CTX);
     expect(html).toMatch(/display:none[^>]*>Before: Pro \$12 a month After: Pro \$15 a month Seen at /);
+  });
+
+  it("ends the change with what to do about it, before the link", () => {
+    const { text } = renderChange(CTX);
+    const todo = text.indexOf("Worth a look today");
+    expect(todo).toBeGreaterThan(text.indexOf("After:"));
+    expect(todo).toBeLessThan(text.indexOf("See the before and after"));
   });
 });

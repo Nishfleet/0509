@@ -72,10 +72,6 @@ describe("Login account-delete progress", () => {
     );
   });
 
-  // DESIGN.md: tap targets are 44px minimum. min-h-11 is 44px in this repo
-  // (tests/unit/onboarding-competitors.test.ts), and a box only reaches that
-  // height when inline-flex puts the text in a line box and items-center keeps
-  // it centred, so all three tokens are asserted.
   it('gives "Check again" a 44px-tall tap target', () => {
     const html = render({ id: "wf-5", progress: { rows: "removed", files: "removing", deleted: null } });
 

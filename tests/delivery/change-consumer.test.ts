@@ -119,6 +119,8 @@ describe("parseMessage", () => {
     expect(parseMessage(JSON.stringify({ digest_id: "d" }))).toEqual({ digest_id: "d" });
     expect(parseMessage({ incident_id: "i" })).toEqual({ incident_id: "i" });
     expect(parseMessage({ signal_id: "s" })).toEqual({ signal_id: "s" });
+    expect(parseMessage({ digest_id: "d", slack_target_id: "t" })).toEqual({ digest_id: "d", slack_target_id: "t" });
+    expect(parseMessage({ digest_id: "d", target_id: "t" })).toEqual({ digest_id: "d", target_id: "t" });
   });
 
   it("returns null for anything else", () => {
@@ -211,7 +213,7 @@ describe("deliverChange", () => {
     const first = await deliverChange(fakeEnv(), { signal_id: "sig-1" });
     expect(first.outcome).toBe("capped");
     expect(sent).toHaveLength(1);
-    expect(sent[0]?.subject).toBe("More rivals changed price or plan today");
+    expect(sent[0]?.subject).toBe("More competitors changed price or plan today");
 
     slots.claimSendAttempt.mockResolvedValue(null);
     const second = await deliverChange(fakeEnv(), { signal_id: "sig-2" });
