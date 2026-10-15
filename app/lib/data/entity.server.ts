@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
+import { governingWorkspace } from "./active-workspace";
 import { readEntitlements } from "./plan.server";
 import { shouldRetryD1, tryWhile } from "./retries.server";
 import { resetYoutubeWatchStatement } from "./watch.server";
@@ -304,8 +305,7 @@ const SELECT_SELF =
 const SELECT_KNOWN =
   "SELECT domain, name, role, state FROM entity WHERE workspace_id = ?1 UNION ALL SELECT candidate_domain, candidate_name, 'suggestion', status FROM suggestion WHERE workspace_id = ?1 AND status <> 'pending'";
 
-const SELECT_DISCOVERABLE_WORKSPACES =
-  "SELECT e.workspace_id AS workspace_id, w.created_at AS created_at, p.status AS status, p.current_period_end AS current_period_end FROM entity e JOIN workspace w ON w.id = e.workspace_id JOIN plan p ON p.workspace_id = w.id WHERE e.role = 'self' AND w.fixture = 0 ORDER BY e.workspace_id";
+const SELECT_DISCOVERABLE_WORKSPACES = `SELECT e.workspace_id AS workspace_id, w.created_at AS created_at, p.status AS status, p.current_period_end AS current_period_end FROM entity e JOIN workspace w ON w.id = e.workspace_id JOIN plan p ON p.workspace_id = ${governingWorkspace("w.id")} WHERE e.role = 'self' AND w.fixture = 0 ORDER BY e.workspace_id`;
 
 const readDiscoverableWorkspacesRow = z.object({
   workspace_id: z.string(),

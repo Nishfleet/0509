@@ -4,7 +4,7 @@ import { createCookie } from "react-router";
 
 import { deleteSignedInUser } from "./auth.server";
 import { readWorkspaceEntityIds } from "./data/entity.server";
-import { readBriefScheduleForOwner, readWorkspaceR2Prefixes } from "./data/workspace.server";
+import { readBriefSchedulesForOwner, readWorkspaceR2Prefixes } from "./data/workspace.server";
 import type { OwnedSchedule } from "./data/workspace.server";
 import { terminateIdentityTail } from "./identity/tail-instance.server";
 import { retireRollovers } from "./standing/reschedule";
@@ -29,15 +29,15 @@ export async function deleteAccount(
   userId: string,
 ): Promise<{ headers: Headers; instanceId: string } | null> {
   const cookie = deleteInstanceCookie();
-  const owned = await readBriefScheduleForOwner(userId);
-  const [prefixes, entityIds]: [string[], string[]] =
-    owned === null
-      ? [[], []]
-      : await Promise.all([readWorkspaceR2Prefixes(owned.workspaceId), readWorkspaceEntityIds(owned.workspaceId)]);
+  const owned = await readBriefSchedulesForOwner(userId);
+  const [prefixes, entityIds] = await Promise.all([
+    Promise.all(owned.map((workspace) => readWorkspaceR2Prefixes(workspace.workspaceId))).then((lists) => lists.flat()),
+    Promise.all(owned.map((workspace) => readWorkspaceEntityIds(workspace.workspaceId))).then((lists) => lists.flat()),
+  ]);
   const headers = await deleteSignedInUser(env, request, new Date());
   if (headers === null) return null;
   await Promise.all(entityIds.map((entityId) => terminateIdentityTail(entityId)));
-  if (owned !== null) await retireWorkspaceRollovers(owned);
+  await Promise.all(owned.map((workspace) => retireWorkspaceRollovers(workspace)));
   const grants = revokeGrants(helpers, userId);
   const instance = await env.ACCOUNT_DELETE.create({ params: { prefixes } satisfies AccountDeleteParams });
   headers.append("set-cookie", await cookie.serialize(instance.id));
