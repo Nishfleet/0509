@@ -17,7 +17,7 @@ function page(connected: boolean) {
       error: null,
       suppressed: false,
     }),
-    createElement(SlackAlertsSetting, { connected, error: null }),
+    createElement(SlackAlertsSetting, { connected, revoked: false, emailAlerts: true, error: null }),
   );
 }
 

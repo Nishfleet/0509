@@ -5,17 +5,14 @@ import { fileURLToPath } from "node:url";
 import { compile } from "tailwindcss";
 import { describe, expect, it } from "vitest";
 
-// #4309: the privacy wordmark, now drawn by the shared legal page, used
-// `bg-accent` / `text-on-accent` after #3984 retired those tokens. Tailwind emits no rule for an unregistered colour, so
-// the `09` span painted as a transparent box while a string assertion stayed
-// green. This compiles the page's colour and type utilities against the real
-// `app/app.css` and fails when one of them emits nothing.
-//
-// The scan reads static className="..." strings only. A className={...}
-// expression, a template, or a class on an imported component is not seen.
-
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const PRIVACY = path.join(REPO_ROOT, "app/components/legal-page.tsx");
+const PAGE_FILES = ["legal-page.tsx", "site-header.tsx", "wordmark.tsx"].map((file) =>
+  path.join(REPO_ROOT, "app/components", file),
+);
+
+async function pageSource(): Promise<string> {
+  return (await Promise.all(PAGE_FILES.map((file) => readFile(file, "utf8")))).join("\n");
+}
 const WORDMARK = 'className="bg-green px-[5px] text-on-green"';
 const RETIRED_WORDMARK = 'className="bg-accent px-[5px] text-on-accent"';
 
@@ -34,9 +31,6 @@ function colourAndTypeClasses(source: string): string[] {
   return names;
 }
 
-// Tailwind's selector escapes every character outside [A-Za-z0-9_-]. The
-// space before `{` is how `build()` prints a rule, and it keeps `text-ink`
-// from matching `text-ink-soft`.
 function hasRule(css: string, className: string): boolean {
   let escaped = "";
   for (const char of className) {
@@ -67,7 +61,7 @@ async function classesWithNoRule(names: string[]): Promise<string[]> {
 
 describe("privacy colour and type utilities (#4309)", () => {
   it("emits a rule for every colour and type utility on the page", async () => {
-    const source = await readFile(PRIVACY, "utf8");
+    const source = await pageSource();
     const names = colourAndTypeClasses(source);
     expect(source).toContain(WORDMARK);
     expect(names).toEqual(expect.arrayContaining(["bg-green", "text-on-green"]));
@@ -75,7 +69,7 @@ describe("privacy colour and type utilities (#4309)", () => {
   });
 
   it("fails when the wordmark is swapped back to the retired accent tokens", async () => {
-    const source = await readFile(PRIVACY, "utf8");
+    const source = await pageSource();
     const retired = source.replace(WORDMARK, RETIRED_WORDMARK);
     expect(retired).not.toBe(source);
     expect(await classesWithNoRule(colourAndTypeClasses(retired))).toEqual(["bg-accent", "text-on-accent"]);

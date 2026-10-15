@@ -4,17 +4,28 @@ import { BLOCK_HEADING } from "./page-heading";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
-export function SignOut() {
+const DELETE_NOTE =
+  "Your plan is cancelled and the emails stop. This can't be undone. Want a copy first? Use Download my data above.";
+
+function SignOutButton({ intent, idle }: { intent: string; idle: string }) {
   const navigation = useNavigation();
-  const signingOut = navigation.state !== "idle" && navigation.formData?.get("intent") === "sign-out";
+  const leaving = navigation.state !== "idle" && navigation.formData?.get("intent") === intent;
   return (
     <Form method="post" action="/app/settings">
-      <input type="hidden" name="intent" value="sign-out" />
-      <Button type="submit" variant="tertiary" disabled={signingOut}>
-        {signingOut ? "Signing out…" : "Sign out"}
+      <input type="hidden" name="intent" value={intent} />
+      <Button type="submit" variant="tertiary" disabled={leaving}>
+        {leaving ? "Signing out…" : idle}
       </Button>
     </Form>
   );
+}
+
+export function SignOut() {
+  return <SignOutButton intent="sign-out" idle="Sign out" />;
+}
+
+export function SignOutEverywhere() {
+  return <SignOutButton intent="sign-out-everywhere" idle="Sign out of all devices" />;
 }
 
 export function ExportData() {
@@ -57,7 +68,7 @@ export function DeleteAccount({ email, error }: { email: string; error: string |
         <li>The days you used 0509</li>
         <li>Your account, its API keys and connected AI apps</li>
       </ul>
-      <p className="mt-2 max-w-prose leading-[1.55]">The emails stop. This can't be undone.</p>
+      <p className="mt-2 max-w-prose leading-[1.55]">{DELETE_NOTE}</p>
       <Form method="post" action="/app/settings" className="mt-4 flex flex-col gap-3">
         <input type="hidden" name="intent" value="delete-account" />
         <label htmlFor="confirm-email" className="leading-[1.55] [overflow-wrap:anywhere]">

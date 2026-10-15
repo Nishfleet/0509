@@ -4,6 +4,7 @@ import { checkStuckWebhooks } from "../app/lib/billing/stuck-webhooks.server";
 import { deleteExpiredAuthRows } from "../app/lib/data/auth_expiry.server";
 import { deleteExpiredJevFailures } from "../app/lib/data/jev_failure.server";
 import { deleteExpiredVisits } from "../app/lib/data/workspace_visit.server";
+import { backfillChangeExcerpts } from "../app/lib/site/backfill-excerpts.server";
 
 export function nightlyDataChecks(db: D1Database, now: Date): Promise<unknown>[] {
   return [
@@ -11,6 +12,7 @@ export function nightlyDataChecks(db: D1Database, now: Date): Promise<unknown>[]
     deleteExpiredJevFailures(db, now),
     deleteExpiredVisits(db, now),
     checkStuckWebhooks(db, now),
+    backfillChangeExcerpts(),
   ];
 }
 

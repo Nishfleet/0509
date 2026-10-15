@@ -7,7 +7,7 @@ import { LEGAL_UPDATED } from "./legal/document";
 import { planNames, planPriceList } from "./pricing-page";
 import { plainSourceReason } from "./source-status-words";
 import { SITE_URL } from "./structured-data";
-import { watchedClaims } from "./watched-claims";
+import { UNANSWERED_NOUNS, watchedClaims } from "./watched-claims";
 
 export interface LlmsTxtSource {
   source: SourceRow;
@@ -82,13 +82,18 @@ export function robotsTxt(origin: string): string {
   );
 }
 
+function watchedPhrase(sources: readonly LlmsTxtSource[], now: number): string {
+  const { nouns } = watchedClaims(sources, now);
+  return nouns === UNANSWERED_NOUNS ? `their ${nouns}` : `their ${nouns} from public sources`;
+}
+
 export function llmsTxt(origin: string, sources: readonly LlmsTxtSource[], now: number = Date.now()): string {
   const prices = planPriceList();
   return (
     [
       "# Five to Nine",
       "",
-      `> Five to Nine (0509.io) is a competitor tracker for founders, brands and creators. It finds your competitors for you, watches their ${watchedClaims(sources, now).nouns} from public sources, ranks you against them every week, and emails one brief every Monday with a screenshot behind every change.`,
+      `> Five to Nine (0509.io) is a competitor tracker for founders, brands and creators. It finds your competitors for you, watches ${watchedPhrase(sources, now)}, ranks you against them every week, and emails one brief every Monday with a screenshot behind every change.`,
       "",
       `- Plans: ${prices}. ${TRIAL_TERMS}`,
       `- Agents: every plan includes a read-only API and an MCP server at ${MCP_URL}.`,

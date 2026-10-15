@@ -8,14 +8,10 @@ import { onboardedStatePath } from "../playwright.config";
 interface MotionFinding {
   selector: string;
   reason: string;
-  // For duration leaks: the value the browser is actually running.
+
   duration?: string;
 }
 
-// Routes visited by the spec. Reuses the walker from e2e/console-clean.spec.ts
-// so the reduced-motion coverage stays in lockstep with the route surface —
-// a new screen gets a motion assertion for free, and a route whose file ends
-// in `.ts` (an API/resource route, not a screen) is skipped the same way.
 function screenPaths(entries: RouteConfigEntry[], parent: string): string[] {
   const paths: string[] = [];
   for (const entry of entries) {
@@ -32,11 +28,6 @@ function visitPath(path: string): string {
   return `/${path.replace(/:[^/]+/g, "placeholder")}`;
 }
 
-// `testInfo.attach({ body })` keeps the buffer in memory and never writes a
-// file; only the `path:` form is persisted, which is what makes the
-// screenshots a reviewer can actually open. Writing through
-// `testInfo.outputPath()` keeps the file inside Playwright's output directory
-// (so `preserveOutput` governs it) without adding a path that escapes it.
 async function saveShot(
   page: Page,
   testInfo: TestInfo,
@@ -50,19 +41,9 @@ async function saveShot(
 
 const targets = ["/", ...screenPaths(routes, "").map(visitPath)];
 
-// The two end-state switch tests run against a real /app/competitors/:entityId
-// page, which exists only once a competitor is watched — so both open on the
-// shared onboarded session (e2e/onboarded.setup.ts signs in and drives the J3
-// journey once per viewport lane) and walk /app/competitors onto adidas.com,
-// the switch this file owns; competitor-page.spec.ts owns nike.com's. The
-// preview Worker cannot mint a session, so both tests skip on the preview lane
-// and run in the e2e-production job. The function returns nothing the tests
-// need beyond the open page: the detail page carries exactly one switch.
 async function openWatchedCompetitor(page: Page): Promise<void> {
   await page.goto("/app/competitors");
-  // The row is matched on its domain, not its display name: names are
-  // non-deterministic after onboarding (the brand chip falls back to a title
-  // cased handle) while the per-row domain `<p>` is app/routes/app.competitors.tsx.
+
   await page
     .getByRole("list", { name: "Competitors", exact: true })
     .getByRole("listitem")
@@ -72,37 +53,11 @@ async function openWatchedCompetitor(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/app\/competitors\/[^/]+$/);
 }
 
-// The two assertions the browser can answer honestly:
-//
-//   1. `document.getAnimations()` returns no running or pending CSS / WAAPI
-//      animations on the page. A transition is *not* an "animation" in the
-//      Web Animations sense — it is a CSS transition — so this only catches
-//      `animation:` keyframes and `Element.animate(...)`. The global reduced-
-//      motion block in `app/app.css` already drops `animation` to `none`, so
-//      in practice this set should be empty.
-//
-//   2. Every element in the document has `transition-duration: 0s` AND
-//      `animation-duration: 0s` in its computed style. The global block
-//      applies `transition: none !important`, which the browser reports as
-//      `transition-duration: 0s` for `all`. This is the assertion that
-//      catches `Element.animate(...)` calls and inline `style="..."` that
-//      tries to override the global reset.
-//
-// Both checks are run per route. The control test at the bottom of this file
-// visits the same routes WITHOUT reduced motion and asserts the computed
-// durations are non-zero on at least one element — so an always-green spec
-// that proves nothing fails there instead.
 async function inspectMotion(page: Page): Promise<MotionFinding[]> {
   return page.evaluate(() => {
     const findings: { selector: string; reason: string; duration?: string }[] = [];
     const label = (element: Element) => `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ""}`;
 
-    // `document.getAnimations()` takes no options — the `subtree` option only
-    // exists on `Element.getAnimations()` — so a shadow root opened by a Base
-    // UI dialog or a sonner toast would be invisible to it. Walk the tree,
-    // descend into every shadow root, and collect per element instead. The
-    // Set collapses the duplicates the document-level call shares with the
-    // element-level ones.
     const animations = new Set<Animation>(document.getAnimations());
     const walk = (root: ParentNode) => {
       for (const element of root.querySelectorAll("*")) {
@@ -121,19 +76,8 @@ async function inspectMotion(page: Page): Promise<MotionFinding[]> {
       });
     }
 
-    // `transition: none !important` is what `app/app.css` pins under
-    // `prefers-reduced-motion: reduce`. The computed longhands are the only
-    // way to prove the cascade actually won: a `duration-180` utility
-    // declares a non-zero `transition-duration` in the same origin, and only
-    // the important universal reset can beat it back to `0s`.
-    //
-    // The value is a comma-separated list (`transition-property: all` with
-    // several properties), so every entry is checked, not just the first.
     const nonZero = (value: string) => value.split(",").some((part) => Number.parseFloat(part) > 0);
 
-    // `querySelectorAll("*")` on a Document already includes the document
-    // element (`<html>`) — it is a child of the document node — so this is
-    // every element on the page, root included, without a special case.
     for (const element of document.querySelectorAll("*")) {
       const cs = getComputedStyle(element);
       if (nonZero(cs.transitionDuration)) {
@@ -155,18 +99,6 @@ async function inspectMotion(page: Page): Promise<MotionFinding[]> {
   });
 }
 
-// The per-route screenshot is evidence for a reviewer, not an assertion: the
-// `main` visibility check is what proves the route rendered. Playwright's own
-// `screenshot: "on"` recorder takes it once the test body ends (before any
-// afterEach) and attaches it as `test-finished-1.png`. Viewport-only, not
-// fullPage: 21 routes x 2 projects is a lot of report weight and the first
-// screen is what "did this route render" is asking.
-//
-// It replaces a `page.screenshot()` in the test body because a CDP capture can
-// fail with "Unable to capture screenshot" on a page that is fully rendered,
-// and in the body that failure failed the test (0509 PR #7214, preview-assert
-// run 37416731241). The recorder catches a failed capture and drops the
-// attachment, so a lost screenshot can no longer fail a motion test.
 test.use({ screenshot: "on" });
 
 for (const target of targets) {
@@ -174,19 +106,12 @@ for (const target of targets) {
     await page.emulateMedia({ reducedMotion: "reduce" });
 
     const response = await page.goto(target);
-    // The status check is the same one the console-clean spec does: a 404 on
-    // the unmatched `*` route is expected and not a failure of the spec, but
-    // a 5xx is — motion checks on a broken page mean nothing.
+
     const status = response?.status() ?? 0;
     if (status >= 500) {
       throw new Error(`${target} returned ${status}; motion assertions skipped on a broken page`);
     }
 
-    // The sample is taken once `main` is visible, so the route has painted.
-    // The computed-style scan below is what proves the cascade: a route that
-    // forgot the `prefers-reduced-motion` reset still carries a non-zero
-    // duration at first paint. Motion a script starts after first paint is
-    // outside this assertion, which is exactly what the test name scopes.
     await expect(page.locator("main")).toBeVisible();
 
     const findings = await inspectMotion(page);
@@ -203,22 +128,13 @@ test.describe("the watched-competitor page's brand switch and its motion @own-si
     !process.env.PLAYWRIGHT_TEST_BASE_URL,
     "the switch tests need a real session; the preview Worker cannot mint one and has no saved state file",
   );
-  // The storageState must be set at the describe level: it is resolved when the
-  // context is created, before an in-body skip could fire, and the preview lane
-  // has no e2e/.auth/onboarded-*.json to load (an ENOENT failure instead of a
-  // skip). The session itself comes from onboarded.setup.ts, one per lane.
-  // Playwright's fixture validator requires an object destructuring pattern
-  // here, and no-empty-pattern bans `({})`: the ignored binding is the price.
+
   test.use({
     storageState: async ({ browserName: _browserName }, use, testInfo) => {
       await use(onboardedStatePath(testInfo.project.name === "phone-390" ? "phone" : "desktop"));
     },
   });
 
-  // End-state assertion: toggling a brand switch must produce the same visible
-  // state regardless of whether motion is reduced. The whole point of
-  // "honoured" is "the user can still use the thing"; a transition being
-  // stripped is fine only if the final state lands.
   test("the brand switch toggles under reduced motion @own-signin", async ({ page }, testInfo) => {
     test.setTimeout(150_000);
     await page.emulateMedia({ reducedMotion: "reduce" });
@@ -237,25 +153,12 @@ test.describe("the watched-competitor page's brand switch and its motion @own-si
     const findings = await inspectMotion(page);
     expect(findings, `after toggle: ${JSON.stringify(findings[0])}`).toEqual([]);
 
-    // Same for the switch: the header reads "Paused", the thumb has moved, and
-    // nothing is animating. The motion assertion above already guaranteed the
-    // last part; this is the part a human looks at.
     await saveShot(page, testInfo, "end-state-brand-switch-paused", { fullPage: true });
 
-    // The account is shared with every other consumer of this session, so the
-    // switch is turned back on before the test ends; a run that left adidas.com
-    // off would break the next test to read it.
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-checked", "true");
   });
 
-  // Control assertion: without reduced motion, the switch thumb carries a
-  // non-zero `transition-duration` (`duration-180` -> 180ms). A spec that
-  // always reports "no motion found" because of a broken selector or a stale
-  // page snapshot would still be green on the assertions above — this one
-  // proves the inspection is actually looking at the live styles. If the
-  // non-reduced visit lands with all-zero durations too, the assertions
-  // above are vacuous and this file's PR should not merge.
   test("control: the switch thumb has a non-zero transition-duration without reduced motion @own-signin", async ({
     page,
   }) => {
@@ -263,18 +166,11 @@ test.describe("the watched-competitor page's brand switch and its motion @own-si
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await openWatchedCompetitor(page);
 
-    // The switch thumb is the element the brand-switch.tsx component pins at
-    // `[&_[data-slot=switch-thumb]]:duration-180`. That utility is what we
-    // expect the global reduced-motion block to neutralise. The real detail
-    // page wraps it in `brand-switch-field`, not the preview's
-    // `competitor-switch`.
     const thumb = page.locator("[data-slot='brand-switch-field'] [data-slot='switch-thumb']").first();
     await expect(thumb).toBeVisible();
 
     const duration = await thumb.evaluate((el) => getComputedStyle(el).transitionDuration);
 
-    // Tailwind compiles `duration-180` to `180ms`; the browser reports it as
-    // `"0.18s"`. Either non-zero form is acceptable; `0s` is the failure.
     const numeric = parseFloat(duration);
     expect(
       numeric,

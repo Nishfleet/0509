@@ -37,8 +37,6 @@ vi.mock("../../app/lib/discovery/generators/news", () => ({ newsGenerator: () =>
 vi.mock("../../app/lib/discovery/generators/hn", () => ({ hnGenerator: () => Promise.resolve([]) }));
 vi.mock("../../app/lib/discovery/generators/ai", () => ({ aiGenerator: () => Promise.resolve([]) }));
 
-// The shipped production state builder, fed exactly what a ResolvedCandidate
-// carries in discovery, so the judged state is the state onboarding judges.
 function stateFor(row: DiscoveryCase): unknown {
   const context: DiscoveryContext = {
     self: {

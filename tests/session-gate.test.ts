@@ -1,10 +1,6 @@
 import { RouterContextProvider } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
-// `cloudflare:workers` is a Workers-runtime module. The node project aliases
-// it to tests/workers-env-empty-stub.ts. The gate asks better-auth for a
-// session, so only the auth client is mocked below.
-
 import {
   requireSession,
   requireSessionMiddleware,
@@ -33,6 +29,8 @@ vi.mock("../app/lib/auth.server", () => ({
     },
   }),
   signOut,
+  hasSessionCookie: (request: Request) =>
+    Promise.resolve((request.headers.get("cookie") ?? "").includes("session_token")),
 }));
 
 const env = {} as never;

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { DEAD_LINK_MESSAGE, deadLinkMessage } from "../app/lib/login-link-error";
+import {
+  DEAD_LINK_MESSAGE,
+  SESSION_ENDED_MESSAGE,
+  deadLinkMessage,
+  sessionEndedMessage,
+} from "../app/lib/login-link-error";
 
 describe("deadLinkMessage", () => {
   it.each(["INVALID_TOKEN", "EXPIRED_TOKEN", "ATTEMPTS_EXCEEDED"])("explains %s", (code) => {
@@ -10,5 +15,13 @@ describe("deadLinkMessage", () => {
   it("stays silent without an error or with one it does not know", () => {
     expect(deadLinkMessage(new URLSearchParams())).toBeNull();
     expect(deadLinkMessage(new URLSearchParams({ error: "<b>x</b>" }))).toBeNull();
+  });
+});
+
+describe("sessionEndedMessage", () => {
+  it("speaks only for ended=1", () => {
+    expect(sessionEndedMessage(new URLSearchParams({ ended: "1" }))).toBe(SESSION_ENDED_MESSAGE);
+    expect(sessionEndedMessage(new URLSearchParams({ ended: "<b>" }))).toBeNull();
+    expect(sessionEndedMessage(new URLSearchParams())).toBeNull();
   });
 });

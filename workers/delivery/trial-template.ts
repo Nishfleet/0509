@@ -1,7 +1,7 @@
 import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
 import { formatDate } from "./brief-template";
-import { BODY, EYEBROW, HEADLINE, emailDocument, linkParagraph } from "./email-shell";
+import { BODY_STYLE, EYEBROW_STYLE, HEADLINE, emailDocument, linkParagraph } from "../../app/lib/email-shell";
 
 export interface TrialEndingContext {
   plan: string;
@@ -30,9 +30,9 @@ export function renderTrialEnding(ctx: TrialEndingContext): RenderedBrief {
     html: emailDocument(
       subject,
       [
-        `<p class="brief-muted" style="${EYEBROW}">Your trial</p>`,
+        `<p class="brief-muted" style="${EYEBROW_STYLE}">Your trial</p>`,
         `<p style="${HEADLINE}">${escapeHtml(subject)}</p>`,
-        ...lines.map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`),
+        ...lines.map((line) => `<p style="${BODY_STYLE}">${escapeHtml(line)}</p>`),
         linkParagraph("Manage or cancel your plan", ctx.link),
       ].join(""),
       lines[0],

@@ -1,8 +1,10 @@
 import { Fragment, type ReactElement } from "react";
+import { Link } from "react-router";
 
+import { ledgerFooter } from "../lib/work-ledger";
 import { ReadThisFirst } from "./read-this-first";
 import type { BriefPayload } from "../lib/brief-payload";
-import { rankTrendLine, sinceStartedLine } from "../lib/brief-since";
+import { newRivalLines, rankTrendLine, sinceStartedLine } from "../lib/brief-since";
 
 const SECTION = "mt-5 border-t border-line pt-4";
 const HEAD = "font-mono text-eyebrow text-ink-soft uppercase";
@@ -16,6 +18,7 @@ export function BriefView({ payload }: { payload: BriefPayload }) {
       <ReadThisFirst marks={payload.read_this_first} unjudged={payload.is_unjudged} />
       {brandsBlock(payload)}
       {ownSiteBlock(payload)}
+      {newRivalBlock(payload)}
       {checkedBlock(payload)}
     </article>
   );
@@ -48,12 +51,12 @@ function brandsBlock(payload: BriefPayload): ReactElement {
         <Fragment>
           <p className={BODY}>Add a competitor to see where you stand</p>
           <p className={BODY}>
-            <a
+            <Link
               className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4"
-              href="/app/competitors"
+              to="/app/competitors"
             >
               Add one on Competitors
-            </a>
+            </Link>
           </p>
         </Fragment>
       ) : (
@@ -63,6 +66,11 @@ function brandsBlock(payload: BriefPayload): ReactElement {
               {brand.name}: {rankText(brand.rank)}
             </p>
             {brand.biggest_move === null ? null : <p className="text-ink-soft">{brand.biggest_move}</p>}
+            {(brand.baseline ?? []).map((row) => (
+              <p key={row} className="text-ink-soft">
+                {row}
+              </p>
+            ))}
           </div>
         ))
       )}
@@ -93,11 +101,35 @@ function ownSiteBlock(payload: BriefPayload): ReactElement {
   );
 }
 
+function newRivalBlock(payload: BriefPayload): ReactElement | null {
+  const rival = newRivalLines(payload);
+  if (rival === null) return null;
+  return (
+    <section data-brief-block="new-rival" className={SECTION}>
+      <h3 className={HEAD}>A competitor you may be missing</h3>
+      <p className={BODY}>
+        {rival.title}
+        {rival.reason === null ? "" : ` ${rival.reason}`}
+      </p>
+      <p className={BODY}>
+        <a
+          className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4"
+          href="/app/competitors"
+        >
+          Review in Competitors
+        </a>
+      </p>
+    </section>
+  );
+}
+
 function checkedBlock(payload: BriefPayload): ReactElement {
   const since = sinceStartedLine(payload.checked);
+  const work = ledgerFooter(payload.checked.ledger, payload.why_line);
   return (
     <section data-brief-block="checked" className={SECTION}>
       <h3 className={HEAD}>What was checked</h3>
+      {work === null ? null : <p className={BODY}>{work}</p>}
       <p className="mt-2 font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft">
         {countLabel(payload.checked.mention_count, "mention", "mentions")} ·{" "}
         {countLabel(payload.checked.site_change_count, "site change", "site changes")}

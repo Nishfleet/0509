@@ -20,6 +20,7 @@ import { insertWatches, markWatchPolled, readSiteSweepTargets, readUnwatchedEnti
 import { robotsAllows } from "../fetch/robots.server";
 import { decodeHtmlEntities } from "../html";
 import { normaliseSubject } from "../identity/normalise";
+import { changeExcerpt } from "../site-change-excerpt";
 import { takeBrowserScreenshot } from "./browser-budget.server";
 import { computeBreakageEvidence } from "./breakage-evidence";
 import type { CheckPageResult } from "./check-page.server";
@@ -28,6 +29,7 @@ import { diffPageText } from "./diff";
 import type { JudgedChange, JudgeInput } from "./judge.server";
 import { judgeChange } from "./judge.server";
 import { readPage } from "./read-page.server";
+import { rememberRivalDescription } from "./rival-profile.server";
 
 const SITE_SOURCE_KEY = "site.web";
 
@@ -154,6 +156,7 @@ export async function checkSitePage(
     return { outcome: "failed", reason: "robots", detail: "disallowed by robots.txt" };
   }
   const read = await readPage(target, tick.plannedAt, { browser: options.browser ?? true });
+  await rememberRivalDescription(target, read);
   const result = await checkPage({
     watchId: target.watchId,
     pageId: target.pageId,
@@ -223,6 +226,7 @@ function changeSignalPayload(
       screenshotKey: changed.screenshotKey,
     },
     diffKey: diff === null ? null : diffKey,
+    excerpt: diff === null ? [] : changeExcerpt(diff.hunks.map((hunk) => hunk.lines)),
     wordsAdded: words.filter((c) => c.added).reduce((n, c) => n + wordCount(c.value), 0),
     wordsRemoved: words.filter((c) => c.removed).reduce((n, c) => n + wordCount(c.value), 0),
     status: changed.status,
