@@ -100,8 +100,8 @@ describe("re-judging unjudged mentions", () => {
     const first = await sweepTarget(await gdeltTargetFor(brand), NIGHT_ONE, null);
     expect(first).toEqual({ items: 2, stored: 0, unjudged: 2, skipped: 0 });
     expect((await signalRows(competitorId)).map((row) => [row.title, row.state, row.is_tombstoned])).toEqual([
-      ["Quill winds expected this weekend", "unjudged", 0],
-      ["Quillon opens a London flagship", "unjudged", 0],
+      ["Quill winds expected this weekend", "unjudged", 1],
+      ["Quillon opens a London flagship", "unjudged", 1],
     ]);
 
     const run = jevAnswering();
@@ -152,8 +152,8 @@ describe("re-judging unjudged mentions", () => {
     expect(second).toEqual({ items: 2, stored: 0, unjudged: 0, skipped: 0 });
     expect(stillDown).toHaveBeenCalledTimes(1);
     expect((await signalRows(competitorId)).map((row) => [row.state, row.is_tombstoned])).toEqual([
-      ["unjudged", 0],
-      ["unjudged", 0],
+      ["unjudged", 1],
+      ["unjudged", 1],
     ]);
   });
 });

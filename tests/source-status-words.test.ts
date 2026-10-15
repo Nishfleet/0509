@@ -7,12 +7,12 @@ describe("plainSourceReason", () => {
   it("maps each known reason to its plain words", () => {
     expect(plainSourceReason("no fresh data")).toBe("no new data yet");
     expect(plainSourceReason("timed out")).toBe("slow to answer");
-    expect(plainSourceReason("not answering")).toBe("not answering right now");
+    expect(plainSourceReason("not answering")).toBe("could not be checked right now");
   });
 
-  it("reads a blocked reason as not answering right now", () => {
-    expect(plainSourceReason("blocked: 403")).toBe("not answering right now");
-    expect(plainSourceReason("Blocked:cloudflare")).toBe("not answering right now");
+  it("reads a blocked reason as could not be checked right now", () => {
+    expect(plainSourceReason("blocked: 403")).toBe("could not be checked right now");
+    expect(plainSourceReason("Blocked:cloudflare")).toBe("could not be checked right now");
   });
 
   it("matches ignoring case and surrounding whitespace", () => {
@@ -21,7 +21,7 @@ describe("plainSourceReason", () => {
 
   it("maps the channel reasons to plain words", () => {
     expect(plainSourceReason(LOST_CHANNEL_REASON)).toBe("finding the channel again");
-    expect(plainSourceReason(NO_CHANNEL_REASON)).toBe("no YouTube channel on your profile");
+    expect(plainSourceReason(NO_CHANNEL_REASON)).toBe("no YouTube channel found");
   });
 
   it("falls back to not updating right now", () => {

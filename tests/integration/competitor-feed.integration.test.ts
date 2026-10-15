@@ -1,7 +1,13 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { readEntityDevelopments } from "../../app/lib/data/signal.server";
+import {
+  insertMention,
+  readEntityDevelopments,
+  readUnjudgedMentions,
+  resolveUnjudgedMention,
+} from "../../app/lib/data/signal.server";
+import { isAboutBrand } from "../../app/lib/jev/thresholds";
 
 const SINCE = "2026-09-01T00:00:00.000Z";
 
@@ -256,6 +262,72 @@ describe("competitor feed read", () => {
     expect(feed.map((item) => item.id)).not.toContain(fixture.tombstoned);
     expect(feed.map((item) => item.id)).not.toContain(fixture.stale);
     expect(feed.map((item) => item.id)).not.toContain(fixture.foreign);
+  });
+
+  it("hides Hacker News titles nobody has judged yet, then shows only the one judged about the brand", async () => {
+    const fixture = await seed();
+    const titles = ["Flock: A Flock of Birds in your Browser", "Libron E-Reader Font", "List of April Fools RFCs"];
+    const ids = titles.map((_, index) => `sig-fed-hn-${fixture.entityId}-${index}`);
+    const watchId = `watch-fed-hn-${fixture.entityId}`;
+    const snapshotId = `snap-fed-hn-${fixture.entityId}`;
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO watch (id, entity_id, source_id, target_key) VALUES (?1, ?2, 'src_site_web', 'brand name')",
+      ).bind(watchId, fixture.entityId),
+      env.DB.prepare(
+        "INSERT INTO snapshot (id, watch_id, fetched_at, payload_hash) VALUES (?1, ?2, '2026-10-13T10:00:00.000Z', 'h')",
+      ).bind(snapshotId, watchId),
+    ]);
+    await env.DB.batch(
+      titles.map((title, index) =>
+        insertMention({
+          id: ids[index] ?? "",
+          workspaceId: fixture.workspaceId,
+          entityId: fixture.entityId,
+          sourceId: "src_site_web",
+          watchId,
+          snapshotId,
+          title,
+          url: `https://news.ycombinator.com/item?id=${String(4100 + index)}`,
+          urlHash: `hash-${ids[index] ?? ""}`,
+          titleHash: `th-${ids[index] ?? ""}`,
+          normUrlHash: `nh-${ids[index] ?? ""}`,
+          author: null,
+          engagementJson: null,
+          payloadJson: "{}",
+          dedupKey: `${ids[index] ?? ""}:dedup`,
+          publishedAt: "2026-10-05T10:00:00.000Z",
+          observedAt: "2026-10-13T10:00:00.000Z",
+          isNotAboutBrand: false,
+          state: "unjudged",
+        }),
+      ),
+    );
+    const read = async () =>
+      (
+        await readEntityDevelopments({
+          workspaceId: fixture.workspaceId,
+          entityId: fixture.entityId,
+          since: SINCE,
+          limit: 20,
+        })
+      ).map((item) => item.title);
+    const before = await read();
+    for (const title of titles) expect(before).not.toContain(title);
+    const pending = await readUnjudgedMentions(watchId, 10);
+    expect(pending.map((row) => row.title).sort()).toEqual([...titles].sort());
+    const aboutBrandP = new Map([
+      [titles[0] ?? "", 0.93],
+      [titles[1] ?? "", 0.1929],
+      [titles[2] ?? "", 0.1378],
+    ]);
+    await env.DB.batch(
+      pending.map((row) => resolveUnjudgedMention(row.id, !isAboutBrand(aboutBrandP.get(row.title) ?? 0))),
+    );
+    const after = await read();
+    expect(after).toContain(titles[0]);
+    expect(after).not.toContain(titles[1]);
+    expect(after).not.toContain(titles[2]);
   });
 
   it("honours limit with the two newest", async () => {

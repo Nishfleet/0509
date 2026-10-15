@@ -76,7 +76,7 @@ describe("the competitor snapshot card", () => {
       { key: "new_creatives", label: "New ads", value: null, movement: null, reason },
       { key: "copy_changes", label: "Ad wording changes", value: null, movement: null, reason },
     ]);
-    expect(visibleText(html)).toBe(`New ads, Ad wording changes: ${reason}`);
+    expect(visibleText(html)).toBe(`New ads and Ad wording changes: ${reason}`);
   });
 
   it("prefixes the rank value and appends its movement label", () => {

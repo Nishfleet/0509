@@ -38,3 +38,7 @@ export function noulAction(p: number): NoulAction {
   if (p <= REJECT_AT) return "reject";
   return "maybe";
 }
+
+export function isAboutBrand(p: number): boolean {
+  return p >= ABOUT_BRAND_KEEP_AT;
+}
