@@ -7,7 +7,8 @@ import { PricingTimeline } from "./pricing-timeline";
 import { CompetitorRail, type CompetitorRailProps } from "./competitor-rail";
 import type { SiteChangeItemData } from "./site-change-item";
 import { SITE_SWEEP_UTC_LABEL } from "../lib/cadence";
-import { quietWithChanges, type BiggestMoveView } from "../lib/biggest-move";
+import type { BiggestMoveView } from "../lib/biggest-move";
+import { quietWithChanges } from "../lib/quiet-with-changes";
 import type { DevelopmentItem } from "../lib/developments";
 import { pricingTimeline } from "../lib/pricing-timeline";
 
