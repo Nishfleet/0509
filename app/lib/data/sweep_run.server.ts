@@ -29,15 +29,16 @@ export async function recordSweepRun(run: SweepRun): Promise<void> {
     .run();
 }
 
-const COUNT_INCOMPLETE_MENTION_RUNS = `SELECT COUNT(*) AS n FROM sweep_run
+const LOST_MENTION_RUNS = `SELECT reason FROM sweep_run
 WHERE kind = 'mentions' AND failed > 0 AND finished_at >= ?1 AND finished_at < ?2`;
 
-const countRow = z.object({ n: z.number().int() });
+const reasonRows = z.array(z.object({ reason: z.string().nullable() }));
 
-export async function countIncompleteMentionRuns(
+export async function lostMentionSources(
   db: D1Database,
   window: { startAt: string; endAt: string },
-): Promise<number> {
-  const row = await db.prepare(COUNT_INCOMPLETE_MENTION_RUNS).bind(window.startAt, window.endAt).first();
-  return countRow.parse(row).n;
+): Promise<string[]> {
+  const result = await db.prepare(LOST_MENTION_RUNS).bind(window.startAt, window.endAt).all();
+  const keys = reasonRows.parse(result.results).flatMap((row) => (row.reason === null ? [] : row.reason.split(", ")));
+  return [...new Set(keys)].sort();
 }
