@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import routes from "../app/routes";
 import { PLANS, TRIAL_DAYS } from "../app/lib/billing/plans";
 import { LEGAL_UPDATED } from "../app/lib/legal/document";
+import { SECURITY_UPDATED } from "../app/lib/legal/security";
 import type { SourceRow, SourceSnapshot } from "../app/lib/source-pill-status";
 import {
   AGENT_PATHS,
@@ -36,9 +37,6 @@ const SESSION_GATE_ALLOWLIST: Readonly<Record<string, string>> = {
   "/login": "sign-in must load without a session",
   "/api/health": "liveness probe has no cookie",
   "/api/docs": "public OpenAPI explorer",
-  "/status": "public status page; walled by Access until LAUNCH, listed in robots Disallow until then",
-  "/security": "public security page; walled by Access until LAUNCH, listed in robots Disallow until then",
-  "/design/landing": "public marketing page",
   "/onboarding": "first-run flow after sign-in, not under /app layouts",
   "/onboarding/competitors": "first-run flow after sign-in, not under /app layouts",
   "/onboarding/identity": "first-run flow after sign-in, not under /app layouts",
@@ -97,10 +95,6 @@ const withoutComments = (source: string) =>
     /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`)|(\/\*[\s\S]*?\*\/|\/\/[^\n]*)/g,
     (_match: string, literal: string | undefined) => literal ?? " ",
   );
-const documentsDeclaringNoindex = (document: string) =>
-  (withoutComments(document).match(/<meta\b[^>]*>/gi) ?? [])
-    .filter((tag) => /\bname\s*=\s*["']robots["']/i.test(tag))
-    .some((tag) => /\bnoindex\b/i.test(tag));
 const modulesDeclaringNoindex = (module: string) =>
   (withoutComments(module).match(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`/g) ?? []).some((literal) =>
     /\bnoindex\b/i.test(literal),
@@ -154,6 +148,7 @@ describe("public-route manifest", () => {
     for (const path of ["/privacy", "/terms"]) {
       expect(body).toContain(`<loc>https://0509.io${path}</loc><lastmod>${LEGAL_UPDATED}</lastmod>`);
     }
+    expect(body).toContain(`<loc>https://0509.io/security</loc><lastmod>${SECURITY_UPDATED}</lastmod>`);
     expect(body).toContain("<loc>https://0509.io/llms.txt</loc></url>");
   });
 
@@ -239,13 +234,6 @@ describe("public-route manifest", () => {
     }
     for (const path of SITEMAP_PATHS as readonly string[]) {
       expect(isDisallowed(path), `sitemap path "${path}" is disallowed by robots.txt`).toBe(false);
-      if (path === "/" && existsSync(join(REPO_ROOT, "public/index.html"))) {
-        expect(
-          documentsDeclaringNoindex(readFileSync(join(REPO_ROOT, "public/index.html"), "utf8")),
-          "the document serving / declares a robots noindex",
-        ).toBe(false);
-        continue;
-      }
       const route = routesByUrl.get(path);
       assert(route !== undefined, `sitemap path "${path}" is not a route in app/routes.ts`);
       expect(
@@ -262,11 +250,19 @@ describe("public-route manifest", () => {
     expect(sitemapXml("https://x", ["/a&b"])).toContain("/a&amp;b");
   });
 
-  it("keeps a noindex page out of the sitemap", () => {
-    const file = join(REPO_ROOT, "public/index.html");
-    const staticHome = existsSync(file) ? readFileSync(file, "utf8") : "";
-    const noindex = documentsDeclaringNoindex(staticHome);
-    expect((SITEMAP_PATHS as readonly string[]).includes("/")).toBe(!noindex);
+  it("serves / from the landing route and lists it in the sitemap", () => {
+    const home = topLevel(routes).find((entry) => entry.index === true);
+    expect(home?.file).toBe("routes/landing.tsx");
+    expect(SITEMAP_PATHS as readonly string[]).toContain("/");
+    expect(existsSync(join(REPO_ROOT, "public/index.html"))).toBe(false);
+  });
+
+  it("lists /status and /security as public pages that robots.txt allows", () => {
+    for (const path of ["/status", "/security"]) {
+      expect(PUBLIC_PATHS as readonly string[]).toContain(path);
+      expect(isDisallowed(path)).toBe(false);
+    }
+    expect(robotsTxt("https://0509.io")).not.toMatch(/^Disallow: \/(status|security)$/m);
   });
 
   it("llms.txt never says public sources twice when no source is answering", () => {

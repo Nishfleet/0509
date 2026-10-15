@@ -4,6 +4,7 @@ import { TRIAL_DAYS, TRIAL_TERMS } from "./billing/plans";
 import { LIVE_COVERAGE, PLAN_NOTE } from "./coverage";
 import { FAQ } from "./faq";
 import { LEGAL_UPDATED } from "./legal/document";
+import { SECURITY_UPDATED } from "./legal/security";
 import { planNames, planPriceList } from "./pricing-page";
 import { plainSourceReason } from "./source-status-words";
 import { SITE_URL } from "./structured-data";
@@ -14,11 +15,12 @@ export interface LlmsTxtSource {
   snapshot: SourceSnapshot | null;
 }
 
-export const PUBLIC_PATHS = ["/pricing", "/privacy", "/terms"] as const;
-export const SITEMAP_PATHS = ["/pricing", "/privacy", "/terms", "/llms.txt"] as const;
+export const PUBLIC_PATHS = ["/", "/pricing", "/privacy", "/terms", "/security", "/status"] as const;
+export const SITEMAP_PATHS = ["/", "/pricing", "/privacy", "/terms", "/security", "/status", "/llms.txt"] as const;
 export const SITEMAP_LASTMOD: Readonly<Record<string, string>> = {
   "/privacy": LEGAL_UPDATED,
   "/terms": LEGAL_UPDATED,
+  "/security": SECURITY_UPDATED,
 };
 export const DISALLOWED_PREFIXES = [
   "/app",
@@ -29,13 +31,15 @@ export const DISALLOWED_PREFIXES = [
   "/onboarding",
   "/oauth",
   "/design",
-  "/status",
-  "/security",
 ] as const;
 export const AGENT_PATHS = ["/mcp", "/api/v1/openapi.json", "/.well-known/http-message-signatures-directory"] as const;
 export const MCP_URL = `${SITE_URL}/mcp`;
 
 const PAGE_SUMMARIES: Record<(typeof PUBLIC_PATHS)[number], { title: string; summary: string }> = {
+  "/": {
+    title: "Home",
+    summary: "what Five to Nine watches, how the Monday brief works, the plans and the answers to common questions",
+  },
   "/pricing": {
     title: "Pricing",
     summary: `the ${planNames()} plans with monthly prices in euros, and the ${String(TRIAL_DAYS)}-day trial terms`,
@@ -48,6 +52,14 @@ const PAGE_SUMMARIES: Record<(typeof PUBLIC_PATHS)[number], { title: string; sum
     title: "Terms",
     summary:
       "who can use 0509, fair use, agent access, plans and cancelling, and how either side can end the agreement",
+  },
+  "/security": {
+    title: "Security",
+    summary: "where the data lives, how you sign in, what agents can touch, and how to report a security problem",
+  },
+  "/status": {
+    title: "Status",
+    summary: "whether the Five to Nine site and its database are working right now",
   },
 };
 
