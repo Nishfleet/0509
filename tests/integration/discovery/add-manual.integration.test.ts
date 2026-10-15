@@ -204,6 +204,20 @@ describe("handleCompetitorIntent intent=add", () => {
     expect(rows?.n).toBe(0);
   });
 
+  it("sends no request to the typed address once the probe limit is spent", async () => {
+    const workspaceId = await seedWorkspace();
+    const fetched = vi.fn((_input: RequestInfo | URL) => Promise.reject(new TypeError("fetch failed")));
+    vi.stubGlobal("fetch", fetched);
+    const limiter = vi.spyOn(env.PROBE_LIMIT, "limit").mockResolvedValue({ success: false });
+
+    const result = await handleCompetitorIntent(workspaceId, addForm("gymshrk.com"));
+    limiter.mockRestore();
+
+    expect(result.unreachable).toBeUndefined();
+    expect(result.message).toContain("tried a lot of addresses");
+    expect(fetched).not.toHaveBeenCalled();
+  });
+
   it("adds an address that does not answer when the customer chooses to add it anyway", async () => {
     const workspaceId = await seedWorkspace();
     vi.stubGlobal("fetch", () => Promise.reject(new TypeError("fetch failed")));
