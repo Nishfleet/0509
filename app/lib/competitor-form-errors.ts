@@ -4,5 +4,6 @@ export interface CompetitorFormErrors {
   siteError: string | null;
   nameError: string | null;
   noteError: string | null;
+  noteSaved: boolean;
   renamed: boolean;
 }
