@@ -1559,6 +1559,23 @@ export default tseslint.config(
                 "The delivery-address save is the second app-side sender after app/lib/auth.server.ts, and it goes through the one paved path (workers/delivery/send.ts) instead of calling env.EMAIL.send a second time. Only that one file reaches the worker; every other server leaf keeps the boundary. Source: 0509#5811.",
             },
             {
+              from: { file: { path: "app/lib/brief-preview.server.ts" } },
+              allow: {
+                to: {
+                  file: {
+                    path: [
+                      "workers/standing/compose-brief.ts",
+                      "workers/standing/freeze.ts",
+                      "workers/standing/read-this-first.ts",
+                      "workers/standing/refresh.ts",
+                    ],
+                  },
+                },
+              },
+              message:
+                "The brief preview composes the brief with the email's own compose step (workers/standing/compose-brief.ts) so the page and the email cannot drift. Only that one server leaf reaches those four worker files; every other server leaf keeps the boundary. Source: the brief preview PR (0509#7607), same shape as 0509#5811.",
+            },
+            {
               from: { element: { type: "data-writer" } },
               disallow: {
                 to: [

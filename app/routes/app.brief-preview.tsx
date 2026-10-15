@@ -32,7 +32,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <PageHeading title="This week so far" />
       <p
         data-brief="preview"
-        className="mt-2 font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft uppercase [overflow-wrap:anywhere]"
+        className="mt-2 font-mono text-[0.75rem] tracking-[0.04em] [overflow-wrap:anywhere] text-ink-soft uppercase"
       >
         Preview · Nothing is sent from here
       </p>
