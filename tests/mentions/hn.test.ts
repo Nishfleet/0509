@@ -26,6 +26,7 @@ describe("hn.algolia mentions adapter", () => {
       const result = await adapter?.({ query: "gymshark" }, null);
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(String(fetchMock.mock.calls[0]?.[0])).toContain("query=gymshark&tags=story");
+      expect(new URL(String(fetchMock.mock.calls[0]?.[0])).searchParams.get("typoTolerance")).toBe("false");
       expect(result?.items).toEqual(parseHn(fixture).items);
     } finally {
       vi.unstubAllGlobals();
