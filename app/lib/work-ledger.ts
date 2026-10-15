@@ -12,7 +12,7 @@ export interface WorkLedger {
 
 function pagesClause(ledger: WorkLedger): string | null {
   if (ledger.pages_read === 0) return null;
-  const across = ledger.rivals > 0 ? ` across ${countPhrase(ledger.rivals, "rival", "rivals")}` : "";
+  const across = ledger.rivals > 0 ? ` across ${countPhrase(ledger.rivals, "competitor", "competitors")}` : "";
   return `read ${countPhrase(ledger.pages_read, "page", "pages")}${across}`;
 }
 
@@ -39,7 +39,7 @@ function ledgerSentence(ledger: WorkLedger, lead: string): string {
 }
 
 export function quietLedgerLine(ledger: WorkLedger): string | null {
-  if (ledger.pages_read === 0) return null;
+  if (ledger.pages_read === 0 || ledger.changes_told > 0) return null;
   return ledgerSentence(ledger, "Quiet week: we");
 }
 
