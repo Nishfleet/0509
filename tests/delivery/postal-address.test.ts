@@ -39,9 +39,13 @@ describe("marketing email needs a postal address, service email does not", () =>
   it("sends win-back and rival nudges only while an address is set, and every service email regardless", async () => {
     const { sendLifecycleEmails } = await import("../../workers/delivery/lifecycle");
     sent.names.length = 0;
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     await sendLifecycleEmails({} as Env, new Date("2026-10-15T12:00:00Z"));
     const marketing = ["winback", "rival-nudge"];
     expect(sent.names).toEqual(expect.arrayContaining(["welcome", "recap", "monthly"]));
     expect(sent.names.some((name) => marketing.includes(name))).toBe(POSTAL_ADDRESS !== null);
+    const held = log.mock.calls.filter(([line]) => String(line).includes("delivery.marketing_held"));
+    expect(held).toHaveLength(POSTAL_ADDRESS === null ? 2 : 0);
+    log.mockRestore();
   });
 });
