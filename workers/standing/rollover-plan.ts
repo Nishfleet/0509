@@ -33,7 +33,8 @@ WHERE s.week_start_at >= ?1
     SELECT 1 FROM digest d
     WHERE d.workspace_id = s.workspace_id AND d.kind = 'weekly' AND d.period_start = s.week_start_at
   )
-GROUP BY s.workspace_id, s.week_start_at`;
+GROUP BY s.workspace_id, s.week_start_at
+HAVING COUNT(DISTINCT s.entity_id) >= 2`;
 
 const scheduleRows = z.array(
   z.object({

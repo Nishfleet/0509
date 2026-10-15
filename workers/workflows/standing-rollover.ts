@@ -85,7 +85,7 @@ async function writeDigest(
     week: { startsAt: new Date(closing.startsAt), closesAt },
     readThisFirst,
   });
-  await insertWeeklyDigest(env.DB, {
+  const inserted = await insertWeeklyDigest(env.DB, {
     id,
     workspaceId,
     periodStart: payload.period_start,
@@ -94,7 +94,7 @@ async function writeDigest(
     payloadJson: JSON.stringify(payload),
     subject: briefSubject(payload),
   });
-  if (!closing.paused) await env.SEND_EMAIL.send({ digest_id: id });
+  if (inserted && !closing.paused) await env.SEND_EMAIL.send({ digest_id: id });
   return id;
 }
 
@@ -158,11 +158,13 @@ function pausedSkip(paused: boolean): RolloverOutcome["skipped"] {
   return paused ? "brief_paused" : null;
 }
 
-function isSendable(readThisFirst: JudgedWeek, closesAt: Date): boolean {
-  return weekSendable({
-    unjudgedInputs: readThisFirst.unjudged ? 1 : 0,
-    holdDeadlinePassed: holdDeadlinePassed(closesAt, new Date()),
-  });
+function isSendable(step: WorkflowStep, readThisFirst: JudgedWeek, closesAt: Date): Promise<boolean> {
+  return step.do("hold-check", RETRY, () =>
+    weekSendable({
+      unjudgedInputs: readThisFirst.unjudged ? 1 : 0,
+      holdDeadlinePassed: holdDeadlinePassed(closesAt, new Date()),
+    }),
+  );
 }
 
 export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
@@ -206,7 +208,7 @@ export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
       }),
     );
 
-    const sendable = isSendable(readThisFirst, closesAt);
+    const sendable = await isSendable(step, readThisFirst, closesAt);
     const digestId =
       !sendable || (rankedCount < 2 && !readThisFirst.unjudged)
         ? null

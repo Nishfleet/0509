@@ -74,8 +74,8 @@ export async function readWorkspaceBrief(workspaceId: string, digestId: string):
   return readBrief(env.DB, workspaceId, digestId);
 }
 
-export async function insertWeeklyDigest(db: D1Database, digest: WeeklyDigest): Promise<void> {
-  await db
+export async function insertWeeklyDigest(db: D1Database, digest: WeeklyDigest): Promise<boolean> {
+  const result = await db
     .prepare(INSERT_WEEKLY_DIGEST)
     .bind(
       digest.id,
@@ -87,4 +87,5 @@ export async function insertWeeklyDigest(db: D1Database, digest: WeeklyDigest): 
       digest.subject,
     )
     .run();
+  return result.meta.changes > 0;
 }
