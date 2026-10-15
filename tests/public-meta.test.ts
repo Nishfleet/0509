@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { PRIVACY } from "../app/lib/legal/privacy";
+import { SECURITY } from "../app/lib/legal/security";
 import { TERMS } from "../app/lib/legal/terms";
 import { legalMeta } from "../app/lib/legal/meta";
 import { pricingMeta } from "../app/lib/pricing-page";
@@ -9,10 +10,11 @@ import { SITE_URL } from "../app/lib/structured-data";
 
 type Entry = Record<string, unknown>;
 
-const PAGES: Record<(typeof PUBLIC_PATHS)[number], readonly Entry[]> = {
+const PAGES: Record<Exclude<(typeof PUBLIC_PATHS)[number], "/" | "/status">, readonly Entry[]> = {
   "/pricing": pricingMeta(),
   "/privacy": legalMeta(PRIVACY),
   "/terms": legalMeta(TERMS),
+  "/security": legalMeta(SECURITY),
 };
 
 function field(entries: readonly Entry[], key: string, value: string): Entry[] {
