@@ -3,7 +3,7 @@ import type { Route } from "./+types/app.settings";
 import { DeleteAccount, ExportData } from "../components/account-settings";
 import { DismissedBrands } from "../components/dismissed-brands";
 import { Footer } from "../components/footer";
-import { ChangeAlertsSetting, OwnSiteAlertsSetting } from "../components/own-site-alerts-setting";
+import { ChangeAlertsSetting, OwnSiteAlertsSetting, SlackBriefSetting } from "../components/own-site-alerts-setting";
 import { SlackAlertsSetting } from "../components/slack-alerts-setting";
 import { PlanSection } from "../components/plan-settings";
 import { PageHeading } from "../components/page-heading";
@@ -52,6 +52,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
               emailAlerts={loaderData.changeAlerts}
               error={actionData?.slackError ?? null}
             />
+            {loaderData.slackConnected ? <SlackBriefSetting on={loaderData.slackBrief} /> : null}
           </div>
           <DismissedBrands dismissed={loaderData.dismissed} />
           <AgentsSection />

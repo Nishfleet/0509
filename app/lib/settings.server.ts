@@ -20,9 +20,11 @@ import {
   readBriefScheduleForOwner,
   readChangeAlerts,
   readOwnSiteAlerts,
+  readSlackBrief,
   readWorkspaceIdForOwner,
   setChangeAlerts,
   setOwnSiteAlerts,
+  setSlackBrief,
 } from "./data/workspace.server";
 import { readDeliveryAddress, saveDeliveryAddress } from "./delivery-address.server";
 import { addTeammateByOwner, readTeammates, removeTeammateByOwner } from "./teammates.server";
@@ -91,6 +93,7 @@ const NO_WORKSPACE_SETTINGS = {
   changeAlerts: true,
   slackConnected: false,
   slackRevoked: false,
+  slackBrief: false,
   dismissed: [],
   teammates: [],
   plan: null,
@@ -115,12 +118,13 @@ async function readCountLine(workspaceId: string): Promise<string | null> {
 }
 
 async function readWorkspaceSettings(workspaceId: string) {
-  const [ownSiteAlerts, changeAlerts, slackTarget, slackRevoked, dismissed, plan, teammates, countLine] =
+  const [ownSiteAlerts, changeAlerts, slackTarget, slackRevoked, slackBrief, dismissed, plan, teammates, countLine] =
     await Promise.all([
       readOwnSiteAlerts(workspaceId),
       readChangeAlerts(workspaceId),
       readSlackTarget(env.DB, workspaceId),
       readSlackDisconnected(env.DB, workspaceId),
+      readSlackBrief(env.DB, workspaceId),
       readUserDismissed(workspaceId),
       readPlanSummary(workspaceId),
       readTeammates(workspaceId),
@@ -132,6 +136,7 @@ async function readWorkspaceSettings(workspaceId: string) {
     changeAlerts,
     slackConnected: slackTarget !== null,
     slackRevoked,
+    slackBrief,
     dismissed,
     teammates,
     plan,
@@ -159,6 +164,7 @@ export async function readSettings(user: SettingsUser) {
     changeAlerts,
     slackConnected,
     slackRevoked,
+    slackBrief,
     dismissed,
     teammates,
     plan,
@@ -172,6 +178,7 @@ export async function readSettings(user: SettingsUser) {
     changeAlerts,
     slackConnected,
     slackRevoked,
+    slackBrief,
     dismissed,
     delivery,
     teammates,
@@ -325,6 +332,7 @@ interface IntentCall {
 const INTENTS = new Map<string, (call: IntentCall) => Promise<SettingsResult>>([
   ["own-site-alerts", (c) => saveSwitch(c.user.id, c.form, setOwnSiteAlerts)],
   ["change-alerts", (c) => saveSwitch(c.user.id, c.form, setChangeAlerts)],
+  ["slack-brief", (c) => saveSwitch(c.user.id, c.form, setSlackBrief)],
   ["slack-save", (c) => connectSlack(c.user.id, c.form)],
   ["slack-remove", (c) => disconnectSlack(c.user.id)],
   ["delivery-address", (c) => saveAddress(c.user, c.form)],
