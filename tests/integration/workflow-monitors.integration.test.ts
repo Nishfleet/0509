@@ -129,7 +129,16 @@ describe("workflow Sentry cron monitors", () => {
       [{ monitorSlug: "mentions-sweep", status: "in_progress" }, MENTIONS_MONITOR],
       [{ checkInId: "check-in-1", monitorSlug: "mentions-sweep", status: "ok" }, MENTIONS_MONITOR],
     ]);
-    expect(outcome).toEqual({ targets: 0, swept: 0, failed: 0, missed: [], stored: 0, unjudged: 0, skipped: 0 });
+    expect(outcome).toEqual({
+      targets: 0,
+      swept: 0,
+      failed: 0,
+      missed: [],
+      skippedTargets: 0,
+      stored: 0,
+      unjudged: 0,
+      skipped: 0,
+    });
   });
 
   it("checks own-site-check in on its hourly monitor and returns the zeroed check", async () => {
