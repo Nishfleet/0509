@@ -52,7 +52,7 @@ describe("checkSilentRivals", () => {
   it("raises when a paid rival has had no snapshot for a week, naming the stored reason", async () => {
     await seedRival({ id: "blocked", discoveredAt: LONG_AGO, paid: true, reason: "deferred: no browser budget" });
 
-    await expect(checkSilentRivals(NOW)).rejects.toThrow("paid rivals with no snapshot for 7 days");
+    await expect(checkSilentRivals(NOW)).rejects.toThrow("paid competitors with no snapshot for 7 days");
 
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('"deferred: no browser budget":1'));
   });

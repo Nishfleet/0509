@@ -11,5 +11,5 @@ export async function checkSilentRivals(now: Date): Promise<void> {
   const byReason: Record<string, number> = {};
   for (const rival of silent) byReason[rival.reason] = (byReason[rival.reason] ?? 0) + 1;
   console.warn(JSON.stringify({ event: "site.rivals_silent", days: SILENT_DAYS, rivals: silent.length, byReason }));
-  throw new Error(`site: paid rivals with no snapshot for ${String(SILENT_DAYS)} days`);
+  throw new Error(`site: paid competitors with no snapshot for ${String(SILENT_DAYS)} days`);
 }

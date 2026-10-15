@@ -1,4 +1,4 @@
--- 0062_page_last_failure.sql: a page that could not be read keeps the reason
+-- 0064_page_last_failure.sql: a page that could not be read keeps the reason
 -- and the time of its latest failed read, and both are cleared by the next
 -- successful read. Before this a failed fetch wrote no row, so a rival whose
 -- site blocks us was indistinguishable from a rival with nothing new

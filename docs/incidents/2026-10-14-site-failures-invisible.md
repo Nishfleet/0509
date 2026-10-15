@@ -18,7 +18,7 @@ LOGS' 14-day Sentry read on 2026-10-14: zero of both events while 13 pages sat d
 
 ## The fix
 
-Both are now `console.warn` (`app/lib/site/sweep.server.ts`, `app/lib/fetch/archive.server.ts`). The check-failed line carries a page id, the reason and the detail with any URL replaced by `<url>` and capped at 300 characters, so no tracked-brand address reaches Sentry.
+Both already logged as `console.warn` (`app/lib/site/sweep.server.ts`, `app/lib/fetch/archive.server.ts`); this change adds the redaction. The check-failed line carries a page id, the reason and the detail with any URL replaced by `<url>` and capped at 300 characters, so no tracked-brand address reaches Sentry.
 
 ## What stops a repeat
 
