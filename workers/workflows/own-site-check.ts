@@ -3,8 +3,8 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 
 import type { OwnSitePage } from "../../app/lib/data/page.server";
 import type { OwnSiteHealth } from "../../app/lib/site/own-site.server";
+import { breakageRepaired } from "../../app/lib/site/breakage-recheck.server";
 import {
-  breakageRepaired,
   closeOwnSiteIncident,
   openOwnSiteIncident,
   planOwnSiteCheck,

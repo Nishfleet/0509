@@ -213,6 +213,22 @@ describe("own-site alert in one sweep pass", () => {
     expect(send).toHaveBeenCalledWith({ incident_id: incident.id });
   });
 
+  it("a high breakage guess on a page that still has its text and prices opens no incident and sends no email", async () => {
+    const self = (await planSiteSweep(NOW)).find((target) => target.entityId === SELF);
+    if (self === undefined) throw new Error("expected the self homepage target");
+    await sweepOnePage(self, await tick("baseline-self"));
+
+    holder.html = BEFORE_HTML.replace("<h1>MyBrand</h1>", "<h1>MyBrand</h1><p>Sold out: the red tile.</p>");
+    const reordered = await sweepOnePage(self, await tick("reordered-self"));
+    expect(reordered.outcome).toBe("changed");
+
+    const incidents = await env.DB.prepare("SELECT COUNT(*) AS n FROM incident WHERE entity_id = ?")
+      .bind(SELF)
+      .first<{ n: number }>();
+    expect(incidents?.n).toBe(0);
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it("the same break on a competitor opens no incident, no alert and no email", async () => {
     const rival = (await planSiteSweep(NOW)).find((target) => target.entityId === RIVAL);
     if (rival === undefined) throw new Error("expected the rival homepage target");

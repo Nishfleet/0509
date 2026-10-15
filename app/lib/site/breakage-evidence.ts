@@ -30,6 +30,10 @@ export function computeBreakageEvidence(input: {
   };
 }
 
+export function showsBreakage(e: BreakageEvidence): boolean {
+  return e.httpError || e.textHalved || e.pricesVanished;
+}
+
 function countPrices(text: string): number {
   return text.match(/[£$€₹]\s?\d/g)?.length ?? 0;
 }

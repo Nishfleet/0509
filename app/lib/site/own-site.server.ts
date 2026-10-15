@@ -12,29 +12,21 @@ import { readPaidWorkspaceIds } from "../data/plan.server";
 import type { OwnSitePage } from "../data/page.server";
 import { readOwnSitePages } from "../data/page.server";
 import { readWorkspaceEntitlements } from "../data/plan.server";
-import { BlockedRedirectError, cappedText, fetchOutbound } from "../fetch/outbound.server";
-import { CRAWLER_USER_AGENT, robotsAllows } from "../fetch/robots.server";
-import { computeBreakageEvidence } from "./breakage-evidence";
-import { extractPageText } from "./extract-text";
+import { BlockedRedirectError, fetchOutbound } from "../fetch/outbound.server";
+import { robotsAllows } from "../fetch/robots.server";
+import { PROBE_HEADERS, PROBE_TIMEOUT_MS } from "./breakage-recheck.server";
 import { ensureHomePages } from "./sweep.server";
 
 export type OwnSiteHealth =
-  { state: "healthy" } | { state: "unknown"; reason: string } | { state: "broken"; kind: string };
+  | { state: "healthy" }
+  | { state: "unknown"; reason: string }
+  | { state: "broken"; kind: string };
 
 export interface OwnSitePlan {
   pages: OwnSitePage[];
   openIncidents: Record<string, string>;
   breakage: Record<string, string | null>;
 }
-
-const PROBE_TIMEOUT_MS = 10_000;
-
-const MAX_PAGE_BYTES = 5 * 1024 * 1024;
-
-const PROBE_HEADERS = {
-  accept: "text/html,application/xhtml+xml",
-  "user-agent": CRAWLER_USER_AGENT,
-} as const;
 
 async function fetchStatus(url: string): Promise<Response | Error> {
   try {
@@ -81,36 +73,6 @@ function classify(response: Response | Error): OwnSiteHealth {
   }
   if (response.status >= 400) return { state: "unknown", reason: `status ${String(response.status)}` };
   return { state: "healthy" };
-}
-
-export async function breakageRepaired(url: string, beforeKey: string | null): Promise<boolean> {
-  if (beforeKey === null) return false;
-  let response: Response;
-  try {
-    response = await fetchOutbound(url, {
-      headers: PROBE_HEADERS,
-      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
-    });
-  } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "site.own_check_verify_failed",
-        error: error instanceof Error ? error.name : "unknown",
-      }),
-    );
-    return false;
-  }
-  const html = await cappedText(response, MAX_PAGE_BYTES);
-  if (html === null) return false;
-  const afterText = (await extractPageText(html)).text;
-  const before = await env.SNAPSHOTS.get(beforeKey);
-  if (before === null) return false;
-  const e = computeBreakageEvidence({
-    status: response.status,
-    beforeText: await before.text(),
-    afterText,
-  });
-  return !e.httpError && !e.textHalved && !e.pricesVanished;
 }
 
 async function entitledOwnSitePages(pages: OwnSitePage[]): Promise<OwnSitePage[]> {

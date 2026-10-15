@@ -25,6 +25,7 @@ import { takeBrowserScreenshot } from "./browser-budget.server";
 import { computeBreakageEvidence } from "./breakage-evidence";
 import type { CheckPageResult } from "./check-page.server";
 import { checkPage } from "./check-page.server";
+import { breakageConfirmed } from "./breakage-recheck.server";
 import { changedWordCounts, diffPageText } from "./diff";
 import type { JudgedChange, JudgeInput } from "./judge.server";
 import { judgeChange } from "./judge.server";
@@ -483,7 +484,11 @@ export async function publishSiteChange(target: SiteSweepTarget, changed: Change
   const payloadJson = changeSignalPayload({ target, changed, diff, diffKey });
   const selfJudgment = await judgeSelfChange(change);
   const band = selfJudgment?.selfBreakage?.band;
-  if (selfJudgment !== null && (band === "alert" || band === "check")) {
+  if (
+    selfJudgment !== null &&
+    (band === "alert" || band === "check") &&
+    (await breakageConfirmed(change.evidence, target.url, changed.previousTextKey))
+  ) {
     await openBreakageIncident(change, { payloadJson, judgment: selfJudgment, band });
   } else {
     await fileUnlessDiscarded(change, payloadJson, selfJudgment);

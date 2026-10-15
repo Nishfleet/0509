@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { robotsAllows } from "../../app/lib/fetch/robots.server";
-import { breakageRepaired, probeOwnSite } from "../../app/lib/site/own-site.server";
+import { breakageRepaired } from "../../app/lib/site/breakage-recheck.server";
+import { probeOwnSite } from "../../app/lib/site/own-site.server";
 
 const REFUSED = [
   "http://169.254.169.254/latest/meta-data/",
