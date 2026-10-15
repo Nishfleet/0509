@@ -1,5 +1,7 @@
 import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 
+import { marketingEmailAllowed } from "../../app/lib/email-shell";
+
 import { sendMonthlies } from "./monthly";
 import { sendRecaps } from "./recap";
 import { sendRivalNudges } from "./rival-nudge";
@@ -7,13 +9,15 @@ import { sendWelcomes } from "./welcome";
 import { sendWinbacks } from "./winback";
 
 export async function sendLifecycleEmails(env: Env, now: Date): Promise<void> {
-  for (const [event, send] of [
-    ["delivery.welcome_cron_failed", sendWelcomes],
-    ["delivery.recap_cron_failed", sendRecaps],
-    ["delivery.winback_cron_failed", sendWinbacks],
-    ["delivery.rival_nudge_cron_failed", sendRivalNudges],
-    ["delivery.monthly_cron_failed", sendMonthlies],
+  const marketing = marketingEmailAllowed();
+  for (const [event, send, promotional] of [
+    ["delivery.welcome_cron_failed", sendWelcomes, false],
+    ["delivery.recap_cron_failed", sendRecaps, false],
+    ["delivery.winback_cron_failed", sendWinbacks, true],
+    ["delivery.rival_nudge_cron_failed", sendRivalNudges, true],
+    ["delivery.monthly_cron_failed", sendMonthlies, false],
   ] as const) {
+    if (promotional && !marketing) continue;
     await send(env, now).catch((error: unknown) => {
       console.error(JSON.stringify({ event, error: redactEmailShaped(String(error)).slice(0, 200) }));
     });
