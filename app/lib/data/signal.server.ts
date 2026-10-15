@@ -333,6 +333,11 @@ const SELECT_UNJUDGED_MENTIONS = `SELECT id, title, canonical_url, published_at,
 WHERE watch_id = ?1 AND kind = 'mention' AND state = 'unjudged'
 ORDER BY observed_at, id LIMIT ?2`;
 
+const SELECT_UNJUDGED_MENTIONS_IN_WINDOW = `SELECT id, watch_id, title, canonical_url, published_at, payload_json FROM signal
+WHERE workspace_id = ?1 AND kind = 'mention' AND state = 'unjudged' AND is_tombstoned = 0 AND watch_id IS NOT NULL
+  AND observed_at >= ?2 AND observed_at < ?3
+ORDER BY observed_at, id LIMIT ?4`;
+
 const RESOLVE_UNJUDGED_MENTION = `UPDATE signal SET state = 'judged', is_tombstoned = ?2
 WHERE id = ?1 AND kind = 'mention' AND state = 'unjudged'`;
 
@@ -360,6 +365,36 @@ export async function readUnjudgedMentions(watchId: string, limit: number): Prom
   const rows = await env.DB.prepare(SELECT_UNJUDGED_MENTIONS).bind(watchId, limit).all();
   return unjudgedMentionRows.parse(rows.results).map((row) => ({
     id: row.id,
+    title: row.title,
+    url: row.canonical_url,
+    publishedAt: row.published_at,
+    publisher: mentionPayload.parse(JSON.parse(row.payload_json)).publisher ?? null,
+  }));
+}
+
+const windowMentionRows = z.array(
+  z.object({
+    id: z.string(),
+    watch_id: z.string(),
+    title: z.string(),
+    canonical_url: z.string(),
+    published_at: z.string().nullable(),
+    payload_json: z.string(),
+  }),
+);
+
+export async function readUnjudgedMentionsInWindow(input: {
+  workspaceId: string;
+  windowStartAt: string;
+  windowEndAt: string;
+  limit: number;
+}): Promise<(UnjudgedMention & { watchId: string })[]> {
+  const rows = await env.DB.prepare(SELECT_UNJUDGED_MENTIONS_IN_WINDOW)
+    .bind(input.workspaceId, input.windowStartAt, input.windowEndAt, input.limit)
+    .all();
+  return windowMentionRows.parse(rows.results).map((row) => ({
+    id: row.id,
+    watchId: row.watch_id,
     title: row.title,
     url: row.canonical_url,
     publishedAt: row.published_at,

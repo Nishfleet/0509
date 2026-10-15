@@ -180,6 +180,13 @@ export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<
     return { picks: pickReadThisFirst(collected), judged: items.length, unjudged: unjudgedInputs > 0 };
   } catch (error) {
     if (error instanceof JevUnavailableError) {
+      console.warn(
+        JSON.stringify({
+          event: "standing.read_this_first_unavailable",
+          workspaceId: input.workspaceId,
+          reason: error.name,
+        }),
+      );
       return { picks: [], judged: 0, unjudged: true };
     }
     throw error;

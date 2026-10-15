@@ -8,6 +8,7 @@ import { briefSubject } from "../../app/lib/brief-subject";
 import { insertWeeklyDigest, listBriefs } from "../../app/lib/data/digest.server";
 import { JevRateLimitedError } from "../../app/lib/jev/client.server";
 import { rejudgeUnjudgedChanges } from "../../app/lib/site/judge.server";
+import { rejudgeWindowMentions } from "../mentions/sweep";
 import { composeBrief } from "../standing/compose-brief";
 import { freezeWeek } from "../standing/freeze";
 import { judgeWeek, type JudgedWeek } from "../standing/read-this-first";
@@ -39,6 +40,8 @@ interface ClosingWeek {
   startsAt: string;
   paused: boolean;
 }
+
+const REJUDGE_MENTIONS_LIMIT = 60;
 
 const WEEK_TOLERANCE_MS = 6 * 24 * 60 * 60 * 1000;
 
@@ -100,6 +103,14 @@ async function rejudgeClosingWeek(
   input: { workspaceId: string; startsAt: string; closesAt: string },
 ): Promise<void> {
   try {
+    await step.do("rejudge-mentions", RETRY, () =>
+      rejudgeWindowMentions({
+        workspaceId: input.workspaceId,
+        windowStartAt: input.startsAt,
+        windowEndAt: input.closesAt,
+        limit: REJUDGE_MENTIONS_LIMIT,
+      }),
+    );
     await step.do("rejudge-changes", RETRY, () =>
       rejudgeUnjudgedChanges({
         workspaceId: input.workspaceId,
