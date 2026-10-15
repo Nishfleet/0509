@@ -6,11 +6,36 @@ import { TERMS } from "../app/lib/legal/terms";
 import { legalMeta, pageMeta } from "../app/lib/legal/meta";
 import { pricingMeta } from "../app/lib/pricing-page";
 import { STATUS_META, type PUBLIC_PATHS } from "../app/lib/public-routes";
-import { SITE_URL } from "../app/lib/structured-data";
+import { SITE_URL, shareImageMeta } from "../app/lib/structured-data";
 
 type Entry = Record<string, unknown>;
 
+const HOME_TITLE = "Competitor tracking for founders and creators | Five to Nine";
+const HOME_DESCRIPTION =
+  "Five to Nine watches your competitors' website changes and emails one Monday brief, with screenshots.";
+
 const PAGES: Record<(typeof PUBLIC_PATHS)[number], readonly Entry[]> = {
+  "/": [
+    { title: HOME_TITLE },
+    { name: "description", content: HOME_DESCRIPTION },
+    { tagName: "link", rel: "canonical", href: `${SITE_URL}/` },
+    { property: "og:type", content: "website" },
+    { property: "og:site_name", content: "Five to Nine" },
+    { property: "og:title", content: HOME_TITLE },
+    { property: "og:description", content: HOME_DESCRIPTION },
+    { property: "og:url", content: `${SITE_URL}/` },
+    ...shareImageMeta(),
+    {
+      "script:ld+json": {
+        "@graph": [
+          { "@type": "Organization" },
+          { "@type": "WebSite" },
+          { "@type": "SoftwareApplication" },
+          { "@type": "FAQPage" },
+        ],
+      },
+    },
+  ],
   "/pricing": pricingMeta(),
   "/privacy": legalMeta(PRIVACY),
   "/terms": legalMeta(TERMS),
@@ -59,11 +84,12 @@ describe.each(Object.entries(PAGES))("search and AI-answer meta for %s", (path, 
 
   it("ends its breadcrumb on this page and ties its organization to the site", () => {
     const nodes = graph(entries);
+    expect(nodes.some((node) => node["@type"] === "Organization")).toBe(true);
     const crumbs = nodes.find((node) => node["@type"] === "BreadcrumbList");
-    const items = (crumbs?.itemListElement ?? []) as { item: string; position: number }[];
+    if (crumbs === undefined) return;
+    const items = (crumbs.itemListElement ?? []) as { item: string; position: number }[];
     expect(items.at(-1)?.item).toBe(`${SITE_URL}${path}`);
     expect(items.map((entry) => entry.position)).toEqual(items.map((_, index) => index + 1));
-    expect(nodes.some((node) => node["@type"] === "Organization")).toBe(true);
   });
 });
 

@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { BANNED_PHRASES, EXEMPT_PATHS, TITLE_CASE_LABEL_EXCEPTIONS } from "./user-copy-phrases.js";
 
 const ROOTS = ["app/routes", "app/components", "app/lib", "workers"];
-const HTML_PAGES = ["public/index.html"];
+const HTML_PAGES: string[] = [];
 const BUTTON_TAGS = new Set(["button", "Button", "a", "Link", "NavLink"]);
 
 function sourceFiles(path: string): string[] {

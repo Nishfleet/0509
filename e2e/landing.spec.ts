@@ -3,7 +3,7 @@ import { expect, test } from "./test";
 import { expectFaceLoaded } from "./fonts";
 import { consoleFailures, watchConsole } from "./inbox";
 
-const PATH = "/design/landing";
+const PATH = "/";
 
 test("the landing document paints without a module graph @smoke", async ({ page }) => {
   const response = await page.goto(PATH);
