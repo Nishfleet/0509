@@ -80,6 +80,17 @@ async function isLocaleSwitch(target: SiteSweepTarget, changed: ChangedPage): Pr
   return before !== null && after !== null && before !== after;
 }
 
+async function skipEvent(
+  target: SiteSweepTarget,
+  changed: ChangedPage,
+  text: { before: string | null; after: string | null },
+): Promise<string | null> {
+  if (sameVisibleText(changed, text.before, text.after)) return "site.change_same_text";
+  if (await isLocaleSwitch(target, changed)) return "site.change_locale_switch";
+  if (await isFlapBack(target, changed)) return "site.change_flap";
+  return null;
+}
+
 async function readVisibleText(key: string): Promise<string | null> {
   const raw = await readText(key);
   return raw === null ? null : decodeHtmlEntities(raw);
@@ -452,16 +463,9 @@ export async function publishSiteChange(target: SiteSweepTarget, changed: Change
     readVisibleText(changed.previousTextKey),
     readVisibleText(changed.textKey),
   ]);
-  if (sameVisibleText(changed, before, after)) {
-    console.log(JSON.stringify({ event: "site.change_same_text", pageId: target.pageId }));
-    return changed.snapshotId;
-  }
-  if (await isLocaleSwitch(target, changed)) {
-    console.log(JSON.stringify({ event: "site.change_locale_switch", pageId: target.pageId }));
-    return changed.snapshotId;
-  }
-  if (await isFlapBack(target, changed)) {
-    console.log(JSON.stringify({ event: "site.change_flap", pageId: target.pageId }));
+  const skipped = await skipEvent(target, changed, { before, after });
+  if (skipped !== null) {
+    console.log(JSON.stringify({ event: skipped, pageId: target.pageId }));
     return changed.snapshotId;
   }
   const diff = pageTextDiff(before, after, changed);
