@@ -1,6 +1,8 @@
 import { useFetcher } from "react-router";
 
+import { SUPPORT_ADDRESS } from "./footer";
 import { BLOCK_HEADING } from "./page-heading";
+import { clientBrandsFullLine } from "../lib/client-brands";
 import { Button } from "./ui/button";
 
 export interface BrandChoice {
@@ -51,7 +53,18 @@ function AddBrand() {
   );
 }
 
-export function ClientBrands({ brands, canAdd }: { brands: BrandChoice[]; canAdd: boolean }) {
+function FullNote() {
+  return (
+    <p className="mt-6 max-w-prose leading-[1.55]">
+      {clientBrandsFullLine()} Write to{" "}
+      <a href={`mailto:${SUPPORT_ADDRESS}`} className="underline underline-offset-4">
+        {SUPPORT_ADDRESS}
+      </a>
+    </p>
+  );
+}
+
+export function ClientBrands({ brands, canAdd, full }: { brands: BrandChoice[]; canAdd: boolean; full: boolean }) {
   return (
     <section aria-labelledby="settings-brands" className="mt-10 border-t border-line pt-6">
       <h2 id="settings-brands" className={BLOCK_HEADING}>
@@ -74,6 +87,7 @@ export function ClientBrands({ brands, canAdd }: { brands: BrandChoice[]; canAdd
         ))}
       </ul>
       {canAdd ? <AddBrand /> : null}
+      {full ? <FullNote /> : null}
     </section>
   );
 }

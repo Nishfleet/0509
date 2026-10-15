@@ -58,8 +58,12 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
             {loaderData.slackConnected ? <SlackBriefSetting on={loaderData.slackBrief} /> : null}
           </div>
           <DismissedBrands dismissed={loaderData.dismissed} />
-          {loaderData.brandPanel.canAdd || loaderData.brandPanel.brands.length > 1 ? (
-            <ClientBrands brands={loaderData.brandPanel.brands} canAdd={loaderData.brandPanel.canAdd} />
+          {loaderData.brandPanel.canAdd || loaderData.brandPanel.full || loaderData.brandPanel.brands.length > 1 ? (
+            <ClientBrands
+              brands={loaderData.brandPanel.brands}
+              canAdd={loaderData.brandPanel.canAdd}
+              full={loaderData.brandPanel.full}
+            />
           ) : null}
           <AgentsSection />
           <PlanSection plan={loaderData.plan} countLine={loaderData.countLine} returning={loaderData.returning} />

@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  BRAND_FULL,
   BRAND_NAME_INVALID,
   BRAND_NEEDS_AGENCY,
   addClientBrand,
@@ -9,6 +10,7 @@ import {
   readOtherBrands,
   switchClientBrand,
 } from "../../app/lib/client-brands.server";
+import { MAX_CLIENT_BRANDS } from "../../app/lib/client-brands";
 import { readEntitlements } from "../../app/lib/data/plan.server";
 import {
   readBriefSchedulesForOwner,
@@ -109,5 +111,22 @@ describe("client brands", () => {
     await addClientBrand(AGENCY, "Acme Foods");
     expect((await readBriefSchedulesForOwner(AGENCY.id)).length).toBe(2);
     expect((await readBriefSchedulesForOwner(SOLO.id)).length).toBe(1);
+  });
+
+  it("stops at the fair use limit and says so", async () => {
+    const stamp = "2026-10-02T00:00:00Z";
+    await env.DB.batch(
+      Array.from({ length: MAX_CLIENT_BRANDS }, (_, index) =>
+        env.DB.prepare(
+          `INSERT INTO workspace (id, name, owner_user_id, timezone, created_at, parent_workspace_id)
+           VALUES (?1, 'Client', ?2, 'UTC', ?3, 'ws-agency')`,
+        ).bind(`ws-client-${String(index)}`, AGENCY.id, stamp),
+      ),
+    );
+    expect(await addClientBrand(AGENCY, "One too many")).toEqual({ status: "refused", message: BRAND_FULL });
+    const panel = await readBrandPanel(AGENCY.id);
+    expect(panel.canAdd).toBe(false);
+    expect(panel.full).toBe(true);
+    expect(MAX_CLIENT_BRANDS).toBe(25);
   });
 });
