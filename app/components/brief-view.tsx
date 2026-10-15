@@ -1,4 +1,5 @@
 import { Fragment, type ReactElement } from "react";
+import { Link } from "react-router";
 
 import { ReadThisFirst } from "./read-this-first";
 import type { BriefPayload } from "../lib/brief-payload";
@@ -49,12 +50,12 @@ function brandsBlock(payload: BriefPayload): ReactElement {
         <Fragment>
           <p className={BODY}>Add a competitor to see where you stand</p>
           <p className={BODY}>
-            <a
+            <Link
               className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4"
-              href="/app/competitors"
+              to="/app/competitors"
             >
               Add one on Competitors
-            </a>
+            </Link>
           </p>
         </Fragment>
       ) : (
@@ -64,6 +65,11 @@ function brandsBlock(payload: BriefPayload): ReactElement {
               {brand.name}: {rankText(brand.rank)}
             </p>
             {brand.biggest_move === null ? null : <p className="text-ink-soft">{brand.biggest_move}</p>}
+            {(brand.baseline ?? []).map((row) => (
+              <p key={row} className="text-ink-soft">
+                {row}
+              </p>
+            ))}
           </div>
         ))
       )}

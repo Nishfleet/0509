@@ -20,7 +20,7 @@ async function readUsage(key: string, nowSeconds: number) {
   return parsed.success && parsed.data.expiresAt > nowSeconds ? parsed.data : null;
 }
 
-export async function takeRecipientSlot(address: string, now = new Date()): Promise<boolean> {
+export async function takeRecipientSlot(address: string, now: Date): Promise<boolean> {
   const key = `recipient-cap:${await sha256Hex(address)}`;
   const nowSeconds = Math.floor(now.getTime() / 1000);
   const current = await readUsage(key, nowSeconds);
