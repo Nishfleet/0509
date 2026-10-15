@@ -26,6 +26,7 @@ import {
   PRICING_ACT_AT,
   REJECT_AT,
 } from "../jev/thresholds";
+import { normaliseSubject } from "../identity/normalise";
 import { markFromHunks, parseDiffHunks, parseSiteChangePayload, type SiteChangePayload } from "../site-change";
 import { daysBefore } from "../site-changes.server";
 import { computeBreakageEvidence, type BreakageEvidence } from "./breakage-evidence";
@@ -239,11 +240,12 @@ export async function breakageRepaired(
   beforeKey: string | null,
 ): Promise<boolean> {
   const fresh = await readFreshEvidence(page.url, beforeKey);
-  if (fresh === null || fresh.httpError) return false;
+  const subject = normaliseSubject(page.url);
+  if (fresh === null || fresh.httpError || !subject.ok || subject.subject.kind !== "domain") return false;
   const state = changeState(
     {
       isSelf: true,
-      subject: { name: null, domain: new URL(page.url).hostname },
+      subject: { name: null, domain: subject.subject.registrable },
       pageUrl: page.url,
       pageRole: "home",
       hunks: [],
