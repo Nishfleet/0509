@@ -6,6 +6,7 @@ import { PasskeyList } from "./passkey-list";
 import { BriefScheduleSettings } from "./brief-schedule-settings";
 import { ChangeSignInEmail } from "./change-sign-in-email";
 import { DeliveryAddress } from "./delivery-address";
+import { MailKinds } from "./mail-kinds";
 import { DevicesList } from "./devices-list";
 import { Teammates } from "./teammates";
 import { MAX_TEAMMATES } from "../lib/teammate-limit";
@@ -89,10 +90,12 @@ interface AccountResult {
 
 function DeliverySettings({
   delivery,
+  mail,
   teammates,
   result,
 }: {
   delivery: ComponentProps<typeof DeliveryAddress>["delivery"];
+  mail: ComponentProps<typeof MailKinds>["mail"];
   teammates: ComponentProps<typeof Teammates>["teammates"];
   result: AccountResult | undefined;
 }) {
@@ -103,6 +106,7 @@ function DeliverySettings({
         error={result?.deliveryError ?? null}
         suppressed={result?.deliverySuppressed ?? false}
       />
+      <MailKinds address={delivery.address} mail={mail} />
       <Teammates teammates={teammates} error={result?.teammateError ?? null} limit={MAX_TEAMMATES} />
     </>
   );
@@ -111,6 +115,7 @@ function DeliverySettings({
 export function AccountSection({
   email,
   delivery,
+  mail,
   teammates,
   passkeys,
   devices,
@@ -118,6 +123,7 @@ export function AccountSection({
 }: {
   email: string;
   delivery: ComponentProps<typeof DeliveryAddress>["delivery"];
+  mail: ComponentProps<typeof MailKinds>["mail"];
   teammates: ComponentProps<typeof Teammates>["teammates"];
   passkeys: ComponentProps<typeof PasskeyList>["passkeys"];
   devices: ComponentProps<typeof DevicesList>["devices"];
@@ -136,7 +142,7 @@ export function AccountSection({
         sent={result?.emailChangeSent ?? false}
         error={result?.emailChangeError ?? null}
       />
-      <DeliverySettings delivery={delivery} teammates={teammates} result={result} />
+      <DeliverySettings delivery={delivery} mail={mail} teammates={teammates} result={result} />
       <PasskeyList passkeys={passkeys} />
       <div className="mt-2 flex flex-wrap items-start gap-x-6">
         <AddPasskey />
