@@ -3,8 +3,8 @@ import type { Route } from "./+types/app.alerts";
 import { Link, type ShouldRevalidateFunctionArgs } from "react-router";
 import { z } from "zod";
 
-import { AlertsFoot } from "../components/alert-help";
 import { ChipFeed } from "../components/alert-chip-feed";
+import { AlertsFoot } from "../components/alert-help";
 import { IncidentSlot } from "../components/incident-block";
 import { PAGE, PageHeading } from "../components/page-heading";
 import { SourcePill } from "../components/source-pill";
