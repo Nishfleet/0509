@@ -183,3 +183,20 @@ describe("the brief view", () => {
     expect(read?.read_this_first).toHaveLength(2);
   });
 });
+
+describe("the web brief's rival-you-may-be-missing block", () => {
+  it("shows it with a link to Competitors when the brief names a rival", () => {
+    const html = renderToStaticMarkup(
+      createElement(BriefView, {
+        payload: { ...payload(), new_rival: { name: "Northwind", domain: "northwind.example", reason: null } },
+      }),
+    );
+    expect(html).toContain('data-brief-block="new-rival"');
+    expect(html).toContain("Northwind (northwind.example) may be a competitor you are missing.");
+    expect(html).toContain('href="/app/competitors"');
+  });
+
+  it("leaves it out otherwise", () => {
+    expect(renderToStaticMarkup(createElement(BriefView, { payload: payload() }))).not.toContain("new-rival");
+  });
+});
