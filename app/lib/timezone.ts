@@ -40,3 +40,11 @@ export function sameTimezone(left: string, right: string): boolean {
     new Intl.DateTimeFormat(APP_LOCALE, { timeZone: rightZone }).resolvedOptions().timeZone
   );
 }
+
+export function zoneName(timezone: string, at: Date): string {
+  return (
+    new Intl.DateTimeFormat(APP_LOCALE, { timeZone: timezone, timeZoneName: "short" })
+      .formatToParts(at)
+      .find((part) => part.type === "timeZoneName")?.value ?? timezone
+  );
+}

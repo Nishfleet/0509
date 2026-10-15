@@ -167,7 +167,7 @@ const BUDGET_MARGIN = 1.2;
 
 const NEURONS_PER_CLEF_CALL = 17;
 
-const NEURONS_PER_MODEL_CALL = 60;
+export const NEURONS_PER_MODEL_CALL = 60;
 
 const NEURON_CEILING = Number(process.env.EVAL_MAX_NEURONS ?? "") || 0;
 
@@ -534,12 +534,20 @@ export async function runEval<T extends EvalRow>(
   rows: readonly T[],
   ask: Ask<T>,
   score: Score<T>,
+  neuronsPerCall: number = NEURONS_PER_CLEF_CALL,
 ): Promise<EvalReport> {
   const models = new Set<string>();
   const splits: SplitScore[] = [];
   const wanted = selectedSplits();
   callsUsed = 0;
-  callBudget = Math.ceil(rows.filter((row) => wanted.includes(row.split)).length * REPEATS * BUDGET_MARGIN);
+  const selectedRows = rows.filter((row) => wanted.includes(row.split)).length;
+  callBudget = Math.ceil(selectedRows * REPEATS * BUDGET_MARGIN);
+  const plannedNeurons = selectedRows * REPEATS * neuronsPerCall;
+  if (NEURON_CEILING > 0 && neuronsSpent + plannedNeurons > NEURON_CEILING) {
+    throw new Error(
+      `eval refused before any paid call: ${questionId} needs about ${String(plannedNeurons)} neurons (${String(selectedRows)} rows x ${String(REPEATS)} repeats x ${String(neuronsPerCall)} per call) on top of ${String(neuronsSpent)} already spent, over the ceiling of ${String(NEURON_CEILING)}; narrow the run with the evals.yml split or filter input, or EVAL_SPLIT here (0509#7249)`,
+    );
+  }
   for (const split of wanted) {
     const picked = rows.filter((row) => row.split === split);
     if (picked.length === 0) throw new Error(`${questionId} has no ${split} cases to score`);

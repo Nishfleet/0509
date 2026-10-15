@@ -1,6 +1,8 @@
 import { TZDate } from "@date-fns/tz";
 import { format } from "date-fns";
 
+import { zoneName } from "./timezone";
+
 export const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
 
 export const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
@@ -10,7 +12,7 @@ export function hourLabel(hour: number): string {
 }
 
 export function formatBriefAt(instant: Date, timezone: string): string {
-  return `${format(new TZDate(instant.getTime(), timezone), "EEEE d MMMM yyyy, HH:mm")} ${timezone}`;
+  return `${format(new TZDate(instant.getTime(), timezone), "EEEE d MMMM yyyy, HH:mm")} ${zoneName(timezone, instant)}`;
 }
 
 export function formatPausedSince(pausedAt: string, timezone: string): string {

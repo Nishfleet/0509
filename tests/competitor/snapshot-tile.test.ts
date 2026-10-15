@@ -27,3 +27,29 @@ describe("the competitor snapshot rank tile", () => {
     expect(rankTileText(RANK_FLAT)).toBe("#3");
   });
 });
+
+describe("the competitor snapshot notes", () => {
+  const unwatched = (key: SnapshotCell["key"], label: string): SnapshotCell => ({
+    key,
+    label,
+    value: null,
+    movement: null,
+    reason: "We're not watching this for this competitor yet.",
+  });
+
+  it("says what is not watched as one sentence, not a run-on list", () => {
+    const html = renderToStaticMarkup(
+      createElement(CompetitorSnapshot, {
+        cells: [
+          unwatched("new_creatives", "New ads"),
+          unwatched("copy_changes", "Ad wording changes"),
+          unwatched("new_roles", "New job openings"),
+        ],
+      }),
+    );
+    expect(html).toContain(
+      "We&#x27;re not watching new ads, ad wording changes and new job openings for this competitor yet.",
+    );
+    expect(html).not.toContain("New ads, Ad wording changes");
+  });
+});

@@ -1,3 +1,4 @@
+import { APP_LOCALE } from "./locale";
 import type { SourceKind } from "./source-kind";
 
 export type SnapshotKind = SourceKind;
@@ -128,4 +129,25 @@ function countCell(spec: CountCellSpec, input: SnapshotInput): SnapshotCell {
 
 export function snapshotCells(input: SnapshotInput): readonly SnapshotCell[] {
   return [rankCell(input.standing), ...COUNT_CELLS.map((spec) => countCell(spec, input))];
+}
+
+const LIST = new Intl.ListFormat(APP_LOCALE, { type: "conjunction" });
+
+function lowerFirst(label: string): string {
+  return label.charAt(0).toLowerCase() + label.slice(1);
+}
+
+export function snapshotNotes(cells: readonly SnapshotCell[]): { reason: string; text: string }[] {
+  const byReason = new Map<string, string[]>();
+  for (const cell of cells) {
+    if (cell.value !== null) continue;
+    byReason.set(cell.reason, [...(byReason.get(cell.reason) ?? []), cell.label]);
+  }
+  return [...byReason].map(([reason, labels]) => ({
+    reason,
+    text:
+      reason === UNWATCHED_REASON
+        ? `We're not watching ${LIST.format(labels.map(lowerFirst))} for this competitor yet.`
+        : `${LIST.format(labels)}: ${reason}`,
+  }));
 }

@@ -160,11 +160,11 @@ describe("RankedRow", () => {
     expect(render(rowFor("ent_kindred"))).toContain(">#1</span>");
   });
 
-  it("collapses a quiet row's none sources into one line and keeps a degraded source as label · not answering", () => {
+  it("collapses a quiet row's none sources into one line and keeps a degraded source as label · could not be checked right now", () => {
     const html = render(rowFor("ent_casetta"));
     expect(html).toContain("Nothing new this week");
     expect(html).not.toContain("Website checks · nothing new");
-    expect(html).toContain("Reddit mentions · not answering");
+    expect(html).toContain("Reddit mentions · could not be checked right now");
   });
 
   it("shows one line and no source chips for a row where every source is quiet and answering", () => {
