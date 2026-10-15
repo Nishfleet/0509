@@ -230,6 +230,8 @@ function buildMarks(picks: readonly string[], pickedById: ReadonlyMap<string, Pi
   });
 }
 
+const WORDING_LIMIT = 3;
+
 function redactWording(value: string | null): string | null {
   return value === null ? null : redactEmailShaped(value);
 }
@@ -240,7 +242,10 @@ async function buildMarksWithWording(
   pickedById: ReadonlyMap<string, PickedSignal>,
 ) {
   const picks = input.readThisFirst.picks;
-  const wording = await readMarkWording(db, { workspaceId: input.workspaceId, signalIds: picks });
+  const wording = await readMarkWording(db, {
+    workspaceId: input.workspaceId,
+    signalIds: picks.slice(0, WORDING_LIMIT),
+  });
   return buildMarks(picks, pickedById).map((mark) => {
     const change = wording.get(mark.signal_id);
     if (change === undefined) return mark;

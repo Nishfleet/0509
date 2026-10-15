@@ -442,7 +442,7 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
   const marks = renderReadThisFirst(payload, context.asset_base_url, open);
   const brands = renderBrands(payload);
   const ownSite = renderOwnSite(payload);
-  const footer = renderFooter(payload, context.unsubscribe_url, context.teammate === true);
+  const footer = renderFooter({ ...payload, why_line: whyLine }, context.unsubscribe_url, context.teammate === true);
   const newRival = renderNewRival(payload, context.teammate === true);
 
   const subject = briefSubject(payload, COPY.unjudged);

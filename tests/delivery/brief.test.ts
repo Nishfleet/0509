@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { BRAND_LINES_QUERY, parseBriefPayload, type BriefPayload } from "../../app/lib/brief-payload";
 import { PROBE, URL_PROBE, expectNoHtmlInjection } from "../email-html-injection";
+import { isFirstRanking } from "../../app/lib/brief-subject";
 import { renderBrief } from "../../workers/delivery/brief-template";
 
 const CONTEXT = {
@@ -669,6 +670,19 @@ describe("an unjudged week", () => {
 });
 
 describe("the subject line", () => {
+  it("calls it a first ranking only when no brand is new to an existing ranking", () => {
+    const first = payload({
+      headline_movement: null,
+      brands: payload().brands.map((brand) => ({ ...brand, movement: null, is_new: false })),
+    });
+    expect(isFirstRanking(first)).toBe(true);
+    const later = payload({
+      headline_movement: null,
+      brands: first.brands.map((brand) => ({ ...brand, is_new: true })),
+    });
+    expect(isFirstRanking(later)).toBe(false);
+  });
+
   it("falls back to the title when one side of the wording is empty", () => {
     const lead = { ...payload().read_this_first[0], before: "", after: "2 tiers", title: "Pricing page changed" };
     expect(renderBrief(payload({ read_this_first: [lead] }), CONTEXT).subject).toBe("Kindred: Pricing page changed");

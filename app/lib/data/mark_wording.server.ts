@@ -13,8 +13,9 @@ const diffKeyRows = z.array(z.object({ id: z.string(), diff_key: z.string().null
 
 async function readMark(signalId: string, diffKey: string): Promise<[string, ChangeMark] | null> {
   try {
-    const stored = await env.SNAPSHOTS.get(diffKey);
-    const hunks = stored === null || stored.size > MAX_DIFF_BYTES ? null : parseDiffHunks(await stored.text());
+    const head = await env.SNAPSHOTS.head(diffKey);
+    const stored = head === null || head.size > MAX_DIFF_BYTES ? null : await env.SNAPSHOTS.get(diffKey);
+    const hunks = stored === null ? null : parseDiffHunks(await stored.text());
     const mark = hunks === null ? null : markFromHunks(hunks);
     return mark === null ? null : [signalId, mark];
   } catch (error) {
