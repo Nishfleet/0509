@@ -6,6 +6,7 @@ import type { SiteChangeView } from "./site-change";
 import { sourceName } from "./source-name";
 import type { SourceKind } from "./source-kind";
 import { APP_LOCALE } from "./locale";
+import { zoneName } from "./timezone";
 
 export interface HomeEntity {
   id: string;
@@ -161,11 +162,7 @@ export function arrivalAround(timezone: string, at: Date): string {
     day: "numeric",
     month: "long",
   }).format(at);
-  const zone =
-    new Intl.DateTimeFormat(APP_LOCALE, { timeZone: timezone, timeZoneName: "short" })
-      .formatToParts(at)
-      .find((part) => part.type === "timeZoneName")?.value ?? timezone;
-  return `${date.replace(",", "")}, around ${hourAndMinute(timezone, at)} ${zone}`;
+  return `${date.replace(",", "")}, around ${hourAndMinute(timezone, at)} ${zoneName(timezone, at)}`;
 }
 
 function todayEyebrow(timezone: string, now: Date): string {
