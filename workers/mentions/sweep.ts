@@ -176,7 +176,7 @@ function judgedStatements(input: {
       p: verdict.p,
       choice: null,
       reason,
-      decidedAt: now,
+      decidedAt: new Date().toISOString(),
     });
   const statements = [verdictRow(verdicts.about, null)];
   if (verdicts.matters === null) return statements;
