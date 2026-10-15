@@ -14,8 +14,8 @@ export const PROBE_HEADERS = {
   "user-agent": CRAWLER_USER_AGENT,
 } as const;
 
-export async function breakageRepaired(url: string, beforeKey: string | null): Promise<boolean> {
-  if (beforeKey === null) return false;
+export async function readFreshEvidence(url: string, beforeKey: string | null): Promise<BreakageEvidence | null> {
+  if (beforeKey === null) return null;
   let response: Response;
   try {
     response = await fetchOutbound(url, {
@@ -29,21 +29,22 @@ export async function breakageRepaired(url: string, beforeKey: string | null): P
         error: error instanceof Error ? error.name : "unknown",
       }),
     );
-    return false;
+    return null;
   }
   const html = await cappedText(response, MAX_PAGE_BYTES);
-  if (html === null) return false;
+  if (html === null) return null;
   const afterText = (await extractPageText(html)).text;
   const before = await env.SNAPSHOTS.get(beforeKey);
-  if (before === null) return false;
-  const e = computeBreakageEvidence({
+  if (before === null) return null;
+  return computeBreakageEvidence({
     status: response.status,
     beforeText: await before.text(),
     afterText,
   });
-  return !showsBreakage(e);
 }
 
 export async function breakageConfirmed(evidence: BreakageEvidence, url: string, beforeKey: string): Promise<boolean> {
-  return showsBreakage(evidence) && !(await breakageRepaired(url, beforeKey));
+  if (!showsBreakage(evidence)) return false;
+  const fresh = await readFreshEvidence(url, beforeKey);
+  return fresh === null || showsBreakage(fresh);
 }

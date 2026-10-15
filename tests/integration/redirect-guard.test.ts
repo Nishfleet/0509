@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { robotsAllows } from "../../app/lib/fetch/robots.server";
-import { breakageRepaired } from "../../app/lib/site/breakage-recheck.server";
+import { readFreshEvidence } from "../../app/lib/site/breakage-recheck.server";
 import { probeOwnSite } from "../../app/lib/site/own-site.server";
 
 const REFUSED = [
@@ -53,10 +53,10 @@ describe("own-site redirect guard", () => {
     expect(stub.inits.every((init) => init.redirect === "manual")).toBe(true);
   });
 
-  it.each(REFUSED)("breakageRepaired refuses a redirect to %s without fetching it", async (location) => {
+  it.each(REFUSED)("readFreshEvidence refuses a redirect to %s without fetching it", async (location) => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     const stub = redirectingTo(location, "https://brand.example.com/");
-    expect(await breakageRepaired("https://brand.example.com/", "snapshot-key")).toBe(false);
+    expect(await readFreshEvidence("https://brand.example.com/", "snapshot-key")).toBeNull();
     expect(stub.seen).toEqual(["https://brand.example.com/"]);
   });
 });

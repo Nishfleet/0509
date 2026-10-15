@@ -31,6 +31,18 @@ const site: {
   html: null,
 };
 
+const verdict = { p: 0.05 };
+
+const installJev = (): void => {
+  Reflect.set(env, "AI", {
+    async run(_model: string, request: { questions: Record<string, { type: string }> }) {
+      const answers: Record<string, { type: "noul"; noul: number }> = {};
+      for (const id of Object.keys(request.questions)) answers[id] = { type: "noul", noul: verdict.p };
+      return { answers };
+    },
+  });
+};
+
 const hostRobots = new Map<string, string>();
 
 const fetched: string[] = [];
@@ -131,9 +143,12 @@ describe("own-site check", () => {
     fetched.length = 0;
     await env.DB.exec("UPDATE source SET is_enabled = 1 WHERE id = 'src_site_web'");
     vi.stubGlobal("fetch", respond);
+    verdict.p = 0.05;
+    installJev();
   });
 
   afterEach(() => {
+    Reflect.deleteProperty(env, "AI");
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -221,18 +236,57 @@ describe("own-site check", () => {
       metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
     });
 
+    verdict.p = 0.8;
     site.html = SOFT_BROKEN_HTML;
     expect(await runCheck("own-soft-broken")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
     const [open] = await incidents();
     expect(open).toMatchObject({ kind: "breakage", closed_at: null });
     expect(send).not.toHaveBeenCalled();
 
+    verdict.p = 0.05;
     site.html = PRICED_HTML;
     expect(await runCheck("own-soft-fixed")).toEqual({ pages: 1, opened: 0, closed: 1, failed: 0 });
     const [closed] = await incidents();
     expect(closed?.closed_at).not.toBeNull();
     expect(send).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledWith({ incident_id: "inc-break" });
+  });
+
+  it("keeps a soft-break incident open when Jev still says the page is broken, even with its text and prices back", async () => {
+    await env.DB.prepare(
+      `INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('page-self-home', 'ent-self', 'https://mybrand.com/', 'home', ?)`,
+    )
+      .bind(NOW)
+      .run();
+    await env.SNAPSHOTS.put("snapshot/site/own-site/before.txt", BEFORE_TEXT);
+    await env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, url, aspect, payload_json, dedup_key, observed_at)
+       VALUES ('sig-break', ?, 'ent-self', 'src_site_web', 'change', 'https://mybrand.com/', 'breakage', ?, 'sig-break', ?)`,
+    )
+      .bind(WS, JSON.stringify({ before: { textKey: "snapshot/site/own-site/before.txt" } }), NOW)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO incident (id, workspace_id, entity_id, page_id, kind, opened_at)
+       VALUES ('inc-break', ?, 'ent-self', 'page-self-home', 'breakage', ?)`,
+    )
+      .bind(WS, NOW)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO alert (id, workspace_id, entity_id, signal_id, page_id, incident_id, kind, severity, title, created_at)
+       VALUES ('alert-break', ?, 'ent-self', 'sig-break', 'page-self-home', 'inc-break', 'own_site_broken', 'high', 'mybrand.com looks broken: breakage', ?)`,
+    )
+      .bind(WS, NOW)
+      .run();
+    const send = vi.spyOn(workerEnv.SEND_EMAIL, "send").mockResolvedValue({
+      metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
+    });
+
+    verdict.p = 0.8;
+    site.html = PRICED_HTML;
+    expect(await runCheck("own-priced-still-broken")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    const [still] = await incidents();
+    expect(still).toMatchObject({ kind: "breakage", closed_at: null });
+    expect(send).not.toHaveBeenCalled();
   });
 
   it("never calls a bot wall or a refusal a break", async () => {
