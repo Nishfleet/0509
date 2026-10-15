@@ -213,6 +213,16 @@ describe("handleCompetitorIntent intent=add", () => {
     expect(await handleCompetitorIntent(workspaceId, form)).toEqual({ message: null, added: true });
   });
 
+  it("treats Cloudflare's no-such-origin answer as an address that cannot be found", async () => {
+    const workspaceId = await seedWorkspace();
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response(null, { status: 530 })));
+
+    expect(await handleCompetitorIntent(workspaceId, addForm("gymshrk.com"))).toEqual({
+      message: "We couldn't reach that address. Check the spelling?",
+      unreachable: true,
+    });
+  });
+
   it("accepts an address whose apex does not answer but whose www does", async () => {
     const workspaceId = await seedWorkspace();
     vi.stubGlobal("fetch", (input: RequestInfo | URL) =>

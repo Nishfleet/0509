@@ -5,6 +5,7 @@ import { CRAWLER_USER_AGENT } from "../fetch/crawler-identity";
 import { fetchOutbound } from "../fetch/outbound.server";
 
 const REACH_TIMEOUT_MS = 4000;
+const ORIGIN_DNS_ERROR_STATUS = 530;
 
 async function answers(url: string): Promise<boolean> {
   try {
@@ -14,7 +15,7 @@ async function answers(url: string): Promise<boolean> {
       signal: AbortSignal.timeout(REACH_TIMEOUT_MS),
     });
     await res.body?.cancel();
-    return true;
+    return res.status !== ORIGIN_DNS_ERROR_STATUS;
   } catch (error) {
     return error instanceof Error && error.name === "TimeoutError";
   }
