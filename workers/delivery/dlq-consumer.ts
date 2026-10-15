@@ -9,19 +9,19 @@ export const DELIVERY_FAILED_KIND = "delivery_failed";
 export const DLQ_ALERT_PREFIX = "dlq:";
 export const DLQ_INCIDENT_PREFIX = "dlq-incident:";
 export const DLQ_CHANGE_PREFIX = "dlq-change:";
-export const DELIVERY_FAILED_TITLE = "We could not send your brief by email, so it is in the app instead";
+export const DELIVERY_FAILED_TITLE = "We couldn't send your brief by email, so it is in the app instead";
 
 export const DELIVERY_FAILED_BODY =
   "We tried several times and could not deliver this brief by email, so we have stopped trying. Everything in it is below. Your next brief goes out on its usual day.";
 
 export const SELECT_LATEST_ATTEMPT_ERROR = `SELECT error FROM send_attempt WHERE digest_id = ? ORDER BY attempted_at DESC LIMIT 1`;
 
-export const INCIDENT_UNDELIVERED_TITLE = "We could not email you about your site";
+export const INCIDENT_UNDELIVERED_TITLE = "We couldn't email you about your site";
 
 export const INCIDENT_UNDELIVERED_BODY =
   "Your site broke and we tried several times to email you about it, so we have stopped trying. The breakage and every check that followed are on your Alerts page.";
 
-export const CHANGE_UNDELIVERED_TITLE = "We could not email you about a competitor change";
+export const CHANGE_UNDELIVERED_TITLE = "We couldn't email you about a competitor change";
 
 export const CHANGE_UNDELIVERED_BODY =
   "A competitor changed price or plan and we tried several times to email you about it, so we have stopped trying. The change is on your Alerts page.";
