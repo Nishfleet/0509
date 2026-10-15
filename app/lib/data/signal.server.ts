@@ -680,7 +680,7 @@ export async function readSignalCounts(
     .map((row) => ({ kind: row.kind, count: row.n }));
 }
 
-const SELECT_SCORED_SIGNALS = `SELECT * FROM (SELECT s.id, s.entity_id, s.kind, s.title, s.summary, s.url, s.observed_at,
+const SELECT_SCORED_SIGNALS = `SELECT * FROM (SELECT s.id, s.kind, s.title, s.summary, s.url, s.observed_at,
   src.platform, src.reliability,
   CASE
     WHEN s.kind = 'mention' AND v.p >= ${String(ACT_AT)} THEN 'mention_matters'
@@ -699,7 +699,7 @@ LEFT JOIN jev_verdict v ON v.id = (
   ORDER BY v2.decided_at DESC
   LIMIT 1
 )
-WHERE s.workspace_id = ?1 AND s.entity_id IN (SELECT value FROM json_each(?2))
+WHERE s.workspace_id = ?1 AND s.entity_id = ?2
   AND s.observed_at >= ?3 AND s.observed_at < ?4 AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL)
 WHERE bucket IS NOT NULL
 ORDER BY observed_at DESC, id DESC`;
@@ -707,7 +707,6 @@ ORDER BY observed_at DESC, id DESC`;
 const scoredSignalRows = z.array(
   z.object({
     id: z.string(),
-    entity_id: z.string(),
     kind: z.string(),
     title: z.string().nullable(),
     summary: z.string().nullable(),
@@ -719,43 +718,32 @@ const scoredSignalRows = z.array(
   }),
 );
 
-export async function readScoredSignalsByEntity(input: {
-  workspaceId: string;
-  entityIds: readonly string[];
-  since: string;
-  until: string;
-}): Promise<Map<string, ScoredSignal[]>> {
-  const { results } = await env.DB.prepare(SELECT_SCORED_SIGNALS)
-    .bind(input.workspaceId, JSON.stringify(input.entityIds), input.since, input.until, D6_QUESTION_ID, D3_QUESTION_ID)
-    .all();
-  const byEntity = new Map<string, ScoredSignal[]>();
-  for (const row of scoredSignalRows.parse(results)) {
-    if (!isFeedKind(row.kind)) continue;
-    const signal: ScoredSignal = {
-      id: row.id,
-      kind: row.kind,
-      bucket: row.bucket,
-      reliability: row.reliability,
-      platform: row.platform,
-      title: row.title,
-      summary: row.summary,
-      url: row.url,
-      observedAt: row.observed_at,
-    };
-    byEntity.set(row.entity_id, [...(byEntity.get(row.entity_id) ?? []), signal]);
-  }
-  return byEntity;
-}
-
 export async function readScoredSignals(input: {
   workspaceId: string;
   entityId: string;
   since: string;
   until: string;
 }): Promise<ScoredSignal[]> {
-  const { entityId, ...window } = input;
-  const byEntity = await readScoredSignalsByEntity({ ...window, entityIds: [entityId] });
-  return byEntity.get(entityId) ?? [];
+  const { results } = await env.DB.prepare(SELECT_SCORED_SIGNALS)
+    .bind(input.workspaceId, input.entityId, input.since, input.until, D6_QUESTION_ID, D3_QUESTION_ID)
+    .all();
+  return scoredSignalRows.parse(results).flatMap((row) =>
+    isFeedKind(row.kind)
+      ? [
+          {
+            id: row.id,
+            kind: row.kind,
+            bucket: row.bucket,
+            reliability: row.reliability,
+            platform: row.platform,
+            title: row.title,
+            summary: row.summary,
+            url: row.url,
+            observedAt: row.observed_at,
+          },
+        ]
+      : [],
+  );
 }
 
 const SELECT_WORKSPACE_HIRING = `SELECT s.id, s.title, s.summary, s.url, s.published_at, s.observed_at, COALESCE(e.name, e.domain) AS brand

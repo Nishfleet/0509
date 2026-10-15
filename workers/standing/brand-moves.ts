@@ -1,5 +1,5 @@
 import { pickBiggestMove } from "../../app/lib/biggest-move";
-import { readScoredSignalsByEntity } from "../../app/lib/data/signal.server";
+import { readScoredSignalsByEntity } from "./scored-signals";
 import { weightsAsOf } from "../../app/lib/standing-score";
 import { ALL_WEIGHTS, weightRows } from "../../app/lib/standing-score.server";
 
