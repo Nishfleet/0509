@@ -1,14 +1,22 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
-import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+import {
+  confirmPublicSubject,
+  consoleFailures,
+  deleteCreatedAccount,
+  requireInboxToken,
+  signInWithMagicLink,
+  watchConsole,
+} from "./inbox";
 
 let createdEmail = "";
+
+test.use({ screenshot: "on" });
+
 test.afterEach(async ({ page }, testInfo) => {
   if (createdEmail === "") return;
   testInfo.setTimeout(testInfo.timeout + 60_000);
-  // The delete failing is a test failure, not a reason to keep the address:
-  // clearing in finally means the next test in this worker cannot try to
-  // delete an account that is already gone.
+
   try {
     await deleteCreatedAccount(page, createdEmail);
   } finally {
@@ -45,7 +53,21 @@ test.describe("J4 onboard a creator handle", () => {
       const started = Date.now();
       await input.press("Enter");
 
-      await expect(page.getByRole("heading", { name: "Check your details. Fix anything that's wrong." })).toBeVisible();
+      await confirmPublicSubject(page);
+      try {
+        await expect(page.getByRole("heading", { name: "Check your details. Fix anything that's wrong." })).toBeVisible(
+          { timeout: 30_000 },
+        );
+      } catch (error) {
+        const shown = await page
+          .locator("main")
+          .innerText({ timeout: 2_000 })
+          .catch(() => "no main element");
+        throw new Error(
+          `${(error as Error).message}\nurl=${new URL(page.url()).pathname}\nmain=${shown.slice(0, 400)}`,
+          { cause: error },
+        );
+      }
       const editName = page.getByRole("button", { name: "edit name" });
       await expect(editName).toBeVisible({ timeout: 30_000 });
       const firstField = Date.now() - started;
@@ -90,10 +112,6 @@ test.describe("J4 onboard a creator handle", () => {
       );
       expect(noHorizontalScroll).toBe(true);
       expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
-      await test.info().attach(`j4-${width}`, {
-        body: await page.screenshot(),
-        contentType: "image/png",
-      });
     });
   }
 });

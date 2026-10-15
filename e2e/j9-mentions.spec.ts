@@ -1,9 +1,11 @@
 import type { DatabaseSync } from "node:sqlite";
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
 import { consoleFailures, isLocalLane, run, seedPreviewSession, watchConsole } from "./inbox";
+
+test.use({ screenshot: { mode: "on", fullPage: true } });
 
 test.skip(
   !isLocalLane(),
@@ -109,8 +111,6 @@ test("J9: news, Hacker News and YouTube mentions are listed and the homonym is n
   const cookie = await seedSession();
   await page.setExtraHTTPHeaders({ cookie });
 
-  // The bound is read on its own page, so closing it cannot abort a fetch of
-  // the page whose console the journey watches.
   const competitorsPage = await page.context().newPage();
   await competitorsPage.setExtraHTTPHeaders({ cookie });
   await competitorsPage.goto("/app/competitors");
@@ -138,9 +138,5 @@ test("J9: news, Hacker News and YouTube mentions are listed and the homonym is n
   );
   await expect(page.getByText("Zephyr winds expected this weekend")).toHaveCount(0);
 
-  await testInfo.attach(`j9-${testInfo.project.name}`, {
-    body: await page.screenshot({ fullPage: true }),
-    contentType: "image/png",
-  });
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

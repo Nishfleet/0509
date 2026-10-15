@@ -2,9 +2,10 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { FreshnessLine, freshnessText, type FreshnessEntry } from "../../app/components/freshness-line";
+import { FreshnessLine, freshnessText } from "../../app/components/freshness-line";
+import type { FreshnessEntry } from "../../app/lib/freshness-entry";
 import { blindSourceNames, freshnessEntries } from "../../app/lib/freshness.server";
-import type { SourceRow, SourceSnapshot } from "../../app/components/source-pill";
+import type { SourceRow, SourceSnapshot } from "../../app/lib/source-pill-status";
 
 const NOW = Date.parse("2026-09-24T09:00:00.000Z");
 
@@ -107,7 +108,7 @@ describe("the freshness line", () => {
     expect(line([])).toBe("");
   });
 
-  it("names each entry with its state and separates them", () => {
+  it("names each entry with its state, one line each", () => {
     const entries = freshnessEntries(
       [
         { kind: "mentions", source: reddit, snapshot: freshSnapshot },
@@ -120,6 +121,7 @@ describe("the freshness line", () => {
     expect(html).toContain('data-home="freshness"');
     expect(html).toContain('data-state="live"');
     expect(html).toContain('data-state="degraded"');
-    expect(html).toContain(" · ");
+    expect(html.match(/<li\b/g)).toHaveLength(2);
+    expect(html).toContain("</li><li");
   });
 });

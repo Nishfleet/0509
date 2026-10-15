@@ -3,7 +3,7 @@ import { Fragment, type ReactElement } from "react";
 import { Mark } from "./mark";
 import type { BriefPayload } from "../lib/brief-payload";
 import { httpUrl } from "../lib/http-url";
-import { UNJUDGED_WEEK_LINE } from "../lib/read-this-first";
+import { NOTHING_FIRST_LINE, UNJUDGED_WEEK_LINE } from "../lib/read-this-first";
 
 const SECTION = "mt-5 border-t border-line pt-4";
 const HEAD = "font-mono text-eyebrow text-ink-soft uppercase";
@@ -53,7 +53,7 @@ export function ReadThisFirst({
       {unjudged ? (
         <p className={BODY}>{UNJUDGED_WEEK_LINE}</p>
       ) : marks.length === 0 ? (
-        <p className={BODY}>Nothing this week needed reading first.</p>
+        <p className={BODY}>{NOTHING_FIRST_LINE}</p>
       ) : (
         marks.slice(0, MAX_MARKS).map(markBlock)
       )}

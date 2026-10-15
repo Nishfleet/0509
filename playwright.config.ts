@@ -21,7 +21,6 @@ const localPort = process.env.PLAYWRIGHT_LOCAL_PORT;
 const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL ?? `http://127.0.0.1:${localPort}`;
 export const accessStatePath = "e2e/.auth/access.json";
 export const onboardedStatePath = (lane: "desktop" | "phone"): string => `e2e/.auth/onboarded-${lane}.json`;
-export const onboardedEmailPath = (lane: "desktop" | "phone"): string => `e2e/.auth/onboarded-${lane}.email`;
 export const sessionStatePath = "e2e/.auth/session.json";
 const accessState = process.env.CF_ACCESS_CLIENT_ID ? { storageState: accessStatePath } : {};
 const productionLane = Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL && process.env.CF_ACCESS_CLIENT_ID);
@@ -32,7 +31,7 @@ const productionLane = Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL && process.e
 // listed here stays in the signed-in projects. Source: 0509 spec dispatch that
 // ran onboarded-setup for an SEO spec, 2026-10-04.
 const publicSpecs =
-  /(?:^|\/)(?:a11y-legal|api-docs|footer|landing|not-found|pricing|privacy|security-headers|seo|share-image|smoke|terms|turnstile-blocked|unsubscribe|verify-address)\.spec\.ts$/;
+  /(?:^|\/)(?:a11y-legal|api-docs|email-rendering|footer|landing|not-found|pricing|privacy|public-nav|quiet-guard|security-headers|seo|share-image|smoke|terms|turnstile-blocked|unsubscribe|verify-address)\.spec\.ts$/;
 const accessDependency = process.env.CF_ACCESS_CLIENT_ID ? ["setup"] : [];
 
 export default defineConfig({
@@ -93,9 +92,7 @@ export default defineConfig({
             name: "onboarded-setup",
             testMatch: /onboarded\.setup\.ts/,
             dependencies: ["setup"],
-            teardown: "onboarded-teardown",
           },
-          { name: "onboarded-teardown", testMatch: /onboarded-teardown\.setup\.ts/ },
         ]
       : []),
     {
@@ -146,7 +143,12 @@ export default defineConfig({
         // link at this origin so the preview lane can follow it, and wrangler's
         // simulated send_email writes the message under .wrangler/tmp/email/
         // for e2e/inbox.ts to read instead of the inbox Worker (0509#6092).
-        command: `npx wrangler d1 migrations apply 0509 --local </dev/null && npx wrangler dev --env-file .dev.vars.example --port ${localPort} --local --var "BETTER_AUTH_URL:http://127.0.0.1:${localPort}" --var "DODO_PRODUCT_STARTER:pdt_preview_starter"`,
+        //
+        // The AI binding is the one binding wrangler dev --local does not simulate:
+        // env.AI.run reaches the account's real Workers AI and bills neurons. The
+        // stock AI_SPEND:off var makes every model call refuse before it leaves
+        // (app/lib/ai/spend.server.ts, 0509#7191), so the local lane spends nothing.
+        command: `npx wrangler d1 migrations apply 0509 --local </dev/null && npx wrangler dev --env-file .dev.vars.example --port ${localPort} --local --var "BETTER_AUTH_URL:http://127.0.0.1:${localPort}" --var "DODO_PRODUCT_STARTER:pdt_preview_starter" --var "AI_SPEND:off"`,
         url: `http://127.0.0.1:${localPort}/api/health`,
         reuseExistingServer: false,
         timeout: 120_000,

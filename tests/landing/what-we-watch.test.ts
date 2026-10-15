@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { WhatWeWatch, type WatchedSource } from "../../app/components/landing/what-we-watch";
-import type { SourceRow, SourceSnapshot } from "../../app/components/source-pill";
+import type { SourceRow, SourceSnapshot } from "../../app/lib/source-pill-status";
 
 const NOW = Date.parse("2026-09-26T12:00:00.000Z");
 const HOUR = 60 * 60 * 1000;
@@ -24,8 +24,6 @@ function markup(sources: readonly WatchedSource[], now: number = NOW): string {
   return renderToStaticMarkup(createElement(WhatWeWatch, { sources, now }));
 }
 
-// React serializes the apostrophe in a text node as an entity; decode it so an
-// assertion is against the copy as written, not React's escaping.
 function decoded(html: string): string {
   return html.replaceAll("&#x27;", "'").replaceAll("&quot;", '"');
 }

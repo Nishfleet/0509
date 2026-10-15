@@ -13,20 +13,26 @@ SELECT ?1, ?2, ?3, ?4, ?5, ?6, 1
 WHERE EXISTS (SELECT 1 FROM watch WHERE id = ?2) AND EXISTS (SELECT 1 FROM page WHERE id = ?3)
 ON CONFLICT (id) DO NOTHING`;
 
-const SNAPSHOT_EXISTS = `SELECT 1 FROM snapshot WHERE id = ?`;
+const SNAPSHOT_EXISTS = `SELECT 1 AS present FROM snapshot WHERE id = ?`;
 
-interface SiteSnapshotRow {
-  id: string;
-  payload_hash: string;
-  payload_r2_key: string | null;
-}
+const snapshotExistsRow = z.object({ present: z.number() });
+
+const siteSnapshotRow = z.object({
+  id: z.string(),
+  payload_hash: z.string(),
+  payload_r2_key: z.string().nullable(),
+});
+
+type SiteSnapshotRow = z.infer<typeof siteSnapshotRow>;
 
 export async function latestSiteSnapshot(
   watchId: string,
   pageId: string,
   before: string,
 ): Promise<SiteSnapshotRow | null> {
-  return env.DB.prepare(LATEST_SITE_SNAPSHOT).bind(watchId, pageId, before).first<SiteSnapshotRow>();
+  return siteSnapshotRow
+    .nullable()
+    .parse(await env.DB.prepare(LATEST_SITE_SNAPSHOT).bind(watchId, pageId, before).first());
 }
 
 export async function insertSnapshot(row: {
@@ -42,7 +48,7 @@ export async function insertSnapshot(row: {
     recordSourceLatestSnapshot(row.id),
   ]);
   if (inserted !== undefined && inserted.meta.changes > 0) return true;
-  return (await env.DB.prepare(SNAPSHOT_EXISTS).bind(row.id).first()) !== null;
+  return snapshotExistsRow.nullable().parse(await env.DB.prepare(SNAPSHOT_EXISTS).bind(row.id).first()) !== null;
 }
 
 const INSERT_WATCH_SNAPSHOT = `INSERT INTO snapshot
@@ -129,12 +135,17 @@ export interface CoveredPagePair {
   pageId: string;
 }
 
+const readCoveredPagePairsRow = z.object({
+  watch_id: z.string(),
+  page_id: z.string(),
+});
+
 export async function readCoveredPagePairs(
   sinceIso: string,
   watchIds: readonly string[],
 ): Promise<readonly CoveredPagePair[]> {
-  const rows = await env.DB.prepare(COVERED_PAGE_PAIRS)
-    .bind(sinceIso, JSON.stringify(watchIds))
-    .all<{ watch_id: string; page_id: string }>();
-  return rows.results.map((row) => ({ watchId: row.watch_id, pageId: row.page_id }));
+  return z
+    .array(readCoveredPagePairsRow)
+    .parse((await env.DB.prepare(COVERED_PAGE_PAIRS).bind(sinceIso, JSON.stringify(watchIds)).all()).results)
+    .map((row) => ({ watchId: row.watch_id, pageId: row.page_id }));
 }

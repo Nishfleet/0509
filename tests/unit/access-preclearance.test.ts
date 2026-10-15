@@ -15,9 +15,6 @@ afterEach(() => {
 
 const AUD = "b4fa400a1848c913b92c3212dc0714fcdbd1b1b66eb24659e4a7cc01c790575d";
 
-// A fresh issuer per test keeps the module-level JWKS cache honest: every
-// case fetches its own key set, so a pass can never ride a previous case's
-// cached keys.
 let issuerSeq = 0;
 function freshIssuer() {
   issuerSeq += 1;
@@ -86,7 +83,7 @@ describe("accessPrecleared", () => {
   it("clears a service-token assertion carried in the CF_Authorization cookie", async () => {
     const iss = freshIssuer();
     const pair = await rsaPair();
-    const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    const jwk: JsonWebKey & { kid?: string } = await crypto.subtle.exportKey("jwk", pair.publicKey);
     jwk.kid = "test-kid";
     stubJwks(iss, jwk);
     const jwt = await mintJwt(pair.privateKey, serviceClaims(iss));
@@ -109,7 +106,7 @@ describe("accessPrecleared", () => {
   it("still finds the assertion cookie when other cookies follow it", async () => {
     const iss = freshIssuer();
     const pair = await rsaPair();
-    const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    const jwk: JsonWebKey & { kid?: string } = await crypto.subtle.exportKey("jwk", pair.publicKey);
     jwk.kid = "test-kid";
     stubJwks(iss, jwk);
     const jwt = await mintJwt(pair.privateKey, serviceClaims(iss));
@@ -125,7 +122,7 @@ describe("accessPrecleared", () => {
   it("clears a verified service-token assertion", async () => {
     const iss = freshIssuer();
     const pair = await rsaPair();
-    const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    const jwk: JsonWebKey & { kid?: string } = await crypto.subtle.exportKey("jwk", pair.publicKey);
     jwk.kid = "test-kid";
     stubJwks(iss, jwk);
     const jwt = await mintJwt(pair.privateKey, serviceClaims(iss));
@@ -137,7 +134,7 @@ describe("accessPrecleared", () => {
     vi.mocked(createRemoteJWKSet).mockClear();
     const iss = freshIssuer();
     const pair = await rsaPair();
-    const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    const jwk: JsonWebKey & { kid?: string } = await crypto.subtle.exportKey("jwk", pair.publicKey);
     jwk.kid = "test-kid";
     stubJwks(iss, jwk);
     const jwt = await mintJwt(pair.privateKey, serviceClaims(iss));
@@ -150,7 +147,7 @@ describe("accessPrecleared", () => {
     const iss = freshIssuer();
     const published = await rsaPair();
     const attacker = await rsaPair();
-    const jwk = await crypto.subtle.exportKey("jwk", published.publicKey);
+    const jwk: JsonWebKey & { kid?: string } = await crypto.subtle.exportKey("jwk", published.publicKey);
     jwk.kid = "test-kid";
     stubJwks(iss, jwk);
     const jwt = await mintJwt(attacker.privateKey, serviceClaims(iss));
@@ -161,7 +158,7 @@ describe("accessPrecleared", () => {
   it("denies a token for a different audience", async () => {
     const iss = freshIssuer();
     const pair = await rsaPair();
-    const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    const jwk: JsonWebKey & { kid?: string } = await crypto.subtle.exportKey("jwk", pair.publicKey);
     jwk.kid = "test-kid";
     stubJwks(iss, jwk);
     const jwt = await mintJwt(pair.privateKey, serviceClaims(iss, { aud: "other-app-aud" }));
@@ -172,7 +169,7 @@ describe("accessPrecleared", () => {
   it("denies a token issued by a different team domain", async () => {
     const iss = freshIssuer();
     const pair = await rsaPair();
-    const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    const jwk: JsonWebKey & { kid?: string } = await crypto.subtle.exportKey("jwk", pair.publicKey);
     jwk.kid = "test-kid";
     stubJwks(iss, jwk);
     const jwt = await mintJwt(pair.privateKey, serviceClaims("https://other.cloudflareaccess.com"));
@@ -183,7 +180,7 @@ describe("accessPrecleared", () => {
   it("denies a token that omits exp", async () => {
     const iss = freshIssuer();
     const pair = await rsaPair();
-    const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    const jwk: JsonWebKey & { kid?: string } = await crypto.subtle.exportKey("jwk", pair.publicKey);
     jwk.kid = "test-kid";
     stubJwks(iss, jwk);
     const claims = serviceClaims(iss);
@@ -196,7 +193,7 @@ describe("accessPrecleared", () => {
   it("denies an expired token", async () => {
     const iss = freshIssuer();
     const pair = await rsaPair();
-    const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    const jwk: JsonWebKey & { kid?: string } = await crypto.subtle.exportKey("jwk", pair.publicKey);
     jwk.kid = "test-kid";
     stubJwks(iss, jwk);
     const jwt = await mintJwt(pair.privateKey, serviceClaims(iss, { exp: Math.floor(Date.now() / 1000) - 60 }));
@@ -207,7 +204,7 @@ describe("accessPrecleared", () => {
   it("denies a user-session assertion, which is not a service token", async () => {
     const iss = freshIssuer();
     const pair = await rsaPair();
-    const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    const jwk: JsonWebKey & { kid?: string } = await crypto.subtle.exportKey("jwk", pair.publicKey);
     jwk.kid = "test-kid";
     stubJwks(iss, jwk);
     const jwt = await mintJwt(

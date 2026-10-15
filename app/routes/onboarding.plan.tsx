@@ -1,0 +1,99 @@
+import type { Route } from "./+types/onboarding.plan";
+
+import { data, redirect } from "react-router";
+import { z } from "zod";
+
+import { OnboardingFrame } from "../components/onboarding-frame";
+import { PlanGate, UpgradeStatus } from "../components/plan-gate";
+import { createCheckoutUrl } from "../lib/billing/checkout.server";
+import { isWorkspacePaid } from "../lib/billing/subscription-state";
+import { reconcileCheckoutReturn } from "../lib/billing/reconcile.server";
+import { isBillingInterval, isPlanId, TRIAL_TERMS } from "../lib/billing/plans";
+import { readPlanSubscription, readPlanTier } from "../lib/data/plan.server";
+import { readPlanIntent } from "../lib/plan-intent.server";
+import { inPickedOrder, planName } from "../lib/plan-order";
+import { requireFreshSession, requireSession, signOutToLogin } from "../lib/require-session.server";
+import { ONBOARDING_PLAN, workspaceLandingForRequest } from "../lib/workspace.server";
+
+const UNAVAILABLE = { message: "Starting a trial isn't available right now. Try again in a few minutes." };
+
+const planForm = z.object({
+  plan: z.string(),
+  interval: z.string().default("monthly"),
+});
+
+async function workspaceFor(request: Request, fresh = false): Promise<{ workspaceId: string; email: string }> {
+  const session = await (fresh ? requireFreshSession(request) : requireSession(request));
+  const { landing, workspaceId } = await workspaceLandingForRequest(request, session.user);
+  if (workspaceId === null) return await signOutToLogin(request);
+  if (landing === null) throw redirect("/app");
+  if (landing !== ONBOARDING_PLAN) throw redirect(landing);
+  return { workspaceId, email: session.user.email };
+}
+
+export function meta() {
+  return [{ title: "Pick a plan · Five to Nine" }];
+}
+
+export function headers() {
+  return { "cache-control": "private, no-store" };
+}
+
+export async function loader({ request }: Route.LoaderArgs) {
+  const { workspaceId, email } = await workspaceFor(request);
+  const wantedRaw = new URL(request.url).searchParams.get("upgraded");
+  if (isPlanId(wantedRaw)) await reconcileCheckoutReturn(workspaceId, email);
+  const wanted = isPlanId(wantedRaw) ? wantedRaw : null;
+  const [tier, subscription] = await Promise.all([readPlanTier(workspaceId), readPlanSubscription(workspaceId)]);
+  if (isWorkspacePaid(subscription, new Date())) throw redirect("/app");
+  return data({ tier, wanted, picked: await readPlanIntent(request), checkoutPath: ONBOARDING_PLAN });
+}
+
+export async function action({ request }: Route.ActionArgs) {
+  const { workspaceId, email } = await workspaceFor(request, true);
+  const parsed = planForm.safeParse(Object.fromEntries(await request.formData()));
+  const planId = parsed.success ? parsed.data.plan : null;
+  const interval = parsed.success ? parsed.data.interval : "monthly";
+  if (!isPlanId(planId) || !isBillingInterval(interval)) return UNAVAILABLE;
+  const url = await createCheckoutUrl({
+    planId,
+    interval,
+    workspaceId,
+    email,
+    returnPath: `${ONBOARDING_PLAN}?upgraded=${planId}`,
+  });
+  return url === null ? UNAVAILABLE : redirect(url);
+}
+
+function Choices({ loaderData }: { loaderData: Route.ComponentProps["loaderData"] }) {
+  return (
+    <>
+      <p className="mt-3 max-w-prose leading-[1.55] text-ink-soft">{TRIAL_TERMS}</p>
+      <div className="mt-8">
+        {loaderData.picked === null ? null : (
+          <p data-slot="picked-plan" className="text-body-sm text-ink">
+            You picked {planName(loaderData.picked)} on the pricing page. It is first below.
+          </p>
+        )}
+        {inPickedOrder(loaderData.picked).map((plan) => (
+          <PlanGate key={plan.id} planId={plan.id} action={loaderData.checkoutPath} />
+        ))}
+      </div>
+    </>
+  );
+}
+
+export default function Page({ loaderData, actionData }: Route.ComponentProps) {
+  const confirming = loaderData.wanted !== null && loaderData.tier !== loaderData.wanted;
+  return (
+    <OnboardingFrame step={4} heading={confirming ? "Almost there" : "Start your trial"}>
+      {confirming ? null : <Choices loaderData={loaderData} />}
+      <UpgradeStatus tier={loaderData.tier} wanted={loaderData.wanted} />
+      {actionData?.message ? (
+        <p role="alert" className="mt-4 text-[0.95rem]">
+          {actionData.message}
+        </p>
+      ) : null}
+    </OnboardingFrame>
+  );
+}

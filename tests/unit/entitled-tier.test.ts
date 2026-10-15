@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { entitledTier } from "../../app/lib/billing/entitlements";
+import { entitledTier, isWorkspacePaid } from "../../app/lib/billing/subscription-state";
 
 const NOW = new Date("2026-09-29T12:00:00Z");
 const plan = (status: string, currentPeriodEnd: string | null) => ({ tier: "agency", status, currentPeriodEnd });
@@ -8,6 +8,10 @@ const plan = (status: string, currentPeriodEnd: string | null) => ({ tier: "agen
 describe("entitledTier", () => {
   it.each(["trialing", "active", "past_due"])("keeps the paid tier while %s", (status) => {
     expect(entitledTier(plan(status, null), NOW)).toBe("agency");
+  });
+
+  it("keeps an active plan paid after its billing date when the renewal webhook never arrived", () => {
+    expect(entitledTier(plan("active", "2026-09-01T00:00:00Z"), NOW)).toBe("agency");
   });
 
   it.each(["pending", "on_hold", "paused", "failed", "expired"])("falls back to scout while %s", (status) => {
@@ -18,5 +22,16 @@ describe("entitledTier", () => {
     expect(entitledTier(plan("cancelled", "2026-09-30T00:00:00Z"), NOW)).toBe("agency");
     expect(entitledTier(plan("cancelled", "2026-09-28T00:00:00Z"), NOW)).toBe("scout");
     expect(entitledTier(plan("cancelled", null), NOW)).toBe("scout");
+  });
+});
+
+describe("isWorkspacePaid", () => {
+  it("treats a missing plan row as unpaid", () => {
+    expect(isWorkspacePaid(null, NOW)).toBe(false);
+  });
+
+  it("treats a live row as paid and a lapsed row as unpaid", () => {
+    expect(isWorkspacePaid({ status: "trialing", currentPeriodEnd: null }, NOW)).toBe(true);
+    expect(isWorkspacePaid({ status: "cancelled", currentPeriodEnd: "2026-09-28T00:00:00Z" }, NOW)).toBe(false);
   });
 });

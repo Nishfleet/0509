@@ -11,6 +11,7 @@ export interface AgentKey {
 export interface ConnectedApp {
   grantId: string;
   name: string;
+  host: string;
   connectedAt: string;
 }
 

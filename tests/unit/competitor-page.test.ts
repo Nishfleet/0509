@@ -1,6 +1,6 @@
 import { createElement, Fragment, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MemoryRouter } from "react-router";
+import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { CompetitorFrame, type CompetitorFrameProps, developmentsEmpty } from "../../app/components/competitor-frame";
@@ -15,7 +15,8 @@ import {
 } from "../../app/components/competitor-header";
 
 function render(element: ReactElement): string {
-  return renderToStaticMarkup(createElement(MemoryRouter, null, element));
+  const Stub = createRoutesStub([{ path: "/", Component: () => element }]);
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
 }
 
 const change: SiteChangeItemData = {
@@ -115,7 +116,7 @@ describe("the competitor page frame", () => {
 
   it("makes the breadcrumb link a 44px-tall tap target", () => {
     const html = header({ name: "Kindred", domain: "kindred.example", state: "on", stateChangedAt: null });
-    const link = html.match(/<a\b[^>]*href="\/app\/competitors"[^>]*>/)?.[0] ?? "";
+    const link = /<a\b[^>]*href="\/app\/competitors"[^>]*>/.exec(html)?.[0] ?? "";
     expect(link).toContain("min-h-11");
   });
 

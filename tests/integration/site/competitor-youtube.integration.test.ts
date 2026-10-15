@@ -1,10 +1,6 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-vi.mock("../../../app/lib/require-session.server", () => ({
-  requireSession: () => Promise.resolve({ user: { id: "user-comp-youtube" } }),
-  requireFreshSession: () => Promise.resolve({ user: { id: "user-comp-youtube" } }),
-}));
+import { RouterContextProvider } from "react-router";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   YOUTUBE_LINK_ERROR,
@@ -14,6 +10,7 @@ import {
 } from "../../../app/lib/competitor-youtube";
 import { saveCompetitorYoutube } from "../../../app/lib/competitor-youtube.server";
 import { readCompetitorSocials } from "../../../app/lib/data/entity.server";
+import { onboardedContext } from "../../../app/lib/require-onboarded.server";
 import { action } from "../../../app/routes/app.competitor";
 
 const NOW = "2026-10-02T02:00:00Z";
@@ -120,7 +117,9 @@ describe("saveCompetitorYoutube", () => {
     body.set("intent", "youtube");
     body.set("youtube", "youtube.com/@rivalshop");
     const request = new Request(`https://0509.io/app/competitors/${RIVAL}`, { method: "POST", body });
-    const args = { request, params: { entityId: RIVAL }, context: {} } as unknown as Parameters<typeof action>[0];
+    const context = new RouterContextProvider();
+    context.set(onboardedContext, { session: { user: { id: USER } }, workspaceId: WS } as never);
+    const args = { request, params: { entityId: RIVAL }, context } as unknown as Parameters<typeof action>[0];
     expect(await action(args)).toMatchObject({ youtubeError: null });
     expect((await readCompetitorSocials(WS, RIVAL))?.at(-1)?.url).toBe("https://www.youtube.com/@rivalshop");
 

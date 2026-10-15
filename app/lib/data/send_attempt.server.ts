@@ -1,4 +1,12 @@
+import { env } from "cloudflare:workers";
+import { z } from "zod";
+
 const STALE_CLAIM_MS = 60 * 60 * 1000;
+const SENT_MARKER_TTL_SECONDS = 8 * 24 * 60 * 60;
+
+const sentMarkerKey = (idempotencyKey: string): string => `send-sent:${idempotencyKey}`;
+
+const MARK_SENT = `UPDATE send_attempt SET status = 'sent', error = NULL WHERE idempotency_key = ? AND status = 'pending'`;
 
 const CLAIM_ATTEMPT = `INSERT INTO send_attempt
   (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at)
@@ -14,8 +22,27 @@ const SENT_UNRECORDED = `SELECT a.id FROM send_attempt a
   JOIN digest d ON d.id = a.digest_id
  WHERE a.idempotency_key = ? AND a.status = 'sent' AND d.status <> 'sent'`;
 
+const readUnrecordedSendRow = z.object({ id: z.string() });
+
 export async function readUnrecordedSend(db: D1Database, idempotencyKey: string): Promise<{ id: string } | null> {
-  return db.prepare(SENT_UNRECORDED).bind(idempotencyKey).first<{ id: string }>();
+  return readUnrecordedSendRow.nullable().parse(await db.prepare(SENT_UNRECORDED).bind(idempotencyKey).first());
+}
+
+const SELECT_ATTEMPT = `SELECT 1 AS present FROM send_attempt WHERE idempotency_key = ?`;
+
+const attemptPresentRow = z.object({ present: z.number() });
+
+export async function hasSendAttempt(db: D1Database, idempotencyKey: string): Promise<boolean> {
+  return attemptPresentRow.nullable().parse(await db.prepare(SELECT_ATTEMPT).bind(idempotencyKey).first()) !== null;
+}
+
+const claimSendAttemptRow = z.object({ id: z.string() });
+
+async function healUnrecordedSend(db: D1Database, idempotencyKey: string): Promise<boolean> {
+  const marker = await env.IDENTITY_CACHE.get(sentMarkerKey(idempotencyKey)).catch(() => null);
+  if (marker === null) return false;
+  await db.prepare(MARK_SENT).bind(idempotencyKey).run();
+  return true;
 }
 
 export async function claimSendAttempt(
@@ -27,27 +54,41 @@ export async function claimSendAttempt(
     digestId: string | null;
   },
 ): Promise<{ id: string } | null> {
+  if (await healUnrecordedSend(db, input.idempotencyKey)) return null;
   const now = new Date().toISOString();
   const staleBefore = new Date(Date.now() - STALE_CLAIM_MS).toISOString();
-  return db
-    .prepare(CLAIM_ATTEMPT)
-    .bind(
-      input.idempotencyKey,
-      input.workspaceId,
-      input.targetId,
-      input.digestId,
-      input.idempotencyKey,
-      now,
-      staleBefore,
-    )
-    .first<{ id: string }>();
+  return claimSendAttemptRow
+    .nullable()
+    .parse(
+      await db
+        .prepare(CLAIM_ATTEMPT)
+        .bind(
+          input.idempotencyKey,
+          input.workspaceId,
+          input.targetId,
+          input.digestId,
+          input.idempotencyKey,
+          now,
+          staleBefore,
+        )
+        .first(),
+    );
 }
 
 export async function resolveSendAttempt(
   db: D1Database,
-  input: { attemptId: string; outcome: "sent" | "failed"; error: string | null },
+  input: { attemptId: string; idempotencyKey: string; outcome: "sent" | "failed"; error: string | null },
 ): Promise<void> {
-  await db.prepare(RESOLVE_ATTEMPT).bind(input.outcome, input.error, input.attemptId).run();
+  try {
+    await db.prepare(RESOLVE_ATTEMPT).bind(input.outcome, input.error, input.attemptId).run();
+  } catch (cause) {
+    if (input.outcome === "sent") {
+      await env.IDENTITY_CACHE.put(sentMarkerKey(input.idempotencyKey), "1", {
+        expirationTtl: SENT_MARKER_TTL_SECONDS,
+      }).catch(() => undefined);
+    }
+    throw cause;
+  }
 }
 
 const CLAIM_CHANGE_SLOT = `INSERT INTO send_attempt
@@ -57,31 +98,53 @@ WHERE (SELECT COUNT(*) FROM send_attempt
         WHERE workspace_id = ? AND idempotency_key LIKE 'change:%' AND status <> 'failed' AND attempted_at >= ?) < ?
 ON CONFLICT(idempotency_key) DO UPDATE
   SET status = 'pending', error = NULL, attempted_at = excluded.attempted_at
-  WHERE send_attempt.status = 'failed'
+  WHERE send_attempt.status = 'failed' OR (send_attempt.status = 'pending' AND send_attempt.attempted_at < ?)
 RETURNING id`;
 
 const SELECT_ATTEMPT_KEY = `SELECT 1 AS found FROM send_attempt WHERE idempotency_key = ?`;
 
+export const CHANGE_DEAD_LETTER_STATUS = "dropped";
+
+const DROP_DEAD_LETTERED_CHANGE = `UPDATE send_attempt
+  SET status = 'dropped'
+  WHERE idempotency_key LIKE ? AND status IN ('pending', 'failed')`;
+
+export async function dropDeadLetteredChange(db: D1Database, signalId: string): Promise<void> {
+  await db.prepare(DROP_DEAD_LETTERED_CHANGE).bind(`change:${signalId}:%`).run();
+}
+
 export type ChangeSlot = { kind: "claimed"; id: string } | { kind: "duplicate" } | { kind: "capped" };
+
+const claimChangeSlotRow = z.object({ id: z.string() });
+const claimChangeSlotExistingRow = z.object({ found: z.number() });
 
 export async function claimChangeSlot(
   db: D1Database,
   input: { idempotencyKey: string; workspaceId: string; targetId: string; since: string; cap: number },
 ): Promise<ChangeSlot> {
-  const claimed = await db
-    .prepare(CLAIM_CHANGE_SLOT)
-    .bind(
-      crypto.randomUUID(),
-      input.workspaceId,
-      input.targetId,
-      input.idempotencyKey,
-      new Date().toISOString(),
-      input.workspaceId,
-      input.since,
-      input.cap,
-    )
-    .first<{ id: string }>();
+  const now = new Date().toISOString();
+  const staleBefore = new Date(Date.now() - STALE_CLAIM_MS).toISOString();
+  const claimed = claimChangeSlotRow
+    .nullable()
+    .parse(
+      await db
+        .prepare(CLAIM_CHANGE_SLOT)
+        .bind(
+          crypto.randomUUID(),
+          input.workspaceId,
+          input.targetId,
+          input.idempotencyKey,
+          now,
+          input.workspaceId,
+          input.since,
+          input.cap,
+          staleBefore,
+        )
+        .first(),
+    );
   if (claimed !== null) return { kind: "claimed", id: claimed.id };
-  const existing = await db.prepare(SELECT_ATTEMPT_KEY).bind(input.idempotencyKey).first<{ found: number }>();
+  const existing = claimChangeSlotExistingRow
+    .nullable()
+    .parse(await db.prepare(SELECT_ATTEMPT_KEY).bind(input.idempotencyKey).first());
   return existing === null ? { kind: "capped" } : { kind: "duplicate" };
 }

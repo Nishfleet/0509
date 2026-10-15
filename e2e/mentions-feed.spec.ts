@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { consoleFailures, isLocalLane, run, seedPreviewSession, watchConsole } from "./inbox";
 
@@ -64,7 +65,7 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
     url: string,
     publishedAt: string | null,
     observedAt: string,
-  ) =>
+  ) => {
     run(
       db,
       `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, canonical_url, url_hash, payload_json, dedup_key, published_at, observed_at)
@@ -81,7 +82,8 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
       publishedAt,
       observedAt,
     );
-  const verdict = (id: string, signalId: string, entityId: string, p: number, reason: string, decidedAt: string) =>
+  };
+  const verdict = (id: string, signalId: string, entityId: string, p: number, reason: string, decidedAt: string) => {
     run(
       db,
       `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, reason, decided_at)
@@ -95,6 +97,7 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
       reason,
       decidedAt,
     );
+  };
   mention(
     `sig-news-${suffix}`,
     onId,
@@ -214,7 +217,7 @@ test("a workspace shows the three mention treatments", async ({ page }, testInfo
   await expect(possibly).toHaveCount(1);
   await expect(held).toHaveCount(0);
   await expect(possibly).toContainText("Possibly. We were not sure this mattered");
-  await expect(possibly).toContainText("found today");
+  await expect(possibly).toContainText(/found \d+ days ago/);
   await expect(page.getByText("News mentions", { exact: true })).toBeVisible();
   await expect(page.getByText("Hacker News mentions", { exact: true })).toBeVisible();
   await expect(page.getByText("Medium mentions", { exact: true })).toBeVisible();
@@ -234,20 +237,17 @@ test("a workspace shows the three mention treatments", async ({ page }, testInfo
   await expect(held).toHaveCount(1);
   await expect(held).toContainText("Zephyrwear ticker line");
 
-  // The reveal button stays mounted and keeps focus, so a keyboard user is not dropped to <body>.
   const reveal = page.getByTestId("mentions-show-all");
   await expect(reveal).toBeVisible();
   await expect(reveal).toBeFocused();
   await expect(reveal).toHaveAttribute("aria-expanded", "true");
   await expect(reveal).toHaveText(/Hide the \d+ we think (?:do|does) not matter/);
 
-  // A second keyboard activation hides the held rows again.
   await page.keyboard.press("Enter");
   await expect(held).toHaveCount(0);
   await expect(reveal).toHaveAttribute("aria-expanded", "false");
   await expect(reveal).toHaveText(/Show all, including \d+ we think (?:do|does) not matter/);
 
-  // Re-open so the rest of this test inspects the held rows.
   await page.keyboard.press("Enter");
   await expect(held).toHaveCount(1);
   const trigger = held.getByRole("button", { name: "Why we flagged this" });

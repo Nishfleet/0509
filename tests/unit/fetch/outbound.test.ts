@@ -4,6 +4,7 @@ import {
   BlockedRedirectError,
   cappedJson,
   cappedText,
+  leadingText,
   fetchOutbound,
   targetRefusal,
 } from "../../../app/lib/fetch/outbound.server";
@@ -114,5 +115,18 @@ describe("cappedText and cappedJson", () => {
   it("returns null when the stream exceeds the cap without a content-length", async () => {
     expect(await cappedText(streamed(["aaaaaa", "bbbbbb"]), 10)).toBeNull();
     expect(await cappedText(streamed(["aaaaa", "bbbbb"]), 10)).toBe("aaaaabbbbb");
+  });
+});
+
+describe("leadingText", () => {
+  it("returns the whole body when it is within the limit", async () => {
+    expect(await leadingText(new Response("héllo"), 64)).toBe("héllo");
+    expect(await leadingText(new Response(null), 64)).toBe("");
+  });
+
+  it("keeps only the first bytes of a larger body, whether or not a content-length is declared", async () => {
+    expect(await leadingText(streamed(["aaaaaa", "bbbbbb"]), 10)).toBe("aaaaaabbbb");
+    const declared = new Response("abcdefghij", { headers: { "content-length": "1000" } });
+    expect(await leadingText(declared, 4)).toBe("abcd");
   });
 });

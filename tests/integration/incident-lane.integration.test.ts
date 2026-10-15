@@ -11,10 +11,10 @@ interface Recorder {
 const recorder = (): Recorder => ({ sent: [], fail: null });
 
 const bindingFor = (rec: Recorder): SendEmail => ({
-  send(message: EmailMessageBuilder) {
+  send(message: EmailMessage | EmailMessageBuilder) {
     if (rec.fail) throw rec.fail;
-    rec.sent.push(message);
-    return Promise.resolve({} as EmailSendResult);
+    rec.sent.push(message as EmailMessageBuilder);
+    return Promise.resolve({ messageId: "unused" });
   },
 });
 
@@ -48,6 +48,11 @@ const seedUserAndWorkspace = async () => {
      VALUES (?, 'Incident lane', ?, 'UTC', 1, 8, '2026-09-23T00:00:00Z')`,
   )
     .bind(WS, USER)
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'starter', 'active', '2026-09-23T00:00:00Z')`,
+  )
+    .bind("plan-incident-lane", WS)
     .run();
   await env.DB.prepare(`INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?, 'email', 1, '{}')`)
     .bind(CHANNEL)
@@ -162,6 +167,7 @@ const cleanTables = [
   "digest",
   "channel",
   "email_suppression",
+  "plan",
   "workspace",
 ];
 
@@ -198,7 +204,7 @@ describe("incident lane (0509#4364)", () => {
     expect(rec.sent[0].text).toContain("What changed: Checkout was 500ing");
     expect(rec.sent[0].html).toContain("https://0509.io/app/alerts");
     expect(rec.sent[0].headers?.["List-Unsubscribe-Post"]).toBe("List-Unsubscribe=One-Click");
-    expect(rec.sent[0].headers?.["List-Unsubscribe"]).toMatch(/^<https:\/\/0509\.io\/u\/[0-9a-f]{64}>$/);
+    expect(rec.sent[0].headers?.["List-Unsubscribe"]).toMatch(/^<https:\/\/0509\.io\/u\/[0-9a-f]{64}\?type=alerts>$/);
     expect(rec.sent[0].text).toContain("Settings: https://0509.io/app/settings");
 
     const attempts = await readAttempts();
@@ -212,6 +218,20 @@ describe("incident lane (0509#4364)", () => {
     expect(notices?.[0]?.is_resolution).toBe(0);
     expect(notices?.[0]?.incident_id).toBe(INCIDENT_A);
     expect(notices?.[0]?.sent_on).toBe(DAY);
+  });
+
+  it("never mails an incident notice to a confirmed teammate, only to the owner", async () => {
+    await env.DB.prepare(
+      `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at, role)
+       VALUES ('mate-incident', ?, ?, 'mate@0509.io', 1, '2026-09-23T00:00:02Z', 'teammate')`,
+    )
+      .bind(WS, CHANNEL)
+      .run();
+    const rec = recorder();
+
+    await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
+
+    expect(rec.sent.map((mail) => mail.to)).toEqual([TARGET]);
   });
 
   it("(b) drops a re-enqueued open notice as a duplicate", async () => {
@@ -244,6 +264,29 @@ describe("incident lane (0509#4364)", () => {
     expect(notices).toHaveLength(2);
     expect(notices?.map((row) => row.is_resolution)).toEqual([0, 1]);
     expect(notices?.every((row) => row.sent_on === DAY)).toBe(true);
+  });
+
+  it("(c3) sends no fixed follow-up for an incident that never had an open notice", async () => {
+    const rec = recorder();
+    await closeIncident(INCIDENT_A);
+
+    const result = await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
+
+    expect(result.outcome).toBe("unannounced");
+    expect(rec.sent).toHaveLength(0);
+    expect(await readNotices(PAGE_A)).toHaveLength(0);
+  });
+
+  it("(c4) sends no fixed follow-up when the open email never went out", async () => {
+    const failing = { ...recorder(), fail: new Error("boom") };
+    await deliverIncident(envWith(bindingFor(failing)), message(INCIDENT_A));
+    await closeIncident(INCIDENT_A);
+
+    const rec = recorder();
+    const result = await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
+
+    expect(result.outcome).toBe("unannounced");
+    expect(rec.sent).toHaveLength(0);
   });
 
   it("(c2) still sends the fixed follow-up after the alert is acknowledged (0509#4115)", async () => {
@@ -393,6 +436,16 @@ describe("incident lane (0509#4364)", () => {
       .bind(INCIDENT_A)
       .first<{ n: number }>();
     expect(alerts?.n).toBe(1);
+  });
+
+  it("sends nothing on Scout even when the workspace preference is on", async () => {
+    await env.DB.prepare("DELETE FROM plan WHERE workspace_id = ?").bind(WS).run();
+    const rec = recorder();
+
+    const result = await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
+
+    expect(result.outcome).toBe("muted");
+    expect(rec.sent).toHaveLength(0);
   });
 
   it("returns no_incident when the incident row is gone", async () => {

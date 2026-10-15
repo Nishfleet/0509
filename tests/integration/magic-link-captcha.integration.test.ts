@@ -1,19 +1,20 @@
 import { env } from "cloudflare:test";
 import { data } from "react-router";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAuth, createAuthForRequest } from "../../app/lib/auth.server";
 import { action as loginAction } from "../../app/routes/login";
 
 const ORIGIN = "http://localhost:8787";
+const SITEVERIFY = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const PASSING_TOKEN = "XXXX.DUMMY.TOKEN.XXXX";
 
 function authEnv(sent: string[], secret = "1x0000000000000000000000000000000AA") {
   return {
     DB: env.DB,
     EMAIL: {
-      send: async (message: { text?: string }) => {
-        sent.push(message.text ?? "");
+      send: async (message: EmailMessage | EmailMessageBuilder): Promise<EmailSendResult> => {
+        sent.push("text" in message ? (message.text ?? "") : "");
         return { messageId: "test" };
       },
     },
@@ -35,7 +36,25 @@ function magicLinkPost(token?: string): Request {
   });
 }
 
+function stubSiteverify() {
+  const realFetch = globalThis.fetch;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) !== SITEVERIFY) return realFetch(input, init);
+      const { secret } = JSON.parse(String(init?.body)) as { secret: string };
+      return Response.json({ success: secret.startsWith("1x") });
+    }),
+  );
+}
+
 describe("magic-link captcha", () => {
+  beforeEach(stubSiteverify);
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("refuses a post with no turnstile token", async () => {
     const response = await createAuth(authEnv([])).handler(magicLinkPost());
     expect(response.status).toBe(400);
@@ -84,10 +103,6 @@ describe("magic-link captcha", () => {
   });
 });
 
-// The Access pre-clearance path (#4702, #5631): a request carrying a verified
-// service-token assertion is already authenticated at the edge, so the
-// captcha does not apply to it. Everything else — a forged header, a
-// user-session assertion, no header — is still checked.
 const ACCESS_AUD = "aud-tag-test";
 let accessIssuerSeq = 0;
 function freshAccessIssuer() {
@@ -109,7 +124,7 @@ async function mintAccessJwt(key: CryptoKey, claims: Record<string, unknown>, ki
   return `${head}.${body}.${b64u(new Uint8Array(signature))}`;
 }
 
-function stubAccessJwks(iss: string, jwk: JsonWebKey) {
+function stubAccessJwks(iss: string, jwk: JsonWebKey & { kid?: string }) {
   const realFetch = globalThis.fetch;
   vi.stubGlobal(
     "fetch",
@@ -146,9 +161,8 @@ describe("magic-link captcha access pre-clearance", () => {
       true,
       ["sign", "verify"],
     );
-    const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
-    jwk.kid = "test-kid";
-    stubAccessJwks(iss, jwk);
+    const exported = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    stubAccessJwks(iss, { ...exported, kid: "test-kid" });
     const assertion = await mintAccessJwt(pair.privateKey, {
       type: "app",
       iss,
@@ -183,9 +197,8 @@ describe("magic-link captcha access pre-clearance", () => {
       true,
       ["sign", "verify"],
     );
-    const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
-    jwk.kid = "test-kid";
-    stubAccessJwks(iss, jwk);
+    const exported = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    stubAccessJwks(iss, { ...exported, kid: "test-kid" });
     const assertion = await mintAccessJwt(pair.privateKey, {
       type: "app",
       iss,
@@ -205,11 +218,6 @@ describe("magic-link captcha access pre-clearance", () => {
   });
 });
 
-// #5640: the e2e lane drives the route action, and React Router submits
-// <Form> posts to `/login.data` — a path Access does not front. The only
-// credential on that request is the CF_Authorization cookie (the same JWT
-// Access would inject as cf-access-jwt-assertion). The action must still
-// reach {sent}; a forged or user-session cookie must still refuse.
 describe("login form action access pre-clearance", () => {
   const keys = ["ACCESS_TEAM_DOMAIN", "ACCESS_AUD", "EMAIL"] as const;
   const saved = new Map<string, unknown>();
@@ -244,8 +252,7 @@ describe("login form action access pre-clearance", () => {
     );
     const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
     const kid = `kid-${crypto.randomUUID()}`;
-    jwk.kid = kid;
-    stubAccessJwks(iss, jwk);
+    stubAccessJwks(iss, { ...jwk, kid });
     return {
       iss,
       assertion: await mintAccessJwt(
@@ -277,7 +284,9 @@ describe("login form action access pre-clearance", () => {
     const { assertion, iss } = await serviceTokenAssertion();
     const sent: string[] = [];
     actionEnv(sent, iss);
-    const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) });
+    const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) } as Parameters<
+      typeof loginAction
+    >[0]);
     expect(result).toMatchObject({ sent: { email: "cookie-precleared@test.dev" } });
     expect(sent).toHaveLength(1);
   });
@@ -294,7 +303,9 @@ describe("login form action access pre-clearance", () => {
     });
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
-      const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) });
+      const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) } as Parameters<
+        typeof loginAction
+      >[0]);
       expect(result).toEqual(data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 }));
       const text = logged.mock.calls.map((call) => String(call[0])).join("\n");
       expect(text).toContain("account daily sending quota exceeded");
@@ -314,8 +325,7 @@ describe("login form action access pre-clearance", () => {
     );
     const jwk = await crypto.subtle.exportKey("jwk", published.publicKey);
     const kid = `kid-${crypto.randomUUID()}`;
-    jwk.kid = kid;
-    stubAccessJwks(iss, jwk);
+    stubAccessJwks(iss, { ...jwk, kid });
     const attacker = await crypto.subtle.generateKey(
       { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
       true,
@@ -337,7 +347,9 @@ describe("login form action access pre-clearance", () => {
 
     const sent: string[] = [];
     actionEnv(sent, iss);
-    const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) });
+    const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) } as Parameters<
+      typeof loginAction
+    >[0]);
     expect(result).toEqual({ error: "Confirm you're a person, then we'll send the link." });
     expect(sent).toHaveLength(0);
   });
@@ -351,8 +363,7 @@ describe("login form action access pre-clearance", () => {
     );
     const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
     const kid = `kid-${crypto.randomUUID()}`;
-    jwk.kid = kid;
-    stubAccessJwks(iss, jwk);
+    stubAccessJwks(iss, { ...jwk, kid });
     const assertion = await mintAccessJwt(
       pair.privateKey,
       {
@@ -369,7 +380,9 @@ describe("login form action access pre-clearance", () => {
 
     const sent: string[] = [];
     actionEnv(sent, iss);
-    const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) });
+    const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) } as Parameters<
+      typeof loginAction
+    >[0]);
     expect(result).toEqual({ error: "Confirm you're a person, then we'll send the link." });
     expect(sent).toHaveLength(0);
   });

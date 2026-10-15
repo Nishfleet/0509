@@ -14,12 +14,12 @@ function markup(): string {
 
 describe("landing start button", () => {
   it("links to /login", () => {
-    const anchor = markup().match(/<a\b[^>]*>/)?.[0];
+    const anchor = /<a\b[^>]*>/.exec(markup())?.[0];
     expect(anchor).toContain('href="/login"');
   });
 
   it("carries the primary large button classes", () => {
-    const anchor = markup().match(/<a\b[^>]*>/)?.[0];
+    const anchor = /<a\b[^>]*>/.exec(markup())?.[0];
     expect(anchor).toContain(buttonVariants({ variant: "primary", size: "lg" }));
   });
 

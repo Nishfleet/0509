@@ -2,8 +2,9 @@ import { createChangeEventDetails } from "@base-ui/react/internals/createBaseUIE
 import { REASONS } from "@base-ui/react/internals/reasons";
 import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MemoryRouter } from "react-router";
+import { createRoutesStub } from "react-router";
 import type * as ReactRouterModule from "react-router";
+import type { URLSearchParamsInit } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DevelopmentsFeed } from "../../app/components/developments-feed";
@@ -22,7 +23,7 @@ const feedFilterHarness = vi.hoisted(() => ({
 }));
 
 vi.mock("react-router", async (importOriginal) => {
-  const actual = await importOriginal<ReactRouterModule>();
+  const actual = await importOriginal<typeof ReactRouterModule>();
   return {
     ...actual,
     useSearchParams: () =>
@@ -34,7 +35,7 @@ vi.mock("react-router", async (importOriginal) => {
 });
 
 vi.mock("../../app/components/ui/toggle-group", async (importOriginal) => {
-  const actual = await importOriginal<ToggleGroupModule>();
+  const actual = await importOriginal<typeof ToggleGroupModule>();
   return {
     ...actual,
     ToggleGroup: ({ children, onValueChange, ...props }: ToggleGroupProps) => {
@@ -123,9 +124,10 @@ const CHANGES: readonly SiteChangeItemData[] = [];
 
 function renderWith(rows: readonly FeedRow[], changes: readonly SiteChangeItemData[], url = "/"): string {
   feedFilterHarness.params = new URLSearchParams(new URL(url, "https://example.test").search);
-  return renderToStaticMarkup(
-    createElement(MemoryRouter, { initialEntries: [url] }, createElement(DevelopmentsFeed, { items: rows, changes })),
-  );
+  const Stub = createRoutesStub([
+    { path: "*", Component: () => createElement(DevelopmentsFeed, { items: rows, changes }) },
+  ]);
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: [url] }));
 }
 
 function render(url: string, rows: readonly FeedRow[] = ROWS): string {
@@ -140,8 +142,8 @@ function chips(html: string): string[] {
     const closeStart = block.lastIndexOf("</button>");
     if (openEnd === -1 || closeStart === -1) continue;
     const inner = block.slice(openEnd + 1, closeStart);
-    const chip = inner.match(/^([^<]+)<span class="font-mono text-meta">(\d+)<\/span>$/);
-    if (chip && chip[1] !== undefined && chip[2] !== undefined) out.push(`${chip[1]}${chip[2]}`);
+    const chip = /^([^<]+)<span class="font-mono text-meta">(\d+)<\/span>$/.exec(inner);
+    if (chip?.[1] !== undefined && chip[2] !== undefined) out.push(`${chip[1]}${chip[2]}`);
   }
   return out;
 }
@@ -156,13 +158,13 @@ function kinds(html: string): string[] {
 }
 
 function sourcePill(html: string): string {
-  const match = html.match(/data-slot="source-pill"[^>]*>([^<]*)</);
-  return match && match[1] !== undefined ? match[1] : "";
+  const match = /data-slot="source-pill"[^>]*>([^<]*)</.exec(html);
+  return match?.[1] ?? "";
 }
 
 function headingAnchor(html: string): string | null {
-  const match = html.match(/<h3[^>]*>([\s\S]*?)<\/h3>/);
-  return match && match[1] !== undefined ? match[1] : null;
+  const match = /<h3[^>]*>([\s\S]*?)<\/h3>/.exec(html);
+  return match?.[1] ?? null;
 }
 
 describe("the developments feed", () => {

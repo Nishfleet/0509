@@ -42,6 +42,28 @@ describe("X-Error-Reference", () => {
   });
 });
 
+describe("document gzip HEAD", () => {
+  it("sends HEAD through the same wrapper as GET so both carry Vary", async () => {
+    const get = await handleRequest(
+      new Request("https://0509.io/privacy"),
+      200,
+      new Headers(),
+      routerContext,
+      new RouterContextProvider(),
+    );
+    const head = await handleRequest(
+      new Request("https://0509.io/privacy", { method: "HEAD" }),
+      200,
+      new Headers(),
+      routerContext,
+      new RouterContextProvider(),
+    );
+    expect(get.headers.get("Vary")).toBe("Accept-Encoding");
+    expect(head.headers.get("Vary")).toBe(get.headers.get("Vary"));
+    expect(head.body).toBeNull();
+  });
+});
+
 describe("errors thrown while the page streams", () => {
   it("reaches Sentry, because handleError never sees a render error", async () => {
     const request = new Request("https://0509.io/onboarding/identity?subject=bluorng.com");

@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { configDefaults, defineConfig } from "vitest/config";
 
+import { FileStartReporter } from "./tests/file-start-reporter.js";
+
 // Deliberately a separate config from vite.config.ts.
 //
 // vitest picks up vite.config.ts by default, which carries the cloudflare()
@@ -13,6 +15,7 @@ import { configDefaults, defineConfig } from "vitest/config";
 // cloudflareTest() belongs here.
 export default defineConfig({
   test: {
+    reporters: ["default", new FileStartReporter()],
     // CI runs `vitest run --changed` on pull requests (0509#5849). These files
     // reach tests without an import edge, so a change to any of them reruns
     // the whole suite. The stock default "**/{vitest,vite}.config.*/**" does
@@ -28,12 +31,22 @@ export default defineConfig({
       "**/tsconfig*.json",
       "**/migrations/**",
       "**/wrangler*.jsonc",
+      // tests/dependabot-config.test.ts reads this from disk (0509#7078);
+      // without the trigger a dependabot.yml-only PR reruns nothing.
+      "**/.github/dependabot.yml",
       "**/tests/integration/apply-migrations.ts",
-      // tests/agents-md-canonical.test.ts reads these from disk (0509#7005);
-      // without the trigger a doc-only PR reruns nothing and the shadowing
-      // verdict is left to the merge queue instead of the PR.
+      // tests/agents-md-canonical.test.ts and tests/migration-gate-docs.test.ts
+      // read these from disk (0509#7005, 0509#7003); without the trigger a
+      // doc-only PR reruns nothing and the false-lock verdict is left to the
+      // merge queue instead of the PR.
       "**/AGENTS.md",
       "**/CLAUDE.md",
+      // tests/design-md-tokens.test.ts reads these two from disk; neither has
+      // an import edge into a test, so an edit to one reruns nothing without
+      // the trigger (Nish asked for the shadcn DESIGN.md skill, 2026-10-09).
+      "**/DESIGN.md",
+      "**/app/app.css",
+      "**/.github/CODEOWNERS",
     ],
     coverage: {
       provider: "v8",

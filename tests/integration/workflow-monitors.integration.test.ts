@@ -55,14 +55,14 @@ const makeWorkflow = <T extends object>(workflow: { prototype: T }): T => {
 };
 
 const SITE_MONITOR = {
-  schedule: { type: "crontab", value: "0 2 * * *" },
+  schedule: { type: "crontab", value: "0 21 * * *" },
   checkinMargin: 60,
   maxRuntime: 120,
   timezone: "UTC",
 } as const;
 
 const MENTIONS_MONITOR = {
-  schedule: { type: "crontab", value: "0 1 * * *" },
+  schedule: { type: "crontab", value: "0 19 * * *" },
   checkinMargin: 60,
   maxRuntime: 90,
   timezone: "UTC",
@@ -103,7 +103,7 @@ describe("an instance started by a Workflow's own registered schedule", () => {
 });
 
 describe("workflow Sentry cron monitors", () => {
-  it("checks site-sweep in on its 02:00 UTC monitor and returns the zeroed sweep", async () => {
+  it("checks site-sweep in on its 21:00 UTC monitor and returns the zeroed sweep", async () => {
     const outcome = await makeWorkflow(siteSweep).run(event, immediateStep);
     expect(checkInMock.mock.calls).toEqual([
       [{ monitorSlug: "site-sweep", status: "in_progress" }, SITE_MONITOR],
@@ -121,7 +121,7 @@ describe("workflow Sentry cron monitors", () => {
     });
   });
 
-  it("checks mentions-sweep in on its 01:00 UTC monitor and returns the zeroed sweep", async () => {
+  it("checks mentions-sweep in on its 19:00 UTC monitor and returns the zeroed sweep", async () => {
     await env.DB.exec("UPDATE source SET canary_query = NULL");
     const outcome = await makeWorkflow(mentionsSweep).run(event, immediateStep);
     expect(checkInMock.mock.calls).toEqual([

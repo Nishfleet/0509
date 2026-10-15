@@ -1,6 +1,6 @@
 # Engine 6 — Standing and Home
 
-P3 step 6 of umbrella #3842. Written by the Opus deputy (second architect), **2026-09-21**. Contracts: `docs/REBUILD-STANDING.md`, `docs/REBUILD-JEV.md` (D4, D6), `docs/REBUILD-DELIVERY.md`, `docs/REBUILD-SCHEMA.md`, `docs/REBUILD-STACK.md`, `docs/REBUILD-ONBOARDING.md`.
+P3 step 6 of umbrella #3842. Written by the Opus deputy (second architect), **2026-09-21**. Contracts: `docs/REBUILD-STANDING.md`, `docs/REBUILD-JEV.md` (D4, D6), `docs/REBUILD-DELIVERY.md`, `docs/REBUILD-SCHEMA.md`, `docs/REBUILD-STACK.md`, `docs/REBUILD-ONBOARDING.md (deleted, in git history)`.
 
 This engine has no upstream. Its only external call is Jev (D4), and its correctness depends entirely on things the product already stores. So the probes here are of the **runtime**, not of a vendor.
 
@@ -295,7 +295,7 @@ Only one decision belongs to this engine.
 
 ### P6.5 — Home
 
-**GOAL.** The Home route: headline rank with movement, the four-week line **read from `standing`**, the why-line, up to three read-this-first marks with screenshots, the per-source freshness line, and the empty states. Fewer than 2 ON brands ⇒ "add a competitor to see where you stand". A brand with zero signals ⇒ a dash, not a zero. A degraded source ⇒ its name and last-good time, and the quiet-week line is **suppressed**. Second-zero Home (per `docs/REBUILD-ONBOARDING.md` step 5) shows what is being gathered and a real arrival time from the Workflow.
+**GOAL.** The Home route: headline rank with movement, the four-week line **read from `standing`**, the why-line, up to three read-this-first marks with screenshots, the per-source freshness line, and the empty states. Fewer than 2 ON brands ⇒ "add a competitor to see where you stand". A brand with zero signals ⇒ a dash, not a zero. A degraded source ⇒ its name and last-good time, and the quiet-week line is **suppressed**. Second-zero Home (per `docs/REBUILD-ONBOARDING.md (deleted, in git history)` step 5) shows what is being gathered and a real arrival time from the Workflow.
 
 **STOCK FEATURE OR LIBRARY.** React Router 8 framework-mode loader (one D1 round trip per panel). `uplot` **1.6.32** + `uplot-react` **1.2.4** for the four-week line, wrapped **once** in one component with the server rendering the axis frame and the canvas painting on mount (`docs/REBUILD-STACK.md` §5.7 — uPlot is Canvas-based and renders nothing during SSR). shadcn/ui components via `npx shadcn@latest add`. `Intl.DateTimeFormat` for every timestamp.
 

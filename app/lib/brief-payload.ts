@@ -45,6 +45,7 @@ const brandLineSchema = z
     mention_delta: count,
     site_change_count: count,
     new_roles: count,
+    baseline: z.array(z.string()).optional().catch(undefined),
   })
   .transform((line) => ({ ...line, name: line.name.length > 0 ? line.name : line.entity_id }));
 
@@ -61,11 +62,26 @@ const degradedSourceSchema = z.object({
   last_landed_at: optionalText,
 });
 
+const ledgerSchema = z
+  .object({
+    rivals: count,
+    pages_read: count,
+    changes_seen: count,
+    changes_told: count,
+    changes_set_aside: count,
+    mentions_read: count,
+    mentions_kept: count,
+  })
+  .optional()
+  .catch(undefined);
+
 const checkedSchema = z
   .object({
     mention_count: count,
     site_change_count: count,
     new_ad_count: count,
+    total_change_count: z.number().int().nonnegative().optional().catch(undefined),
+    ledger: ledgerSchema,
     source_keys: keepValid(z.string()),
     degraded_source_keys: keepValid(z.string()),
     degraded_sources: keepValid(degradedSourceSchema),
@@ -88,6 +104,12 @@ const checkedSchema = z
     ],
   }));
 
+const newRivalSchema = z
+  .object({ name: text, domain: text, reason: optionalText })
+  .nullable()
+  .optional()
+  .catch(undefined);
+
 const briefPayloadSchema = z.object({
   workspace_id: text,
   timezone: text,
@@ -97,14 +119,21 @@ const briefPayloadSchema = z.object({
   headline_total: count,
   headline_movement: numberOrNull,
   headline_is_new: flag,
+  headline_earlier: z
+    .object({ rank: z.number().int().positive(), weeks: z.number().int().positive() })
+    .nullable()
+    .optional()
+    .catch(undefined),
   why_line: text,
   is_quiet_week: flag,
   is_unjudged: flag,
+  judged_count: z.number().optional().catch(undefined),
   read_this_first: keepValid(markSchema),
   brands: keepValid(brandLineSchema),
   own_site: ownSiteSchema,
   checked: checkedSchema,
   next_brief_at: optionalText,
+  new_rival: newRivalSchema,
 });
 
 export type BriefPayload = z.output<typeof briefPayloadSchema>;
@@ -112,6 +141,8 @@ export type BriefPayload = z.output<typeof briefPayloadSchema>;
 export interface BriefContext {
   unsubscribe_url: string | null;
   asset_base_url: string | null;
+  open_url?: string | null;
+  teammate?: boolean;
 }
 
 export interface RenderedBrief {

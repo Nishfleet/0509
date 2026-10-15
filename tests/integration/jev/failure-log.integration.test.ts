@@ -1,7 +1,13 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { askChoice, askNoul, askNouls, JevUnavailableError } from "../../../app/lib/jev/client.server";
+import {
+  askChoice,
+  askNoul,
+  askNouls,
+  JevSpendOffError,
+  JevUnavailableError,
+} from "../../../app/lib/jev/client.server";
 import type { ChoiceQuestion, NoulQuestion } from "../../../app/lib/jev/client.server";
 import { deleteExpiredJevFailures, RETENTION_MS } from "../../../app/lib/data/jev_failure.server";
 
@@ -42,9 +48,30 @@ function choiceQuestion(): ChoiceQuestion {
 
 afterEach(() => {
   Reflect.deleteProperty(env, "AI");
+  Reflect.set(env, "AI_SPEND", "on");
 });
 
 describe("a failed Jev call", () => {
+  it("writes no jev_failure row when the ai spend kill switch refused the call (0509#7191)", async () => {
+    const refused = question();
+    const outage = question();
+    const run = vi.fn(() => Promise.reject(new Error("2003: Rate limited")));
+    Reflect.set(env, "AI", { run });
+    Reflect.set(env, "AI_SPEND", "off");
+
+    await expect(askNoul("ws-failure-log", refused, {})).rejects.toThrow(JevSpendOffError);
+    expect(run).not.toHaveBeenCalled();
+
+    Reflect.set(env, "AI_SPEND", "on");
+    await expect(askNoul("ws-failure-log", outage, {})).rejects.toThrow(JevUnavailableError);
+    expect(await failuresFor(outage.id)).toHaveLength(1);
+
+    const { results } = await env.DB.prepare("SELECT question FROM jev_failure WHERE question = ?1")
+      .bind(refused.id)
+      .all();
+    expect(results).toEqual([]);
+  });
+
   it("is written to jev_failure with its kind, code and message", async () => {
     const asking = question();
     Reflect.set(env, "AI", { run: vi.fn(() => Promise.reject(new Error("2003: Rate limited"))) });

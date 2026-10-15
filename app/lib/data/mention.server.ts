@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 
 import { D6_QUESTION_ID } from "../standing-score";
 import { mentionsFromRows, type MentionReadRow, type MentionRowModel } from "../mention-feed";
@@ -19,21 +20,23 @@ WHERE m.workspace_id = ?1 AND m.duplicate_of IS NULL
 ORDER BY m.observed_at DESC, m.id DESC
 LIMIT 50`;
 
-interface MentionFeedSqlRow {
-  id: string;
-  title: string | null;
-  url: string;
-  published_at: string | null;
-  observed_at: string;
-  state: "judged" | "unjudged" | null;
-  also_count: number;
-  platform: string;
-  kind: string;
-  p: number | null;
-  reason: string | null;
-  verdict_id: string;
-  verdict_decided_at: string;
-}
+const mentionFeedSqlRow = z.object({
+  id: z.string(),
+  title: z.string().nullable(),
+  url: z.string(),
+  published_at: z.string().nullable(),
+  observed_at: z.string(),
+  state: z.enum(["judged", "unjudged"]).nullable(),
+  also_count: z.number(),
+  platform: z.string(),
+  kind: z.string(),
+  p: z.number().nullable(),
+  reason: z.string().nullable(),
+  verdict_id: z.string().nullable(),
+  verdict_decided_at: z.string().nullable(),
+});
+
+type MentionFeedSqlRow = z.infer<typeof mentionFeedSqlRow>;
 
 function toReadRow(row: MentionFeedSqlRow): MentionReadRow {
   return {
@@ -54,6 +57,6 @@ function toReadRow(row: MentionFeedSqlRow): MentionReadRow {
 }
 
 export async function readMentionFeed(workspaceId: string, now: Date): Promise<MentionRowModel[]> {
-  const { results } = await env.DB.prepare(MENTION_FEED_SQL).bind(workspaceId, D6_QUESTION_ID).all<MentionFeedSqlRow>();
-  return mentionsFromRows(results.map(toReadRow), now);
+  const { results } = await env.DB.prepare(MENTION_FEED_SQL).bind(workspaceId, D6_QUESTION_ID).all();
+  return mentionsFromRows(z.array(mentionFeedSqlRow).parse(results).map(toReadRow), now);
 }

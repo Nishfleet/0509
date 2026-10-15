@@ -9,11 +9,6 @@ import { noulAction } from "../../app/lib/jev/thresholds";
 import type { NoulAction } from "../../app/lib/jev/thresholds";
 import type { BreakageEvidence } from "../../app/lib/site/breakage-evidence";
 
-// The one eval harness. Every Jev question in this repo scores through it, so the
-// case loader, the live call, the cutoffs, the repeats and the report have exactly
-// one implementation. A question that wanted its own copy of any of those is the
-// second paved path docs/REBUILD-TRUST.md §C1(3) rules out.
-
 const REPEATS = 3;
 
 const CONCURRENCY = 8;
@@ -36,9 +31,10 @@ const GATEWAY_MODEL = "@cf/cloudflare/clef";
 
 const JEV_URL = VIA_GATEWAY ? "workers-ai binding" : (process.env.JEV_URL ?? "http://127.0.0.1:4000/jev");
 
-// Eval calls skip AI Gateway on purpose: error 2003 is the gateway's own rate limit,
-// and sharing the gateway `default` with customers failed two sign-ups on 2026-10-04
-// (docs/incidents/2026-10-04-signup-judge-failure.md). callBudget caps the spend.
+export const NOUL_WIRE: { type: string; field: string; value: (answer: JevAnswer) => number | undefined } = VIA_GATEWAY
+  ? { type: "noul", field: "noul", value: (answer) => answer.noul }
+  : { type: "boolean", field: "probability", value: (answer) => answer.probability };
+
 const WRANGLER_CONFIG = path.join(HERE, "..", "..", "wrangler.jsonc");
 
 let platform: Promise<PlatformProxy<{ AI: Ai }>> | undefined;
@@ -108,15 +104,22 @@ export type Ask<T extends EvalRow> = (row: T) => Promise<Call>;
 
 export type Score<T extends EvalRow> = (row: T, call: Call) => Outcome;
 
+export interface JevAnswer {
+  type?: string;
+  noul?: number;
+  probability?: number;
+  choice?: string;
+}
+
 interface JevResponse {
   model?: string;
-  answers?: Record<string, { type?: string; noul?: number; choice?: string }>;
+  answers?: Record<string, JevAnswer>;
 }
 
 export async function loadCases<T extends EvalRow>(
   questionId: string,
   required: readonly (keyof T & string)[],
-  options: { file?: string; project?: (entry: unknown) => unknown } = {},
+  options: { file?: string; project?: (entry: unknown) => unknown; unsplit?: boolean } = {},
 ): Promise<T[]> {
   const file = path.join(HERE, "cases", `${options.file ?? questionId}.json`);
   if (!existsSync(file)) throw new Error(`eval cases missing: ${file}`);
@@ -126,7 +129,8 @@ export async function loadCases<T extends EvalRow>(
     const entry = options.project?.(raw) ?? raw;
     const row = entry as EvalRow;
     if (typeof row.id !== "string" || row.id === "") throw new Error(`case ${index} has no id`);
-    if (row.split !== "train" && row.split !== "test") throw new Error(`case ${row.id} has no split`);
+    if (options.unsplit !== true && row.split !== "train" && row.split !== "test")
+      throw new Error(`case ${row.id} has no split`);
     if (typeof row.why !== "string" || row.why === "") throw new Error(`case ${row.id} has no why`);
     for (const key of required) {
       const value = Reflect.get(row, key);
@@ -141,7 +145,7 @@ export async function loadCases<T extends EvalRow>(
   if (cases.length < MIN_TOTAL) throw new Error(`${questionId} has ${cases.length} cases, needs ${MIN_TOTAL}`);
   const ids = new Set(cases.map((row) => row.id));
   if (ids.size !== cases.length) throw new Error(`${questionId} has duplicate case ids`);
-  for (const split of ["train", "test"] as const) {
+  for (const split of options.unsplit === true ? [] : (["train", "test"] as const)) {
     const count = cases.filter((row) => row.split === split).length;
     if (count < MIN_PER_SPLIT)
       throw new Error(`${questionId} ${split} split has ${count} cases, needs ${MIN_PER_SPLIT}`);
@@ -161,9 +165,85 @@ const JEV_TIMEOUT_MS = 60_000;
 
 const BUDGET_MARGIN = 1.2;
 
+const NEURONS_PER_CLEF_CALL = 17;
+
+const NEURONS_PER_MODEL_CALL = 60;
+
+const NEURON_CEILING = Number(process.env.EVAL_MAX_NEURONS ?? "") || 0;
+
+const DAILY_CEILING = Number(process.env.EVAL_DAILY_NEURON_CEILING ?? "") || 9000;
+
+const GRAPHQL_URL = "https://api.cloudflare.com/client/v4/graphql";
+
+const DAILY_QUERY = `query($account: String!, $since: Time!, $until: Time!) {
+  viewer { accounts(filter: { accountTag: $account }) {
+    aiInferenceAdaptiveGroups(limit: 1, filter: { datetime_geq: $since, datetime_leq: $until }) {
+      sum { totalNeurons }
+    }
+  } }
+}`;
+
+interface DailyReply {
+  data?: { viewer?: { accounts?: { aiInferenceAdaptiveGroups?: { sum?: { totalNeurons?: unknown } }[] }[] } };
+  errors?: unknown;
+}
+
+async function neuronsToday(): Promise<number> {
+  const now = new Date();
+  const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const response = await fetch(GRAPHQL_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${CF_TOKEN}` },
+    body: JSON.stringify({
+      query: DAILY_QUERY,
+      variables: { account: CF_ACCOUNT, since: since.toISOString(), until: now.toISOString() },
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) throw new Error(`GraphQL answered ${String(response.status)}`);
+  const reply = (await response.json()) as DailyReply;
+  if (reply.errors !== undefined && reply.errors !== null) throw new Error("GraphQL returned errors");
+  const groups = reply.data?.viewer?.accounts?.[0]?.aiInferenceAdaptiveGroups;
+  if (groups === undefined) throw new Error("GraphQL returned no aiInferenceAdaptiveGroups");
+  const total = groups[0]?.sum?.totalNeurons ?? 0;
+  if (typeof total !== "number" || !Number.isFinite(total)) throw new Error("GraphQL neurons were not a number");
+  return total;
+}
+
+let dailyGuard: Promise<void> | undefined;
+
+async function checkDaily(): Promise<void> {
+  let today: number;
+  try {
+    today = await neuronsToday();
+  } catch (error) {
+    throw new Error(
+      `eval refused: cannot read today's neurons (${String(error)}), so the daily ceiling cannot be checked (0509#7249)`,
+      { cause: error },
+    );
+  }
+  const verdict = today + NEURON_CEILING > DAILY_CEILING ? "refused" : "ok";
+  console.log(
+    `daily neuron guard: ${verdict}; today (UTC) ${String(Math.round(today))} + this run's ceiling ${String(NEURON_CEILING)} vs daily ceiling ${String(DAILY_CEILING)}`,
+  );
+  if (verdict === "refused") {
+    throw new Error(
+      `eval refused: ${String(Math.round(today))} neurons used today (UTC) plus this run's ${String(NEURON_CEILING)} would pass the daily ceiling of ${String(DAILY_CEILING)}; set by EVAL_DAILY_NEURON_CEILING in .github/workflows/evals.yml (0509#7249)`,
+    );
+  }
+}
+
+function guardDaily(): Promise<void> {
+  if (!VIA_GATEWAY) return Promise.resolve();
+  dailyGuard ??= checkDaily();
+  return dailyGuard;
+}
+
 let callBudget = 0;
 
 let callsUsed = 0;
+
+let neuronsSpent = 0;
 
 function withoutModel(body: unknown): unknown {
   const { model: _model, ...rest } = body as { model?: string };
@@ -186,21 +266,29 @@ async function withOneRetry<T>(call: () => Promise<T>): Promise<T> {
   }
 }
 
-function spendCall(): void {
+function spendCall(neurons: number): void {
   if (callsUsed >= callBudget) throw new Error(`eval stopped: call budget of ${String(callBudget)} spent`);
+  if (NEURON_CEILING > 0 && neuronsSpent + neurons > NEURON_CEILING) {
+    throw new Error(
+      `eval stopped: neuron ceiling of ${String(NEURON_CEILING)} spent (estimated ${String(neuronsSpent)}); set by EVAL_MAX_NEURONS in .github/workflows/evals.yml (0509#7249)`,
+    );
+  }
   callsUsed += 1;
+  neuronsSpent += neurons;
 }
 
 export async function postWorkersAi(model: string, body: unknown): Promise<unknown> {
+  await guardDaily();
   return withOneRetry(async () => {
-    spendCall();
+    spendCall(NEURONS_PER_MODEL_CALL);
     const ai = await aiBinding();
     return ai.run(model as never, body as never);
   });
 }
 
 async function postJev(body: unknown): Promise<JevResponse> {
-  spendCall();
+  await guardDaily();
+  spendCall(NEURONS_PER_CLEF_CALL);
   if (VIA_GATEWAY) {
     const raw = await (
       await aiBinding()
@@ -223,7 +311,7 @@ async function postJev(body: unknown): Promise<JevResponse> {
   return parsed;
 }
 
-function answerOf(body: JevResponse, questionId: string): { type?: string; noul?: number; choice?: string } {
+function answerOf(body: JevResponse, questionId: string): JevAnswer {
   const answer = body.answers?.[questionId];
   if (answer === undefined) throw new Error(`jev answer missing ${questionId}: ${JSON.stringify(body).slice(0, 300)}`);
   return answer;
@@ -248,8 +336,6 @@ export type SiteRow<L extends boolean | string> = Omit<SiteChangeCase, "labels" 
   why: string;
 };
 
-// The three site questions judge one shared state, so they share one case
-// file; each question reads its own label and its own why out of it.
 export function loadSiteRows<L extends boolean | string>(caseFile: string, questionId: string): Promise<SiteRow<L>[]> {
   return loadCases<SiteRow<L>>(questionId, ["subject", "pageUrl", "hunks", "evidence", "label"], {
     file: caseFile,
@@ -260,46 +346,47 @@ export function loadSiteRows<L extends boolean | string>(caseFile: string, quest
   });
 }
 
+export function loadProdRows(): Promise<SiteRow<boolean>[]> {
+  return loadCases<SiteRow<boolean>>("noteworthy_change", ["subject", "pageUrl", "hunks", "evidence", "label"], {
+    file: "site-change-prod",
+    unsplit: true,
+    project: (entry) => {
+      const { labels, why, ...rest } = entry as SiteChangeCase;
+      return { ...rest, split: "test", label: labels.noteworthy_change, why: why.noteworthy_change };
+    },
+  });
+}
+
+function noulQuestions(questions: readonly NoulEvalQuestion[]): Record<string, unknown> {
+  return Object.fromEntries(
+    questions.map((question) => [
+      question.id,
+      {
+        type: NOUL_WIRE.type,
+        instructions: question.instructions,
+        criteria: { true: question.whenTrue, false: question.whenFalse },
+      },
+    ]),
+  );
+}
+
+function noulValue(answer: JevAnswer, questionId: string): number {
+  const value = NOUL_WIRE.value(answer);
+  if (typeof value !== "number") throw new Error(`jev answer missing a ${NOUL_WIRE.field} for ${questionId}`);
+  return value;
+}
+
 export function makeNoulAsk(question: NoulEvalQuestion): StateAsk {
   return async (state) => {
-    const body = await postJev({
-      model: "jev-latest",
-      state,
-      questions: {
-        [question.id]: {
-          type: "noul",
-          instructions: question.instructions,
-          criteria: { true: question.whenTrue, false: question.whenFalse },
-        },
-      },
-    });
-    const answer = answerOf(body, question.id);
-    if (typeof answer.noul !== "number") throw new Error(`jev answer missing a noul: ${question.id}`);
-    return { model: body.model as string, p: answer.noul, choice: null };
+    const body = await postJev({ model: "jev-latest", state, questions: noulQuestions([question]) });
+    return { model: body.model as string, p: noulValue(answerOf(body, question.id), question.id), choice: null };
   };
 }
 
 export function makeNoulsAsk(questions: readonly NoulEvalQuestion[], combine: (ps: number[]) => number): StateAsk {
   return async (state) => {
-    const body = await postJev({
-      model: "jev-latest",
-      state,
-      questions: Object.fromEntries(
-        questions.map((question) => [
-          question.id,
-          {
-            type: "noul",
-            instructions: question.instructions,
-            criteria: { true: question.whenTrue, false: question.whenFalse },
-          },
-        ]),
-      ),
-    });
-    const ps = questions.map((question) => {
-      const answer = answerOf(body, question.id);
-      if (typeof answer.noul !== "number") throw new Error(`jev answer missing a noul: ${question.id}`);
-      return answer.noul;
-    });
+    const body = await postJev({ model: "jev-latest", state, questions: noulQuestions(questions) });
+    const ps = questions.map((question) => noulValue(answerOf(body, question.id), question.id));
     return { model: body.model as string, p: combine(ps), choice: null };
   };
 }
@@ -347,7 +434,7 @@ function stdev(values: readonly number[]): number {
   return Math.sqrt(mean(values.map((value) => (value - average) ** 2)));
 }
 
-async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length);
   let next = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
@@ -387,6 +474,8 @@ export interface EvalReport {
   splits: SplitScore[];
   callsUsed: number;
   callBudget: number;
+  neuronsSpent: number;
+  neuronCeiling: number;
 }
 
 async function scoreSplit<T extends EvalRow>(
@@ -466,6 +555,8 @@ export async function runEval<T extends EvalRow>(
     splits,
     callsUsed,
     callBudget,
+    neuronsSpent,
+    neuronCeiling: NEURON_CEILING,
   };
 }
 
@@ -482,7 +573,7 @@ export function formatReport(report: EvalReport): string {
       ? ""
       : `\ntrain maybes: ${train.maybeIds.join(", ") || "none"}\ntrain wrong: ${train.wrongIds.join(", ") || "none"}`;
   return [
-    `question ${report.questionId}\tmodel ${report.model}\trepeats ${report.repeats}\tjev calls ${report.callsUsed}/${report.callBudget}`,
+    `question ${report.questionId}\tmodel ${report.model}\trepeats ${report.repeats}\tjev calls ${report.callsUsed}/${report.callBudget}\test. neurons so far ${report.neuronsSpent}/${report.neuronCeiling > 0 ? report.neuronCeiling : "no ceiling"}`,
     rows,
     uncertain,
   ].join("\n");

@@ -1,10 +1,14 @@
-import { PLANS, TRIAL_TERMS } from "./billing/plans";
+import { PLANS, TRIAL_SUMMARY, type PlanId } from "./billing/plans";
+import { FAQ } from "./faq";
 import {
   SITE_URL,
   breadcrumbJsonLd,
+  faqPageJsonLd,
   jsonLdGraph,
   organizationJsonLd,
+  shareImageMeta,
   softwareApplicationJsonLd,
+  websiteJsonLd,
 } from "./structured-data";
 
 const PRICING_PATH = "/pricing";
@@ -17,6 +21,12 @@ export function startSource(url: URL): StartSource | null {
   return START_SOURCES.find((source) => source === value) ?? null;
 }
 
+export function planStartHref(plan: PlanId, source: StartSource | null): string {
+  const params = new URLSearchParams({ plan });
+  if (source !== null) params.set("utm_source", source);
+  return `/login?${params.toString()}`;
+}
+
 export function planNames(): string {
   return PLANS.map((plan) => plan.name).join(", ");
 }
@@ -27,7 +37,7 @@ export function planPriceList(): string {
 
 export function pricingMeta() {
   const title = "Pricing · Five to Nine";
-  const description = `Five to Nine pricing: ${planPriceList()}. ${TRIAL_TERMS}`;
+  const description = `Five to Nine pricing: ${planPriceList()}. ${TRIAL_SUMMARY}`;
   const url = `${SITE_URL}${PRICING_PATH}`;
   return [
     { title },
@@ -39,14 +49,17 @@ export function pricingMeta() {
     { property: "og:title", content: title },
     { property: "og:description", content: description },
     { property: "og:url", content: url },
+    ...shareImageMeta(),
     {
       "script:ld+json": jsonLdGraph([
         organizationJsonLd(),
+        websiteJsonLd(),
         breadcrumbJsonLd([
           { name: "Five to Nine", path: "/" },
           { name: "Pricing", path: PRICING_PATH },
         ]),
-        softwareApplicationJsonLd([]),
+        softwareApplicationJsonLd([], PRICING_PATH),
+        faqPageJsonLd(FAQ),
       ]),
     },
   ];

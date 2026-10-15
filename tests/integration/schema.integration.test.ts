@@ -1,22 +1,13 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
-/**
- * The migration, proven in real workerd against real D1 rather than in sqlite3.
- *
- * Pins counts and the two facts that took a correction to get right: the
- * better-auth tables are the CLI's, not hand-written, and `user` carries no
- * pre-rebuild columns.
- */
 describe("0001_rebuild.sql", () => {
   it("creates the whole schema and nothing else", async () => {
     const tables = await env.DB.prepare(
       "SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != 'd1_migrations' AND name NOT LIKE '_cf_%'",
     ).first<{ n: number }>();
-    // 36 = 35 on main plus sweep_run (0029, 0509#5755): every finished
-    // site sweep records its wall clock, pages and failures; 37 adds
-    // jev_failure (0043), one row per failed judge call.
-    expect(tables?.n).toBe(37);
+
+    expect(tables?.n).toBe(38);
   });
 
   it("carries better-auth's six generated tables", async () => {

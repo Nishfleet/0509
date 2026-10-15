@@ -12,11 +12,11 @@ function render(before: string, after: string, className = ""): string {
 }
 
 function marked(html: string, tag: "s" | "ins"): string {
-  return html.match(new RegExp(`<${tag}\\b[\\s\\S]*?</${tag}>`))?.[0] ?? "";
+  return new RegExp(`<${tag}\\b[\\s\\S]*?</${tag}>`).exec(html)?.[0] ?? "";
 }
 
 function srOnlyText(markup: string): string {
-  return markup.match(/<span class="sr-only">([\s\S]*?)<\/span>/)?.[1] ?? "";
+  return /<span class="sr-only">([\s\S]*?)<\/span>/.exec(markup)?.[1] ?? "";
 }
 
 describe("ExampleMark", () => {
@@ -40,12 +40,12 @@ describe("ExampleMark", () => {
 
   it("hides the arrow from assistive technology", () => {
     const html = render(BEFORE, AFTER);
-    const arrow = html.match(/<span\b[^>]*aria-hidden="true"[^>]*>([\s\S]*?)<\/span>/);
+    const arrow = /<span\b[^>]*aria-hidden="true"[^>]*>([\s\S]*?)<\/span>/.exec(html);
     expect(arrow?.[1]).toBe("→");
   });
 
   it("lands the className on the wrapping paragraph", () => {
-    const paragraph = render(BEFORE, AFTER, "mt-3 text-mark-md").match(/<p\b[^>]*>/)?.[0] ?? "";
+    const paragraph = /<p\b[^>]*>/.exec(render(BEFORE, AFTER, "mt-3 text-mark-md"))?.[0] ?? "";
     expect(paragraph).toContain("mt-3");
     expect(paragraph).toContain("text-mark-md");
   });

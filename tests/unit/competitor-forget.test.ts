@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createRoutesStub } from "react-router";
 import type * as ReactRouterModule from "react-router";
+import { createRoutesStub } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CompetitorForget } from "../../app/components/competitor-forget";
@@ -9,7 +9,7 @@ import { CompetitorForget } from "../../app/components/competitor-forget";
 const navigation = vi.hoisted(() => ({ state: "idle", intent: null as string | null }));
 
 vi.mock("react-router", async (importOriginal) => {
-  const actual = await importOriginal<ReactRouterModule>();
+  const actual = await importOriginal<typeof ReactRouterModule>();
   return {
     ...actual,
     useNavigation: () => {

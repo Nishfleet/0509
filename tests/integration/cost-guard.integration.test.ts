@@ -4,15 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fixture from "../fixtures/cf-graphql-usage.json";
 import { runCostGuard, runNightlyCostGuard } from "../../app/lib/observability/run-cost-guard.server";
 
-/**
- * cost_alert writer + runCostGuard (0509#4432).
- *
- * The guard reads one day's Cloudflare usage (fetch stubbed: the GraphQL
- * response body is supplied per test), counts ON entities and writes one
- * cost_alert row per line over threshold, UNIQUE (day, line) making a repeat
- * run idempotent. Real local D1 with every migration applied.
- */
-
 const usageBody = (rowsWritten: number, requests: number) => ({
   data: {
     viewer: {
@@ -42,7 +33,6 @@ const countAlerts = async (day: string) => {
 
 const NOW = "2026-09-22T12:00:00.000Z";
 
-/** `entity.workspace_id` has a FK to `workspace`, which has a FK to `user`. */
 async function seedWorkspace(userId: string, email: string): Promise<void> {
   await env.DB.prepare(
     'INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, 1, ?, ?)',
@@ -70,16 +60,6 @@ async function seedEntity(
     .run();
 }
 
-/**
- * Two workspaces, so the divisor has self rows in it that must NOT count
- * (0509#6086): `entity` CHECKs `role = 'competitor' OR state = 'on'`, so
- * every `self` row is always ON. Counting `state = 'on'` alone made
- * `workspaces_self` dilute the per-brand divisor.
- *
- * ws_user-brand-count: 2 ON competitors, 1 off, 1 dismissed, 1 self
- * ws_user-brand-other:  1 ON competitor, 1 self
- * → onBrands must be 3, not 5.
- */
 async function seedBrands(): Promise<void> {
   await seedWorkspace("user-brand-count", "brand-count@example.com");
   await seedEntity("e-self-1", "user-brand-count", "self", "mine.example", "on");
@@ -148,9 +128,7 @@ describe("runCostGuard (0509#4432)", () => {
 
   it("divides by ON competitors only: self rows are always ON and must not dilute the divisor", async () => {
     await seedBrands();
-    // 91 rows over 3 ON competitors is 30.33/brand, over the factor of three
-    // times the documented 10. Over 5 (2 self + 3 competitors) it would be
-    // 18.2/brand, which is inside the factor and would have alerted nobody.
+
     stubUsage(usageBody(91, 0));
     const result = await runCostGuard(env.DB, "t", "2026-09-24");
     expect(result.onBrands).toBe(3);
@@ -245,6 +223,7 @@ describe("runCostGuard (0509#4432)", () => {
       d1RowsWritten: 4677,
       r2ClassAOps: 13,
       browserMs: 0,
+      aiCalls: 0,
     });
   });
 });
@@ -275,7 +254,7 @@ describe("runNightlyCostGuard", () => {
     expect(await countAlerts("2026-09-28")).toBe(1);
   });
 
-  it("without a token evaluates the browser line only and never calls the analytics API", async () => {
+  it("without a token evaluates the local lines only and never calls the analytics API", async () => {
     await seedBrands();
     await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-09-28")).addMs(150_000);
     const fetchSpy = vi.fn(async () => new Response("{}", { status: 500 }));

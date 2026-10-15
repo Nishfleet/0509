@@ -96,8 +96,63 @@ describe("readSelfSiteFill", () => {
     expect(await readSelfSiteFill(workspaceId)).toBe("gave_up");
   });
 
+  const expected = /Invalid option: expected one of/;
+
+  it("throws when $.siteFill holds a string no writer produces", async () => {
+    await seed();
+    await env.DB.prepare(
+      `UPDATE entity SET identity_json = json_set(identity_json, '$.siteFill', 'bogus') WHERE id = ?1`,
+    )
+      .bind(selfId)
+      .run();
+
+    await expect(readSelfSiteFill(workspaceId)).rejects.toThrow(expected);
+  });
+
+  it("throws on any non-string value SQLite reports as text", async () => {
+    await seed();
+    for (const json of ['{"a":1}', "[1,2]", "1", "true"]) {
+      await env.DB.prepare(
+        `UPDATE entity SET identity_json = json_set(identity_json, '$.siteFill', json(?1)) WHERE id = ?2`,
+      )
+        .bind(json, selfId)
+        .run();
+      await expect(readSelfSiteFill(workspaceId)).rejects.toThrow(expected);
+    }
+  });
+
+  it("throws when $.siteFill is a JSON null, instead of reading it as no answer", async () => {
+    await seed();
+    expect(await readSelfSiteFill(workspaceId)).toBe(null);
+
+    await env.DB.prepare(
+      `UPDATE entity SET identity_json = json_set(identity_json, '$.siteFill', json('null')) WHERE id = ?1`,
+    )
+      .bind(selfId)
+      .run();
+
+    const stored = await env.DB.prepare(
+      `SELECT json_type(identity_json, '$.siteFill') AS site_fill_type FROM entity WHERE id = ?1`,
+    )
+      .bind(selfId)
+      .first<{ site_fill_type: string | null }>();
+    expect(stored?.site_fill_type).toBe("null");
+
+    await expect(readSelfSiteFill(workspaceId)).rejects.toThrow();
+  });
+
   it("returns null for a workspace with no self entity", async () => {
     expect(await readSelfSiteFill(`ws-empty-${crypto.randomUUID()}`)).toBe(null);
+  });
+
+  it("throws on a non-string $.siteFill row, instead of repairing it", async () => {
+    await seed();
+    await env.DB.prepare(
+      `UPDATE entity SET identity_json = json_set(identity_json, '$.siteFill', json('12345')) WHERE id = ?1`,
+    )
+      .bind(selfId)
+      .run();
+    await expect(readSelfSiteFill(workspaceId)).rejects.toThrow();
   });
 
   it("returns nothing for another workspace's entity, on every helper", async () => {

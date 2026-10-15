@@ -1,16 +1,18 @@
 import { lazy, Suspense } from "react";
 import type { ReactElement, ReactNode } from "react";
-import { Form } from "react-router";
+import { Form, useNavigation } from "react-router";
 
 import { BrandChipRow } from "./brand-chip";
 import { EmptyState, fewerThanTwoOnBrands } from "./empty-state";
 import { FirstFilePanel } from "./first-file-panel";
+import { FirstLook } from "./first-look";
 import { FirstWeekSteps } from "./first-week-steps";
 import { FourWeekLine } from "./four-week-line";
 import { HowRankedSheet } from "./how-ranked-sheet";
 import { PAGE } from "./page-heading";
 import { RankedRow } from "./ranked-row";
 import { ReadThisFirst } from "./read-this-first";
+import type { FirstLookRow } from "../lib/first-look";
 import type { HomeRow, HomeView, WeekEvidence } from "../lib/home-standing";
 import type { HowRanked } from "../lib/how-ranked";
 import { cn } from "../lib/utils";
@@ -44,16 +46,16 @@ export function HomePageFrame({
 export function HomeStanding({
   view,
   howRanked,
-  onSwitch,
   openId = null,
   evidence = null,
+  firstLook = [],
   showEyebrow = true,
 }: {
   view: HomeView;
   howRanked?: HowRanked | null;
-  onSwitch?: (entityId: string, checked: boolean) => void;
   openId?: string | null;
   evidence?: readonly WeekEvidence[] | null;
+  firstLook?: readonly FirstLookRow[];
   showEyebrow?: boolean;
 }): ReactElement {
   return (
@@ -61,7 +63,7 @@ export function HomeStanding({
       {showEyebrow ? <p className={EYEBROW}>{view.eyebrow}</p> : null}
       {greeting(view)}
       {chips(view)}
-      {body({ view, howRanked, onSwitch, openId, evidence })}
+      {body({ view, howRanked, openId, evidence, firstLook })}
     </section>
   );
 }
@@ -87,23 +89,36 @@ function greeting(view: HomeView): ReactElement {
   );
 }
 
+function AddFirstCompetitor(): ReactElement {
+  const navigation = useNavigation();
+  const adding = navigation.state === "submitting" && navigation.formAction === "/app/competitors";
+  return (
+    <Form method="post" action="/app/competitors" aria-busy={adding}>
+      <input type="hidden" name="intent" value="add" />
+      <fieldset disabled={adding} className="min-w-0 border-0 p-0">
+        <EmptyState {...fewerThanTwoOnBrands()} />
+      </fieldset>
+      <p role="status" className="mt-2 text-[0.88rem] text-ink-soft">
+        {adding ? "Adding. We're reading their site now." : ""}
+      </p>
+    </Form>
+  );
+}
+
 interface BodyInput {
   view: HomeView;
   howRanked: HowRanked | null | undefined;
-  onSwitch: ((entityId: string, checked: boolean) => void) | undefined;
   openId: string | null;
   evidence: readonly WeekEvidence[] | null;
+  firstLook: readonly FirstLookRow[];
 }
 
-function body({ view, howRanked, onSwitch, openId, evidence }: BodyInput): ReactElement {
+function body({ view, howRanked, openId, evidence, firstLook }: BodyInput): ReactElement {
   const { standing } = view;
   if (standing.kind === "add-competitor") {
     return (
       <div className="mt-6">
-        <Form method="post" action="/app/competitors">
-          <input type="hidden" name="intent" value="add" />
-          <EmptyState {...fewerThanTwoOnBrands()} />
-        </Form>
+        <AddFirstCompetitor />
       </div>
     );
   }
@@ -111,6 +126,7 @@ function body({ view, howRanked, onSwitch, openId, evidence }: BodyInput): React
     return (
       <div className="mt-6">
         <FirstFilePanel brands={standing.brands} firstSweepAt={standing.firstSweepAt} briefAt={standing.briefAt} />
+        <FirstLook rivals={firstLook} />
         <FirstWeekSteps />
       </div>
     );
@@ -123,19 +139,17 @@ function body({ view, howRanked, onSwitch, openId, evidence }: BodyInput): React
       </>
     );
   }
-  return rankedBody({ standing, howRanked, onSwitch, openId, evidence });
+  return rankedBody({ standing, howRanked, openId, evidence });
 }
 
 function rankedBody({
   standing,
   howRanked,
-  onSwitch,
   openId,
   evidence,
 }: {
   standing: Extract<HomeView["standing"], { kind: "ranked" }>;
   howRanked: HowRanked | null | undefined;
-  onSwitch: ((entityId: string, checked: boolean) => void) | undefined;
   openId: string | null;
   evidence: readonly WeekEvidence[] | null;
 }): ReactElement {
@@ -155,7 +169,7 @@ function rankedBody({
       <h2 className={cn(EYEBROW, "mt-8 border-t border-line pt-4")}>This week's ranking</h2>
       <ol className="mt-2">
         {standing.rows.map((row) => (
-          <RankedRow key={row.entityId} row={row} onSwitch={onSwitch} openId={openId} evidence={evidence} />
+          <RankedRow key={row.entityId} row={row} openId={openId} evidence={evidence} />
         ))}
       </ol>
       {rowSheet(standing.rows, openId, evidence)}

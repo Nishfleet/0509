@@ -1,10 +1,11 @@
 import type { AuthRequest, OAuthHelpers } from "@cloudflare/workers-oauth-provider";
-import { AuthorizationError } from "@cloudflare/workers-oauth-provider";
+import { AuthorizationError, CimdFetchError } from "@cloudflare/workers-oauth-provider";
 import { redirect } from "react-router";
 
 import { readWorkspaceIdForOwner } from "../data/workspace.server";
 import { claimedNameFor } from "./client-label";
 import { READ_SCOPE } from "./paths";
+import { allowedRedirectUri } from "./redirect-uri";
 
 export type ConsentView =
   { kind: "error"; message: string } | { kind: "ask"; host: string; claimedName: string | null };
@@ -16,6 +17,9 @@ function withParams(target: string, params: Record<string, string | undefined>):
 }
 
 function refusal(error: unknown): ConsentView | Response {
+  if (error instanceof CimdFetchError) {
+    return { kind: "error", message: "This app's details could not be loaded. Go back and try connecting again." };
+  }
   if (!(error instanceof AuthorizationError)) throw error;
   if (!error.redirectUri) return { kind: "error", message: error.description };
   return redirect(
@@ -35,6 +39,9 @@ async function parse(helpers: OAuthHelpers, request: Request): Promise<AuthReque
   } catch (error) {
     return refusal(error);
   }
+  if (!allowedRedirectUri(parsed.redirectUri)) {
+    return { kind: "error", message: "This connection link doesn't use a safe return address." };
+  }
   if (parsed.codeChallenge) return parsed;
   return redirect(
     withParams(parsed.redirectUri, {
@@ -46,6 +53,14 @@ async function parse(helpers: OAuthHelpers, request: Request): Promise<AuthReque
   );
 }
 
+async function clientName(helpers: OAuthHelpers, clientId: string): Promise<string | null | ConsentView | Response> {
+  try {
+    return claimedNameFor((await helpers.lookupClient(clientId))?.clientName);
+  } catch (error) {
+    return refusal(error);
+  }
+}
+
 function hostOf(uri: string): string {
   const url = new URL(uri);
   return url.host === "" ? `${url.protocol}//` : url.host;
@@ -54,12 +69,9 @@ function hostOf(uri: string): string {
 export async function readConsent(helpers: OAuthHelpers, request: Request): Promise<ConsentView | Response> {
   const parsed = await parse(helpers, request);
   if (!("clientId" in parsed)) return parsed;
-  const client = await helpers.lookupClient(parsed.clientId);
-  return {
-    kind: "ask",
-    host: hostOf(parsed.redirectUri),
-    claimedName: claimedNameFor(client?.clientName),
-  };
+  const claimedName = await clientName(helpers, parsed.clientId);
+  if (claimedName !== null && typeof claimedName !== "string") return claimedName;
+  return { kind: "ask", host: hostOf(parsed.redirectUri), claimedName };
 }
 
 export async function decideConsent(
@@ -80,10 +92,13 @@ export async function decideConsent(
       }),
     );
   }
+  const claimedName = await clientName(helpers, parsed.clientId);
+  if (claimedName !== null && typeof claimedName !== "string") return claimedName;
+  const host = hostOf(parsed.redirectUri);
   const { redirectTo } = await helpers.completeAuthorization({
     request: parsed,
     userId: input.userId,
-    metadata: { appName: hostOf(parsed.redirectUri) },
+    metadata: { appName: claimedName ?? host, host },
     scope: [READ_SCOPE],
     props: { userId: input.userId, clientId: parsed.clientId },
   });

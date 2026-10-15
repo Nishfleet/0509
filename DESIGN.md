@@ -1,3 +1,95 @@
+---
+name: Five to Nine (0509)
+colors:
+  bone: "#f4f1e8"
+  card: "#fffdf6"
+  ink: "#0e0d0a"
+  ink-soft: "#55524a"
+  ink-faint: "#8e8878"
+  line: "#ddd6c6"
+  green: "#16c47f"
+  green-ink: "#064d31"
+  green-wash: "#d9f6e8"
+  red: "#e0442c"
+  on-green: "#0e0d0a"
+typography:
+  display-1:
+    fontFamily: '"Bricolage Grotesque", "Bricolage Fallback", ui-sans-serif, sans-serif'
+    fontSize: "clamp(2.35rem, 4.6vw, 4.1rem)"
+    lineHeight: 1.04
+    letterSpacing: "-0.045em"
+  display-2:
+    fontFamily: '"Bricolage Grotesque", "Bricolage Fallback", ui-sans-serif, sans-serif'
+    fontSize: "clamp(1.8rem, 4vw, 3rem)"
+    lineHeight: 1.04
+    letterSpacing: "-0.04em"
+  display-3:
+    fontFamily: '"Bricolage Grotesque", "Bricolage Fallback", ui-sans-serif, sans-serif'
+    fontSize: "clamp(1.7rem, 3.6vw, 2.8rem)"
+    lineHeight: 1.06
+    letterSpacing: "-0.035em"
+  mark-lg:
+    fontFamily: '"Bricolage Grotesque", "Bricolage Fallback", ui-sans-serif, sans-serif'
+    fontSize: "clamp(1.4rem, 3.4vw, 2.5rem)"
+    lineHeight: 1.1
+    letterSpacing: "-0.02em"
+  mark-md:
+    fontFamily: '"Bricolage Grotesque", "Bricolage Fallback", ui-sans-serif, sans-serif'
+    fontSize: "clamp(1rem, 1.9vw, 1.45rem)"
+    lineHeight: 1.1
+    letterSpacing: "-0.02em"
+  mark-sm:
+    fontFamily: '"Bricolage Grotesque", "Bricolage Fallback", ui-sans-serif, sans-serif'
+    fontSize: "1rem"
+    lineHeight: 1.1
+    letterSpacing: "-0.02em"
+  title:
+    fontFamily: '"Bricolage Grotesque", "Bricolage Fallback", ui-sans-serif, sans-serif'
+    fontSize: "1.15rem"
+    lineHeight: 1.1
+    letterSpacing: "0.02em"
+  row-name:
+    fontFamily: '"Bricolage Grotesque", "Bricolage Fallback", ui-sans-serif, sans-serif'
+    fontSize: "1.02rem"
+    lineHeight: 1.2
+    letterSpacing: "-0.015em"
+  body:
+    fontFamily: '"Instrument Sans", "Instrument Fallback", ui-sans-serif, -apple-system, sans-serif'
+    fontSize: "1rem"
+    lineHeight: 1.55
+    letterSpacing: "0"
+  body-sm:
+    fontFamily: '"Instrument Sans", "Instrument Fallback", ui-sans-serif, -apple-system, sans-serif'
+    fontSize: "0.88rem"
+    lineHeight: 1.5
+    letterSpacing: "0"
+  eyebrow:
+    fontFamily: '"IBM Plex Mono", "Plex Mono Fallback", ui-monospace, "SF Mono", Menlo, monospace'
+    fontSize: "0.72rem"
+    lineHeight: 1.4
+    letterSpacing: "0.16em"
+  pill:
+    fontFamily: '"IBM Plex Mono", "Plex Mono Fallback", ui-monospace, "SF Mono", Menlo, monospace'
+    fontSize: "0.66rem"
+    lineHeight: 1.3
+    letterSpacing: "0.08em"
+  meta:
+    fontFamily: '"IBM Plex Mono", "Plex Mono Fallback", ui-monospace, "SF Mono", Menlo, monospace'
+    fontSize: "0.68rem"
+    lineHeight: 1.4
+    letterSpacing: "0.06em"
+rounded:
+  none: 0px
+  xs: 0px
+  sm: 0px
+  md: 0px
+  lg: 0px
+  xl: 0px
+  2xl: 0px
+  3xl: 0px
+  4xl: 0px
+---
+
 # Design brief — the 0509 rebuild
 
 Umbrella #3842. Issue #3878. Author: the Opus deputy (design lead). Checked by Fable.
@@ -96,8 +188,8 @@ again" that is disabled for 30 seconds with the count visible.
 
 ### 2.3 Onboarding
 
-Three screens, each one action, per `docs/REBUILD-ONBOARDING.md`. A mono step bar with
-the current step on the marker runs across the top of all three.
+Four screens, each one action. A mono step bar with
+the current step on the marker runs across the top of all four.
 
 1. **One input.** Placeholder "yourbrand.com or @yourbrand", button "Continue". Nothing else on screen.
 2. **Check your details.** The heading is "This is you. Fix anything we got wrong." The card
@@ -108,7 +200,10 @@ the current step on the marker runs across the top of all three.
 3. **Who you're up against.** Accepted competitors (D1 p ≥ 0.9) listed ON with a
    one-line reason each; maybes below on the bone ground, off, with Jev's reason and its
    probability. "Add one we missed" is the same one input, inline, at the bottom of the
-   list. One action: "Start watching — €10/mo".
+   list. One action: "Start watching — €10/month".
+4. **Start your trial.** The plan gate is the last onboarding step: the trial terms, then
+   each plan with its price on its button. Checkout starts the 7-day card-up-front trial,
+   and /app does not open until the workspace has a live subscription (#7061).
 
 First viewport of screen 2 at 390 shows the card header and the first four fields. First
 viewport of screen 3 shows the heading and three candidates.
@@ -223,13 +318,18 @@ No public card page (Nish, 2026-09-24). The owner shares a picture, made from Ho
 signed-in app, the way Spotify shares work: the brand's monogram and name, the rank line
 with the rank on its green marker, the week label in mono, and the `05|09` wordmark with
 `0509.io`, on the real cream ground. No competitor names, no captures, no marks, no counts
-table. Per `docs/REBUILD-STANDING-CARD.md`.
+table. Never mentions text and never own-site incidents (docs/REBUILD-GUARDRAILS.md).
+The landing's sample is this same image, made from a workspace we own for a well-known
+brand we track ourselves: real, never sample data. The unused `workspace.card_is_published`,
+`card_slug` and `card_is_indexable` columns stay in D1 and are dropped only with Nish's yes.
 
 **It is a square composition (`app/components/share-image.tsx`) drawn with the same tokens,
 fonts and built stylesheet as Home**, screenshotted by Cloudflare Browser Rendering at
 1080x1080 on demand when the owner taps **Share my rank**. No second renderer, no second
 stylesheet, no hand-maintained SVG twin. On a phone the share sheet opens with the image;
-elsewhere it downloads.
+elsewhere it downloads. When Browser Rendering is full (10-session cap, docs/REBUILD-COST.md)
+the route answers 503 with `retry-after: 60` and the button says to try again in a minute;
+it never queues behind the sweeps.
 
 ---
 
@@ -386,7 +486,7 @@ Declared under both `@media (prefers-color-scheme: dark)` scoped to
 
 1. **Primary** — filled ink, square, display 700, one per viewport. Always a verb.
    **The price is on the button** wherever the action starts or changes a subscription:
-   `Start watching  €10/mo`. List prices from the ledger, localized at checkout by
+   `Start watching  €10/month`. List prices from the ledger, localized at checkout by
    Dodo: **Scout €10/month, Starter €46/month, Agency €136/month.** There is no free
    plan and no "free" anywhere in the copy (#3896). **Trial copy is decided** (Nish,
    2026-09-22, #3912 item 2): every paid plan carries a 7-day trial through Dodo, card up
@@ -400,6 +500,8 @@ Declared under both `@media (prefers-color-scheme: dark)` scoped to
 
 A plan gate appears only when a paid thing is asked for, in place, with the price on the
 button and one line saying what it unlocks. Never as an interstitial, never as a banner.
+The one exception is onboarding's last step (§2.3), where the trial starts before /app
+opens (#7061).
 
 ---
 
@@ -576,9 +678,7 @@ that is a decision for Fable, recorded in the PR, not a silent divergence.
 
 These need Nish, and the brief deliberately stops rather than picking:
 
-1. **The name.** Three concepts rebranded the product to "Five to Nine"; the charter says
-   rebuild in place and says nothing about a rename. The concept pages use the `05|09`
-   wordmark, which works for either answer. Unresolved.
+1. **The name.** Decided: the product is Five to Nine, and `0509.io` is its domain (AGENTS.md).
 2. **A trial.** Decided 2026-09-22 (#3912 item 2): a 7-day trial on every paid plan through
    Dodo, card up front, charged on day 8 unless cancelled. No free tier. Landing and pricing
    copy say so (#4014, #4132).

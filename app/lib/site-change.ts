@@ -1,12 +1,14 @@
 import { z } from "zod";
 
 import { httpUrl } from "./http-url";
+import { BREAKAGE_CLEAR_AT } from "./jev/thresholds";
 import { shortUtc } from "./short-utc";
 import type { WhyFlagged } from "./why-flagged";
 
 const shotSide = z.object({
   snapshotId: z.string(),
   screenshotKey: z.string().nullable(),
+  textKey: z.string().optional(),
 });
 
 const siteChangePayload = z.object({
@@ -17,15 +19,29 @@ const siteChangePayload = z.object({
   wordsAdded: z.number().int().nonnegative(),
   wordsRemoved: z.number().int().nonnegative(),
   viaArchive: z.boolean().optional(),
+  status: z.number().int().optional(),
 });
 
 export type SiteChangePayload = z.output<typeof siteChangePayload>;
+
+export const CHANGE_HAS_STORED_EVIDENCE = `(json_extract(s.payload_json, '$.status') IS NOT NULL
+  AND json_extract(s.payload_json, '$.before.textKey') IS NOT NULL
+  AND json_extract(s.payload_json, '$.after.textKey') IS NOT NULL)`;
+
+export function changeJudgedSql(verdictQuestions: { noteworthy: string; breakage: string }): string {
+  return `EXISTS (
+    SELECT 1 FROM jev_verdict v
+    WHERE v.signal_id = s.id
+      AND (v.question_id = ${verdictQuestions.noteworthy}
+        OR (v.question_id = ${verdictQuestions.breakage} AND v.p > ${String(BREAKAGE_CLEAR_AT)}))
+  )`;
+}
 
 function parseJson(json: string, what: string): unknown {
   try {
     return JSON.parse(json);
   } catch (err) {
-    console.log(JSON.stringify({ event: "site_change.unreadable", what, error: String(err) }));
+    console.warn(JSON.stringify({ event: "site_change.unreadable", what, error: String(err) }));
     return null;
   }
 }
@@ -113,6 +129,8 @@ export function provenanceNote(source: { viaArchive: boolean; seenOn: string | n
   return parts.length === 0 ? null : parts.join(" · ");
 }
 
+export type ChangeFeedback = "useful" | "not_useful";
+
 export interface SiteChangeView {
   id: string;
   entityId: string;
@@ -126,9 +144,11 @@ export interface SiteChangeView {
   provenance: string | null;
   sentence: string;
   mark: ChangeMark | null;
+  detailsUnavailable?: boolean;
   before: ChangeShot;
   after: ChangeShot;
   whyFlagged: WhyFlagged | null;
+  feedback?: ChangeFeedback | null;
 }
 
 export interface PairedSiteChange extends SiteChangeView {

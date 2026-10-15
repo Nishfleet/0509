@@ -1,6 +1,8 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { clearRecipientCap } from "./clear-recipient-cap";
+
 import { readDeliveryAddress, saveDeliveryAddress } from "../../app/lib/delivery-address.server";
 import { confirmDeliveryAddress } from "../../app/lib/verify-delivery-address.server";
 import { ensureWorkspaceForSignIn, firstWorkspaceId } from "../../app/lib/workspace.server";
@@ -17,9 +19,9 @@ interface Recorder {
 const recorder = (): Recorder => ({ sent: [], fail: null });
 
 const bindingFor = (rec: Recorder): SendEmail => ({
-  send(message: EmailMessageBuilder) {
+  send(message: EmailMessage | EmailMessageBuilder) {
     if (rec.fail) throw rec.fail;
-    rec.sent.push(message);
+    rec.sent.push(message as EmailMessageBuilder);
     return Promise.resolve({ messageId: "test-message" });
   },
 });
@@ -78,6 +80,7 @@ const emailedToken = (rec: Recorder): string => {
 
 describe("change the workspace's email address (0509#4779)", () => {
   beforeEach(async () => {
+    await clearRecipientCap();
     USER_ID = `user-da-${crypto.randomUUID()}`;
     await env.DB.exec("DELETE FROM email_suppression");
     await env.DB.exec("DELETE FROM send_target");

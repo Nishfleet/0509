@@ -1,14 +1,15 @@
 import { env } from "cloudflare:workers";
 
 const INSERT_SWEEP_RUN = `INSERT INTO sweep_run
-  (id, kind, planned_at, finished_at, wall_ms, pages, failed)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+  (id, kind, planned_at, finished_at, wall_ms, pages, failed, reason)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
 ON CONFLICT (id) DO UPDATE SET
   planned_at = excluded.planned_at,
   finished_at = excluded.finished_at,
   wall_ms = excluded.wall_ms,
   pages = excluded.pages,
-  failed = excluded.failed`;
+  failed = excluded.failed,
+  reason = excluded.reason`;
 
 export interface SweepRun {
   id: string;
@@ -18,10 +19,11 @@ export interface SweepRun {
   wallMs: number;
   pages: number;
   failed: number;
+  reason: string | null;
 }
 
 export async function recordSweepRun(run: SweepRun): Promise<void> {
   await env.DB.prepare(INSERT_SWEEP_RUN)
-    .bind(run.id, run.kind, run.plannedAt, run.finishedAt, run.wallMs, run.pages, run.failed)
+    .bind(run.id, run.kind, run.plannedAt, run.finishedAt, run.wallMs, run.pages, run.failed, run.reason)
     .run();
 }

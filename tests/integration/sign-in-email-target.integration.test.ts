@@ -37,9 +37,9 @@ const brief: BriefPayload = {
 
 const sent: EmailMessageBuilder[] = [];
 const recording: SendEmail = {
-  send(message: EmailMessageBuilder) {
-    sent.push(message);
-    return Promise.resolve({} as EmailSendResult);
+  send(message: EmailMessage | EmailMessageBuilder) {
+    sent.push(message as EmailMessageBuilder);
+    return Promise.resolve({ messageId: "unused" });
   },
 };
 
@@ -80,6 +80,11 @@ describe("a new owner's sign-in is enough to receive the brief", () => {
 
   it("the send lane then delivers the weekly brief to that address", async () => {
     await signIn();
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', '2026-09-22T00:00:00Z')",
+    )
+      .bind(`plan-${WS}`, WS)
+      .run();
     await env.DB.prepare(
       `INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status, subject, payload_json, sent_at)
        VALUES ('digest-signin', ?, 'weekly', '2026-09-15', '2026-09-22', 'pending', 'You are #1 of 2 this week', ?, NULL)`,

@@ -38,4 +38,34 @@ describe("warming rival suggestions while the brand card shows", () => {
 
     expect(warmProposals).not.toHaveBeenCalled();
   });
+
+  it("warms a creator under the site from the card, as the Workflow will later ask", async () => {
+    budget.take.mockResolvedValue(true);
+    const creator = { kind: "handle", registrable: "mkbhd" } as unknown as Subject;
+    const creatorSite = Promise.resolve({
+      unfound: false,
+      name: "MKBHD",
+      description: "Tech reviews",
+      socials: [{ platform: "site", url: "https://mkbhd.com" }],
+    } as unknown as SiteFields);
+
+    await warmDiscovery("ws-1", creator, creatorSite);
+
+    expect(warmProposals).toHaveBeenCalledWith({ name: "MKBHD", domain: "mkbhd.com", description: "Tech reviews" });
+  });
+
+  it("warms a creator with no site under the handle", async () => {
+    budget.take.mockResolvedValue(true);
+    const creator = { kind: "handle", registrable: "mkbhd" } as unknown as Subject;
+    const bare = Promise.resolve({
+      unfound: false,
+      name: "MKBHD",
+      description: "",
+      socials: [],
+    } as unknown as SiteFields);
+
+    await warmDiscovery("ws-1", creator, bare);
+
+    expect(warmProposals).toHaveBeenCalledWith({ name: "MKBHD", domain: "mkbhd", description: null });
+  });
 });

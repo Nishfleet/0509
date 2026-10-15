@@ -4,7 +4,7 @@ import { readEntityDomain } from "../lib/data/entity.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { backfillLogo } from "../lib/identity/card.server";
 import { readEntityLogo } from "../lib/identity/logo-store.server";
-import { requireSession } from "../lib/require-session.server";
+import { sessionContext } from "../lib/require-session.server";
 
 function notFound(): Response {
   return new Response("That logo isn't here.", {
@@ -13,8 +13,8 @@ function notFound(): Response {
   });
 }
 
-export async function loader({ request, params }: Route.LoaderArgs) {
-  const session = await requireSession(request);
+export async function loader({ params, context }: Route.LoaderArgs) {
+  const session = context.get(sessionContext);
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   const kept = workspaceId === null ? null : await readEntityLogo(workspaceId, params.entityId);
   const domain = workspaceId === null || kept !== null ? null : await readEntityDomain(workspaceId, params.entityId);

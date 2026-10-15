@@ -23,8 +23,9 @@ function view(overrides: Partial<SiteChangeView> & Pick<SiteChangeView, "id">): 
     mark: { removed: "Plans from $10.", added: "Plans from $12." },
     before: { src: `/app/changes/${overrides.id}/before`, capturedAt: "2026-09-22 02:00 UTC" },
     after: { src: `/app/changes/${overrides.id}/after`, capturedAt: "2026-09-24 02:10 UTC" },
+    whyFlagged: null,
     ...overrides,
-  };
+  } as SiteChangeView;
 }
 
 const ROWS: SiteChangeView[] = [

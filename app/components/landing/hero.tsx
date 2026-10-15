@@ -100,8 +100,8 @@ export function Hero({ nouns }: { nouns: string }) {
           </p>
           <div className="max-w-[38rem]">
             <OneInput
-              label="your website address or social username (like @yourbrand)"
-              placeholder="your website address or social username (like @yourbrand)"
+              label="Your website address or social username"
+              placeholder="yoursite.com or @yourbrand"
               name="subject"
               action="/login"
               method="get"

@@ -1,16 +1,18 @@
 import { type ReactElement, useId } from "react";
 
 import { Switch } from "./ui/switch";
+import { APP_LOCALE } from "../lib/locale";
 
-export const DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
+export const DAY_MONTH = new Intl.DateTimeFormat(APP_LOCALE, {
   day: "numeric",
   month: "short",
   timeZone: "UTC",
 });
 
-export function dayMonthLabel(value: string): string | null {
+export function dayMonthLabel(value: string, timeZone = "UTC"): string | null {
   if (Number.isNaN(Date.parse(value))) return null;
-  return DAY_MONTH.format(new Date(value));
+  if (timeZone === "UTC") return DAY_MONTH.format(new Date(value));
+  return new Intl.DateTimeFormat(APP_LOCALE, { day: "numeric", month: "short", timeZone }).format(new Date(value));
 }
 
 export type BrandSwitchState = "on" | "off" | "you";
@@ -28,12 +30,6 @@ export function brandSwitchNote(state: BrandSwitchState, pausedOn: Date | null):
   if (pausedOn === null || Number.isNaN(pausedOn.getTime())) return "Paused, history kept";
   const day = DAY_MONTH.format(pausedOn);
   return `Paused ${day}, history kept`;
-}
-
-export function brandRowClass(state: BrandSwitchState): string {
-  if (state === "off") return "text-ink-faint";
-  if (state === "you") return "bg-green-wash";
-  return "";
 }
 
 export function BrandSwitchField({
@@ -83,7 +79,7 @@ export function BrandSwitch({
         aria-label={label ?? `${brandName} tracking`}
         aria-describedby={describedBy}
         onCheckedChange={(checked) => onCheckedChange?.(checked)}
-        className="h-[22px] w-[38px] shrink-0 rounded-none border-[1.5px] border-ink bg-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid data-checked:bg-green data-disabled:bg-green-wash data-disabled:opacity-100 [&_[data-slot=switch-thumb]]:size-4 [&_[data-slot=switch-thumb]]:translate-x-[1.5px] [&_[data-slot=switch-thumb]]:rounded-none [&_[data-slot=switch-thumb]]:bg-ink [&_[data-slot=switch-thumb]]:transition-transform [&_[data-slot=switch-thumb]]:duration-180 data-checked:[&_[data-slot=switch-thumb]]:translate-x-[17.5px]"
+        className="shrink-0 rounded-none border-[1.5px] border-ink bg-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid data-checked:bg-green data-disabled:bg-green-wash data-disabled:opacity-100 data-unchecked:bg-card data-[size=default]:h-[22px] data-[size=default]:w-[38px] dark:data-unchecked:bg-card [&_[data-slot=switch-thumb]]:size-4 [&_[data-slot=switch-thumb]]:translate-x-[1.5px] [&_[data-slot=switch-thumb]]:rounded-none [&_[data-slot=switch-thumb]]:bg-ink [&_[data-slot=switch-thumb]]:transition-transform [&_[data-slot=switch-thumb]]:duration-180 data-checked:[&_[data-slot=switch-thumb]]:translate-x-[17.5px]"
       />
       <span>{STATE_TEXT[state]}</span>
     </label>

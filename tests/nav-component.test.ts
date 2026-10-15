@@ -21,7 +21,7 @@ function links(html: string): string[] {
 }
 
 function attribute(link: string, name: "href" | "aria-current"): string {
-  return link.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1] ?? "";
+  return new RegExp(`\\s${name}="([^"]*)"`).exec(link)?.[1] ?? "";
 }
 
 function label(link: string): string {

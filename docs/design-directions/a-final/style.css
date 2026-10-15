@@ -326,7 +326,7 @@ mark, .mk {
 .slab .mark-line { font-size: clamp(1.4rem, 3.4vw, 2.5rem); }
 .slab .after { font-size: 0.88rem; line-height: 1.6; color: var(--ink-soft); margin-top: 16px; max-width: 64ch; }
 
-/* the public standing card (REBUILD-STANDING-CARD.md) shown as landing proof */
+/* the public standing card shown as landing proof */
 .stand-card {
   background: var(--card); border: 1.5px solid var(--ink);
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);

@@ -19,7 +19,7 @@ const gdeltBody = JSON.stringify({
 });
 
 function stubFetch(body: string, status = 200) {
-  const fetchMock = vi.fn(async () => new Response(body, { status }));
+  const fetchMock = vi.fn(async (_input: string | URL | Request) => new Response(body, { status }));
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }
@@ -33,7 +33,7 @@ describe("gdelt adapter", () => {
   it("returns real article links with publisher and time, dropping non-web links", async () => {
     const fetchMock = stubFetch(gdeltBody);
     const result = await adapterFor("gdelt.doc")?.({ query: "Gymshark" }, null);
-    expect(String(fetchMock.mock.calls[0]?.at(0))).toContain(encodeURIComponent('"Gymshark"'));
+    expect(fetchMock.mock.calls[0]?.[0]).toEqual(expect.stringContaining(encodeURIComponent('"Gymshark"')));
     expect(result?.items).toEqual([
       {
         dedupKey: "https://www.example-news.com/gymshark-opens-store",
@@ -90,16 +90,62 @@ describe("gdelt adapter", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("does not retry a blocking status", async () => {
-    const fetchMock = stubFetch("", 429);
-    await expect(adapterFor("gdelt.doc")?.({ query: "Gymshark" }, null)).rejects.toThrow(/429/);
+  it("does not retry a ban", async () => {
+    const fetchMock = stubFetch("", 403);
+    await expect(adapterFor("gdelt.doc")?.({ query: "Gymshark" }, null)).rejects.toThrow(/403/);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks again after a rate limit answer and reads the answer that follows", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("Please limit requests to one every 5 seconds", { status: 429 }))
+      .mockResolvedValueOnce(new Response("Please limit requests to one every 5 seconds", { status: 429 }))
+      .mockResolvedValue(new Response(gdeltBody));
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = adapterFor("gdelt.doc")?.({ query: "Gymshark" }, null);
+    await vi.advanceTimersByTimeAsync(16_000);
+    expect(await pending).toMatchObject({ canaryCount: 2 });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    vi.useRealTimers();
+  });
+
+  it("waits at least five seconds between asks, as GDELT's own answer requires", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async () => new Response("", { status: 429 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = adapterFor("gdelt.doc")?.({ query: "Gymshark" }, null);
+    const outcome = pending?.then(
+      () => null,
+      (error: unknown) => error,
+    );
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(String(await outcome)).toMatch(/429/);
+    vi.useRealTimers();
+  });
+
+  it("gives up with the rate limit error after five more asks", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async () => new Response("", { status: 429 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = adapterFor("gdelt.doc")?.({ query: "Gymshark" }, null);
+    const outcome = pending?.then(
+      () => null,
+      (error: unknown) => error,
+    );
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(String(await outcome)).toMatch(/429/);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    vi.useRealTimers();
   });
 
   it("fails loudly on a text answer or an error status", async () => {
     stubFetch("Please limit requests to one every 5 seconds");
     await expect(adapterFor("gdelt.doc")?.({ query: "Gymshark" }, null)).rejects.toThrow(/not JSON/);
-    stubFetch("", 429);
-    await expect(adapterFor("gdelt.doc")?.({ query: "Gymshark" }, null)).rejects.toThrow(/429/);
+    stubFetch("", 403);
+    await expect(adapterFor("gdelt.doc")?.({ query: "Gymshark" }, null)).rejects.toThrow(/403/);
   });
 });

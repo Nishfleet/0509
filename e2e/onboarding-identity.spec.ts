@@ -1,8 +1,11 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
 
 let createdEmail = "";
+
+test.use({ screenshot: "on" });
+
 test.afterEach(async ({ page }, testInfo) => {
   if (createdEmail === "") return;
   testInfo.setTimeout(testInfo.timeout + 60_000);
@@ -56,7 +59,7 @@ test.describe("signed in", () => {
     await page.goto("/onboarding");
     await expect(page).toHaveURL(/\/onboarding\/competitors$/);
     await page.getByRole("button", { name: "Start watching" }).click();
-    await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
+    await expect(page).toHaveURL(/\/onboarding\/plan$/, { timeout: 30_000 });
     expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
   });
 
@@ -72,9 +75,6 @@ test.describe("signed in", () => {
       await page.setViewportSize({ width, height });
       await signInWithMagicLink(page, email, token);
 
-      // Same listener the test above uses, and the same placement: the empty
-      // list is a claim about the card screen, so it starts once the signed-in
-      // session is established.
       const watched = watchConsole(page);
 
       await page.goto("/onboarding");
@@ -113,10 +113,6 @@ test.describe("signed in", () => {
       );
       expect(noHorizontalScroll).toBe(true);
       expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
-      await test.info().attach(`card-${width}`, {
-        body: await page.screenshot(),
-        contentType: "image/png",
-      });
     });
   }
 });

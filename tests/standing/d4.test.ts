@@ -172,7 +172,7 @@ describe("readThisFirstState", () => {
   it("carries the six item fields and drops anything else on the input item", () => {
     const state = readThisFirstState({
       ...base,
-      item: { ...item, id: "sig_1", entity_id: "ent_adidas", source_url: "https://example.com/a" },
+      item: { ...item, id: "sig_1", entity_id: "ent_adidas", source_url: "https://example.com/a" } as ReadThisFirstItem,
     }) as { item: unknown };
     expect(state.item).toEqual({
       kind: "change",

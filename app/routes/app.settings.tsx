@@ -8,7 +8,8 @@ import { SlackAlertsSetting } from "../components/slack-alerts-setting";
 import { PlanSection } from "../components/plan-settings";
 import { PageHeading } from "../components/page-heading";
 import { AccountSection, AgentsSection, BriefSection, SettingsJumps } from "../components/settings-sections";
-import { requireFreshSession, requireSession } from "../lib/require-session.server";
+import { sessionContext } from "../lib/require-session.server";
+import { readDeviceList } from "../lib/devices.server";
 import { readPasskeys } from "../lib/passkeys.server";
 import { readSettings, runSettingsIntent } from "../lib/settings.server";
 
@@ -16,14 +17,18 @@ export function meta() {
   return [{ title: "Settings · Five to Nine" }];
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const session = await requireSession(request);
-  const [settings, passkeys] = await Promise.all([readSettings(session.user), readPasskeys(request)]);
-  return { ...settings, passkeys };
+export async function loader({ request, context }: Route.LoaderArgs) {
+  const session = context.get(sessionContext);
+  const [settings, passkeys, devices] = await Promise.all([
+    readSettings(session.user),
+    readPasskeys(request),
+    readDeviceList(session.user.id, session.session.id, new Date()),
+  ]);
+  return { ...settings, passkeys, devices };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
-  const session = await requireFreshSession(request);
+  const session = context.get(sessionContext);
   return runSettingsIntent(session.user, request, context);
 }
 
@@ -38,23 +43,33 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         <SettingsJumps hasBrief={loaderData.schedule !== null} hasPlan={loaderData.plan !== null} />
         <div className="max-w-3xl min-w-0">
           {loaderData.schedule === null ? null : <BriefSection schedule={loaderData.schedule} />}
-          <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
-          <ChangeAlertsSetting on={loaderData.changeAlerts} />
-          <SlackAlertsSetting connected={loaderData.slackConnected} error={actionData?.slackError ?? null} />
+          <div id="settings-alerts">
+            <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
+            <ChangeAlertsSetting on={loaderData.changeAlerts} />
+            <SlackAlertsSetting
+              connected={loaderData.slackConnected}
+              revoked={loaderData.slackRevoked}
+              emailAlerts={loaderData.changeAlerts}
+              error={actionData?.slackError ?? null}
+            />
+          </div>
           <DismissedBrands dismissed={loaderData.dismissed} />
           <AgentsSection />
-          <PlanSection plan={loaderData.plan} />
+          <PlanSection plan={loaderData.plan} countLine={loaderData.countLine} returning={loaderData.returning} />
           <AccountSection
             email={loaderData.email}
             delivery={loaderData.delivery}
+            mail={loaderData.mail}
+            teammates={loaderData.teammates}
             passkeys={loaderData.passkeys}
+            devices={loaderData.devices}
             result={actionData}
           />
           <ExportData />
           <DeleteAccount email={loaderData.email} error={actionData?.deleteError ?? null} />
         </div>
       </div>
-      <Footer />
+      <Footer walled />
     </main>
   );
 }

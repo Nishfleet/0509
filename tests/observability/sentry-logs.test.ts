@@ -20,8 +20,6 @@ const USER_DATA_MESSAGE = "never carry customer data or prompt input";
 
 const envelopes: unknown[] = [];
 
-// A transport that records instead of sending, with the return shapes
-// `Transport` declares.
 function fakeTransport() {
   return {
     send: (envelope: unknown) => {
@@ -32,19 +30,15 @@ function fakeTransport() {
   };
 }
 
-// The client the Worker gets. The SDK's internal `initAndBind` is exactly these
-// three steps, and the package's own entry point ships no top-level `init` in
-// v10, so building the client from `sentryOptions` with only what a test must
-// know how to send overridden keeps every option under test — `enableLogs`,
-// `consoleLoggingIntegration()`, `beforeSendLog` — the ones the Worker runs:
-// the dsn, the recording transport, and a stack parser that drops frames
-// because no assertion here reads a stack frame.
 function initProductionOptions(): void {
+  const productionOptions = sentryOptions({} as unknown as Env);
+  const integrations = productionOptions.integrations;
   const client = new CloudflareClient({
-    ...sentryOptions({} as unknown as Env),
+    ...productionOptions,
     dsn: "https://examplePublicKey@o0.ingest.sentry.io/0",
     transport: fakeTransport,
     stackParser: () => [],
+    integrations: typeof integrations === "function" ? integrations([]) : (integrations ?? []),
   });
   setCurrentClient(client);
   client.init();
@@ -56,9 +50,6 @@ interface LogItem {
   attributes?: Record<string, { value?: unknown; type?: string }>;
 }
 
-// The SDK ships each log attribute as one `{ value, type }` pair. A container
-// arrives as a JSON string in that `value`, so the redaction is asserted on
-// the text Sentry will actually store.
 function attribute(item: LogItem | undefined, key: string): string {
   const entry = item?.attributes?.[key];
   return typeof entry?.value === "string" ? entry.value : JSON.stringify(entry?.value ?? null);
@@ -85,7 +76,6 @@ function logItems(): LogItem[] {
     .flatMap((item) => item.logs ?? []);
 }
 
-/** The trace every error event ships in its envelope header, which is what Sentry ingests. */
 function eventTraceIds(): string[] {
   return envelopes
     .map((envelope) => {
@@ -103,9 +93,6 @@ afterEach(() => {
   envelopes.length = 0;
 });
 
-// The suite binds a global Sentry client, so hand the process back the one it
-// had. Without this, a later test file in the same worker would log into this
-// recording transport instead of its own.
 afterAll(() => {
   if (clientBeforeTheSuite !== undefined) setCurrentClient(clientBeforeTheSuite);
 });
@@ -149,9 +136,6 @@ describe("Sentry Logs (#6604)", () => {
   });
 
   it("scrubs customer data out of the log it ships, under the #5786 gate", async () => {
-    // A value a name-based selector cannot see: `contact` and `back` are not
-    // on 0509#5786's banned list, so the gate lets the line through. The log
-    // hook is what keeps their contents out of Sentry.
     console.warn(
       JSON.stringify({
         event: "probe.redaction",
@@ -174,9 +158,6 @@ describe("Sentry Logs (#6604)", () => {
   });
 
   it("scrubs a customer value nested inside an attribute object and an array", async () => {
-    // The same probe through `Sentry.logger` instead of a console string, so
-    // the value travels as a log attribute rather than inside the message.
-    // Removing the recursive walk in `scrubLogValue` fails this test.
     const cycle: Record<string, unknown> = { note: "cycle.ada@customer.example" };
     cycle.self = cycle;
     logger.warn("probe.nested", {
@@ -192,13 +173,13 @@ describe("Sentry Logs (#6604)", () => {
     const [shipped] = logItems().filter((log) => log.body?.includes("probe.nested"));
     expect(shipped).toBeDefined();
     expect(attribute(shipped, "contact")).toBe('{"name":"[redacted]"}');
-    expect(attribute(shipped, "links")).toBe('["https://0509.io/u/[redacted]",{"inner":"[redacted]"}]');
-    // Past the depth cap the subtree is redacted whole, never copied through.
+    expect(attribute(shipped, "links")).toBe('["[redacted]",{"inner":"[redacted]"}]');
+
     expect(attribute(shipped, "deep")).toBe('{"a":{"b":{"c":{"d":{"e":{"f":"[redacted]"}}}}}}');
-    // A self-referencing attribute terminates and is redacted.
+
     expect(attribute(shipped, "cycle")).toContain("[redacted]");
     expect(attribute(shipped, "cycle")).not.toContain("ada@customer.example");
-    // A `Date` keeps its own shape instead of becoming `{}`.
+
     expect(attribute(shipped, "at")).toBe('"1970-01-01T00:00:00.000Z"');
   });
 
@@ -285,9 +266,6 @@ describe("Sentry Logs (#6604)", () => {
   });
 
   it("keeps the #5786 gate firing on the log path a console line takes", { timeout: 60_000 }, async () => {
-    // eslint applies the gate through the `app/**` block, so the probe has to
-    // live under app/. The directory name is unique per run, so an interrupted
-    // run cannot leave an artifact a later run reads.
     const scratch = await mkdtemp(path.join(REPO_ROOT, "app", "sentry-logs-probe-"));
     const probe = path.join(scratch, "probe.ts");
     await writeFile(probe, "declare const subject: { registrable: string };\nconsole.log(subject.registrable);\n");

@@ -59,6 +59,14 @@ you.
 - **One writer per table.** Writes live in `app/lib/data/<table>.server.ts`.
   A route that writes directly becomes the second writer the moment a second
   route needs the row.
+- **D1 rows are parsed, never asserted.** In `app/lib/data/`, a read parses its
+  rows with a zod schema in the writer file and the row type is `z.infer` of
+  it. `no-restricted-syntax` (D1_ROW_TYPE_ARGUMENT) rejects a type argument on
+  `.first`, `.all`, `.raw`, `.run` or `.batch`. `row-rules/d1-row-parse` requires
+  `.first`, `.all` or `.raw` to be parsed with a zod schema before the row leaves
+  the function. Use `env.DB` from `cloudflare:workers`. Take a `db: D1Database`
+  parameter only where a caller or test passes a different database. Source:
+  0509#7031, 0509#7299.
 - **Routes are thin.** 150 lines, enforced. Logic goes to `app/lib/`.
 - **Lean functions.** In `app/` and `workers/`: 50 lines, complexity 10, depth 3, 3 parameters. Code already over is listed in `eslint-suppressions.json` and cannot grow. Source: 0509#5783.
 - **Comments are banned in app code.** Not style — agents use a comment to
@@ -67,7 +75,7 @@ you.
   ESLint enforces is same-line comments and the workaround vocabulary
   (`todo`, `hack`, `for now`, `revisit`, …); the rest is the reviewer's job.
   Put the reason in the commit message, where it is read at the moment it
-  matters. Config files and tests are exempt.
+  matters. Config files are exempt.
 - **No user data in logs or Sentry.** `no-restricted-syntax` (NO_USER_DATA_IN_LOGS). Source: 0509#5776.
 - **Tests never skip, focus or sleep.** A vitest test is never focused or disabled
   (`vitest/no-focused-tests`, `vitest/no-disabled-tests`); an e2e spec is never
@@ -77,12 +85,19 @@ you.
   `playwright/no-networkidle`). Conditional `test.skip(condition, reason)` and
   `test.fail()` stay allowed. The full enforced set is the two test-lint blocks
   in `eslint.config.js`. Source: 0509#5785.
-- **Immutability.** New objects, never mutation.
+- **An e2e name must still exist.** A name a spec looks up by string literal (`getByRole` name, `getByLabel`, `getByText`, a `button:` field) is checked against app source and e2e seed data by `tests/e2e-names-exist.test.ts`; a name the app builds at run time is listed there with its template. Source: 0509#7430.
+- **Failures reach Sentry.** An event named `_failed`, `_discarded`, `_unavailable`, `_dead_lettered`, `_unreadable`, `_unreached` or `_skipped`, and any log inside a `catch`, must use `console.warn` or `console.error`: `workers/sentry.ts` forwards only those two levels. `no-restricted-syntax` (FAILURE_EVENT_LOGGED_QUIETLY, LOG_IN_CATCH_LOGGED_QUIETLY). Source: 0509#7501.
 - **Formatting is Prettier.** `npm run lint` runs `prettier --check .`; run `npm run format` before committing.
-- **Stock only, at the version named in `docs/REBUILD-STACK.md`.** `tests/stack-dependencies.test.ts` fails a dependency with no row there. A PR names the library or Cloudflare primitive it uses and what it rejected. Hand-rolled schedulers, diffing, crawlers, queues, retries, auth, billing, email, charts or design systems are rejected. A hand-written type annotation over a framework value is a hand-rolled assertion: use the generated types.
+- **Stock only, at the version named in `docs/dependencies.md`.** `tests/stack-dependencies.test.ts` fails a dependency with no row there. A PR names the library or Cloudflare primitive it uses and what it rejected. Hand-rolled schedulers, diffing, crawlers, queues, retries, auth, billing, email, charts or home-built design systems are rejected. The official upstream shadcn skill in `.agents/skills/shadcn` and the token frontmatter in `DESIGN.md` are allowed: they are stock, not home-built (Nish, 2026-10-09). A hand-written type annotation over a framework value is a hand-rolled assertion: use the generated types.
 - **Jev decides every typed decision** (`docs/REBUILD-JEV.md`, D1–D9). Code never guesses with regexes where a judgment is needed; Jev internals are never shown to customers.
 - **Cost** (`docs/REBUILD-COST.md`): writes batched, blobs in R2, counters in KV/DO, Browser Rendering capped at 10 concurrent sessions as a config value. Raising the cap needs Nish's yes with the cost in the PR, and is never left to degrade customers.
 - **Guardrails** (`docs/REBUILD-GUARDRAILS.md`): brands and creators only, never private individuals; disposable identities for collection; paid data providers only with Nish's yes.
+
+## Conventions a reviewer enforces
+
+Not in lint yet, so only a reviewer catches it: new objects,
+never mutation. 0509#5783 parked `eslint-plugin-functional` until the violation
+count is measured (0509#6999).
 
 ## Commands
 
@@ -94,16 +109,16 @@ npm run lint       # eslint . && knip && jscpd && prettier --check .
 npm run format     # prettier --write .
 npm test           # vitest run
 npm run e2e        # playwright test
-npm run eval       # vitest run --config vitest.evals.config.ts
+npm run eval       # vitest run --config vitest.evals.config.ts; live Workers AI, EVAL_MAX_NEURONS caps one run (evals.yml sets 2000; unset = no cap)
 npm run deploy     # wrangler deploy
 npm run verify:start # chrome-devtools start, headless, Playwright's Chromium, --no-sandbox
 npm run verify:stop  # chrome-devtools stop
 ```
 
 **`npm run typecheck` is the only real type gate.** `tsc --noEmit -p
-tsconfig.json` is a no-op here — `tsconfig.json` is `"files": []` plus two
-project references, so without `-b` it checks zero files and exits 0. Never
-cite it as type evidence.
+tsconfig.json` is a no-op here — `tsconfig.json` is `"files": []` plus three
+project references (node, cloudflare, test), so without `-b` it checks zero
+files and exits 0. Never cite it as type evidence.
 
 Signing in locally needs the `--var` overrides in `.agents/skills/verify/SKILL.md` (`BETTER_AUTH_URL` is pinned to production in `wrangler.jsonc`, so the emailed link would point at 0509.io).
 
@@ -128,7 +143,7 @@ workers out on 2026-09-23. Chromium is already installed on this host
 
 1. **Read the raw report.** `npx wrangler d1 execute 0509 --remote --command "select raw from support_report where id = '<id>'"`, where `<id>` is the report id in the issue body. This is a read; never run any other statement against `--remote`. Never paste any of the raw text into the issue, the PR, a commit message or a spec.
 2. **Map the report to rows of `.agents/skills/verify/feature-map.md`** by the paths in the issue body and the words in the raw text, following the procedure in `.agents/skills/verify/SKILL.md#reproduce-a-vague-user-report` — link it, do not restate it. If no row matches, say in the issue whether the map is missing a feature or the report is not about this product, and stop.
-3. **Drive production through the e2e suite.** `source ~/.config/cloudflare/access-0509-agents.env`, then `PLAYWRIGHT_TEST_BASE_URL=https://0509.io npm run e2e -- e2e/report-<id>.spec.ts`. The deliverable is one spec `e2e/report-<id>.spec.ts` whose test title contains the report id. If the report reproduces, the test asserts the correct behaviour and is marked `test.fail()`, so CI stays green until the fix lands. If it does not reproduce, the test has no `test.fail()` and the issue gets a no-repro comment listing each step tried with its UTC timestamp.
+3. **Drive the local lane through the e2e suite.** `PLAYWRIGHT_TEST_BASE_URL` unset, then `npm run e2e -- e2e/report-<id>.spec.ts` (simulated email, local D1, AI off). Do not run it against https://0509.io: each production sign-in sends a real email and churns production D1. If the report depends on production-only data, say so in the issue instead. The deliverable is one spec `e2e/report-<id>.spec.ts` whose test title contains the report id. If the report reproduces, the test asserts the correct behaviour and is marked `test.fail()`, so CI stays green until the fix lands. If it does not reproduce, the test has no `test.fail()` and the issue gets a no-repro comment listing each step tried with its UTC timestamp.
 4. **The PR that fixes the report** removes the `test.fail()` from that spec and keeps the spec.
 
 ## Architecture
@@ -139,8 +154,8 @@ they name were plans and many never existed. The real layout is below.
 
 - `app/routes.ts` — the route registry. A route not listed here cannot be
   reached. `.agents/skills/verify/feature-map.md` describes every one of them and is updated in
-  the same PR that changes one. Search, never read whole: grep it for the
-  route path (`grep -n "app/alerts" .agents/skills/verify/feature-map.md`) and
+  the same PR that changes one, one file per row under `feature-map/` so parallel PRs never edit the same lines. Search, never read whole: grep it for the
+  route path (`grep -rn "app/alerts" .agents/skills/verify/feature-map.md .agents/skills/verify/feature-map/`) and
   read only that row.
 - `app/routes/*` — route modules: loader, action, component.
 - `app/components/` — shared UI.
@@ -149,7 +164,6 @@ they name were plans and many never existed. The real layout is below.
   `competitor/`, `feeds/`, `hiring/`, `mentions/`, `standing/`, `agent/` for the
   API and MCP, `data/` for the table writers).
 - `app/lib/*.ts` — shared pure logic.
-- `app/lib/ads/` is retained code for a dropped feature (J10, #3974); do not extend it.
 - `app/lib/public-routes.ts` — the sitemap paths, robots.txt and llms.txt.
 - `workers/app.ts` — the Worker entry and the `scheduled` handler.
 - `workers/workflows/` — the Workflows (site, feed, hiring and mentions sweeps,
@@ -171,37 +185,46 @@ passkey, API keys) · D1 · Tailwind 4 · vitest 4.1.11 with
 `@cloudflare/vitest-plugin` · Playwright 1.63.0.
 
 Every dependency and every version is justified with a vendor doc URL in
-`docs/REBUILD-STACK.md`. **Adding a dependency that is not in that file is a
+`docs/dependencies.md`. **Adding a dependency that is not in that file is a
 rejection**, not a review comment. The row format is asserted by
 `tests/stack-dependencies.test.ts`.
 
 ## What gates a merge
 
-Four required checks on the `main-merge-queue` ruleset (id 21391031), **empty
-bypass list**:
+Three required checks on the `main-merge-queue` ruleset (id 21391031), **empty
+bypass list**: `ci-ok`, `base-fresh` and `ratchet / ratchet`. `ci-ok` is a job in `ci.yml` that needs the six gate jobs
 
 ```
-Gitleaks   codex-node-checks   semgrep   preview-assert
+codex-node-checks   vitest-shard   Gitleaks   semgrep   preview-assert   base-fresh
 ```
 
-`ci-ok` in `ci.yml` needs all four and fails if any failed or was cancelled,
-so the ruleset can require it alone (0509#7013). Until the ruleset swaps the
-four for `ci-ok`, the rule below still holds.
+and fails unless every one succeeded (0509#7013). It checks for `success`,
+never for a list of bad results: a job no runner picked up matched neither
+`failure` nor `cancelled` and passed it once (2026-10-05). `vitest-shard` is a
+four-way matrix (`vitest-shard (1)` … `(4)`, vitest's own `--shard`); its
+result in `needs` is `success` only when every shard succeeded (0509#7163).
+`base-fresh` fails a PR whose head lacks the newest `main` commit that touched a gate file, and `stale-base-retest.yml` reruns it on every open PR when one lands (`docs/incidents/2026-10-07-stale-base-queue-ejections.md`).
 
-Renaming one of these is not cosmetic. A required check that never reports fails
+`ratchet / ratchet` (2026-10-12) is the fleet's no-glue gate: a PR's net added lines under `.github/workflows`, `.github/actions`, `scripts` and `bin` must be 0 or fewer. `.github/workflows/ratchet.yml` only calls `Nishfleet/fleet-ops/.github/workflows/ratchet.yml@main` (a SHA pin would queue forever on the runner group), so the rule is fleet-ops' main copy and a PR cannot loosen it; a PR that edits the caller's `ratchet` job fails. Ruleset before: required `ci-ok`, `base-fresh`; after: those plus `ratchet / ratchet`; nothing else changed. Bypass list: `gh api repos/Nishfleet/0509/rulesets/21391031 --jq '.bypass_actors, .current_user_can_bypass'` prints `[]` and `"never"`; it was already empty (admin `always` existed 2026-09-21 17:07 to 17:08 IST, one direct push by nish3451 in that window, none since), and no workflow or script here merges through the REST API. Undo (Nish only): `gh api repos/Nishfleet/0509/rulesets/21391031 | jq '{name,target,enforcement,bypass_actors,conditions,rules:(.rules|map(if .type=="required_status_checks" then .parameters.required_status_checks|=map(select(.context!="ratchet / ratchet")) else . end))}' | gh api -X PUT repos/Nishfleet/0509/rulesets/21391031 --input -`.
+
+Renaming `ci-ok` is not cosmetic. A required check that never reports fails
 closed and nothing can merge again, including the PR that renamed it. A
-_skipped_ required check counts as passing, so none of these four carries a
-job-level `if:` that can skip it: they report on every event, and on an event
-with nothing to do they pass through one explicit step. The merge queue tests
+_skipped_ job counts as passing, so no gate job carries a job-level `if:` that
+can skip it: they report on every event, and on an event with nothing to do
+they pass through one explicit step. `tests/required-checks-never-skip.test.ts`
+pins the gate list, the `if:` rule and `ci-ok`'s `needs`. The merge queue tests
 the merge result, so a PR that would redden `main` never lands. There is no
 AI grader: CI is the gate, and a PR that touches `.github/`, `migrations/`,
 `app/lib/auth*` or `app/lib/data/` is labelled `needs-coordinator` and the
 coordinator reviews it before it merges.
 
-`lighthouse` runs in `deploy-production.yml` after the deploy job, and `e2e-production` (the sharded full
-suite in `e2e-scheduled.yml`, dispatched with `journey=suite`) runs on demand. To run one spec against production from any branch, dispatch
-`e2e-scheduled.yml` on that ref with the `spec` input (`e2e/<name>.spec.ts`).
-Neither is **required**, deliberately: they cannot run on a pull request, and a
+`lighthouse` runs in `deploy-production.yml` after the deploy job. Verify a fix on the local lane:
+`PLAYWRIGHT_TEST_BASE_URL` unset, so `npm run e2e -- e2e/<name>.spec.ts` starts `wrangler dev --local` with simulated
+email, a local D1 and `AI_SPEND` off. Do not dispatch `e2e-scheduled.yml` to verify a fix, and do not point a run at
+https://0509.io: each production sign-in sends a real email, the specs delete and recreate production D1 rows, and the
+live-AI journeys spend Workers AI neurons. Production e2e runs only on its schedule from `main`, and every job that
+reaches production declares the `production-e2e` environment, whose deployment branch policy allows `main` only.
+Neither `lighthouse` nor the production e2e is **required**, deliberately: they cannot run on a pull request, and a
 required check that cannot report blocks the queue forever. The suite is off the
 deploy path because every sign-in in it sends a real email against the Email
 Service daily quota (Nish 2026-09-28).
@@ -215,15 +238,28 @@ Service daily quota (Nish 2026-09-28).
   explicit authorization. Merging a reviewed green PR is ordinary work.
 - Migrations (Nish 2026-09-24: "this is allowed too, use your best
   judgement"): a merge to `main` applies them to production D1, so
-  `/migrations/` is code-owned and needs a code-owner review before merge.
-  The reviewer checks the SQL, re-checks `main` for the next free number, and
-  relies on D1 Time Travel to undo a drop or delete. Data left from the old
-  app may be dropped outright ("meh, delete, the old app had no users").
+  `/migrations/` is code-owned, and the gate is not a code-owner review.
+  `gh api repos/Nishfleet/0509/rulesets/21391031` reports
+  `require_code_owner_review:false` and `required_approving_review_count:0`,
+  and #5787 closed the ruleset change with the reason a lock here can never
+  work: every PR the fleet opens is authored by nish3451, and GitHub never
+  lets an author approve their own PR. What actually stands in front of a
+  migration: a worker PR that touches `migrations/` sits outside the fleet-ops
+  `agent.yml` arm allowlist, so it gets the `needs-coordinator` label and is
+  never auto-armed. An orchestrator PR (author nish3451) carries no second
+  review either way; the orchestrator-path decision is tracked at
+  fleet-ops#9231. Every merge, worker or orchestrator, rides the merge queue's
+  one required check, `ci-ok`, which needs every gate job to succeed. The
+  reviewer checks the SQL, re-checks `main` for the next free number, and
+  relies on D1 Time Travel to undo a drop or delete.
+  Data left from the old app may be dropped outright ("meh, delete, the old
+  app had no users").
 - Deploys go through CI. Every push to `main` deploys via
   `.github/workflows/deploy-production.yml`. Local `npm run deploy` is
   break-glass only.
 - Prod schema changes go through one door: a numbered file in `migrations/`.
   Never DDL via `wrangler d1 execute --remote`.
+- Number a new migration with the next free number on `origin/main` at push time, re-check it immediately before pushing, and never skip a number: if a sibling PR claimed that number, take the next free one and update every citation in the same commit.
 - Nothing from the pre-wipe code is reused: old files are read only for facts
   about an outside API, never copied and never checked out beside a build.
 - No `scripts/`, `ops/`, `.github/scripts`, hooks, wrappers or helper files.
@@ -242,11 +278,12 @@ Service daily quota (Nish 2026-09-28).
 `DESIGN.md` (the design system — read it before any UI work) ·
 `.agents/skills/verify/feature-map.md` (what exists and how to reach it; search, never read whole) ·
 `docs/REBUILD-TRUST.md` (verification, the ladder, the gardener) ·
-`docs/REBUILD-STACK.md` (every dependency, probed) ·
+`docs/dependencies.md` (every dependency, the allowlist) ·
 `docs/REBUILD-DONE.md` (the definition of complete) ·
-`docs/REBUILD-SCHEMA.md`, `REBUILD-DELIVERY.md`, `REBUILD-ONBOARDING.md`,
-`REBUILD-STANDING.md`, `REBUILD-STANDING-CARD.md`, `REBUILD-COST.md`,
-`REBUILD-JEV.md`, `REBUILD-CREATORS.md`, `REBUILD-MENTIONS.md`,
-`REBUILD-GUARDRAILS.md`, `REBUILD-KEEPLIST.md` (old-app findings, so its paths
-are the old tree) · `docs/USER-REPORTS.md` · `docs/ga-metrics.md` ·
+`docs/REBUILD-SCHEMA.md`, `REBUILD-DELIVERY.md`, `REBUILD-STANDING.md`,
+`REBUILD-COST.md`, `REBUILD-JEV.md`, `REBUILD-GUARDRAILS.md` ·
+`docs/USER-REPORTS.md` · `docs/ga-metrics.md` ·
 `docs/engines/` (design packets, history only) · `docs/design-directions/`.
+
+Deleted design history (0509#7018) stays in git:
+`git log --diff-filter=D --name-only -- docs/` lists it.

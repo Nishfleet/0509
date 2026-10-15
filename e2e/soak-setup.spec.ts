@@ -1,4 +1,5 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { type Locator, type Page } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
 import { requireInboxToken, signInWithMagicLink } from "./inbox";
@@ -70,7 +71,7 @@ test("soak workspace: one persistent production workspace tracks at least four b
   test.skip(testInfo.project.name === "phone-390", "one sign-in, one workspace: the desktop lane sets it up");
 
   await signInWithMagicLink(page, FIXTURE_ACCOUNTS.soak.email, requireInboxToken(), /\/(app|onboarding)/);
-  const alreadyOnboarded = /\/app$/.test(new URL(page.url()).pathname);
+  const alreadyOnboarded = new URL(page.url()).pathname.endsWith("/app");
   if (!alreadyOnboarded) await onboardSelf(page);
   await addCompetitors(page);
 

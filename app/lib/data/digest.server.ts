@@ -1,3 +1,6 @@
+import { env } from "cloudflare:workers";
+import { z } from "zod";
+
 const MARK_SENT = `UPDATE digest SET status = 'sent', sent_at = ? WHERE id = ?`;
 
 const CANCEL_PENDING = `UPDATE digest SET status = 'cancelled'
@@ -15,17 +18,19 @@ const LIST_BRIEFS =
 const READ_BRIEF =
   "SELECT id, period_start, period_end, status, sent_at, payload_json FROM digest WHERE workspace_id = ? AND id = ? AND kind = 'weekly'";
 
-export interface BriefRow {
-  id: string;
-  period_start: string;
-  period_end: string;
-  status: string;
-  sent_at: string | null;
-}
+const briefRow = z.object({
+  id: z.string(),
+  period_start: z.string(),
+  period_end: z.string(),
+  status: z.string(),
+  sent_at: z.string().nullable(),
+});
 
-export interface BriefWithPayload extends BriefRow {
-  payload_json: string;
-}
+const briefWithPayloadRow = briefRow.extend({ payload_json: z.string() });
+
+export type BriefRow = z.infer<typeof briefRow>;
+
+export type BriefWithPayload = z.infer<typeof briefWithPayloadRow>;
 
 export interface WeeklyDigest {
   id: string;
@@ -49,8 +54,7 @@ export async function markDigestFailed(db: D1Database, digestId: string): Promis
 }
 
 export async function listBriefs(db: D1Database, workspaceId: string): Promise<BriefRow[]> {
-  const { results } = await db.prepare(LIST_BRIEFS).bind(workspaceId).all<BriefRow>();
-  return results;
+  return z.array(briefRow).parse((await db.prepare(LIST_BRIEFS).bind(workspaceId).all()).results);
 }
 
 export async function readBrief(
@@ -58,7 +62,15 @@ export async function readBrief(
   workspaceId: string,
   digestId: string,
 ): Promise<BriefWithPayload | null> {
-  return db.prepare(READ_BRIEF).bind(workspaceId, digestId).first<BriefWithPayload>();
+  return briefWithPayloadRow.nullable().parse(await db.prepare(READ_BRIEF).bind(workspaceId, digestId).first());
+}
+
+export async function listWorkspaceBriefs(workspaceId: string): Promise<BriefRow[]> {
+  return listBriefs(env.DB, workspaceId);
+}
+
+export async function readWorkspaceBrief(workspaceId: string, digestId: string): Promise<BriefWithPayload | null> {
+  return readBrief(env.DB, workspaceId, digestId);
 }
 
 export async function insertWeeklyDigest(db: D1Database, digest: WeeklyDigest): Promise<void> {

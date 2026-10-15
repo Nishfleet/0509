@@ -1,25 +1,10 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
 
-// #4462: a bare `catch { return null }` swallows the error — a thrown fetch, a
-// bug, and a genuine "not found" all reach the caller as the same null, so the
-// failure leaves no trace. The review of #4457 (REBUILD-TRUST.md C1 Q1) wanted
-// the lint gate, not a filed issue, because the shape only shows up when
-// someone writes it. The gate is a CATCH_RETURNS_NULL selector in
-// BANNED_SYNTAX plus a by-name grandfather list in eslint.config.js. These
-// probes boot the real eslint.config.js (same rig as eslint-writer-rule.test.ts)
-// and hold the pass/fail pair: a fresh bare catch fails, the grandfathered
-// clauses stay clean, and the near-miss shapes stay unblocked.
-
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
 const CATCH_NULL_MESSAGE = "swallows the error";
 
-const PROBE = "app/lib/probe-catch-null-tmp.ts";
+const PROBE = "app/lib/cadence.ts";
 
 const BARE_CATCH_NULL = `export function probe(): string | null {
   try {
@@ -68,29 +53,8 @@ const nullViaVariable = `export function probe(): string | null {
 }
 `;
 
-async function lintProbe(rel: string, code: string): Promise<{ ignored: boolean; messages: string[] }> {
-  const file = path.join(REPO_ROOT, rel);
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, code);
-  try {
-    const eslint = new ESLint({ cwd: REPO_ROOT });
-    if (await eslint.isPathIgnored(file)) {
-      return { ignored: true, messages: [] };
-    }
-    const results = await eslint.lintFiles([file]);
-    return {
-      ignored: false,
-      messages: results.flatMap((result) => result.messages.map((m) => m.message)),
-    };
-  } finally {
-    await rm(file, { force: true });
-  }
-}
-
-async function lintExisting(rel: string): Promise<string[]> {
-  const eslint = new ESLint({ cwd: REPO_ROOT });
-  const results = await eslint.lintFiles([path.join(REPO_ROOT, rel)]);
-  return results.flatMap((result) => result.messages.map((m) => m.message));
+function lintProbe(rel: string, code: string) {
+  return lintTextAt(rel, code);
 }
 
 describe("eslint no-silent-catch rule (#4462)", () => {

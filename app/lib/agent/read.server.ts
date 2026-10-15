@@ -9,6 +9,7 @@ import { readMentionFeed } from "../data/mention.server";
 import { PENDING_LINE, POSSIBLY_LINE, showInFeed, UNREVIEWED_LINE, type MentionRowModel } from "../mention-feed";
 import type { SiteChangeView } from "../site-change";
 import { daysBefore, readSiteChangeViews } from "../site-changes.server";
+import { hideOffBrands } from "./hide-off-brands";
 import type { AlertsResult, BriefResult, CompetitorResult, CompetitorsResult, StandingResult } from "./schemas";
 
 const SELECT_LATEST_BRIEF = `SELECT payload_json FROM digest
@@ -21,14 +22,6 @@ const SELECT_OFF_ENTITIES = `SELECT id FROM entity WHERE workspace_id = ? AND st
 async function offEntityIds(workspaceId: string): Promise<Set<string>> {
   const off = await env.DB.prepare(SELECT_OFF_ENTITIES).bind(workspaceId).all<{ id: string }>();
   return new Set(off.results.map((row) => row.id));
-}
-
-function hideOffBrands(payload: BriefPayload, hidden: Set<string>): BriefPayload {
-  return {
-    ...payload,
-    brands: payload.brands.filter((line) => !hidden.has(line.entity_id)),
-    read_this_first: payload.read_this_first.filter((mark) => !hidden.has(mark.entity_id)),
-  };
 }
 
 function briefReadFirst(payload: BriefPayload): NonNullable<BriefResult["brief"]>["readThisFirst"] {
@@ -136,13 +129,13 @@ export async function readAgentCompetitor(
     readCompetitorPage(workspaceId, competitorId, now),
     offEntityIds(workspaceId),
   ]);
-  if (page === null || hidden.has(competitorId)) return { competitor: null };
+  if (page === null || hidden.has(competitorId) || page.competitor.state !== "on") return { competitor: null };
   return {
     competitor: {
       id: page.competitor.id,
       name: page.competitor.name,
       domain: page.competitor.domain,
-      state: page.competitor.state,
+      state: "on",
       stateChangedAt: page.competitor.stateChangedAt,
       pagesWatched: page.watch.pages,
       lastCheckedAt: page.watch.lastPolledAt,

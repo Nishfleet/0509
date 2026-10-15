@@ -21,6 +21,9 @@ async function seedWorkspace(identityJson: string): Promise<string> {
       "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Training with Mia', ?2, 'UTC', 1, 8, ?3)",
     ).bind(workspaceId, userId, NOW),
     env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?1, ?2, 'scout', 'trialing', ?3)",
+    ).bind(`${workspaceId}-plan`, workspaceId, NOW),
+    env.DB.prepare(
       "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, created_at) VALUES (?1, ?2, 'self', 'mia.example', 'Training with Mia', ?3, ?4)",
     ).bind(`${workspaceId}-self`, workspaceId, identityJson, NOW),
   ]);
@@ -62,9 +65,9 @@ describe("judgeCandidates question choice", () => {
 
     expect(run).toHaveBeenCalledTimes(1);
     const questions = run.mock.calls[0]?.[1].questions;
-    expect(questions?.["is_creator_rival"]).toBeDefined();
-    expect(questions?.["is_competitor"]).toBeUndefined();
-    expect(questions?.["same_product_category"]).toBeUndefined();
+    expect(questions?.is_creator_rival).toBeDefined();
+    expect(questions?.is_competitor).toBeUndefined();
+    expect(questions?.same_product_category).toBeUndefined();
     expect(results[0]?.verdict).toMatchObject({ questionId: "is_creator_rival", p: 0.9, cached: false });
   });
 
@@ -80,9 +83,9 @@ describe("judgeCandidates question choice", () => {
 
     expect(run).toHaveBeenCalledTimes(1);
     const questions = run.mock.calls[0]?.[1].questions;
-    expect(questions?.["is_competitor"]).toBeDefined();
-    expect(questions?.["same_product_category"]).toBeDefined();
-    expect(questions?.["is_creator_rival"]).toBeUndefined();
+    expect(questions?.is_competitor).toBeDefined();
+    expect(questions?.same_product_category).toBeDefined();
+    expect(questions?.is_creator_rival).toBeUndefined();
     expect(results[0]?.verdict).toMatchObject({ questionId: "is_competitor", p: 0.98, cached: false });
   });
 });

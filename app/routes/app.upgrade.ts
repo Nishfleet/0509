@@ -4,11 +4,15 @@ import { redirect } from "react-router";
 import { z } from "zod";
 
 import { createCheckoutUrl } from "../lib/billing/checkout.server";
+import { isSubscriptionLive } from "../lib/billing/subscription-state";
+import { returningLookup } from "../lib/billing/returning.server";
 import { isBillingInterval, isPlanId } from "../lib/billing/plans";
-import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { requireFreshSession } from "../lib/require-session.server";
+import { readPlanSubscription } from "../lib/data/plan.server";
+import { onboardedContext } from "../lib/require-onboarded.server";
 
 const UNAVAILABLE = { message: "Upgrading isn't available right now. Try again in a few minutes." };
+
+const HAS_PLAN = { message: "This workspace already has a plan. Change it from Settings." };
 
 const upgradeForm = z.object({
   plan: z.string(),
@@ -19,13 +23,16 @@ export function loader() {
   return redirect("/app/settings");
 }
 
-export async function action({ request }: Route.ActionArgs) {
-  const session = await requireFreshSession(request);
+export async function action({ request, context }: Route.ActionArgs) {
+  const { session, workspaceId } = context.get(onboardedContext);
   const parsed = upgradeForm.safeParse(Object.fromEntries(await request.formData()));
   const planId = parsed.success ? parsed.data.plan : null;
   const interval = parsed.success ? parsed.data.interval : "monthly";
-  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   if (workspaceId === null || !isPlanId(planId) || !isBillingInterval(interval)) return UNAVAILABLE;
-  const url = await createCheckoutUrl({ planId, interval, workspaceId, email: session.user.email });
+  const current = await readPlanSubscription(workspaceId);
+  if (current !== null && isSubscriptionLive(current, new Date())) return HAS_PLAN;
+  const returning = await returningLookup(current);
+  if (returning === null) return UNAVAILABLE;
+  const url = await createCheckoutUrl({ planId, interval, workspaceId, email: session.user.email, returning });
   return url === null ? UNAVAILABLE : redirect(url);
 }

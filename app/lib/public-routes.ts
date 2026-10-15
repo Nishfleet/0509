@@ -1,9 +1,4 @@
-import {
-  sourcePillStatus,
-  type SourcePillStatus,
-  type SourceRow,
-  type SourceSnapshot,
-} from "../components/source-pill";
+import { sourcePillStatus, type SourcePillStatus, type SourceRow, type SourceSnapshot } from "./source-pill-status";
 import { registeredToolDescriptors } from "./agent/mcp-tools";
 import { TRIAL_DAYS, TRIAL_TERMS } from "./billing/plans";
 import { LIVE_COVERAGE, PLAN_NOTE } from "./coverage";
@@ -12,7 +7,7 @@ import { LEGAL_UPDATED } from "./legal/document";
 import { planNames, planPriceList } from "./pricing-page";
 import { plainSourceReason } from "./source-status-words";
 import { SITE_URL } from "./structured-data";
-import { watchedClaims } from "./watched-claims";
+import { UNANSWERED_NOUNS, watchedClaims } from "./watched-claims";
 
 export interface LlmsTxtSource {
   source: SourceRow;
@@ -25,7 +20,18 @@ export const SITEMAP_LASTMOD: Readonly<Record<string, string>> = {
   "/privacy": LEGAL_UPDATED,
   "/terms": LEGAL_UPDATED,
 };
-export const DISALLOWED_PREFIXES = ["/app", "/api", "/u", "/v", "/login", "/onboarding", "/oauth", "/design"] as const;
+export const DISALLOWED_PREFIXES = [
+  "/app",
+  "/api",
+  "/u/",
+  "/v/",
+  "/login",
+  "/onboarding",
+  "/oauth",
+  "/design",
+  "/status",
+  "/security",
+] as const;
 export const AGENT_PATHS = ["/mcp", "/api/v1/openapi.json", "/.well-known/http-message-signatures-directory"] as const;
 export const MCP_URL = `${SITE_URL}/mcp`;
 
@@ -76,13 +82,18 @@ export function robotsTxt(origin: string): string {
   );
 }
 
+function watchedPhrase(sources: readonly LlmsTxtSource[], now: number): string {
+  const { nouns } = watchedClaims(sources, now);
+  return nouns === UNANSWERED_NOUNS ? `their ${nouns}` : `their ${nouns} from public sources`;
+}
+
 export function llmsTxt(origin: string, sources: readonly LlmsTxtSource[], now: number = Date.now()): string {
   const prices = planPriceList();
   return (
     [
       "# Five to Nine",
       "",
-      `> Five to Nine (0509.io) is a competitor tracker for founders, brands and creators. It finds your competitors for you, watches their ${watchedClaims(sources, now).nouns} from public sources, ranks you against them every week, and emails one brief every Monday with a screenshot behind every change.`,
+      `> Five to Nine (0509.io) is a competitor tracker for founders, brands and creators. It finds your competitors for you, watches ${watchedPhrase(sources, now)}, ranks you against them every week, and emails one brief every Monday with a screenshot behind every change.`,
       "",
       `- Plans: ${prices}. ${TRIAL_TERMS}`,
       `- Agents: every plan includes a read-only API and an MCP server at ${MCP_URL}.`,

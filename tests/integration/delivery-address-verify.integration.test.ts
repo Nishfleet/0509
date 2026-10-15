@@ -1,6 +1,8 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { clearRecipientCap } from "./clear-recipient-cap";
+
 import { readDeliveryAddress, saveDeliveryAddress } from "../../app/lib/delivery-address.server";
 import { confirmDeliveryAddress } from "../../app/lib/verify-delivery-address.server";
 import { ensureWorkspaceForSignIn, firstWorkspaceId } from "../../app/lib/workspace.server";
@@ -18,9 +20,9 @@ interface Recorder {
 const recorder = (): Recorder => ({ sent: [], fail: null });
 
 const bindingFor = (rec: Recorder): SendEmail => ({
-  send(message: EmailMessageBuilder) {
+  send(message: EmailMessage | EmailMessageBuilder) {
     if (rec.fail) throw rec.fail;
-    rec.sent.push(message);
+    rec.sent.push(message as EmailMessageBuilder);
     return Promise.resolve({ messageId: "test-message" });
   },
 });
@@ -71,6 +73,7 @@ const save = (rec: Recorder, address: string) =>
 
 describe("confirm a changed delivery address (0509#5811)", () => {
   beforeEach(async () => {
+    await clearRecipientCap();
     USER_ID = `user-dav-${crypto.randomUUID()}`;
     await env.DB.exec("DELETE FROM email_suppression");
     await env.DB.exec("DELETE FROM send_target");
@@ -193,7 +196,7 @@ describe("confirm a changed delivery address (0509#5811)", () => {
     expect(result.error).not.toBeNull();
     expect(result.suppressed).toBe(false);
     const row = await onlyTarget(workspaceId);
-    // The token write deliberately precedes the send: a retry after a failed send writes a fresh token.
+
     expect(row).toMatchObject({ target_value: NEW_ADDRESS, is_verified: 0 });
     expect(row.verify_token).toMatch(/^[0-9a-f]{64}$/);
     expect(rec.sent).toHaveLength(0);
@@ -221,14 +224,14 @@ describe("confirm a changed delivery address (0509#5811)", () => {
     await save(rec, NEW_ADDRESS);
     const token = emailedToken(rec);
 
-    await confirmDeliveryAddress(token);
+    expect(await confirmDeliveryAddress(token)).toBe(true);
     expect(await onlyTarget(workspaceId)).toMatchObject({
       target_value: NEW_ADDRESS,
       is_verified: 1,
       verify_token: null,
     });
 
-    await confirmDeliveryAddress(token);
+    expect(await confirmDeliveryAddress(token)).toBe(false);
     expect(await onlyTarget(workspaceId)).toMatchObject({
       target_value: NEW_ADDRESS,
       is_verified: 1,
@@ -246,7 +249,7 @@ describe("confirm a changed delivery address (0509#5811)", () => {
       .run();
     const before = await onlyTarget(workspaceId);
 
-    await confirmDeliveryAddress(token);
+    expect(await confirmDeliveryAddress(token)).toBe(false);
 
     expect(await onlyTarget(workspaceId)).toEqual(before);
   });

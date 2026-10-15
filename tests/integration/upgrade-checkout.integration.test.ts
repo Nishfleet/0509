@@ -1,13 +1,10 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { RouterContextProvider } from "react-router";
 
 import { checkoutProof } from "../../app/lib/billing/checkout-proof.server";
 import checkoutSession from "../fixtures/dodo/checkout-session-created.json";
-
-vi.mock("../../app/lib/require-session.server", () => ({
-  requireFreshSession: async () => ({ user: { id: "user-upgrade", email: "upgrade@example.com" } }),
-}));
-
+import { onboardedContext } from "../../app/lib/require-onboarded.server";
 import { action, loader } from "../../app/routes/app.upgrade";
 
 async function seedOwner(): Promise<void> {
@@ -24,7 +21,12 @@ async function seedOwner(): Promise<void> {
 function upgradeRequest(plan: string): Parameters<typeof action>[0] {
   const body = new URLSearchParams({ plan });
   const request = new Request("https://0509.io/app/upgrade", { method: "POST", body });
-  return { request, params: {}, context: {} } as unknown as Parameters<typeof action>[0];
+  const context = new RouterContextProvider();
+  context.set(onboardedContext, {
+    session: { user: { id: "user-upgrade", email: "upgrade@example.com" } },
+    workspaceId: "ws-upgrade",
+  } as never);
+  return { request, params: {}, context } as unknown as Parameters<typeof action>[0];
 }
 
 afterEach(() => {
@@ -89,5 +91,87 @@ describe("upgrade checkout when Dodo refuses (J13)", () => {
 
     expect(result).toEqual({ message: "Upgrading isn't available right now. Try again in a few minutes." });
     expect(JSON.stringify(logged.mock.calls)).not.toContain("upgrade@example.com");
+  });
+});
+
+describe("upgrade checkout when the workspace already has a plan (#7228)", () => {
+  async function seedPlan(status: string, periodEnd: string | null): Promise<void> {
+    await seedOwner();
+    await env.DB.prepare("DELETE FROM plan WHERE workspace_id = 'ws-upgrade'").run();
+    await env.DB.prepare(
+      `INSERT INTO plan (id, workspace_id, tier, status, current_period_end, updated_at)
+       VALUES ('plan-upgrade', 'ws-upgrade', 'scout', ?1, ?2, '2026-09-29T00:00:00Z')`,
+    )
+      .bind(status, periodEnd)
+      .run();
+  }
+
+  it("starts no second checkout for an active plan", async () => {
+    await seedPlan("active", "2099-01-01T00:00:00Z");
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const result = await action(upgradeRequest("starter"));
+
+    expect(result).toEqual({ message: "This workspace already has a plan. Change it from Settings." });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("still checks out for a cancelled plan past its period end", async () => {
+    await seedPlan("cancelled", "2020-01-01T00:00:00Z");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json(checkoutSession, { status: 200 }));
+
+    const result = await action(upgradeRequest("starter"));
+
+    expect((result as Response).headers.get("Location")).toBe(checkoutSession.checkout_url);
+  });
+
+  async function checkoutBodyAfterLookup(
+    status: string,
+    productOnFile: string | null | 404,
+  ): Promise<Record<string, unknown> | undefined> {
+    await seedPlan(status, "2020-01-01T00:00:00Z");
+    await env.DB.prepare(
+      "UPDATE plan SET provider_subscription_id = 'sub_before' WHERE workspace_id = 'ws-upgrade'",
+    ).run();
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation((input) =>
+        Promise.resolve(
+          String(input).includes("/subscriptions/")
+            ? productOnFile === null
+              ? new Response("boom", { status: 500 })
+              : productOnFile === 404
+                ? new Response("gone", { status: 404 })
+                : Response.json({ product_id: productOnFile })
+            : Response.json(checkoutSession, { status: 200 }),
+        ),
+      );
+    await action(upgradeRequest("starter"));
+    const call = fetchSpy.mock.calls.find(([url]) => String(url).endsWith("/checkouts"));
+    return call === undefined ? undefined : (JSON.parse(String(call[1]?.body)) as Record<string, unknown>);
+  }
+
+  it("gives a returning customer no second free trial", async () => {
+    expect(await checkoutBodyAfterLookup("cancelled", "pdt_test_starter")).not.toHaveProperty("subscription_data");
+  });
+
+  it("still gives the trial to a workspace whose only subscription was the free Tester one", async () => {
+    expect(await checkoutBodyAfterLookup("cancelled", env.DODO_PRODUCT_TESTER)).toMatchObject({
+      subscription_data: { trial_period_days: 7 },
+    });
+  });
+
+  it("still gives the trial when the first checkout failed before it began", async () => {
+    expect(await checkoutBodyAfterLookup("failed", "pdt_test_starter")).toMatchObject({
+      subscription_data: { trial_period_days: 7 },
+    });
+  });
+
+  it("starts no checkout when Dodo cannot say whether the customer paid before", async () => {
+    expect(await checkoutBodyAfterLookup("cancelled", null)).toBeUndefined();
+  });
+
+  it("treats a subscription Dodo no longer has as a paid one, so the customer is not stuck", async () => {
+    expect(await checkoutBodyAfterLookup("cancelled", 404)).not.toHaveProperty("subscription_data");
   });
 });

@@ -5,18 +5,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
-// 0509#7074: a Dependabot run that defers because an npm-minor-patch
-// group PR is open puts @cloudflare/workers-oauth-provider and
-// @sentry/cloudflare into "Adding dependencies as handled" and then
-// reports "Found no dependencies to update after filtering allowed
-// updates" (runs 36721784366 and 36727409669). Majors therefore need
-// their own group, and the schedule needs an explicit day, time and
-// timezone so the run time is known. This gate fails until both land.
-// It reads the file from disk; dependabot.yml has no import edge into
-// the app, so it is checked by the full-suite run in the merge queue.
 const CONFIG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".github", "dependabot.yml");
 
-// Dependabot schedule.time: HH:mm, 00:00 to 23:59.
 const TIME_OF_DAY = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 interface Group {

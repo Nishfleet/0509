@@ -1,18 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
-
-vi.mock("cloudflare:workers", () => ({ env: {} }));
 vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn() }));
 
 import { captureException } from "@sentry/cloudflare";
 
 import {
+  CHANGE_UNDELIVERED_BODY,
+  CHANGE_UNDELIVERED_TITLE,
   DELIVERY_FAILED_BODY,
   DELIVERY_FAILED_KIND,
   DELIVERY_FAILED_TITLE,
   DLQ_ALERT_PREFIX,
+  DLQ_CHANGE_PREFIX,
   DLQ_INCIDENT_PREFIX,
   INCIDENT_UNDELIVERED_BODY,
   INCIDENT_UNDELIVERED_TITLE,
+  changeUndeliveredAlert,
   deliveryFailedAlert,
   handleDlqBatch,
   incidentUndeliveredAlert,
@@ -95,6 +97,7 @@ describe("incidentUndeliveredAlert", () => {
 
 describe("handleDlqBatch", () => {
   it("marks the digest failed, inserts one plain delivery_failed alert and acks (0509#4375)", async () => {
+    vi.mocked(captureException).mockClear();
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { env, recorded } = fakeEnv((sql) => {
       if (sql.startsWith("SELECT workspace_id")) {
@@ -119,6 +122,9 @@ describe("handleDlqBatch", () => {
     expect(ack).toHaveBeenCalledOnce();
     expect(retry).not.toHaveBeenCalled();
     expect(ids).toEqual(["dlq:dg_1"]);
+    expect(capturedReasons()).toHaveLength(1);
+    expect(capturedReasons()[0]).toContain("dg_1");
+    expect(capturedReasons()[0]).toContain("invalid recipient");
     error.mockRestore();
   });
 
@@ -138,6 +144,7 @@ describe("handleDlqBatch", () => {
   });
 
   it("acks a missing digest without inserting an alert", async () => {
+    vi.mocked(captureException).mockClear();
     const { env, recorded } = fakeEnv((sql) => {
       if (sql.startsWith("SELECT workspace_id")) {
         return Promise.resolve(null);
@@ -152,6 +159,23 @@ describe("handleDlqBatch", () => {
     expect(ack).toHaveBeenCalledOnce();
     expect(retry).not.toHaveBeenCalled();
     expect(ids).toEqual([]);
+    expect(capturedReasons()).toHaveLength(1);
+    expect(capturedReasons()[0]).toContain("digest not found");
+  });
+
+  it("acks a dead-lettered teammate message without touching the owner's digest or raising an alert", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { env, recorded } = fakeEnv(() => Promise.resolve(null));
+    const { batch, ack, retry } = fakeBatch({ digest_id: "dg_1", target_id: "st_mate" });
+
+    const ids = await handleDlqBatch(env, batch);
+
+    expect(recorded).toEqual([]);
+    expect(ack).toHaveBeenCalledOnce();
+    expect(retry).not.toHaveBeenCalled();
+    expect(ids).toEqual([]);
+    expect(capturedReasons().at(-1)).toContain("teammate send gave up");
+    error.mockRestore();
   });
 
   it("raises the Sentry error and writes the workspace alert for a dead-lettered incident (0509#5761)", async () => {
@@ -176,15 +200,13 @@ describe("handleDlqBatch", () => {
     expect(inserts[0]?.args[1]).toBe("ws_1");
     expect(inserts[0]?.args[2]).toBe(DELIVERY_FAILED_KIND);
     expect(inserts[0]?.args).not.toContain("invalid recipient");
-    // The digest branch must stay out of the incident branch's way.
+
     expect(recorded.some((row) => row.sql.includes("FROM digest"))).toBe(false);
     expect(recorded.some((row) => row.sql.startsWith("UPDATE digest"))).toBe(false);
     expect(ack).toHaveBeenCalledOnce();
     expect(retry).not.toHaveBeenCalled();
     expect(ids).toEqual([`${DLQ_INCIDENT_PREFIX}inc_1`]);
 
-    // The finding: before this, this message died on "unparseable message" and
-    // reached nobody. Now Sentry carries it, naming the incident and why.
     expect(capturedReasons()).toHaveLength(1);
     expect(capturedReasons()[0]).toContain("inc_1");
     expect(capturedReasons()[0]).toContain("invalid recipient");
@@ -207,5 +229,53 @@ describe("handleDlqBatch", () => {
     expect(retry).not.toHaveBeenCalled();
     expect(ids).toEqual([]);
     error.mockRestore();
+  });
+
+  it("raises Sentry and writes an in-app alert for a dead-lettered change (0509#7084)", async () => {
+    vi.mocked(captureException).mockClear();
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { env, recorded } = fakeEnv((sql) => {
+      if (sql.includes("FROM signal")) {
+        return Promise.resolve({ workspace_id: "ws_1" });
+      }
+      if (sql.includes("FROM send_attempt")) {
+        return Promise.resolve({ error: "smtp down" });
+      }
+      return Promise.resolve(null);
+    });
+    const { batch, ack, retry } = fakeBatch({ signal_id: "sig_1" });
+
+    const ids = await handleDlqBatch(env, batch);
+
+    const inserts = recorded.filter((row) => row.sql.startsWith("INSERT INTO alert"));
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0]?.args[0]).toBe(`${DLQ_CHANGE_PREFIX}sig_1`);
+    expect(inserts[0]?.args[1]).toBe("ws_1");
+    expect(inserts[0]?.args[2]).toBe(DELIVERY_FAILED_KIND);
+    expect(inserts[0]?.args[3]).toBe("high");
+    expect(inserts[0]?.args[4]).toBe(CHANGE_UNDELIVERED_TITLE);
+    expect(inserts[0]?.args[5]).toBe(CHANGE_UNDELIVERED_BODY);
+    expect(recorded.some((row) => row.sql.includes("SET status = 'dropped'"))).toBe(true);
+    expect(ack).toHaveBeenCalledOnce();
+    expect(retry).not.toHaveBeenCalled();
+    expect(ids).toEqual([`${DLQ_CHANGE_PREFIX}sig_1`]);
+    expect(capturedReasons()).toHaveLength(1);
+    expect(capturedReasons()[0]).toContain("sig_1");
+    expect(capturedReasons()[0]).toContain("smtp down");
+    error.mockRestore();
+  });
+});
+
+describe("changeUndeliveredAlert", () => {
+  it("names the missed change without the signal id in the customer copy", () => {
+    const alert = changeUndeliveredAlert({
+      signal_id: "sig_1",
+      workspace_id: "ws_1",
+      now: "2026-10-05T00:00:00.000Z",
+    });
+    expect(alert.id).toBe(`${DLQ_CHANGE_PREFIX}sig_1`);
+    expect(alert.title).toBe(CHANGE_UNDELIVERED_TITLE);
+    expect(alert.body).toBe(CHANGE_UNDELIVERED_BODY);
+    expect(alert.body).not.toContain("sig_1");
   });
 });

@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import { dayMonthLabel } from "./competitor-header";
 import { EmptyState } from "./empty-state";
 import { SourcePill } from "./source-pill";
-import type { SourceRow, SourceSnapshot } from "./source-pill";
+import type { SourceRow, SourceSnapshot } from "../lib/source-pill-status";
 import { SITE_SWEEP_UTC_LABEL } from "../lib/cadence";
 
 const HEADING = "mb-3 font-mono text-eyebrow text-ink-soft uppercase";
@@ -58,6 +58,8 @@ export interface CompetitorRailProps {
   verdict: RailVerdict | null;
   lastChecked: string | null;
   now: number;
+  sweepClock?: string;
+  unreadable?: boolean;
 }
 
 export function verdictWords(choice: string): string | null {
@@ -94,7 +96,7 @@ function Peers({ entityId, peers }: { entityId: string; peers: readonly RailPeer
                 {peer.name}
               </span>
             ) : (
-              <Link to={`/app/competitors/${peer.entityId}`} prefetch="intent">
+              <Link to={`/app/competitors/${peer.entityId}`} prefetch="intent" viewTransition>
                 {peer.name}
               </Link>
             )}
@@ -124,18 +126,30 @@ function Sources({
   sources,
   lastChecked,
   now,
+  sweepClock = SITE_SWEEP_UTC_LABEL,
+  unreadable = false,
 }: {
   sources: readonly RailSource[];
   lastChecked: string | null;
   now: number;
+  sweepClock?: string;
+  unreadable?: boolean;
 }): ReactElement {
+  if (sources.length === 0 && unreadable) {
+    return (
+      <>
+        <p className="font-display text-[1.02rem]">Website</p>
+        <p className="text-meta text-ink-soft">We couldn't read the homepage. We try again every night.</p>
+      </>
+    );
+  }
   if (sources.length === 0) {
     return (
       <>
         <p className="font-display text-[1.02rem]">Website</p>
         <p className="text-meta text-ink-soft">
           {lastChecked === null
-            ? `Homepage, read every night. First read tonight at ${SITE_SWEEP_UTC_LABEL}.`
+            ? `Homepage, read every night. First read tonight at ${sweepClock}.`
             : `Homepage, read every night. Last read ${lastChecked}.`}
         </p>
       </>
@@ -176,6 +190,8 @@ export function CompetitorRail({
   verdict,
   lastChecked,
   now,
+  sweepClock = SITE_SWEEP_UTC_LABEL,
+  unreadable = false,
 }: CompetitorRailProps): ReactElement {
   return (
     <aside data-slot="competitor-rail" className="flex min-w-0 flex-col gap-10">
@@ -195,7 +211,13 @@ export function CompetitorRail({
         <h2 id="competitor-sources" className={HEADING}>
           What we watch here
         </h2>
-        <Sources sources={sources} lastChecked={lastChecked} now={now} />
+        <Sources
+          sources={sources}
+          lastChecked={lastChecked}
+          now={now}
+          sweepClock={sweepClock}
+          unreadable={unreadable}
+        />
       </section>
       <section data-section="still-competitor" aria-labelledby="competitor-still" className="min-w-0">
         <h2 id="competitor-still" className={HEADING}>

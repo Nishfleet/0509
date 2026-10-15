@@ -37,7 +37,7 @@ describe("a feed watch is never a site watch", () => {
     await env.DB.prepare("UPDATE source SET is_enabled = 1 WHERE key = 'site.web'").run();
     await insertPages([
       { id: "page-home", entityId: "ent-rival", url: HOME_URL, role: "home", discoveredAt: NOW },
-      { id: "page-feed", entityId: "ent-rival", url: FEED_URL, role: "other", discoveredAt: NOW },
+      { id: "page-feed", entityId: "ent-rival", url: FEED_URL, role: "pricing", discoveredAt: NOW },
     ]);
     await insertWatches([
       { id: "watch-site", entityId: "ent-rival", sourceId: await sourceId("site.web"), targetKey: HOME_URL },

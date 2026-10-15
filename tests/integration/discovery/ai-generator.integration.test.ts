@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
+import { AiSpendOffError } from "../../../app/lib/ai/spend.server";
 import { aiGenerator, warmProposals } from "../../../app/lib/discovery/generators/ai.server";
 import type { FetchedText, Subject } from "../../../app/lib/discovery/types";
 
@@ -19,8 +20,10 @@ function proposes(response: unknown): ReturnType<typeof vi.fn> {
   return run;
 }
 
-function answering(answers: Record<string, Response>): ReturnType<typeof vi.spyOn> {
-  return vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+function answering(
+  answers: Record<string, Response>,
+): MockInstance<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>> {
+  return vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL, _init?: RequestInit) => {
     const host = new URL(input instanceof Request ? input.url : String(input)).hostname;
     const answer = answers[host];
     return answer === undefined ? Promise.reject(new TypeError("dns")) : Promise.resolve(answer);
@@ -39,6 +42,7 @@ beforeEach(async () => {
 afterEach(() => {
   vi.restoreAllMocks();
   Reflect.deleteProperty(env, "AI");
+  Reflect.set(env, "AI_SPEND", "on");
 });
 
 describe("aiGenerator", () => {
@@ -119,6 +123,22 @@ describe("aiGenerator", () => {
   it("fails, rather than returning zero candidates, when the AI binding throws", async () => {
     Reflect.set(env, "AI", { run: vi.fn().mockRejectedValue(new Error("gateway down")) });
     await expect(aiGenerator(SUBJECT, home())).rejects.toThrow("gateway down");
+  });
+
+  it("never caches a kill-switch refusal as an empty proposal list, so rivals return once spend is on (0509#7191)", async () => {
+    const run = proposes({ competitors: [{ name: "Alpha", domain: "a.com" }] });
+    liveHosts("gymshark.com", "a.com");
+    Reflect.set(env, "AI_SPEND", "off");
+
+    await expect(aiGenerator(SUBJECT, home())).rejects.toBeInstanceOf(AiSpendOffError);
+    await warmProposals(SUBJECT);
+    expect(run).not.toHaveBeenCalled();
+    expect((await env.IDENTITY_CACHE.list({ prefix: "discovery:proposals:" })).keys).toEqual([]);
+
+    Reflect.set(env, "AI_SPEND", "on");
+    const candidates = await aiGenerator(SUBJECT, home());
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(candidates.map((candidate) => candidate.domain)).toEqual(["a.com"]);
   });
 
   it("asks both models and keeps the brands from both answers", async () => {

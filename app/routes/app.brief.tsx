@@ -1,6 +1,5 @@
 import type { Route } from "./+types/app.brief";
 
-import { env } from "cloudflare:workers";
 import { Link, redirect } from "react-router";
 
 import { BriefUnavailable } from "../components/brief-unavailable";
@@ -12,7 +11,7 @@ import { formatBriefAt } from "../lib/brief-settings";
 import { nextBriefAt } from "../lib/brief-schedule";
 import { briefSendLine } from "../lib/brief-state";
 import { readBriefPayload } from "../lib/brief-payload";
-import { listBriefs, readBrief } from "../lib/data/digest.server";
+import { listWorkspaceBriefs, readWorkspaceBrief } from "../lib/data/digest.server";
 import { readBriefScheduleForOwner } from "../lib/data/workspace.server";
 import { onboardedContext } from "../lib/require-onboarded.server";
 
@@ -24,8 +23,8 @@ export function meta() {
   return [{ title: "Your brief · Five to Nine" }];
 }
 
-function briefWeekLabel(periodStart: string): string {
-  const day = dayMonthLabel(periodStart);
+function briefWeekLabel(periodStart: string, timeZone: string): string {
+  const day = dayMonthLabel(periodStart, timeZone);
   return day === null ? "An earlier week" : `Week of ${day}`;
 }
 
@@ -35,9 +34,9 @@ export async function loader({ params, context }: Route.LoaderArgs) {
   const owned = await readBriefScheduleForOwner(session.user.id);
   if (owned === null) throw redirect("/onboarding");
   const { schedule } = owned;
-  const weeks = await listBriefs(env.DB, workspaceId);
+  const weeks = await listWorkspaceBriefs(workspaceId);
   const selectedId = params.digestId ?? weeks[0]?.id ?? null;
-  const brief = selectedId === null ? null : await readBrief(env.DB, workspaceId, selectedId);
+  const brief = selectedId === null ? null : await readWorkspaceBrief(workspaceId, selectedId);
   if (params.digestId !== undefined && brief === null) {
     throw new Response("That brief isn't here.", { status: 404 });
   }
@@ -46,7 +45,7 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     firstBriefAt: formatBriefAt(nextBriefAt(schedule, now), schedule.timezone),
     weeks: weeks.map((w) => ({
       id: w.id,
-      weekLabel: briefWeekLabel(w.period_start),
+      weekLabel: briefWeekLabel(w.period_start, schedule.timezone),
       line: briefSendLine(w),
     })),
     selected:
@@ -54,7 +53,7 @@ export async function loader({ params, context }: Route.LoaderArgs) {
         ? null
         : {
             id: brief.id,
-            weekLabel: briefWeekLabel(brief.period_start),
+            weekLabel: briefWeekLabel(brief.period_start, schedule.timezone),
             status: brief.status,
             line: briefSendLine(brief),
             payload: readBriefPayload(brief.payload_json),
@@ -82,8 +81,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         </>
       )}
       {loaderData.weeks.length > 0 ? (
-        <nav aria-label="Previous briefs" className={PREVIOUS_LIST}>
-          <h2 className={PREVIOUS_HEADING}>Previous briefs</h2>
+        <nav aria-label="Your briefs" className={PREVIOUS_LIST}>
+          <h2 className={PREVIOUS_HEADING}>Your briefs</h2>
           <ul className="mt-3">
             {loaderData.weeks.map((w) => (
               <li key={w.id} className="mt-2 leading-[1.65]">
@@ -95,7 +94,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                   {w.weekLabel}
                 </Link>
                 {": "}
-                {w.line}
+                {w.id === loaderData.selected?.id ? "You are reading this one" : w.line}
               </li>
             ))}
           </ul>

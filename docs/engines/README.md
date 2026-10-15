@@ -7,19 +7,19 @@ Find the real code with `ls` or grep.
 
 One file per engine, in the P3 build order (umbrella #3842):
 
-| Order | Engine                              | Issue | File                                                 |
-| ----- | ----------------------------------- | ----- | ---------------------------------------------------- |
-| 1     | Identity card                       | #3885 | [`identity-card.md`](identity-card.md)               |
-| 2     | Competitor discovery                | #3884 | [`competitor-discovery.md`](competitor-discovery.md) |
-| 4     | Site-change tracking incl. own site | #3879 | [`site-change.md`](site-change.md)                   |
-| 5     | Hiring (job boards)                 | #4725 | [`hiring.md`](hiring.md)                             |
-| 6     | Content (blog and changelog feeds)  | #6377 | [`content.md`](content.md)                           |
+| Order | Engine                              | Issue | File                               |
+| ----- | ----------------------------------- | ----- | ---------------------------------- |
+| 1     | Identity card                       | #3885 | deleted (0509#7018)                |
+| 2     | Competitor discovery                | #3884 | deleted (0509#7018)                |
+| 4     | Site-change tracking incl. own site | #3879 | [`site-change.md`](site-change.md) |
+| 5     | Hiring (job boards)                 | #4725 | deleted (0509#7018)                |
+| 6     | Content (blog and changelog feeds)  | #6377 | deleted (0509#7018)                |
 
-The first four are the P3 design packets; each carries two candidate shapes with the screening and the pick, the data flow against `docs/REBUILD-SCHEMA.md` tables by name, the Workflow/Queue/cron layout with concurrency numbers, the exact upstream calls with live probes on Gymshark, the Jev decision ids and their context-pack fields, the cost line, the failure modes with their degraded UI states, and worker packets sized for 45 minutes with no design choice left.
+Of the four P3 design packets, only [`site-change.md`](site-change.md) remains — the other three were deleted in 0509#7018 (git history keeps them). Each carried two candidate shapes with the screening and the pick, the data flow against `docs/REBUILD-SCHEMA.md` tables by name, the Workflow/Queue/cron layout with concurrency numbers, the exact upstream calls with live probes on Gymshark, the Jev decision ids and their context-pack fields, the cost line, the failure modes with their degraded UI states, and worker packets sized for 45 minutes with no design choice left.
 
-## What the four share
+## What the shared decisions are
 
-These decisions are made once here and repeated in each file so a packet is readable alone.
+These decisions are made once here and were repeated in each packet so one was readable alone. The surviving packets are [`site-change.md`](site-change.md) plus [`delivery.md`](delivery.md), [`guardrails.md`](guardrails.md), [`mentions.md`](mentions.md) and [`standing-home.md`](standing-home.md).
 
 **Two queues, and the browser cap is one number.**
 
@@ -33,7 +33,7 @@ These decisions are made once here and repeated in each file so a packet is read
 
 Everything that needs a browser goes through `page-sweep`; nothing else may open one. Two of the ten browsers are reserved for interactive onboarding so a customer's first screen never queues behind a sweep, and a test asserts `8 + 2 === BROWSER_CONCURRENCY_CAP`. Raising the cap costs $2.00 per additional concurrent browser per month and needs Nish's recorded yes (`REBUILD-COST.md`; his standing rule, 2026-09-21).
 
-**Cron → Workflow → Queue, never work inline in `scheduled()`.** Each engine's Workflow runs the same five steps: `select` → `enqueue` (`sendBatch`) → `sleep` → `assert coverage` → `escalate`. The `assert` step counts `snapshot` rows for the tick, because `REBUILD-KEEPLIST.md` finding 3 is that a health check watching the cron heartbeat reported `ok` while one run covered 22 watchlists, and finding 2 is a source that reported active and captured nothing for 8 days. Coverage is asserted on outcomes.
+**Cron → Workflow → Queue, never work inline in `scheduled()`.** Each engine's Workflow runs the same five steps: `select` → `enqueue` (`sendBatch`) → `sleep` → `assert coverage` → `escalate`. The `assert` step counts `snapshot` rows for the tick, because `REBUILD-KEEPLIST.md (deleted, in git history)` finding 3 is that a health check watching the cron heartbeat reported `ok` while one run covered 22 watchlists, and finding 2 is a source that reported active and captured nothing for 8 days. Coverage is asserted on outcomes.
 
 **The Jev wire contract, probed live 2026-09-21 12:18:48Z and 12:19:10Z:**
 

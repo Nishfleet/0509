@@ -27,6 +27,11 @@ export async function resetFeedFixtures(ids: { user: string; workspace: string; 
     .bind(ids.workspace, ids.user, NOW)
     .run();
   await env.DB.prepare(
+    "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
+  )
+    .bind(`plan-${ids.workspace}`, ids.workspace, NOW)
+    .run();
+  await env.DB.prepare(
     `UPDATE source SET is_enabled = 1, config_json = '{"robots":"honoured"}' WHERE key = 'feed.rss'`,
   ).run();
 }

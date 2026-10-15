@@ -26,7 +26,12 @@ describe("OneInput", () => {
     expect(html).toContain('action="/onboarding"');
     expect(html).toContain('name="subject"');
     expect(html).toContain('placeholder="your website address or social username (like @yourbrand)"');
-    expect(html).toContain('aria-label="your website address or social username (like @yourbrand)"');
+    expect(html).toMatch(
+      /<label for="([^"]+)"[^>]*>your website address or social username \(like @yourbrand\)<\/label>/,
+    );
+    const labelFor = /<label for="([^"]+)"/.exec(html)?.[1];
+    expect(html).toContain(`id="${labelFor}"`);
+    expect(html).not.toContain("aria-label=");
     expect(html).not.toContain("required");
   });
 
@@ -66,14 +71,14 @@ describe("OneInput", () => {
         method: "get",
         required: true,
         maxLength: 200,
-        submitLabel: createElement("span", null, "€10/mo"),
+        submitLabel: createElement("span", null, "€10/month"),
       }),
     );
     expect(html).toContain('method="get"');
     expect(html).toContain('action="/login"');
     expect(html).toContain("required");
     expect(html).toContain('maxLength="200"');
-    expect(html).toContain("€10/mo");
+    expect(html).toContain("€10/month");
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*>/);
   });
 });

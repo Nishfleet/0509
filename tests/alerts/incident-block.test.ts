@@ -65,21 +65,21 @@ describe("the incident block", () => {
 
   it("disables the acknowledge button and reads Saving… while that alert submits", () => {
     const html = render({}, true);
-    const button = html.match(/<button\b[^>]*>[\s\S]*?<\/button>/)?.[0] ?? "";
+    const button = /<button\b[^>]*>[\s\S]*?<\/button>/.exec(html)?.[0] ?? "";
     expect(button).toContain('disabled=""');
     expect(button).toContain("Saving…");
     expect(button).not.toContain("I meant to do this");
   });
 
   it("leaves the acknowledge button enabled and idle until something submits", () => {
-    const button = render().match(/<button\b[^>]*>[\s\S]*?<\/button>/)?.[0] ?? "";
+    const button = /<button\b[^>]*>[\s\S]*?<\/button>/.exec(render())?.[0] ?? "";
     expect(button).not.toContain('disabled=""');
     expect(button).toContain("I meant to do this");
     expect(button).not.toContain("Saving…");
   });
 
   it("tells a screen reader the site link leaves the page, in the same anchor", () => {
-    const anchor = render().match(/<a\b[^>]*href="https:\/\/example\.com\/"[^>]*>[\s\S]*?<\/a>/)?.[0] ?? "";
+    const anchor = /<a\b[^>]*href="https:\/\/example\.com\/"[^>]*>[\s\S]*?<\/a>/.exec(render())?.[0] ?? "";
     expect(anchor).toContain('target="_blank"');
     expect(anchor).toContain('Open your site →<span class="sr-only"> (opens in a new tab)</span>');
   });

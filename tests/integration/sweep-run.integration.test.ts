@@ -11,6 +11,7 @@ const RUN: SweepRun = {
   wallMs: 4250,
   pages: 6,
   failed: 1,
+  reason: "1 of 6 pages failed in 1 step: check page_rival: browser timeout after 120000ms",
 };
 
 interface SweepRunRow {
@@ -21,10 +22,11 @@ interface SweepRunRow {
   wall_ms: number;
   pages: number;
   failed: number;
+  reason: string | null;
 }
 
 const readRun = async (id: string): Promise<SweepRunRow | null> =>
-  env.DB.prepare(`SELECT id, kind, planned_at, finished_at, wall_ms, pages, failed FROM sweep_run WHERE id = ?`)
+  env.DB.prepare(`SELECT id, kind, planned_at, finished_at, wall_ms, pages, failed, reason FROM sweep_run WHERE id = ?`)
     .bind(id)
     .first<SweepRunRow>();
 
@@ -47,12 +49,26 @@ describe("sweep_run records a finished site sweep (0509#5755)", () => {
       wall_ms: 4250,
       pages: 6,
       failed: 1,
+      reason: "1 of 6 pages failed in 1 step: check page_rival: browser timeout after 120000ms",
     });
+  });
+
+  it("stores a null reason for a clean sweep, so the column reads as no recorded failure (0509#7191)", async () => {
+    await recordSweepRun({ ...RUN, failed: 0, reason: null });
+
+    expect((await readRun(RUN.id))?.reason).toBeNull();
   });
 
   it("refreshes the row when the same sweep id is recorded twice, so a retried record step stores the last confirmed write", async () => {
     await recordSweepRun(RUN);
-    await recordSweepRun({ ...RUN, finishedAt: "2026-09-25T09:05:00.000Z", wallMs: 99_999, pages: 40, failed: 40 });
+    await recordSweepRun({
+      ...RUN,
+      finishedAt: "2026-09-25T09:05:00.000Z",
+      wallMs: 99_999,
+      pages: 40,
+      failed: 40,
+      reason: "40 of 40 pages failed in 40 steps: check page_rival: browser timeout",
+    });
 
     expect(await countRuns()).toBe(1);
     expect(await readRun(RUN.id)).toEqual({
@@ -63,6 +79,7 @@ describe("sweep_run records a finished site sweep (0509#5755)", () => {
       wall_ms: 99_999,
       pages: 40,
       failed: 40,
+      reason: "40 of 40 pages failed in 40 steps: check page_rival: browser timeout",
     });
   });
 });

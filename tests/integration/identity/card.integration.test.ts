@@ -211,8 +211,7 @@ describe("startCard", () => {
 
   it("re-probes past a stale icon entry that holds a URL the guarded fetch refuses", async () => {
     stubAi(0.95);
-    // 0509#5890: a v1 entry cached the raw-fetch winner, so a URL storeLogo
-    // refuses pinned a logo-less card for the probe TTL. v2 must not parse it.
+
     const staleUrl = "http://insecure.example/og.png";
     await env.IDENTITY_CACHE.put(probeKey(subjectFor("example.com"), "icon"), JSON.stringify({ url: staleUrl }));
     const duckUrl = "https://icons.duckduckgo.com/ip3/example.com.ico";
@@ -301,6 +300,88 @@ describe("startCard", () => {
     });
     expect(await card.logo).toBeNull();
     expect((await env.IDENTITY_CACHE.list()).keys).toEqual([]);
+  });
+
+  it("gives up on a read that never answers and says it could not reach the site, inside the card budget", async () => {
+    vi.useFakeTimers();
+    try {
+      stubAi(0.95);
+      vi.stubGlobal("fetch", () => new Promise<Response>(() => undefined));
+      installBrowser({ calls: [], quickAction: () => new Promise<Response>(() => undefined) });
+      const card = startCard("ws-1", subjectFor("slowread.com"), []);
+      await vi.advanceTimersByTimeAsync(28_000);
+      expect(await card.site).toEqual({
+        name: null,
+        description: null,
+        socials: [],
+        review: { name: "empty", description: "empty", socials: "empty" },
+        unfound: true,
+      });
+      expect(await card.logo).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps a read that outlasts the card budget running until its answer is cached", async () => {
+    vi.useFakeTimers();
+    try {
+      stubAi(0.95);
+      vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url.startsWith("https://www.wikidata.org/")) return Promise.resolve(Response.json({ search: [] }));
+        if (isLogo(url)) return Promise.resolve(new Response("", { status: 404 }));
+        return new Promise<Response>((resolve) => {
+          setTimeout(() => {
+            resolve(new Response(gym, { status: 200 }));
+          }, 30_000);
+        });
+      });
+      const card = startCard("ws-1", subjectFor("latebloomer.com"), []);
+      await vi.advanceTimersByTimeAsync(28_000);
+      expect((await card.site).unfound).toBe(true);
+      await vi.advanceTimersByTimeAsync(3_000);
+      await card.settled;
+      const keys = (await env.IDENTITY_CACHE.list()).keys.map((key) => key.name);
+      expect(keys).toContain(probeKey(subjectFor("latebloomer.com"), "homepage"));
+      await card.logo;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("draws a creator's card from the handle when the profile read runs out of budget", async () => {
+    vi.useFakeTimers();
+    try {
+      stubAi(0.95);
+      vi.stubGlobal("fetch", () => new Promise<Response>(() => undefined));
+      installBrowser({ calls: [], quickAction: () => new Promise<Response>(() => undefined) });
+      const card = startCard("ws-1", subjectFor("https://www.youtube.com/@slowchannel"), []);
+      await vi.advanceTimersByTimeAsync(28_000);
+      const site = await card.site;
+      expect(site.name).toBe("@slowchannel");
+      expect(site.unfound).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("asks the user to check every field when the confidence review outlasts the card budget", async () => {
+    vi.useFakeTimers();
+    try {
+      await answerHomepage();
+      Reflect.set(env, "AI", { run: () => new Promise(() => undefined) });
+      vi.stubGlobal("fetch", () => Promise.resolve(new Response("", { status: 404 })));
+      const card = startCard("ws-1", subjectFor("gymshark.com"), []);
+      await vi.advanceTimersByTimeAsync(28_000);
+      const site = await card.site;
+      await card.logo;
+      expect(site.name).toBe("Gymshark");
+      expect(site.review).toEqual({ name: "check", description: "check", socials: "empty" });
+      expect(site.unfound).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not keep a read that found no name, description or socials", async () => {
@@ -447,7 +528,7 @@ describe("startCard", () => {
     const stub = stubBrowser(BOT_GATED_HTML);
     installBrowser(stub);
 
-    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const log = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
     const card = startCard("ws-1", subject, []);
 
@@ -468,13 +549,10 @@ describe("startCard", () => {
   });
 });
 
-// The four unreached lines carry the subject's hash, never the subject itself:
-// #5786 took the `subject` key out, and the registrable domain still reached
-// the same lines through the error message (0509#5847).
 describe("the unreached log lines", () => {
   async function logged(run: () => Promise<unknown>): Promise<Record<string, unknown>[]> {
     const lines: string[] = [];
-    const spy = vi.spyOn(console, "log").mockImplementation((line) => {
+    const spy = vi.spyOn(console, "warn").mockImplementation((line) => {
       lines.push(String(line));
     });
     try {
@@ -486,8 +564,6 @@ describe("the unreached log lines", () => {
   }
 
   it("names the subject only as a hash, on a failed site probe", async () => {
-    // A host tldts is not ICANN for is an invalid-url failure whose detail is
-    // the hostname itself: the exact string #5786's name-based gate missed.
     const domain = "unreachablenotin-icann.invalid";
 
     const rows = await logged(() => startCard("ws-1", subjectFor(domain), []).site);
@@ -533,9 +609,6 @@ describe("the unreached log lines", () => {
   });
 
   it("names the reason, never the message, when the probe throws something else", async () => {
-    // A readable page that carries no name, description or socials is not a
-    // readUrl failure, so probeSite throws a plain Error: the branch the
-    // reason classifier is there to name.
     const domain = "throwselsewhere.com";
     const anonymous = `<!doctype html>
 <html><head><meta name="generator" content="none"></head>
@@ -572,7 +645,7 @@ describe("confirmCard", () => {
 
     const row = await env.DB.prepare(
       "SELECT role, domain, name, identity_json, origin, state, confirmed_at IS NOT NULL AS confirmed, id FROM entity",
-    ).first<Record<string, unknown>>();
+    ).first();
     expect(row).toMatchObject({
       role: "self",
       domain: "gymshark.com",
@@ -608,7 +681,8 @@ describe("confirmCard", () => {
     await settledTail();
 
     const entity = await env.DB.prepare("SELECT id FROM entity WHERE role = 'self'").first<{ id: string }>();
-    const expected = (await extractIdentity(gym, "https://www.gymshark.com/")).navPages.length;
+    const found = (await extractIdentity(gym, "https://www.gymshark.com/")).navPages.length;
+    const expected = Math.min(found, 40);
     expect(expected).toBeGreaterThan(0);
 
     const { results } = await env.DB.prepare(
@@ -738,7 +812,7 @@ describe("confirmCard", () => {
       }),
     );
     expect(saved).toBe(true);
-    const row = await env.DB.prepare("SELECT identity_json FROM entity").first<Record<string, unknown>>();
+    const row = await env.DB.prepare("SELECT identity_json FROM entity").first();
     expect(JSON.parse(String(row?.identity_json)).logoUrl).toBeNull();
     await settledTail();
   });

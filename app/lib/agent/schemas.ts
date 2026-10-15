@@ -99,7 +99,7 @@ export const competitorResultSchema = z.object({
       id: z.string(),
       name: z.string(),
       domain: z.string(),
-      state: z.enum(["on", "off"]),
+      state: z.literal("on"),
       stateChangedAt: isoTime.nullable(),
       pagesWatched: z.number(),
       lastCheckedAt: isoTime.nullable(),

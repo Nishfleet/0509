@@ -2,6 +2,7 @@ import { SITE_SWEEP_UTC_LABEL } from "./cadence";
 import { daysAgoLabel } from "./delivery-alert";
 import { SOURCE_LABEL, type FeedKind } from "./developments";
 import { BUCKET_LABELS } from "./how-ranked";
+import { formatScore } from "./score-format";
 import { weightOf, type Reliability, type ScoreBucket } from "./standing-score";
 
 export interface ScoredSignal {
@@ -56,7 +57,8 @@ export interface BiggestMoveView {
 
 export function biggestMoveView(move: BiggestMove, now: Date): BiggestMoveView {
   const { signal, weight, multiplier, points } = move;
-  const pointWord = points === 1 ? "point" : "points";
+  const shownPoints = formatScore(points);
+  const pointWord = shownPoints === "1" ? "point" : "points";
   return {
     id: signal.id,
     kind: signal.kind,
@@ -64,18 +66,22 @@ export function biggestMoveView(move: BiggestMove, now: Date): BiggestMoveView {
     title: signal.title ?? signal.summary ?? SOURCE_LABEL[signal.kind],
     url: signal.url,
     when: daysAgoLabel(signal.observedAt, now),
-    read: `${BUCKET_LABELS[signal.bucket]}: ${String(weight)} × ${String(multiplier)} = ${String(points)} ${pointWord}, the most of anything this brand did this week.`,
+    read: `${BUCKET_LABELS[signal.bucket]}: ${formatScore(weight)} × ${formatScore(multiplier)} = ${shownPoints} ${pointWord}, the most of anything this brand did this week.`,
     weight,
     multiplier,
     points,
   };
 }
 
-export function quietWeekSentence(checked: readonly string[], lastChecked: string | null): string {
+export function quietWeekSentence(
+  checked: readonly string[],
+  lastChecked: string | null,
+  sweepClock: string = SITE_SWEEP_UTC_LABEL,
+): string {
   const list =
     checked.length === 0 ? "its website" : new Intl.ListFormat("en", { type: "conjunction" }).format(checked);
   if (lastChecked === null) {
-    return `Nothing worth scoring for this competitor in the last 7 days. We watch ${list}; our first read is tonight at ${SITE_SWEEP_UTC_LABEL}.`;
+    return `Nothing worth scoring for this competitor in the last 7 days. We watch ${list}; our first read is tonight at ${sweepClock}.`;
   }
   return `Nothing worth scoring for this competitor in the last 7 days. We checked ${list}, last at ${lastChecked}.`;
 }

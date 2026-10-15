@@ -18,7 +18,7 @@ describe("parseFeedEntries extra fields", () => {
   it("passes raw per-entry fields to the extra-fields hook", () => {
     const entries = parseFeedEntries(rss, (data) => ({ sourceRaw: data.source }));
 
-    expect(entries[0].sourceRaw["@_url"]).toBe("https://www.theguardian.com");
+    expect((entries[0].sourceRaw as { "@_url": string })["@_url"]).toBe("https://www.theguardian.com");
   });
 
   it("keeps the no-hook call compatible", () => {

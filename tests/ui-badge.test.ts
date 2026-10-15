@@ -11,11 +11,11 @@ function render(props: Parameters<typeof Badge>[0] = {}, children = "New"): stri
 }
 
 function spanOf(html: string): string {
-  return html.match(SPAN)?.[0] ?? "";
+  return SPAN.exec(html)?.[0] ?? "";
 }
 
 function classesOf(html: string): string[] {
-  return (spanOf(html).match(/class="([^"]*)"/)?.[1] ?? "").split(/\s+/);
+  return (/class="([^"]*)"/.exec(spanOf(html))?.[1] ?? "").split(/\s+/);
 }
 
 describe("Badge", () => {

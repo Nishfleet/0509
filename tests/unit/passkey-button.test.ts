@@ -14,15 +14,15 @@ const button = vi.hoisted(() => ({ onClick: null as (() => void) | null, disable
 vi.mock("../../app/lib/auth-client", () => ({ authClient: { passkey: { addPasskey } } }));
 
 vi.mock("react-router", async (importOriginal) => {
-  const actual = await importOriginal<ReactRouterModule>();
+  const actual = await importOriginal<typeof ReactRouterModule>();
   return { ...actual, useRevalidator: () => ({ revalidate, state: "idle" }) };
 });
 
 vi.mock("../../app/components/ui/button", async (importOriginal) => {
-  const actual = await importOriginal<ButtonModule>();
+  const actual = await importOriginal<typeof ButtonModule>();
   return {
     ...actual,
-    Button: ({ onClick, children, ...rest }: { onClick?: () => void; children?: ReactNode }) => {
+    Button: ({ onClick, children, ...rest }: { onClick?: () => void; children?: ReactNode; disabled?: boolean }) => {
       button.onClick = onClick ?? null;
       button.disabled = rest.disabled;
       return createElement("button", { type: "button", onClick, ...rest }, children);
@@ -40,7 +40,9 @@ function render(): string {
 async function clickAndWaitAdded(): Promise<void> {
   render();
   button.onClick?.();
-  await vi.waitFor(() => expect(addPasskey).toHaveBeenCalledTimes(1));
+  await vi.waitFor(() => {
+    expect(addPasskey).toHaveBeenCalledTimes(1);
+  });
 }
 
 describe("AddPasskey", () => {
@@ -60,7 +62,9 @@ describe("AddPasskey", () => {
     addPasskey.mockResolvedValue({ data: null, error: null });
 
     button.onClick?.();
-    await vi.waitFor(() => expect(revalidate).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => {
+      expect(revalidate).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("does not revalidate when better-auth answers with an error", async () => {

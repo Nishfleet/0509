@@ -1,4 +1,8 @@
+import { z } from "zod";
+
 import type { CostBreach } from "../observability/cost-guard";
+
+const insertCostAlertsRow = z.object({ id: z.string() });
 
 const INSERT_ALERT = `INSERT INTO cost_alert (id, day, line, measured_per_brand, expected_per_brand, on_brands, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(day, line) DO NOTHING RETURNING id`;
 
@@ -18,6 +22,11 @@ export async function insertCostAlerts(db: D1Database, breaches: readonly CostBr
         createdAt,
       ),
   );
-  const results = await db.batch<{ id: string }>(statements);
-  return results.flatMap((result) => result.results.map((row) => row.id));
+  const results = await db.batch(statements);
+  return results.flatMap((result) =>
+    z
+      .array(insertCostAlertsRow)
+      .parse(result.results)
+      .map((row) => row.id),
+  );
 }

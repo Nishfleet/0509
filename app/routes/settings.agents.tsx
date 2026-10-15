@@ -8,7 +8,7 @@ import { AgentKeys, ConnectedApps, ConnectDetails } from "../components/agent-se
 import { createAgentKey, disconnectApp, readAgentAccess, revokeAgentKey } from "../lib/agent/access.server";
 import { oauthHelpersContext } from "../lib/agent/context.server";
 import { MCP_PATH } from "../lib/agent/paths";
-import { requireFreshSession } from "../lib/require-session.server";
+import { requireFreshSession, sessionContext } from "../lib/require-session.server";
 
 const agentActionForm = z.object({
   intent: z.string(),
@@ -27,7 +27,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
-  const session = await requireFreshSession(request);
+  const session = context.get(sessionContext);
   const form = await request.formData();
   const parsed = agentActionForm.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { newKey: null, duplicate: false };

@@ -46,7 +46,7 @@ const runSweep = async (id: string) => {
   await using introspector = await introspectWorkflowInstance(env.HIRING_SWEEP, id);
   await env.HIRING_SWEEP.create({ id });
   await introspector.waitForStatus("complete");
-  return introspector.getOutput();
+  return await introspector.getOutput();
 };
 
 describe("nightly hiring sweep workflow", () => {
@@ -73,6 +73,11 @@ describe("nightly hiring sweep workflow", () => {
        VALUES (?, 'Hiring Sweep', ?, 'UTC', 1, 8, ?)`,
     )
       .bind(WS, USER, NOW)
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
+    )
+      .bind(`plan-${WS}`, WS, NOW)
       .run();
     await seedEntity("ent-rival", "rival.com", "on");
     await seedEntity("ent-paused", "paused.com", "off");

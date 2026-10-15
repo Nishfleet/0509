@@ -30,6 +30,7 @@ yarn-error.log*
 
 .vercel
 *.tsbuildinfo
+.tsbuild/
 worker-configuration.d.ts
 
 # Track only the shared Codex local-environment surface.

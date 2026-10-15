@@ -2,6 +2,8 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readMentionFeed } from "../../../app/lib/data/mention.server";
+import { readSignalAlerts } from "../../../app/lib/data/alert.server";
+import { normUrlHash } from "../../../app/lib/mentions/normalize";
 import { planTargets, sweepTarget } from "../../../workers/mentions/sweep";
 
 const NIGHT_ONE = "2026-09-24T03:00:00.000Z";
@@ -41,6 +43,9 @@ async function seedWorkspace(brand: string): Promise<{ workspaceId: string; comp
     env.DB.prepare(
       "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Gymshark', ?2, 'UTC', 1, 8, ?3)",
     ).bind(workspaceId, userId, NIGHT_ONE),
+    env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?1, ?2, 'scout', 'trialing', ?3)",
+    ).bind(`${workspaceId}-plan`, workspaceId, NIGHT_ONE),
     env.DB.prepare(
       "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, created_at) VALUES (?1, ?2, 'self', ?3, 'Gymshark', '{\"description\":\"Gym clothing\"}', ?4)",
     ).bind(`${workspaceId}-self`, workspaceId, `gymshark-dedup-${String(runs)}.com`, NIGHT_ONE),
@@ -162,15 +167,38 @@ describe("D8 duplicate_signal", () => {
     expect((await rows(competitorId)).map((row) => row.duplicate_of)).toEqual([null, null]);
   });
 
-  it("matches on the normalized url when the titles differ", async () => {
+  it("does not store a second row for the same normalized URL (0509#7080)", async () => {
     const brand = freshBrand();
     const { competitorId } = await seedWorkspace(brand);
     const run = jev(0.96);
     Reflect.set(env, "AI", { run });
     await sweep(brand, [article("https://news.example.com/a")], NIGHT_ONE);
     await sweep(brand, [article("https://www.news.example.com/a/?utm_medium=x", "A different headline")], NIGHT_TWO);
-    expect(duplicateAsks(run)).toBe(1);
-    expect((await rows(competitorId)).filter((row) => row.duplicate_of !== null)).toHaveLength(1);
+    expect(duplicateAsks(run)).toBe(0);
+    expect(await rows(competitorId)).toHaveLength(1);
+  });
+
+  it("still stores the same URL for a second brand in the workspace (0509#7080)", async () => {
+    const brand = freshBrand();
+    const { workspaceId, competitorId } = await seedWorkspace(brand);
+    const otherId = `${workspaceId}-other`;
+    const url = "https://news.example.com/a";
+    const hash = await normUrlHash(url);
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO entity (id, workspace_id, role, domain, name, created_at) VALUES (?1, ?2, 'competitor', ?3, ?4, ?5)",
+      ).bind(otherId, workspaceId, `${otherId}.com`, "Other Brand", NIGHT_ONE),
+      env.DB.prepare(
+        `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, canonical_url, url_hash, payload_json, dedup_key, observed_at, last_seen_at, title_hash, norm_url_hash)
+         VALUES (?1, ?2, ?3, 'src_mentions_gdelt', 'mention', 'Other story', ?4, ?4, ?5, '{}', ?6, ?7, ?7, ?5, ?5)`,
+      ).bind(`sig-${otherId}`, workspaceId, otherId, url, hash, `${otherId}:${url}`, NIGHT_ONE),
+    ]);
+    const run = jev(0.96);
+    Reflect.set(env, "AI", { run });
+    await sweep(brand, [article(url)], NIGHT_TWO);
+    expect(await rows(otherId)).toHaveLength(1);
+    expect(await rows(competitorId)).toHaveLength(1);
+    expect(duplicateAsks(run)).toBe(0);
   });
 
   it("never treats an older-than-seven-days mention as a candidate", async () => {
@@ -243,9 +271,10 @@ describe("D8 duplicate_signal", () => {
       NIGHT_TWO,
     );
     const all = await rows(competitorId);
-    expect(all).toHaveLength(18);
+    expect(all).toHaveLength(24);
     expect(duplicateAsks(run)).toBe(6);
     expect(all.filter((row) => row.duplicate_of !== null)).toHaveLength(6);
+    expect(all.filter((row) => row.state === "unjudged")).toHaveLength(6);
   });
 
   it("collapses a same-sweep pair at p >= 0.9 and keeps both rows", async () => {
@@ -263,9 +292,10 @@ describe("D8 duplicate_signal", () => {
     expect(later?.duplicate_of).toBe(earlier?.id);
     const feed = await readMentionFeed(workspaceId, new Date(NIGHT_ONE));
     expect(feed.map((row) => row.id)).toEqual([earlier?.id]);
+    expect(await readSignalAlerts(env.DB, workspaceId)).toHaveLength(1);
   });
 
-  it("pairs a same-sweep item on the normalized url when the titles differ", async () => {
+  it("stores one row when two items share a normalized URL (0509#7080)", async () => {
     const brand = freshBrand();
     const { competitorId } = await seedWorkspace(brand);
     const run = jev(0.96);
@@ -278,8 +308,8 @@ describe("D8 duplicate_signal", () => {
       ],
       NIGHT_ONE,
     );
-    expect(duplicateAsks(run)).toBe(1);
-    expect((await rows(competitorId)).filter((row) => row.duplicate_of !== null)).toHaveLength(1);
+    expect(duplicateAsks(run)).toBe(0);
+    expect(await rows(competitorId)).toHaveLength(1);
   });
 
   it("points a third same-sweep item at the earliest one", async () => {
@@ -336,8 +366,9 @@ describe("D8 duplicate_signal", () => {
     await sweep(brand, interleaved, NIGHT_ONE);
     const all = await rows(competitorId);
     expect(duplicateAsks(run)).toBe(4);
-    expect(all).toHaveLength(8);
+    expect(all).toHaveLength(24);
     expect(all.filter((row) => row.duplicate_of !== null)).toHaveLength(4);
+    expect(all.filter((row) => row.state === "unjudged")).toHaveLength(16);
   });
 
   it("never pairs a mention with another workspace's row", async () => {

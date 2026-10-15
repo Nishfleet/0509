@@ -11,8 +11,6 @@ vi.mock("../../app/lib/auth.server", () => ({
   hasSessionCookie: () => false,
 }));
 
-vi.mock("cloudflare:workers", () => ({ env: {} }));
-
 import { FACES_SCRIPT } from "../../app/lib/faces-script";
 import { contentSecurityPolicy } from "../../app/lib/security-headers";
 import { Layout } from "../../app/root";
@@ -37,7 +35,7 @@ function renderDocument(id: string): string {
               claims: { nouns: "website changes", features: [] },
               now: 0,
             },
-          }),
+          } as unknown as Parameters<typeof Landing>[0]),
         ),
     },
   ]);
@@ -52,18 +50,22 @@ describe("landing LCP critical path", () => {
     expect(html).not.toContain("modulepreload");
   });
 
-  it.each(["routes/landing", "routes/privacy", "routes/terms"])(
-    "keeps every web font out of the first paint on %s and loads the faces after the load event",
-    (id) => {
-      const html = renderDocument(id);
-      expect(html).not.toContain('rel="preload"');
-      expect(html).not.toContain("/fonts/");
-      expect(html).not.toContain("app-faces.css");
-      expect(html).not.toContain('type="module"');
-      expect(html).not.toContain("modulepreload");
-      expect(html).toContain(`<script>${FACES_SCRIPT}</script>`);
-    },
-  );
+  it.each([
+    "routes/landing",
+    "routes/privacy",
+    "routes/terms",
+    "routes/pricing",
+    "routes/api-docs",
+    "routes/unmatched",
+  ])("keeps every web font out of the first paint on %s and loads the faces after the load event", (id) => {
+    const html = renderDocument(id);
+    expect(html).not.toContain('rel="preload"');
+    expect(html).not.toContain("/fonts/");
+    expect(html).not.toContain("app-faces.css");
+    expect(html).not.toContain('type="module"');
+    expect(html).not.toContain("modulepreload");
+    expect(html).toContain(`<script>${FACES_SCRIPT}</script>`);
+  });
 
   it("shares one faces script with the static home", () => {
     const home = readFileSync(join(REPO_ROOT, "public/index.html"), "utf8");
@@ -78,7 +80,7 @@ describe("landing LCP critical path", () => {
   it("still ships the module script, the faces stylesheet and the preloads on every other document", () => {
     const html = renderDocument("routes/login");
     expect(html).toContain("<script");
-    expect(html).toContain('<link rel="stylesheet" href="/app-faces.css"/>');
+    expect(html).toContain('<link rel="stylesheet" href="/app-faces.css" data-precedence="default"/>');
     expect(html).toContain("/fonts/instrument-sans-latin.woff2");
     expect(html).toContain("/fonts/bricolage-hero.woff2");
   });
@@ -122,8 +124,7 @@ describe("static home LCP critical path", () => {
     const script = html.slice(scriptAt, html.indexOf("</script>", scriptAt));
     expect(script).toContain('addEventListener("load"');
     expect(script).toContain('faces.href = "/home-faces.css"');
-    // load alone races first paint: the faces must also wait for the
-    // first-contentful-paint entry or they land on the LCP path (0509#6432).
+
     expect(script).toContain("first-contentful-paint");
     expect(faces).toContain("/fonts/bricolage-hero.woff2");
     expect(faces).toContain("/fonts/instrument-sans-latin.woff2");

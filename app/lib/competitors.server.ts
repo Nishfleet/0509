@@ -5,7 +5,8 @@ import { nameFromDomain } from "./competitor/domain-name";
 import { readCompetitorName } from "./competitor/site-name.server";
 import { addManualCompetitor, countOtherOnCompetitors, readCompetitor, setCompetitorState } from "./data/entity.server";
 import { nextPlan, type PlanId } from "./billing/plans";
-import { readEntitlements, readPlanTier } from "./data/plan.server";
+import { isReturningCustomer } from "./billing/returning.server";
+import { readEntitlements, readPlanSubscription, readPlanTier } from "./data/plan.server";
 import { withinProbeLimit } from "./identity/card.server";
 import {
   acceptSuggestion,
@@ -16,15 +17,22 @@ import {
 import { isTakenDown } from "./data/takedown.server";
 import { resolveDomain } from "./discovery/resolve-domain.server";
 import { normaliseSubject } from "./identity/normalise";
+import { tryFirstLook } from "./site/first-look.server";
 
 export interface CompetitorActionResult {
   message: string | null;
   upgradePlanId?: PlanId | null;
+  returning?: boolean;
+  added?: boolean;
 }
 
 const DONE: CompetitorActionResult = { message: null };
+const ADDED: CompetitorActionResult = { message: null, added: true };
 const COULD_NOT_READ: CompetitorActionResult = {
   message: "We couldn't read that. Try their main website, like brand.com.",
+};
+const EMPTY: CompetitorActionResult = {
+  message: "Enter their website address, like brand.com.",
 };
 const UNRESOLVED: CompetitorActionResult = {
   message: "We couldn't find that brand's website. Try their main website, like brand.com.",
@@ -47,10 +55,12 @@ async function upgradePlanIdFor(workspaceId: string): Promise<PlanId | null> {
   return next === null ? null : next.id;
 }
 
-async function capRefusal(workspaceId: string, cap: number): Promise<CompetitorActionResult> {
+async function capRefusal(workspaceId: string, cap: number, turningOn = false): Promise<CompetitorActionResult> {
+  const next = turningOn ? "Switch another one off to turn this one on." : "Switch one off to add another.";
   return {
-    message: `Your plan watches up to ${String(cap)} competitors. Switch one off to add another.`,
+    message: `Your plan watches up to ${String(cap)} competitors. ${next}`,
     upgradePlanId: await upgradePlanIdFor(workspaceId),
+    returning: await isReturningCustomer(await readPlanSubscription(workspaceId)),
   };
 }
 
@@ -72,7 +82,7 @@ async function workspaceOwnerId(workspaceId: string): Promise<string | null> {
 
 function unreadableAdd(normalised: ReturnType<typeof normaliseSubject>): CompetitorActionResult | null {
   if (normalised.ok) return normalised.subject.kind === "domain" ? null : COULD_NOT_READ;
-  return normalised.reason === "empty" ? COULD_NOT_READ : null;
+  return normalised.reason === "empty" ? EMPTY : null;
 }
 
 async function refusedBeforeFetch(
@@ -110,7 +120,9 @@ async function addCompetitor(workspaceId: string, raw: string, now: string): Pro
     now,
     cap,
   });
-  return outcome === "at_cap" ? capRefusal(workspaceId, cap) : DONE;
+  if (outcome === "at_cap") return capRefusal(workspaceId, cap);
+  await tryFirstLook(workspaceId, domain);
+  return ADDED;
 }
 
 const SUGGESTION_INTENTS = new Map([
@@ -119,8 +131,8 @@ const SUGGESTION_INTENTS = new Map([
   ["dismiss", dismissSuggestion],
 ]);
 
-async function refusedAtCap(workspaceId: string): Promise<CompetitorActionResult> {
-  return capRefusal(workspaceId, (await readEntitlements(workspaceId)).competitors);
+async function refusedAtCap(workspaceId: string, turningOn = false): Promise<CompetitorActionResult> {
+  return capRefusal(workspaceId, (await readEntitlements(workspaceId)).competitors, turningOn);
 }
 
 async function switchRival(input: { workspaceId: string; entityId: string; state: "on" | "off"; now: string }) {
@@ -128,7 +140,7 @@ async function switchRival(input: { workspaceId: string; entityId: string; state
   const changed = await setCompetitorState(input);
   if (changed || state === "off") return DONE;
   const rival = await readCompetitor(workspaceId, entityId);
-  return rival?.state === "off" ? refusedAtCap(workspaceId) : DONE;
+  return rival?.state === "off" ? refusedAtCap(workspaceId, true) : DONE;
 }
 
 function parsedCompetitorIntent(form: FormData) {

@@ -1,0 +1,2 @@
+ALTER TABLE email_suppression ADD COLUMN stops_brief INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE email_suppression ADD COLUMN stops_alerts INTEGER NOT NULL DEFAULT 1;

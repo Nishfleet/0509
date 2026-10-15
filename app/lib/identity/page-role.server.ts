@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { insertVerdicts, type VerdictRow } from "../data/jev_verdict.server";
 import { readPageHashes, upsertJudgedPages, type JudgedPage } from "../data/page.server";
-import { askChoice, type ChoiceQuestion } from "../jev/client.server";
+import { askChoices, type ChoiceQuestion, type ChoiceVerdict } from "../jev/client.server";
 import { sha256Hex } from "../sha256";
 
 const NAV_PAGES_JUDGED = 40;
@@ -58,6 +58,31 @@ export interface ClassifyNavPagesInput {
   now: string;
 }
 
+interface Target {
+  page: NavPage;
+  hash: string;
+}
+
+async function judgeStale(
+  workspaceId: string,
+  domain: string,
+  stale: readonly Target[],
+): Promise<{ judged: (Target & { verdict: ChoiceVerdict })[]; refusal: Error }> {
+  const settled = await askChoices(
+    workspaceId,
+    PAGE_ROLE,
+    stale.map(({ page }) => pageRoleState(domain, page)),
+  );
+  const judged = stale.flatMap((target, index) => {
+    const result = settled[index];
+    return result?.status === "fulfilled" ? [{ ...target, verdict: result.value }] : [];
+  });
+  const refusal = settled.find((result) => result.status === "rejected");
+  if (judged.length === 0 && refusal?.status === "rejected") throw refusal.reason;
+  const reason: unknown = refusal?.status === "rejected" ? refusal.reason : null;
+  return { judged, refusal: reason instanceof Error ? reason : new Error("page_role left pages unanswered") };
+}
+
 export async function classifyNavPages({
   workspaceId,
   entity,
@@ -73,16 +98,15 @@ export async function classifyNavPages({
   const stale = targets.filter((target) => hashes.get(target.page.url) !== target.hash);
   if (stale.length === 0) return [];
 
-  const verdicts = await Promise.all(
-    stale.map(({ page }) => askChoice(workspaceId, PAGE_ROLE, pageRoleState(entity.domain, page))),
-  );
+  const { judged, refusal } = await judgeStale(workspaceId, entity.domain, stale);
+  const verdicts = judged.map((entry) => entry.verdict);
 
-  const rows: JudgedPage[] = stale.map(({ page, hash }, index) => ({
+  const rows: JudgedPage[] = judged.map(({ page, hash, verdict }) => ({
     id: crypto.randomUUID(),
     entityId: entity.id,
     url: page.url,
     title: page.title,
-    role: pageRole.parse(verdicts[index]?.choice),
+    role: pageRole.parse(verdict.choice),
     roleDecidedForHash: hash,
     discoveredAt: now,
   }));
@@ -107,5 +131,6 @@ export async function classifyNavPages({
 
   await insertVerdicts(verdictRows);
   await upsertJudgedPages(rows);
+  if (judged.length < stale.length) throw refusal;
   return rows;
 }

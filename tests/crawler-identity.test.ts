@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { CRAWLER_USER_AGENT, ROBOTS_AGENT } from "../app/lib/fetch/crawler-identity";
 
 function contactUrl(userAgent: string): URL {
-  const inside = userAgent.match(/\(([^)]*)\)/);
+  const inside = /\(([^)]*)\)/.exec(userAgent);
   if (inside === null) throw new Error(`no parenthesised contact url in ${userAgent}`);
   return new URL(inside[1].replace(/^\+/, ""));
 }

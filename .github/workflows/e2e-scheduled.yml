@@ -1,10 +1,18 @@
 name: e2e-scheduled
 
 # Journeys that need calendar time or break the fixture for hours run here on
-# their own clock, never per deploy (0509#4124, 0509#4128). So does the full
-# production suite, `journey=suite` (the `e2e-production` job below): it runs
-# everything except @scheduled, on demand, off the deploy path because its
-# sign-ins send real emails against the daily quota (0509#6033, 0509#6034).
+# their own clock, never per deploy (0509#4124, 0509#4128). The full production
+# suite (the `e2e-production` job below) runs everything except @scheduled, and
+# its sign-ins send real emails against the daily quota (0509#6033, 0509#6034).
+# It runs once a week on the Sunday cron (07:40 UTC, clear of the 04:17 signin
+# and 06:30 soak, and not on the Wednesday j12 run, so no other job holds the
+# live-ai group and replaces a waiting shard), from main: a predictable cost
+# (about 75 emails a week) instead of on-demand runs, which cost 152 emails in
+# one day on 2026-10-09. `suite` is not a dispatch choice: agents verify on the
+# local lane (PLAYWRIGHT_TEST_BASE_URL unset, AGENTS.md). Every job that reaches
+# production declares `environment: production-e2e`, whose deployment branch
+# policy is `main` only.
+# The weekly `j12` job also runs J11, whose kept account needs a 6-day gap.
 # `signin` is the one real sign-in smoke a day (0509#6093): the only production
 # run that sends a real email besides the suite, once, at 04:17 UTC.
 # `soak-report` posts one comment a day on #4730 while the 7-day soak runs
@@ -15,15 +23,16 @@ on:
     - cron: "5 10 * * 3"
     - cron: "17 4 * * *"
     - cron: "30 6 * * *"
+    - cron: "40 7 * * 0"
   workflow_dispatch:
     inputs:
       journey:
         description: Journey to run now
         type: choice
-        options: [none, j12, suite, signin, j8-hard, j8-soft, soak-report, backup-proof, jev-failures]
+        options: [none, j12, signin, j8-hard, j8-soft, soak-report, backup-proof, jev-failures]
         default: none
       spec:
-        description: 'One spec or a filter to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts (0509 sign-up verdict, 2026-09-28)'
+        description: 'One spec file to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts, no flags (0509 sign-up verdict, 2026-09-28; 0509#7186)'
         type: string
         default: ''
 
@@ -31,14 +40,32 @@ permissions:
   contents: read
 
 concurrency:
-  group: e2e-scheduled-${{ inputs.spec && 'spec' || github.event.schedule == '30 6 * * *' && 'soak' || inputs.journey == 'soak-report' && 'soak' || inputs.journey == 'suite' && 'suite' || github.event.schedule == '17 4 * * *' && 'signin' || inputs.journey == 'signin' && 'signin' || startsWith(inputs.journey, 'j8-') && 'j8' || inputs.journey == 'backup-proof' && 'backup' || inputs.journey == 'jev-failures' && 'jev-failures' || 'j12' }}
+  group: e2e-scheduled-${{ inputs.spec && 'spec' || github.event.schedule == '30 6 * * *' && 'soak' || inputs.journey == 'soak-report' && 'soak' || github.event.schedule == '40 7 * * 0' && 'suite' || github.event.schedule == '17 4 * * *' && 'signin' || inputs.journey == 'signin' && 'signin' || startsWith(inputs.journey, 'j8-') && 'j8' || inputs.journey == 'backup-proof' && 'backup' || inputs.journey == 'jev-failures' && 'jev-failures' || 'j12' }}
   cancel-in-progress: false
 
 jobs:
+  main-only:
+    name: main-only
+    # Every journey mints accounts, sends real mail or reads production with a
+    # Cloudflare token, so a dispatch runs one only from main; the jobs below
+    # skip on any other ref and this job makes that skip red, not a quiet
+    # green (0509#7186). The spec input stays open to any branch.
+    if: github.event_name == 'workflow_dispatch' && inputs.journey != 'none' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Refuse a journey dispatched from a branch
+        env:
+          JOURNEY: ${{ inputs.journey }}
+          REF: ${{ github.ref }}
+        run: |
+          echo "::error::journey=$JOURNEY dispatches from main only, not $REF"
+          exit 1
   j12:
     name: j12
-    if: github.event.schedule == '5 10 * * 3' || inputs.journey == 'j12'
+    if: github.event.schedule == '5 10 * * 3' || (inputs.journey == 'j12' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
+    environment: production-e2e
     # One live-AI job at a time: they share the account's Clef call rate (about 60
     # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
     # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
@@ -62,46 +89,57 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Run J12 against production
+      - name: Run J12 and J11 against production
+        # J11 rides the weekly clock too (#7061): its kept account gets a
+        # catch-up brief only when the last one is 6 or more days old.
         id: e2e
         timeout-minutes: 65
-        run: npm run e2e -- e2e/j12-rollovers.spec.ts --project=desktop-1440 --retries=0 --reporter=github,list
+        run: npm run e2e -- e2e/j12-rollovers.spec.ts e2e/j11-weekly-brief.spec.ts --project=desktop-1440 --retries=0 --reporter=github,list
         env:
           PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
       - name: Delete the setup accounts if the run was cut short
-        # The session and onboarded setups mint real accounts and their teardown
-        # projects delete them, but a cancel, a timeout or a killed runner ends
-        # the Playwright process first and the rows stay in production
-        # (0509#6968). The teardowns read the state files the setups wrote, so
-        # running them again here deletes what is left; an account already
-        # deleted is skipped.
+        # The session setup mints a real account and its teardown project
+        # deletes it, but a cancel, a timeout or a killed runner ends the
+        # Playwright process first and the row stays in production (0509#6968).
+        # The teardown reads the state file the setup wrote, so running it again
+        # here deletes what is left; an account already deleted is skipped. The
+        # onboarded setup signs in kept accounts (#7061), so it has no teardown.
         if: always() && steps.e2e.outcome != 'skipped'
         timeout-minutes: 5
-        run: npm run e2e -- --project=session-teardown --project=onboarded-teardown --retries=0 --reporter=github,list
+        run: npm run e2e -- --project=session-teardown --retries=0 --reporter=github,list
         env:
           PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      - name: Print what the page showed when it failed
+        if: failure()
+        run: |
+          shopt -s globstar nullglob
+          files=(test-results/**/error-context.md)
+          if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
   spec:
     name: spec
     # No trace is uploaded: the repo is public and a trace can hold the Access
     # cookie (0509#5999); a failure is read from the job log.
     if: inputs.spec != ''
     runs-on: ubuntu-latest
-    # One live-AI job at a time: they share the account's Clef call rate (about 60
-    # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
-    # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
-    # every workflow in the repo. One run waits per group; a newer waiting run
-    # replaces an older one (actionlint 1.7.12 rejects `queue: max`).
+    environment: production-e2e
     # See the live-ai note on the j12 job.
     concurrency:
       group: live-ai
       cancel-in-progress: false
     timeout-minutes: 30
     steps:
+      - name: Accept one spec file and no flags
+        # The spec input is the one dispatch allowed from any branch, so it runs
+        # one named file and nothing Playwright would read as an option (0509#7186).
+        env:
+          SPEC: ${{ inputs.spec }}
+        run: |
+          [[ "$SPEC" =~ ^e2e/[A-Za-z0-9._-]+\.spec\.ts$ ]] || { echo "::error::spec must be one file, e2e/<name>.spec.ts, with no flags"; exit 1; }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -123,15 +161,15 @@ jobs:
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
           FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
       - name: Delete the setup accounts if the run was cut short
-        # The session and onboarded setups mint real accounts and their teardown
-        # projects delete them, but a cancel, a timeout or a killed runner ends
-        # the Playwright process first and the rows stay in production
-        # (0509#6968). The teardowns read the state files the setups wrote, so
-        # running them again here deletes what is left; an account already
-        # deleted is skipped.
+        # The session setup mints a real account and its teardown project
+        # deletes it, but a cancel, a timeout or a killed runner ends the
+        # Playwright process first and the row stays in production (0509#6968).
+        # The teardown reads the state file the setup wrote, so running it again
+        # here deletes what is left; an account already deleted is skipped. The
+        # onboarded setup signs in kept accounts (#7061), so it has no teardown.
         if: always() && steps.e2e.outcome != 'skipped'
         timeout-minutes: 5
-        run: npm run e2e -- --project=session-teardown --project=onboarded-teardown --retries=0 --reporter=github,list
+        run: npm run e2e -- --project=session-teardown --retries=0 --reporter=github,list
         env:
           PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
@@ -140,20 +178,19 @@ jobs:
         # Playwright writes the page snapshot next to each failure; printing it
         # is how a failure is read, since nothing is uploaded.
         if: failure()
-        run: tail -n +1 test-results/*/error-context.md
+        run: |
+          shopt -s globstar nullglob
+          files=(test-results/**/error-context.md)
+          if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
   signin:
     name: signin
     # One sign-in, one real email against the Email Service daily quota
     # (0509#6033, 0509#6093): no retries, no loop, no other spec. No trace is
     # uploaded: the repo is public and a trace can hold the Access cookie
     # (0509#5999); a failure is read from the job log.
-    if: github.event.schedule == '17 4 * * *' || (inputs.journey == 'signin' && inputs.spec == '')
+    if: github.event.schedule == '17 4 * * *' || (inputs.journey == 'signin' && inputs.spec == '' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    # One live-AI job at a time: they share the account's Clef call rate (about 60
-    # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
-    # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
-    # every workflow in the repo. One run waits per group; a newer waiting run
-    # replaces an older one (actionlint 1.7.12 rejects `queue: max`).
+    environment: production-e2e
     # See the live-ai note on the j12 job.
     concurrency:
       group: live-ai
@@ -186,7 +223,10 @@ jobs:
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
       - name: Print what the page showed when it failed
         if: failure()
-        run: tail -n +1 test-results/*/error-context.md
+        run: |
+          shopt -s globstar nullglob
+          files=(test-results/**/error-context.md)
+          if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
   j8:
     name: j8
     # One break of j8-hard.fixture.0509.in or j8-soft.fixture.0509.in per dispatch, journey j8-hard or j8-soft,
@@ -198,8 +238,9 @@ jobs:
     # public and a trace can hold the Access cookie (0509#5999); a failure is
     # read from the job log. 350 minutes is the most a hosted job may run under
     # the 6 hour cap.
-    if: startsWith(inputs.journey, 'j8-') && inputs.spec == ''
+    if: startsWith(inputs.journey, 'j8-') && inputs.spec == '' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    environment: production-e2e
     timeout-minutes: 350
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -240,13 +281,16 @@ jobs:
           FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
       - name: Print what the page showed when it failed
         if: failure()
-        run: tail -n +1 test-results/*/error-context.md
+        run: |
+          shopt -s globstar nullglob
+          files=(test-results/**/error-context.md)
+          if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
   production-sha:
     name: production-sha
     # The suite runs the code of the deploy that is live, not main's head; no
     # deployment, or one that is not yet successful, fails this job and the
     # shards never start.
-    if: inputs.journey == 'suite'
+    if: github.event.schedule == '40 7 * * 0'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -276,13 +320,9 @@ jobs:
     # uploaded: the repo is public and a trace can hold the Access cookie
     # (0509#5999); a failure is read from the job log.
     needs: production-sha
-    if: inputs.journey == 'suite'
+    if: github.event.schedule == '40 7 * * 0'
     runs-on: ubuntu-latest
-    # One live-AI job at a time: they share the account's Clef call rate (about 60
-    # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
-    # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
-    # every workflow in the repo. One run waits per group; a newer waiting run
-    # replaces an older one (actionlint 1.7.12 rejects `queue: max`).
+    environment: production-e2e
     # See the live-ai note on the j12 job.
     concurrency:
       group: live-ai
@@ -323,23 +363,29 @@ jobs:
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
           FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
       - name: Delete the setup accounts if the run was cut short
-        # The session and onboarded setups mint real accounts and their teardown
-        # projects delete them, but a cancel, a timeout or a killed runner ends
-        # the Playwright process first and the rows stay in production
-        # (0509#6968). The teardowns read the state files the setups wrote, so
-        # running them again here deletes what is left; an account already
-        # deleted is skipped.
+        # The session setup mints a real account and its teardown project
+        # deletes it, but a cancel, a timeout or a killed runner ends the
+        # Playwright process first and the row stays in production (0509#6968).
+        # The teardown reads the state file the setup wrote, so running it again
+        # here deletes what is left; an account already deleted is skipped. The
+        # onboarded setup signs in kept accounts (#7061), so it has no teardown.
         if: always() && steps.e2e.outcome != 'skipped'
         timeout-minutes: 5
-        run: npm run e2e -- --project=session-teardown --project=onboarded-teardown --retries=0 --reporter=github,list
+        run: npm run e2e -- --project=session-teardown --retries=0 --reporter=github,list
         env:
           PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      - name: Print what the page showed when it failed
+        if: failure()
+        run: |
+          shopt -s globstar nullglob
+          files=(test-results/**/error-context.md)
+          if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
   suite:
     name: e2e-production
     needs: [production-sha, suite-shard]
-    if: always() && inputs.journey == 'suite'
+    if: always() && github.event.schedule == '40 7 * * 0'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -384,8 +430,9 @@ jobs:
     name: backup-proof
     # Reads the snapshot-backup instances of the last 48 h and describes each
     # cron-started one (0509#5982, 0509#6289). Counts and R2 cursors only, no rows.
-    if: inputs.journey == 'backup-proof' && inputs.spec == ''
+    if: inputs.journey == 'backup-proof' && inputs.spec == '' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    environment: production-e2e
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -414,8 +461,9 @@ jobs:
     # counts by kind and code over 24 h, then the latest 20 rows. Rows hold a
     # kind, a 4-digit code, a 160-char redacted message and the question ids.
     # Dispatch: `journey=jev-failures`, then read the job log.
-    if: inputs.journey == 'jev-failures' && inputs.spec == ''
+    if: inputs.journey == 'jev-failures' && inputs.spec == '' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    environment: production-e2e
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -440,11 +488,13 @@ jobs:
   soak-report:
     name: soak-report
     # Reads counts only, never rows: no email, report text or other customer
-    # data reaches the log or the comment. Every query is a SELECT. The
-    # healthchecks.io pings and the Sentry issue count are not read here: no
-    # read credential for either is a repository secret, and the comment says so.
-    if: github.event.schedule == '30 6 * * *' || (inputs.journey == 'soak-report' && inputs.spec == '')
+    # data reaches the log or the comment. Every query is a SELECT. New
+    # Sentry crashes are GitHub issues Sentry filed in the last 24 h (author
+    # app/sentry, 0509#7076). Uptime is healthchecks.io Management API v3
+    # with the read-only HEALTHCHECKS_API_KEY repository secret.
+    if: github.event.schedule == '30 6 * * *' || (inputs.journey == 'soak-report' && inputs.spec == '' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
+    environment: production-e2e
     timeout-minutes: 10
     permissions:
       contents: read
@@ -464,6 +514,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+          HEALTHCHECKS_API_KEY: ${{ secrets.HEALTHCHECKS_API_KEY }}
         run: |
           set -euo pipefail
           since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
@@ -509,7 +560,7 @@ jobs:
           gdelt=$(d1 "SELECT COUNT(*) AS n FROM snapshot sn JOIN watch w ON w.id = sn.watch_id JOIN source s ON s.id = w.source_id WHERE s.key = 'gdelt.doc' AND sn.item_count > 0 AND sn.fetched_at >= '$since'" | jq -r '.[0].n')
           mentions=$(d1 "SELECT COUNT(*) AS n FROM signal WHERE kind = 'mention' AND observed_at >= '$since'" | jq -r '.[0].n')
           [ "$gdelt" -gt 0 ] && [ "$mentions" -gt 0 ] || failed=1
-          users=$(d1 "SELECT COUNT(*) AS total, SUM((email LIKE 'e2e+%@0509.io' OR email LIKE 'canary%' OR email LIKE '%@fixture.0509.in') AND email NOT IN ('e2e+j7@0509.io', 'e2e+j8-hard@0509.io', 'e2e+j8-soft@0509.io', 'e2e+j8-hard-v2@0509.io', 'e2e+j8-soft-v2@0509.io', 'e2e+j9-mentions@0509.io', 'e2e+j12-rollovers@0509.io', 'e2e+soak@0509.io')) AS leftover FROM \"user\"" | jq -r '.[0] | "\(.total) users, \(.leftover) leftover test accounts (the eight kept journey accounts are not counted)"')
+          users=$(d1 "SELECT COUNT(*) AS total, SUM((email LIKE 'e2e+%@0509.io' OR email LIKE 'canary%' OR email LIKE '%@fixture.0509.in') AND email NOT IN ('e2e+j7@0509.io', 'e2e+j8-hard@0509.io', 'e2e+j8-soft@0509.io', 'e2e+j8-hard-v2@0509.io', 'e2e+j8-soft-v2@0509.io', 'e2e+j9-mentions@0509.io', 'e2e+j12-rollovers@0509.io', 'e2e+soak@0509.io', 'e2e+onboarded-desktop@0509.io', 'e2e+onboarded-phone@0509.io', 'e2e+j6-desktop@0509.io', 'e2e+j6-phone@0509.io', 'e2e+j11@0509.io')) AS leftover FROM \"user\"" | jq -r '.[0] | "\(.total) users, \(.leftover) leftover test accounts (the thirteen kept journey accounts are not counted)"')
           pricing=$(d1 "SELECT e.domain AS brand, p.url IS NOT NULL AS judged, COUNT(DISTINCT w.id) AS watches, COUNT(sn.id) AS snapshots FROM entity e LEFT JOIN page p ON p.entity_id = e.id AND p.role = 'pricing' AND p.role_decided_for_hash IS NOT NULL LEFT JOIN watch w ON w.entity_id = e.id AND w.target_key = p.url AND w.is_active = 1 AND w.source_id = (SELECT id FROM source WHERE key = 'site.web') LEFT JOIN snapshot sn ON sn.watch_id = w.id AND sn.fetched_at >= '$since' WHERE e.role = 'competitor' AND e.state = 'on'$scope GROUP BY e.id ORDER BY e.domain")
           pricing_lines=$(jq -r 'map("\(.brand) " + (if .judged == 0 then "no pricing page judged" elif .watches == 0 then "pricing page judged, NO WATCH" elif .snapshots == 0 then "watched, no snapshot" else "watched, \(.snapshots) snapshots" end)) | join("; ")' <<< "$pricing")
           pricing_bad=$(jq -r '[.[] | select(.judged == 1 and (.watches == 0 or .snapshots == 0))] | length' <<< "$pricing")
@@ -520,6 +571,27 @@ jobs:
           feed_bad=$(jq -r '[.[] | select(.watches > 0 and .snapshots == 0)] | length' <<< "$feeds")
           feed_posts=$(d1 "SELECT COUNT(*) AS n FROM signal WHERE kind = 'content' AND observed_at >= '$since'$scope" | jq -r '.[0].n')
           [ "$feed_bad" -eq 0 ] || failed=1
+          sentry_day=$(date -u -d '24 hours ago' +%Y-%m-%d)
+          sentry_json=$(gh issue list --state all --search "author:app/sentry created:>=$sentry_day" --limit 100 --json number,createdAt) || sentry_json=null
+          sentry_n=$(jq -r --arg since "$since" 'if type == "array" then [.[] | select(.createdAt >= $since)] | length else "unreadable" end' <<< "$sentry_json") || sentry_n=unreadable
+          [ "$sentry_n" = "0" ] || failed=1
+          hc_json=null
+          if [ -n "${HEALTHCHECKS_API_KEY:-}" ]; then
+            hc_json=$(printf 'X-Api-Key: %s\n' "$HEALTHCHECKS_API_KEY" | curl -sS --fail-with-body --max-time 30 -H @- https://healthchecks.io/api/v3/checks/) || hc_json=null
+          fi
+          hc_up=$(jq -r '.checks | if type == "array" then map(select(.status == "up")) | length else 0 end' <<< "$hc_json") || hc_up=0
+          hc_bad=$(jq -r '.checks | if type == "array" then map(select(.status != "paused" and .status != "up")) | length else 1 end' <<< "$hc_json") || hc_bad=1
+          hc_lines=$(jq -r '.checks | if type == "array" and length > 0 then map(select(.status != "paused") | "\(.name) \(.status)") | join("; ") else empty end' <<< "$hc_json") || hc_lines=""
+          if [ -z "${HEALTHCHECKS_API_KEY:-}" ]; then
+            hc_line="unreadable, HEALTHCHECKS_API_KEY repository secret is empty"
+          elif [ "$(jq -r '.checks | type' <<< "$hc_json" 2>/dev/null)" != "array" ]; then
+            hc_line="unreadable"
+          elif [ -z "$hc_lines" ]; then
+            hc_line="no unpaused checks"
+          else
+            hc_line="$hc_lines"
+          fi
+          [ "$hc_up" -gt 0 ] && [ "$hc_bad" -eq 0 ] || failed=1
           {
             echo "Soak report for the 24 hours before $(date -u +%Y-%m-%dT%H:%MZ) (send counts: $label)."
             echo
@@ -535,8 +607,8 @@ jobs:
             echo "- user table (0509#5731): $users"
             echo "- pricing-page watches, soak brands: $pricing_lines$([ "$pricing_bad" -eq 0 ] && [ "$pricing_any" -gt 0 ] || echo " (FAIL, $pricing_any brands have a judged pricing page and $pricing_bad of those lack a watch or a snapshot)")"
             echo "- blog and changelog feeds, soak brands: $feed_lines; $feed_posts new posts filed in the last 24 h$([ "$feed_bad" -eq 0 ] || echo " (FAIL, $feed_bad watched feeds were not read)")"
-            echo "- healthchecks.io dead-man and site-sweep pings: not read, no healthchecks.io read key is a repository secret"
-            echo "- new Sentry issues: not read, no Sentry auth token is a repository secret"
+            echo "- healthchecks.io dead-man and site-sweep pings: $hc_line$([ "$hc_up" -gt 0 ] && [ "$hc_bad" -eq 0 ] || echo " (FAIL)")"
+            echo "- new Sentry issues in the last 24 h: $sentry_n (author app/sentry)$([ "$sentry_n" = "0" ] || echo " (FAIL)")"
           } > comment.md
           gh issue comment 4730 --body-file comment.md
           [ "$failed" -eq 0 ] || { echo "An engine check failed, see the issue comment"; exit 1; }

@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   waitUntil: vi.fn(),
 }));
 
-vi.mock("cloudflare:workers", () => ({ env: {} }));
 vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn() }));
 vi.mock("../../app/lib/onboarding/subject-access.server", () => ({
   readSubjectAccess: mocks.readSubjectAccess,
@@ -69,14 +68,18 @@ function load() {
   return loader({
     request: new Request("https://0509.io/onboarding/identity?subject=acme.com"),
     context: { get: () => ({ waitUntil: mocks.waitUntil }) },
-  } as Parameters<typeof loader>[0]);
+  } as unknown as Parameters<typeof loader>[0]);
 }
 
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.readSubjectAccess.mockResolvedValue(access());
   mocks.readDraft.mockResolvedValue({});
-  mocks.startCard.mockReturnValue({ site: Promise.resolve({}), logo: Promise.resolve(null) });
+  mocks.startCard.mockReturnValue({
+    site: Promise.resolve({}),
+    logo: Promise.resolve(null),
+    settled: Promise.resolve(),
+  });
   mocks.warmDiscovery.mockResolvedValue(undefined);
   mocks.screenOnboardingSubject.mockResolvedValue({ kind: "proceed" });
   mocks.startOnboardingRun.mockResolvedValue(undefined);

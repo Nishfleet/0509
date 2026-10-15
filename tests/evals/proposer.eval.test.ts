@@ -24,7 +24,7 @@ vi.mock("../../app/lib/fetch/outbound.server", () => ({
   fetchOutbound: () => Promise.reject(new Error("no network")),
 }));
 vi.mock("../../app/lib/fetch/robots.server", () => ({ CRAWLER_USER_AGENT: "eval" }));
-vi.mock("../../app/lib/jev/client.server", () => ({ GATEWAY_ID: "default" }));
+vi.mock("../../app/lib/ai/gateway.server", () => ({ aiGatewayId: () => "default" }));
 
 interface ProposerCase extends EvalRow {
   self: { name: string; domain: string; description: string };

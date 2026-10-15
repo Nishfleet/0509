@@ -31,6 +31,12 @@ WHERE workspace_id = ?1 AND entity_id = ?2 AND verdict = ?3`;
 
 const fieldEditNoteSchema = z.object({ field: z.enum(DRAFT_FIELDS) });
 
+const readEditedFieldsRow = z.object({ note: z.string() });
+
+const readSubjectDecisionRow = z.object({
+  verdict: z.enum(["public_subject:confirmed", "public_subject:refused"]),
+});
+
 export async function insertSubjectDecision(row: {
   workspaceId: string;
   userId: string;
@@ -69,10 +75,10 @@ export async function insertFieldEdits(
 }
 
 export async function readEditedFields(workspaceId: string, entityId: string): Promise<DraftField[]> {
-  const rows = await env.DB.prepare(SELECT_FIELD_EDITS)
-    .bind(workspaceId, entityId, FIELD_EDIT_VERDICT)
-    .all<{ note: string }>();
-  const fields = rows.results.flatMap((row) => {
+  const rows = z
+    .array(readEditedFieldsRow)
+    .parse((await env.DB.prepare(SELECT_FIELD_EDITS).bind(workspaceId, entityId, FIELD_EDIT_VERDICT).all()).results);
+  const fields = rows.flatMap((row) => {
     try {
       const result = fieldEditNoteSchema.safeParse(JSON.parse(row.note));
       return result.success ? [result.data.field] : [];
@@ -85,8 +91,36 @@ export async function readEditedFields(workspaceId: string, entityId: string): P
 }
 
 export async function readSubjectDecision(workspaceId: string, subject: string): Promise<SubjectVerdict | null> {
-  const row = await env.DB.prepare(SELECT_SUBJECT_DECISION)
-    .bind(workspaceId, subject)
-    .first<{ verdict: SubjectVerdict }>();
+  const row = readSubjectDecisionRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_SUBJECT_DECISION).bind(workspaceId, subject).first());
   return row?.verdict ?? null;
+}
+
+const CLEAR_CHANGE_FEEDBACK = `DELETE FROM user_decision
+WHERE workspace_id = ?1 AND signal_id = ?2 AND verdict IN ('change_feedback:useful', 'change_feedback:not_useful')`;
+
+const INSERT_CHANGE_FEEDBACK = `INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at)
+SELECT ?1, s.workspace_id, ?3, s.id, s.entity_id, ?4, NULL, ?5
+FROM signal s
+WHERE s.id = ?2 AND s.workspace_id = ?6 AND s.kind = 'change' AND EXISTS (SELECT 1 FROM "user" WHERE id = ?3)`;
+
+export async function recordChangeFeedback(row: {
+  workspaceId: string;
+  userId: string;
+  signalId: string;
+  useful: boolean;
+  decidedAt: string;
+}): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(CLEAR_CHANGE_FEEDBACK).bind(row.workspaceId, row.signalId),
+    env.DB.prepare(INSERT_CHANGE_FEEDBACK).bind(
+      crypto.randomUUID(),
+      row.signalId,
+      row.userId,
+      row.useful ? "change_feedback:useful" : "change_feedback:not_useful",
+      row.decidedAt,
+      row.workspaceId,
+    ),
+  ]);
 }

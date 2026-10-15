@@ -1,6 +1,7 @@
 import { joinList } from "../../lib/coverage";
 import { sourceKindNoun } from "../../lib/source-name";
-import { SourcePill, sourcePillStatus, type SourceRow, type SourceSnapshot } from "../source-pill";
+import { SourcePill } from "../source-pill";
+import { sourcePillStatus, type SourceRow, type SourceSnapshot } from "../../lib/source-pill-status";
 import { Section } from "./section";
 
 export interface WatchedSource {

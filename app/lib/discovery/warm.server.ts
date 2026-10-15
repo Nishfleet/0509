@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 
 import type { SiteFields } from "../identity/card-fields";
+import { creatorSite } from "../identity/creator-site";
 import type { Subject } from "../identity/normalise";
 import { warmProposals } from "./generators/ai.server";
 
@@ -13,13 +14,12 @@ function takeWarm(workspaceId: string): Promise<boolean> {
 }
 
 export async function warmDiscovery(workspaceId: string, subject: Subject, site: Promise<SiteFields>): Promise<void> {
-  if (subject.kind !== "domain") return;
   const fields = await site;
   if (fields.unfound || fields.name === null || fields.name === "") return;
   if (!(await takeWarm(workspaceId))) return;
   await warmProposals({
     name: fields.name,
-    domain: subject.registrable,
+    domain: (subject.kind === "domain" ? null : creatorSite(fields.socials))?.registrable ?? subject.registrable,
     description: fields.description === "" ? null : fields.description,
   });
 }

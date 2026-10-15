@@ -8,15 +8,6 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { CompetitorSite } from "../../app/components/competitor-site";
 import { CompetitorYoutube } from "../../app/components/competitor-youtube";
 
-// Both competitor forms post to the same route, so the pending state has to be
-// scoped to the form that owns the in-flight intent. The harness stands in for
-// the router's own navigation so each state is rendered for real.
-//
-// The router keeps the submission's formData from "submitting" through the
-// "loading" that follows it, and drops it only when the navigation returns to
-// "idle" (getSubmittingNavigation/getLoadingNavigation in
-// node_modules/react-router/dist/development/lib/router/router.js), so the
-// harness keeps formData for both states that carry a submission.
 const harness = vi.hoisted(() => ({
   state: "idle" as Navigation["state"],
   intent: null as string | null,
@@ -29,44 +20,30 @@ const harness = vi.hoisted(() => ({
 }));
 
 vi.mock("react-router", async (importOriginal) => {
-  const actual = await importOriginal<ReactRouterModule>();
+  const actual = await importOriginal<typeof ReactRouterModule>();
   return {
     ...actual,
-    useNavigation: (): Navigation => ({
-      state: harness.state,
-      location: { pathname: "/app/competitors/ent-1", search: "", hash: "", state: null, key: "k" },
-      matches: [],
-      historyAction: "POP",
-      formMethod: harness.state === "submitting" ? "post" : undefined,
-      formAction: harness.state === "submitting" ? "/app/competitors/ent-1" : undefined,
-      formEncType: undefined,
-      formData: harness.formFor(harness.intent),
-      json: undefined,
-      text: undefined,
-    }),
+    useNavigation: () => ({ state: harness.state, formData: harness.formFor(harness.intent) }),
   };
 });
 
 function render(element: ReactElement): string {
-  // Form needs a data router, so each form is rendered on its own route stub.
   const Stub = createRoutesStub([{ path: "/app/competitors/:entityId", Component: () => element }]);
   return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/app/competitors/ent-1"] }));
 }
 
 function openTag(html: string): string {
-  const tag = html.match(/<button\b[^>]*>/);
+  const tag = /<button\b[^>]*>/.exec(html);
   if (tag === null) throw new Error("no button in the rendered form");
   return tag[0];
 }
 
 function label(html: string): string {
-  const block = html.match(/<button\b[^>]*>([\s\S]*?)<\/button>/);
-  if (block === null || block[1] === undefined) throw new Error("no label in the rendered form");
+  const block = /<button\b[^>]*>([\s\S]*?)<\/button>/.exec(html);
+  if (block?.[1] === undefined) throw new Error("no label in the rendered form");
   return block[1];
 }
 
-// The button's own class list carries `disabled:pointer-events-none`, so the
-// attribute is matched on its own and not as a substring of the class string.
 function isDisabled(tag: string): boolean {
   return /(?:^|\s)disabled(?:\s|>|=|$)/.test(tag);
 }

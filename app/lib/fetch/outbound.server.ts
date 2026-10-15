@@ -89,7 +89,8 @@ export async function fetchOutbound(url: string, init: OutboundInit): Promise<Re
     await res.body?.cancel();
     request = afterRedirect(request, redirectTarget(location, request.url, init.schemes), res.status);
   }
-  throw new BlockedRedirectError(`more than ${String(MAX_REDIRECTS)} redirects`);
+  const last = new URL(request.url);
+  throw new BlockedRedirectError(`more than ${String(MAX_REDIRECTS)} redirects, last at ${last.host}${last.pathname}`);
 }
 
 export async function cappedBody(res: Response, capBytes: number): Promise<Uint8Array | null> {
@@ -126,6 +127,23 @@ export async function cappedBody(res: Response, capBytes: number): Promise<Uint8
 export async function cappedText(res: Response, capBytes: number): Promise<string | null> {
   const bytes = await cappedBody(res, capBytes);
   return bytes === null ? null : new TextDecoder().decode(bytes);
+}
+
+export async function leadingText(res: Response, maxBytes: number): Promise<string> {
+  if (res.body === null) return "";
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  let seen = 0;
+  while (seen < maxBytes) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const kept = value.byteLength > maxBytes - seen ? value.subarray(0, maxBytes - seen) : value;
+    text += decoder.decode(kept, { stream: true });
+    seen += kept.byteLength;
+  }
+  await reader.cancel();
+  return text + decoder.decode();
 }
 
 export async function cappedJson(res: Response, capBytes: number): Promise<unknown> {

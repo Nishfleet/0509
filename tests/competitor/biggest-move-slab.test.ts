@@ -1,6 +1,6 @@
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MemoryRouter } from "react-router";
+import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { BiggestMove, type BiggestMoveProps } from "../../app/components/biggest-move";
@@ -48,7 +48,8 @@ function move(overrides: Partial<BiggestMoveView> = {}): BiggestMoveView {
 }
 
 function render(element: ReactElement): string {
-  return renderToStaticMarkup(createElement(MemoryRouter, null, element));
+  const Stub = createRoutesStub([{ path: "/", Component: () => element }]);
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
 }
 
 function slab(props: BiggestMoveProps): string {
@@ -96,14 +97,14 @@ describe("the biggest-move slab", () => {
 
   it("tells a screen reader the source link leaves the page, in the same anchor", () => {
     const html = slab({ move: move(), change: null, quiet: QUIET });
-    const link = html.match(/<a\b[^>]*href="https:\/\/example\.com\/post\/1"[^>]*>[\s\S]*?<\/a>/)?.[0] ?? "";
+    const link = /<a\b[^>]*href="https:\/\/example\.com\/post\/1"[^>]*>[\s\S]*?<\/a>/.exec(html)?.[0] ?? "";
     expect(link).toContain('target="_blank"');
     expect(link).toContain('Open the source<span class="sr-only"> (opens in a new tab)</span>');
   });
 
   it("gives the source link the whole 44px tap target, not just the min-h-11 token", () => {
     const html = slab({ move: move(), change: null, quiet: QUIET });
-    const link = html.match(/<a\b[^>]*href="https:\/\/example\.com\/post\/1"[^>]*>/)?.[0] ?? "";
+    const link = /<a\b[^>]*href="https:\/\/example\.com\/post\/1"[^>]*>/.exec(html)?.[0] ?? "";
     expect(link).toContain("min-h-11");
     expect(link).toContain("inline-flex");
     expect(link).toContain("items-center");

@@ -1,8 +1,10 @@
 import {
-  countRecentSupportReports,
-  deleteExpiredSupportReports,
-  insertSupportReport,
-} from "../app/lib/data/support_report.server";
+  claimIssueSlot,
+  countRecentIssues,
+  deleteExpiredIssues,
+  releaseIssueSlot,
+} from "../app/lib/data/support_issue.server";
+import { deleteExpiredSupportReports, insertSupportReport } from "../app/lib/data/support_report.server";
 import { fetchOutbound } from "../app/lib/fetch/outbound.server";
 import { sha256Hex } from "../app/lib/sha256";
 
@@ -12,11 +14,17 @@ const SITE_HOSTS = new Set(["0509.io", "www.0509.io"]);
 const TOKEN_PATH_PREFIXES = ["/u/", "/v/", "/api/auth/"];
 const MAX_PATHS = 10;
 const MAX_UA = 200;
-const MAX_ISSUES_PER_DOMAIN_PER_DAY = 3;
 
 interface SupportInboxEnv {
   DB: D1Database;
   SUPPORT_INBOX_GITHUB_TOKEN?: string;
+}
+
+interface ReportMail {
+  id: string;
+  receivedAt: string;
+  raw: string;
+  userAgent: string;
 }
 
 function sitePaths(text: string): string[] {
@@ -36,7 +44,58 @@ function sitePaths(text: string): string[] {
   return [...paths].slice(0, MAX_PATHS);
 }
 
+function issueBody(report: ReportMail): string {
+  const paths = sitePaths(report.raw);
+  return [
+    `report: ${report.id}`,
+    `received: ${report.receivedAt}`,
+    `paths: ${paths.length > 0 ? paths.join(", ") : "none"}`,
+    `user agent: ${report.userAgent.slice(0, MAX_UA)}`,
+  ].join("\n");
+}
+
+async function openIssue(token: string, report: ReportMail): Promise<Response> {
+  return fetchOutbound(ISSUES_URL, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      accept: "application/vnd.github+json",
+      "x-github-api-version": "2022-11-28",
+      "user-agent": "0509-support-inbox-v2",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      title: `user report ${report.id}`,
+      body: issueBody(report),
+      labels: ["user-report", "machine-reported"],
+    }),
+  });
+}
+
+async function createIssue(db: D1Database, token: string, report: ReportMail): Promise<void> {
+  let response: Response;
+  try {
+    response = await openIssue(token, report);
+  } catch (error) {
+    await releaseIssueSlot(db, report.id);
+    console.error("support-inbox: issue create threw", String(error), report.id);
+    return;
+  }
+  if (response.ok) return;
+  await releaseIssueSlot(db, report.id);
+  console.error("support-inbox: issue create failed", response.status, report.id);
+}
+
+async function sweep(db: D1Database, now: Date): Promise<void> {
+  await deleteExpiredSupportReports(db, now);
+  await deleteExpiredIssues(db, now);
+}
+
 export default {
+  fetch() {
+    return new Response(null, { status: 404 });
+  },
+
   async email(message, env) {
     const raw = await new Response(message.raw).text();
     const id = crypto.randomUUID();
@@ -55,40 +114,20 @@ export default {
       console.error("support-inbox: SUPPORT_INBOX_GITHUB_TOKEN is not set", id);
       return;
     }
-    const recent = await countRecentSupportReports(env.DB, fromDomain, new Date(receivedAt));
-    if (recent > MAX_ISSUES_PER_DOMAIN_PER_DAY) {
-      console.error("support-inbox: issue cap reached", id);
+    const claimed = await claimIssueSlot(env.DB, { reportId: id, fromDomain, at: receivedAt });
+    if (!claimed) {
+      console.error(
+        "support-inbox: issue cap reached",
+        id,
+        await countRecentIssues(env.DB, fromDomain, new Date(receivedAt)),
+      );
       return;
     }
-    const userAgent = (message.headers.get("user-agent") ?? message.headers.get("x-mailer") ?? "none").slice(0, MAX_UA);
-    const paths = sitePaths(raw);
-    const body = [
-      `report: ${id}`,
-      `received: ${receivedAt}`,
-      `paths: ${paths.length > 0 ? paths.join(", ") : "none"}`,
-      `user agent: ${userAgent}`,
-    ].join("\n");
-    const response = await fetchOutbound(ISSUES_URL, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${token}`,
-        accept: "application/vnd.github+json",
-        "x-github-api-version": "2022-11-28",
-        "user-agent": "0509-support-inbox-v2",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        title: `user report ${id}`,
-        body,
-        labels: ["user-report", "machine-reported"],
-      }),
-    });
-    if (!response.ok) {
-      console.error("support-inbox: issue create failed", response.status, id);
-    }
+    const userAgent = message.headers.get("user-agent") ?? message.headers.get("x-mailer") ?? "none";
+    await createIssue(env.DB, token, { id, receivedAt, raw, userAgent });
   },
 
   scheduled(controller, env, ctx) {
-    ctx.waitUntil(deleteExpiredSupportReports(env.DB, new Date(controller.scheduledTime)));
+    ctx.waitUntil(sweep(env.DB, new Date(controller.scheduledTime)));
   },
 } satisfies ExportedHandler<SupportInboxEnv>;

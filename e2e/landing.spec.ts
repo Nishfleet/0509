@@ -1,12 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { expectFaceLoaded } from "./fonts";
 import { consoleFailures, watchConsole } from "./inbox";
-
-// The homepage, staged at /design/landing, publicly reachable until launch;
-// / keeps the static rebuild notice (Nish, 2026-09-24). What is asserted is the
-// contract: section order, one headline, the priced action and where it goes,
-// the structured data matching the visible page. Copy stays unpinned.
 
 const PATH = "/design/landing";
 
@@ -40,15 +35,6 @@ test("the landing route data and document carry no disabled source's internal no
   const response = await page.goto(PATH);
   expect(response?.status()).toBe(200);
 
-  // Migration 0007 seeds `x.search` disabled with `disabled_reason` and
-  // `cheapest_route` in config_json; migration 0002 seeds the five parked
-  // `ads.*_parked` rows with their probe evidence. The loader must drop both
-  // classes before the route serializes anything (0509#5828). The `.data`
-  // payload is the route's own client-navigation serialization and is where
-  // the filter has to bite; app/root.tsx:34 omits <Scripts /> for the landing,
-  // so the document carries no loader data — its negatives below are a guard
-  // for the day hydration comes back, and the payload positive is the evidence
-  // the route still has sources.
   const data = await request.get(`${PATH}.data`);
   expect(data.status()).toBe(200);
   const payload = await data.text();
@@ -68,26 +54,15 @@ test("the landing never leads with a full row of dimmed sources @smoke", async (
   const response = await page.goto(PATH);
   expect(response?.status()).toBe(200);
 
-  // #5674 at the real HTTP surface: the What we watch section holds the pill
-  // row with at least one pill not degraded, or the all-degraded gate has
-  // replaced the row with the one rebuilding line and left no row behind. The
-  // local preview is always the gated state — no migration seeds a `snapshot`
-  // row, so every enabled source reads degraded — and the production lane
-  // carries whichever state its sources are in; both are correct here, an
-  // all-degraded pill row is not.
   const watch = page.locator("#what-we-watch");
   const pills = await watch.locator("[data-state]").count();
   const degraded = await watch.locator('[data-state="degraded"]').count();
   const row = await watch.locator("ul").count();
   expect(pills > 0).toBe(row > 0);
-  // The all-degraded gate counts mentions sources only (#6064): when the site
-  // source (site.page) is itself degraded the normal dimmed rows render, so a
-  // fully dimmed row is allowed only then and never otherwise.
+
   const siteDegraded = await watch.locator('[data-state="degraded"]', { hasText: "Website checks" }).count();
   expect(degraded === pills && pills > 0 && siteDegraded === 0).toBe(false);
   if (row === 0) {
-    // The gate leaves the one rebuilding line where the row was; a bare section
-    // with neither row nor line is the regression this guards.
     expect(await watch.textContent()).toContain("We're rebuilding coverage of news mentions");
   }
 });
@@ -157,10 +132,10 @@ test("the agents section hands a visitor's agent the MCP address and the API doc
 test("the landing's action names its price and leads to sign-in @smoke", async ({ page }) => {
   await page.goto(PATH);
   const hero = page.locator("#hero");
-  await expect(hero.getByRole("button", { name: /€\d+\/mo/ })).toBeVisible();
+  await expect(hero.getByRole("button", { name: /€\d+\/month/ })).toBeVisible();
   await expect(hero.locator("form")).toHaveAttribute("action", "/login");
   await expect(hero.locator("form")).toHaveAttribute("method", "get");
-  await expect(page.locator("#price").getByRole("link", { name: /€\d+\/mo/ })).toHaveAttribute("href", "/login");
+  await expect(page.locator("#price").getByRole("link", { name: /€\d+\/month/ })).toHaveAttribute("href", "/login");
 });
 
 test("the hero's first viewport holds the outcome and the one priced input @smoke", async ({ page }, testInfo) => {
@@ -181,7 +156,7 @@ test("the hero's first viewport holds the outcome and the one priced input @smok
     hero.getByRole("heading", { level: 1, name: "Know where you stand. And who’s gaining on you." }),
     hero.getByText(/we find your competitors for you, so you do not need to know who they are/i),
     hero.getByRole("textbox", { name: /your website address or social username/i }),
-    hero.getByRole("button", { name: /€\d+\/mo/ }),
+    hero.getByRole("button", { name: /€\d+\/month/ }),
     hero.getByText("One box to fill in. About a minute to see who’s gaining on you."),
   ];
   for (const piece of pieces) {
@@ -257,7 +232,7 @@ test("the hero input carries what you typed to sign-in @smoke", async ({ page })
     .fill("example.com");
   await page
     .locator("#hero")
-    .getByRole("button", { name: /€\d+\/mo/ })
+    .getByRole("button", { name: /€\d+\/month/ })
     .click();
   await expect(page).toHaveURL(/\/login\?subject=example\.com$/);
 });
@@ -307,12 +282,6 @@ test("the organization logo is served @smoke", async ({ request }) => {
   expect(response.headers()["content-type"].startsWith("image/svg+xml")).toBe(true);
 });
 
-// The ticker is the one looping element on the landing (DESIGN.md §9). These
-// tests pin the physical contract #4083 bought: it sits above the main page
-// flow and holds its own height, it never widens the document, it does not
-// shift layout, it stops for prefers-reduced-motion, and every item is a
-// distinct real signal row.
-
 test("the ticker sits above the page and reserves its height @smoke", async ({ page }) => {
   await page.goto(PATH);
   const ticker = page.locator("#ticker");
@@ -355,7 +324,7 @@ test("the ticker causes no layout shift @smoke", async ({ page }) => {
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
         if (!Reflect.get(entry, "hadRecentInput")) {
-          Reflect.set(window, "__cls", Reflect.get(window, "__cls") + Reflect.get(entry, "value"));
+          Reflect.set(window, "__cls", Number(Reflect.get(window, "__cls")) + Number(Reflect.get(entry, "value")));
         }
       }
     }).observe({ type: "layout-shift", buffered: true });
@@ -365,7 +334,7 @@ test("the ticker causes no layout shift @smoke", async ({ page }) => {
   await expectFaceLoaded(page, "Bricolage Grotesque", 800);
   await expectFaceLoaded(page, "Instrument Sans", 400);
   await expectFaceLoaded(page, "IBM Plex Mono", 400);
-  expect(await page.evaluate(() => Reflect.get(window, "__cls"))).toBeLessThan(0.05);
+  expect(await page.evaluate(() => Number(Reflect.get(window, "__cls")))).toBeLessThan(0.05);
 });
 
 test("the ticker stops under reduced motion @smoke", async ({ page }) => {

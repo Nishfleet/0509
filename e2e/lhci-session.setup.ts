@@ -4,17 +4,12 @@ import { expect, test as setup } from "@playwright/test";
 
 import { requireInboxToken, waitForMagicLink } from "./inbox";
 
-// The lighthouse job's signed-in audit (0509#5767). There is no test-session
-// shortcut in the app, so this is J1's sign-in driven through the request
-// fixture: no browser, so the job needs no `playwright install`. The cookie
-// lands in GITHUB_ENV and lighthouserc.cjs sends it next to CF_Authorization.
 setup("sign in a fresh e2e address and record the session cookie", async ({ request, baseURL }) => {
+  if (!baseURL) throw new Error("baseURL is not set");
   const token = requireInboxToken();
   const githubEnv = process.env.GITHUB_ENV;
   if (!githubEnv) throw new Error("GITHUB_ENV is not set: the session cookie has nowhere to be recorded");
-  // The service-token headers clear the Access gate and pre-clear Turnstile
-  // server side (accessPrecleared), the same as J1's browser lane. better-auth
-  // checks Origin on the sign-in POST the way the app's own form does.
+
   const accessHeaders = {
     "CF-Access-Client-Id": process.env.CF_ACCESS_CLIENT_ID ?? "",
     "CF-Access-Client-Secret": process.env.CF_ACCESS_CLIENT_SECRET ?? "",
@@ -31,8 +26,6 @@ setup("sign in a fresh e2e address and record the session cookie", async ({ requ
   const response = await request.get(link, { headers: accessHeaders });
   expect(response.ok()).toBe(true);
 
-  // The session is only proven when the gate accepts it: /app must answer
-  // without bouncing to /login (a fresh workspace lands on /onboarding).
   const app = await request.get("/app", { headers: accessHeaders });
   expect(new URL(app.url()).pathname.startsWith("/login")).toBe(false);
 

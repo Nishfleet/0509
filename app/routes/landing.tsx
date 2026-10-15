@@ -18,20 +18,22 @@ import { readRegistrySources } from "../lib/data/source.server";
 import { FAQ } from "../lib/faq";
 import { landingSources } from "../lib/landing-sources";
 import { daysBefore, readLandingMarks } from "../lib/site-changes.server";
+import { MAIN_CONTENT_ID, SkipLink } from "../components/skip-link";
 import {
   SITE_URL,
   faqPageJsonLd,
   jsonLdGraph,
   organizationJsonLd,
+  shareImageMeta,
   softwareApplicationJsonLd,
   websiteJsonLd,
 } from "../lib/structured-data";
-import { tickerItems } from "../lib/ticker";
+import { tickerItems } from "../lib/ticker-items.server";
 import { watchedClaims } from "../lib/watched-claims";
 
 const PAGE_TITLE = "Competitor tracking for founders and creators | Five to Nine";
 function description(nouns: string): string {
-  return `Five to Nine watches your competitors' ${nouns} and emails you one brief every Monday with a screenshot behind every change.`;
+  return `Five to Nine watches your competitors' ${nouns} and emails one Monday brief, with screenshots.`;
 }
 const HOME = `${SITE_URL}/`;
 
@@ -47,11 +49,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
     { property: "og:title", content: PAGE_TITLE },
     { property: "og:description", content: summary },
     { property: "og:url", content: HOME },
-    { property: "og:image", content: `${SITE_URL}/og.png` },
-    { property: "og:image:width", content: "1200" },
-    { property: "og:image:height", content: "630" },
-    { property: "og:image:alt", content: "Know where you stand. And who's gaining on you." },
-    { name: "twitter:card", content: "summary_large_image" },
+    ...shareImageMeta(),
     {
       "script:ld+json": jsonLdGraph([
         organizationJsonLd(),
@@ -83,9 +81,10 @@ export async function loader(_: Route.LoaderArgs) {
 export default function Landing({ loaderData }: Route.ComponentProps) {
   return (
     <div className="bg-bone text-ink">
+      <SkipLink />
       <Ticker items={loaderData.ticker} />
       <Header />
-      <main>
+      <main id={MAIN_CONTENT_ID} tabIndex={-1}>
         <Hero nouns={loaderData.claims.nouns} />
         <Marks marks={loaderData.marks} now={loaderData.now} />
         <HowItWorks />

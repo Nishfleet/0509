@@ -1,6 +1,15 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 
-import { decryptSlackWebhook, encryptSlackWebhook, isEncryptedSlackTarget } from "../slack-target-crypto.server";
+import { normalizeEmailAddress } from "../email-address";
+import { MAX_TEAMMATES } from "../teammate-limit";
+import {
+  decryptSlackWebhookWithKeys,
+  encryptSlackWebhook,
+  isEncryptedSlackTarget,
+  parseSlackTargetKeys,
+  slackTargetKeyId,
+} from "../slack-target-crypto.server";
 import { parseSlackWebhook } from "../slack-webhook";
 import { sha256Hex } from "../sha256";
 
@@ -8,7 +17,7 @@ const WRITE_UNSUBSCRIBE_TOKEN = `UPDATE send_target SET unsubscribe_token = ? WH
 
 const SELECT_EMAIL_TARGET = `SELECT st.target_value, st.is_verified FROM send_target st
 JOIN channel c ON c.id = st.channel_id
-WHERE st.workspace_id = ? AND c.key = 'email'
+WHERE st.workspace_id = ? AND c.key = 'email' AND st.role = 'owner'
 ORDER BY st.created_at ASC
 LIMIT 1`;
 
@@ -16,7 +25,7 @@ const WRITE_VERIFY_TOKEN = `UPDATE send_target SET verify_token = ?, verify_toke
 WHERE id = (
   SELECT st.id FROM send_target st
   JOIN channel c ON c.id = st.channel_id
-  WHERE st.workspace_id = ? AND c.key = 'email'
+  WHERE st.workspace_id = ? AND c.key = 'email' AND st.role = 'owner'
   ORDER BY st.created_at ASC
   LIMIT 1
 )`;
@@ -25,7 +34,7 @@ const MARK_EMAIL_TARGET_VERIFIED = `UPDATE send_target SET is_verified = 1, veri
 WHERE id = (
   SELECT st.id FROM send_target st
   JOIN channel c ON c.id = st.channel_id
-  WHERE st.workspace_id = ? AND c.key = 'email'
+  WHERE st.workspace_id = ? AND c.key = 'email' AND st.role = 'owner'
   ORDER BY st.created_at ASC
   LIMIT 1
 )`;
@@ -33,23 +42,27 @@ WHERE id = (
 const CHANGE_EMAIL_TARGET = `UPDATE send_target
 SET target_value = ?, is_verified = 0, unsubscribe_token = NULL, verify_token = NULL, verify_token_expires_at = NULL
 WHERE workspace_id = ?
+  AND role = 'owner'
   AND channel_id = (SELECT id FROM channel WHERE key = 'email')
-  AND target_value <> ?`;
+  AND lower(trim(target_value)) <> lower(trim(?))`;
 
 const CONFIRM_EMAIL_TARGET_BY_TOKEN = `UPDATE send_target SET is_verified = 1, verify_token = NULL, verify_token_expires_at = NULL
+WHERE verify_token = ? AND verify_token_expires_at > ?`;
+
+const SELECT_ROLE_BY_TOKEN = `SELECT role FROM send_target
 WHERE verify_token = ? AND verify_token_expires_at > ?`;
 
 const SELECT_EMAIL_TARGET_BY_TOKEN = `SELECT target_value FROM send_target
 WHERE verify_token = ? AND verify_token_expires_at > ?`;
 
 const INSERT_OWNER_EMAIL_TARGET = `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at)
-SELECT 'st-email-' || w.id, w.id, c.id, u.email, u.emailVerified, ?
+SELECT 'st-email-' || w.id, w.id, c.id, lower(trim(u.email)), u.emailVerified, ?
   FROM workspace w
   JOIN "user" u ON u.id = w.owner_user_id
   JOIN channel c ON c.key = 'email'
  WHERE w.id = ?
    AND NOT EXISTS (
-     SELECT 1 FROM send_target st WHERE st.workspace_id = w.id AND st.channel_id = c.id
+     SELECT 1 FROM send_target st WHERE st.workspace_id = w.id AND st.channel_id = c.id AND st.role = 'owner'
    )`;
 
 interface TargetDb {
@@ -69,15 +82,13 @@ export async function ensureOwnerEmailTarget(db: TargetDb, input: { workspaceId:
   await db.prepare(INSERT_OWNER_EMAIL_TARGET).bind(input.now, input.workspaceId).run();
 }
 
+const readEmailTargetRow = z.object({ target_value: z.string(), is_verified: z.number() });
+
 export async function readEmailTarget(
   db: TargetDb,
   workspaceId: string,
 ): Promise<{ target_value: string; is_verified: number } | null> {
-  const row = await db
-    .prepare(SELECT_EMAIL_TARGET)
-    .bind(workspaceId)
-    .first<{ target_value: string; is_verified: number }>();
-  return row ?? null;
+  return readEmailTargetRow.nullable().parse(await db.prepare(SELECT_EMAIL_TARGET).bind(workspaceId).first());
 }
 
 export async function writeVerifyToken(
@@ -93,19 +104,34 @@ export async function markEmailTargetVerified(db: TargetDb, input: { workspaceId
 }
 
 export async function changeEmailTarget(db: TargetDb, input: { workspaceId: string; address: string }): Promise<void> {
-  await db.prepare(CHANGE_EMAIL_TARGET).bind(input.address, input.workspaceId, input.address).run();
+  const address = normalizeEmailAddress(input.address);
+  await db.prepare(CHANGE_EMAIL_TARGET).bind(address, input.workspaceId, address).run();
 }
+
+const readEmailTargetByTokenRow = z.object({ target_value: z.string() });
 
 export async function readEmailTargetByToken(
   db: TargetDb,
   input: { token: string; now: string },
 ): Promise<string | null> {
   const tokenHash = await sha256Hex(input.token);
-  const row = await db
-    .prepare(SELECT_EMAIL_TARGET_BY_TOKEN)
-    .bind(tokenHash, input.now)
-    .first<{ target_value: string }>();
+  const row = readEmailTargetByTokenRow
+    .nullable()
+    .parse(await db.prepare(SELECT_EMAIL_TARGET_BY_TOKEN).bind(tokenHash, input.now).first());
   return row?.target_value ?? null;
+}
+
+const roleByTokenRow = z.object({ role: z.enum(["owner", "teammate"]) });
+
+export async function readTargetRoleByToken(
+  db: TargetDb,
+  input: { token: string; now: string },
+): Promise<"owner" | "teammate" | null> {
+  const tokenHash = await sha256Hex(input.token);
+  const row = roleByTokenRow
+    .nullable()
+    .parse(await db.prepare(SELECT_ROLE_BY_TOKEN).bind(tokenHash, input.now).first());
+  return row?.role ?? null;
 }
 
 export async function confirmEmailTargetByToken(db: TargetDb, input: { token: string; now: string }): Promise<void> {
@@ -119,45 +145,273 @@ WHERE st.workspace_id = ? AND c.key = 'slack' AND c.is_enabled = 1 AND st.is_ver
 ORDER BY st.created_at ASC
 LIMIT 1`;
 
+const readSlackDisconnectedRow = z.object({ found: z.number() });
+
+const DISCONNECT_SLACK_TARGET = `UPDATE send_target SET is_verified = 0 WHERE id = ?`;
+
+const SELECT_DISCONNECTED_SLACK = `SELECT 1 AS found FROM send_target st
+JOIN channel c ON c.id = st.channel_id
+WHERE st.workspace_id = ? AND c.key = 'slack' AND st.is_verified = 0
+LIMIT 1`;
+
 const DELETE_SLACK_TARGET = `DELETE FROM send_target
 WHERE workspace_id = ? AND channel_id = (SELECT id FROM channel WHERE key = 'slack')`;
 
 const INSERT_SLACK_TARGET = `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at)
 SELECT ?, ?, id, ?, 1, ? FROM channel WHERE key = 'slack'`;
 
-function slackTargetSecret(): string {
-  const raw: unknown = env.SLACK_TARGET_SECRET;
-  if (typeof raw !== "string") throw new Error("SLACK_TARGET_SECRET is not configured");
-  const secret = raw.trim();
-  if (secret.length === 0) throw new Error("SLACK_TARGET_SECRET is not configured");
-  return secret;
+const SELECT_UNSEALED_SLACK_TARGETS = `SELECT st.id, st.workspace_id, st.target_value FROM send_target st
+JOIN channel c ON c.id = st.channel_id
+WHERE c.key = 'slack' AND st.id > ? AND st.seal_attempts < ? AND st.target_value NOT LIKE 'enc:v2:' || ? || ':%'
+ORDER BY st.id ASC
+LIMIT ?`;
+
+const SEAL_SLACK_TARGET = `UPDATE send_target SET target_value = ? WHERE id = ? AND target_value = ?`;
+
+const RECORD_FAILED_SEAL = `UPDATE send_target SET seal_attempts = seal_attempts + 1 WHERE id = ?`;
+
+const COUNT_UNSEALED_SLACK_TARGETS = `SELECT COUNT(*) AS remaining FROM send_target st
+JOIN channel c ON c.id = st.channel_id
+WHERE c.key = 'slack' AND st.seal_attempts < ? AND st.target_value NOT LIKE 'enc:v2:' || ? || ':%'`;
+
+const COUNT_STUCK_SLACK_TARGETS = `SELECT COUNT(*) AS stuck FROM send_target st
+JOIN channel c ON c.id = st.channel_id
+WHERE c.key = 'slack' AND st.seal_attempts >= ? AND st.target_value NOT LIKE 'enc:v2:' || ? || ':%'`;
+
+const DEFAULT_BACKFILL_BATCH = 50;
+const NIGHTLY_SLACK_BACKFILL_CAP = 500;
+const MAX_SEAL_ATTEMPTS = 3;
+
+const slackTargetRow = z.object({
+  id: z.string(),
+  workspace_id: z.string(),
+  target_value: z.string(),
+});
+
+type SlackTargetRow = z.infer<typeof slackTargetRow>;
+
+export interface SlackBackfillResult {
+  readonly sealed: number;
+  readonly skipped: number;
+  readonly failed: number;
 }
+
+type SlackBackfillOutcome = keyof SlackBackfillResult;
+
+function slackTargetKeys(): Promise<readonly string[]> {
+  return parseSlackTargetKeys(env.SLACK_TARGET_SECRET);
+}
+
+async function slackTargetWriteSecret(): Promise<string> {
+  const [current] = await slackTargetKeys();
+  if (current === undefined) throw new Error("SLACK_TARGET_SECRET is not configured");
+  return current;
+}
+
+const readSlackTargetRow = z.object({ id: z.string(), target_value: z.string() });
 
 export async function readSlackTarget(
   db: TargetDb,
   workspaceId: string,
 ): Promise<{ id: string; target_value: string } | null> {
-  const row = await db.prepare(SELECT_SLACK_TARGET).bind(workspaceId).first<{ id: string; target_value: string }>();
+  const row = readSlackTargetRow.nullable().parse(await db.prepare(SELECT_SLACK_TARGET).bind(workspaceId).first());
   if (row === null) return null;
   if (isEncryptedSlackTarget(row.target_value)) {
-    return { id: row.id, target_value: await decryptSlackWebhook(row.target_value, slackTargetSecret(), workspaceId) };
+    const webhook = await decryptSlackWebhookWithKeys(row.target_value, await slackTargetKeys(), workspaceId);
+    return { id: row.id, target_value: webhook };
   }
   const webhook = parseSlackWebhook(row.target_value);
   if (webhook === null) throw new Error("Slack target is not a webhook address");
   return { id: row.id, target_value: webhook };
 }
 
+async function openSlackTarget(row: SlackTargetRow, keys: readonly string[]): Promise<string | null> {
+  if (!isEncryptedSlackTarget(row.target_value)) return parseSlackWebhook(row.target_value);
+  return decryptSlackWebhookWithKeys(row.target_value, keys, row.workspace_id).catch(() => null);
+}
+
+async function recordFailedSeal(db: D1Database, id: string): Promise<"failed"> {
+  await db.prepare(RECORD_FAILED_SEAL).bind(id).run();
+  return "failed";
+}
+
+async function sealSlackTargetRow(
+  db: D1Database,
+  row: SlackTargetRow,
+  keys: readonly string[],
+): Promise<SlackBackfillOutcome> {
+  const webhook = await openSlackTarget(row, keys);
+  const [current] = keys;
+  if (webhook === null || current === undefined) return recordFailedSeal(db, row.id);
+  const sealed = await encryptSlackWebhook(webhook, current, row.workspace_id);
+  const result = await db.prepare(SEAL_SLACK_TARGET).bind(sealed, row.id, row.target_value).run();
+  return result.meta.changes === 1 ? "sealed" : "skipped";
+}
+
+function addOutcome(total: SlackBackfillResult, outcome: SlackBackfillOutcome): SlackBackfillResult {
+  return { ...total, [outcome]: total[outcome] + 1 };
+}
+
+function cappedCount(total: SlackBackfillResult): number {
+  return total.sealed + total.skipped;
+}
+
+export async function backfillSlackTargets(
+  db: D1Database,
+  options: { batchSize?: number; maxRows?: number } = {},
+): Promise<SlackBackfillResult> {
+  const keys = await slackTargetKeys();
+  const [current] = keys;
+  if (current === undefined) throw new Error("SLACK_TARGET_SECRET is not configured");
+  const currentId = await slackTargetKeyId(current);
+  const batchSize = options.batchSize ?? DEFAULT_BACKFILL_BATCH;
+  const maxRows = options.maxRows ?? Number.POSITIVE_INFINITY;
+  let total: SlackBackfillResult = { sealed: 0, skipped: 0, failed: 0 };
+  let cursor = "";
+  while (cappedCount(total) < maxRows) {
+    const limit = Math.min(batchSize, maxRows - cappedCount(total));
+    const rows = z
+      .array(slackTargetRow)
+      .parse(
+        (await db.prepare(SELECT_UNSEALED_SLACK_TARGETS).bind(cursor, MAX_SEAL_ATTEMPTS, currentId, limit).all())
+          .results,
+      );
+    for (const row of rows) total = addOutcome(total, await sealSlackTargetRow(db, row, keys));
+    const last = rows.at(-1);
+    if (last === undefined || rows.length < limit) break;
+    cursor = last.id;
+  }
+  return total;
+}
+
+async function currentKeyId(): Promise<string> {
+  const [current] = await slackTargetKeys();
+  if (current === undefined) throw new Error("SLACK_TARGET_SECRET is not configured");
+  return slackTargetKeyId(current);
+}
+
+const countUnsealedSlackTargetsRow = z.object({ remaining: z.number() });
+
+export async function countUnsealedSlackTargets(db: D1Database): Promise<number> {
+  const row = countUnsealedSlackTargetsRow.nullable().parse(
+    await db
+      .prepare(COUNT_UNSEALED_SLACK_TARGETS)
+      .bind(MAX_SEAL_ATTEMPTS, await currentKeyId())
+      .first(),
+  );
+  return row?.remaining ?? 0;
+}
+
+const countStuckSlackTargetsRow = z.object({ stuck: z.number() });
+
+async function countStuckSlackTargets(db: D1Database): Promise<number> {
+  const row = countStuckSlackTargetsRow.nullable().parse(
+    await db
+      .prepare(COUNT_STUCK_SLACK_TARGETS)
+      .bind(MAX_SEAL_ATTEMPTS, await currentKeyId())
+      .first(),
+  );
+  return row?.stuck ?? 0;
+}
+
+export async function runNightlySlackBackfill(db: D1Database, options: { maxRows?: number } = {}): Promise<number> {
+  const result = await backfillSlackTargets(db, { maxRows: options.maxRows ?? NIGHTLY_SLACK_BACKFILL_CAP });
+  const remaining = await countUnsealedSlackTargets(db);
+  const stuck = await countStuckSlackTargets(db);
+  if (remaining > 0 || stuck > 0) {
+    console.info(JSON.stringify({ event: "slack_backfill.remaining", remaining, stuck, ...result }));
+  }
+  return remaining;
+}
+
 export async function removeSlackTarget(db: D1Database, workspaceId: string): Promise<void> {
   await db.prepare(DELETE_SLACK_TARGET).bind(workspaceId).run();
+}
+
+export async function disconnectSlackTarget(db: D1Database, targetId: string): Promise<void> {
+  await db.prepare(DISCONNECT_SLACK_TARGET).bind(targetId).run();
+}
+
+export async function readSlackDisconnected(db: D1Database, workspaceId: string): Promise<boolean> {
+  return (
+    readSlackDisconnectedRow.nullable().parse(await db.prepare(SELECT_DISCONNECTED_SLACK).bind(workspaceId).first()) !==
+    null
+  );
 }
 
 export async function saveSlackTarget(
   db: D1Database,
   input: { workspaceId: string; webhookUrl: string; now: string },
 ): Promise<void> {
-  const sealed = await encryptSlackWebhook(input.webhookUrl, slackTargetSecret(), input.workspaceId);
+  const sealed = await encryptSlackWebhook(input.webhookUrl, await slackTargetWriteSecret(), input.workspaceId);
   await db.batch([
     db.prepare(DELETE_SLACK_TARGET).bind(input.workspaceId),
     db.prepare(INSERT_SLACK_TARGET).bind(crypto.randomUUID(), input.workspaceId, sealed, input.now),
   ]);
+}
+
+const SELECT_TEAMMATES = `SELECT st.id, st.workspace_id, st.channel_id, st.target_value, st.is_verified, st.unsubscribe_token FROM send_target st
+JOIN channel c ON c.id = st.channel_id
+WHERE st.workspace_id = ? AND c.key = 'email' AND st.role = 'teammate'
+ORDER BY st.created_at ASC`;
+
+const INSERT_TEAMMATE = `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at, role)
+SELECT ?1, ?2, c.id, ?3, 0, ?4, 'teammate'
+  FROM channel c
+ WHERE c.key = 'email'
+   AND (SELECT count(*) FROM send_target t WHERE t.workspace_id = ?2 AND t.channel_id = c.id AND t.role = 'teammate') < ?5
+   AND NOT EXISTS (
+     SELECT 1 FROM send_target t WHERE t.workspace_id = ?2 AND t.channel_id = c.id AND lower(trim(t.target_value)) = ?3
+   )`;
+
+const WRITE_TEAMMATE_VERIFY_TOKEN = `UPDATE send_target SET verify_token = ?, verify_token_expires_at = ?
+WHERE id = ? AND workspace_id = ? AND role = 'teammate'`;
+
+const DELETE_TEAMMATE = `DELETE FROM send_target WHERE id = ? AND workspace_id = ? AND role = 'teammate'`;
+
+const teammateRow = z.object({
+  id: z.string(),
+  workspace_id: z.string(),
+  channel_id: z.string(),
+  target_value: z.string(),
+  is_verified: z.number(),
+  unsubscribe_token: z.string().nullable(),
+});
+
+export type Teammate = z.infer<typeof teammateRow>;
+
+export async function listTeammates(db: D1Database, workspaceId: string): Promise<Teammate[]> {
+  const { results } = await db.prepare(SELECT_TEAMMATES).bind(workspaceId).all();
+  return z.array(teammateRow).parse(results);
+}
+
+export async function readConfirmedTeammates(db: D1Database, workspaceId: string): Promise<Teammate[]> {
+  return (await listTeammates(db, workspaceId)).filter((mate) => mate.is_verified === 1);
+}
+
+export async function addTeammate(
+  db: D1Database,
+  input: { workspaceId: string; address: string; now: string },
+): Promise<string | null> {
+  const id = `st-mate-${crypto.randomUUID()}`;
+  const added = await db
+    .prepare(INSERT_TEAMMATE)
+    .bind(id, input.workspaceId, normalizeEmailAddress(input.address), input.now, MAX_TEAMMATES)
+    .run();
+  return added.meta.changes === 1 ? id : null;
+}
+
+export async function writeTeammateVerifyToken(
+  db: D1Database,
+  input: { workspaceId: string; targetId: string; token: string; expiresAt: string },
+): Promise<void> {
+  const tokenHash = await sha256Hex(input.token);
+  await db
+    .prepare(WRITE_TEAMMATE_VERIFY_TOKEN)
+    .bind(tokenHash, input.expiresAt, input.targetId, input.workspaceId)
+    .run();
+}
+
+export async function removeTeammate(db: D1Database, input: { workspaceId: string; targetId: string }): Promise<void> {
+  await db.prepare(DELETE_TEAMMATE).bind(input.targetId, input.workspaceId).run();
 }

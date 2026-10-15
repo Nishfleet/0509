@@ -1,24 +1,8 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { type Locator, type Page } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { consoleFailures, isLocalLane, run, seedPreviewSession, watchConsole } from "./inbox";
 
-// Preview-lane proof for #5441 and #5557: Enter saves and closes the identity card
-// editor, Escape saves and closes, and Base UI returns focus to the trigger.
-// `e2e/onboarding-identity.spec.ts` keeps the production walk on the same
-// component, but its signed-in describe skips in this lane (no inbox), so
-// this spec seeds the local preview D1 the same way `e2e/alerts-chips.spec.ts`
-// does and exercises the keyboard paths on the real built Worker.
-//
-// The seeded user owns a workspace with no self entity, so the identity route
-// renders instead of redirecting to /app, and a `public_subject:confirmed`
-// decision for the subject, so `screenOnboardingSubject` returns proceed
-// without a Jev call. The probed host does not resolve, so `readSiteCard`
-// returns the unfound card — empty fields, every `EditRow` openable — and the
-// keyboard paths the packet specifies are reachable without any network.
-//
-// At 390 the `Row` now wraps the empty-line span under the trigger,
-// giving the edit name/about triggers a non-zero bounding box on the unread card.
-// 0509#5557 owns this fix; the 390 lane asserts the triggers are clickable.
 test.skip(!isLocalLane(), "production signs in through the magic-link inbox; the local preview D1 carries the seed");
 
 async function seedCardSession(registrable: string): Promise<string> {
@@ -56,9 +40,7 @@ async function openEditor(page: Page, field: "name" | "about"): Promise<Locator>
   await expect(trigger).toBeVisible({ timeout: 30_000 });
   const box = await trigger.boundingBox();
   if (box === null) throw new Error(`the edit ${field} trigger has no bounding box`);
-  // 0509#5557: an empty-line span beside the `min-w-0 flex-1` trigger used to
-  // starve it to 0px wide on the unread card at 390; this keeps that from
-  // returning silently.
+
   expect(box.width, `edit ${field} trigger has zero width`).toBeGreaterThan(0);
   await trigger.click();
   const editor = page.getByRole("textbox", { name: field });
@@ -98,13 +80,6 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   );
   await name.press("Enter");
 
-  // The controlled `open` prop closing does not fire Popover's onOpenChange, so
-  // Enter reaches onSave through exactly one path, and `saveOnEnter` calls it
-  // inside the keydown handler. Awaiting that save's response proves the one POST
-  // round-tripped, so the `toHaveLength(1)` count below is the post-save count, not
-  // a zero read taken before the request went out; a second `onSave` from that
-  // same keydown task would be dispatched, and observed by `watchDraftPosts`,
-  // before this response returns.
   expect((await saveResponse).status()).toBe(200);
   expect(draftPosts).toHaveLength(1);
   await expect(name).toHaveCount(0);
@@ -129,10 +104,6 @@ test("the identity card editor ignores the Enter that confirms an IME compositio
   const name = await openEditor(page, "name");
   await name.fill("ニホン");
 
-  // An IME composition in progress delivers the candidate-confirming Enter as a
-  // keydown with isComposing true. The handler must return before preventDefault,
-  // leaving the editor open and saving nothing, so the customer can finish
-  // converting instead of losing the value to a half-converted save.
   const composingEnter = await name.evaluate((element) => {
     const event = new KeyboardEvent("keydown", {
       key: "Enter",
@@ -148,7 +119,6 @@ test("the identity card editor ignores the Enter that confirms an IME compositio
   await expect(name).toHaveValue("ニホン");
   expect(draftPosts).toHaveLength(0);
 
-  // The Enter after the composition ends still saves and closes.
   const saveResponse = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" && new URL(response.url()).pathname === "/onboarding/identity.data",

@@ -35,6 +35,9 @@ async function seedWorkspace(name: string): Promise<string> {
       "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, ?2, ?3, 'UTC', 1, 8, ?4)",
     ).bind(workspaceId, name, userId, NOW),
     env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?1, ?2, 'scout', 'trialing', ?3)",
+    ).bind(`${workspaceId}-plan`, workspaceId, NOW),
+    env.DB.prepare(
       "INSERT INTO entity (id, workspace_id, role, domain, name, created_at) VALUES (?1, ?2, 'self', ?3, ?4, ?5)",
     ).bind(`${workspaceId}-self`, workspaceId, `${workspaceId}-self.example`, name, NOW),
   ]);

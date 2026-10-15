@@ -1,23 +1,9 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
 
-// DESIGN.md rule 8: the accent is one colour, and nothing else is coloured.
-// A colour class that is not a `@theme` token in app/app.css used to be a
-// review comment; the eslint-plugin-better-tailwindcss block on `app/**` in
-// eslint.config.js makes it a lint failure (0509#5871). These probes boot the
-// real config (same rig as eslint-catch-null-rule.test.ts): each one writes a
-// component under app/, lints it with the project's own ESLint, and removes it.
-// The negative cases are load-bearing — a gate that fires on every class list
-// is a gate someone turns off.
+import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-
-const PROBE = "app/components/probe-tw-tmp.tsx";
-const UI_PROBE = "app/components/ui/probe-tw-tmp.tsx";
+const PROBE = "app/components/share-button.tsx";
+const UI_PROBE = "app/components/ui/button.tsx";
 
 const ARBITRARY = "Arbitrary colour values are banned";
 const PALETTE = "The Tailwind default palette is banned";
@@ -40,29 +26,8 @@ export function ProbeTwTmp() {
 `;
 }
 
-async function lintProbe(rel: string, code: string): Promise<{ ignored: boolean; messages: string[] }> {
-  const file = path.join(REPO_ROOT, rel);
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, code);
-  try {
-    const eslint = new ESLint({ cwd: REPO_ROOT });
-    if (await eslint.isPathIgnored(file)) {
-      return { ignored: true, messages: [] };
-    }
-    const results = await eslint.lintFiles([file]);
-    return {
-      ignored: false,
-      messages: results.flatMap((result) => result.messages.map((m) => m.message)),
-    };
-  } finally {
-    await rm(file, { force: true });
-  }
-}
-
-async function lintExisting(rel: string): Promise<string[]> {
-  const eslint = new ESLint({ cwd: REPO_ROOT });
-  const results = await eslint.lintFiles([path.join(REPO_ROOT, rel)]);
-  return results.flatMap((result) => result.messages.map((m) => m.message));
+function lintProbe(rel: string, code: string) {
+  return lintTextAt(rel, code);
 }
 
 describe("eslint DESIGN.md colour gate (#5871)", () => {
@@ -107,16 +72,36 @@ describe("eslint DESIGN.md colour gate (#5871)", () => {
     expect(result.messages.some((m) => m.includes(UNKNOWN))).toBe(true);
   });
 
-  it("rejects a shadcn semantic token outside app/components/ui", { timeout: 60_000 }, async () => {
+  it(
+    "rejects a shadcn token that has no @theme mapping, in and outside app/components/ui",
+    { timeout: 60_000 },
+    async () => {
+      const outside = await lintProbe(PROBE, component("bg-sidebar-accent"));
+      expect(outside.messages.some((m) => m.includes(UNKNOWN))).toBe(true);
+      const inside = await lintProbe(UI_PROBE, component("bg-sidebar-accent"));
+      expect(inside.messages.some((m) => m.includes(UNKNOWN))).toBe(true);
+    },
+  );
+
+  it("accepts a shadcn name that @theme maps to a house token (0509#7071)", { timeout: 60_000 }, async () => {
     const result = await lintProbe(PROBE, component("bg-muted"));
-    expect(result.messages.some((m) => m.includes(UNKNOWN))).toBe(true);
+    expect(result.messages.some((m) => m.includes(UNKNOWN))).toBe(false);
   });
 
-  it("allows the stock shadcn and tw-animate tokens inside app/components/ui", { timeout: 60_000 }, async () => {
-    const result = await lintProbe(UI_PROBE, component("bg-muted data-open:animate-in"));
+  it("allows the stock shadcn tokens inside app/components/ui", { timeout: 60_000 }, async () => {
+    const result = await lintProbe(UI_PROBE, component("bg-muted data-starting-style:opacity-0"));
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(UNKNOWN))).toBe(false);
   });
+
+  it(
+    "rejects a tw-animate class inside app/components/ui, because the app never imports that package",
+    { timeout: 60_000 },
+    async () => {
+      const result = await lintProbe(UI_PROBE, component("bg-muted data-open:animate-in"));
+      expect(result.messages.some((m) => m.includes(UNKNOWN))).toBe(true);
+    },
+  );
 
   it("rejects an out-of-order class list", { timeout: 60_000 }, async () => {
     const result = await lintProbe(PROBE, component("text-ink-soft mt-2"));

@@ -50,6 +50,16 @@ describe("nightly snapshot backup", () => {
     expect(await secondIntrospector.getOutput()).toEqual({ listed: 3, copied: 0, present: 3 });
   });
 
+  it("copies again an object whose backup is a different size from the source", async () => {
+    await env.SNAPSHOTS.put("logo/example.png", "fresh logo bytes");
+    await env.SNAPSHOTS_BACKUP.put("logo/example.png", "old");
+
+    const page = await copyMissingPage();
+
+    expect(page).toMatchObject({ listed: 1, copied: 1, present: 0 });
+    expect(await (await env.SNAPSHOTS_BACKUP.get("logo/example.png"))?.text()).toBe("fresh logo bytes");
+  });
+
   it("preserves the content type of a copied object", async () => {
     await env.SNAPSHOTS.put("snapshot/site/watch-1/1.png", "a", {
       httpMetadata: { contentType: "image/png" },
@@ -61,7 +71,7 @@ describe("nightly snapshot backup", () => {
     await introspector.waitForStatus("complete");
 
     const copied = await env.SNAPSHOTS_BACKUP.head("snapshot/site/watch-1/1.png");
-    expect(copied?.httpMetadata.contentType).toBe("image/png");
+    expect(copied?.httpMetadata?.contentType).toBe("image/png");
   });
 
   it("reports an empty source", async () => {

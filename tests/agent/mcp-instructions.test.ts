@@ -1,6 +1,4 @@
-import { describe, expect, test, vi } from "vitest";
-
-vi.mock("cloudflare:workers", () => ({ env: {} }));
+import { describe, expect, test } from "vitest";
 
 import { mcpInstructions } from "../../app/lib/agent/mcp.server";
 import type { FreshnessSource } from "../../app/lib/freshness.server";

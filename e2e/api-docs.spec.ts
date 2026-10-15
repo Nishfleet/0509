@@ -1,12 +1,14 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { consoleFailures, watchConsole } from "./inbox";
+
+test.use({ screenshot: { mode: "on", fullPage: true } });
 
 test("the API reference is generated from the OpenAPI document @smoke", async ({ page, request }, testInfo) => {
   const watched = watchConsole(page);
   const spec = await request.get("/api/v1/openapi.json");
   expect(spec.status()).toBe(200);
-  const body: { paths: Record<string, unknown> } = await spec.json();
+  const body = (await spec.json()) as { paths: Record<string, unknown> };
   const paths = Object.keys(body.paths);
 
   const response = await page.goto("/api/docs");
@@ -22,14 +24,11 @@ test("the API reference is generated from the OpenAPI document @smoke", async ({
   await expect(main).toContainText("competitorId");
   await expect(main).toContainText("Missing or invalid API key");
   await expect(main).toContainText("Authorization: Bearer");
+  await expect(main).toContainText("curl -H");
   await expect(main).toContainText("/mcp");
   await expect(page.getByRole("link", { name: "Settings" }).first()).toHaveAttribute("href", "/app/settings/agents");
 
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
-  await testInfo.attach(`api-docs-${testInfo.project.name}`, {
-    body: await page.screenshot({ fullPage: true }),
-    contentType: "image/png",
-  });
 });
 
 test("the API reference does not scroll sideways at 390 @smoke", async ({ page }, testInfo) => {

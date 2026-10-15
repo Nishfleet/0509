@@ -1,5 +1,4 @@
 import type { Route } from "./+types/settings.export";
-import { env } from "cloudflare:workers";
 
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { readWorkspaceExport } from "../lib/data-export.server";
@@ -10,7 +9,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   if (workspaceId === null) throw new Response("There is nothing to export yet.", { status: 404 });
   const now = new Date();
-  const data = await readWorkspaceExport(env.DB, { workspaceId, email: session.user.email, now });
+  const data = await readWorkspaceExport({
+    workspaceId,
+    userId: session.user.id,
+    email: session.user.email,
+    now,
+  });
+  if (data === null) throw new Response("There is nothing to export yet.", { status: 404 });
   return new Response(JSON.stringify(data, null, 2), {
     headers: {
       "content-type": "application/json; charset=utf-8",

@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createAuth, requestEmailChange } from "../../app/lib/auth.server";
+import { runSettingsIntent } from "../../app/lib/settings.server";
 
 const sent: { to: string; text: string }[] = [];
 
@@ -24,7 +25,7 @@ const authEnv = {
 const auth = createAuth(authEnv);
 
 function linkTo(address: string): string {
-  const message = sent.findLast((entry) => entry.to === address);
+  const message = [...sent].reverse().find((entry) => entry.to === address);
   const link = /https?:\/\/\S+/.exec(message?.text ?? "")?.[0];
   if (link === undefined) throw new Error(`no link was sent to ${address}`);
   return link;
@@ -73,11 +74,13 @@ describe("change sign-in email", () => {
     expect(linkTo(old)).toContain("verify-email");
     expect(await exists(old)).toBe(true);
 
-    await open(linkTo(old), cookie);
+    const approved = await open(linkTo(old), cookie);
+    expect(approved.headers.get("location")).toContain("/app/settings?email=approved");
     expect(mailCount(next)).toBe(1);
     expect(await exists(next)).toBe(false);
 
-    await open(linkTo(next), cookie);
+    const confirmed = await open(linkTo(next), cookie);
+    expect(confirmed.headers.get("location")).toContain("/app/settings?email=changed");
     expect(await exists(next)).toBe(true);
     expect(await exists(old)).toBe(false);
   });
@@ -103,7 +106,7 @@ describe("change sign-in email", () => {
       .run();
     const before = sent.length;
 
-    await expect(requestEmailChange(authEnv, asRequest(cookie), "new-c@0509.io")).rejects.toBeDefined();
+    expect(await requestEmailChange(authEnv, asRequest(cookie), "new-c@0509.io")).toBe("stale");
     expect(sent.length).toBe(before);
   });
 
@@ -153,5 +156,19 @@ describe("change sign-in email", () => {
     );
     expect(response.status).toBe(404);
     expect(sent.length).toBe(before);
+  });
+});
+
+describe("change email from Settings", () => {
+  it("tells a customer with no fresh session to sign in again, not that sending failed", async () => {
+    const result = await runSettingsIntent(
+      { id: "u-none", email: "none@0509.io" },
+      new Request("https://0509.io/app/settings", {
+        method: "POST",
+        body: new URLSearchParams({ intent: "change-email", newEmail: "next@0509.io" }),
+      }),
+      {} as never,
+    );
+    expect(result.emailChangeError).toBe("For your safety, sign out and sign back in, then change your email.");
   });
 });

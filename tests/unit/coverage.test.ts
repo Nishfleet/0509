@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   COVERAGE,
+  type CoverageKind,
   FEATURES,
   LIVE_COVERAGE,
   WATCHED_NOUNS,
@@ -13,12 +14,9 @@ import { FAQ } from "../../app/lib/faq";
 import { llmsTxt } from "../../app/lib/public-routes";
 import { softwareApplicationJsonLd } from "../../app/lib/structured-data";
 
-// The homepage, the FAQ, /llms.txt and the JSON-LD featureList all claim
-// coverage from one list, app/lib/coverage.ts. A source reaches the public copy
-// only once it is marked live there, and tests/integration/coverage.integration.test.ts
-// ties "live" to an enabled source row. Launch checklist §3: claim only what works.
-
-const notLive = COVERAGE.filter((group) => group.sources.every((source) => !source.live));
+const notLive: readonly CoverageKind[] = COVERAGE.filter((group: CoverageKind) =>
+  group.sources.every((source) => !source.live),
+);
 
 function claims(text: string, phrase: string): boolean {
   return new RegExp(`\\b${phrase}\\b`, "i").test(text);
@@ -70,11 +68,6 @@ describe("coverage", () => {
   });
 
   it("names every live kind in the shipped public copy, and no kind that is not live", () => {
-    // docs/REBUILD-DONE.md D: a test never reads a .md file to check copy
-    // against code. This one used to read README.md and DESIGN.md for the same
-    // claim rows; that doc-vs-code check is review's now, and what the test
-    // owns is the surface a customer actually reads, which is built from the
-    // one list above.
     const copy = [
       ...FAQ.flatMap((entry) => [entry.question, entry.answer]),
       llmsTxt("https://0509.io", []),

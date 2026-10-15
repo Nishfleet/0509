@@ -12,7 +12,7 @@ export const ABOUT_BRAND: NoulQuestion = {
 export const MATTERS: NoulQuestion = {
   id: "mention_matters",
   instructions:
-    "Would the owner of `self` want to know about this mention of `subject` this week? It matters when it shows a move: a launch, a price or offer change, funding, a deal, a hire or exit at the top, an expansion, a campaign, a controversy or a big review.",
+    "Would the owner of `self` want to know about this mention of `subject` this week? Use `item.published_at` when it is set: a story whose date is missing, or older than this week, is old news, not a new alert. It matters when it shows a move this week: a launch, a price or offer change, funding, a deal, a hire or exit at the top, an expansion, a campaign, a controversy or a big review.",
   whenTrue: MENTION_MATTERS_WHEN_TRUE,
   whenFalse: MENTION_MATTERS_WHEN_FALSE,
 };

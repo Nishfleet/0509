@@ -31,7 +31,7 @@ describe("organizationJsonLd", () => {
 
   it("ships a square logo of at least 112px in public/", () => {
     const svg = readFileSync(new URL("../../public/logo.svg", import.meta.url), "utf8");
-    const dimensions = svg.match(/width="(\d+)"[^>]*height="(\d+)"/);
+    const dimensions = /width="(\d+)"[^>]*height="(\d+)"/.exec(svg);
     expect(dimensions).not.toBeNull();
     const width = Number(dimensions?.[1]);
     const height = Number(dimensions?.[2]);

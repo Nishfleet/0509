@@ -1,6 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-
-vi.mock("cloudflare:workers", () => ({ env: {} }));
 vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn() }));
 
 import type { NoulVerdict } from "../../../app/lib/jev/client.server";

@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createRoutesStub, UNSAFE_DataRouterNavigationContext } from "react-router";
+import { createRoutesStub, UNSAFE_DataRouterNavigationContext, type RouterState } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { ChangeSignInEmail } from "../../app/components/change-sign-in-email";
@@ -11,7 +11,7 @@ function formData(intent: string): FormData {
   return data;
 }
 
-function render(navigation: { state: string; formData?: FormData }): string {
+function render(navigation: { state: string; formData?: FormData }, entry = "/app/settings"): string {
   const Stub = createRoutesStub([
     {
       id: "settings",
@@ -19,16 +19,16 @@ function render(navigation: { state: string; formData?: FormData }): string {
       Component: () =>
         createElement(
           UNSAFE_DataRouterNavigationContext.Provider,
-          { value: { navigation } },
-          createElement(ChangeSignInEmail, { sent: false, error: null }),
+          { value: { navigation } as unknown as RouterState },
+          createElement(ChangeSignInEmail, { email: "me@brand.com", sent: false, error: null }),
         ),
     },
   ]);
-  return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/app/settings"] }));
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: [entry] }));
 }
 
 function button(html: string): string {
-  const match = html.match(/<button[^>]*type="submit"[\s\S]*?<\/button>/);
+  const match = /<button[^>]*type="submit"[\s\S]*?<\/button>/.exec(html);
   if (match === null) throw new Error(`no submit button in ${html}`);
   return match[0];
 }
@@ -62,5 +62,32 @@ describe("the change-sign-in-email button (0509#6566)", () => {
 
     expect(html).toContain("Send confirmation link");
     expect(html).not.toContain('disabled=""');
+  });
+});
+
+describe("the line after an email-change link lands on Settings", () => {
+  it("says the approval went through and one more link is coming", () => {
+    const html = render({ state: "idle" }, "/app/settings?email=approved");
+
+    expect(html).toContain('role="status"');
+    expect(html).toContain("We sent a confirmation link to the new address.");
+  });
+
+  it("names the email you sign in with, so a pasted link cannot claim a change that never happened", () => {
+    expect(render({ state: "idle" }, "/app/settings?email=changed")).toContain("You sign in with me@brand.com now.");
+  });
+
+  it("says nothing when the link failed, whatever flag it kept", () => {
+    for (const flag of ["approved", "changed"]) {
+      const html = render({ state: "idle" }, `/app/settings?email=${flag}&error=invalid_token`);
+      expect(html).not.toContain('role="status"');
+    }
+  });
+
+  it("says nothing without the flag, and nothing for a made-up one", () => {
+    expect(render({ state: "idle" })).not.toContain('role="status"');
+    for (const flag of ["whatever", "__proto__", "toString"]) {
+      expect(render({ state: "idle" }, `/app/settings?email=${flag}`)).not.toContain('role="status"');
+    }
   });
 });

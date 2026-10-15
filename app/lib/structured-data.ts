@@ -1,10 +1,21 @@
 import { SUPPORT_ADDRESS } from "../components/footer";
 import { PLANS } from "./billing/plans";
 import type { FaqEntry } from "./faq";
+import { SITE_URL } from "./site-url";
 
-export const SITE_URL = "https://0509.io";
+export { SITE_URL };
 
 const ORGANIZATION_ID = `${SITE_URL}/#organization`;
+
+export function shareImageMeta() {
+  return [
+    { property: "og:image", content: `${SITE_URL}/og.png` },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
+    { property: "og:image:alt", content: "Know where you stand. And who's gaining on you." },
+    { name: "twitter:card", content: "summary_large_image" },
+  ];
+}
 
 export function organizationJsonLd() {
   return {
@@ -32,14 +43,14 @@ export function websiteJsonLd() {
   };
 }
 
-export function softwareApplicationJsonLd(features: readonly string[]) {
+export function softwareApplicationJsonLd(features: readonly string[], offerPath = "/") {
   return {
     "@type": "SoftwareApplication",
     name: "Five to Nine",
     url: SITE_URL,
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web",
-    featureList: features,
+    ...(features.length > 0 ? { featureList: features } : {}),
     publisher: { "@id": ORGANIZATION_ID },
     offers: PLANS.map((plan) => ({
       "@type": "Offer",
@@ -53,7 +64,7 @@ export function softwareApplicationJsonLd(features: readonly string[]) {
         unitCode: "MON",
         referenceQuantity: { "@type": "QuantitativeValue", value: 1, unitCode: "MON" },
       },
-      url: `${SITE_URL}/`,
+      url: `${SITE_URL}${offerPath}`,
     })),
   };
 }

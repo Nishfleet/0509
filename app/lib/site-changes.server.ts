@@ -20,6 +20,11 @@ import {
 
 export type ShotSide = "before" | "after";
 
+const FEEDBACK_VALUE = {
+  "change_feedback:useful": "useful",
+  "change_feedback:not_useful": "not_useful",
+} as const;
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function daysBefore(now: Date, days: number): string {
@@ -38,12 +43,22 @@ function shot(id: string, side: ShotSide, capture: { key: string | null; at: str
   return { src: shotPath(id, side), capturedAt: captureLabel(at) };
 }
 
-async function readMark(diffKey: string | null): Promise<ChangeMark | null> {
-  if (diffKey === null) return null;
-  const object = await env.SNAPSHOTS.get(diffKey);
-  if (object === null) return null;
-  const hunks = parseDiffHunks(await object.text());
-  return hunks === null ? null : markFromHunks(hunks);
+interface MarkRead {
+  mark: ChangeMark | null;
+  unavailable: boolean;
+}
+
+async function readMark(diffKey: string | null): Promise<MarkRead> {
+  if (diffKey === null) return { mark: null, unavailable: false };
+  try {
+    const object = await env.SNAPSHOTS.get(diffKey);
+    if (object === null) return { mark: null, unavailable: false };
+    const hunks = parseDiffHunks(await object.text());
+    return { mark: hunks === null ? null : markFromHunks(hunks), unavailable: false };
+  } catch (cause) {
+    console.warn(JSON.stringify({ event: "site_changes.diff_unavailable", error: String(cause).slice(0, 200) }));
+    return { mark: null, unavailable: true };
+  }
 }
 
 function seenOn(row: SiteChangeRow, payload: SiteChangePayload): string | null {
@@ -52,19 +67,22 @@ function seenOn(row: SiteChangeRow, payload: SiteChangePayload): string | null {
 
 async function toView(row: SiteChangeRow, payload: SiteChangePayload): Promise<SiteChangeView> {
   const isSelf = row.entity_role === "self";
+  const { mark, unavailable } = await readMark(payload.diffKey);
   return {
     id: row.id,
     entityId: row.entity_id,
     isSelf,
     headline: changeHeadline({ name: row.entity_name ?? row.entity_domain, isSelf, role: payload.page.role }),
     page: pageLabel(payload.page.role),
-    url: row.url,
+    url: row.url ?? payload.page.url,
     observedAt: row.observed_at,
     capturedAt: captureLabel(row.after_at ?? row.observed_at),
     wordsChanged: payload.wordsAdded + payload.wordsRemoved,
     provenance: provenanceNote({ viaArchive: payload.viaArchive === true, seenOn: seenOn(row, payload) }),
     sentence: wordsSentence(payload.wordsAdded, payload.wordsRemoved),
-    mark: await readMark(payload.diffKey),
+    feedback: row.feedback === null ? null : FEEDBACK_VALUE[row.feedback],
+    mark,
+    detailsUnavailable: unavailable,
     before: shot(row.id, "before", { key: payload.before.screenshotKey, at: row.before_at }),
     after: shot(row.id, "after", { key: payload.after.screenshotKey, at: row.after_at }),
     whyFlagged: whyFlagged({
@@ -74,7 +92,7 @@ async function toView(row: SiteChangeRow, payload: SiteChangePayload): Promise<S
       decidedAt: row.verdict_decided_at,
       compared: [
         { label: "Page", value: pageLabel(payload.page.role) },
-        { label: "Link", value: row.url },
+        { label: "Link", value: row.url ?? payload.page.url },
         { label: "Before", value: row.before_at ?? "—" },
         { label: "After", value: row.after_at ?? row.observed_at },
       ],
@@ -124,7 +142,10 @@ export async function readChangeShot(
   const payload = json === null ? null : parseSiteChangePayload(json);
   const key = payload?.[side].screenshotKey;
   if (!key?.startsWith(SHOT_PREFIX)) return null;
-  return env.SNAPSHOTS.get(key);
+  return env.SNAPSHOTS.get(key).catch((cause: unknown) => {
+    console.warn(JSON.stringify({ event: "site_changes.shot_unavailable", error: String(cause).slice(0, 200) }));
+    return null;
+  });
 }
 
 const LANDING_WINDOW_DAYS = 7;

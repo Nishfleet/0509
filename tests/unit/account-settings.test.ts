@@ -1,15 +1,15 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createRoutesStub } from "react-router";
 import type * as ReactRouterModule from "react-router";
+import { createRoutesStub } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DeleteAccount, SignOut } from "../../app/components/account-settings";
+import { DeleteAccount, SignOut, SignOutEverywhere } from "../../app/components/account-settings";
 
 const navigation = vi.hoisted(() => ({ state: "idle", intent: null as string | null }));
 
 vi.mock("react-router", async (importOriginal) => {
-  const actual = await importOriginal<ReactRouterModule>();
+  const actual = await importOriginal<typeof ReactRouterModule>();
   return {
     ...actual,
     useNavigation: () => {
@@ -30,11 +30,11 @@ function renderDeleteAccount(): string {
   return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
 }
 
-function renderSignOut(): string {
+function renderSignOut(button: typeof SignOut = SignOut): string {
   const Stub = createRoutesStub([
     {
       path: "/",
-      Component: () => createElement(SignOut),
+      Component: () => createElement(button),
     },
   ]);
   return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
@@ -84,7 +84,7 @@ describe("DeleteAccount", () => {
       "Your send history and every brief",
       "Your account, its API keys and connected AI apps",
     ]);
-    expect(html).toContain("The emails stop. This can&#x27;t be undone.");
+    expect(html).toContain("Your plan is cancelled and the emails stop. This can&#x27;t be undone.");
   });
 
   it("keeps the idle label and styling", () => {
@@ -123,6 +123,14 @@ describe("DeleteAccount", () => {
   it("asks the phone for an email keyboard", () => {
     const input = confirmInput(renderDeleteAccount());
     expect(input).toContain('inputMode="email"');
+  });
+});
+
+describe("SignOutEverywhere", () => {
+  it("is a button of its own that posts the sign-out-everywhere intent", () => {
+    const html = renderSignOut(SignOutEverywhere);
+    expect(html).toContain("Sign out of all devices");
+    expect(html).toContain('value="sign-out-everywhere"');
   });
 });
 

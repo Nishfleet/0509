@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { sourceName } from "../../app/lib/source-name";
+import { quietWeekSentence } from "../../app/lib/biggest-move";
+import { platformName, watchedNames, sourceName } from "../../app/lib/source-name";
 
 describe("a source's name in the brief (0509#4554)", () => {
   it("names a known platform in plain words, never the internal key", () => {
@@ -15,5 +16,24 @@ describe("a source's name in the brief (0509#4554)", () => {
 
   it("falls back to the kind of source when the platform has no name yet", () => {
     expect(sourceName("mentions", "brand_new_network")).toBe("Your mentions source");
+  });
+});
+
+describe("platformName", () => {
+  it("gives customers the plain name of a source platform, never its internal key", () => {
+    expect(["gdelt", "hn", "youtube", "web"].map(platformName)).toEqual(["News", "Hacker News", "YouTube", "Website"]);
+  });
+
+  it("falls back to plain words for a platform it has no name for", () => {
+    expect(platformName("not-a-platform")).toBe("other sources");
+  });
+
+  it("keeps a platform key literally named other in the fallback group", () => {
+    expect(watchedNames(["other", "odd", "feed"])).toEqual(["Blog and changelog", "other sources"]);
+  });
+
+  it("reads as one sentence in the quiet-week line, with each name once", () => {
+    const names = watchedNames(["odd", "gdelt", "web", "web", "other"]);
+    expect(quietWeekSentence(names, null, "21:00 UTC")).toContain("We watch News, Website, and other sources;");
   });
 });

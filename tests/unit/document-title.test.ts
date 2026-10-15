@@ -1,6 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("cloudflare:workers", () => ({ env: {} }));
+import { describe, expect, it } from "vitest";
 
 import { meta as homeMeta } from "../../app/routes/app.home";
 import { meta as alertsMeta } from "../../app/routes/app.alerts";

@@ -1,25 +1,10 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
 
-// #5786 (privacy rule from #5776): logs and Sentry never carry customer data
-// or prompt input. NO_USER_DATA_IN_LOGS is a set of `no-restricted-syntax`
-// selectors over `console.*` and the Sentry capture*/set* sinks, bare or on a
-// namespace. These probes boot the real eslint.config.js (same rig as
-// eslint-catch-null-rule.test.ts) and hold both directions: a value named like
-// user data is flagged as a key, a value, a property read, a template
-// interpolation, a nested call argument, a spread, a member read, a wrapped
-// expression and each Sentry receiver form; the ids an operator needs,
-// `workspaceId` and a capped error message, stay clean.
-
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
 const USER_DATA_MESSAGE = "never carry customer data or prompt input";
 
-const PROBE = "app/lib/probe-user-data-logs-tmp.ts";
+const PROBE = "app/lib/cadence.ts";
 
 const HEADER = `declare const email: string;
 declare const subject: { registrable: string };
@@ -42,23 +27,9 @@ declare const scope: { setUser(value: { id: string }): void };
 `;
 
 async function lintProbe(code: string): Promise<string[]> {
-  const file = path.join(REPO_ROOT, PROBE);
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, `${HEADER}${code}`);
-  try {
-    const eslint = new ESLint({ cwd: REPO_ROOT });
-    if (await eslint.isPathIgnored(file)) throw new Error(`${PROBE} is ignored; the rule would never run`);
-    const results = await eslint.lintFiles([file]);
-    return results.flatMap((result) => result.messages.map((message) => message.message));
-  } finally {
-    await rm(file, { force: true });
-  }
-}
-
-async function lintExisting(rel: string): Promise<string[]> {
-  const eslint = new ESLint({ cwd: REPO_ROOT });
-  const results = await eslint.lintFiles([path.join(REPO_ROOT, rel)]);
-  return results.flatMap((result) => result.messages.map((message) => message.message));
+  const result = await lintTextAt(PROBE, `${HEADER}${code}`);
+  if (result.ignored) throw new Error(`${PROBE} is ignored; the rule would never run`);
+  return result.messages;
 }
 
 function flagged(messages: string[]): boolean {
@@ -99,8 +70,6 @@ describe("eslint no-user-data-in-logs rule (#5786)", () => {
   });
 
   it("flags a member read off a user-data binding", { timeout: 60_000 }, async () => {
-    // The shape this rule exists for: the log line dropped the `subject` key,
-    // so a renamed key or a bare read is how the domain would get back in.
     expect(flagged(await lintProbe(`console.log(subject.registrable);\n`))).toBe(true);
     expect(flagged(await lintProbe(`console.log({ registrable: subject.registrable });\n`))).toBe(true);
     expect(flagged(await lintProbe(`console.log(email.trim());\n`))).toBe(true);

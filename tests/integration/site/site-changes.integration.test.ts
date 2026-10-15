@@ -1,8 +1,9 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { readAgentAlerts } from "../../../app/lib/agent/read.server";
 import { readCompetitorPage } from "../../../app/lib/competitor-page.server";
+import { D3_QUESTION_ID } from "../../../app/lib/standing-score";
 import { readChangeShot, readSiteChangeViews } from "../../../app/lib/site-changes.server";
 
 const NOW = new Date("2026-09-24T12:00:00.000Z");
@@ -107,9 +108,18 @@ async function seedChange(input: {
   );
 }
 
+async function seedChangeVerdict(): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, choice, reason, decided_at)
+     VALUES ('v-rival', 'ws-mine', ?, 'hash-rival', 'sig-rival', 'rival', 0.9, 'act', 'Looks like a real change.', '2026-09-24T04:00:00.000Z')`,
+  )
+    .bind(D3_QUESTION_ID)
+    .run();
+}
+
 describe("site changes a customer can see", () => {
   beforeEach(async () => {
-    for (const table of ["signal", "snapshot", "watch", "page", "entity", "workspace", '"user"']) {
+    for (const table of ["signal", "snapshot", "watch", "page", "entity", "jev_verdict", "workspace", '"user"']) {
       await env.DB.exec(`DELETE FROM ${table}`);
     }
     const listed = await env.SNAPSHOTS.list({ prefix: "snapshot/site/" });
@@ -168,6 +178,21 @@ describe("site changes a customer can see", () => {
     expect(mine?.headline).toBe("Your homepage changed");
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("keeps the change list and says details are unavailable when R2 is down", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.spyOn(env.SNAPSHOTS, "get").mockRejectedValue(new Error("R2 unavailable"));
+
+    const views = await readSiteChangeViews({ workspaceId: "ws-mine", entityId: null, since: SINCE, limit: 30 });
+
+    expect(views.length).toBeGreaterThan(0);
+    expect(views.every((view) => view.mark === null && view.detailsUnavailable === true)).toBe(true);
+    expect(await readChangeShot("ws-mine", "sig-mine", "after")).toBeNull();
+  });
+
   it("keeps a paused brand's history on its own page", async () => {
     const page = await readCompetitorPage("ws-mine", "paused", NOW);
     expect(page?.changes.map((view) => view.id)).toEqual(["sig-paused"]);
@@ -224,6 +249,18 @@ describe("site changes a customer can see", () => {
     expect(await after?.text()).toBe("after-sig-rival");
     expect(after?.httpMetadata?.contentType).toBe("image/png");
     expect(await readChangeShot("ws-mine", "no-such-signal", "after")).toBeNull();
+  });
+
+  it("links a change whose url column is NULL to the page it happened on, in the view and in the why-flagged row", async () => {
+    await env.DB.prepare("UPDATE signal SET url = NULL WHERE id = 'sig-rival'").run();
+    await seedChangeVerdict();
+
+    const views = await readSiteChangeViews({ workspaceId: "ws-mine", entityId: "rival", since: SINCE, limit: 30 });
+
+    expect(views).toHaveLength(1);
+    expect(views[0]?.url).toBe("https://rival.example/");
+    const compared = views[0]?.whyFlagged?.compared ?? [];
+    expect(compared.find((field) => field.label === "Link")?.value).toBe("https://rival.example/");
   });
 
   it("gives agents the same changes in list_alerts", async () => {

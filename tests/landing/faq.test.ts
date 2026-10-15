@@ -20,7 +20,7 @@ describe("landing faq", () => {
     const html = markup();
     expect(html).toContain('<section id="faq"');
     expect(html).toContain('aria-labelledby="faq-title"');
-    const heading = html.match(/<h2\b[^>]*>[\s\S]*?<\/h2>/);
+    const heading = /<h2\b[^>]*>[\s\S]*?<\/h2>/.exec(html);
     expect(heading).toBeDefined();
     expect(heading?.[0]).toContain('id="faq-title"');
     expect(heading?.[0]).toContain("Questions");

@@ -52,6 +52,39 @@ describe("the brief schedule (0509#4004)", () => {
     expect(following.toISOString().slice(0, 10)).toBe("2026-04-05");
   });
 
+  it("keeps the week after a DST-gap hour, instead of an hour-long skip", () => {
+    const londonOne: BriefSchedule = { timezone: "Europe/London", weekday: 0, hour: 1 };
+    const gapInstant = nextBriefAt(londonOne, at("2026-03-26T00:00:00.000Z"));
+    const weekAfter = openWeek(londonOne, gapInstant);
+    expect(gapInstant.toISOString()).toBe("2026-03-29T01:00:00.000Z");
+    expect(weekAfter.startsAt.toISOString()).toBe(gapInstant.toISOString());
+    expect(weekAfter.closesAt.toISOString()).toBe("2026-04-05T00:00:00.000Z");
+    expect(weekAfter.closesAt.getTime() - weekAfter.startsAt.getTime()).toBeGreaterThan(6 * 24 * 60 * 60 * 1000);
+  });
+
+  it("keeps both neighbouring weeks for a 45-minute offset around its DST gap", () => {
+    const chathamThree: BriefSchedule = { timezone: "Pacific/Chatham", weekday: 0, hour: 3 };
+    const beforeGap = nextBriefAt(chathamThree, at("2026-09-13T00:00:00.000Z"));
+    const gapInstant = nextBriefAt(chathamThree, beforeGap);
+    const weekAfter = openWeek(chathamThree, gapInstant);
+    const following = nextBriefAt(chathamThree, weekAfter.closesAt);
+    expect(gapInstant.toISOString()).toBe("2026-09-26T14:15:00.000Z");
+    expect(weekAfter.startsAt.toISOString()).toBe(gapInstant.toISOString());
+    expect(weekAfter.closesAt.toISOString()).toBe("2026-10-03T13:15:00.000Z");
+    expect(following.toISOString()).toBe("2026-10-10T13:15:00.000Z");
+    expect(weekAfter.closesAt.getTime() - weekAfter.startsAt.getTime()).toBeGreaterThan(6 * 24 * 60 * 60 * 1000);
+  });
+
+  it("uses the first valid local hour when the brief hour is inside a spring-forward gap", () => {
+    const newYorkTwo: BriefSchedule = { timezone: "America/New_York", weekday: 0, hour: 2 };
+    const gapInstant = nextBriefAt(newYorkTwo, at("2026-03-01T12:00:00.000Z"));
+    const weekAfter = openWeek(newYorkTwo, gapInstant);
+    expect(gapInstant.toISOString()).toBe("2026-03-08T07:00:00.000Z");
+    expect(weekAfter.startsAt.toISOString()).toBe(gapInstant.toISOString());
+    expect(weekAfter.closesAt.toISOString()).toBe("2026-03-15T06:00:00.000Z");
+    expect(weekAfter.closesAt.getTime() - weekAfter.startsAt.getTime()).toBeGreaterThan(6 * 24 * 60 * 60 * 1000);
+  });
+
   it("names the week that closes at an instant", () => {
     const closesAt = at("2026-09-28T08:00:00.000Z");
     expect(weekClosingAt(MONDAY_8_UTC, closesAt)).toEqual({

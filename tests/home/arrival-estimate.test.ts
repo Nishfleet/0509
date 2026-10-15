@@ -20,18 +20,18 @@ const TWO_ON: readonly HomeEntity[] = [
 ];
 
 describe("firstSiteSweepAt", () => {
-  it("lands the arrival after the next 02:00Z sweep has had time to finish", () => {
+  it("lands the arrival after the next 21:00Z sweep has had time to finish (0509#7191 moved the sweep off 02:00Z)", () => {
     expect(firstSiteSweepAt({ now: new Date("2026-09-24T01:00:00Z"), sources: SITE_SOURCES, brandsOn: 0 })).toEqual(
-      new Date("2026-09-24T06:00:00Z"),
+      new Date("2026-09-24T23:00:00Z"),
     );
-    expect(firstSiteSweepAt({ now: new Date("2026-09-24T02:00:00Z"), sources: SITE_SOURCES, brandsOn: 0 })).toEqual(
-      new Date("2026-09-25T06:00:00Z"),
+    expect(firstSiteSweepAt({ now: new Date("2026-09-24T21:00:00Z"), sources: SITE_SOURCES, brandsOn: 0 })).toEqual(
+      new Date("2026-09-25T23:00:00Z"),
     );
   });
 
   it("promises the next sweep as soon as a brand is on, before its site source is seeded", () => {
     expect(firstSiteSweepAt({ now: new Date("2026-09-24T01:00:00Z"), sources: [], brandsOn: 2 })).toEqual(
-      new Date("2026-09-24T06:00:00Z"),
+      new Date("2026-09-24T23:00:00Z"),
     );
   });
 
@@ -71,7 +71,7 @@ describe("homeView gathering standing", () => {
     });
     expect(view.standing.kind).toBe("gathering");
     if (view.standing.kind !== "gathering") return;
-    expect(view.standing.firstSweepAt).toBe("Friday 25 September, around 07:00 BST");
+    expect(view.standing.firstSweepAt).toBe("Friday 25 September, around 00:00 BST");
     expect(view.standing.briefAt).toBe("Monday 08:00");
   });
 });

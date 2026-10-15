@@ -10,17 +10,11 @@ import {
   type FetchSweepMessage,
 } from "../../../workers/sources/fetch-sweep-consumer";
 
-/**
- * The fetch-sweep consumer (0509#5261). The identity tail puts one message per
- * seeded watch onto the queue (`enqueueFirstSweep`); this consumer is the thing
- * that collects it, on the lane that never opens a browser, and a message that
- * exhausts its retries lands in fetch-sweep-dlq instead of being deleted.
- */
-
 interface BrowserStub {
   calls: string[];
   closed: number;
   quickAction(action: "content", options: { url: string }): Promise<Response>;
+  close(): Promise<void>;
 }
 
 vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn() }));
@@ -124,6 +118,11 @@ const resetTenant = async () => {
      VALUES (?, 'Fetch sweep', ?, 'UTC', 1, 8, ?)`,
   )
     .bind(WS, USER, NOW)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
+  )
+    .bind(`${WS}-plan`, WS, NOW)
     .run();
   await env.DB.prepare(
     `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
@@ -353,7 +352,6 @@ describe("fetch-sweep consumer (0509#5261)", () => {
     expect(calls.retried).toEqual([]);
     expect(await snapshots()).toHaveLength(1);
 
-    // The email lane's tables stay untouched: nothing was sent, nothing claimed.
     const digests = await env.DB.prepare("SELECT COUNT(*) AS n FROM digest").first<{ n: number }>();
     expect(digests?.n).toBe(0);
     const attempts = await env.DB.prepare("SELECT COUNT(*) AS n FROM send_attempt").first<{ n: number }>();

@@ -1,7 +1,8 @@
+import type { GrantSummary } from "@cloudflare/workers-oauth-provider";
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { createAgentKey } from "../../app/lib/agent/access.server";
+import { createAgentKey, listAllGrants } from "../../app/lib/agent/access.server";
 import { createAuth } from "../../app/lib/auth.server";
 
 const ORIGIN = "http://localhost:8787";
@@ -100,7 +101,37 @@ describe("create-key is idempotent per submission", () => {
     expect(await keyRows("My agent")).toBeGreaterThan(0);
   });
 
-  it("rethrows the create error, not the lookup error, when the create fails and the lookup fails too", async () => {
+  it("refuses a new create when the plan has no API access, but reports a resubmitted one as a duplicate", async () => {
+    const request = await signedInRequest();
+    const minted = crypto.randomUUID();
+    expect((await createAgentKey(request, createForm("before-lapse", minted))).newKey?.startsWith("0509_")).toBe(true);
+    const owner = await env.DB.prepare(
+      'SELECT w.id AS id FROM workspace w JOIN "user" u ON u.id = w.owner_user_id WHERE u.email = ?',
+    )
+      .bind(ADDRESS)
+      .first<{ id: string }>();
+    if (owner === null) throw new Error("sign-in created no workspace");
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, limits_json, updated_at) VALUES (?1, ?2, 'scout', 'active', ?3, ?4)",
+    )
+      .bind("plan_create_key_no_api", owner.id, JSON.stringify({ api_access: false }), "2026-10-06T00:00:00.000Z")
+      .run();
+    try {
+      const result = await createAgentKey(request, createForm("refused", crypto.randomUUID()));
+
+      expect(result).toEqual({ newKey: null, duplicate: false });
+      expect(await keyRows("refused")).toBe(0);
+      expect(await createAgentKey(request, createForm("before-lapse", minted))).toEqual({
+        newKey: null,
+        duplicate: true,
+      });
+      expect(await keyRows("before-lapse")).toBe(1);
+    } finally {
+      await env.DB.prepare("DELETE FROM plan WHERE id = ?").bind("plan_create_key_no_api").run();
+    }
+  });
+
+  it("refuses a signed-out create with an error and mints no key", async () => {
     const signedOut = new Request(`${ORIGIN}/app/settings/agents`, { method: "POST", headers: { origin: ORIGIN } });
 
     const failure = await createAgentKey(signedOut, createForm("nobody", crypto.randomUUID())).catch(
@@ -109,5 +140,34 @@ describe("create-key is idempotent per submission", () => {
 
     expect(failure).toBeInstanceOf(Error);
     expect(await keyRows("nobody")).toBe(0);
+  });
+});
+
+function grant(id: string): GrantSummary {
+  return { id, clientId: "c", userId: "u", scope: ["read"], metadata: {}, createdAt: 1 };
+}
+
+describe("listAllGrants pages until the cursor ends", () => {
+  it("concatenates two pages", async () => {
+    const helpers = {
+      listUserGrants: async (_user: string, options?: { cursor?: string }) =>
+        options?.cursor === "p2" ? { items: [grant("g2")] } : { items: [grant("g1")], cursor: "p2" },
+    };
+    expect((await listAllGrants(helpers, "u")).map((row) => row.id)).toEqual(["g1", "g2"]);
+  });
+
+  it("stops on an empty cursor and on a repeated cursor", async () => {
+    const empty = { listUserGrants: async () => ({ items: [grant("g1")], cursor: "" }) };
+    expect((await listAllGrants(empty, "u")).map((row) => row.id)).toEqual(["g1"]);
+
+    let calls = 0;
+    const repeating = {
+      listUserGrants: async () => {
+        calls += 1;
+        return { items: [grant("g1")], cursor: "same" };
+      },
+    };
+    await listAllGrants(repeating, "u");
+    expect(calls).toBe(2);
   });
 });

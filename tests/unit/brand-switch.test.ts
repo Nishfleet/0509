@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 import {
   BrandSwitch,
   type BrandSwitchState,
-  brandRowClass,
   BrandSwitchField,
   brandSwitchNote,
   dayMonthLabel,
@@ -41,9 +40,6 @@ describe("the brand switch", () => {
   });
 
   it("resets the outline style so the focus ring actually paints", () => {
-    // ui/switch carries `outline-none`, which sets --tw-outline-style: none.
-    // focus-visible:outline-2 only reads that variable, so without a matching
-    // focus-visible:outline-solid the ring is width 2px of style none: invisible.
     const html = render("on");
     expect(html).toContain("focus-visible:outline-2");
     expect(html).toContain("focus-visible:outline-solid");
@@ -92,13 +88,9 @@ describe("dayMonthLabel", () => {
     expect(dayMonthLabel("2026-09-22T12:00:00.000Z")).toBe("22 Sept");
     expect(dayMonthLabel("garbage")).toBeNull();
   });
-});
 
-describe("brandRowClass", () => {
-  it("dims off rows, washes you rows and leaves on rows alone", () => {
-    expect(brandRowClass("off")).toBe("text-ink-faint");
-    expect(brandRowClass("you")).toBe("bg-green-wash");
-    expect(brandRowClass("on")).toBe("");
+  it("shifts the calendar day into the workspace zone", () => {
+    expect(dayMonthLabel("2026-09-14T00:00:00.000Z", "America/New_York")).toBe("13 Sept");
   });
 });
 
@@ -123,5 +115,41 @@ describe("the brand switch field", () => {
     expect(id).toBeDefined();
     expect(html).toContain(`id="${String(id)}"`);
     expect(html).not.toContain("text-ink-faint");
+  });
+});
+
+describe("the brand switch geometry (0509#7071)", () => {
+  function switchClass(html: string): string {
+    return /role="switch"[^>]*class="([^"]*)"/.exec(html.replace(/&amp;/g, "&"))?.[1] ?? "";
+  }
+
+  it("sizes the track at 38x22 by winning the size against the stock 32x18.4 track", () => {
+    const html = render("off");
+    const cls = switchClass(html);
+    expect(cls).toContain("data-[size=default]:h-[22px]");
+    expect(cls).toContain("data-[size=default]:w-[38px]");
+    expect(cls).not.toContain("h-[18.4px]");
+    expect(cls).not.toContain("w-[32px]");
+  });
+
+  it("never lets the stock track leak an undefined token class", () => {
+    const html = render("off");
+    const cls = switchClass(html);
+    expect(cls).not.toContain("data-[size=default]:h-[18.4px]");
+    expect(cls).not.toContain("data-[size=default]:w-[32px]");
+  });
+
+  it("paints the off track card fill, so the stock unchecked fill loses", () => {
+    const html = render("off");
+    const cls = switchClass(html);
+    expect(cls).toContain("data-unchecked:bg-card");
+    expect(cls).toContain("dark:data-unchecked:bg-card");
+    expect(cls).not.toContain("data-unchecked:bg-input");
+    expect(cls).not.toContain("dark:data-unchecked:bg-input/80");
+  });
+
+  it("carries the checked thumb translate that keeps the thumb inside a 38px track", () => {
+    const html = render("on").replace(/&amp;/g, "&");
+    expect(switchClass(html)).toContain("data-checked:[&_[data-slot=switch-thumb]]:translate-x-[17.5px]");
   });
 });

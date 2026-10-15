@@ -4,11 +4,6 @@ import { describe, expect, it } from "vitest";
 import { readOnboardingCompetitors } from "../../app/lib/data/entity.server";
 import { acceptSuggestion } from "../../app/lib/data/suggestion.server";
 
-/**
- * Screen 3's write (0509#4429): one maybe flipped on accepts a pending
- * suggestion into an ON competitor, in one batch, against the migrated D1.
- */
-
 let seededRuns = 0;
 
 async function seedUser(id: string, email: string): Promise<void> {
@@ -25,6 +20,11 @@ async function seedWorkspace(id: string, ownerUserId: string, name: string): Pro
      VALUES (?, ?, ?, 'UTC', 1, 8, ?)`,
   )
     .bind(id, name, ownerUserId, "2026-09-24T12:00:00.000Z")
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'trialing', ?)",
+  )
+    .bind(`plan-${id}`, id, "2026-09-24T12:00:00.000Z")
     .run();
 }
 

@@ -1,21 +1,15 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createMemoryRouter, type Router as MemoryRouter, RouterProvider } from "react-router";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { SubjectConfirm } from "../../app/components/onboarding-subject-confirm";
 
-// The guardrail question posts an answer back to the same route, and both
-// buttons belong to that one form: a second click while the answer is in flight
-// would send the other answer for a question that has to be answered once. So
-// both buttons disable together, whichever one was clicked, and the clicked one
-// reads its own pending label. JSX escapes the apostrophe, hence the entity in
-// the "person" label assertions.
 const CONFIRM = createElement(SubjectConfirm, { subject: "acme.example", raw: "acme.example" });
 const PERSON = ">No, it&#x27;s a person<";
 const NEVER = () => new Promise(() => undefined);
 
-function routerWith(action: (args: unknown) => Promise<unknown>): MemoryRouter {
+function routerWith(action: (args: unknown) => Promise<unknown>): ReturnType<typeof createMemoryRouter> {
   return createMemoryRouter(
     [
       { path: "/", element: createElement("div", null, "home") },
@@ -25,11 +19,11 @@ function routerWith(action: (args: unknown) => Promise<unknown>): MemoryRouter {
   );
 }
 
-function markup(router: MemoryRouter): string {
+function markup(router: ReturnType<typeof createMemoryRouter>): string {
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
 
-function submit(router: MemoryRouter, answer: string): Promise<unknown> {
+function submit(router: ReturnType<typeof createMemoryRouter>, answer: string): Promise<unknown> {
   const formData = new FormData();
   formData.set("subject", "acme.example");
   formData.set("answer", answer);
@@ -76,9 +70,6 @@ describe("the business or creator question buttons", () => {
   });
 
   it("re-enables both buttons when the action returns an error instead of completing", async () => {
-    // The error path in app/routes/onboarding.tsx keeps `confirm` set (the route
-    // unmounts the form only on the answer paths that leave no question to
-    // repeat), so the rendered form after the action is what the user sees.
     const router = routerWith(() => Promise.resolve({ message: "that did not work", confirm: "acme.example" }));
     await submit(router, "person");
     expect(router.state.navigation.state).toBe("idle");

@@ -1,6 +1,8 @@
 import { sha256Hex } from "../sha256";
 
-const SKIP_SELECTOR = "script, style, noscript, [aria-hidden='true']";
+const SKIP_SELECTOR = "script, style, noscript, template, [hidden], [aria-hidden='true']";
+
+const HIDDEN_STYLE = /display\s*:\s*none|visibility\s*:\s*hidden/i;
 
 const VOID_ELEMENTS = new Set([
   "area",
@@ -49,6 +51,15 @@ export async function extractPageText(html: string): Promise<ExtractedPageText> 
       },
     })
     .on("*", {
+      element(element) {
+        const style = element.getAttribute("style") ?? "";
+        if (!HIDDEN_STYLE.test(style)) return;
+        if (VOID_ELEMENTS.has(element.tagName.toLowerCase())) return;
+        state.skip += 1;
+        element.onEndTag(() => {
+          state.skip -= 1;
+        });
+      },
       text(chunk) {
         if (state.skip > 0) return;
         state.pending += chunk.text;

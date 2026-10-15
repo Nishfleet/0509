@@ -17,9 +17,6 @@ vi.mock("../../app/lib/auth.server", () => ({
 
 import Login from "../../app/routes/login";
 
-// The router keeps the last action result in its state after a post, so the
-// alert and the input attribute come from the same error: the one place where
-// hydrationData and the action agree is the action's own return value.
 function render(options: { linkError?: boolean; actionError?: boolean }): string {
   const Stub = createRoutesStub([
     {
@@ -48,7 +45,7 @@ function render(options: { linkError?: boolean; actionError?: boolean }): string
 }
 
 function emailInput(html: string): string {
-  return html.match(/<input\b[^>]*id="email"[^>]*>/)?.[0] ?? "";
+  return /<input\b[^>]*id="email"[^>]*>/.exec(html)?.[0] ?? "";
 }
 
 describe("Login sign-in error", () => {

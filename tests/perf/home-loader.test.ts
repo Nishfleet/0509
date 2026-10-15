@@ -3,11 +3,6 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { readHomeStandingInputs, SELECT_HOME_STANDING } from "../../app/lib/home-standing.server";
 
-/**
- * One indexed Home read over 100 loads of four ON brands and two weekly
- * digests. The digest index is used and p95 stays under 500 ms.
- */
-
 const USER = "user_home_perf";
 const WS = "ws_home_perf";
 const CREATED_AT = "2026-08-01T00:00:00.000Z";
@@ -83,7 +78,7 @@ describe("home loader", () => {
     let readOk = true;
     for (let i = 0; i < 100; i++) {
       const started = performance.now();
-      const inputs = await readHomeStandingInputs(env.DB, USER);
+      const inputs = await readHomeStandingInputs(USER);
       samples.push(performance.now() - started);
       readOk =
         readOk &&

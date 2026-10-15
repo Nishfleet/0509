@@ -24,10 +24,10 @@ const recorder = (): Recorder => ({ sent: [], fail: null });
 const failing = (value: unknown, sync = false): Failure => ({ value, sync });
 
 const bindingFor = (rec: Recorder): SendEmail => ({
-  send(message: EmailMessageBuilder): Promise<EmailSendResult> {
+  send(message: EmailMessage | EmailMessageBuilder): Promise<EmailSendResult> {
     if (rec.fail?.sync) throw rec.fail.value;
     if (rec.fail) return Promise.reject(rec.fail.value);
-    rec.sent.push(message);
+    rec.sent.push(message as EmailMessageBuilder);
     return Promise.resolve({ messageId: "m-1" });
   },
 });
@@ -81,7 +81,15 @@ describe("sendMessage", () => {
     const result = await sendMessage(bindingFor(rec), MESSAGE);
 
     expect(result).toEqual({ outcome: "sent", error: null });
-    expect(rec.sent).toEqual([MESSAGE]);
+    expect(rec.sent).toEqual([{ ...MESSAGE, replyTo: "support@0509.io" }]);
+  });
+
+  it("keeps a reply-to the caller already set", async () => {
+    const rec = recorder();
+
+    await sendMessage(bindingFor(rec), { ...MESSAGE, replyTo: "other@0509.io" });
+
+    expect(rec.sent[0]?.replyTo).toBe("other@0509.io");
   });
 
   it("resolves 'failed' with the error text when the binding rejects, and never throws", async () => {
@@ -120,7 +128,7 @@ describe("sendOrThrow", () => {
     const rec = recorder();
 
     await expect(sendOrThrow(bindingFor(rec), MESSAGE)).resolves.toBeUndefined();
-    expect(rec.sent).toEqual([MESSAGE]);
+    expect(rec.sent).toEqual([{ ...MESSAGE, replyTo: "support@0509.io" }]);
   });
 
   it("throws the failure text when the send rejects", async () => {

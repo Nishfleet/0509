@@ -30,7 +30,7 @@ Every observed item becomes a `signal` row. Polls insert what they find; `tombst
 
 ### Candidate B — raw in R2, curated in D1
 
-A poll writes **one** `snapshot` row per watch per tick — `payload_r2_key`, `payload_hash`, `item_count` — with the body in R2, and the same batch updates the `source` row's `latest_fetched_at` / `latest_item_count` / `latest_canary_count` facts, so a poll writes two rows per check. An item becomes a `signal` row only once it has passed the judgments that decide it is worth showing: D5 for mentions, D3 or D6 for everything else.
+A poll writes **one** `snapshot` row per watch per tick — `payload_r2_key`, `payload_hash`, `item_count` — with the body in R2 (mentions poll bodies are no longer stored from now on: the sha256 stays in `payload_hash` and new snapshots leave `snapshot.payload_r2_key` NULL, #7069; older snapshots keep their keys), and the same batch updates the `source` row's `latest_fetched_at` / `latest_item_count` / `latest_canary_count` facts, so a poll writes two rows per check. An item becomes a `signal` row only once it has passed the judgments that decide it is worth showing: D5 for mentions, D3 or D6 for everything else.
 
 - `signal` is the curated set, and its size is bounded by what is worth telling the user, not by what was observed.
 - The hash gate is cheap, not free: an unchanged page still writes its `snapshot` row and the paired `source` latest-facts update, but no R2 body and no screenshot.
@@ -84,7 +84,7 @@ The asymmetry between those last two is deliberate. `kind` is CHECKed to `mentio
 
 **`page`** — pages discovered for an entity, with **`role`** from D9 and `role_decided_for_hash` so the role is re-judged only when URL or title changes.
 
-**`snapshot`** — one row per watch per tick: `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at`. The cost boundary.
+**`snapshot`** — one row per watch per tick: `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at`. The cost boundary. Mention bodies are no longer stored from now on: new mentions snapshots keep only the sha256 in `payload_hash` and leave `payload_r2_key` NULL (#7069); older snapshots keep their keys.
 
 **`signal`** — the curated spine every view reads. `kind` is a plugin-owned string, never an enum. Conditional CHECKs enforce per-kind requirements. `mention` and `change` are views over it.
 
@@ -94,13 +94,13 @@ The asymmetry between those last two is deliberate. `kind` is CHECKed to `mentio
 
 **`alert`**, **`digest`**, **`send_target`**, **`send_attempt`** — the alerts feed and the weekly brief, plus the email lane through the Cloudflare Email Service binding.
 
-**Platform** — `email_suppression`, `rate_limit_events`, `dodo_webhook_event`.
+**Platform** — `email_suppression`, `dodo_webhook_event`.
 
 ## The DROP prologue
 
 `0001_init.sql` opens by dropping every pre-rebuild table, then creates the new schema. The list was derived by applying the 106 pre-rebuild migrations to a local D1 and reading `sqlite_master`, not by grepping the old files — the old chain contains 200 `CREATE TABLE` and 96 `DROP TABLE` statements because of SQLite's rebuild-and-copy pattern, so parsing overcounts badly.
 
-The list includes the names the new schema reuses — `user`, `session`, `account`, `verification`, `dodo_webhook_event`, `email_suppression`, `rate_limit_events` — because `CREATE TABLE IF NOT EXISTS` silently skips a table that already exists. Without dropping those, the database keeps the old definitions: I measured a live `user` still carrying a `signup_source` CHECK listing dead marketing values while the new file declared a clean seven-column table.
+The list includes the names the new schema reuses — `user`, `session`, `account`, `verification`, `dodo_webhook_event`, `email_suppression` — because `CREATE TABLE IF NOT EXISTS` silently skips a table that already exists. Without dropping those, the database keeps the old definitions: I measured a live `user` still carrying a `signup_source` CHECK listing dead marketing values while the new file declared a clean seven-column table.
 
 `wrangler d1 migrations apply` does not object to the 106 applied migrations having vanished from the folder; tracking is by filename, so `0001_init.sql` is simply a name the migrations table has never seen. I verified that on a local D1 before relying on it.
 

@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToReadableStream } from "react-dom/server";
-import { createMemoryRouter, type Router as MemoryRouter, RouterProvider } from "react-router";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { IdentityCard } from "../../../app/components/identity-card";
@@ -18,7 +18,7 @@ const fields: SiteFields = {
   unfound: false,
 };
 
-function routerWithCard(action: () => Promise<unknown>): MemoryRouter {
+function routerWithCard(action: () => Promise<unknown>): ReturnType<typeof createMemoryRouter> {
   return createMemoryRouter(
     [
       {
@@ -33,7 +33,7 @@ function routerWithCard(action: () => Promise<unknown>): MemoryRouter {
             draft: {},
             message: undefined,
           }),
-        // The card's submit button posts back to this route.
+
         action,
       },
     ],
@@ -41,10 +41,7 @@ function routerWithCard(action: () => Promise<unknown>): MemoryRouter {
   );
 }
 
-// IdentityCard draws its fields through `Await`, so the promise has to resolve
-// before the markup exists: `allReady` is the public render entry that waits
-// for every Suspense boundary instead of only the shell.
-async function renderCard(router: MemoryRouter): Promise<string> {
+async function renderCard(router: ReturnType<typeof createMemoryRouter>): Promise<string> {
   const stream = await renderToReadableStream(createElement(RouterProvider, { router }));
   await stream.allReady;
   const reader = stream.getReader();
@@ -59,12 +56,11 @@ async function renderCard(router: MemoryRouter): Promise<string> {
 
 function confirmButton(html: string): string {
   const buttons = html.match(/<button\b[^>]*>[\s\S]*?<\/button>/g) ?? [];
-  return buttons.find((entry) => /submit/.test(entry)) ?? "";
+  return buttons.find((entry) => entry.includes("submit")) ?? "";
 }
 
 const NEVER = () => new Promise<undefined>(() => undefined);
-// A failed confirm in the real route returns a message, which keeps the card
-// mounted, so the route's action resolves instead of throwing.
+
 const FAILS = () => Promise.resolve({ message: "Add your brand's name, then tap That's me." });
 
 describe("the onboarding confirm button", () => {

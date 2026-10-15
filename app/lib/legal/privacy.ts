@@ -35,7 +35,7 @@ export const PRIVACY: LegalDocument = {
         "Your account: your email address, and a name if you give one.",
         "Your sign-in: the public half of a passkey, if you set one up. Your fingerprint or face never leaves your device, and we store no passwords.",
         "Your sessions: when you signed in, and the IP address and browser you used, so you stay signed in and we can spot someone else using your account.",
-        "Your workspace: your brand, the competitors you watch, your settings and time zone, and the choices you make, such as dismissing a suggestion or turning a brand off.",
+        "Your workspace: your brand, the competitors you watch, your settings and time zone, and the choices you make, such as dismissing a suggestion or turning a brand off, and any private notes you write about a competitor. Notes are for your workspace only: only people in your workspace can see them, and they are never emailed.",
         "Your agent access: the apps you approved, and a scrambled copy of each key you create, with when it was last used.",
         "Billing: your plan and whether it is paid. Your card details go to Dodo Payments and never reach us.",
         "Emails you send us, so we can answer them.",
@@ -141,6 +141,7 @@ export const PRIVACY: LegalDocument = {
         "A session cookie that keeps you signed in, and a short-lived copy of your session that saves a database lookup.",
         "A time zone cookie, so the brief arrives on your Monday morning.",
         "A short-lived cookie set while you delete your account, so the sign-in page can show when your files are gone.",
+        "A short-lived cookie that remembers which plan you chose on the pricing page, so the plan step can show it first.",
       ],
       closing: ["We use no advertising or tracking cookies, so there is no cookie banner."],
     },
@@ -181,7 +182,7 @@ export const PRIVACY: LegalDocument = {
         {
           term: "Do-not-email record",
           details: [
-            "When you unsubscribe, or delete your account, we keep the email address and the reason on a do-not-email list, so we never email it again. It holds nothing else.",
+            "When you unsubscribe, we keep the email address and the reason on a do-not-email list, so we never email it again. It holds nothing else. When you delete your account we add the address the same way, and we remove that delete record if you sign up again with the same address.",
           ],
         },
         {

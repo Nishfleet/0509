@@ -1,6 +1,7 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
+import { HIRING_SWEEP_CRON, sweepMonitor } from "../../app/lib/cadence";
 import { readHiringTargets } from "../../app/lib/data/watch.server";
 import type { BoardResult } from "../../app/lib/hiring/read-board.server";
 import { readBoard } from "../../app/lib/hiring/read-board.server";
@@ -14,12 +15,7 @@ const RETRY: WorkflowStepConfig = {
   timeout: "5 minutes",
 };
 
-const MONITOR = {
-  schedule: { type: "crontab", value: "30 2 * * *" },
-  checkinMargin: 60,
-  maxRuntime: 90,
-  timezone: "UTC",
-} as const;
+const MONITOR = { ...sweepMonitor(HIRING_SWEEP_CRON), timezone: "UTC" } as const;
 
 export interface HiringSweepOutcome {
   discovered: number;

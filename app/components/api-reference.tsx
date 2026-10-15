@@ -1,4 +1,5 @@
 import { Footer } from "./footer";
+import { MAIN_CONTENT_ID, SkipLink } from "./skip-link";
 import { Wordmark } from "./wordmark";
 import {
   bearerCopy,
@@ -28,7 +29,15 @@ function SettingsLink({ href }: { href: string }) {
   );
 }
 
-function AuthBlock({ document, settingsHref }: { document: JsonRecord; settingsHref: string }) {
+function AuthBlock({
+  document,
+  exampleUrl,
+  settingsHref,
+}: {
+  document: JsonRecord;
+  exampleUrl: string | null;
+  settingsHref: string;
+}) {
   return (
     <section aria-labelledby="authentication" className="mt-14 scroll-mt-6">
       <h2 className={HEADING} id="authentication">
@@ -39,6 +48,12 @@ function AuthBlock({ document, settingsHref }: { document: JsonRecord; settingsH
       </p>
       <p className={`mt-3 ${MONO}`}>{`Authorization: Bearer <key>`}</p>
       <p className={BODY}>{bearerCopy(document)}.</p>
+      {exampleUrl === null ? null : (
+        <>
+          <p className={BODY}>For example:</p>
+          <p className={`mt-3 ${MONO}`}>{`curl -H "Authorization: Bearer <key>" ${exampleUrl}`}</p>
+        </>
+      )}
     </section>
   );
 }
@@ -54,6 +69,8 @@ function McpBlock({ mcpUrl, settingsHref }: { mcpUrl: string; settingsHref: stri
         <SettingsLink href={settingsHref} />.
       </p>
       <p className={`mt-3 ${MONO}`}>{mcpUrl}</p>
+      <p className={BODY}>In Claude Code, run:</p>
+      <p className={`mt-3 ${MONO}`}>{`claude mcp add --transport http five-to-nine ${mcpUrl}`}</p>
     </section>
   );
 }
@@ -181,21 +198,24 @@ function Schemas({ document }: { document: JsonRecord }) {
 
 export function ApiReference({
   document,
+  exampleUrl,
   mcpUrl,
   settingsHref,
 }: {
   document: JsonRecord;
+  exampleUrl: string | null;
   mcpUrl: string;
   settingsHref: string;
 }) {
   return (
     <div className={SHELL}>
+      <SkipLink />
       <header>
         <Wordmark />
       </header>
-      <main className="mt-8 min-w-0">
+      <main id={MAIN_CONTENT_ID} tabIndex={-1} className="mt-8 min-w-0">
         <h1 className={TITLE}>API reference</h1>
-        <AuthBlock document={document} settingsHref={settingsHref} />
+        <AuthBlock document={document} exampleUrl={exampleUrl} settingsHref={settingsHref} />
         <McpBlock mcpUrl={mcpUrl} settingsHref={settingsHref} />
         <LimitsBlock settingsHref={settingsHref} />
         <Endpoints document={document} />

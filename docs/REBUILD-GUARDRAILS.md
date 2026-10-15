@@ -36,7 +36,7 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's decisions stan
 ## Takedown
 
 - Any brand or person can ask to be removed from tracking by any workspace, by email to the address in the footer. Handled within 72 hours by hand (Nish or the deputy), recorded on a `takedown` row with the subject, the date and the action. A subject on the takedown list is refused at onboarding and dropped from existing workspaces at the next tick, with a one-line note to the owner.
-- Share images show only what docs/REBUILD-STANDING-CARD.md allows. They are rendered from live rows, so a subject is out of every share image made after its takedown is recorded.
+- Share images show only what DESIGN.md §2.8 allows: the own brand's name and monogram, the rank, the count and the week. Never mentions text, never own-site incidents, never a competitor's name. They are rendered from live rows, so a subject is out of every share image made after its takedown is recorded.
 
 ### Who reads it
 

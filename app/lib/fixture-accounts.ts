@@ -5,6 +5,11 @@ export const FIXTURE_ACCOUNTS = {
   j9Mentions: { email: "e2e+j9-mentions@0509.io", maxCompetitors: 1 },
   j12Rollovers: { email: "e2e+j12-rollovers@0509.io", maxCompetitors: 4 },
   soak: { email: "e2e+soak@0509.io", maxCompetitors: 4 },
+  onboardedDesktop: { email: "e2e+onboarded-desktop@0509.io", maxCompetitors: 2 },
+  onboardedPhone: { email: "e2e+onboarded-phone@0509.io", maxCompetitors: 2 },
+  j6Desktop: { email: "e2e+j6-desktop@0509.io", maxCompetitors: 1 },
+  j6Phone: { email: "e2e+j6-phone@0509.io", maxCompetitors: 1 },
+  j11: { email: "e2e+j11@0509.io", maxCompetitors: 3 },
 } as const;
 
 export function isFixtureAccount(email: string): boolean {

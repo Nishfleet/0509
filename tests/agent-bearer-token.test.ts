@@ -17,8 +17,6 @@ describe("bearerToken (0509#6573)", () => {
   });
 
   it("ignores extra whitespace between the scheme and the token", () => {
-    // Headers drops the padding at the ends, so the run of spaces between
-    // scheme and token is what this case covers.
     expect(bearerToken(requestWith("  Bearer   abc  "))).toBe("abc");
   });
 

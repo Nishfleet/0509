@@ -1,5 +1,6 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { RouterContextProvider } from "react-router";
 
 import checkoutSession from "../fixtures/dodo/checkout-session-created.json";
 
@@ -7,12 +8,9 @@ const session = vi.hoisted(() => ({
   user: { id: "user-yearly", email: "yearly@example.com", emailVerified: true },
 }));
 
-vi.mock("../../app/lib/require-session.server", () => ({
-  requireFreshSession: async () => session,
-}));
-
 import { checkoutProof } from "../../app/lib/billing/checkout-proof.server";
 import { planIdForProduct } from "../../app/lib/billing/products.server";
+import { onboardedContext } from "../../app/lib/require-onboarded.server";
 import { action } from "../../app/routes/app.upgrade";
 
 async function seedOwner(): Promise<void> {
@@ -31,7 +29,9 @@ function upgradeRequest(fields: Record<string, string>): Parameters<typeof actio
     method: "POST",
     body: new URLSearchParams(fields),
   });
-  return { request, params: {}, context: {} } as unknown as Parameters<typeof action>[0];
+  const context = new RouterContextProvider();
+  context.set(onboardedContext, { session, workspaceId: "ws-user-yearly" } as never);
+  return { request, params: {}, context } as unknown as Parameters<typeof action>[0];
 }
 
 afterEach(() => {

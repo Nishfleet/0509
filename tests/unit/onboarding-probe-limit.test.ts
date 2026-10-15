@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   requireSession: vi.fn(),
 }));
 
-vi.mock("cloudflare:workers", () => ({ env: {} }));
 vi.mock("../../app/lib/require-session.server", () => ({
   requireFreshSession: mocks.requireFreshSession,
   requireSession: mocks.requireSession,

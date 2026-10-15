@@ -95,8 +95,6 @@ describe("pickBiggestMove", () => {
   });
 
   it("keeps the higher-points signal when a lower-points signal arrives after it", () => {
-    // Same reliability on both, so the bucket weight alone decides the points:
-    // mention_matters is 3 and mention_normal is 1 in V1_ROWS.
     const high = signal({ id: "sig-high", bucket: "mention_matters" });
     const low = signal({ id: "sig-low", bucket: "mention_normal" });
 
@@ -106,8 +104,6 @@ describe("pickBiggestMove", () => {
   });
 
   it("breaks an equal-points tie on the later observedAt in either order", () => {
-    // Same bucket and reliability on both, so the points are equal by
-    // construction and only observedAt can separate them.
     const earlier = signal({
       id: "sig-earlier",
       bucket: "mention_matters",
@@ -126,8 +122,6 @@ describe("pickBiggestMove", () => {
   });
 
   it("breaks an equal-points, equal-observedAt tie on the greater id in either order", () => {
-    // Same bucket, reliability and observedAt on both, so points and time are
-    // equal by construction and only the id can separate them.
     const alpha = signal({
       id: "sig-alpha",
       bucket: "mention_matters",
@@ -141,8 +135,6 @@ describe("pickBiggestMove", () => {
       observedAt: "2026-09-20T10:00:00.000Z",
     });
 
-    // "sig-beta" sorts above "sig-alpha", so the test cannot hide a win by
-    // the smaller id behind JS string order.
     expect(pickBiggestMove([beta, alpha], WEIGHTS)?.signal.id).toBe("sig-beta");
     expect(pickBiggestMove([alpha, beta], WEIGHTS)?.signal.id).toBe("sig-beta");
   });
@@ -204,6 +196,28 @@ describe("biggestMoveView", () => {
     expect(onePoint.read).not.toContain("1 points");
   });
 
+  it.each([
+    { weight: 3, multiplier: 0.6, shown: "3 × 0.6 = 1.8 points" },
+    { weight: 3, multiplier: 0.7, shown: "3 × 0.7 = 2.1 points" },
+    { weight: 4, multiplier: 0.6, shown: "4 × 0.6 = 2.4 points" },
+    { weight: 3, multiplier: 0.9, shown: "3 × 0.9 = 2.7 points" },
+    { weight: 4, multiplier: 1, shown: "4 × 1 = 4 points" },
+    { weight: 2, multiplier: 1.0, shown: "2 × 1 = 2 points" },
+  ])("formats $weight × $multiplier for people, never as a raw float", ({ weight, multiplier, shown }) => {
+    const view = biggestMoveView({ ...move, weight, multiplier, points: weight * multiplier }, now);
+
+    expect(view.read).toBe(`Ad wording or offer changes: ${shown}, the most of anything this brand did this week.`);
+    expect(view.read).not.toMatch(/\d\.\d{3,}/);
+  });
+
+  it("says point for a product that rounds to one", () => {
+    const view = biggestMoveView({ ...move, weight: 1, multiplier: 0.9999, points: 0.9999 }, now);
+
+    expect(view.read).toBe(
+      "Ad wording or offer changes: 1 × 1 = 1 point, the most of anything this brand did this week.",
+    );
+  });
+
   it("falls back to the summary, then to the source label, for the title", () => {
     expect(biggestMoveView(move, now).title).toBe("Fresh copy on the winter sale");
     expect(biggestMoveView({ ...move, signal: { ...move.signal, summary: null } }, now).title).toBe("Ad library");
@@ -219,7 +233,13 @@ describe("quietWeekSentence", () => {
 
   it("says the first read lands tonight when the brand was never checked", () => {
     expect(quietWeekSentence([], null)).toBe(
-      "Nothing worth scoring for this competitor in the last 7 days. We watch its website; our first read is tonight at 02:00 UTC.",
+      "Nothing worth scoring for this competitor in the last 7 days. We watch its website; our first read is tonight at 21:00 UTC.",
+    );
+  });
+
+  it("uses the workspace sweep clock instead of a UTC-only label", () => {
+    expect(quietWeekSentence([], null, "07:30 GMT+5:30")).toBe(
+      "Nothing worth scoring for this competitor in the last 7 days. We watch its website; our first read is tonight at 07:30 GMT+5:30.",
     );
   });
 });

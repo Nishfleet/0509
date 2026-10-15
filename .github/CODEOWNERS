@@ -1,5 +1,14 @@
 # No-glue lock (fleet-ops#8459): scripts, wrappers and script dirs need Nish's review to merge.
-# Push rulesets are refused on public repos, so this uses CODEOWNERS + require_code_owner_review.
+# CODEOWNERS is a review request, not the gate: ruleset 21391031 — the only
+# ruleset on this branch, and branch protection returns 404 — has
+# require_code_owner_review:false and required_approving_review_count:0
+# (`gh api repos/Nishfleet/0509/rulesets/21391031`). #5787 closed the ruleset
+# change with the reason a lock here can never work: every PR the fleet opens is
+# authored by nish3451, and GitHub never lets an author approve their own PR.
+# The real gate is the fleet-ops agent.yml arm step, which labels a worker PR
+# that touches any path outside its arm allowlist `needs-coordinator` and does
+# not arm auto-merge, plus the merge queue's one required check, `ci-ok`, on every
+# merge; it needs every gate job in ci.yml to succeed.
 *.sh @nish3451
 *.py @nish3451
 *.bash @nish3451
@@ -11,6 +20,11 @@
 /.github/CODEOWNERS @nish3451
 
 # Migration lock: merging to main applies migrations/ to production D1
-# (deploy-production.yml), so a migration waits for a code-owner review
-# instead of riding a worker's auto-merge.
+# (deploy-production.yml). No code-owner review stands in front of it — see the
+# note above for the ruleset params and #5787 — so the gate is the
+# `needs-coordinator` label the fleet-ops arm step gives a worker PR, which stops
+# its auto-merge, and the merge queue's required checks on every other merge.
+# An orchestrator PR (author nish3451) has no second review either way; the
+# orchestrator-path decision is tracked at fleet-ops#9231. Recovery is D1 Time
+# Travel.
 /migrations/ @nish3451

@@ -2,15 +2,13 @@ import { z } from "zod";
 
 import { insertVerdict } from "../../app/lib/data/jev_verdict.server";
 import type { NoulVerdict } from "../../app/lib/jev/client.server";
-import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
+import { askNoul, JEV_BATCH_SIZE, JevUnavailableError } from "../../app/lib/jev/client.server";
 import { changeActsSql } from "../../app/lib/jev/thresholds";
 import type { D4Verdict } from "../../app/lib/read-this-first";
 import { pickReadThisFirst, READ_THIS_FIRST, readThisFirstState } from "../../app/lib/read-this-first";
 import { D3_QUESTION_ID, D6_QUESTION_ID } from "../../app/lib/standing-score";
 import { countUnjudgedInputs } from "../../app/lib/standing-score.server";
 import { required } from "../../app/lib/required";
-
-const JUDGE_CHUNK = 10;
 
 const EFFECTIVE_AT = "COALESCE(datetime(s.published_at), datetime(s.observed_at))";
 
@@ -132,8 +130,8 @@ async function judgeChunk(context: JudgeContext, chunk: readonly LocatedItem[]):
 
 async function judgeAll(context: JudgeContext, located: readonly LocatedItem[]): Promise<D4Verdict[]> {
   let collected: D4Verdict[] = [];
-  for (let index = 0; index < located.length; index += JUDGE_CHUNK) {
-    const chunk = located.slice(index, index + JUDGE_CHUNK);
+  for (let index = 0; index < located.length; index += JEV_BATCH_SIZE) {
+    const chunk = located.slice(index, index + JEV_BATCH_SIZE);
     collected = [...collected, ...(await judgeChunk(context, chunk))];
   }
   return collected;

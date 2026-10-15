@@ -2,8 +2,6 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createRoutesStub } from "react-router";
 import { describe, expect, it, vi } from "vitest";
-
-vi.mock("cloudflare:workers", () => ({ env: {} }));
 vi.mock("../../app/lib/auth.server", () => ({
   createAuth: () => ({ handler: async () => new Response(null, { status: 200 }) }),
 }));
@@ -74,14 +72,10 @@ describe("Login account-delete progress", () => {
     );
   });
 
-  // DESIGN.md: tap targets are 44px minimum. min-h-11 is 44px in this repo
-  // (tests/unit/onboarding-competitors.test.ts), and a box only reaches that
-  // height when inline-flex puts the text in a line box and items-center keeps
-  // it centred, so all three tokens are asserted.
   it('gives "Check again" a 44px-tall tap target', () => {
     const html = render({ id: "wf-5", progress: { rows: "removed", files: "removing", deleted: null } });
 
-    const link = html.match(/<a\b[^>]*href="\/login\?deleted=wf-5"[^>]*>/)?.[0] ?? "";
+    const link = /<a\b[^>]*href="\/login\?deleted=wf-5"[^>]*>/.exec(html)?.[0] ?? "";
 
     expect(link).toContain("min-h-11");
     expect(link).toContain("inline-flex");

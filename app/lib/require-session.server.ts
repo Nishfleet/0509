@@ -1,12 +1,20 @@
 import { env } from "cloudflare:workers";
-import { redirect } from "react-router";
+import { createContext, redirect, type RouterContextProvider } from "react-router";
 
-import { createAuth } from "./auth.server";
+import { createAuth, hasSessionCookie, signOut } from "./auth.server";
+
+async function loginPath(request: Request, returnTo: string | undefined): Promise<string> {
+  const params = new URLSearchParams();
+  if (returnTo !== undefined) params.set("next", returnTo);
+  if (await hasSessionCookie(request)) params.set("ended", "1");
+  const query = params.toString();
+  return query === "" ? "/login" : `/login?${query}`;
+}
 
 async function readSession(request: Request, returnTo: string | undefined, disableCookieCache: boolean) {
   const auth = createAuth(env);
   const session = await auth.api.getSession({ headers: request.headers, query: { disableCookieCache } });
-  if (!session) throw redirect(returnTo === undefined ? "/login" : `/login?next=${encodeURIComponent(returnTo)}`);
+  if (!session) throw redirect(await loginPath(request, returnTo));
   return session;
 }
 
@@ -18,7 +26,29 @@ export function requireFreshSession(request: Request, returnTo?: string) {
   return readSession(request, returnTo, true);
 }
 
+export function sessionForRequest(request: Request, returnTo?: string) {
+  return request.method === "GET" ? requireSession(request, returnTo) : requireFreshSession(request, returnTo);
+}
+
+export type Session = Awaited<ReturnType<typeof requireSession>>;
+
+export const sessionContext = createContext<Session>();
+
+export async function requireSessionMiddleware({
+  request,
+  context,
+}: {
+  request: Request;
+  context: Pick<RouterContextProvider, "set">;
+}): Promise<void> {
+  context.set(sessionContext, await sessionForRequest(request));
+}
+
 export async function hasSession(request: Request): Promise<boolean> {
   const auth = createAuth(env);
   return (await auth.api.getSession({ headers: request.headers })) !== null;
+}
+
+export async function signOutToLogin(request: Request): Promise<never> {
+  throw redirect("/login", { headers: await signOut(env, request) });
 }

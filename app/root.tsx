@@ -1,12 +1,22 @@
-import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration, useMatches } from "react-router";
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, useMatches } from "react-router";
 
 import type { Route } from "./+types/root";
 import { ErrorPage } from "./components/error-page";
 import { hasSessionCookie } from "./lib/auth.server";
+import { errorCopy } from "./lib/error-copy";
 import { FACES_SCRIPT } from "./lib/faces-script";
-import "./app.css";
+import appStylesheet from "./app.css?url";
 
-const SERVER_ONLY_ROUTES: ReadonlySet<string> = new Set(["routes/landing", "routes/privacy", "routes/terms"]);
+const SERVER_ONLY_ROUTES: ReadonlySet<string> = new Set([
+  "routes/landing",
+  "routes/privacy",
+  "routes/terms",
+  "routes/security",
+  "routes/pricing",
+  "routes/status",
+  "routes/api-docs",
+  "routes/unmatched",
+]);
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const matches = useMatches();
@@ -16,12 +26,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#f4f1e8" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#14130f" media="(prefers-color-scheme: dark)" />
         <link rel="icon" href="/logo.svg" type="image/svg+xml" />
         <link rel="icon" href="/favicon.ico" sizes="48x48" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="stylesheet" href={appStylesheet} precedence="default" />
         {serverOnly ? null : (
           <>
-            <link rel="stylesheet" href="/app-faces.css" />
+            <link rel="stylesheet" href="/app-faces.css" precedence="default" />
             <link
               rel="preload"
               href="/fonts/bricolage-hero.woff2"
@@ -64,19 +77,15 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export function ErrorBoundary({ error, loaderData }: Route.ErrorBoundaryProps) {
-  const notFound = isRouteErrorResponse(error) && error.status === 404;
   const signedIn = loaderData?.signedIn === true;
-  const where = loaderData?.pathname ?? "this address";
+  const copy = errorCopy(error, loaderData?.pathname ?? "this address");
   return (
     <ErrorPage
-      title={notFound ? "Page not found" : "Something went wrong"}
-      detail={
-        notFound
-          ? `There is no page at ${where}. Check the address, or go back to the home page.`
-          : "This is a problem on our side and we have been alerted. Please try again in a minute."
-      }
-      actionHref={signedIn ? "/app" : "/"}
-      actionLabel="Back to home"
+      title={copy.title}
+      detail={copy.detail}
+      actionHref={copy.action?.href ?? (signedIn ? "/app" : "/")}
+      actionLabel={copy.action?.label ?? "Back to home"}
+      retry={copy.retry}
     />
   );
 }
