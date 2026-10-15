@@ -36,7 +36,7 @@ afterEach(() => {
 
 const MODEL = "@cf/openai/gpt-oss-120b";
 
-async function started(): Promise<Pick<typeof Harness, "postWorkersAi">> {
+async function started(): Promise<Pick<typeof Harness, "postWorkersAi" | "runEval">> {
   vi.resetModules();
   const { postWorkersAi, runEval } = await import("../../evals/harness");
   await runEval(
@@ -45,7 +45,7 @@ async function started(): Promise<Pick<typeof Harness, "postWorkersAi">> {
     () => Promise.resolve({ model: "m", p: null, choice: "x" }),
     () => ({ points: 1, uncertain: false, key: "k" }),
   );
-  return { postWorkersAi };
+  return { postWorkersAi, runEval };
 }
 
 describe("EVAL_MAX_NEURONS", () => {
@@ -66,6 +66,49 @@ describe("EVAL_MAX_NEURONS", () => {
     for (let index = 0; index < 3; index += 1) await postWorkersAi(MODEL, {});
 
     expect(run).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("runEval ceiling fit", () => {
+  const scored = () => ({ points: 1, uncertain: false, key: "k" });
+  const asked = () => Promise.resolve({ model: "m", p: null, choice: "x" });
+
+  it("refuses a run whose call budget cannot fit before any paid call", async () => {
+    vi.stubEnv("EVAL_MAX_NEURONS", "100");
+    const { runEval } = await started();
+    const rows = Array.from({ length: 4 }, (_, index) => ({
+      id: `row-${String(index)}`,
+      split: "test" as const,
+      why: "w",
+    }));
+
+    await expect(runEval("probe", rows, asked, scored)).rejects.toThrow(/refused before any paid call/);
+
+    expect(run).not.toHaveBeenCalled();
+    expect(graphql).not.toHaveBeenCalled();
+  });
+
+  it("counts neurons already spent in the same process", async () => {
+    vi.stubEnv("EVAL_MAX_NEURONS", "200");
+    const { postWorkersAi, runEval } = await started();
+    await postWorkersAi(MODEL, {});
+    await postWorkersAi(MODEL, {});
+    const rows = [{ id: "a", split: "test" as const, why: "w" }];
+
+    await expect(runEval("probe", rows, asked, scored, 60)).rejects.toThrow(/refused before any paid call/);
+
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it("lets a run go ahead when its call budget fits the ceiling", async () => {
+    vi.stubEnv("EVAL_MAX_NEURONS", "100");
+    const { runEval } = await started();
+    const rows = [{ id: "a", split: "test" as const, why: "w" }];
+
+    const report = await runEval("probe", rows, asked, scored);
+
+    expect(report.neuronCeiling).toBe(100);
+    expect(run).not.toHaveBeenCalled();
   });
 });
 
