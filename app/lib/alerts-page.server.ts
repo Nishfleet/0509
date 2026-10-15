@@ -20,9 +20,10 @@ import { readWorkspaceMentionSources } from "./data/source.server";
 import { readWorkspaceIdForOwner, readWorkspaceTimezone } from "./data/workspace.server";
 import { daysAgoLabel } from "./delivery-alert";
 import { nextHour } from "./home-standing";
-import { withoutMentionAlerts } from "./mention-feed";
+import { mentionAlertWhen, withoutMentionAlerts } from "./mention-feed";
 import { offBrandsSentence } from "./off-brands";
 import { daysBefore, readSiteChangeViews } from "./site-changes.server";
+import { APP_LOCALE } from "./locale";
 
 const HIRING_LIMIT = 100;
 
@@ -172,8 +173,8 @@ function buildAlertItems(inputs: AlertInputs, now: Date) {
     ...mentions.map((mention) => ({
       kind: "mention" as const,
       id: mention.id,
-      at: mention.publishedAt ?? mention.observedAt,
-      mention,
+      at: mention.observedAt,
+      mention: { ...mention, when: mentionAlertWhen(mention, now, inputs.timeZone) },
     })),
   ];
 }
@@ -189,7 +190,7 @@ function buildOpenIncident(inputs: AlertInputs, now: Date) {
     url: open.url,
     openedLabel: daysAgoLabel(open.opened_at, now),
     recheckAt,
-    recheckLabel: new Intl.DateTimeFormat("en-US", {
+    recheckLabel: new Intl.DateTimeFormat(APP_LOCALE, {
       timeZone,
       hour: "numeric",
       minute: "2-digit",

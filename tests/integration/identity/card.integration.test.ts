@@ -681,7 +681,8 @@ describe("confirmCard", () => {
     await settledTail();
 
     const entity = await env.DB.prepare("SELECT id FROM entity WHERE role = 'self'").first<{ id: string }>();
-    const expected = (await extractIdentity(gym, "https://www.gymshark.com/")).navPages.length;
+    const found = (await extractIdentity(gym, "https://www.gymshark.com/")).navPages.length;
+    const expected = Math.min(found, 40);
     expect(expected).toBeGreaterThan(0);
 
     const { results } = await env.DB.prepare(

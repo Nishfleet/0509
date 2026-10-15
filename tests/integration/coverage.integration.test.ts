@@ -42,7 +42,7 @@ describe("coverage matches the enabled sources", () => {
     try {
       const body = llmsTxt("https://0509.io", await readRegistrySources(), Date.parse("2026-09-28T12:00:00.000Z"));
       expect(body).toContain("- Mentions: News (not answering today: slow to answer)");
-      expect(body).toContain("Some sources are not answering today; those lines say so.");
+      expect(body).toContain("Some sources aren't answering today; those lines say so.");
     } finally {
       await env.DB.prepare("UPDATE source SET degraded_reason = NULL WHERE key = ?").bind(news.sourceKey).run();
     }

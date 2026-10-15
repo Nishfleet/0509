@@ -19,8 +19,6 @@ function site(review: CardReview, overrides: Partial<SiteFields> = {}): SiteFiel
   };
 }
 
-// A data router renders the fields: useFetcher needs the fetcher context that
-// createRoutesStub provides, which is why a bare render throws.
 function render(fields: SiteFields, draft: CardDraft = {}): string {
   const Stub = createRoutesStub([
     {

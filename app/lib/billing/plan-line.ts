@@ -1,7 +1,8 @@
 import { isPaymentFailed, isPaymentHeld, isPlanLapsed } from "./subscription-state";
 import { PLANS, type PlanSummary } from "./plans";
+import { APP_LOCALE } from "../locale";
 
-const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+const DAY = new Intl.DateTimeFormat(APP_LOCALE, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
 function formatDay(value: string | null): string | null {
   const parsed = value === null ? Number.NaN : Date.parse(value);
@@ -43,7 +44,7 @@ function runningLine(plan: PlanSummary, name: string, now: Date): string {
   return date === null ? `You're on ${name}.` : `You're on ${name}. It renews on ${date}.`;
 }
 
-export function planLine(plan: PlanSummary, now: Date = new Date()): string {
+export function planLine(plan: PlanSummary, now: Date): string {
   const name = PLANS.find((entry) => entry.id === plan.tier)?.name ?? "Scout";
   if (!isPlanLapsed(plan, now)) return runningLine(plan, name, now);
   return endedLine(name, formatDay(plan.currentPeriodEnd));

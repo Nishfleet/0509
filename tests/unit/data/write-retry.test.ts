@@ -21,8 +21,6 @@ const NOW = "2026-10-05T12:00:00.000Z";
 let randomStub: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
-  // Full jitter: pin the draw to 0 so retries wait 0ms and the give-up count
-  // stays fast; production keeps the real draw.
   randomStub = vi.spyOn(Math, "random").mockReturnValue(0);
   db.prepare.mockReset();
   db.batch.mockReset();

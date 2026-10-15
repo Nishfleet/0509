@@ -114,7 +114,7 @@ describe("loader query counts", () => {
           const weeksList = await listWorkspaceBriefs(ws);
           await readWorkspaceBrief(ws, weeksList[0]?.id ?? "none");
         },
-        settings: () => Promise.all([readSettings(owner), readDeviceList(user, "session")]),
+        settings: () => Promise.all([readSettings(owner), readDeviceList(user, "session", new Date())]),
         competitors: () => readCompetitors(ws),
       };
       for (const page of Object.keys(BUDGET) as Page[]) counts[page].push(await count(measured[page]));

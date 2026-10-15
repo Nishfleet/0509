@@ -2,13 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { lintTextAt } from "./eslint-lint-text";
 
-// 0509#7501: console.log, console.info and console.debug reach Workers Logs
-// but never Sentry (workers/sentry.ts forwards only warn and error). On
-// 2026-10-13 site.change_discarded, site.check_failed and archive.read_failed
-// were logged at info level and nobody was paged. An event named for a failure,
-// or any log inside a catch clause, must use console.warn or console.error.
-// These probes boot the real eslint.config.js and hold the pass/fail pairs.
-
 const QUIET = "never reaches Sentry";
 const CATCH = "inside a catch clause";
 const PROBE = "app/lib/cadence.ts";

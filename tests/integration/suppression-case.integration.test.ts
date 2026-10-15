@@ -78,9 +78,9 @@ describe("email suppression ignores address case (2026-10-05 suppression case by
   it("finds a stored mixed-case suppression from any casing of the address", async () => {
     await suppress("Legacy@0509.io");
 
-    expect(await isAddressSuppressed("legacy@0509.io")).toBe(true);
-    expect(await isAddressSuppressed(" LEGACY@0509.IO ")).toBe(true);
-    expect(await isAddressSuppressed("other@0509.io")).toBe(false);
+    expect(await isAddressSuppressed("legacy@0509.io", "all")).toBe(true);
+    expect(await isAddressSuppressed(" LEGACY@0509.IO ", "all")).toBe(true);
+    expect(await isAddressSuppressed("other@0509.io", "all")).toBe(false);
   });
 
   it("stores the send target trimmed and lowercased", async () => {
@@ -105,7 +105,7 @@ describe("email suppression ignores address case (2026-10-05 suppression case by
       .bind(workspaceId)
       .run();
 
-    await suppressByUnsubscribeToken("tok");
+    await suppressByUnsubscribeToken("tok", "all");
 
     expect(await suppressionAddresses()).toEqual(["mixed@0509.io"]);
   });

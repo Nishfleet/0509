@@ -6,9 +6,7 @@ let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
   if (createdEmail === "") return;
   testInfo.setTimeout(testInfo.timeout + 60_000);
-  // The delete failing is a test failure, not a reason to keep the address:
-  // clearing in finally means the next test in this worker cannot try to
-  // delete an account that is already gone.
+
   try {
     await deleteCreatedAccount(page, createdEmail);
   } finally {
@@ -16,7 +14,6 @@ test.afterEach(async ({ page }, testInfo) => {
   }
 });
 
-// #4015, DESIGN.md §2.2: the sent state lands in place and the resend counts down for 30 s.
 test("the sent state lands in place and the resend waits 30 seconds with a visible count @own-signin", async ({
   page,
 }, testInfo) => {
@@ -30,11 +27,7 @@ test("the sent state lands in place and the resend waits 30 seconds with a visib
   createdEmail = email;
   await page.locator('input[name="email"]').fill(email);
   await settleSignInWidget(page);
-  // Real time, not page.clock: the sent state mounts a second Turnstile widget
-  // after submit (startOn="mount"), and its iframe runs on whatever clock the
-  // page has. Fake timers starve its scripts and they throw uncaught
-  // pageerrors ("reading 'call'", "setting 'rqvo8'", 2026-10-11 run
-  // 38146870606), which carry no URL to exclude. The 30 s wait is the real one.
+
   await page.locator('button[type="submit"]').click();
 
   await expect(page).toHaveURL(/\/login$/);
@@ -64,4 +57,17 @@ test("the sent state lands in place and the resend waits 30 seconds with a visib
     ),
     testInfo.project.name,
   ).toEqual([]);
+});
+
+test("a stale session lands on sign-in with a calm explanation", async ({ page, baseURL }) => {
+  const host = new URL(baseURL ?? "http://localhost").hostname;
+  await page
+    .context()
+    .addCookies([{ name: "better-auth.session_token", value: "stale.value", domain: host, path: "/" }]);
+  await page.goto("/app");
+  await expect(page).toHaveURL(/\/login\?.*ended=1/);
+  await expect(page.getByRole("alert")).toContainText("You were signed out");
+  await page.context().clearCookies();
+  await page.goto("/app");
+  await expect(page).toHaveURL(/\/login$/);
 });

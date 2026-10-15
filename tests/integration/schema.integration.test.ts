@@ -7,7 +7,7 @@ describe("0001_rebuild.sql", () => {
       "SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != 'd1_migrations' AND name NOT LIKE '_cf_%'",
     ).first<{ n: number }>();
 
-    expect(tables?.n).toBe(37);
+    expect(tables?.n).toBe(39);
   });
 
   it("carries better-auth's six generated tables", async () => {

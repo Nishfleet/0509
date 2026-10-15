@@ -55,9 +55,10 @@ async function upgradePlanIdFor(workspaceId: string): Promise<PlanId | null> {
   return next === null ? null : next.id;
 }
 
-async function capRefusal(workspaceId: string, cap: number): Promise<CompetitorActionResult> {
+async function capRefusal(workspaceId: string, cap: number, turningOn = false): Promise<CompetitorActionResult> {
+  const next = turningOn ? "Switch another one off to turn this one on." : "Switch one off to add another.";
   return {
-    message: `Your plan watches up to ${String(cap)} competitors. Switch one off to add another.`,
+    message: `Your plan watches up to ${String(cap)} competitors. ${next}`,
     upgradePlanId: await upgradePlanIdFor(workspaceId),
     returning: await isReturningCustomer(await readPlanSubscription(workspaceId)),
   };
@@ -130,8 +131,8 @@ const SUGGESTION_INTENTS = new Map([
   ["dismiss", dismissSuggestion],
 ]);
 
-async function refusedAtCap(workspaceId: string): Promise<CompetitorActionResult> {
-  return capRefusal(workspaceId, (await readEntitlements(workspaceId)).competitors);
+async function refusedAtCap(workspaceId: string, turningOn = false): Promise<CompetitorActionResult> {
+  return capRefusal(workspaceId, (await readEntitlements(workspaceId)).competitors, turningOn);
 }
 
 async function switchRival(input: { workspaceId: string; entityId: string; state: "on" | "off"; now: string }) {
@@ -139,7 +140,7 @@ async function switchRival(input: { workspaceId: string; entityId: string; state
   const changed = await setCompetitorState(input);
   if (changed || state === "off") return DONE;
   const rival = await readCompetitor(workspaceId, entityId);
-  return rival?.state === "off" ? refusedAtCap(workspaceId) : DONE;
+  return rival?.state === "off" ? refusedAtCap(workspaceId, true) : DONE;
 }
 
 function parsedCompetitorIntent(form: FormData) {

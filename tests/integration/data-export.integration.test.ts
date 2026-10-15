@@ -55,6 +55,10 @@ async function seed(tag: string): Promise<{ workspaceId: string; userId: string 
       `INSERT INTO user_decision (id, workspace_id, user_id, verdict, note, decided_at)
        VALUES (?1, ?2, ?3, 'public_subject:confirmed', ?4, ?5)`,
     ).bind(`dec-${tag}`, workspaceId, userId, `${tag}.example`, NOW),
+    env.DB.prepare("INSERT INTO workspace_visit (workspace_id, day) VALUES (?1, ?2)").bind(
+      workspaceId,
+      tag === "mine" ? "2026-10-13" : "2026-10-12",
+    ),
   ]);
   return { workspaceId, userId };
 }
@@ -96,6 +100,7 @@ describe("workspace export", () => {
       expect.objectContaining({ candidate_domain: "mine-skip.example", status: "dismissed" }),
     ]);
     expect(data.decisions).toEqual([expect.objectContaining({ verdict: "public_subject:confirmed" })]);
+    expect(data.daysUsed).toEqual(["2026-10-13"]);
     expect(data.plan).toEqual(expect.objectContaining({ tier: "scout", billed: false }));
     expect(text).not.toContain("theirs");
     expect(text).not.toContain("203.0.113.9");
@@ -103,6 +108,28 @@ describe("workspace export", () => {
     expect(text).not.toContain("jev");
     expect(text).not.toContain("pubkey");
     expect(text).not.toContain("key-mine");
+  });
+
+  it("includes the caller's competitor notes and no one else's", async () => {
+    const mine = await seed("notes-mine");
+    const theirs = await seed("notes-theirs");
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO entity_note (workspace_id, entity_id, body, updated_at) VALUES (?1, ?2, 'my private note', ?3)",
+      ).bind(mine.workspaceId, "ent-notes-mine", NOW),
+      env.DB.prepare(
+        "INSERT INTO entity_note (workspace_id, entity_id, body, updated_at) VALUES (?1, ?2, 'their private note', ?3)",
+      ).bind(theirs.workspaceId, "ent-notes-theirs", NOW),
+    ]);
+    const data = await readWorkspaceExport({
+      workspaceId: mine.workspaceId,
+      userId: mine.userId,
+      email: "notes-mine@test.dev",
+      now: new Date(NOW),
+    });
+    if (data === null) throw new Error("expected export");
+    expect(data.notes).toEqual([{ brand: "notes-mine.example", body: "my private note", updated_at: NOW }]);
+    expect(JSON.stringify(data)).not.toContain("their private note");
   });
 
   it("returns null when the owner row is gone", async () => {

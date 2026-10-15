@@ -62,8 +62,8 @@ describe("low-confidence alerts", () => {
   });
 
   it("says what each treatment is without naming a score", () => {
-    expect(possiblyHtml).toContain(POSSIBLY_LINE);
-    expect(unreviewedHtml).toContain(UNREVIEWED_LINE);
+    expect(possiblyHtml).toContain(POSSIBLY_LINE.replaceAll("'", "&#x27;"));
+    expect(unreviewedHtml).toContain(UNREVIEWED_LINE.replaceAll("'", "&#x27;"));
     expect(unreviewedHtml).toMatch(/unreviewed/i);
     expect(possiblyHtml).toMatch(/<button[^>]*>Why we flagged this</);
     expect(unreviewedHtml).not.toMatch(/Why we flagged this/);

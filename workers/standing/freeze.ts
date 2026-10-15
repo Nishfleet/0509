@@ -10,7 +10,7 @@ FROM standing s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.state = 'on'
 WHERE s.workspace_id = ?1 AND s.week_start_at = ?2`;
 
-const PREVIOUS_RANKS = `SELECT entity_id, rank
+export const PREVIOUS_RANKS = `SELECT entity_id, rank
 FROM standing
 WHERE workspace_id = ?1
   AND rank IS NOT NULL
@@ -20,7 +20,7 @@ WHERE workspace_id = ?1
   )`;
 
 const weekScoreRows = z.array(z.object({ entity_id: z.string(), score: z.number() }));
-const previousRankRows = z.array(z.object({ entity_id: z.string(), rank: z.number().int() }));
+export const previousRankRows = z.array(z.object({ entity_id: z.string(), rank: z.number().int() }));
 
 export async function freezeWeek(
   db: D1Database,

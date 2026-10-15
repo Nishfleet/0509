@@ -233,11 +233,41 @@ describe("nightly site sweep", () => {
     const stored = await env.SNAPSHOTS.get(diffKey);
     const diff: unknown = JSON.parse((await stored?.text()) ?? "null");
     expect(diff).toMatchObject({ hunks: [expect.objectContaining({ lines: expect.any(Array) })] });
+    expect(payload).toMatchObject({ excerpt: [expect.objectContaining({ lines: expect.any(Array) })] });
 
     const polled = await env.DB.prepare("SELECT last_polled_at FROM watch WHERE id = ?")
       .bind(rival.watchId)
       .first<{ last_polled_at: string | null }>();
     expect(polled?.last_polled_at).not.toBeNull();
+  });
+
+  it("reads a rival once for every workspace that watches it when they share one sweep tick", async () => {
+    await env.DB.prepare(
+      `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
+       VALUES ('ws-second', 'Second', ?, 'UTC', 1, 8, ?)`,
+    )
+      .bind(USER, NOW)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES ('plan-second', 'ws-second', 'starter', 'active', ?)`,
+    )
+      .bind(NOW)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
+       VALUES ('ent-rival-second', 'ws-second', 'competitor', 'rival.com', '{}', 'manual', 'on', ?)`,
+    )
+      .bind(NOW)
+      .run();
+
+    const rivals = (await planSiteSweep(NOW)).filter((t) => t.url === "https://rival.com/");
+    expect(rivals).toHaveLength(2);
+    const tick = await nextTick("shared-night");
+    const reads = [];
+    for (const rival of rivals) reads.push(await checkSitePage(rival, tick));
+
+    expect(reads.map((read) => read.outcome)).toEqual(["first", "first"]);
+    expect(calls.filter((call) => call === "GET https://rival.com/")).toHaveLength(1);
   });
 
   it("stores the before and after in readable text, not as the page's character codes", async () => {
@@ -469,10 +499,30 @@ describe("nightly site sweep", () => {
       throw new Error("expected the self and rival homepages");
     }
 
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     expect((await checkSitePage(self, await nextTick("robots-self"))).outcome).toBe("failed");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"event":"site.check_failed"'));
+    warn.mockRestore();
     expect(fetched).not.toContain("https://mybrand.com/");
     expect((await checkSitePage(rival, await nextTick("robots-rival"))).outcome).toBe("first");
     expect(fetched).not.toContain("https://rival.com/robots.txt");
+  });
+
+  it("logs a failed check without the brand's address, as a URL or a bare host", async () => {
+    vi.stubGlobal("fetch", () =>
+      Promise.reject(new Error("getaddrinfo ENOTFOUND www.rival.com via https://www.rival.com/")),
+    );
+    const [target] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
+    if (target === undefined) throw new Error("expected the rival homepage");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    expect((await checkSitePage(target, await nextTick("redact"))).outcome).toBe("failed");
+
+    const lines = warn.mock.calls.map((call) => String(call[0]));
+    warn.mockRestore();
+    const failed = lines.find((line) => line.includes('"event":"site.check_failed"'));
+    expect(failed).toContain("<host>");
+    expect(failed).not.toContain("rival.com");
   });
 
   it("stops planning a brand once it is turned off", async () => {

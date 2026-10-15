@@ -92,8 +92,10 @@ WHERE e.role = 'competitor' AND e.state = 'on'
     OR CASE WHEN json_valid(e.identity_json)
          THEN json_extract(e.identity_json, '$.socialsReadAt') IS NULL AND coalesce(json_array_length(e.identity_json, '$.socials'), 0) = 0
          ELSE 0 END
+    OR (p.links_read_at IS NULL AND NOT EXISTS (SELECT 1 FROM page k WHERE k.entity_id = e.id AND k.role = 'pricing' AND k.role_decided_for_hash IS NOT NULL))
   )
   AND (p.deferred_at IS NULL OR p.deferred_at < ?2)
+  AND (p.links_retry_at IS NULL OR p.links_retry_at < ?2)
 ORDER BY random()
 LIMIT ?1`;
 
@@ -172,6 +174,10 @@ export async function insertAlternatePage(input: {
 const RECORD_TRANSPORT =
   "UPDATE page SET transport = ?2, transport_reason = ?3, transport_tested_at = ?4, deferred_at = NULL WHERE id = ?1";
 
+const MARK_LINKS_READ = "UPDATE page SET links_read_at = ?2, links_retry_at = NULL WHERE id = ?1";
+
+const MARK_LINKS_RETRY = "UPDATE page SET links_retry_at = ?2 WHERE id = ?1";
+
 const MARK_DEFERRED = "UPDATE page SET deferred_at = ?2 WHERE id = ?1";
 
 export async function recordPageTransport(input: {
@@ -183,8 +189,54 @@ export async function recordPageTransport(input: {
   await env.DB.prepare(RECORD_TRANSPORT).bind(input.pageId, input.transport, input.reason, input.testedAt).run();
 }
 
+export async function markLinksRead(pageId: string, at: string): Promise<void> {
+  await env.DB.prepare(MARK_LINKS_READ).bind(pageId, at).run();
+}
+
+export async function markLinksRetry(pageId: string, at: string): Promise<void> {
+  await env.DB.prepare(MARK_LINKS_RETRY).bind(pageId, at).run();
+}
+
 export async function markPageDeferred(pageId: string, at: string): Promise<void> {
   await env.DB.prepare(MARK_DEFERRED).bind(pageId, at).run();
+}
+
+const RECORD_FAILURE = "UPDATE page SET last_failure_reason = ?2, last_failure_at = ?3 WHERE id = ?1";
+
+const CLEAR_FAILURE =
+  "UPDATE page SET last_failure_reason = NULL, last_failure_at = NULL WHERE id = ?1 AND last_failure_at IS NOT NULL";
+
+export async function recordPageFailure(pageId: string, reason: string, at: string): Promise<void> {
+  await env.DB.prepare(RECORD_FAILURE).bind(pageId, reason, at).run();
+}
+
+export async function clearPageFailure(pageId: string): Promise<void> {
+  await env.DB.prepare(CLEAR_FAILURE).bind(pageId).run();
+}
+
+const FAILURE_REASON_BY_WATCH = `SELECT p.last_failure_reason AS reason
+FROM watch w JOIN page p ON p.entity_id = w.entity_id AND p.url = w.target_key
+WHERE w.id = ?1 LIMIT 1`;
+
+export async function readFailureReasonForWatch(watchId: string): Promise<string | null> {
+  const row = z
+    .object({ reason: z.string().nullable() })
+    .nullable()
+    .parse(await env.DB.prepare(FAILURE_REASON_BY_WATCH).bind(watchId).first());
+  return row?.reason ?? null;
+}
+
+const SILENT_RIVALS = `SELECT e.workspace_id AS workspace_id, COALESCE(p.last_failure_reason, 'none recorded') AS reason
+FROM entity e
+JOIN page p ON p.entity_id = e.id AND p.role = 'home'
+WHERE e.role = 'competitor' AND e.state = 'on' AND p.discovered_at < ?1
+  AND NOT EXISTS (SELECT 1 FROM snapshot s WHERE s.page_id = p.id AND s.fetched_at >= ?1)`;
+
+const silentRivalRows = z.array(z.object({ workspace_id: z.string(), reason: z.string() }));
+
+export async function readSilentRivals(since: string): Promise<{ workspaceId: string; reason: string }[]> {
+  const rows = await env.DB.prepare(SILENT_RIVALS).bind(since).all();
+  return silentRivalRows.parse(rows.results).map((row) => ({ workspaceId: row.workspace_id, reason: row.reason }));
 }
 
 export interface OwnSitePage {
