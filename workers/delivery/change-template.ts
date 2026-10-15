@@ -2,6 +2,7 @@ import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
 import type { ChangeMark } from "../../app/lib/site-change";
 import { renderAlertFooter, type AlertFooterContext } from "../../app/lib/alert-footer";
+import { PRICING_NEXT_STEP } from "../../app/lib/next-step";
 import { formatDate } from "./brief-template";
 import { BODY_STYLE, EYEBROW_STYLE, HEADLINE, emailDocument, linkParagraph, siteName } from "../../app/lib/email-shell";
 
@@ -79,7 +80,7 @@ export function renderChangeOverflow(ctx: ChangeOverflowContext): RenderedBrief 
   };
 }
 
-const SO_WHAT = "Worth a look today: does your own pricing page still hold up next to this?";
+const SO_WHAT = PRICING_NEXT_STEP;
 
 export function renderChange(ctx: ChangeContext): RenderedBrief {
   const seen = `Seen at ${formatDate(ctx.observed_at, ctx.timezone, true)}.`;
