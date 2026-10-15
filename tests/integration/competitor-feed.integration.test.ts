@@ -7,6 +7,7 @@ import {
   readUnjudgedMentions,
   resolveUnjudgedMention,
 } from "../../app/lib/data/signal.server";
+import { isAboutBrand } from "../../app/lib/jev/thresholds";
 
 const SINCE = "2026-09-01T00:00:00.000Z";
 
@@ -298,7 +299,14 @@ describe("competitor feed read", () => {
     for (const title of titles) expect(before).not.toContain(title);
     const pending = await readUnjudgedMentions(watchId, 10);
     expect(pending.map((row) => row.title).sort()).toEqual([...titles].sort());
-    await env.DB.batch(pending.map((row) => resolveUnjudgedMention(row.id, row.title !== titles[0])));
+    const aboutBrandP = new Map([
+      [titles[0] ?? "", 0.93],
+      [titles[1] ?? "", 0.1929],
+      [titles[2] ?? "", 0.1378],
+    ]);
+    await env.DB.batch(
+      pending.map((row) => resolveUnjudgedMention(row.id, !isAboutBrand(aboutBrandP.get(row.title) ?? 0))),
+    );
     const after = await read();
     expect(after).toContain(titles[0]);
     expect(after).not.toContain(titles[1]);
