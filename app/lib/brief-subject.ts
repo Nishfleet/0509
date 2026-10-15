@@ -9,7 +9,7 @@ const PREHEADER_MAX = 110;
 
 const SEGMENTER = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
-function clip(value: string, max: number): string {
+export function clip(value: string, max: number): string {
   const flat = value.replace(/\s+/g, " ").trim();
   const graphemes = Array.from(SEGMENTER.segment(flat), (part) => part.segment);
   return graphemes.length <= max

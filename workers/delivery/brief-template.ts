@@ -54,6 +54,7 @@ const COPY = {
   noUnsubscribe: "Unsubscribe is not available right now. Reply to this email and we will stop sending.",
   degraded: (count: number) =>
     `${n(count)} ${count === 1 ? "source" : "sources"} could not be reached this week, so these counts may be low.`,
+  degradedNamed: (list: string) => `We could not reach ${list} this week, so these counts may be low.`,
   unnamedSource: "One of your sources",
   sources: (count: number) => (count === 1 ? "1 source" : `${n(count)} sources`),
   blind: (source: string, when: string) =>
@@ -393,6 +394,19 @@ function unsubscribeParagraph(href: string | null): string {
   return `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${inner}</p>`;
 }
 
+const DEGRADED_NAMES_MAX = 3;
+
+function degradedSentence(checked: BriefPayload["checked"]): string {
+  const total = checked.degraded_source_keys.length;
+  if (total === 0) return "";
+  const names = checked.degraded_sources.flatMap((source) => (source.name === null ? [] : [source.name]));
+  if (names.length === 0) return ` ${COPY.degraded(total)}`;
+  const shown = names.slice(0, DEGRADED_NAMES_MAX);
+  const rest = Math.max(total, names.length) - shown.length;
+  const list = rest > 0 ? `${shown.join(", ")} and ${n(rest)} more` : shown.join(", ").replace(/, ([^,]*)$/, " and $1");
+  return ` ${COPY.degradedNamed(list)}`;
+}
+
 function renderFooter(
   payload: BriefPayload,
   unsubscribeUrl: string | null,
@@ -407,10 +421,7 @@ function renderFooter(
     payload.next_brief_at === null
       ? COPY.noNext
       : `${COPY.next}: ${formatDate(payload.next_brief_at, payload.timezone, true)}`;
-  const degraded =
-    payload.checked.degraded_source_keys.length > 0
-      ? ` ${COPY.degraded(payload.checked.degraded_source_keys.length)}`
-      : "";
+  const degraded = degradedSentence(payload.checked);
 
   const unsubscribeHref = unsubscribeUrl === null ? null : safeUrl(unsubscribeUrl);
   const postal = postalLine();
