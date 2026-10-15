@@ -27,8 +27,8 @@ function read(summary: string, schema: ZodType, path?: ZodObject) {
       responses: {
         "200": { description: summary, content: { "application/json": { schema } } },
         "401": { description: "Missing or invalid API key" },
-        "403": { description: "The key's owner has not finished signing up" },
-        "429": { description: "Too many requests; retry after a minute" },
+        "403": { description: "The plan has no API access, or the key's owner has not finished signing up" },
+        "429": { description: "Too many requests. Wait the number of seconds in the Retry-After header" },
       },
     },
   };

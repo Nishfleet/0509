@@ -1,8 +1,9 @@
 import { type BriefContext, type BriefPayload, type RenderedBrief } from "../../app/lib/brief-payload";
+import { briefPreheader, briefSubject, isFirstRanking } from "../../app/lib/brief-subject";
 import { COMPETITORS_LINK, newRivalLines, rankTrendLine, sinceStartedLine } from "../../app/lib/brief-since";
 import { escapeHtml } from "../../app/lib/html";
 import { countPhrase } from "../../app/lib/quiet-week";
-import { ledgerSummary } from "../../app/lib/work-ledger";
+import { ledgerFooter } from "../../app/lib/work-ledger";
 import { NOTHING_FIRST_LINE, UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
 import {
   EYEBROW_STYLE,
@@ -23,11 +24,8 @@ import {
 import { APP_LOCALE } from "../../app/lib/locale";
 
 const COPY = {
+  openBrief: "See every change in your brief",
   open: "Open in Five to Nine",
-  subject: (rank: number, total: number) => `You're #${n(rank)} of ${n(total)} this week`,
-  subjectMoved: (rank: number, total: number, movement: string) =>
-    `You're #${n(rank)} of ${n(total)} this week, ${movement}`,
-  noRankSubject: "Your weekly brief",
   weekOf: (start: string) => `Week of ${start}`,
   headline: (rank: number, total: number) => `You're #${n(rank)} of ${n(total)} this week`,
   noRank: "Add a competitor to see where you stand",
@@ -138,7 +136,8 @@ function renderHeadline(payload: BriefPayload, whyLine: string): { html: string;
     };
   }
 
-  const movement = payload.headline_is_new ? COPY.firstRanking : movementText(headline_movement, false);
+  const movement =
+    payload.headline_is_new || isFirstRanking(payload) ? COPY.firstRanking : movementText(headline_movement, false);
   const period = COPY.weekOf(formatDate(payload.period_start, payload.timezone, false));
   const trend = rankTrendLine(payload);
 
@@ -213,7 +212,11 @@ function renderMark(
   return { html, text };
 }
 
-function renderReadThisFirst(payload: BriefPayload, assetBaseUrl: string | null): { html: string; text: string } {
+function renderReadThisFirst(
+  payload: BriefPayload,
+  assetBaseUrl: string | null,
+  briefUrl: string | null,
+): { html: string; text: string } {
   const marks = payload.read_this_first.slice(0, 3);
 
   const heading = (text: string) => `<h2 class="brief-muted" style="${EYEBROW_STYLE}">${escapeHtml(text)}</h2>`;
@@ -232,17 +235,27 @@ function renderReadThisFirst(payload: BriefPayload, assetBaseUrl: string | null)
     };
   }
 
-  const html = [heading(COPY.readThisFirst), ...marks.map((mark) => renderMark(mark, payload, assetBaseUrl).html)].join(
-    "",
-  );
+  const link =
+    briefUrl === null
+      ? ""
+      : `<p style="margin:4px 0 0;font-family:${FONT};font-size:16px;line-height:24px;"><a class="brief-ink" href="${escapeHtml(briefUrl)}">${escapeHtml(COPY.openBrief)}</a></p>`;
+  const html = [
+    heading(COPY.readThisFirst),
+    ...marks.map((mark) => renderMark(mark, payload, assetBaseUrl).html),
+    link,
+  ].join("");
 
   const rendered = marks.map((mark) => renderMark(mark, payload, assetBaseUrl));
-  const text = [COPY.readThisFirst, ...rendered.map((r) => r.text)].join("\n\n");
+  const text = [
+    COPY.readThisFirst,
+    ...rendered.map((r) => r.text),
+    ...(briefUrl === null ? [] : [`${COPY.openBrief}: ${briefUrl}`]),
+  ].join("\n\n");
 
   return { html, text };
 }
 
-function renderBrandLine(line: BriefPayload["brands"][number]): { html: string; text: string } {
+function renderBrandLine(line: BriefPayload["brands"][number], first: boolean): { html: string; text: string } {
   const counts = [
     countPhrase(line.ad_delta, "new ad", "new ads"),
     countPhrase(line.mention_delta, "mention", "mentions"),
@@ -251,14 +264,15 @@ function renderBrandLine(line: BriefPayload["brands"][number]): { html: string; 
   ];
 
   const rankLabel = line.rank === null ? "unranked" : `#${n(line.rank)}`;
-  const movement = movementText(line.movement, line.is_new);
+  const movement = first ? "" : movementText(line.movement, line.is_new);
+  const standing = movement === "" ? rankLabel : `${rankLabel}, ${movement}`;
   const baseline = line.baseline ?? [];
 
   const html = [
     `<div class="brief-rule" style="padding:10px 0;">`,
     `<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">`,
     `<strong>${escapeHtml(line.name)}</strong>`,
-    ` <span class="brief-muted">${escapeHtml(rankLabel)}, ${escapeHtml(movement)}</span>`,
+    ` <span class="brief-muted">${escapeHtml(standing)}</span>`,
     `</p>`,
     line.biggest_move !== null
       ? `<p style="margin:2px 0 0;font-family:${FONT};font-size:15px;line-height:22px;">${escapeHtml(line.biggest_move)}</p>`
@@ -271,7 +285,7 @@ function renderBrandLine(line: BriefPayload["brands"][number]): { html: string; 
     `</div>`,
   ].join("");
 
-  const text = [`${line.name} — ${rankLabel}, ${movement}`, line.biggest_move, counts.join(" · "), ...baseline]
+  const text = [`${line.name} — ${standing}`, line.biggest_move, counts.join(" · "), ...baseline]
     .filter((v): v is string => v !== null)
     .join("\n");
 
@@ -288,7 +302,7 @@ function renderBrands(payload: BriefPayload): { html: string; text: string } {
     };
   }
 
-  const rendered = payload.brands.map((line) => renderBrandLine(line));
+  const rendered = payload.brands.map((line) => renderBrandLine(line, isFirstRanking(payload)));
 
   return {
     html: heading(COPY.yourBrands) + rendered.map((r) => r.html).join(""),
@@ -354,8 +368,8 @@ function sinceSentence(checked: BriefPayload["checked"]): string {
   return since === null ? "" : ` ${since}.`;
 }
 
-function renderWork(checked: BriefPayload["checked"]): { html: string; text: string[] } {
-  const work = ledgerSummary(checked.ledger, "This week we");
+function renderWork(payload: BriefPayload): { html: string; text: string[] } {
+  const work = ledgerFooter(payload.checked.ledger, payload.why_line);
   if (work === null) return { html: "", text: [] };
   return {
     html: `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(work)}</p>`,
@@ -400,7 +414,7 @@ function renderFooter(
 
   const unsubscribeHref = unsubscribeUrl === null ? null : safeUrl(unsubscribeUrl);
   const postal = postalLine();
-  const work = renderWork(payload.checked);
+  const work = renderWork(payload);
   const html = [
     `<div class="brief-rule" style="padding:16px 0 0;">`,
     `<p class="brief-muted" style="${EYEBROW_STYLE}">${escapeHtml(COPY.footerTitle)}</p>`,
@@ -430,16 +444,6 @@ function renderFooter(
   return { html, text };
 }
 
-function briefSubject(payload: BriefPayload): string {
-  const { headline_rank, headline_total, headline_movement } = payload;
-  if (payload.is_unjudged) return COPY.unjudged;
-  if (headline_rank === null || headline_total < 2) return COPY.noRankSubject;
-  if (payload.headline_is_new || headline_movement === null || headline_movement === 0) {
-    return COPY.subject(headline_rank, headline_total);
-  }
-  return COPY.subjectMoved(headline_rank, headline_total, movementText(headline_movement, false));
-}
-
 export function renderBrief(payload: BriefPayload, context: BriefContext): RenderedBrief {
   const quiet = payload.is_quiet_week && payload.read_this_first.length === 0;
   const blindLine = payload.checked.degraded_sources
@@ -452,13 +456,13 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
   const whyLine = quiet && blindLine !== "" ? blindLine : payload.why_line;
   const headline = renderHeadline(payload, whyLine);
   const open = context.open_url == null ? null : safeUrl(context.open_url);
-  const marks = renderReadThisFirst(payload, context.asset_base_url);
+  const marks = renderReadThisFirst(payload, context.asset_base_url, open);
   const brands = renderBrands(payload);
   const ownSite = renderOwnSite(payload);
-  const footer = renderFooter(payload, context.unsubscribe_url, context.teammate === true);
+  const footer = renderFooter({ ...payload, why_line: whyLine }, context.unsubscribe_url, context.teammate === true);
   const newRival = renderNewRival(payload, context.teammate === true);
 
-  const subject = briefSubject(payload);
+  const subject = briefSubject(payload, COPY.unjudged);
 
   const html = emailDocument(
     subject,
@@ -471,7 +475,7 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
       newRival.html,
       footer.html,
     ].join(""),
-    whyLine,
+    briefPreheader(payload, whyLine),
   );
 
   const text = [

@@ -1,9 +1,7 @@
-import { lazy, Suspense, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { Nav } from "./nav";
 import { OfflineNotice } from "./offline-notice";
-
-const Toaster = lazy(() => import("./toaster").then((module) => ({ default: module.Toaster })));
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
@@ -18,9 +16,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Nav />
       <div className="min-w-0 flex-1 pb-[92px] min-[860px]:pb-0" id="app-content" tabIndex={-1}>
         {children}
-        <Suspense fallback={null}>
-          <Toaster />
-        </Suspense>
       </div>
     </div>
   );
