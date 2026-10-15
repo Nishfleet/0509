@@ -311,15 +311,17 @@ function sectionBlock(inner: string): string {
   return `<div class="brief-rule" style="padding:20px 0;">${inner}</div>`;
 }
 
-function renderNewRival(payload: BriefPayload): { html: string; text: string[] } {
+function renderNewRival(payload: BriefPayload, teammate: boolean): { html: string; text: string[] } {
   const rival = newRivalLines(payload);
   if (rival === null) return { html: "", text: [] };
   const detail = rival.reason === null ? "" : ` ${rival.reason}`;
+  const link = teammate ? "" : ` <a class="brief-ink" href="${COMPETITORS_LINK}">${escapeHtml(COPY.reviewRival)}</a>`;
   const html = [
     `<h2 class="brief-muted" style="${EYEBROW}">${escapeHtml(COPY.newRival)}</h2>`,
-    `<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(`${rival.title}${detail}`)} <a class="brief-ink" href="${COMPETITORS_LINK}">${escapeHtml(COPY.reviewRival)}</a></p>`,
+    `<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(`${rival.title}${detail}`)}${link}</p>`,
   ].join("");
-  const text = `${COPY.newRival}\n${rival.title}${detail}\n${COPY.reviewRival}: ${COMPETITORS_LINK}`;
+  const linkLine = teammate ? "" : `\n${COPY.reviewRival}: ${COMPETITORS_LINK}`;
+  const text = `${COPY.newRival}\n${rival.title}${detail}${linkLine}`;
   return { html: sectionBlock(html), text: [text, ""] };
 }
 
@@ -415,7 +417,7 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
   const brands = renderBrands(payload);
   const ownSite = renderOwnSite(payload);
   const footer = renderFooter(payload, context.unsubscribe_url, context.teammate === true);
-  const newRival = renderNewRival(payload);
+  const newRival = renderNewRival(payload, context.teammate === true);
 
   const subject = briefSubject(payload);
 

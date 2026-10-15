@@ -866,6 +866,14 @@ describe("the rival-you-may-be-missing block", () => {
     }
   });
 
+  it("names the competitor in a teammate's copy without a link to the sign-in wall", () => {
+    const { html, text } = renderBrief(payload({ new_rival: rival }), { ...CONTEXT, teammate: true });
+    for (const out of [html, text]) {
+      expect(out).toContain("Northwind (northwind.example) may be a competitor you are missing.");
+      expect(out).not.toContain("https://0509.io/app/competitors");
+    }
+  });
+
   it.each([
     ["none found", null],
     ["a digest saved before it existed", undefined],
