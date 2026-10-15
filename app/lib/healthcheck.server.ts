@@ -35,6 +35,7 @@ export async function pingCheck(check: string, signal: CheckSignal, body?: strin
       check,
       signal,
       status: response.status,
+      ...(body === undefined ? {} : { body }),
     });
   } catch (error) {
     pingEvent("healthcheck.ping_failed", { check, signal, kind: error instanceof Error ? error.name : "unknown" });
