@@ -123,10 +123,10 @@ describe("the weekly brief under stress", () => {
         }),
         CONTEXT,
       ).text;
-    expect(blind(["Casetta"])).toContain("We could not reach Casetta this week, so these counts may be low.");
-    expect(blind(["Casetta", "Kindred"])).toContain("We could not reach Casetta and Kindred this week");
-    expect(blind(["A", "B", "C"])).toContain("We could not reach A, B and C this week");
-    expect(blind(["A", "B", "C", "D", "E"])).toContain("We could not reach A, B, C and 2 more this week");
+    expect(blind(["Casetta"])).toContain("We couldn't reach Casetta this week, so these counts may be low.");
+    expect(blind(["Casetta", "Kindred"])).toContain("We couldn't reach Casetta and Kindred this week");
+    expect(blind(["A", "B", "C"])).toContain("We couldn't reach A, B and C this week");
+    expect(blind(["A", "B", "C", "D", "E"])).toContain("We couldn't reach A, B, C and 2 more this week");
   });
 
   it("falls back to a count when the unreachable source has no name", () => {

@@ -18,9 +18,9 @@ export interface RefreshInput {
 
 const entityIdRows = z.array(z.object({ id: z.string() }));
 
-export async function refreshWorkspaceScores(
+export async function computeWorkspaceScores(
   db: D1Database,
-  input: RefreshInput,
+  input: Omit<RefreshInput, "computedAt">,
 ): Promise<ReadonlyMap<string, number>> {
   const reads = await db.batch([
     db.prepare(ON_ENTITY_IDS).bind(input.workspaceId),
@@ -33,13 +33,21 @@ export async function refreshWorkspaceScores(
   const weights = weightsAsOf(weightRows.parse(required(reads[1], "refresh.weights").results), input.weekStartAt);
   const counts = bucketCountRows.parse(required(reads[2], "refresh.counts").results);
   const scores = scoreByEntity(counts, weights);
-  const rows: StandingScore[] = entityIds.map((entity_id) => ({
+  return new Map(entityIds.map((entityId) => [entityId, scores.get(entityId) ?? 0]));
+}
+
+export async function refreshWorkspaceScores(
+  db: D1Database,
+  input: RefreshInput,
+): Promise<ReadonlyMap<string, number>> {
+  const scores = await computeWorkspaceScores(db, input);
+  const rows: StandingScore[] = [...scores].map(([entity_id, score]) => ({
     workspace_id: input.workspaceId,
     entity_id,
     week_start_at: input.weekStartAt,
-    score: scores.get(entity_id) ?? 0,
+    score,
     computed_at: input.computedAt,
   }));
   await upsertStandingScores(db, rows);
-  return new Map(rows.map((row) => [row.entity_id, row.score]));
+  return scores;
 }

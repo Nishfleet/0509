@@ -51,8 +51,8 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   if (!(isRouteErrorResponse(error) && error.status === 404)) {
     return (
       <ErrorPage
-        title="Something went wrong"
-        detail="This is a problem on our side and we have been alerted. Nothing was changed. Please try again in a minute."
+        title="We hit a problem on our side"
+        detail="We have been alerted. Nothing was changed. Try again in a minute."
         actionHref="/"
         actionLabel="Back to home"
       />

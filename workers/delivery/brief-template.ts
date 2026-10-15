@@ -55,13 +55,13 @@ const COPY = {
   noUnsubscribe: "Unsubscribe is not available right now. Reply to this email and we will stop sending.",
   degraded: (count: number) =>
     `${n(count)} ${count === 1 ? "source" : "sources"} could not be reached this week, so these counts may be low.`,
-  degradedNamed: (list: string) => `We could not reach ${list} this week, so these counts may be low.`,
+  degradedNamed: (list: string) => `We couldn't reach ${list} this week, so these counts may be low.`,
   unnamedSource: "One of your sources",
   sources: (count: number) => (count === 1 ? "1 source" : `${n(count)} sources`),
   blind: (source: string, when: string) =>
-    `We could not reach ${source} since ${when}, so we cannot say this was a quiet week.`,
+    `We couldn't reach ${source} since ${when}, so we can't say this was a quiet week.`,
   blindNever: (source: string) =>
-    `We have not been able to reach ${source} yet, so we cannot say this was a quiet week.`,
+    `We have not been able to reach ${source} yet, so we can't say this was a quiet week.`,
 } as const;
 
 const ALERTS_LINK = "https://0509.io/app/alerts";
