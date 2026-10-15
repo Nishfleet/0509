@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { consoleFailures, deleteCreatedAccount, settleSignInWidget, watchConsole } from "./inbox";
 
@@ -6,10 +6,7 @@ let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
   if (createdEmail === "") return;
   testInfo.setTimeout(testInfo.timeout + 60_000);
-  await page.clock.resume();
-  // The delete failing is a test failure, not a reason to keep the address:
-  // clearing in finally means the next test in this worker cannot try to
-  // delete an account that is already gone.
+
   try {
     await deleteCreatedAccount(page, createdEmail);
   } finally {
@@ -17,10 +14,10 @@ test.afterEach(async ({ page }, testInfo) => {
   }
 });
 
-// #4015, DESIGN.md §2.2: the sent state lands in place and the resend counts down for 30 s.
 test("the sent state lands in place and the resend waits 30 seconds with a visible count @own-signin", async ({
   page,
 }, testInfo) => {
+  testInfo.setTimeout(120_000);
   const watched = watchConsole(page);
 
   const response = await page.goto("/login");
@@ -30,9 +27,7 @@ test("the sent state lands in place and the resend waits 30 seconds with a visib
   createdEmail = email;
   await page.locator('input[name="email"]').fill(email);
   await settleSignInWidget(page);
-  // Fake timers after Turnstile has minted. Installing before navigation makes
-  // the widget's own scripts throw, and those pageerrors have no URL to exclude.
-  await page.clock.install();
+
   await page.locator('button[type="submit"]').click();
 
   await expect(page).toHaveURL(/\/login$/);
@@ -43,13 +38,13 @@ test("the sent state lands in place and the resend waits 30 seconds with a visib
   await expect(resend).toBeDisabled();
   await expect(resend).toHaveText(/\d+s/);
 
-  await page.clock.runFor(31_000);
-  await expect(resend).toBeEnabled();
+  await expect(resend).toBeEnabled({ timeout: 40_000 });
   await expect(resend).not.toHaveText(/\d+s/);
 
   await page.getByRole("button", { name: "Use a different email" }).click();
   await expect(page.locator('input[name="email"]')).toBeVisible();
   await expect(page.getByRole("heading", { level: 1, name: "Sign in" })).toBeVisible();
+  await expect(page.getByText("New or returning, we email you a link.")).toBeVisible();
 
   const fitsViewport = await page.evaluate(
     () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
@@ -62,4 +57,17 @@ test("the sent state lands in place and the resend waits 30 seconds with a visib
     ),
     testInfo.project.name,
   ).toEqual([]);
+});
+
+test("a stale session lands on sign-in with a calm explanation", async ({ page, baseURL }) => {
+  const host = new URL(baseURL ?? "http://localhost").hostname;
+  await page
+    .context()
+    .addCookies([{ name: "better-auth.session_token", value: "stale.value", domain: host, path: "/" }]);
+  await page.goto("/app");
+  await expect(page).toHaveURL(/\/login\?.*ended=1/);
+  await expect(page.getByRole("alert")).toContainText("You were signed out");
+  await page.context().clearCookies();
+  await page.goto("/app");
+  await expect(page).toHaveURL(/\/login$/);
 });

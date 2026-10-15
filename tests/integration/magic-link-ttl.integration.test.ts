@@ -4,29 +4,29 @@ import { describe, expect, it } from "vitest";
 import { createAuth } from "../../app/lib/auth.server";
 import { MAGIC_LINK_TTL_SECONDS } from "../../app/lib/auth/magic-link-email";
 
-// The email promises an expiry; better-auth enforces one. They are the same
-// number only if createAuth passes MAGIC_LINK_TTL_SECONDS as the plugin's
-// expiresIn, so this reads the expiry better-auth actually stored.
 const ORIGIN = "http://localhost:8787";
 const EMAIL = "ttl@test.dev";
 
 describe("magic link expiry", () => {
   it("stores the expiry the email tells the reader", async () => {
     const sent: string[] = [];
-    const auth = createAuth({
-      DB: env.DB,
-      EMAIL: {
-        send: async (message: EmailMessage | EmailMessageBuilder) => {
-          sent.push((message as { text?: string }).text ?? "");
-          return { messageId: "test" };
+    const auth = createAuth(
+      {
+        DB: env.DB,
+        EMAIL: {
+          send: async (message: EmailMessage | EmailMessageBuilder) => {
+            sent.push((message as { text?: string }).text ?? "");
+            return { messageId: "test" };
+          },
         },
+        SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
+        SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
+        TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
+        BETTER_AUTH_SECRET: "integration-test-secret-integration-test-secret",
+        BETTER_AUTH_URL: ORIGIN,
       },
-      SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
-      SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
-      TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
-      BETTER_AUTH_SECRET: "integration-test-secret-integration-test-secret",
-      BETTER_AUTH_URL: ORIGIN,
-    });
+      { captcha: false },
+    );
 
     const response = await auth.handler(
       new Request(`${ORIGIN}/api/auth/sign-in/magic-link`, {
@@ -34,7 +34,6 @@ describe("magic link expiry", () => {
         headers: {
           "content-type": "application/json",
           origin: ORIGIN,
-          "x-captcha-response": "XXXX.DUMMY.TOKEN.XXXX",
         },
         body: JSON.stringify({ email: EMAIL, callbackURL: "/app" }),
       }),

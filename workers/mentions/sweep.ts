@@ -42,7 +42,9 @@ import {
 } from "../../app/lib/mentions/questions";
 import {
   readWatchConfig,
+  withFeedError,
   withLostChannel,
+  withPageMiss,
   withNoChannel,
   withoutLostChannel,
   withoutNoChannel,
@@ -600,6 +602,19 @@ async function flagLostChannel(watchId: string, now: string): Promise<void> {
   if (flagged !== current) await writeWatchConfigJson(watchId, flagged);
 }
 
+async function notePageMiss(watchId: string, reason: string | undefined, now: string): Promise<void> {
+  if (reason === undefined) return;
+  const current = await requireWatchConfigJson(watchId);
+  const noted = withPageMiss(current, reason, now);
+  if (noted !== current) await writeWatchConfigJson(watchId, noted);
+}
+
+async function clearNoChannel(watchId: string): Promise<void> {
+  const current = await requireWatchConfigJson(watchId);
+  const cleared = withoutNoChannel(current);
+  if (cleared !== current) await writeWatchConfigJson(watchId, cleared);
+}
+
 async function flagNoChannel(watchId: string, now: string): Promise<void> {
   const current = await requireWatchConfigJson(watchId);
   const flagged = withNoChannel(withoutLostChannel(current), now);
@@ -626,7 +641,8 @@ async function commitYoutubeFeed(input: {
     (currentConfig.channelId !== channelId ||
       currentConfig.degraded !== null ||
       currentConfig.noChannel !== null ||
-      currentConfig.pendingChannelId !== null)
+      currentConfig.pendingChannelId !== null ||
+      currentConfig.record.feedError !== undefined)
   ) {
     await writeWatchConfigJson(watch.watch_id, withResolvedChannel(current, channelId));
   }
@@ -644,6 +660,13 @@ async function commitYoutubeFeed(input: {
   return { items: feed.items.length, stored: committed.stored, unjudged: committed.unjudged, skipped: 0 };
 }
 
+async function skipFailedFeed(watchId: string, status: number, now: string): Promise<TargetOutcome> {
+  const current = await requireWatchConfigJson(watchId);
+  await writeWatchConfigJson(watchId, withFeedError(current, status, now));
+  await markWatchPolled(watchId, now);
+  return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
+}
+
 async function verifyPendingYoutube(watch: WatchRow, pendingId: string, run: YoutubeRun): Promise<TargetOutcome> {
   const { now } = run;
   const result = await youtubeAdapter({ query: pendingId }, null);
@@ -654,9 +677,34 @@ async function verifyPendingYoutube(watch: WatchRow, pendingId: string, run: You
     const current = await requireWatchConfigJson(watch.watch_id);
     const flagged = withLostChannel(withoutPendingChannel(current), now);
     await writeWatchConfigJson(watch.watch_id, flagged);
+    await markWatchPolled(watch.watch_id, now);
+    return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
   }
-  await markWatchPolled(watch.watch_id, now);
-  return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
+  return skipFailedFeed(watch.watch_id, result.status, now);
+}
+
+async function resolveYoutubeChannel(
+  watch: WatchRow,
+  now: string,
+): Promise<{ found: true; channelId: string } | { found: false; outcome: TargetOutcome }> {
+  const lookup = await lookupYoutubeChannel(await requireEntityIdentityJson(watch.workspace_id, watch.entity_id));
+  switch (lookup.status) {
+    case "id":
+      return { found: true, channelId: lookup.channelId };
+    case "unread":
+      await clearNoChannel(watch.watch_id);
+      await markWatchPolled(watch.watch_id, now);
+      return { found: false, outcome: { items: 0, stored: 0, unjudged: 0, skipped: 0 } };
+    case "no-url":
+      await flagNoChannel(watch.watch_id, now);
+      await markWatchPolled(watch.watch_id, now);
+      return { found: false, outcome: { items: 0, stored: 0, unjudged: 0, skipped: 0 } };
+    case "unresolved":
+      await flagLostChannel(watch.watch_id, now);
+      await notePageMiss(watch.watch_id, lookup.reason, now);
+      await markWatchPolled(watch.watch_id, now);
+      return { found: false, outcome: { items: 0, stored: 0, unjudged: 0, skipped: 0 } };
+  }
 }
 
 async function sweepOneYoutube(watch: WatchRow, run: YoutubeRun): Promise<TargetOutcome> {
@@ -671,18 +719,9 @@ async function sweepOneYoutube(watch: WatchRow, run: YoutubeRun): Promise<Target
 
   let channelId = config.channelId;
   if (channelId === null) {
-    const lookup = await lookupYoutubeChannel(await requireEntityIdentityJson(watch.workspace_id, watch.entity_id));
-    switch (lookup.status) {
-      case "no-url":
-        await flagNoChannel(watch.watch_id, now);
-        await markWatchPolled(watch.watch_id, now);
-        return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
-      case "unresolved":
-        await flagLostChannel(watch.watch_id, now);
-        await markWatchPolled(watch.watch_id, now);
-        return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
-    }
-    channelId = lookup.channelId;
+    const resolution = await resolveYoutubeChannel(watch, now);
+    if (!resolution.found) return resolution.outcome;
+    channelId = resolution.channelId;
   }
 
   const first = await youtubeAdapter({ query: channelId }, null);
@@ -699,8 +738,7 @@ async function sweepOneYoutube(watch: WatchRow, run: YoutubeRun): Promise<Target
   if (first.feedState === "ok") {
     return commitYoutubeFeed({ watch, feed: first, run, channelId });
   }
-  await markWatchPolled(watch.watch_id, now);
-  return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
+  return skipFailedFeed(watch.watch_id, first.status, now);
 }
 
 async function sweepYoutubeTarget(

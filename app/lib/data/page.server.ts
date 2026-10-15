@@ -92,8 +92,10 @@ WHERE e.role = 'competitor' AND e.state = 'on'
     OR CASE WHEN json_valid(e.identity_json)
          THEN json_extract(e.identity_json, '$.socialsReadAt') IS NULL AND coalesce(json_array_length(e.identity_json, '$.socials'), 0) = 0
          ELSE 0 END
+    OR (p.links_read_at IS NULL AND NOT EXISTS (SELECT 1 FROM page k WHERE k.entity_id = e.id AND k.role = 'pricing' AND k.role_decided_for_hash IS NOT NULL))
   )
   AND (p.deferred_at IS NULL OR p.deferred_at < ?2)
+  AND (p.links_retry_at IS NULL OR p.links_retry_at < ?2)
 ORDER BY random()
 LIMIT ?1`;
 
@@ -172,6 +174,10 @@ export async function insertAlternatePage(input: {
 const RECORD_TRANSPORT =
   "UPDATE page SET transport = ?2, transport_reason = ?3, transport_tested_at = ?4, deferred_at = NULL WHERE id = ?1";
 
+const MARK_LINKS_READ = "UPDATE page SET links_read_at = ?2, links_retry_at = NULL WHERE id = ?1";
+
+const MARK_LINKS_RETRY = "UPDATE page SET links_retry_at = ?2 WHERE id = ?1";
+
 const MARK_DEFERRED = "UPDATE page SET deferred_at = ?2 WHERE id = ?1";
 
 export async function recordPageTransport(input: {
@@ -181,6 +187,14 @@ export async function recordPageTransport(input: {
   testedAt: string;
 }): Promise<void> {
   await env.DB.prepare(RECORD_TRANSPORT).bind(input.pageId, input.transport, input.reason, input.testedAt).run();
+}
+
+export async function markLinksRead(pageId: string, at: string): Promise<void> {
+  await env.DB.prepare(MARK_LINKS_READ).bind(pageId, at).run();
+}
+
+export async function markLinksRetry(pageId: string, at: string): Promise<void> {
+  await env.DB.prepare(MARK_LINKS_RETRY).bind(pageId, at).run();
 }
 
 export async function markPageDeferred(pageId: string, at: string): Promise<void> {

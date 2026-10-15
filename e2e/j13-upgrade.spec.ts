@@ -1,7 +1,8 @@
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
+import { expect, test } from "./test";
 import { Webhook } from "standardwebhooks";
 
 import { checkoutProofMessage } from "../app/lib/billing/checkout-proof";
@@ -159,7 +160,7 @@ test("J13: the plan gate upgrades a workspace and the page flips without a reloa
   if (!isLocalLane()) {
     await watchOneCompetitor(page);
     await expect(page.getByRole("heading", { name: "Start your trial" })).toBeVisible();
-    await page.getByRole("button", { name: /^Upgrade to Starter\s*€46\/mo$/ }).click();
+    await page.getByRole("button", { name: /^Upgrade to Starter\s*€46\/month$/ }).click();
     await page.waitForURL(/checkout\.dodopayments\.com/, { timeout: 30_000 });
     console.log(
       `J13 stopped at Dodo hosted checkout from /onboarding/plan, no payment made: ${new URL(page.url()).origin}`,
@@ -173,7 +174,7 @@ test("J13: the plan gate upgrades a workspace and the page flips without a reloa
   await expect(page.getByText(/Confirming your Starter plan/)).toBeVisible();
 
   await addUntilCap(page);
-  const upgrade = page.getByRole("button", { name: /^Upgrade to Starter\s*€46\/mo$/ });
+  const upgrade = page.getByRole("button", { name: /^Upgrade to Starter\s*€46\/month$/ });
   await expect(upgrade).toBeVisible();
   await expect(page.getByText("Starter watches up to 15 competitors.")).toBeVisible();
 

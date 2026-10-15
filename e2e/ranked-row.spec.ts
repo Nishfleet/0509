@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { consoleFailures, isLocalLane, watchConsole } from "./inbox";
 import { seedRankedHomeSession } from "./ranked-home";
@@ -65,6 +66,13 @@ test("below 860px an open ranked row's evidence is a bottom sheet that clears th
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.locator('[data-slot="row-evidence"]')).toBeHidden();
 
+  const sheet = await page.getByRole("dialog").evaluate((el) => {
+    const style = getComputedStyle(el);
+    return { duration: style.transitionDuration, property: style.transitionProperty };
+  });
+  expect(sheet.property, JSON.stringify(sheet)).toContain("translate");
+  expect(sheet.duration, JSON.stringify(sheet)).toContain("0.38s");
+
   await page.addStyleTag({ content: "html, body { overflow-x: visible !important; }" });
   const m = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
@@ -102,13 +110,14 @@ test("a row's source pills read live, degraded and none for the same week @smoke
 
   await page.goto("/app");
   const pills = rankedRow(page, "Kindred").locator('[data-slot="row-pills"] li');
-  // Kindred answered two site checks and one mention, Hacker News did not
-  // answer at all, and YouTube produced nothing this week — the three pill
-  // states one row can carry, asserted on the route that draws them.
+
   await expect(pills.filter({ hasText: "Website checks · 2" })).toHaveAttribute("data-state", "live");
   await expect(pills.filter({ hasText: "News mentions · 1" })).toHaveAttribute("data-state", "live");
   await expect(pills.filter({ hasText: "Hacker News mentions" })).toHaveAttribute("data-state", "degraded");
   await expect(pills.filter({ hasText: "YouTube mentions · nothing new" })).toHaveAttribute("data-state", "none");
+  const quiet = rankedRow(page, "Casetta").locator('[data-slot="row-pills"] li');
+  await expect(quiet.filter({ hasText: "Nothing new this week" })).toHaveAttribute("data-state", "none");
+  await expect(quiet.filter({ hasText: "· nothing new" })).toHaveCount(0);
 
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

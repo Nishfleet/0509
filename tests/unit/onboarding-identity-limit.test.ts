@@ -75,7 +75,11 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.readSubjectAccess.mockResolvedValue(access());
   mocks.readDraft.mockResolvedValue({});
-  mocks.startCard.mockReturnValue({ site: Promise.resolve({}), logo: Promise.resolve(null) });
+  mocks.startCard.mockReturnValue({
+    site: Promise.resolve({}),
+    logo: Promise.resolve(null),
+    settled: Promise.resolve(),
+  });
   mocks.warmDiscovery.mockResolvedValue(undefined);
   mocks.screenOnboardingSubject.mockResolvedValue({ kind: "proceed" });
   mocks.startOnboardingRun.mockResolvedValue(undefined);

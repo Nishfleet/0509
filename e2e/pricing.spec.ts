@@ -1,11 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { PLANS, TRIAL_TERMS } from "../app/lib/billing/plans";
 import { consoleFailures, watchConsole } from "./inbox";
-
-// The /pricing contract (0509#5601). Every assertion is reachable from the
-// /pricing row in .agents/skills/verify/feature-map.md. Plan names, prices and
-// the trial line are read from app/lib/billing/plans.ts, never typed here.
 
 const PATH = "/pricing";
 
@@ -14,13 +10,21 @@ test("the pricing page states every plan and its monthly price @smoke", async ({
   expect(response?.status()).toBe(200);
 
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
-  const plans = page.locator("main li").filter({ has: page.getByRole("heading", { level: 3 }) });
+  const plans = page.locator("main li").filter({ has: page.getByRole("heading", { level: 2 }) });
   await expect(plans).toHaveCount(PLANS.length);
   for (const [index, plan] of PLANS.entries()) {
     const card = plans.nth(index);
-    await expect(card.getByRole("heading", { level: 3, name: plan.name })).toBeVisible();
+    await expect(card.getByRole("heading", { level: 2, name: plan.name })).toBeVisible();
     await expect(card).toContainText(`€${String(plan.monthlyPriceEur)}/month`);
   }
+  const cardOf = (id: string) => {
+    const plan = PLANS.find((candidate) => candidate.id === id);
+    if (!plan) throw new Error(`plan ${id} is not in PLANS`);
+    return plans.filter({ has: page.getByRole("heading", { level: 2, name: plan.name, exact: true }) });
+  };
+  await expect(cardOf("starter")).toContainText("Everything in Scout, plus");
+  await expect(cardOf("agency")).toContainText("Everything in Starter, plus");
+  await expect(cardOf("scout")).not.toContainText("Everything in");
 });
 
 test("the pricing page states the trial terms from the plans module @smoke", async ({ page }) => {
@@ -64,7 +68,9 @@ test("the start button leads to sign-in and carries a known utm_source only @smo
 test("the pricing page links back to the overview and carries the footer links @smoke", async ({ page }) => {
   await page.goto(PATH);
 
-  await expect(page.getByRole("link", { name: "Back to overview" })).toHaveAttribute("href", "/");
+  await expect(page.getByRole("link", { name: "Overview", exact: true })).toHaveAttribute("href", "/");
+  await expect(page.getByRole("link", { name: "Sign in", exact: true })).toHaveAttribute("href", "/login");
+  await expect(page.getByRole("heading", { level: 3, name: /How much does it cost/i })).toBeVisible();
   const footer = page.locator("footer");
   await expect(footer.locator('a[href="/privacy"]')).toBeVisible();
   await expect(footer.locator('a[href="/terms"]')).toBeVisible();

@@ -1,15 +1,6 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-/**
- * incident_notice uniqueness after 0004 (0509#4357).
- *
- * The shipped key was UNIQUE (page_id, sent_on), which drops a same-day
- * "fixed" notice. The widened key is UNIQUE (page_id, sent_on, is_resolution):
- * one open notice and one resolution notice per page per day, and a second of
- * either still fails the insert.
- */
-
 const USER = "user-incident-notice";
 const WS = "ws-incident-notice";
 const ENTITY = "ent-incident-notice";

@@ -130,11 +130,15 @@ async function judgeFields({ workspaceId, subject, fields, edited, now }: Review
   return withEdited(review, edited);
 }
 
+export function unreviewedFields(fields: CardValues, edited: readonly DraftField[]): CardReview {
+  return withEdited(reviewValued(fields, "check"), edited);
+}
+
 export async function reviewFields(input: ReviewFieldsInput): Promise<CardReview> {
   try {
     return await judgeFields(input);
   } catch (error) {
     captureException(error, { tags: { step: "identity-review" } });
-    return withEdited(reviewValued(input.fields, "check"), input.edited);
+    return unreviewedFields(input.fields, input.edited);
   }
 }

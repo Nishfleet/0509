@@ -9,17 +9,16 @@
     "test": "vitest run",
     "eval": "vitest run --config vitest.evals.config.ts",
     "typecheck": "wrangler types --env-file .dev.vars.example && react-router typegen && tsc -b",
-    "lint": "eslint . && knip && jscpd && prettier --check .",
+    "lint": "eslint . && knip && jscpd && prettier --check . && npm audit --omit=dev --omit=optional --audit-level=high",
     "format": "prettier --write .",
     "e2e": "playwright test",
-    "verify:start": "chrome-devtools start --headless --chromeArg=--no-sandbox --executablePath \"$(node -p \"require('playwright-core').chromium.executablePath()\")\"",
+    "verify:start": "chrome-devtools start --headless --chromeArg=--no-sandbox --executablePath \"$(node -p \"require('@playwright/test').chromium.executablePath()\")\"",
     "verify:stop": "chrome-devtools stop"
   },
   "dependencies": {
     "@base-ui/react": "1.8.0",
     "@better-auth/api-key": "^1.7.5",
     "@better-auth/passkey": "^1.7.5",
-    "@cloudflare/puppeteer": "^1.4.0",
     "@cloudflare/workers-oauth-provider": "^0.10.4",
     "@date-fns/tz": "1.5.0",
     "@extractus/feed-extractor": "8.0.3",
@@ -88,7 +87,6 @@
     "@vitest/snapshot": "4.1.11",
     "@vitest/browser-playwright": "4.1.11",
     "@vitest/ui": "4.1.11",
-    "@vitest/coverage-v8": "4.1.11",
-    "@puppeteer/browsers": "3.2.2"
+    "@vitest/coverage-v8": "4.1.11"
   }
 }

@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { BriefView } from "../../app/components/brief-view";
@@ -96,7 +97,9 @@ function payload(): BriefPayload {
 }
 
 function render(overrides: Partial<BriefPayload> = {}): string {
-  return renderToStaticMarkup(createElement(BriefView, { payload: { ...payload(), ...overrides } }));
+  return renderToStaticMarkup(
+    createElement(MemoryRouter, null, createElement(BriefView, { payload: { ...payload(), ...overrides } })),
+  );
 }
 
 function blocks(html: string): string[] {
@@ -116,7 +119,7 @@ describe("the brief view", () => {
     expect(html).toContain("You&#x27;re #2 of 6 this week");
     expect(html).toContain("12 mentions · 3 site changes<");
     expect(html).toContain("cart 500s on https://drylight.example/, still broken");
-    expect(html).toContain("Oaks: #1 Oaks shipped a 2026 pricing page");
+    expect(html).toMatch(/<p>Oaks: #1<\/p><p class="text-ink-soft">Oaks shipped a 2026 pricing page<\/p>/);
     expect(html).toContain("Drylight: unranked");
   });
 
@@ -126,7 +129,9 @@ describe("the brief view", () => {
     expect(html).toContain("3 tiers");
     expect(html).toContain(`href="https://facebook.example/ads/casetta"`);
     expect(html).toContain("Kindred: A competitor dropping a tier before launch week is the move.");
-    expect(render({ read_this_first: [] })).toContain("Nothing this week needed reading first.");
+    expect(render({ read_this_first: [] })).toContain(
+      "Nothing needed your attention this week. We keep watching competitor sites, ads and mentions.",
+    );
     expect(blocks(render({ read_this_first: [], brands: [] }))).toEqual([
       "headline",
       "read-this-first",
@@ -179,5 +184,22 @@ describe("the brief view", () => {
     const read = readBriefPayload(JSON.stringify(payload()));
     expect(read?.why_line).toBe(payload().why_line);
     expect(read?.read_this_first).toHaveLength(2);
+  });
+});
+
+describe("the web brief's rival-you-may-be-missing block", () => {
+  it("shows it with a link to Competitors when the brief names a rival", () => {
+    const html = renderToStaticMarkup(
+      createElement(BriefView, {
+        payload: { ...payload(), new_rival: { name: "Northwind", domain: "northwind.example", reason: null } },
+      }),
+    );
+    expect(html).toContain('data-brief-block="new-rival"');
+    expect(html).toContain("Northwind (northwind.example) may be a competitor you are missing.");
+    expect(html).toContain('href="/app/competitors"');
+  });
+
+  it("leaves it out otherwise", () => {
+    expect(renderToStaticMarkup(createElement(BriefView, { payload: payload() }))).not.toContain("new-rival");
   });
 });

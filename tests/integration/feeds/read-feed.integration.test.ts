@@ -232,6 +232,15 @@ describe("readFeed", () => {
     expect(await snapshots()).toHaveLength(1);
   });
 
+  it("treats a feed larger than the cap with nothing recent in its first 2 MiB as unreadable, not as no new posts", async () => {
+    server.body =
+      rssFeed([{ id: "old", title: "Old post", date: "2020-01-01T00:00:00Z" }]) + " ".repeat(2 * 1024 * 1024 + 1);
+    const result = await readFeed(await target(), await nextTick("night-1"));
+
+    expect(result.outcome).toBe("unreadable");
+    expect(await snapshots()).toHaveLength(0);
+  });
+
   it("deactivates the watch when the feed is gone", async () => {
     server.status = 404;
     expect(await readFeed(await target(), await nextTick("night-1"))).toEqual({ outcome: "gone", newPosts: 0 });

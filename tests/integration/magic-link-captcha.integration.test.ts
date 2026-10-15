@@ -1,11 +1,12 @@
 import { env } from "cloudflare:test";
 import { data } from "react-router";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAuth, createAuthForRequest } from "../../app/lib/auth.server";
 import { action as loginAction } from "../../app/routes/login";
 
 const ORIGIN = "http://localhost:8787";
+const SITEVERIFY = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const PASSING_TOKEN = "XXXX.DUMMY.TOKEN.XXXX";
 
 function authEnv(sent: string[], secret = "1x0000000000000000000000000000000AA") {
@@ -35,7 +36,25 @@ function magicLinkPost(token?: string): Request {
   });
 }
 
+function stubSiteverify() {
+  const realFetch = globalThis.fetch;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) !== SITEVERIFY) return realFetch(input, init);
+      const { secret } = JSON.parse(String(init?.body)) as { secret: string };
+      return Response.json({ success: secret.startsWith("1x") });
+    }),
+  );
+}
+
 describe("magic-link captcha", () => {
+  beforeEach(stubSiteverify);
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("refuses a post with no turnstile token", async () => {
     const response = await createAuth(authEnv([])).handler(magicLinkPost());
     expect(response.status).toBe(400);
@@ -84,10 +103,6 @@ describe("magic-link captcha", () => {
   });
 });
 
-// The Access pre-clearance path (#4702, #5631): a request carrying a verified
-// service-token assertion is already authenticated at the edge, so the
-// captcha does not apply to it. Everything else — a forged header, a
-// user-session assertion, no header — is still checked.
 const ACCESS_AUD = "aud-tag-test";
 let accessIssuerSeq = 0;
 function freshAccessIssuer() {
@@ -203,11 +218,6 @@ describe("magic-link captcha access pre-clearance", () => {
   });
 });
 
-// #5640: the e2e lane drives the route action, and React Router submits
-// <Form> posts to `/login.data` — a path Access does not front. The only
-// credential on that request is the CF_Authorization cookie (the same JWT
-// Access would inject as cf-access-jwt-assertion). The action must still
-// reach {sent}; a forged or user-session cookie must still refuse.
 describe("login form action access pre-clearance", () => {
   const keys = ["ACCESS_TEAM_DOMAIN", "ACCESS_AUD", "EMAIL"] as const;
   const saved = new Map<string, unknown>();

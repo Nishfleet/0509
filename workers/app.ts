@@ -5,19 +5,21 @@ import { createRequestHandler } from "react-router";
 import { NIGHTLY_CRON, OWN_SITE_CHECK_CRON, WEEKLY_REFRESH_CRON } from "../app/lib/cadence";
 import { requestContext } from "../app/lib/agent/context.server";
 import { createOAuthProvider } from "../app/lib/agent/oauth.server";
-import { deleteExpiredAuthRows } from "../app/lib/data/auth_expiry.server";
-import { deleteExpiredJevFailures } from "../app/lib/data/jev_failure.server";
 import { runNightlySlackBackfill } from "../app/lib/data/send_target.server";
 import { stampFirstSignals } from "../app/lib/data/onboarding_run.server";
+import { startBillingReconcile } from "../app/lib/billing/reconcile.server";
 import { startNightlyDiscovery, startWeeklyRefresh } from "../app/lib/discovery/start.server";
 import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
 import { withTransportSecurityHeaders } from "../app/lib/security-headers";
 import { runNightlyCostGuard } from "../app/lib/observability/run-cost-guard.server";
 import { pingLiveness } from "../app/lib/liveness-ping.server";
 import { cronMonitor } from "./cron-monitors";
+import { withCheckPings } from "./workflow-monitor";
 import { handleBatch } from "./delivery/consumer";
 import { handleDlqBatch } from "./delivery/dlq-consumer";
 import { sweepPending } from "./delivery/sweeper";
+import { sendTrialReminders } from "./delivery/trial-reminder";
+import { sendLifecycleEmails } from "./delivery/lifecycle";
 import { sentryOptions } from "./sentry";
 import { runNightlyStanding } from "./standing/nightly";
 import { IdentityTail } from "./identity-tail-workflow";
@@ -33,10 +35,11 @@ import { FeedSweep } from "./workflows/feed-sweep";
 import { HiringSweep } from "./workflows/hiring-sweep";
 import { OwnSiteCheck } from "./workflows/own-site-check";
 import { SiteSweep } from "./workflows/site-sweep";
+import { BillingReconcile } from "./workflows/billing-reconcile";
 import { SnapshotBackup } from "./workflows/snapshot-backup";
 import { MentionsSweep } from "./workflows/mentions";
 import { StandingRollover } from "./workflows/standing-rollover";
-import { reportNightlyResults } from "./nightly-jobs";
+import { reportNightlyResults, nightlyDataChecks } from "./nightly-jobs";
 import { isWorkflowCron, reportMissedWorkflows, startMissedWorkflows, startScheduledWorkflow } from "./workflow-crons";
 
 type WorkerEnv = Env & { SENTRY_DSN?: string; LIVENESS_PING_URL?: string; CLOUDFLARE_API_TOKEN?: string };
@@ -72,9 +75,10 @@ const handler = {
         const results = await Promise.allSettled([
           runNightlyStanding(env, now),
           sweepPending(env, now),
+          sendTrialReminders(env, now),
           startNightlyDiscovery(now),
-          deleteExpiredAuthRows(env.DB, now),
-          deleteExpiredJevFailures(env.DB, now),
+          ...nightlyDataChecks(env.DB, now),
+          startBillingReconcile(now),
           stampFirstSignals(),
           runNightlySlackBackfill(env.DB),
           runNightlyCostGuard(env.DB, env.CLOUDFLARE_API_TOKEN, controller.scheduledTime),
@@ -90,6 +94,7 @@ const handler = {
         await startScheduledWorkflow(env, controller.cron, controller.scheduledTime);
         if (controller.cron === OWN_SITE_CHECK_CRON) {
           reportMissedWorkflows(await startMissedWorkflows(env, controller.scheduledTime));
+          await sendLifecycleEmails(env, new Date(controller.scheduledTime));
         }
         return;
       }
@@ -101,7 +106,7 @@ const handler = {
       await run();
       return;
     }
-    await withMonitor(monitor.slug, run, {
+    await withMonitor(monitor.slug, () => withCheckPings(monitor.slug, controller.cron === NIGHTLY_CRON, run), {
       schedule: { type: "crontab", value: monitor.schedule },
       checkinMargin: monitor.checkinMargin,
       maxRuntime: monitor.maxRuntime,
@@ -144,6 +149,8 @@ export class SiteSweepWorkflow extends instrumentWorkflowWithSentry(sentryOption
 export class HiringSweepWorkflow extends instrumentWorkflowWithSentry(sentryOptions, HiringSweep) {}
 
 export class FeedSweepWorkflow extends instrumentWorkflowWithSentry(sentryOptions, FeedSweep) {}
+
+export class BillingReconcileWorkflow extends instrumentWorkflowWithSentry(sentryOptions, BillingReconcile) {}
 
 export class SnapshotBackupWorkflow extends instrumentWorkflowWithSentry(sentryOptions, SnapshotBackup) {}
 

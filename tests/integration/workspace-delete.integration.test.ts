@@ -116,6 +116,12 @@ describe("workspace deletion", () => {
       .bind(NOW)
       .run();
     await env.DB.prepare(
+      `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at, role)
+       VALUES ('tgt-mate', 'ws-del', 'chan-email', 'mate@0509.io', 0, ?, 'teammate')`,
+    )
+      .bind(NOW)
+      .run();
+    await env.DB.prepare(
       `INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status, subject, payload_json, sent_at)
        VALUES ('dig-del', 'ws-del', 'weekly', '2026-09-15', '2026-09-22', 'pending', 'brief', '{}', NULL)`,
     ).run();
@@ -132,6 +138,9 @@ describe("workspace deletion", () => {
       "SELECT reason FROM email_suppression WHERE address = 'to@0509.io'",
     ).first<{ reason: string }>();
     expect(suppression).toEqual({ reason: "workspace_deleted" });
+    expect(
+      await env.DB.prepare("SELECT reason FROM email_suppression WHERE address = 'mate@0509.io'").first(),
+    ).toBeNull();
 
     const prefixes = await readWorkspaceR2Prefixes("ws-del");
     expect(prefixes).toEqual([

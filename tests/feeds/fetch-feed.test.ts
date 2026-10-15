@@ -7,12 +7,6 @@ import { fetchFeed, fetchHomepage } from "../../app/lib/feeds/fetch-feed.server"
 import { parseFeed } from "../../app/lib/feeds/parse-feed";
 import { CRAWLER_USER_AGENT } from "../../app/lib/fetch/robots.server";
 
-// 0509#6476: fetch-feed.server.ts held about 12 untested branches with no test
-// of its own. The only network edge is fetchOutbound and the only policy edge
-// is robotsAllows, so mocking those two (cappedText stays real) makes every
-// branch of requestHeaders, classify, fetchFeed and fetchHomepage reachable
-// without a live network.
-
 const FEED_URL = "https://rival.com/feed.xml";
 const HOME_URL = "https://rival.com/";
 
@@ -52,7 +46,7 @@ beforeEach(() => {
   fetchOutboundMock.mockReset();
   robotsAllowsMock.mockReset();
   robotsAllowsMock.mockResolvedValue(true);
-  vi.spyOn(console, "log").mockImplementation(() => undefined);
+  vi.spyOn(console, "warn").mockImplementation(() => undefined);
 });
 
 afterEach(() => {
@@ -103,7 +97,6 @@ describe("requestHeaders sends the stored validators to fetchOutbound", () => {
 
 describe("classify maps the response to a FeedFetch outcome", () => {
   it("reads a 304 as not-modified", async () => {
-    // A 304 carries no body, so this one cannot go through feedResponse.
     fetchOutboundMock.mockResolvedValue(new Response(null, { status: 304 }));
     await expect(fetchFeed(FEED_URL, null)).resolves.toEqual({ outcome: "not-modified" });
   });
@@ -148,7 +141,7 @@ describe("classify maps the response to a FeedFetch outcome", () => {
     const huge = `<feed>${"a".repeat(FEED_CAP_BYTES + 1_000)}</feed>`;
     fetchOutboundMock.mockResolvedValue(feedResponse(200, { "content-length": String(huge.length) }, huge));
     const result = await fetchFeed(FEED_URL, null);
-    expect(result).toMatchObject({ outcome: "ok" });
+    expect(result).toMatchObject({ outcome: "ok", truncated: true });
     expect(result.outcome === "ok" ? result.body : "").toBe(huge.slice(0, FEED_CAP_BYTES));
   });
 
@@ -157,6 +150,7 @@ describe("classify maps the response to a FeedFetch outcome", () => {
     await expect(fetchFeed(FEED_URL, null)).resolves.toEqual({
       outcome: "ok",
       body: "<rss/>",
+      truncated: false,
       validators: { etag: ETAG, lastModified: LAST_MODIFIED },
     });
   });
@@ -171,7 +165,7 @@ describe("fetchFeed guards the fetch and logs a failure", () => {
 
   it("returns unreadable and logs one feed.fetch_failed line with no URL when fetchOutbound throws", async () => {
     fetchOutboundMock.mockRejectedValue(new TypeError("connect ETIMEDOUT"));
-    const logSpy = vi.spyOn(console, "log");
+    const logSpy = vi.spyOn(console, "warn");
 
     await expect(fetchFeed(FEED_URL, null)).resolves.toEqual({ outcome: "unreadable" });
     expect(logSpy).toHaveBeenCalledTimes(1);
@@ -200,7 +194,7 @@ describe("fetchHomepage reads the page under the same guards", () => {
 
   it("returns null and logs one feed.homepage_failed line with no URL when fetchOutbound throws", async () => {
     fetchOutboundMock.mockRejectedValue(new TypeError("connect ETIMEDOUT"));
-    const logSpy = vi.spyOn(console, "log");
+    const logSpy = vi.spyOn(console, "warn");
 
     await expect(fetchHomepage(HOME_URL)).resolves.toBeNull();
     expect(logSpy).toHaveBeenCalledTimes(1);

@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { isLocalLane } from "./inbox";
 import { seedRankedHomeSession } from "./ranked-home";
@@ -61,9 +61,6 @@ test("ranked home passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and
         "1",
       ]);
 
-      // The degraded pill is part of what the scan covers: the seeded week
-      // leaves Hacker News unanswered, so its dashed, dimmed pill is on the
-      // page in both themes rather than only asserted by another spec.
       await expect(page.locator('[data-slot="row-pills"] li[data-state="degraded"]').first()).toBeVisible();
 
       const closed = await new AxeBuilder({ page }).withTags(TAGS).analyze();
@@ -78,9 +75,7 @@ test("ranked home passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and
         if (active instanceof HTMLElement) active.blur();
       });
       const order: string[] = [];
-      // Skip to content is first, then the app shell's nav, then Home's own
-      // **How this is ranked** button, then the standing rows in rank order —
-      // the self row's switch is disabled and reads YOU, so it is skipped.
+
       for (let i = 0; i < 11; i += 1) {
         await page.keyboard.press("Tab");
         order.push(await page.evaluate(activeName));
@@ -99,9 +94,6 @@ test("ranked home passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and
         "Casetta tracking",
       ]);
 
-      // The order walk ends on "Casetta tracking"; walking backward along the
-      // list it just asserted reaches the first row's toggle — no restart, so
-      // no dependence on where the browser resumes sequential focus.
       const toggle = page.locator('[data-testid="standing-row"]').first().locator('[data-slot="row-toggle"]');
       for (let i = 0; i < 4; i += 1) await page.keyboard.press("Shift+Tab");
       await expect(toggle).toBeFocused();

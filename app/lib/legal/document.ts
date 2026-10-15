@@ -14,14 +14,16 @@ export interface LegalSection {
 }
 
 export interface LegalDocument {
-  readonly path: "/privacy" | "/terms";
+  readonly path: "/privacy" | "/terms" | "/security";
+  readonly updated?: string;
+  readonly walled?: boolean;
   readonly title: string;
   readonly description: string;
   readonly intro: string;
   readonly sections: readonly LegalSection[];
 }
 
-export const LEGAL_UPDATED = "2026-10-06";
+export const LEGAL_UPDATED = "2026-10-14";
 export const OPERATOR = "Five to Nine";
 export const GOVERNING_LAW = "India";
 export const PRICE_NOTICE_DAYS = 30;

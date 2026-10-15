@@ -414,7 +414,7 @@ has already rejected once (ce5fed17d).
 
 So the ban is: mechanical where stock reaches, reviewer-enforced past that
 (§C1), and stated in `CLAUDE.md` as a rule rather than a suggestion. Config
-files and tests are exempt — the trap documentation in `wrangler.jsonc` and
+files are exempt (tests are not: 0509#7469) — the trap documentation in `wrangler.jsonc` and
 `vitest.config.ts` is load-bearing and is not app code.
 
 **Known debt:** `app/**` currently contains explanatory comments written before

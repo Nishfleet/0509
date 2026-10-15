@@ -6,8 +6,6 @@ import { describe, expect, it } from "vitest";
 import { AddCompetitor, CompetitorMaybes } from "../../app/components/competitor-maybes";
 import { Button } from "../../app/components/ui/button";
 
-// Tailwind v4 spacing: --spacing is .25rem (build/client/assets/app-*.css), so
-// min-h-11 = calc(var(--spacing) * 11) = 2.75rem = 44px and min-h-12 = 48px.
 const SPACING_PX = 4;
 const TAP_TARGET_PX = 44;
 
@@ -20,14 +18,11 @@ const MAYBES = [
   },
 ];
 
-// A data router renders a <Form>; MemoryRouter's absence of the actions/loaders
-// context is why the render goes through createRoutesStub instead.
 function renderInRouter(element: ReactElement): string {
   const Stub = createRoutesStub([{ path: "/", Component: () => element }]);
   return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
 }
 
-/** Every class attribute on a rendered <button>, in document order. */
 function buttonClasses(html: string): string[] {
   return [...html.matchAll(/<button\b[^>]*\bclass="([^"]*)"/g)].map((match) => match[1]);
 }
@@ -54,7 +49,6 @@ describe("the /onboarding/competitors screen tap targets", () => {
   it("renders every control the screen shows as a 44px-or-taller target", () => {
     const classes = buttonClasses(renderInRouter(SCREEN));
 
-    // Start watching, Watch, Dismiss, Add.
     expect(classes).toHaveLength(4);
     for (const cls of classes) {
       expect(minHeightPx(cls), `button class "${cls}" must be at least ${TAP_TARGET_PX}px`).toBeGreaterThanOrEqual(

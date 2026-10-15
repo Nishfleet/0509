@@ -2,16 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sharePicture } from "../../app/components/share-button";
 
-// 0509#6619: "Share my rank" used to log a cancelled share as a failure and,
-// on any other native-share rejection, return true so the person got neither a
-// share nor the downloaded picture and no message. sharePicture is the boundary
-// under test, so it is a named export; the node project has no DOM, so fetch,
-// navigator, document and URL.createObjectURL are stubbed to the four cases the
-// issue names: resolves, AbortError, another error, and no canShare at all.
-
-// Node has File, Blob, Response and DOMException; document is undefined and
-// navigator is a read-only object, so both are stubbed per test.
-
 interface Harness {
   downloads: number;
   links: { href: string; download: string; click: () => void }[];
@@ -26,9 +16,6 @@ function notAllowedError(): DOMException {
   return new DOMException("gesture consumed", "NotAllowedError");
 }
 
-// The document stub records the anchor download() creates and counts the
-// click(); URL.createObjectURL/revokeObjectURL are real Node so the object-url
-// round trip is exercised, with revocations captured through fake timers.
 function stubDom(): Harness {
   const harness: Harness = { downloads: 0, links: [], revokes: [] };
   const createdUrls: string[] = [];
@@ -90,7 +77,7 @@ describe("sharePicture", () => {
 
     const done = await sharePicture();
 
-    expect(done).toBe(true);
+    expect(done).toBe("shared");
     expect(harness.downloads).toBe(0);
     expect(console.error).not.toHaveBeenCalled();
   });
@@ -107,7 +94,7 @@ describe("sharePicture", () => {
 
     const done = await sharePicture();
 
-    expect(done).toBe(true);
+    expect(done).toBe("shared");
     expect(harness.downloads).toBe(0);
     expect(console.error).not.toHaveBeenCalled();
   });
@@ -124,7 +111,7 @@ describe("sharePicture", () => {
 
     const done = await sharePicture();
 
-    expect(done).toBe(true);
+    expect(done).toBe("saved");
     expect(harness.downloads).toBe(1);
     expect(console.error).toHaveBeenCalledTimes(1);
     const logged = String((console.error as ReturnType<typeof vi.fn>).mock.calls[0][0]);
@@ -141,7 +128,7 @@ describe("sharePicture", () => {
 
     const done = await sharePicture();
 
-    expect(done).toBe(true);
+    expect(done).toBe("saved");
     expect(harness.downloads).toBe(1);
     expect(console.error).not.toHaveBeenCalled();
   });

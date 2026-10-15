@@ -55,7 +55,7 @@ export async function storeLogo(
     await env.SNAPSHOTS.put(logoKey(registrable), bytes, { httpMetadata: { contentType } });
     return { contentType, bytes };
   } catch (error) {
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "identity-logo-store-failed",
         error: String(error),

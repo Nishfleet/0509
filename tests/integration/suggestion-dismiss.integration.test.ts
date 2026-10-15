@@ -10,14 +10,6 @@ import {
 } from "../../app/lib/data/suggestion.server";
 import type { NoulVerdict } from "../../app/lib/jev/client.server";
 
-/**
- * The suggestion writer's read/restore for user dismissals (0509#4859): a
- * dismissal made through `dismissSuggestion` survives a later confident
- * discovery run, `readUserDismissed` lists only `decided_by='user'` rows in
- * the same workspace, and `restoreSuggestion` flips one back to `pending`
- * without touching Jev rejections or takedowns.
- */
-
 const NOW = "2026-09-24T18:00:00.000Z";
 
 let seededRuns = 0;

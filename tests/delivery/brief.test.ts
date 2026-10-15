@@ -4,16 +4,6 @@ import { BRAND_LINES_QUERY, parseBriefPayload, type BriefPayload } from "../../a
 import { PROBE, URL_PROBE, expectNoHtmlInjection } from "../email-html-injection";
 import { renderBrief } from "../../workers/delivery/brief-template";
 
-/**
- * The P7.3 slice: render and order, not send. These tests hold the four
- * properties docs/engines/delivery.md §4b makes non-negotiable — the brief
- * never re-ranks, never re-judges, keeps the contract's block order, and keeps
- * the quiet week — and the three the contract's rule list makes non-negotiable
- * — off brands absent, screenshots linked, dates in the workspace timezone.
- * The send itself, the one-click unsubscribe route and the delivered-once
- * constraint are the other three P7.x packets, and their proofs are theirs.
- */
-
 const CONTEXT = {
   unsubscribe_url: "https://0509.io/u/opaque-token",
   asset_base_url: "https://assets.0509.io",
@@ -112,6 +102,21 @@ function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
   };
 }
 
+describe("a mark without a title", () => {
+  it("links the source's host, never the raw address", () => {
+    const { html } = renderBrief(
+      payload({
+        read_this_first: [
+          { ...payload().read_this_first[0], title: "", url: "https://www.kindred.example/pricing?x=1" },
+        ],
+      }),
+      CONTEXT,
+    );
+    expect(html).toContain(">kindred.example</a>");
+    expect(html).not.toContain(">https://www.kindred.example");
+  });
+});
+
 describe("brief block order", () => {
   it("renders the five blocks in the contract's order", () => {
     const { html } = renderBrief(payload(), CONTEXT);
@@ -151,10 +156,10 @@ describe("brief block order", () => {
     expect(text).toContain("Add a competitor to see where you stand");
   });
 
-  it("says a brand-new workspace has no last week to compare", () => {
+  it("calls a brand-new workspace's headline its first ranking", () => {
     const { html, text } = renderBrief(payload({ headline_movement: null, headline_is_new: true }), CONTEXT);
-    expect(html).toContain("new");
-    expect(text).toContain("You're #3 of 8 this week — new");
+    expect(html).toContain("your first ranking");
+    expect(text).toContain("You're #3 of 8 this week — your first ranking");
   });
 });
 
@@ -267,7 +272,9 @@ describe("read this first is D4's, verbatim", () => {
   it("still renders the block when D4 picked nothing", () => {
     const { html, text } = renderBrief(payload({ read_this_first: [] }), CONTEXT);
     expect(html).toContain("Read this first");
-    expect(html).toContain("Nothing this week needed reading first.");
+    expect(html).toContain(
+      "Nothing needed your attention this week. We keep watching competitor sites, ads and mentions.",
+    );
     expect(text).toContain("Read this first");
   });
 });
@@ -282,6 +289,11 @@ describe("screenshots are linked, never inlined", () => {
   it("links the thumbnail through the asset base URL", () => {
     const { html } = renderBrief(payload(), CONTEXT);
     expect(html).toContain('<img src="https://assets.0509.io/captures/ws_1/sig_1/before.png"');
+  });
+
+  it("sets a sans font on the thumbnail so its alt text is not default serif when images are off", () => {
+    const { html } = renderBrief(payload(), CONTEXT);
+    expect(html).toMatch(/<img [^>]*alt="Screenshot of the change"[^>]*style="[^"]*font-family:-apple-system/);
   });
 
   it("keeps an already percent-encoded key byte-for-byte, never re-encoding it", () => {
@@ -392,6 +404,12 @@ describe("footer", () => {
     expect(text).toContain("Unsubscribe: https://0509.io/u/opaque-token");
   });
 
+  it("ends with a support address in html and text", () => {
+    const { html, text } = renderBrief(payload(), CONTEXT);
+    expect(html).toContain('href="mailto:support@0509.io"');
+    expect(text.trimEnd().endsWith("Questions? Write to support@0509.io.")).toBe(true);
+  });
+
   it("says a source did not answer rather than calling the week quiet", () => {
     const { html, text } = renderBrief(
       payload({ checked: { ...payload().checked, degraded_source_keys: ["reddit"] } }),
@@ -460,7 +478,8 @@ describe("inline-styled html, and the voice", () => {
     expect(html).toContain(".brief-card{background-color:#1c1a15;color:#f2efe4;}");
     expect(html).toContain(".brief-muted{color:#a9a294;}");
     expect(html).toContain(".brief-page{background-color:#14130f;}");
-    expect(html).toContain('max-width:600px;margin:0 auto;padding:24px;"');
+    expect(html).toContain('width="600"');
+    expect(html).toContain('max-width:600px;margin:0 auto;"');
     expect(html).not.toContain("border-radius");
     expect(html.match(/<style>/g)).toHaveLength(1);
   });
@@ -646,6 +665,15 @@ describe("inline styles survive the attribute they sit in", () => {
   });
 });
 
+describe("an unjudged week", () => {
+  it("says so and points to Alerts for what we have seen", () => {
+    const { html, text } = renderBrief(payload({ is_unjudged: true, read_this_first: [] }), CONTEXT);
+    expect(text).toContain("The changes we have seen so far are in Alerts.");
+    expect(text).toContain("Open Alerts: https://0509.io/app/alerts");
+    expect(html).toContain('href="https://0509.io/app/alerts">Open Alerts</a>');
+  });
+});
+
 describe("the subject line", () => {
   it("names the rank when there is one", () => {
     expect(renderBrief(payload(), CONTEXT).subject).toBe("You're #3 of 8 this week, up 2");
@@ -656,12 +684,6 @@ describe("the subject line", () => {
   });
 });
 
-/**
- * 0509#7020: the brief escapes about 27 sites by hand. This table plants the
- * injection probe in every string field that reaches the html, one row per
- * field, so a missed escapeHtml anywhere in the template turns CI red — no
- * new renderer, the plain template modules stay.
- */
 function injectionPayload(): BriefPayload {
   return {
     workspace_id: "ws_probe",
@@ -740,7 +762,7 @@ describe("every string field carries the injection probe escaped, never raw (050
   });
   const quietWithDegraded = (patch: Partial<BriefPayload["checked"]["degraded_sources"][number]>): BriefPayload => ({
     ...base,
-    // The degraded-source names reach the html only in the quiet-week line.
+
     is_quiet_week: true,
     read_this_first: [],
     checked: { ...base.checked, degraded_sources: [{ ...base.checked.degraded_sources[0], ...patch }] },
@@ -772,5 +794,144 @@ describe("every string field carries the injection probe escaped, never raw (050
   it.each(rows)("%s lands in the html only escaped", (field, probed) => {
     const { html } = renderBrief(probed, CONTEXT);
     expectNoHtmlInjection(html, field);
+  });
+});
+
+describe("inbox preview and the Settings link (Mobbin benchmark)", () => {
+  it("hides the why line as the preview text under the opening tag, before the wordmark", () => {
+    const { html } = renderBrief(payload(), CONTEXT);
+    const preview = html.indexOf("Kindred is the mover");
+
+    expect(html).toContain("display:none");
+    expect(preview).toBeGreaterThan(html.indexOf("<body"));
+    expect(preview).toBeLessThan(html.indexOf('brief-marker" style="padding'));
+  });
+
+  it("links Settings in the footer, in html and in the text alternative", () => {
+    const { html, text } = renderBrief(payload(), CONTEXT);
+
+    expect(html).toContain('href="https://0509.io/app/settings"');
+    expect(text).toContain("Choose when your brief arrives in Settings: https://0509.io/app/settings");
+  });
+
+  it("leaves the Settings link out of a teammate's copy, which keeps its unsubscribe link", () => {
+    const { html, text } = renderBrief(payload(), { ...CONTEXT, teammate: true });
+
+    expect(html).not.toContain("/app/settings");
+    expect(text).not.toContain("Settings");
+    expect(text).toContain(
+      "Next brief: Mon 28 Sept, 08:00\nYou get this because you are a member of a Five to Nine workspace.\nUnsubscribe: https://0509.io/u/opaque-token",
+    );
+    expect(html).toContain("Unsubscribe");
+  });
+});
+
+describe("the since-you-started line", () => {
+  it("names the running total when it is bigger than this week's count", () => {
+    const { html, text } = renderBrief(payload({ checked: { ...payload().checked, total_change_count: 40 } }), CONTEXT);
+    expect(text).toContain("40 site changes caught since you started.");
+    expect(html).toContain("40 site changes caught since you started.");
+  });
+
+  it.each([
+    ["the first week", 14],
+    ["a digest saved before the total existed", undefined],
+  ])("is left out for %s", (_name, total) => {
+    const { text } = renderBrief(payload({ checked: { ...payload().checked, total_change_count: total } }), CONTEXT);
+    expect(text).not.toContain("since you started");
+  });
+});
+
+describe("the rank-over-time line", () => {
+  it.each([
+    [5, "Up from #5 6 weeks ago"],
+    [3, "Holding at #3 for 6 weeks"],
+    [2, "Down from #2 6 weeks ago"],
+  ])("compares today's #3 with an earlier #%i", (earlierRank, line) => {
+    const { html, text } = renderBrief(payload({ headline_earlier: { rank: earlierRank, weeks: 6 } }), CONTEXT);
+    expect(text).toContain(line);
+    expect(html).toContain(line);
+  });
+
+  it.each([
+    ["no history", undefined],
+    ["an explicit none", null],
+  ])("is left out for %s", (_name, earlier) => {
+    const { text } = renderBrief(payload({ headline_earlier: earlier }), CONTEXT);
+    expect(text).not.toMatch(/weeks ago|for \d+ weeks/);
+  });
+
+  it.each([
+    ["an unjudged week", { is_unjudged: true }],
+    ["a headline with one brand", { headline_total: 1 }],
+  ])("is left out of the email for %s, as it is in the app", (_name, change) => {
+    const { text } = renderBrief(payload({ headline_earlier: { rank: 5, weeks: 6 }, ...change }), CONTEXT);
+    expect(text).not.toContain("Up from");
+  });
+});
+
+describe("the rival-you-may-be-missing block", () => {
+  const rival = { name: "Northwind", domain: "northwind.example", reason: "Named alongside you by 3 publishers" };
+
+  it("names the rival, why, and where to review it, in html and text", () => {
+    const { html, text } = renderBrief(payload({ new_rival: rival }), CONTEXT);
+    for (const out of [html, text]) {
+      expect(out).toContain("A competitor you may be missing");
+      expect(out).toContain("Northwind (northwind.example) may be a competitor you are missing.");
+      expect(out).toContain("Named alongside you by 3 publishers");
+      expect(out).toContain("https://0509.io/app/competitors");
+    }
+  });
+
+  it("names the competitor in a teammate's copy without a link to the sign-in wall", () => {
+    const { html, text } = renderBrief(payload({ new_rival: rival }), { ...CONTEXT, teammate: true });
+    for (const out of [html, text]) {
+      expect(out).toContain("Northwind (northwind.example) may be a competitor you are missing.");
+      expect(out).not.toContain("https://0509.io/app/competitors");
+    }
+  });
+
+  it.each([
+    ["none found", null],
+    ["a digest saved before it existed", undefined],
+  ])("is left out for %s", (_name, none) => {
+    const { html, text } = renderBrief(payload({ new_rival: none }), CONTEXT);
+    expect(html).not.toContain("may be missing");
+    expect(text).not.toContain("may be missing");
+  });
+
+  it("escapes what the rival is called", () => {
+    const { html } = renderBrief(
+      payload({ new_rival: { name: "<b>x</b>", domain: "x.example", reason: null } }),
+      CONTEXT,
+    );
+    expect(html).not.toContain("<b>x</b>");
+    expect(html).toContain("&lt;b&gt;x&lt;/b&gt;");
+  });
+});
+
+describe("the one action", () => {
+  const OPEN = { ...CONTEXT, open_url: "https://0509.io/app/brief" };
+
+  it("is a single Open in Five to Nine button right under the headline, in both parts", () => {
+    const { html, text } = renderBrief(payload(), OPEN);
+    expect(html).toContain(">Open in Five to Nine</a>");
+    expect(html.match(/Open in Five to Nine/g)).toHaveLength(1);
+    expect(html.indexOf("Open in Five to Nine")).toBeLessThan(html.indexOf("Your tracked brands"));
+    expect(text).toContain("Open in Five to Nine: https://0509.io/app/brief");
+  });
+
+  it("is left out when there is no link, as for a teammate who has no account", () => {
+    const { html, text } = renderBrief(payload(), CONTEXT);
+    expect(html).not.toContain("Open in Five to Nine");
+    expect(text).not.toContain("Open in Five to Nine");
+  });
+
+  it("never shows a raw address as link text for an untitled mark", () => {
+    const base = payload();
+    const mark = { ...base.read_this_first[0], title: "", url: "https://social.example/ads/abc123" };
+    const { html } = renderBrief({ ...base, read_this_first: [mark as (typeof base.read_this_first)[number]] }, OPEN);
+    expect(html).toContain(">social.example</a>");
+    expect(html).not.toMatch(/>\s*https?:\/\/[^<]*</);
   });
 });
