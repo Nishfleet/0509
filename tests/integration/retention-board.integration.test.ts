@@ -95,6 +95,18 @@ describe("retention board", () => {
     ]);
   });
 
+  it("leaves fixture workspaces out of every count", async () => {
+    const before = await readRetentionBoard(NOW);
+    await env.DB.batch([
+      ...workspace("x", "2026-10-06T10:00:00Z", "2026-10-13T08:00:00Z"),
+      plan("x", "cancelled", 0, "2026-10-10T00:00:00Z"),
+      sent("s-x", "x", "digest:x:1", "2026-10-13T08:00:00Z"),
+    ]);
+    await env.DB.exec("UPDATE workspace SET fixture = 1 WHERE id = 'x'");
+    await env.DB.exec("UPDATE plan SET current_period_end = '2026-11-01T00:00:00Z' WHERE workspace_id = 'x'");
+    expect(await readRetentionBoard(NOW)).toEqual(before);
+  });
+
   it("holds no address or name anywhere in what it returns", async () => {
     const board = JSON.stringify(await readRetentionBoard(NOW));
     expect(board).not.toMatch(/@|example\.test/);
