@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { countIncompleteMentionRuns } from "./data/sweep_run.server";
 import { ACT_AT, REJECT_AT, changeActsSql } from "./jev/thresholds";
 import { CHANGE_HAS_STORED_EVIDENCE, changeJudgedSql } from "./site-change";
 import {
@@ -52,7 +53,8 @@ export async function countUnjudgedInputs(
   if (row === null) {
     throw new Error("countUnjudgedInputs returned no row");
   }
-  return row.n;
+  const missed = await countIncompleteMentionRuns(db, { startAt: input.windowStartAt, endAt: input.windowEndAt });
+  return row.n + missed;
 }
 
 export const ALL_WEIGHTS = `SELECT key, weight, effective_from FROM scoring_weight`;
