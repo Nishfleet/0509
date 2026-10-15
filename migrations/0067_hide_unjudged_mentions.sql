@@ -9,11 +9,17 @@
 -- undone row by row. Undo only the judged rows (the re-judge owns the unjudged ones):
 -- UPDATE signal SET is_tombstoned = 0 WHERE id IN (SELECT signal_id FROM mention_hidden_0067 WHERE state IS NOT 'unjudged').
 
-CREATE TABLE mention_hidden_0067 AS
-SELECT s.id AS signal_id, s.state,
+CREATE TABLE mention_hidden_0067 (
+  signal_id TEXT PRIMARY KEY NOT NULL,
+  state TEXT,
+  about_brand_p REAL
+);
+
+INSERT INTO mention_hidden_0067 (signal_id, state, about_brand_p)
+SELECT s.id, s.state,
   (SELECT v.p FROM jev_verdict v
    WHERE v.signal_id = s.id AND v.question_id = 'mention_is_about_brand'
-   ORDER BY v.decided_at DESC LIMIT 1) AS about_brand_p
+   ORDER BY v.decided_at DESC LIMIT 1)
 FROM signal s
 WHERE s.kind = 'mention' AND s.is_tombstoned = 0
   AND (
