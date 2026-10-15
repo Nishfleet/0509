@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { nightlyCatchUpInstance } from "../app/lib/brief-schedule";
+import { nightlyCatchUpInstance } from "../workers/standing/nightly";
 import { holdDeadlinePassed, weekSendable } from "../app/lib/customer-ready";
 
 const HOUR = 60 * 60 * 1000;

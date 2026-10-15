@@ -5,13 +5,12 @@ import { parseBriefPayload } from "../../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../../app/lib/brief-schedule";
 import {
   instantStamp,
-  nightlyCatchUpInstance,
   nextBriefAt,
   openWeek,
   previousBriefAt,
   rolloverInstance,
 } from "../../../app/lib/brief-schedule";
-import { runNightlyStanding } from "../../../workers/standing/nightly";
+import { nightlyCatchUpInstance, runNightlyStanding } from "../../../workers/standing/nightly";
 
 let runs = 0;
 let WS = "";
