@@ -149,8 +149,8 @@ export default defineConfig({
         // stock AI_SPEND:off var makes every model call refuse before it leaves
         // (app/lib/ai/spend.server.ts, 0509#7191), so the local lane spends nothing.
         //
-        // ADMIN_EMAIL_HASHES ships empty in wrangler.jsonc so production has no
-        // owner until Nish adds a hash. The local lane sets it to the SHA-256 of
+        // ADMIN_EMAIL_HASHES is a Worker secret in production, so the repo holds
+        // no owner hash. The local lane sets it to the SHA-256 of
         // the fixed fixture address retention-owner@0509.io so the retention
         // page's owner view can be driven; no real address is involved.
         command: `npx wrangler d1 migrations apply 0509 --local </dev/null && npx wrangler dev --env-file .dev.vars.example --port ${localPort} --local --var "BETTER_AUTH_URL:http://127.0.0.1:${localPort}" --var "DODO_PRODUCT_STARTER:pdt_preview_starter" --var "AI_SPEND:off" --var "ADMIN_EMAIL_HASHES:2e371bd3a312c516139254f06be403a03ab90561bef0c09c904c779e46cdf42a"`,
