@@ -27,9 +27,11 @@ function openDb(): DatabaseSync {
       brief_hour INTEGER NOT NULL DEFAULT 8 CHECK (brief_hour BETWEEN 0 AND 23),
       created_at TEXT NOT NULL,
       fixture INTEGER NOT NULL DEFAULT 0,
+      parent_workspace_id TEXT,
       FOREIGN KEY (owner_user_id) REFERENCES "user"(id)
     );
     CREATE INDEX idx_workspace_owner ON workspace(owner_user_id);
+    CREATE TABLE active_workspace (user_id TEXT PRIMARY KEY NOT NULL, workspace_id TEXT NOT NULL);
     CREATE TABLE channel (id TEXT PRIMARY KEY NOT NULL, key TEXT NOT NULL UNIQUE, is_enabled INTEGER NOT NULL DEFAULT 1, config_json TEXT NOT NULL DEFAULT '{}');
     INSERT INTO channel (id, key) VALUES ('chan-email', 'email');
     CREATE TABLE send_target (
@@ -272,7 +274,7 @@ describe("ensureWorkspace", () => {
     await ensureWorkspace(base, { ...input, timezone: null });
     const racing: WorkspaceDb = {
       prepare(query: string) {
-        if (query.startsWith("SELECT id, name")) {
+        if (query.startsWith("SELECT w.id AS id, w.name")) {
           return {
             bind: () => ({
               first: async <T>() =>

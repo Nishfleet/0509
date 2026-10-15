@@ -34,7 +34,7 @@ function render(chip: AlertChipKey, chipCounts: Record<AlertChipKey, number>, gr
             incidents: [],
             chip,
             chipCounts,
-            hiringCapped: false,
+            cappedChips: [],
             groups,
             offLine: null,
             now: Date.UTC(2026, 9, 2, 8, 0, 0),

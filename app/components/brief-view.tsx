@@ -1,6 +1,9 @@
 import { Fragment, type ReactElement } from "react";
 import { Link } from "react-router";
 
+import { formatBriefAt } from "../lib/brief-settings";
+import { isFirstRanking } from "../lib/brief-subject";
+import { movementLabel } from "../lib/home-standing";
 import { ledgerFooter } from "../lib/work-ledger";
 import { ReadThisFirst } from "./read-this-first";
 import type { BriefPayload } from "../lib/brief-payload";
@@ -44,6 +47,7 @@ function headlineBlock(payload: BriefPayload): ReactElement {
 }
 
 function brandsBlock(payload: BriefPayload): ReactElement {
+  const first = isFirstRanking(payload);
   return (
     <section data-brief-block="brands" className={SECTION}>
       <h3 className={HEAD}>Your tracked brands</h3>
@@ -63,7 +67,7 @@ function brandsBlock(payload: BriefPayload): ReactElement {
         payload.brands.map((brand) => (
           <div key={brand.entity_id} className={LINE}>
             <p>
-              {brand.name}: {rankText(brand.rank)}
+              {brand.name}: {standingText(brand, first)}
             </p>
             {brand.biggest_move === null ? null : <p className="text-ink-soft">{brand.biggest_move}</p>}
             {(brand.baseline ?? []).map((row) => (
@@ -126,6 +130,7 @@ function newRivalBlock(payload: BriefPayload): ReactElement | null {
 function checkedBlock(payload: BriefPayload): ReactElement {
   const since = sinceStartedLine(payload.checked);
   const work = ledgerFooter(payload.checked.ledger, payload.why_line);
+  const next = nextBriefLine(payload);
   return (
     <section data-brief-block="checked" className={SECTION}>
       <h3 className={HEAD}>What was checked</h3>
@@ -135,6 +140,7 @@ function checkedBlock(payload: BriefPayload): ReactElement {
         {countLabel(payload.checked.site_change_count, "site change", "site changes")}
       </p>
       {since === null ? null : <p className="mt-1 font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft">{since}</p>}
+      {next === null ? null : <p className="mt-1 font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft">{next}</p>}
     </section>
   );
 }
@@ -146,4 +152,22 @@ function countLabel(count: number, one: string, many: string): string {
 
 function rankText(rank: number | null): string {
   return rank === null ? "unranked" : `#${String(rank)}`;
+}
+
+function standingText(brand: BriefPayload["brands"][number], first: boolean): string {
+  const rank = rankText(brand.rank);
+  if (first || brand.rank === null || (brand.movement === null && !brand.is_new)) return rank;
+  return `${rank}, ${movementLabel(brand.movement, brand.is_new)}`;
+}
+
+function nextBriefLine(payload: BriefPayload): string | null {
+  if (payload.next_brief_at === null) return null;
+  const at = new Date(payload.next_brief_at);
+  if (Number.isNaN(at.getTime()) || at.getTime() <= Date.now()) return null;
+  try {
+    return `Next brief: ${formatBriefAt(at, payload.timezone)}`;
+  } catch (error) {
+    console.warn(JSON.stringify({ event: "brief.next_brief_unreadable", error: String(error) }));
+    return null;
+  }
 }

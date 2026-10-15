@@ -16,11 +16,33 @@ test("the landing page renders its headline and its contact link @smoke", async 
   await expect(contact).toHaveAccessibleName(/\S/);
 });
 
-test("the rebuild notice renders in the three brand faces @smoke", async ({ page }) => {
+test("the homepage renders its headline, nav and footer links in the three brand faces @smoke", async ({ page }) => {
   await page.goto("/");
-  await expectElementFaceLoaded(page, "header .font-display");
+  await expectElementFaceLoaded(page, "main h1");
   await expectElementFaceLoaded(page, "main p");
   await expectElementFaceLoaded(page, "footer");
+  const header = page.getByRole("banner");
+  await expect(header.getByRole("link", { name: "Pricing", includeHidden: true })).toHaveAttribute("href", "#price");
+  await expect(header.getByRole("link", { name: "Sign in" })).toBeVisible();
+  const footer = page.locator("footer");
+  for (const href of ["/privacy", "/terms", "/pricing", "/security", "/status"]) {
+    await expect(footer.locator(`a[href="${href}"]`)).toBeVisible();
+  }
+});
+
+test("the homepage is clean at phone width @smoke", async ({ page }) => {
+  const failures: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") failures.push(message.text());
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  );
+  expect(overflow).toBe(false);
+  expect(failures).toEqual([]);
 });
 
 test("the landing page does not scroll horizontally @smoke", async ({ page }) => {

@@ -95,6 +95,20 @@ describe("retention board", () => {
     ]);
   });
 
+  it("leaves fixture workspaces out of every count", async () => {
+    const before = await readRetentionBoard(NOW);
+    await env.DB.batch([
+      ...workspace("x", "2026-10-06T10:00:00Z", "2026-10-13T08:00:00Z"),
+      plan("x", "cancelled", 0, "2026-10-10T00:00:00Z"),
+      sent("s-x", "x", "digest:x:1", "2026-10-13T08:00:00Z"),
+    ]);
+    const created = await env.DB.prepare("SELECT fixture FROM workspace WHERE id = 'x'").first();
+    expect(created).toEqual({ fixture: 0 });
+    await env.DB.exec("UPDATE workspace SET fixture = 1 WHERE id = 'x'");
+    await env.DB.exec("UPDATE plan SET current_period_end = '2026-11-01T00:00:00Z' WHERE workspace_id = 'x'");
+    expect(await readRetentionBoard(NOW)).toEqual(before);
+  });
+
   it("holds no address or name anywhere in what it returns", async () => {
     const board = JSON.stringify(await readRetentionBoard(NOW));
     expect(board).not.toMatch(/@|example\.test/);
@@ -147,6 +161,22 @@ describe("visit retention", () => {
 });
 
 describe("the admin check", () => {
+  it("lets nobody in when the list is missing or empty", async () => {
+    const original: unknown = Reflect.get(env, "ADMIN_EMAIL_HASHES");
+    try {
+      Reflect.deleteProperty(env, "ADMIN_EMAIL_HASHES");
+      expect(await isAdminEmail("admin@0509.io")).toBe(false);
+      await expect(requireAdmin({ email: "admin@0509.io", emailVerified: true })).rejects.toMatchObject({
+        status: 404,
+      });
+      Reflect.set(env, "ADMIN_EMAIL_HASHES", "");
+      expect(await isAdminEmail("admin@0509.io")).toBe(false);
+    } finally {
+      if (original === undefined) Reflect.deleteProperty(env, "ADMIN_EMAIL_HASHES");
+      else Reflect.set(env, "ADMIN_EMAIL_HASHES", original);
+    }
+  });
+
   it("lets in only the allowed address, in any letter case", async () => {
     expect(await isAdminEmail("admin@0509.io")).toBe(true);
     expect(await isAdminEmail("  Admin@0509.IO ")).toBe(true);
