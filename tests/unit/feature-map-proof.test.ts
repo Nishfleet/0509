@@ -10,6 +10,8 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const MAP_DIR = path.join(REPO_ROOT, ".agents", "skills", "verify", "feature-map");
 const MAP_INDEX = path.join(REPO_ROOT, ".agents", "skills", "verify", "feature-map.md");
 const SPEC_REF = /e2e\/[A-Za-z0-9_./-]+\.spec\.ts/g;
+const HAS_SPEC = /e2e\/[A-Za-z0-9_./-]+\.spec\.ts/;
+const NO_BROWSER = "No browser spec:";
 const TOOL_CLAUSE = "tools, each with an output schema:";
 
 interface MapFile {
@@ -110,6 +112,31 @@ describe("feature map proof coverage", () => {
       .filter((file) => file.rows !== 3)
       .map((file) => `${file.name} has ${file.rows} table lines; a file is a header, a separator and one row`);
     expect(wrong, wrong.join("\n")).toEqual([]);
+  });
+
+  it("gives every row a browser spec, or says in its Proof cell why it has none", async () => {
+    const rows = routeRows(await readMap()).filter((cells) => cells.length >= 5);
+    expect(rows.length, "the parser must have read rows from the map").toBeGreaterThan(0);
+    const bare = rows
+      .filter((cells) => !HAS_SPEC.test(cells.at(-1) ?? "") && !(cells.at(-1) ?? "").includes(NO_BROWSER))
+      .map((cells) => `${cells[0]} names no e2e spec: name one in its Proof cell, or write "${NO_BROWSER} <why>"`);
+    expect(bare, bare.join("\n")).toEqual([]);
+  });
+
+  it("holds a row for every route in app/routes.ts", async () => {
+    const registry = await readFile(path.join(REPO_ROOT, "app", "routes.ts"), "utf8");
+    const registered = [...registry.matchAll(/route\("([^"]*)"/g)].map((match) => match[1]);
+    expect(registered.length, "the parser must have read routes").toBeGreaterThan(0);
+    const claimed = new Set<string>();
+    let catchAll = false;
+    for (const cells of routeRows(await readMap())) {
+      for (const match of cells[0].matchAll(/`(\/[^`]*)`/g)) claimed.add(match[1]);
+      if (cells[0].includes("any other path")) catchAll = true;
+    }
+    const missing = registered
+      .filter((route) => (route === "*" ? !catchAll : !claimed.has(`/${route.replace(/\?$/, "")}`)))
+      .map((route) => `app/routes.ts registers \`${route}\` but no feature-map row names it`);
+    expect(missing, missing.join("\n")).toEqual([]);
   });
 
   it("names every registered MCP tool in the `/mcp` row", async () => {
