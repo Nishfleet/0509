@@ -89,7 +89,7 @@ describe("runEval ceiling fit", () => {
   });
 
   it("counts neurons already spent in the same process", async () => {
-    vi.stubEnv("EVAL_MAX_NEURONS", "200");
+    vi.stubEnv("EVAL_MAX_NEURONS", "300");
     const { postWorkersAi, runEval } = await started();
     await postWorkersAi(MODEL, {});
     await postWorkersAi(MODEL, {});

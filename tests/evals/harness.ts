@@ -544,7 +544,7 @@ export async function runEval<T extends EvalRow>(
   const plannedNeurons = callBudget * neuronsPerCall;
   if (NEURON_CEILING > 0 && neuronsSpent + plannedNeurons > NEURON_CEILING) {
     throw new Error(
-      `eval refused before any paid call: ${questionId} needs about ${String(plannedNeurons)} neurons (${String(callBudget)} calls x ${String(neuronsPerCall)}) on top of ${String(neuronsSpent)} already spent, over the ceiling of ${String(NEURON_CEILING)}; narrow the run with EVAL_SPLIT or the evals.yml filter input, or run it where EVAL_MAX_NEURONS is unset (0509#7249)`,
+      `eval refused before any paid call: ${questionId} needs about ${String(plannedNeurons)} neurons (${String(callBudget)} calls x ${String(neuronsPerCall)}) on top of ${String(neuronsSpent)} already spent, over the ceiling of ${String(NEURON_CEILING)}; narrow the run with the evals.yml split or filter input, or EVAL_SPLIT here (0509#7249)`,
     );
   }
   for (const split of wanted) {
