@@ -4,12 +4,14 @@ const calls = vi.hoisted(() => ({
   forget: vi.fn(),
   site: vi.fn(),
   name: vi.fn(),
+  note: vi.fn(),
   youtube: vi.fn(),
   intent: vi.fn(),
 }));
 
 vi.mock("../../app/lib/competitor-forget.server", () => ({ forgetCompetitor: calls.forget }));
 vi.mock("../../app/lib/competitor-name.server", () => ({ saveCompetitorName: calls.name }));
+vi.mock("../../app/lib/competitor-note.server", () => ({ saveCompetitorNote: calls.note }));
 vi.mock("../../app/lib/competitor-site.server", () => ({ saveCompetitorSite: calls.site }));
 vi.mock("../../app/lib/competitor-youtube.server", () => ({ saveCompetitorYoutube: calls.youtube }));
 vi.mock("../../app/lib/competitors.server", () => ({ handleCompetitorIntent: calls.intent }));
@@ -25,7 +27,15 @@ function form(values: Record<string, string>): FormData {
   return data;
 }
 
-const CLEAN = { forgetError: null, youtubeError: null, siteError: null, nameError: null, renamed: false };
+const CLEAN = {
+  forgetError: null,
+  youtubeError: null,
+  siteError: null,
+  nameError: null,
+  noteError: null,
+  noteSaved: false,
+  renamed: false,
+};
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -61,6 +71,7 @@ describe("handleCompetitorForm", () => {
   it.each([
     ["youtube", calls.youtube, "youtube", "youtubeError"],
     ["site", calls.site, "site", "siteError"],
+    ["note", calls.note, "note", "noteError"],
   ] as const)(
     "hands the %s field to its saver and shows the saver's refusal",
     async (intent, saver, name, errorKey) => {
@@ -71,6 +82,7 @@ describe("handleCompetitorForm", () => {
       expect(await handleCompetitorForm(WS, ENTITY, form({ intent, [name]: "y" }))).toEqual({
         ...CLEAN,
         message: null,
+        noteSaved: intent === "note",
       });
     },
   );

@@ -18,7 +18,7 @@ const mails = [
 describe.each(mails)("the %s email", (_name, mail) => {
   it("opens with the wordmark and a hidden preview line before the card", () => {
     expect(mail.html).toContain("max-height:0;overflow:hidden");
-    expect(mail.html.indexOf("max-height:0")).toBeLessThan(mail.html.indexOf(`class="ftn-card"`));
+    expect(mail.html.indexOf("max-height:0")).toBeLessThan(mail.html.indexOf(`class="brief-card"`));
     expect(mail.html).toContain(">09</span>");
   });
 
@@ -27,6 +27,11 @@ describe.each(mails)("the %s email", (_name, mail) => {
     expect(first).toContain('href="https://0509.io/x?t=1"');
     expect(mail.html).toContain(`href="mailto:${SUPPORT_ADDRESS}"`);
     expect(mail.text).toContain(`Questions? Write to ${SUPPORT_ADDRESS}.`);
+  });
+
+  it("sets the sans font on the button so mail clients do not fall back to a serif", () => {
+    const first = mail.html.slice(mail.html.indexOf("<a "), mail.html.indexOf("</a>"));
+    expect(first).toContain("font-family:-apple-system");
   });
 
   it("keeps exclamation marks out of every part", () => {

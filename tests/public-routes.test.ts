@@ -92,14 +92,6 @@ const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const isDisallowed = (urlPath: string) => DISALLOWED_PREFIXES.some((prefix) => urlPath.startsWith(prefix));
 
-// A robots directive is a robots <meta> tag in a document, and a string
-// literal in a module: a JSX attribute value, a template literal, or a plain
-// literal. Reading only string literals in a module is what keeps a "robots"
-// spelled as an identifier or a type out; reading each literal whole is what
-// keeps `content={cond ? "noindex" : "index, follow"}` in.
-// Comments are cut only where they are comments: the string-literal branch is
-// matched first and returned untouched, so the "//" in an https:// literal
-// cannot swallow the rest of its line and hide a directive below it.
 const withoutComments = (source: string) =>
   source.replace(
     /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`)|(\/\*[\s\S]*?\*\/|\/\/[^\n]*)/g,
@@ -113,10 +105,7 @@ const modulesDeclaringNoindex = (module: string) =>
   (withoutComments(module).match(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`/g) ?? []).some((literal) =>
     /\bnoindex\b/i.test(literal),
   );
-// The two modules read for a noindex: the route's own module, and app/root.tsx,
-// the document React Router wraps every route in. A meta() composed further out
-// (app/lib/legal/meta.ts builds the legal pages' meta) is past this scan's
-// reach; the served document is what e2e/seo.spec.ts fetches and reads.
+
 const servingSources = (route: RouteConfigEntry) =>
   [join("app", route.file), join("app", "root.tsx")].map((file) => [
     file,
@@ -180,9 +169,6 @@ describe("public-route manifest", () => {
     expect(body).toContain("Sitemap: https://0509.io/sitemap.xml");
   });
 
-  // 0509#5599: /llms.txt told agents to open /mcp and the OpenAPI document
-  // while robots.txt disallowed both. The longest matching rule wins, as in
-  // RFC 9309.
   it("never links from /llms.txt a url that robots.txt disallows", () => {
     const rules = robotsTxt("https://0509.io")
       .split("\n")
@@ -223,9 +209,6 @@ describe("public-route manifest", () => {
     }
   });
 
-  // 0509#5648: /llms.txt was 200, robots-allowed, indexable and absent from the
-  // sitemap, so a crawler that starts at the sitemap never learned of it. Both
-  // halves of that failure are checked here, one direction each.
   it("names /llms.txt in the sitemap", () => {
     expect(SITEMAP_PATHS as readonly string[], "/llms.txt is missing from SITEMAP_PATHS").toContain("/llms.txt");
   });
@@ -257,8 +240,6 @@ describe("public-route manifest", () => {
     for (const path of SITEMAP_PATHS as readonly string[]) {
       expect(isDisallowed(path), `sitemap path "${path}" is disallowed by robots.txt`).toBe(false);
       if (path === "/" && existsSync(join(REPO_ROOT, "public/index.html"))) {
-        // "/" is the static rebuild notice until the landing ships an index
-        // route; the document that serves it is the one read for noindex.
         expect(
           documentsDeclaringNoindex(readFileSync(join(REPO_ROOT, "public/index.html"), "utf8")),
           "the document serving / declares a robots noindex",
@@ -338,7 +319,7 @@ describe("public-route manifest", () => {
     expect(body).toMatch(/^- Mentions: Hacker News$/m);
     expect(body).toContain("- Mentions: News (not answering today: slow to answer)");
     expect(body).toContain("- Mentions: YouTube (no data yet)");
-    expect(body).toContain("Some sources are not answering today; those lines say so.");
+    expect(body).toContain("Some sources aren't answering today; those lines say so.");
     expect(body).toContain("- Your own site: Breakage alerts (Starter and up)");
   });
 

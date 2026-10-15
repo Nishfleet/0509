@@ -4,14 +4,6 @@ import { describe, expect, it } from "vitest";
 
 import { lifecycleEmails, type LifecycleEmail } from "./email-fixtures";
 
-/**
- * Every email the product sends is rendered here from a fixture and held to
- * the same bar: a subject that fits a phone lock screen, a preview line, one
- * action, no pasted web addresses in the body, colours that survive dark mode
- * and a plain-text part that says what the html says. Source: 0509 e2e
- * coverage plan, 2026-10-14.
- */
-
 const EMAILS = lifecycleEmails();
 const SUBJECT_MAX = 60;
 const PREVIEW_MIN = 20;
@@ -52,7 +44,7 @@ function visibleBlocks(html: string): string[] {
   const body = html
     .replace(/<head>.*?<\/head>/s, "")
     .replace(/<div style="display:none[^"]*">.*?<\/div>/s, "")
-    .replace(/<a [^>]*class="ftn-button"[^>]*>.*?<\/a>/gs, "");
+    .replace(/<a [^>]*class="brief-button"[^>]*>.*?<\/a>/gs, "");
   return body
     .replace(/<p class="brief-muted" style="[^"]*letter-spacing:0\.16em[^"]*">.*?<\/p>/gs, "")
     .split(/<\/(?:p|h1|h2|li|td)>/)
@@ -78,7 +70,7 @@ function styleBlocks(html: string): string {
 }
 
 function withoutFallback(email: LifecycleEmail, blocks: string[]): string[] {
-  return email.fallbackAddress ? blocks.filter((block) => !block.startsWith("If the button does not work")) : blocks;
+  return email.fallbackAddress ? blocks.filter((block) => !block.startsWith("If the button doesn't work")) : blocks;
 }
 
 describe.each(EMAILS.map((email) => [email.name, email] as const))("%s", (_name, email) => {
@@ -95,11 +87,11 @@ describe.each(EMAILS.map((email) => [email.name, email] as const))("%s", (_name,
   });
 
   it("has exactly the action buttons it should, none for a teammate copy of the brief", () => {
-    const actions = [...email.html.matchAll(/<a [^>]*class="(?:brief-button|ftn-button)"[^>]*href="([^"]+)"/g)].map(
-      (match) => decode(match[1]),
+    const actions = [...email.html.matchAll(/<a [^>]*class="brief-button"[^>]*href="([^"]+)"/g)].map((match) =>
+      decode(match[1]),
     );
-    const href = [...email.html.matchAll(/<a [^>]*href="([^"]+)"[^>]*class="(?:brief-button|ftn-button)"/g)].map(
-      (match) => decode(match[1]),
+    const href = [...email.html.matchAll(/<a [^>]*href="([^"]+)"[^>]*class="brief-button"/g)].map((match) =>
+      decode(match[1]),
     );
     expect([...actions, ...href]).toEqual([...email.links]);
   });

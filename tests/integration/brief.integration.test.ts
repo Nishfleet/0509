@@ -196,6 +196,37 @@ async function seedHiring(): Promise<{ workspaceId: string; hiredEntity: string 
   return { workspaceId, hiredEntity };
 }
 
+describe("the brief's read-first marks carry the judged kind, through real D1", () => {
+  it("copies the change_kind choice onto the mark, and null when none was judged", async () => {
+    const { workspaceId, hiredEntity } = await seedHiring();
+    const a =
+      (
+        await env.DB.prepare("SELECT id FROM signal WHERE workspace_id = ? AND title = 'Senior Accountant'")
+          .bind(workspaceId)
+          .first<{ id: string }>()
+      )?.id ?? "";
+    const b =
+      (
+        await env.DB.prepare("SELECT id FROM signal WHERE workspace_id = ? AND title = 'Growth Lead'")
+          .bind(workspaceId)
+          .first<{ id: string }>()
+      )?.id ?? "";
+    await env.DB.prepare(
+      `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, choice, decided_at)
+       VALUES ('jv-kind-1', ?1, 'change_kind', 'kind-hash-1', ?2, ?3, 'pricing', '2026-09-20T00:00:00Z')`,
+    )
+      .bind(workspaceId, a, hiredEntity)
+      .run();
+    const payload = await composeBrief(env.DB, {
+      workspaceId,
+      schedule: { timezone: "UTC", weekday: 1, hour: 8 },
+      week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
+      readThisFirst: { picks: [a, b], judged: 2, unjudged: false },
+    });
+    expect(payload.read_this_first.map((mark) => mark.kind)).toEqual(["pricing", null]);
+  });
+});
+
 describe("new job posts reach the brief's brand line, through real D1", () => {
   it("counts only the week's hiring signals on that brand", async () => {
     const { workspaceId } = await seedHiring();
@@ -442,5 +473,59 @@ describe("rank over time reaches the brief, through real D1", () => {
   it("stays out until there are four weeks of history", async () => {
     const workspaceId = await seedSelf("near", { "2026-08-31T12:00:00.000Z": 1, "2026-09-14T12:00:00.000Z": 3 });
     expect((await compose(workspaceId)).headline_earlier).toBeNull();
+  });
+});
+
+describe("a rival we found reaches the brief, through real D1", () => {
+  const seed = async (tag: string): Promise<string> => {
+    const workspaceId = `ws_rival_${tag}`;
+    const now = "2026-09-21T12:00:00.000Z";
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, 'T', ?2, 1, ?3, ?3)",
+      ).bind(`u_rival_${tag}`, `rival-${tag}@example.test`, now),
+      env.DB.prepare(
+        "INSERT INTO workspace (id, name, owner_user_id, timezone, created_at) VALUES (?1, 'Rival', ?2, 'UTC', ?3)",
+      ).bind(workspaceId, `u_rival_${tag}`, now),
+      env.DB.prepare(
+        "INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES (?1, ?2, 'competitor', ?3, 'Known', 'on', ?4)",
+      ).bind(`ent_known_${tag}`, workspaceId, `known-${tag}.example`, now),
+    ]);
+    return workspaceId;
+  };
+
+  const suggest = (workspaceId: string, row: { id: string; domain: string; p: number; status: string }) =>
+    env.DB.prepare(
+      "INSERT INTO suggestion (id, workspace_id, kind, candidate_domain, candidate_name, verdict_p, verdict_reason, status, created_at) VALUES (?1, ?2, 'add', ?3, ?4, ?5, 'Named alongside you by 3 publishers', ?6, '2026-09-20T00:00:00.000Z')",
+    )
+      .bind(row.id, workspaceId, row.domain, row.domain.split(".")[0], row.p, row.status)
+      .run();
+
+  const compose = (workspaceId: string) =>
+    composeBrief(env.DB, {
+      workspaceId,
+      schedule: { timezone: "UTC", weekday: 1, hour: 8 },
+      week: {
+        startsAt: new Date("2026-09-14T12:00:00.000Z"),
+        closesAt: new Date("2026-09-21T12:00:00.000Z"),
+      },
+      readThisFirst: { picks: [], judged: 0, unjudged: false },
+    });
+
+  it("names the most likely pending rival, and ignores dismissed ones and brands already watched", async () => {
+    const workspaceId = await seed("pick");
+    await suggest(workspaceId, { id: "s1", domain: "low.example", p: 0.8, status: "pending" });
+    await suggest(workspaceId, { id: "s2", domain: "best.example", p: 0.97, status: "pending" });
+    await suggest(workspaceId, { id: "s3", domain: "no.example", p: 0.99, status: "dismissed" });
+    await suggest(workspaceId, { id: "s4", domain: "known-pick.example", p: 0.99, status: "pending" });
+    expect((await compose(workspaceId)).new_rival).toEqual({
+      name: "best",
+      domain: "best.example",
+      reason: "Named alongside you by 3 publishers",
+    });
+  });
+
+  it("is null when nothing is waiting", async () => {
+    expect((await compose(await seed("none"))).new_rival).toBeNull();
   });
 });

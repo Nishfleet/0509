@@ -3,6 +3,7 @@ import { Form, useNavigation } from "react-router";
 
 import { BLOCK_HEADING } from "./page-heading";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 
 function slackSubmitting(navigation: ReturnType<typeof useNavigation>, connected: boolean): boolean {
   if (navigation.state === "idle") return false;
@@ -10,11 +11,13 @@ function slackSubmitting(navigation: ReturnType<typeof useNavigation>, connected
   return navigation.formData?.get("intent") === intent;
 }
 
-function ReconnectNote({ show }: { show: boolean }): ReactElement | null {
+function ReconnectNote({ show, emailAlerts }: { show: boolean; emailAlerts: boolean }): ReactElement | null {
   return show ? (
     <p role="status" className="mt-2 max-w-prose leading-[1.55]" data-testid="slack-reconnect">
-      Slack stopped accepting our posts, so we disconnected it. Paste a new webhook address to reconnect. Your alerts
-      keep arriving by email.
+      Slack stopped accepting our posts, so we disconnected it. Paste a new webhook address to reconnect.{" "}
+      {emailAlerts
+        ? "Your alerts keep arriving by email."
+        : "Price and plan alerts are off, so nothing is sent by email or to Slack. Switch them on above."}
     </p>
   ) : null;
 }
@@ -25,14 +28,13 @@ function WebhookField({ error }: { error: string | null }): ReactElement {
       <label htmlFor="slack-webhook-input" className="font-mono text-meta text-ink-soft uppercase">
         Slack webhook address
       </label>
-      <input
+      <Input
         id="slack-webhook-input"
         name="webhook"
         type="url"
         required
         autoComplete="off"
         placeholder="https://hooks.slack.com/services/…"
-        className="h-11 border border-line px-3"
         aria-invalid={error === null ? undefined : true}
         aria-describedby={error === null ? undefined : "slack-webhook-error"}
       />
@@ -43,10 +45,12 @@ function WebhookField({ error }: { error: string | null }): ReactElement {
 export function SlackAlertsSetting({
   connected,
   revoked,
+  emailAlerts,
   error,
 }: {
   connected: boolean;
   revoked: boolean;
+  emailAlerts: boolean;
   error: string | null;
 }): ReactElement {
   const saving = slackSubmitting(useNavigation(), connected);
@@ -64,7 +68,7 @@ export function SlackAlertsSetting({
           ? "Price and plan changes also post to your Slack channel."
           : "Post price and plan changes to a Slack channel. Make an incoming webhook in Slack and paste its address here."}
       </p>
-      <ReconnectNote show={revoked && !connected} />
+      <ReconnectNote show={revoked && !connected} emailAlerts={emailAlerts} />
       <Form method="post" action="/app/settings" className="mt-4 flex flex-col gap-3">
         <input type="hidden" name="intent" value={connected ? "slack-remove" : "slack-save"} />
         {connected ? null : <WebhookField error={error} />}

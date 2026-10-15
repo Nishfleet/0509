@@ -9,22 +9,22 @@ export const DELIVERY_FAILED_KIND = "delivery_failed";
 export const DLQ_ALERT_PREFIX = "dlq:";
 export const DLQ_INCIDENT_PREFIX = "dlq-incident:";
 export const DLQ_CHANGE_PREFIX = "dlq-change:";
-export const DELIVERY_FAILED_TITLE = "We could not send your brief by email, so it is in the app instead";
+export const DELIVERY_FAILED_TITLE = "We couldn't send your brief by email, so it is in the app instead";
 
 export const DELIVERY_FAILED_BODY =
   "We tried several times and could not deliver this brief by email, so we have stopped trying. Everything in it is below. Your next brief goes out on its usual day.";
 
 export const SELECT_LATEST_ATTEMPT_ERROR = `SELECT error FROM send_attempt WHERE digest_id = ? ORDER BY attempted_at DESC LIMIT 1`;
 
-export const INCIDENT_UNDELIVERED_TITLE = "We could not email you about your site";
+export const INCIDENT_UNDELIVERED_TITLE = "We couldn't email you about your site";
 
 export const INCIDENT_UNDELIVERED_BODY =
   "Your site broke and we tried several times to email you about it, so we have stopped trying. The breakage and every check that followed are on your Alerts page.";
 
-export const CHANGE_UNDELIVERED_TITLE = "We could not email you about a rival change";
+export const CHANGE_UNDELIVERED_TITLE = "We couldn't email you about a competitor change";
 
 export const CHANGE_UNDELIVERED_BODY =
-  "A rival changed price or plan and we tried several times to email you about it, so we have stopped trying. The change is on your Alerts page.";
+  "A competitor changed price or plan and we tried several times to email you about it, so we have stopped trying. The change is on your Alerts page.";
 
 export function deliveryFailedAlert(input: {
   digest_id: string;
@@ -107,6 +107,26 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
     const parsed = parseMessage(item.body);
     if (parsed === null) {
       console.error("send-email-dlq: unparseable message", item.id);
+      item.ack();
+      continue;
+    }
+
+    if ("slack_target_id" in parsed) {
+      captureException(
+        digestDeadLetterError({ message_id: item.id, digest_id: parsed.digest_id, reason: "slack brief gave up" }),
+        { tags: { queue: "send-email-dlq", lane: "slack_brief", digest_id: parsed.digest_id } },
+      );
+      console.error(JSON.stringify({ event: "delivery.slack_brief_dead_lettered", digest_id: parsed.digest_id }));
+      item.ack();
+      continue;
+    }
+
+    if ("target_id" in parsed) {
+      captureException(
+        digestDeadLetterError({ message_id: item.id, digest_id: parsed.digest_id, reason: "teammate send gave up" }),
+        { tags: { queue: "send-email-dlq", lane: "teammates", digest_id: parsed.digest_id } },
+      );
+      console.error(JSON.stringify({ event: "delivery.teammate_dead_lettered", digest_id: parsed.digest_id }));
       item.ack();
       continue;
     }

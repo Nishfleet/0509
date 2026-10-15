@@ -1,13 +1,31 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { createRoutesStub } from "react-router";
+import type { Navigation } from "react-router";
+import type * as ReactRouterModule from "react-router";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OneInput } from "../../app/components/one-input";
+
+const harness = vi.hoisted(() => ({
+  state: "idle" as Navigation["state"],
+  formAction: undefined as string | undefined,
+}));
+
+vi.mock("react-router", async (importOriginal) => {
+  const actual = await importOriginal<typeof ReactRouterModule>();
+  return { ...actual, useNavigation: () => ({ state: harness.state, formAction: harness.formAction }) };
+});
+
+function inRouter(element: ReturnType<typeof createElement>): string {
+  const Stub = createRoutesStub([{ path: "/", Component: () => element }]);
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
+}
 
 const PARENT_COPY = "we couldn't find a website or username in that";
 
 function markup(message?: string): string {
-  return renderToStaticMarkup(
+  return inRouter(
     createElement(OneInput, {
       label: "your website address or social username (like @yourbrand)",
       placeholder: "your website address or social username (like @yourbrand)",
@@ -20,6 +38,25 @@ function markup(message?: string): string {
 }
 
 describe("OneInput", () => {
+  beforeEach(() => {
+    harness.state = "idle";
+    harness.formAction = undefined;
+  });
+
+  it("disables its button and marks the form busy while its own submit is in flight", () => {
+    harness.state = "submitting";
+    harness.formAction = "/onboarding";
+    const html = markup();
+    expect(html).toMatch(/<button\b[^>]*\sdisabled(?:=|\s|>)/);
+    expect(html).toContain('aria-busy="true"');
+  });
+
+  it("stays live when another form is the one submitting", () => {
+    harness.state = "submitting";
+    harness.formAction = "/app/competitors";
+    expect(markup()).not.toMatch(/<button\b[^>]*\sdisabled(?:=|\s|>)/);
+  });
+
   it("posts to the given action and carries the given input attributes", () => {
     const html = markup();
     expect(html).toContain('method="post"');
@@ -62,7 +99,7 @@ describe("OneInput", () => {
   });
 
   it("can GET, require the field, and label the submit with a node", () => {
-    const html = renderToStaticMarkup(
+    const html = inRouter(
       createElement(OneInput, {
         label: "your website address or social username (like @yourbrand)",
         placeholder: "your website address or social username (like @yourbrand)",
@@ -71,14 +108,14 @@ describe("OneInput", () => {
         method: "get",
         required: true,
         maxLength: 200,
-        submitLabel: createElement("span", null, "€10/mo"),
+        submitLabel: createElement("span", null, "€10/month"),
       }),
     );
     expect(html).toContain('method="get"');
     expect(html).toContain('action="/login"');
     expect(html).toContain("required");
     expect(html).toContain('maxLength="200"');
-    expect(html).toContain("€10/mo");
+    expect(html).toContain("€10/month");
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*>/);
   });
 });

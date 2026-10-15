@@ -81,7 +81,7 @@ describe("the daily cap notice", () => {
 
   it("says why the emails stopped and where every change still is", () => {
     const { subject, text } = renderChangeOverflow(OVERFLOW);
-    expect(subject).toBe("More rivals changed price or plan today");
+    expect(subject).toBe("More competitors changed price or plan today");
     expect(text).toContain("5 price or plan emails today");
     expect(text).toContain("Alerts and in your Monday brief");
     expect(text).toContain("Unsubscribe: https://0509.io/u/opaque-token");
@@ -129,7 +129,7 @@ describe("every string field carries the injection probe escaped, never raw (050
 
   it("ends the change with what to do about it, before the link", () => {
     const { text } = renderChange(CTX);
-    const todo = text.indexOf("Worth a look today");
+    const todo = text.indexOf("Compare it with your own pricing.");
     expect(todo).toBeGreaterThan(text.indexOf("After:"));
     expect(todo).toBeLessThan(text.indexOf("See the before and after"));
   });

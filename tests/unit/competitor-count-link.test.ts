@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 
+import { CapRefusal } from "../../app/components/cap-refusal";
 import { CompetitorCount } from "../../app/components/competitor-count";
 
 const draw = (full: boolean) =>
@@ -24,5 +25,16 @@ describe("competitor count", () => {
 
   it("is just the line while there is room", () => {
     expect(draw(false)).not.toContain("See plans");
+  });
+
+  it("renders See plans as a plain link, with no router around it", () => {
+    const count = renderToStaticMarkup(
+      createElement(CompetitorCount, { line: "Watching 5 of 5 competitors.", full: true }),
+    );
+    const refusal = renderToStaticMarkup(
+      createElement(CapRefusal, { result: { message: "Your plan is full.", upgradePlanId: "starter" } }),
+    );
+    expect(count).toContain('href="/pricing"');
+    expect(refusal).toContain('href="/pricing"');
   });
 });

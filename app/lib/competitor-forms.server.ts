@@ -1,27 +1,23 @@
 import { redirect } from "react-router";
 import { z } from "zod";
 
+import type { CompetitorFormErrors } from "./competitor-form-errors";
 import { forgetCompetitor } from "./competitor-forget.server";
 import { saveCompetitorName } from "./competitor-name.server";
+import { saveCompetitorNote } from "./competitor-note.server";
 import { saveCompetitorSite } from "./competitor-site.server";
 import { saveCompetitorYoutube } from "./competitor-youtube.server";
 import { handleCompetitorIntent } from "./competitors.server";
 
 const FORGET_MISMATCH = "That doesn't match the name. Type it exactly as shown.";
 
-export interface CompetitorFormErrors {
-  forgetError: string | null;
-  youtubeError: string | null;
-  siteError: string | null;
-  nameError: string | null;
-  renamed: boolean;
-}
-
 const NO_ERRORS: CompetitorFormErrors = {
   forgetError: null,
   youtubeError: null,
   siteError: null,
   nameError: null,
+  noteError: null,
+  noteSaved: false,
   renamed: false,
 };
 
@@ -31,6 +27,7 @@ const competitorForm = z.object({
   youtube: z.string().default(""),
   site: z.string().default(""),
   name: z.string().default(""),
+  note: z.string().default(""),
 });
 
 async function forget(workspaceId: string, entityId: string, confirm: string): Promise<CompetitorFormErrors> {
@@ -52,6 +49,10 @@ async function editField(workspaceId: string, entityId: string, fields: Fields):
     const saved = await saveCompetitorYoutube(workspaceId, entityId, fields.youtube);
     return { message: null, ...NO_ERRORS, youtubeError: saved.ok ? null : saved.message };
   }
+  if (fields.intent === "note") {
+    const saved = await saveCompetitorNote(workspaceId, entityId, fields.note);
+    return { message: null, ...NO_ERRORS, noteError: saved.ok ? null : saved.message, noteSaved: saved.ok };
+  }
   if (fields.intent === "site") {
     const saved = await saveCompetitorSite(workspaceId, entityId, fields.site);
     return { message: null, ...NO_ERRORS, siteError: saved.ok ? null : saved.message };
@@ -61,7 +62,7 @@ async function editField(workspaceId: string, entityId: string, fields: Fields):
 
 export async function handleCompetitorForm(workspaceId: string, entityId: string, form: FormData): Promise<FormResult> {
   const parsed = competitorForm.safeParse(Object.fromEntries(form));
-  const fields = parsed.success ? parsed.data : { intent: "", confirm: "", youtube: "", site: "", name: "" };
+  const fields = parsed.success ? parsed.data : { intent: "", confirm: "", youtube: "", site: "", name: "", note: "" };
   const { intent } = fields;
   if (intent === "forget") return { message: null, ...(await forget(workspaceId, entityId, fields.confirm)) };
   const edited = await editField(workspaceId, entityId, fields);

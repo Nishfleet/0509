@@ -6,6 +6,7 @@ import { redirect, useFetcher } from "react-router";
 
 import { BrandChip } from "../components/brand-chip";
 import { BrandSwitch, brandSwitchNote } from "../components/brand-switch";
+import { CapRefusal } from "../components/cap-refusal";
 import { CompetitorCount } from "../components/competitor-count";
 import { CompetitorRemoved } from "../components/competitor-removed";
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
@@ -58,7 +59,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<typeof action>();
   const noteId = useId();
   const pending = fetcher.formData?.get("intent");
   const state = pending === "on" || pending === "off" ? pending : competitor.state;
@@ -88,6 +89,7 @@ function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
         <p id={noteId} className={cn("basis-full text-meta text-ink-soft", state === "on" && "sr-only")}>
           {brandSwitchNote(state, competitor.stateChangedAt === null ? null : new Date(competitor.stateChangedAt))}
         </p>
+        <CapRefusal result={fetcher.data} />
       </div>
     </li>
   );
@@ -104,6 +106,12 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       <CompetitorCount line={countLine} full={planFull} />
       {removed ? <CompetitorRemoved /> : null}
       <UpgradeStatus tier={tier} wanted={wanted} />
+      <AddCompetitor
+        message={actionData?.message}
+        upgradePlanId={actionData?.upgradePlanId}
+        returning={actionData?.returning}
+        added={actionData?.added}
+      />
       {competitors.length === 0 ? (
         <div className="mt-8">
           <EmptyState sentence="Add a competitor to see where you stand. We also look for new ones every week." />
@@ -117,12 +125,6 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       )}
       <RetireQuestions questions={questions} />
       <CompetitorMaybes maybes={maybes} />
-      <AddCompetitor
-        message={actionData?.message}
-        upgradePlanId={actionData?.upgradePlanId}
-        returning={actionData?.returning}
-        added={actionData?.added}
-      />
     </main>
   );
 }

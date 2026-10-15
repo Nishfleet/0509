@@ -50,10 +50,10 @@ describe("alert feed reveal button", () => {
     const html = feed(mentions);
 
     expect(html).toMatch(
-      /<button[^>]*data-testid="mentions-show-all"[^>]*aria-expanded="false"[^>]*>\s*Show all, including \d+ we think (?:do|does) not matter\s*<\/button>/,
+      /<button[^>]*data-testid="mentions-show-all"[^>]*aria-expanded="false"[^>]*>\s*Show all, including \d+ we think (?:don|doesn)&#x27;t matter\s*<\/button>/,
     );
     expect(html).not.toMatch(
-      /<button[^>]*data-testid="mentions-show-all"[^>]*>\s*Hide the \d+ we think (?:do|does) not matter/,
+      /<button[^>]*data-testid="mentions-show-all"[^>]*>\s*Hide the \d+ we think (?:don|doesn)&#x27;t matter/,
     );
   });
 
@@ -66,7 +66,7 @@ describe("alert feed reveal button", () => {
   it("uses the singular phrase when exactly one item is held", () => {
     const html = feed(mentionsFromRows([row({ id: "held-one", p: 0.1 }), row({ id: "shown-one", p: 0.9 })], NOW));
     expect(html).toMatch(
-      /<button[^>]*data-testid="mentions-show-all"[^>]*aria-expanded="false"[^>]*>\s*Show all, including 1 we think does not matter\s*<\/button>/,
+      /<button[^>]*data-testid="mentions-show-all"[^>]*aria-expanded="false"[^>]*>\s*Show all, including 1 we think doesn&#x27;t matter\s*<\/button>/,
     );
   });
 
@@ -78,7 +78,7 @@ describe("alert feed reveal button", () => {
       ),
     );
     expect(html).toMatch(
-      /<button[^>]*data-testid="mentions-show-all"[^>]*aria-expanded="false"[^>]*>\s*Show all, including 2 we think do not matter\s*<\/button>/,
+      /<button[^>]*data-testid="mentions-show-all"[^>]*aria-expanded="false"[^>]*>\s*Show all, including 2 we think don&#x27;t matter\s*<\/button>/,
     );
   });
 });

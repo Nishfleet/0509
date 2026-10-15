@@ -163,6 +163,36 @@ describe("handleDlqBatch", () => {
     expect(capturedReasons()[0]).toContain("digest not found");
   });
 
+  it("acks a dead-lettered teammate message without touching the owner's digest or raising an alert", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { env, recorded } = fakeEnv(() => Promise.resolve(null));
+    const { batch, ack, retry } = fakeBatch({ digest_id: "dg_1", target_id: "st_mate" });
+
+    const ids = await handleDlqBatch(env, batch);
+
+    expect(recorded).toEqual([]);
+    expect(ack).toHaveBeenCalledOnce();
+    expect(retry).not.toHaveBeenCalled();
+    expect(ids).toEqual([]);
+    expect(capturedReasons().at(-1)).toContain("teammate send gave up");
+    error.mockRestore();
+  });
+
+  it("acks a dead-lettered Slack brief message without touching the owner's digest or raising an alert", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { env, recorded } = fakeEnv(() => Promise.resolve(null));
+    const { batch, ack, retry } = fakeBatch({ digest_id: "dg_1", slack_target_id: "st_slack" });
+
+    const ids = await handleDlqBatch(env, batch);
+
+    expect(recorded).toEqual([]);
+    expect(ack).toHaveBeenCalledOnce();
+    expect(retry).not.toHaveBeenCalled();
+    expect(ids).toEqual([]);
+    expect(capturedReasons().at(-1)).toContain("slack brief gave up");
+    error.mockRestore();
+  });
+
   it("raises the Sentry error and writes the workspace alert for a dead-lettered incident (0509#5761)", async () => {
     vi.mocked(captureException).mockClear();
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);

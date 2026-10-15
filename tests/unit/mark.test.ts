@@ -118,10 +118,7 @@ function shippedGrounds(): {
   dark: { inkSoft: string; bone: string };
 } {
   const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../app/app.css"), "utf8");
-  // #3984 moved the shipped values onto the canonical DESIGN.md §4 names
-  // (--ink-soft, --bone); --color-* are Tailwind aliases of them. Read the
-  // canonical declaration so this measures the colour the app really serves,
-  // not an alias that could drift.
+
   const ink = [...css.matchAll(/(?:^|[^-])--ink-soft:\s*(#[0-9a-fA-F]{6})/gm)].map((match) => match[1] ?? "");
   const bone = [...css.matchAll(/(?:^|[^-])--bone:\s*(#[0-9a-fA-F]{6})/gm)].map((match) => match[1] ?? "");
   expect(ink).toEqual(["#55524a", "#a9a294", "#a9a294"]);

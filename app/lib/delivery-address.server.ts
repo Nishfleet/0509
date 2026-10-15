@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { sendMessage } from "../../workers/delivery/send";
 import { redactEmailShaped } from "./auth/redact-email-shaped";
 import { looksLikeEmailAddress, normalizeEmailAddress } from "./email-address";
-import { clearSuppression, isAddressSuppressed } from "./data/email_suppression.server";
+import { clearSuppression, isAddressSuppressed, readMailKinds, writeMailKinds } from "./data/email_suppression.server";
 import {
   changeEmailTarget,
   ensureOwnerEmailTarget,
@@ -102,7 +102,7 @@ async function refuseOrResumeSuppressed(
   address: string,
   input: { signInEmail: string; resume: boolean },
 ): Promise<boolean> {
-  if (!(await isAddressSuppressed(address))) return false;
+  if (!(await isAddressSuppressed(address, "brief"))) return false;
   if (!input.resume) return true;
   if (address === normalizeEmailAddress(input.signInEmail)) await clearSuppression(address);
   return false;
@@ -117,6 +117,23 @@ export async function readDeliveryAddress(
   const target = await readEmailTarget(env.DB, workspaceId);
   if (target === null) return { address: signInEmail, verified: true };
   return { address: target.target_value, verified: target.is_verified === 1 };
+}
+
+export async function saveMailKinds(input: {
+  userId: string;
+  signInEmail: string;
+  brief: boolean;
+  alerts: boolean;
+}): Promise<boolean> {
+  const { address, verified } = await readDeliveryAddress(input.userId, input.signInEmail);
+  const normalized = normalizeEmailAddress(address);
+  if (normalized !== normalizeEmailAddress(input.signInEmail)) {
+    const current = await readMailKinds(normalized);
+    if (!verified || (input.brief && !current.brief) || (input.alerts && !current.alerts)) return false;
+  }
+  await writeMailKinds(normalized, { brief: input.brief, alerts: input.alerts });
+  const after = await readMailKinds(normalized);
+  return after.brief === input.brief && after.alerts === input.alerts;
 }
 
 export async function saveDeliveryAddress(input: {
@@ -155,7 +172,7 @@ export async function saveDeliveryAddress(input: {
     return { error: null, suppressed: false };
   }
 
-  if (!(await takeRecipientSlot(address))) return { error: RECIPIENT_CAPPED, suppressed: false };
+  if (!(await takeRecipientSlot(address, new Date()))) return { error: RECIPIENT_CAPPED, suppressed: false };
   const error = await sendVerifyConfirmation(input.email, workspaceId, address);
   return { error, suppressed: false };
 }

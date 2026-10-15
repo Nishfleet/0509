@@ -60,7 +60,7 @@ test("the brief day saves at once and is still there after a reload", async ({ p
   const next = options.find((value) => value !== before);
   expect(next).toBeDefined();
   await day.selectOption(next ?? before);
-  await expect(page.getByText("Brief time saved")).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Brief time saved." })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("combobox", { name: "Day", exact: true })).toHaveValue(next ?? before);
 });
@@ -134,4 +134,23 @@ test("Your plan says how many competitors the plan is watching", async ({ page, 
   await expect(page.locator('[data-slot="plan-usage"]')).toHaveText(
     `Watching 0 of ${String(PLANS[0].limits.competitors)} competitors on your plan.`,
   );
+});
+
+test("a teammate invitation shows as waiting and clears the field", async ({ page, baseURL }, testInfo) => {
+  const invitee = `teammate-${testInfo.project.name}-${String(Date.now())}@example.com`;
+  await signIn(page, baseURL);
+  const field = page.getByLabel("Teammate's email");
+  await field.fill(invitee);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("status").filter({ hasText: "Invitation sent" })).toBeVisible();
+  await expect(page.getByText(invitee)).toBeVisible();
+  await expect(page.getByText("waiting for them to confirm")).toBeVisible();
+  await expect(page.getByLabel("Teammate's email")).toHaveValue("");
+});
+
+test("the Alerts jump on Settings puts the next Tab on the first alert switch", async ({ page, baseURL }) => {
+  await signIn(page, baseURL);
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("link", { name: "Alerts" }).click();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("switch", { name: /Immediate alerts for your own site/ })).toBeFocused();
 });

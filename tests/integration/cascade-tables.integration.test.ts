@@ -54,6 +54,7 @@ describe("workspace cascade coverage", () => {
       "digest",
       "discovery_backlog",
       "entity",
+      "entity_note",
       "incident",
       "incident_notice",
       "jev_verdict",
@@ -69,6 +70,7 @@ describe("workspace cascade coverage", () => {
       "suggestion",
       "user_decision",
       "watch",
+      "workspace_visit",
     ]);
   });
 

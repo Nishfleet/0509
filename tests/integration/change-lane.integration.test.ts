@@ -100,9 +100,23 @@ describe("rival change email lane (0509#6375)", () => {
       unsubscribe_token: string;
     }>();
     expect(sent[0].headers).toEqual({
-      "List-Unsubscribe": `<https://0509.io/u/${token?.unsubscribe_token ?? ""}>`,
+      "List-Unsubscribe": `<https://0509.io/u/${token?.unsubscribe_token ?? ""}?type=alerts>`,
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
     });
+  });
+
+  it("never emails a rival change to a confirmed teammate, only to the owner", async () => {
+    await env.DB.prepare(
+      `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at, role)
+       VALUES ('mate-change', ?, 'chan-email', 'mate@0509.io', 1, '2026-09-23T00:00:02Z', 'teammate')`,
+    )
+      .bind(WS)
+      .run();
+    const sent: EmailMessageBuilder[] = [];
+
+    await deliverChange(envWith(sent), { signal_id: SIGNAL });
+
+    expect(sent.map((mail) => mail.to)).toEqual([TARGET]);
   });
 
   it("never sends more than the cap when consumers race for the last slots", async () => {
@@ -113,7 +127,7 @@ describe("rival change email lane (0509#6375)", () => {
     const results = await Promise.all(ids.map((id) => deliverChange(envWith(sent), { signal_id: id })));
 
     const changeEmails = sent.filter((message) => message.subject.startsWith("Rival changed its pricing page"));
-    const notices = sent.filter((message) => message.subject === "More rivals changed price or plan today");
+    const notices = sent.filter((message) => message.subject === "More competitors changed price or plan today");
     expect(changeEmails).toHaveLength(CHANGE_DAILY_CAP);
     expect(notices).toHaveLength(1);
     expect(results.filter((result) => result.outcome === "sent")).toHaveLength(CHANGE_DAILY_CAP);
@@ -143,7 +157,7 @@ describe("rival change email lane (0509#6375)", () => {
 
     expect(outcomes).toEqual([...Array<string>(CHANGE_DAILY_CAP).fill("sent"), "capped", "capped"]);
     expect(sent).toHaveLength(CHANGE_DAILY_CAP + 1);
-    expect(sent.at(-1)?.subject).toBe("More rivals changed price or plan today");
+    expect(sent.at(-1)?.subject).toBe("More competitors changed price or plan today");
     expect(
       sent.slice(0, CHANGE_DAILY_CAP).every((message) => message.subject.startsWith("Rival changed its pricing page")),
     ).toBe(true);

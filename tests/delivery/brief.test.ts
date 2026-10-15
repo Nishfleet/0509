@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { BRAND_LINES_QUERY, parseBriefPayload, type BriefPayload } from "../../app/lib/brief-payload";
 import { PROBE, URL_PROBE, expectNoHtmlInjection } from "../email-html-injection";
+import { isFirstRanking } from "../../app/lib/brief-subject";
 import { renderBrief } from "../../workers/delivery/brief-template";
 
 const CONTEXT = {
@@ -272,7 +273,9 @@ describe("read this first is D4's, verbatim", () => {
   it("still renders the block when D4 picked nothing", () => {
     const { html, text } = renderBrief(payload({ read_this_first: [] }), CONTEXT);
     expect(html).toContain("Read this first");
-    expect(html).toContain("Nothing needed your attention this week. We keep watching rival sites, ads and mentions.");
+    expect(html).toContain(
+      "Nothing needed your attention this week. We keep watching competitor sites, ads and mentions.",
+    );
     expect(text).toContain("Read this first");
   });
 });
@@ -287,6 +290,11 @@ describe("screenshots are linked, never inlined", () => {
   it("links the thumbnail through the asset base URL", () => {
     const { html } = renderBrief(payload(), CONTEXT);
     expect(html).toContain('<img src="https://assets.0509.io/captures/ws_1/sig_1/before.png"');
+  });
+
+  it("sets a sans font on the thumbnail so its alt text is not default serif when images are off", () => {
+    const { html } = renderBrief(payload(), CONTEXT);
+    expect(html).toMatch(/<img [^>]*alt="Screenshot of the change"[^>]*style="[^"]*font-family:-apple-system/);
   });
 
   it("keeps an already percent-encoded key byte-for-byte, never re-encoding it", () => {
@@ -314,7 +322,7 @@ describe("screenshots are linked, never inlined", () => {
   it("refuses a javascript: unsubscribe url the same way", () => {
     const { html } = renderBrief(payload(), { ...CONTEXT, unsubscribe_url: "javascript:alert(1)" });
     expect(html).not.toContain('href="javascript:');
-    expect(html).toContain("Unsubscribe is not available right now");
+    expect(html).toMatch(/Unsubscribe isn(?:'|&#39;)t available right now/);
   });
 
   it("escapes the quote it puts in an attribute, so a url cannot break out of it", () => {
@@ -471,7 +479,8 @@ describe("inline-styled html, and the voice", () => {
     expect(html).toContain(".brief-card{background-color:#1c1a15;color:#f2efe4;}");
     expect(html).toContain(".brief-muted{color:#a9a294;}");
     expect(html).toContain(".brief-page{background-color:#14130f;}");
-    expect(html).toContain('max-width:600px;margin:0 auto;padding:24px;"');
+    expect(html).toContain('width="600"');
+    expect(html).toContain('max-width:600px;margin:0 auto;"');
     expect(html).not.toContain("border-radius");
     expect(html.match(/<style>/g)).toHaveLength(1);
   });
@@ -526,7 +535,7 @@ describe("inline-styled html, and the voice", () => {
     expect(both.html).toContain("<!doctype html>");
     expect(both.html).toContain("<body");
     expect(both.text.length).toBeGreaterThan(0);
-    expect(both.subject).toBe("You're #3 of 8 this week, up 2");
+    expect(both.subject).toBe("Kindred: 3 tiers → 2 tiers (+1 more)");
   });
 
   it("widths the container for a 600 px read", () => {
@@ -657,13 +666,182 @@ describe("inline styles survive the attribute they sit in", () => {
   });
 });
 
-describe("the subject line", () => {
-  it("names the rank when there is one", () => {
-    expect(renderBrief(payload(), CONTEXT).subject).toBe("You're #3 of 8 this week, up 2");
+describe("what to do next", () => {
+  it("adds one fixed line under a mark whose judged kind has a next step, and nothing otherwise", () => {
+    const [first, second] = payload().read_this_first;
+    const withKinds = payload({
+      read_this_first:
+        first && second
+          ? [
+              { ...first, kind: "pricing" },
+              { ...second, kind: "noise" },
+            ]
+          : [],
+    });
+    const { html, text } = renderBrief(withKinds, CONTEXT);
+    expect(text).toContain("Compare it with your own pricing.");
+    expect(html).toContain("Compare it with your own pricing.");
+    expect(text.match(/Compare it with|Decide whether|Check whether/g)).toHaveLength(1);
   });
 
-  it("stays generic when there is no rank", () => {
-    expect(renderBrief(payload({ headline_rank: null }), CONTEXT).subject).toBe("Your weekly brief");
+  const LINES: readonly (readonly [string, string])[] = [
+    ["pricing", "Compare it with your own pricing."],
+    ["offer", "Decide whether your customers will notice it and whether to answer."],
+    ["launch", "Check whether it overlaps with what you are building."],
+    ["removal", "See whether their customers now have a reason to look at you."],
+    ["copy", "Read how they now describe themselves and compare it with how you do."],
+    ["breakage", "Their page looks broken. Worth a look if you compete on reliability."],
+    ["unintended", "This looks accidental. It needs no action unless it stays."],
+  ];
+
+  it.each(LINES)(
+    "a %s mark carries its own line in the email and the plain text, and no other kind's",
+    (kind, line) => {
+      const [first] = payload().read_this_first;
+      const { html, text } = renderBrief(payload({ read_this_first: first ? [{ ...first, kind }] : [] }), CONTEXT);
+      expect(html).toContain(line);
+      expect(text).toContain(line);
+      LINES.filter(([other]) => other !== kind).forEach(([, otherLine]) => {
+        expect(html).not.toContain(otherLine);
+        expect(text).not.toContain(otherLine);
+      });
+    },
+  );
+
+  it("says nothing about a mark with no kind, as in briefs composed before this existed", () => {
+    expect(renderBrief(payload(), CONTEXT).text).not.toMatch(/Compare it with|Decide whether|Check whether/);
+  });
+});
+
+describe("an unjudged week", () => {
+  it("says so and points to Alerts for what we have seen", () => {
+    const { html, text } = renderBrief(payload({ is_unjudged: true, read_this_first: [] }), CONTEXT);
+    expect(text).toContain("The changes we have seen so far are in Alerts.");
+    expect(text).toContain("Open Alerts: https://0509.io/app/alerts");
+    expect(html).toContain('href="https://0509.io/app/alerts">Open Alerts</a>');
+  });
+});
+
+describe("the subject line", () => {
+  it("calls it a first ranking only when no brand is new to an existing ranking", () => {
+    const first = payload({
+      headline_movement: null,
+      brands: payload().brands.map((brand) => ({ ...brand, movement: null, is_new: false })),
+    });
+    expect(isFirstRanking(first)).toBe(true);
+    const later = payload({
+      headline_movement: null,
+      brands: first.brands.map((brand) => ({ ...brand, is_new: true })),
+    });
+    expect(isFirstRanking(later)).toBe(false);
+  });
+
+  it("is not a first ranking when the workspace has an earlier rank", () => {
+    const withHistory = payload({
+      headline_movement: null,
+      headline_earlier: { rank: 4, weeks: 3 },
+      brands: payload().brands.map((brand) => ({ ...brand, movement: null, is_new: false })),
+    });
+    expect(isFirstRanking(withHistory)).toBe(false);
+  });
+
+  it("never cuts an emoji in half when it shortens competitor wording", () => {
+    const lead = { ...payload().read_this_first[0], before: "😀".repeat(30), after: "😀".repeat(30) };
+    const { subject } = renderBrief(payload({ read_this_first: [lead] }), CONTEXT);
+    expect(subject).not.toMatch(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/);
+  });
+
+  it("falls back to the title when one side of the wording is empty", () => {
+    const lead = { ...payload().read_this_first[0], before: "", after: "2 tiers", title: "Pricing page changed" };
+    expect(renderBrief(payload({ read_this_first: [lead] }), CONTEXT).subject).toBe("Kindred: Pricing page changed");
+  });
+
+  it("never puts a bare link in the subject, and keeps a flag emoji whole", () => {
+    const lead = {
+      ...payload().read_this_first[0],
+      before: "https://a.example/x",
+      after: "2 tiers",
+      title: "Pricing changed",
+    };
+    expect(renderBrief(payload({ read_this_first: [lead] }), CONTEXT).subject).toBe("Kindred: Pricing changed");
+    const flags = { ...payload().read_this_first[0], before: "🇮🇳".repeat(30), after: "x" };
+    const { subject } = renderBrief(payload({ read_this_first: [flags] }), CONTEXT);
+    expect(subject.replace(/…$/, "").match(/🇮🇳/g)?.length).toBeGreaterThan(0);
+    expect(subject).not.toMatch(/🇮(?!🇳)/);
+  });
+
+  it("says one competitor moves, not one competitors", () => {
+    const lead = { ...payload().read_this_first[0], entity_name: "", before: null, after: null, title: "" };
+    expect(renderBrief(payload({ read_this_first: [lead] }), CONTEXT).subject).toBe("1 competitor moves this week");
+  });
+
+  it("names the top rival move with its before and after", () => {
+    expect(renderBrief(payload(), CONTEXT).subject).toBe("Kindred: 3 tiers → 2 tiers (+1 more)");
+  });
+
+  it("falls back to the title, then to a plain statement, never a URL", () => {
+    const [lead, ...rest] = payload().read_this_first;
+    const withTitle = payload({ read_this_first: lead ? [{ ...lead, before: null, after: null }] : [] });
+    expect(renderBrief(withTitle, CONTEXT).subject).toBe("Kindred: Pricing page rewritten");
+    const urlTitle = payload({
+      read_this_first: lead ? [{ ...lead, before: null, after: null, title: "https://kindred.example/p" }] : [],
+    });
+    expect(renderBrief(urlTitle, CONTEXT).subject).toBe("Kindred made a move");
+    expect(rest.length).toBeGreaterThan(0);
+  });
+
+  it("stays under 78 characters however long the words are", () => {
+    const [lead] = payload().read_this_first;
+    const long = "word ".repeat(40);
+    const subject = renderBrief(
+      payload({ read_this_first: lead ? [{ ...lead, before: long, after: long, entity_name: long }] : [] }),
+      CONTEXT,
+    ).subject;
+    expect(subject.length).toBeLessThanOrEqual(78);
+  });
+
+  it("is honest on a quiet week and keeps the rank for context", () => {
+    const quiet = payload({ read_this_first: [], is_quiet_week: true });
+    expect(renderBrief(quiet, CONTEXT).subject).toBe("Quiet week: you're #3 of 8");
+    expect(renderBrief({ ...quiet, headline_rank: null }, CONTEXT).subject).toBe(
+      "Quiet week: nothing needed your attention",
+    );
+  });
+
+  it("does not call a week quiet when other activity filled it", () => {
+    const busy = payload({ read_this_first: [], is_quiet_week: false });
+    expect(renderBrief(busy, CONTEXT).subject).toBe("Your weekly brief");
+  });
+
+  it("calls the first brief a first ranking, not a quiet week, and drops 'no last week' from every line", () => {
+    const base = payload({ read_this_first: [], is_quiet_week: true, headline_movement: null, headline_is_new: false });
+    const first = {
+      ...base,
+      brands: base.brands.map((brand) => ({ ...brand, movement: null, is_new: false })),
+    };
+    const { subject, text } = renderBrief(first, CONTEXT);
+    expect(subject).toBe("Your first ranking: you're #3 of 8");
+    expect(text).toContain("You're #3 of 8 this week — your first ranking");
+    expect(text).not.toContain("no last week to compare");
+    expect(text).toContain("Kindred — #1\n");
+  });
+
+  it("promises nothing about timing and never shouts", () => {
+    const { subject } = renderBrief(payload(), CONTEXT);
+    expect(subject).not.toMatch(/[!]|breaking|now|today|just/i);
+  });
+
+  it("uses the top reason as the preheader and offers one link to the brief", () => {
+    const { html, text } = renderBrief(payload(), { ...CONTEXT, open_url: "https://0509.io/app/brief" });
+    expect(html).toContain("A competitor dropping a tier before launch week is the move.");
+    expect(html).toContain('href="https://0509.io/app/brief">See every change in your brief</a>');
+    expect(text).toContain("See every change in your brief: https://0509.io/app/brief");
+  });
+
+  it("offers no link to the brief to a copy that has no account to open it", () => {
+    const { html, text } = renderBrief(payload(), { ...CONTEXT, teammate: true });
+    expect(html).not.toContain("See every change in your brief");
+    expect(text).not.toContain("See every change in your brief");
   });
 });
 
@@ -781,9 +959,9 @@ describe("every string field carries the injection probe escaped, never raw (050
 });
 
 describe("inbox preview and the Settings link (Mobbin benchmark)", () => {
-  it("hides the why line as the preview text under the opening tag, before the wordmark", () => {
+  it("hides the top reason as the preview text under the opening tag, before the wordmark", () => {
     const { html } = renderBrief(payload(), CONTEXT);
-    const preview = html.indexOf("Kindred is the mover");
+    const preview = html.indexOf("A competitor dropping a tier");
 
     expect(html).toContain("display:none");
     expect(preview).toBeGreaterThan(html.indexOf("<body"));
@@ -795,6 +973,17 @@ describe("inbox preview and the Settings link (Mobbin benchmark)", () => {
 
     expect(html).toContain('href="https://0509.io/app/settings"');
     expect(text).toContain("Choose when your brief arrives in Settings: https://0509.io/app/settings");
+  });
+
+  it("leaves the Settings link out of a teammate's copy, which keeps its unsubscribe link", () => {
+    const { html, text } = renderBrief(payload(), { ...CONTEXT, teammate: true });
+
+    expect(html).not.toContain("/app/settings");
+    expect(text).not.toContain("Settings");
+    expect(text).toContain(
+      "Next brief: Mon 28 Sept, 08:00\nYou get this because you are a member of a Five to Nine workspace.\nUnsubscribe: https://0509.io/u/opaque-token",
+    );
+    expect(html).toContain("Unsubscribe");
   });
 });
 
@@ -839,6 +1028,46 @@ describe("the rank-over-time line", () => {
   ])("is left out of the email for %s, as it is in the app", (_name, change) => {
     const { text } = renderBrief(payload({ headline_earlier: { rank: 5, weeks: 6 }, ...change }), CONTEXT);
     expect(text).not.toContain("Up from");
+  });
+});
+
+describe("the rival-you-may-be-missing block", () => {
+  const rival = { name: "Northwind", domain: "northwind.example", reason: "Named alongside you by 3 publishers" };
+
+  it("names the rival, why, and where to review it, in html and text", () => {
+    const { html, text } = renderBrief(payload({ new_rival: rival }), CONTEXT);
+    for (const out of [html, text]) {
+      expect(out).toContain("A competitor you may be missing");
+      expect(out).toContain("Northwind (northwind.example) may be a competitor you are missing.");
+      expect(out).toContain("Named alongside you by 3 publishers");
+      expect(out).toContain("https://0509.io/app/competitors");
+    }
+  });
+
+  it("names the competitor in a teammate's copy without a link to the sign-in wall", () => {
+    const { html, text } = renderBrief(payload({ new_rival: rival }), { ...CONTEXT, teammate: true });
+    for (const out of [html, text]) {
+      expect(out).toContain("Northwind (northwind.example) may be a competitor you are missing.");
+      expect(out).not.toContain("https://0509.io/app/competitors");
+    }
+  });
+
+  it.each([
+    ["none found", null],
+    ["a digest saved before it existed", undefined],
+  ])("is left out for %s", (_name, none) => {
+    const { html, text } = renderBrief(payload({ new_rival: none }), CONTEXT);
+    expect(html).not.toContain("may be missing");
+    expect(text).not.toContain("may be missing");
+  });
+
+  it("escapes what the rival is called", () => {
+    const { html } = renderBrief(
+      payload({ new_rival: { name: "<b>x</b>", domain: "x.example", reason: null } }),
+      CONTEXT,
+    );
+    expect(html).not.toContain("<b>x</b>");
+    expect(html).toContain("&lt;b&gt;x&lt;/b&gt;");
   });
 });
 

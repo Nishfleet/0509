@@ -6,13 +6,6 @@ import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 import { z } from "zod";
 
-// Nish asked to adopt shadcn's DESIGN.md skill (2026-10-09). The skill reads
-// the YAML frontmatter of DESIGN.md (colors, typography, rounded) and writes
-// theme CSS from it, while the app reads the @theme block of app/app.css.
-// Two sources for one set of tokens drift silently, so this test fails when a
-// mapped token differs in either file, or exists in one and not the other.
-// Dark-mode values, ease, duration and the shadcn role aliases have no schema
-// key and are not mapped; the PR that added this test lists them.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const Frontmatter = z.object({

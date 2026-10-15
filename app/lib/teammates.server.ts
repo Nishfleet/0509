@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 
 import { isAddressSuppressed } from "./data/email_suppression.server";
+import { readDiscoveryContext } from "./data/entity.server";
 import { addTeammate, listTeammates, removeTeammate } from "./data/send_target.server";
 import { readWorkspaceIdForOwner } from "./data/workspace.server";
 import { sendTeammateInvite } from "./delivery-address.server";
@@ -8,14 +9,70 @@ import { looksLikeEmailAddress, normalizeEmailAddress } from "./email-address";
 import { RECIPIENT_CAPPED, takeRecipientSlot } from "./recipient-cap.server";
 import { MAX_TEAMMATES } from "./teammate-limit";
 
+const INVITES_PER_DAY = 4;
+const INVITE_COUNTER_TTL_SECONDS = 2 * 24 * 60 * 60;
 const INVALID = "Enter an email address, like colleague@company.com.";
 const NO_WORKSPACE = "Finish setting up first, then add a teammate.";
 const RATE_LIMITED = "Too many invitations. Wait a minute, then try again.";
-const CANT_ADD = `We can't add that address. You can add up to ${String(MAX_TEAMMATES)} teammates, each address only once.`;
+const DAILY_LIMIT = "You have sent a lot of invitations today. Try again tomorrow.";
+const OWN_ADDRESS = "That's the address you sign in with. Enter a teammate's address instead.";
+const ALREADY_ADDED = "That address is already on your list.";
+const NO_SPOT = `You can have up to ${String(MAX_TEAMMATES)} teammates. Remove one to add another.`;
 
 export async function readTeammates(workspaceId: string) {
   const mates = await listTeammates(env.DB, workspaceId);
-  return mates.map((mate) => ({ id: mate.id, address: mate.target_value, confirmed: mate.is_verified === 1 }));
+  return Promise.all(
+    mates.map(async (mate) => ({
+      id: mate.id,
+      address: mate.target_value,
+      confirmed: mate.is_verified === 1,
+      unsubscribed: mate.is_verified === 1 && (await isAddressSuppressed(mate.target_value, "brief")),
+    })),
+  );
+}
+
+const inviteKey = (workspaceId: string, now: Date) =>
+  `teammate-invites:${workspaceId}:${now.toISOString().slice(0, 10)}`;
+
+async function invitesUsedToday(workspaceId: string, now: Date): Promise<number> {
+  return Number(await env.IDENTITY_CACHE.get(inviteKey(workspaceId, now))) || 0;
+}
+
+async function countInvite(input: { workspaceId: string; now: Date; used: number }): Promise<void> {
+  const { workspaceId, now, used } = input;
+  await env.IDENTITY_CACHE.put(inviteKey(workspaceId, now), String(used + 1), {
+    expirationTtl: INVITE_COUNTER_TTL_SECONDS,
+  });
+}
+
+const UNKNOWN_INVITER = "A colleague";
+
+async function inviterName(workspaceId: string): Promise<string> {
+  const context = await readDiscoveryContext(workspaceId);
+  const name = context?.self.name.trim() ?? "";
+  return name === "" ? UNKNOWN_INVITER : name;
+}
+
+async function inviteAndCount(input: {
+  email: SendEmail;
+  workspaceId: string;
+  targetId: string;
+  address: string;
+  now: Date;
+  used: number;
+}): Promise<string | null> {
+  const { workspaceId, targetId, address, now, used } = input;
+  const failure = (await isAddressSuppressed(address, "brief"))
+    ? null
+    : await sendTeammateInvite({
+        email: input.email,
+        workspaceId,
+        targetId,
+        address,
+        addedBy: await inviterName(workspaceId),
+      });
+  if (failure === null) await countInvite({ workspaceId, now, used });
+  return failure;
 }
 
 export async function addTeammateByOwner(input: {
@@ -26,16 +83,20 @@ export async function addTeammateByOwner(input: {
 }): Promise<string | null> {
   const address = normalizeEmailAddress(input.address);
   if (!looksLikeEmailAddress(address)) return INVALID;
-  if (address === normalizeEmailAddress(input.signInEmail)) return CANT_ADD;
+  if (address === normalizeEmailAddress(input.signInEmail)) return OWN_ADDRESS;
   const workspaceId = await readWorkspaceIdForOwner(input.userId);
   if (workspaceId === null) return NO_WORKSPACE;
   const { success } = await env.SIGN_IN_EMAIL_LIMIT.limit({ key: `teammate:${workspaceId}` });
   if (!success) return RATE_LIMITED;
-  if (await isAddressSuppressed(address)) return CANT_ADD;
-  if (!(await takeRecipientSlot(address))) return RECIPIENT_CAPPED;
-  const targetId = await addTeammate(env.DB, { workspaceId, address, now: new Date().toISOString() });
-  if (targetId === null) return CANT_ADD;
-  return sendTeammateInvite({ email: input.email, workspaceId, targetId, address, addedBy: input.signInEmail });
+  const current = await listTeammates(env.DB, workspaceId);
+  if (current.some((mate) => mate.target_value === address)) return ALREADY_ADDED;
+  const now = new Date();
+  const used = await invitesUsedToday(workspaceId, now);
+  if (used >= INVITES_PER_DAY) return DAILY_LIMIT;
+  if (!(await takeRecipientSlot(address, now))) return RECIPIENT_CAPPED;
+  const targetId = await addTeammate(env.DB, { workspaceId, address, now: now.toISOString() });
+  if (targetId === null) return NO_SPOT;
+  return inviteAndCount({ ...input, workspaceId, targetId, address, now, used });
 }
 
 export async function removeTeammateByOwner(userId: string, targetId: string): Promise<void> {
