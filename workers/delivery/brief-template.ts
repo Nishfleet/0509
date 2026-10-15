@@ -2,6 +2,7 @@ import { type BriefContext, type BriefPayload, type RenderedBrief } from "../../
 import { COMPETITORS_LINK, newRivalLines, rankTrendLine, sinceStartedLine } from "../../app/lib/brief-since";
 import { escapeHtml } from "../../app/lib/html";
 import { countPhrase } from "../../app/lib/quiet-week";
+import { ledgerSummary } from "../../app/lib/work-ledger";
 import { NOTHING_FIRST_LINE, UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
 import { EYEBROW, FONT, MONO, emailDocument, linkParagraph, postalLine, siteName } from "./email-shell";
 import { SETTINGS_LINK, supportLineHtml, supportLineText } from "./alert-footer";
@@ -335,6 +336,15 @@ function sinceSentence(checked: BriefPayload["checked"]): string {
   return since === null ? "" : ` ${since}.`;
 }
 
+function renderWork(checked: BriefPayload["checked"]): { html: string; text: string[] } {
+  const work = ledgerSummary(checked.ledger, "This week we");
+  if (work === null) return { html: "", text: [] };
+  return {
+    html: `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(work)}</p>`,
+    text: [work],
+  };
+}
+
 function settingsLine(teammate: boolean): { html: string; text: string } {
   if (teammate) return { html: "", text: "" };
   return {
@@ -366,9 +376,11 @@ function renderFooter(
 
   const unsubscribeHref = unsubscribeUrl === null ? null : safeUrl(unsubscribeUrl);
   const postal = postalLine();
+  const work = renderWork(payload.checked);
   const html = [
     `<div class="brief-rule" style="padding:16px 0 0;">`,
     `<p class="brief-muted" style="${EYEBROW}">${escapeHtml(COPY.footerTitle)}</p>`,
+    work.html,
     `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(`${checked}${across}.${degraded}${sinceTail}`)}</p>`,
     `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(nextAt)}</p>`,
     settings.html,
@@ -383,6 +395,7 @@ function renderFooter(
   ].join("");
 
   const text = [
+    ...work.text,
     `${COPY.footerTitle}: ${checked}${across}.${degraded}${sinceTail}`,
     nextAt,
     settings.text,
