@@ -1,5 +1,5 @@
-import { suppressBouncedAddress } from "../../app/lib/data/email_suppression.server";
 import { SUPPORT_ADDRESS } from "../../app/components/footer";
+import { suppressBouncedAddress } from "../../app/lib/data/email_suppression.server";
 
 export interface SendResult {
   outcome: "sent" | "failed";
@@ -33,7 +33,12 @@ export async function sendMessage(email: SendEmail, message: EmailMessageBuilder
     await email.send({ replyTo: SUPPORT_ADDRESS, ...message });
   } catch (end) {
     if (end instanceof Error && "code" in end && end.code === RECIPIENT_SUPPRESSED) {
-      await Promise.all(recipientAddresses(message.to).map(suppressBouncedAddress));
+      const addresses = recipientAddresses(message.to);
+      if (addresses.length === 1) {
+        await suppressBouncedAddress(addresses[0]).catch((failure: unknown) => {
+          console.error({ event: "send.suppression_record_failed", error: errorText(failure) });
+        });
+      }
     }
     return { outcome: "failed", error: errorText(end) };
   }
