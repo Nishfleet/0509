@@ -32,6 +32,6 @@ describe("PIPELINE_SIGNALS importers", () => {
   });
 
   it("is used only by the listed pipeline files", () => {
-    expect(importers.toSorted()).toEqual(Object.keys(PIPELINE_IMPORTERS).toSorted());
+    expect([...importers].sort()).toEqual(Object.keys(PIPELINE_IMPORTERS).sort());
   });
 });
