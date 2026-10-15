@@ -216,7 +216,7 @@ test("a workspace shows the three mention treatments", async ({ page }, testInfo
   await expect(shown).toHaveCount(2);
   await expect(possibly).toHaveCount(1);
   await expect(held).toHaveCount(0);
-  await expect(possibly).toContainText("Possibly. We were not sure this mattered");
+  await expect(possibly).toContainText("Possibly. We weren't sure this mattered");
   await expect(possibly).toContainText(/found \d+ days ago/);
   await expect(page.getByText("News mentions", { exact: true })).toBeVisible();
   await expect(page.getByText("Hacker News mentions", { exact: true })).toBeVisible();

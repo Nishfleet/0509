@@ -160,7 +160,7 @@ describe("Slack alerts setting (0509#6376)", () => {
 
     const outcome = await call({ intent: "slack-save", webhook: HOOK });
 
-    expect(outcome.slackError).toContain("did not accept");
+    expect(outcome.slackError).toContain("didn't accept");
     expect(await readSlackTarget(env.DB, WS)).toBeNull();
   });
 

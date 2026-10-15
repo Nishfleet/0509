@@ -322,7 +322,7 @@ describe("screenshots are linked, never inlined", () => {
   it("refuses a javascript: unsubscribe url the same way", () => {
     const { html } = renderBrief(payload(), { ...CONTEXT, unsubscribe_url: "javascript:alert(1)" });
     expect(html).not.toContain('href="javascript:');
-    expect(html).toContain("Unsubscribe is not available right now");
+    expect(html).toMatch(/Unsubscribe isn(?:'|&#39;)t available right now/);
   });
 
   it("escapes the quote it puts in an attribute, so a url cannot break out of it", () => {

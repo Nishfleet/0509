@@ -163,7 +163,7 @@ describe("the quiet week brief", () => {
       }),
       CONTEXT,
     );
-    expect(text).toContain("We have not been able to reach One of your sources yet");
+    expect(text).toContain("We haven't been able to reach One of your sources yet");
     expect(text).not.toContain("reddit.search");
   });
 

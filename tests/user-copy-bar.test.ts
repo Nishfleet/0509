@@ -6,7 +6,8 @@ import { describe, expect, it } from "vitest";
 
 import { BANNED_PHRASES, EXEMPT_PATHS, TITLE_CASE_LABEL_EXCEPTIONS } from "./user-copy-phrases.js";
 
-const ROOTS = ["app/routes", "app/components", "app/lib", "workers/delivery", "workers/standing"];
+const ROOTS = ["app/routes", "app/components", "app/lib", "workers"];
+const HTML_PAGES = ["public/index.html"];
 const BUTTON_TAGS = new Set(["button", "Button", "a", "Link", "NavLink"]);
 
 function sourceFiles(path: string): string[] {
@@ -17,18 +18,18 @@ function sourceFiles(path: string): string[] {
   });
 }
 
-function stringsIn(file: string, code = readFileSync(file, "utf8")): { text: string; label: boolean }[] {
+function stringsIn(file: string, code = readFileSync(file, "utf8")): { text: string; label: boolean; jsx: boolean }[] {
   const source = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const found: { text: string; label: boolean }[] = [];
+  const found: { text: string; label: boolean; jsx: boolean }[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
-      found.push({ text: node.text, label: false });
+      found.push({ text: node.text, label: false, jsx: false });
     if (ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node))
-      found.push({ text: node.text, label: false });
+      found.push({ text: node.text, label: false, jsx: false });
     if (ts.isJsxText(node) && node.text.trim()) {
       const parent = node.parent;
       const tag = ts.isJsxElement(parent) ? parent.openingElement.tagName.getText() : "";
-      found.push({ text: node.text.replace(/\s+/g, " ").trim(), label: BUTTON_TAGS.has(tag) });
+      found.push({ text: node.text.replace(/\s+/g, " ").trim(), label: BUTTON_TAGS.has(tag), jsx: true });
     }
     ts.forEachChild(node, visit);
   };
@@ -48,10 +49,31 @@ describe("the copy bar", () => {
   it("has none of the banned phrases in what people read", () => {
     const hits = files.flatMap((file) =>
       stringsIn(file).flatMap(({ text }) =>
-        BANNED_PHRASES.filter(({ pattern }) => pattern.test(text)).map(
+        BANNED_PHRASES.filter(({ pattern, within }) => pattern.test(text) && (within?.test(file) ?? true)).map(
           ({ pattern, instead }) => `${file}: ${pattern} in "${text.slice(0, 80)}" (${instead})`,
         ),
       ),
+    );
+    expect(hits).toEqual([]);
+  });
+
+  it("has none of the banned phrases in the static pages", () => {
+    const hits = HTML_PAGES.flatMap((page) =>
+      readFileSync(page, "utf8")
+        .replace(/<(script|style)[\s\S]*?<\/\1>/g, "")
+        .split(/<[^>]+>/)
+        .map((text) => text.trim())
+        .filter((text) => BANNED_PHRASES.some(({ pattern }) => pattern.test(text)))
+        .map((text) => `${page}: "${text.slice(0, 80)}"`),
+    );
+    expect(hits).toEqual([]);
+  });
+
+  it("names things the same way in screen text: competitors, never rivals or weekly reports", () => {
+    const hits = files.flatMap((file) =>
+      stringsIn(file)
+        .filter(({ jsx, text }) => jsx && /\b(rivals?|weekly reports?)\b/i.test(text))
+        .map(({ text }) => `${file}: "${text.slice(0, 80)}"`),
     );
     expect(hits).toEqual([]);
   });
@@ -66,10 +88,14 @@ describe("the copy bar", () => {
   });
 
   it("catches what it is meant to catch", () => {
-    const sample = 'const a = "Oops, it broke!"; const b = <Button>Save Changes</Button>; const c = <p>Click here</p>;';
+    const sample =
+      'const a = "Oops, it broke!"; const b = <Button>Save Changes</Button>; const c = <p>Click here</p>; const d = <p>Add a rival</p>;';
     const strings = stringsIn("sample.tsx", sample);
     const banned = strings.filter(({ text }) => BANNED_PHRASES.some(({ pattern }) => pattern.test(text)));
     expect(banned.map(({ text }) => text)).toEqual(["Oops, it broke!", "Click here"]);
+    expect(strings.filter(({ jsx, text }) => jsx && /\brivals?\b/i.test(text)).map(({ text }) => text)).toEqual([
+      "Add a rival",
+    ]);
     expect(strings.filter(({ label, text }) => label && isTitleCase(text)).map(({ text }) => text)).toEqual([
       "Save Changes",
     ]);

@@ -30,7 +30,7 @@ export function RivalOnePager(props: OnePagerInput): ReactElement {
       {state === "copied" ? <p role="status">Copied. Paste it into Slack, Notion or an email.</p> : null}
       {state === "failed" ? (
         <>
-          <p role="status">Your browser would not let us copy. Select the text below instead.</p>
+          <p role="status">Your browser wouldn't let us copy. Select the text below instead.</p>
           <textarea readOnly rows={10} value={text} aria-label="One-pager text" className="border border-line p-3" />
         </>
       ) : null}

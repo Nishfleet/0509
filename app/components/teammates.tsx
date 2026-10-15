@@ -85,7 +85,7 @@ export function Teammates({ teammates, limit }: { teammates: Teammate[]; limit: 
       <p className="mt-2 max-w-prose leading-[1.55]">
         Up to {limit} teammates get the weekly brief too. They confirm by email first and can unsubscribe themselves.
         Alerts still come only to you, and a teammate only reads the brief: they can't change your plan, billing or
-        rivals.
+        competitors.
       </p>
       {teammates.length === 0 ? null : (
         <ul className="mt-3 max-w-prose">
