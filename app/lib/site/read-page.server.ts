@@ -1,4 +1,4 @@
-import { markPageDeferred, markPageUnreachable, recordPageTransport } from "../data/page.server";
+import { clearPageFailure, markPageDeferred, markPageUnreachable, recordPageFailure, recordPageTransport } from "../data/page.server";
 import type { SiteSweepTarget } from "../data/watch.server";
 import { readOrArchive } from "../fetch/archive.server";
 import type { ReadUrlResult } from "../fetch/transport.server";
@@ -20,6 +20,22 @@ function escalation(
 ): (() => Promise<boolean>) | undefined {
   if (options.browser === false) return undefined;
   return () => takeBrowserEscalation(target.workspaceId, target.entityId, day);
+}
+
+function failureText(read: { reason: string; detail: string }): string {
+  return read.reason === "deferred" ? `deferred: ${read.detail}` : read.reason;
+}
+
+async function recordFailure(input: {
+  target: SiteSweepTarget;
+  live: { reason: string; detail: string };
+  read: ReadUrlResult;
+  now: string;
+  options: ReadPageOptions;
+}): Promise<void> {
+  const { target, live, read, now, options } = input;
+  await recordPageFailure(target.pageId, failureText(live), now);
+  if (!read.ok && read.reason === "deferred" && options.browser !== false) await markPageDeferred(target.pageId, now);
 }
 
 async function rememberTransport(
@@ -47,12 +63,21 @@ function startMode(target: SiteSweepTarget, now: string): "fetch" | "browser" {
   return learnedBrowser(target, now) ? "browser" : "fetch";
 }
 
-async function readLive(target: SiteSweepTarget, now: string, options: ReadPageOptions): Promise<ReadUrlResult> {
+async function readLive(
+  target: SiteSweepTarget,
+  now: string,
+  options: ReadPageOptions,
+): Promise<{ live: ReadUrlResult; read: ReadUrlResult }> {
   const live = await readUrl(target.url, {
     startWith: startMode(target, now),
     mayEscalate: escalation(options, target, now.slice(0, 10)),
   });
-  return readOrArchive(live, { url: target.url, now: new Date(now), allowed: target.entityRole !== "self" });
+  const read = await readOrArchive(live, {
+    url: target.url,
+    now: new Date(now),
+    allowed: target.entityRole !== "self",
+  });
+  return { live, read };
 }
 
 function sharedKey(target: SiteSweepTarget, now: string): SharedReadKey {
@@ -85,16 +110,15 @@ export async function readPage(
   const key = sharedKey(target, now);
   const shared = isRival ? await readSharedPage(key) : null;
   if (shared !== null) {
+    await clearPageFailure(target.pageId);
     await rememberUnlessLearned(target, shared, now);
     return shared;
   }
-  const read = await readLive(target, now, options);
-  if (!read.ok) {
-    if (read.reason === "deferred") await markPageDeferred(target.pageId, now);
-    if (read.reason === "unreachable") await markPageUnreachable(target.pageId);
-    return read;
-  }
-  if (read.fromArchive === true) return read;
+  const { live, read } = await readLive(target, now, options);
+  if (!live.ok) await recordFailure({ target, live, read, now, options });
+  if (!read.ok && read.reason === "unreachable") await markPageUnreachable(target.pageId);
+  if (!read.ok || read.fromArchive === true) return read;
+  await clearPageFailure(target.pageId);
   if (isRival) await keepSharedPageSafely(key, read);
   await rememberUnlessLearned(target, read, now);
   return read;

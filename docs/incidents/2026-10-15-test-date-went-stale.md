@@ -23,3 +23,7 @@ The merge queue run for #7562 failed at 00:16 UTC.
 ## What stops a repeat
 
 Lint: `DEFAULT_CLOCK_PARAMETER` in `eslint.config.js` rejects a parameter that defaults to `new Date()` in `app/` and `workers/`, pinned by `tests/eslint-default-clock-rule.test.ts`. A global fake clock was tried and dropped: it breaks `@date-fns/tz` in 11 test files.
+
+## Sweep for other tests that read the real clock (2026-10-15)
+
+The workers project (1652 tests) was run with `Date` pushed to 20 November 2027. Twelve tests failed; eleven of them were the shifted `Date` disagreeing with workerd's own clock (Workflow ids, R2 and queue stamps), and all six files pass on the real clock. One was real: `teammates.integration.test.ts` expected two teammates added in the same millisecond in a fixed order. It now compares without order. The node project, with the same shift, failed 18 tests, all in time-zone formatting that `@date-fns/tz` breaks under any `Date` replacement, the reason a global fake clock was dropped. No other test depends on the day it runs.

@@ -77,6 +77,7 @@ you.
   Put the reason in the commit message, where it is read at the moment it
   matters. Config files are exempt.
 - **No user data in logs or Sentry.** `no-restricted-syntax` (NO_USER_DATA_IN_LOGS). Source: 0509#5776.
+- **Copy has a bar.** `tests/user-copy-bar.test.ts` scans every string people read (routes, components, `app/lib`, all of `workers/`, `public/index.html`) for the phrases in `tests/user-copy-phrases.ts`, for Title Case button labels and for "rival" in screen text. To ban a phrase, add a line to that file; to exempt a path, add it there with the reason. Source: coordinator ask under Nish's polish goal, 2026-10-15.
 - **Tests never skip, focus or sleep.** A vitest test is never focused or disabled
   (`vitest/no-focused-tests`, `vitest/no-disabled-tests`); an e2e spec is never
   focused or unconditionally skipped, never waits on a fixed sleep and never

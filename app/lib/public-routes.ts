@@ -175,5 +175,5 @@ function llmsWatchesBlock(sources: readonly LlmsTxtSource[], now: number): reado
   if (!degraded) {
     return ["What it watches today:", "", ...lines];
   }
-  return ["What it watches today:", "", "Some sources are not answering today; those lines say so.", "", ...lines];
+  return ["What it watches today:", "", "Some sources aren't answering today; those lines say so.", "", ...lines];
 }

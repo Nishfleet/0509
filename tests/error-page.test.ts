@@ -28,8 +28,8 @@ describe("error page by cause", () => {
     [403, "You can&#x27;t open this page", false],
     [401, "Sign in to continue", false],
     [429, "Too many requests", true],
-    [500, "Something went wrong", true],
-    [503, "Something went wrong", true],
+    [500, "We hit a problem on our side", true],
+    [503, "We hit a problem on our side", true],
   ])("answers a %i with its own words and no raw text", (status, title, retry) => {
     const html = page(response(status), true, "/app/alerts");
     expect(html).toContain(title);
@@ -51,7 +51,7 @@ describe("error page by cause", () => {
 
   it("treats a thrown Error as a problem on our side and offers a retry", () => {
     const html = page(new Error(LEAK), false, "/app");
-    expect(html).toContain("Something went wrong");
+    expect(html).toContain("We hit a problem on our side");
     expect(html).toContain("Try again");
     expect(html).not.toContain(LEAK);
   });
@@ -114,8 +114,8 @@ describe("error page", () => {
     const error = context.errors?.root;
     expect(error).toBeInstanceOf(Error);
     const html = page(error, false, "/blow-up");
-    expect(html).toContain("Something went wrong");
-    expect(html).toContain("we have been alerted");
+    expect(html).toContain("We hit a problem on our side");
+    expect(html).toContain("We have been alerted");
     expect(html).not.toContain(LEAK);
     expect(html).not.toContain("<pre");
     expect(html).toContain('href="/"');
@@ -128,7 +128,7 @@ describe("error page", () => {
   it("treats a non-404 route error as the problem page", () => {
     const error = { status: 500, statusText: LEAK, internal: false, data: LEAK };
     const html = page(error, false, "/app");
-    expect(html).toContain("Something went wrong");
+    expect(html).toContain("We hit a problem on our side");
     expect(html).not.toContain(LEAK);
     expect(html).not.toContain("404");
   });

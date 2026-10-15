@@ -322,7 +322,7 @@ describe("screenshots are linked, never inlined", () => {
   it("refuses a javascript: unsubscribe url the same way", () => {
     const { html } = renderBrief(payload(), { ...CONTEXT, unsubscribe_url: "javascript:alert(1)" });
     expect(html).not.toContain('href="javascript:');
-    expect(html).toContain("Unsubscribe is not available right now");
+    expect(html).toMatch(/Unsubscribe isn(?:'|&#39;)t available right now/);
   });
 
   it("escapes the quote it puts in an attribute, so a url cannot break out of it", () => {
@@ -683,6 +683,30 @@ describe("what to do next", () => {
     expect(html).toContain("Compare it with your own pricing.");
     expect(text.match(/Compare it with|Decide whether|Check whether/g)).toHaveLength(1);
   });
+
+  const LINES: readonly (readonly [string, string])[] = [
+    ["pricing", "Compare it with your own pricing."],
+    ["offer", "Decide whether your customers will notice it and whether to answer."],
+    ["launch", "Check whether it overlaps with what you are building."],
+    ["removal", "See whether their customers now have a reason to look at you."],
+    ["copy", "Read how they now describe themselves and compare it with how you do."],
+    ["breakage", "Their page looks broken. Worth a look if you compete on reliability."],
+    ["unintended", "This looks accidental. It needs no action unless it stays."],
+  ];
+
+  it.each(LINES)(
+    "a %s mark carries its own line in the email and the plain text, and no other kind's",
+    (kind, line) => {
+      const [first] = payload().read_this_first;
+      const { html, text } = renderBrief(payload({ read_this_first: first ? [{ ...first, kind }] : [] }), CONTEXT);
+      expect(html).toContain(line);
+      expect(text).toContain(line);
+      LINES.filter(([other]) => other !== kind).forEach(([, otherLine]) => {
+        expect(html).not.toContain(otherLine);
+        expect(text).not.toContain(otherLine);
+      });
+    },
+  );
 
   it("says nothing about a mark with no kind, as in briefs composed before this existed", () => {
     expect(renderBrief(payload(), CONTEXT).text).not.toMatch(/Compare it with|Decide whether|Check whether/);
