@@ -3,8 +3,8 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 
 import type { OwnSitePage } from "../../app/lib/data/page.server";
 import type { OwnSiteHealth } from "../../app/lib/site/own-site.server";
+import { breakageRepaired } from "../../app/lib/site/judge.server";
 import {
-  breakageRepaired,
   closeOwnSiteIncident,
   openOwnSiteIncident,
   planOwnSiteCheck,
@@ -73,7 +73,7 @@ function findRecovered(step: WorkflowStep, plan: OwnSitePlan, probed: readonly P
     if (!Object.hasOwn(plan.breakage, page.pageId)) return [...previous, incidentId];
     const label = `verify ${incidentId}`;
     const repaired = await settle(label, () =>
-      step.do(label, RETRY, () => breakageRepaired(page.url, plan.breakage[page.pageId] ?? null)),
+      step.do(label, RETRY, () => breakageRepaired(page, plan.breakage[page.pageId] ?? null)),
     );
     return repaired === true ? [...previous, incidentId] : previous;
   }, Promise.resolve([]));

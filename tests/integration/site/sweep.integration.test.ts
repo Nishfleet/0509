@@ -743,7 +743,9 @@ describe("nightly site sweep", () => {
       expect(filed.signals).toEqual([{ aspect: "breakage", summary: null }]);
       expect(filed.incidents).toEqual([{ id: expect.any(String), kind: "breakage", closed_at: null }]);
       const incidentId = filed.incidents[0]?.id;
-      expect(filed.alerts).toEqual([{ incident_id: incidentId, severity: "high", body: null }]);
+      expect(filed.alerts).toEqual([
+        { incident_id: incidentId, severity: "high", body: expect.stringContaining("status 200") },
+      ]);
       expect(send).toHaveBeenCalledTimes(1);
       expect(send).toHaveBeenCalledWith({ incident_id: incidentId });
       const unlinked = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE signal_id IS NULL").first<{
@@ -778,7 +780,9 @@ describe("nightly site sweep", () => {
 
       const filed = await rows();
       expect(filed.incidents).toHaveLength(1);
-      expect(filed.alerts).toEqual([{ incident_id: filed.incidents[0]?.id, severity: "normal", body: null }]);
+      expect(filed.alerts).toEqual([
+        { incident_id: filed.incidents[0]?.id, severity: "normal", body: expect.stringContaining("status 200") },
+      ]);
       expect(send).not.toHaveBeenCalled();
     });
 

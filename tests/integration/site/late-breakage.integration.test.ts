@@ -36,7 +36,7 @@ async function seedPlainChange(observedAt: string): Promise<void> {
   await env.SNAPSHOTS.put("snapshot/site/late/before.txt", "Plans from $29 a month for teams with a named manager.");
   await env.SNAPSHOTS.put("snapshot/site/late/after.txt", "Error");
   const payload = {
-    page: { role: "home", url: "https://late.example/" },
+    page: { role: "home", url: "https://late-brand.com/" },
     before: { snapshotId: "a", textKey: "snapshot/site/late/before.txt", screenshotKey: null },
     after: { snapshotId: "b", textKey: "snapshot/site/late/after.txt", screenshotKey: null },
     diffKey: null,
@@ -52,17 +52,17 @@ async function seedPlainChange(observedAt: string): Promise<void> {
       `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES ('ws-late', 'late', 'user-late', 'UTC', 1, 8, ?1)`,
     ).bind(NOW),
     env.DB.prepare(
-      `INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES ('ent-late', 'ws-late', 'self', 'late.example', 'Late', 'on', ?1)`,
+      `INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES ('ent-late', 'ws-late', 'self', 'late-brand.com', 'Late', 'on', ?1)`,
     ).bind(NOW),
     env.DB.prepare(
-      `INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('page-late', 'ent-late', 'https://late.example/', 'home', ?1)`,
+      `INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('page-late', 'ent-late', 'https://late-brand.com/', 'home', ?1)`,
     ).bind(NOW),
     env.DB.prepare(
-      `INSERT INTO watch (id, entity_id, source_id, target_key, is_active) VALUES ('watch-late', 'ent-late', 'src_site_web', 'https://late.example/', 1)`,
+      `INSERT INTO watch (id, entity_id, source_id, target_key, is_active) VALUES ('watch-late', 'ent-late', 'src_site_web', 'https://late-brand.com/', 1)`,
     ),
     env.DB.prepare(
       `INSERT INTO signal (id, workspace_id, entity_id, source_id, watch_id, kind, aspect, url, payload_json, dedup_key, observed_at)
-       VALUES ('sig-late', 'ws-late', 'ent-late', 'src_site_web', 'watch-late', 'change', 'home', 'https://late.example/', ?1, 'dedup-late', ?2)`,
+       VALUES ('sig-late', 'ws-late', 'ent-late', 'src_site_web', 'watch-late', 'change', 'home', 'https://late-brand.com/', ?1, 'dedup-late', ?2)`,
     ).bind(JSON.stringify(payload), observedAt),
   ]);
 }
@@ -91,6 +91,7 @@ describe("a breakage judged after the sweep (0509#7337)", () => {
     breakageP = 0.8;
     jevDown = false;
     installJev();
+    vi.stubGlobal("fetch", () => Promise.reject(new Error("offline")));
     send = vi.spyOn(workerEnv.SEND_EMAIL, "send").mockResolvedValue({
       metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
     });
@@ -98,6 +99,7 @@ describe("a breakage judged after the sweep (0509#7337)", () => {
 
   afterEach(() => {
     send.mockRestore();
+    vi.unstubAllGlobals();
     Reflect.deleteProperty(env, "AI");
   });
 
@@ -120,6 +122,22 @@ describe("a breakage judged after the sweep (0509#7337)", () => {
     }>();
     expect(send).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledWith({ incident_id: incident?.id });
+  });
+
+  it("opens nothing when a fresh read of the page shows it has recovered", async () => {
+    await seedPlainChange(NOW);
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) =>
+      Promise.resolve(
+        String(input instanceof Request ? input.url : input).endsWith("/robots.txt")
+          ? new Response("", { status: 404 })
+          : new Response("<html><body><p>Plans from $29 a month for teams with a named manager.</p></body></html>"),
+      ),
+    );
+
+    expect(await rejudgeUnjudgedChanges(WINDOW)).toBe(1);
+
+    expect(await incidents()).toEqual({ n: 0 });
+    expect(send).not.toHaveBeenCalled();
   });
 
   it("opens an in-app incident without an email for the check band, as the sweep path does", async () => {
