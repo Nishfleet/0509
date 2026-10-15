@@ -395,7 +395,7 @@ function breakageStatements(
       signalId: ids.signal,
       incidentId: ids.incident,
       severity: filing.band === "alert" ? "high" : "normal",
-      title: `${subject.domain} looks broken: breakage`,
+      title: `${subject.domain} looks broken`,
       body: breakageProof(change.evidence),
       createdAt: now,
     }),

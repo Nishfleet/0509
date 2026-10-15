@@ -34,7 +34,7 @@ export async function openLateBreakage(
       signalId: row.id,
       incidentId,
       severity: band === "alert" ? "high" : "normal",
-      title: `${row.entityDomain} looks broken: breakage`,
+      title: `${row.entityDomain} looks broken`,
       body: breakageProof(evidence),
       createdAt: at,
     }),
