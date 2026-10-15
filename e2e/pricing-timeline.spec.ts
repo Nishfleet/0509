@@ -60,8 +60,16 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
     putDiff(diffKey, price.from, price.to);
     const payload = {
       page: { role: "pricing", url },
-      before: { snapshotId: `snap-b-${n}-${suffix}`, screenshotKey: null },
-      after: { snapshotId: `snap-a-${n}-${suffix}`, screenshotKey: null },
+      before: {
+        snapshotId: `snap-b-${n}-${suffix}`,
+        screenshotKey: null,
+        textKey: `snapshot/site/${suffix}-${n}/before.txt`,
+      },
+      after: {
+        snapshotId: `snap-a-${n}-${suffix}`,
+        screenshotKey: null,
+        textKey: `snapshot/site/${suffix}-${n}/after.txt`,
+      },
       diffKey,
       wordsAdded: 1,
       wordsRemoved: 1,
@@ -79,6 +87,17 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
       JSON.stringify(payload),
       `dedup-price-${n}-${suffix}`,
       seen,
+      seen,
+    );
+    run(
+      db,
+      `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, reason, decided_at)
+       VALUES (?, ?, 'noteworthy_change', ?, ?, ?, 0.95, 'A price rise on the pricing page.', ?)`,
+      `verdict-price-${n}-${suffix}`,
+      workspaceId,
+      `hash-verdict-price-${n}-${suffix}`,
+      `sig-price-${n}-${suffix}`,
+      entityId,
       seen,
     );
   });

@@ -155,8 +155,8 @@ function seedRankedHome({ db, suffix, userId }: { db: DatabaseSync; suffix: stri
   run(
     db,
     `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, dedup_key, observed_at, is_tombstoned, title, summary, url, evidence_url, payload_json) VALUES
-       (?1, ?2, ?3, 'src_site_web', 'change', 'home', ?4, ?5, 0, 'Pricing page rewrote its hero', NULL, 'https://kindred.example/pricing', NULL, '{}'),
-       (?6, ?2, ?3, 'src_site_web', 'change', 'home', ?7, ?8, 0, NULL, 'Docs link added to the nav', NULL, NULL, '{}')`,
+       (?1, ?2, ?3, 'src_site_web', 'change', 'home', ?4, ?5, 0, 'Pricing page rewrote its hero', NULL, 'https://kindred.example/pricing', NULL, '{"before":{"textKey":"before.txt"},"after":{"textKey":"after.txt"}}'),
+       (?6, ?2, ?3, 'src_site_web', 'change', 'home', ?7, ?8, 0, NULL, 'Docs link added to the nav', NULL, NULL, '{"before":{"textKey":"before.txt"},"after":{"textKey":"after.txt"}}')`,
     `sig_ev_1-${suffix}`,
     workspaceId,
     kindredId,
@@ -177,6 +177,24 @@ function seedRankedHome({ db, suffix, userId }: { db: DatabaseSync; suffix: stri
     "2026-09-18T08:00:00.000Z",
     "https://www.reddit.com/r/sysadmin/comments/abc",
     `hash_ev_3-${suffix}`,
+  );
+  run(
+    db,
+    `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at) VALUES
+       (?1, ?2, 'noteworthy_change', ?3, ?4, ?5, 0.95, '2026-09-20T10:05:00.000Z'),
+       (?6, ?2, 'noteworthy_change', ?7, ?8, ?5, 0.95, '2026-09-19T09:05:00.000Z'),
+       (?9, ?2, 'mention_matters', ?10, ?11, ?5, 0.95, '2026-09-18T08:05:00.000Z')`,
+    `jv_ev_1-${suffix}`,
+    workspaceId,
+    `jh_ev_1-${suffix}`,
+    `sig_ev_1-${suffix}`,
+    kindredId,
+    `jv_ev_2-${suffix}`,
+    `jh_ev_2-${suffix}`,
+    `sig_ev_2-${suffix}`,
+    `jv_ev_3-${suffix}`,
+    `jh_ev_3-${suffix}`,
+    `sig_ev_3-${suffix}`,
   );
 }
 
