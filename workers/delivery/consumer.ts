@@ -419,6 +419,9 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
     });
     await postBriefToSlack(env, message.digest_id).catch((cause: unknown) => {
       const kind = cause instanceof Error ? cause.constructor.name : "unknown";
+      captureException(new Error(`slack brief lane failed: ${kind}`), {
+        tags: { lane: "slack_brief", digest_id: message.digest_id },
+      });
       console.error(JSON.stringify({ event: "delivery.slack_brief_failed", kind, digest_id: message.digest_id }));
     });
   }

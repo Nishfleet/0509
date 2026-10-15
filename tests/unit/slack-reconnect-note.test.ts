@@ -19,7 +19,7 @@ function render(emailAlerts: boolean): string {
 }
 
 describe("the Slack reconnect note", () => {
-  it("says plainly that nothing is sent when price and plan alerts are off", () => {
+  it("says plainly that price and plan alerts are not sent when they are off", () => {
     expect(render(false)).toContain("they are not sent by email or to Slack");
   });
 

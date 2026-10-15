@@ -35,6 +35,15 @@ const stubSlack = () => {
   return posts;
 };
 
+const stubSlackStatus = (status: number) => {
+  vi.stubGlobal("fetch", () => Promise.resolve(new Response("no", { status })));
+};
+
+const slackConnected = (id: string) =>
+  env.DB.prepare(`SELECT is_verified FROM send_target WHERE workspace_id = ? AND id <> 't-email'`)
+    .bind(id)
+    .first<{ is_verified: number }>();
+
 const seedDigest = (id: string, kind: string) =>
   env.DB.prepare(
     `INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status, subject, payload_json, sent_at)
@@ -93,5 +102,27 @@ describe("weekly brief also posts to Slack", () => {
     await deliver(envWithEmail(), { digest_id: "d-sb-2" });
 
     expect(posts).toHaveLength(0);
+  });
+
+  it("disconnects Slack when the channel link is revoked, and the brief still counts as sent", async () => {
+    stubSlackStatus(404);
+    await saveSlackTarget(env.DB, { workspaceId: WS, webhookUrl: HOOK, now: "2026-09-14T00:00:00Z" });
+    await seedDigest("d-sb-3", "weekly");
+
+    const result = await deliver(envWithEmail(), { digest_id: "d-sb-3" });
+
+    expect(result.outcome).toBe("sent");
+    expect((await slackConnected(WS))?.is_verified).toBe(0);
+  });
+
+  it("keeps Slack connected and still counts the brief as sent when Slack is briefly down", async () => {
+    stubSlackStatus(503);
+    await saveSlackTarget(env.DB, { workspaceId: WS, webhookUrl: HOOK, now: "2026-09-14T00:00:00Z" });
+    await seedDigest("d-sb-4", "weekly");
+
+    const result = await deliver(envWithEmail(), { digest_id: "d-sb-4" });
+
+    expect(result.outcome).toBe("sent");
+    expect((await slackConnected(WS))?.is_verified).toBe(1);
   });
 });

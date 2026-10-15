@@ -421,16 +421,14 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
 
   const subject = briefSubject(payload);
 
-  const block = sectionBlock;
-
   const html = emailDocument(
     subject,
     [
       headline.html,
       ...(open === null ? [] : [linkParagraph(COPY.open, open)]),
-      ...(quiet ? [] : [block(marks.html)]),
-      block(brands.html),
-      block(ownSite.html),
+      ...(quiet ? [] : [sectionBlock(marks.html)]),
+      sectionBlock(brands.html),
+      sectionBlock(ownSite.html),
       newRival.html,
       footer.html,
     ].join(""),
