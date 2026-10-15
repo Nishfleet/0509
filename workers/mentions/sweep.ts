@@ -176,7 +176,7 @@ function judgedStatements(input: {
       p: verdict.p,
       choice: null,
       reason,
-      decidedAt: now,
+      decidedAt: new Date().toISOString(),
     });
   const statements = [verdictRow(verdicts.about, null)];
   if (verdicts.matters === null) return statements;
@@ -192,9 +192,8 @@ function duplicateStatements(input: {
   signalId: string;
   candidateId: string;
   verdict: NoulVerdict;
-  now: string;
 }): D1PreparedStatement[] {
-  const { watch, signalId, candidateId, verdict, now } = input;
+  const { watch, signalId, candidateId, verdict } = input;
   const verdictRow = insertVerdict({
     workspaceId: watch.workspace_id,
     questionId: verdict.questionId,
@@ -204,7 +203,7 @@ function duplicateStatements(input: {
     p: verdict.p,
     choice: null,
     reason: null,
-    decidedAt: now,
+    decidedAt: new Date().toISOString(),
   });
   return noulAction(verdict.p) === "act" ? [verdictRow, markDuplicateOf(signalId, candidateId)] : [verdictRow];
 }
@@ -265,7 +264,7 @@ async function judgeDuplicate(input: {
   });
   try {
     const verdict = await withMentionCall(watch.entity_id, () => askNoul(watch.workspace_id, DUPLICATE_SIGNAL, state));
-    const statements = duplicateStatements({ watch, signalId, candidateId: candidate.id, verdict, now });
+    const statements = duplicateStatements({ watch, signalId, candidateId: candidate.id, verdict });
     return { statements, asked: true, jevDown: false, collapsed: noulAction(verdict.p) === "act" };
   } catch (error) {
     if (!(error instanceof JevUnavailableError)) throw error;
