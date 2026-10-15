@@ -29,6 +29,7 @@ describe("eslint default-clock rule (docs/incidents/2026-10-15-test-date-went-st
 
   it("rejects it under workers/", { timeout: 60_000 }, async () => {
     const result = await lintTextAt(WORKERS_PROBE, flagged["now: Date = new Date()"]);
+    expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(MESSAGE))).toBe(true);
   });
 

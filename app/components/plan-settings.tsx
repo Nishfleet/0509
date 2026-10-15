@@ -40,14 +40,15 @@ export function PlanSection({
   returning?: boolean;
 }) {
   if (plan === null) return null;
-  const retryable = isPlanLapsed(plan, new Date()) || isPaymentFailed(plan);
+  const now = new Date();
+  const retryable = isPlanLapsed(plan, now) || isPaymentFailed(plan);
   const upgrade = nextPlan(plan.tier);
   return (
     <section aria-labelledby="settings-plan" className="mt-10 border-t border-line pt-4">
       <h2 id="settings-plan" className={BLOCK_HEADING}>
         Your plan
       </h2>
-      <p className="mt-2 max-w-prose leading-[1.55]">{planLine(plan, new Date())}</p>
+      <p className="mt-2 max-w-prose leading-[1.55]">{planLine(plan, now)}</p>
       {countLine === null ? null : (
         <p data-slot="plan-usage" className="mt-1 text-body-sm text-ink-soft">
           {countLine}

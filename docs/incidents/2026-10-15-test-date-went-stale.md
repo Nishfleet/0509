@@ -2,7 +2,7 @@
 
 ## What customers saw
 
-Nothing. No customer-facing behaviour changed. Every PR in the merge queue failed `codex-node-checks` and was dequeued, so nothing merged for about 40 minutes.
+Nothing. No customer-facing behaviour changed. Every PR in the merge queue failed `codex-node-checks` and was dequeued, so nothing merged for about an hour.
 
 ## Start and end (UTC)
 
