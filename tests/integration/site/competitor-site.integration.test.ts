@@ -9,6 +9,7 @@ import {
   SITE_WAIT_ERROR,
 } from "../../../app/lib/competitor-site";
 import { saveCompetitorSite } from "../../../app/lib/competitor-site.server";
+import { markPageUnreachable, recordPageTransport } from "../../../app/lib/data/page.server";
 import { readSiteWatchSummary, retireCustomerSites } from "../../../app/lib/data/watch.server";
 
 const NOW = "2026-10-02T02:00:00Z";
@@ -80,6 +81,35 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe("a rival whose site cannot be found", () => {
+  async function homePage(transport: string | null, reason: string | null): Promise<void> {
+    await env.DB.prepare(
+      "INSERT INTO page (id, entity_id, url, role, transport, transport_reason, discovered_at) VALUES ('page-nf-home', ?1, 'https://rival.com/', 'home', ?2, ?3, ?4)",
+    )
+      .bind(RIVAL, transport, reason, NOW)
+      .run();
+  }
+
+  it("says not found once a never-read homepage is marked unreachable, and not blocked", async () => {
+    await homePage(null, null);
+    await markPageUnreachable("page-nf-home");
+    expect(await readSiteWatchSummary(WS, RIVAL)).toMatchObject({ notFound: true, unreadable: false });
+  });
+
+  it("does not call a site not found when it was read before and is only down now", async () => {
+    await homePage("fetch", null);
+    await markPageUnreachable("page-nf-home");
+    expect(await readSiteWatchSummary(WS, RIVAL)).toMatchObject({ notFound: false });
+  });
+
+  it("stops saying not found as soon as a read succeeds", async () => {
+    await homePage(null, null);
+    await markPageUnreachable("page-nf-home");
+    await recordPageTransport({ pageId: "page-nf-home", transport: "fetch", reason: null, testedAt: NOW });
+    expect(await readSiteWatchSummary(WS, RIVAL)).toMatchObject({ notFound: false });
+  });
+});
+
 describe("saveCompetitorSite", () => {
   it("watches a readable site as the rival's website and shows it on the page", async () => {
     stubWeb({ [GROUP]: { status: 200, body: HTML } });
@@ -144,6 +174,7 @@ describe("saveCompetitorSite", () => {
       pages: 0,
       lastPolledAt: null,
       unreadable: false,
+      notFound: false,
       customerSite: null,
     });
     await retireCustomerSites(OTHER_WS, RIVAL, "https://elsewhere.example/");

@@ -188,6 +188,52 @@ describe("handleCompetitorIntent intent=add", () => {
     expect(rows?.n).toBe(0);
   });
 
+  it("asks to check the spelling when the address does not answer, and adds nothing", async () => {
+    const workspaceId = await seedWorkspace();
+    const fetched = vi.fn(() => Promise.reject(new TypeError("fetch failed")));
+    vi.stubGlobal("fetch", fetched);
+
+    expect(await handleCompetitorIntent(workspaceId, addForm("gymshrk.com"))).toEqual({
+      message: "We couldn't reach that address. Check the spelling?",
+      unreachable: true,
+    });
+    expect(fetched.mock.calls.map(([input]) => new URL(String(input)).hostname)).toContain("www.gymshrk.com");
+    const rows = await env.DB.prepare("SELECT COUNT(*) AS n FROM entity WHERE workspace_id = ? AND role = 'competitor'")
+      .bind(workspaceId)
+      .first<{ n: number }>();
+    expect(rows?.n).toBe(0);
+  });
+
+  it("adds an address that does not answer when the customer chooses to add it anyway", async () => {
+    const workspaceId = await seedWorkspace();
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("fetch failed")));
+    const form = addForm("gymshrk.com");
+    form.set("anyway", "1");
+
+    expect(await handleCompetitorIntent(workspaceId, form)).toEqual({ message: null, added: true });
+  });
+
+  it("accepts an address whose apex does not answer but whose www does", async () => {
+    const workspaceId = await seedWorkspace();
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) =>
+      new URL(String(input)).hostname === "www.gymshark.com"
+        ? Promise.resolve(new Response(null, { status: 200 }))
+        : Promise.reject(new TypeError("fetch failed")),
+    );
+
+    expect(await handleCompetitorIntent(workspaceId, addForm("gymshark.com"))).toEqual({ message: null, added: true });
+  });
+
+  it("does not block an address on a slow answer, only on one that cannot be found", async () => {
+    const workspaceId = await seedWorkspace();
+    vi.stubGlobal("fetch", () => Promise.reject(new DOMException("timed out", "TimeoutError")));
+
+    expect(await handleCompetitorIntent(workspaceId, addForm("slow-brand.com"))).toEqual({
+      message: null,
+      added: true,
+    });
+  });
+
   it("refuses to add a domain that is already on the takedown list", async () => {
     const workspaceId = await seedWorkspace();
     await env.DB.prepare(

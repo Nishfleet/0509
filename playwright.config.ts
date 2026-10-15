@@ -148,7 +148,7 @@ export default defineConfig({
         // env.AI.run reaches the account's real Workers AI and bills neurons. The
         // stock AI_SPEND:off var makes every model call refuse before it leaves
         // (app/lib/ai/spend.server.ts, 0509#7191), so the local lane spends nothing.
-        command: `npx wrangler d1 migrations apply 0509 --local </dev/null && npx wrangler dev --env-file .dev.vars.example --port ${localPort} --local --var "BETTER_AUTH_URL:http://127.0.0.1:${localPort}" --var "DODO_PRODUCT_STARTER:pdt_preview_starter" --var "AI_SPEND:off"`,
+        command: `npx wrangler d1 migrations apply 0509 --local </dev/null && npx wrangler dev --env-file .dev.vars.example --port ${localPort} --local --var "BETTER_AUTH_URL:http://127.0.0.1:${localPort}" --var "DODO_PRODUCT_STARTER:pdt_preview_starter" --var "AI_SPEND:off" --var "RIVAL_REACH_CHECK:off"`,
         url: `http://127.0.0.1:${localPort}/api/health`,
         reuseExistingServer: false,
         timeout: 120_000,

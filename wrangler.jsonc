@@ -159,6 +159,10 @@
     // the request paths alike. Any value other than "on" stops spend, and so does
     // leaving it unset or blank: the switch fails closed.
     "AI_SPEND": "on",
+    // The check that a rival address answers before it is added. "off" skips it,
+    // which only the offline local e2e lane sets (playwright.config.ts): workerd
+    // there has no DNS, so every typed address would read as unreachable.
+    "RIVAL_REACH_CHECK": "on",
     // 0509#7191, and the operations follow-up on #7079: the named AI Gateway
     // that carries the product's Jev traffic. Creating it is a dashboard step, so
     // the id stays "default" until it exists and both model call sites read it

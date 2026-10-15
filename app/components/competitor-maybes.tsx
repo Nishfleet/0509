@@ -92,12 +92,29 @@ function useClearedAfterAdd(adding: boolean, message: string | null | undefined)
   return formRef;
 }
 
-function AddNotice({ message, added }: { message: string | null | undefined; added: boolean }): ReactElement | null {
+function AddNotice({
+  message,
+  added,
+  unreachable,
+  adding,
+}: {
+  message: string | null | undefined;
+  added: boolean;
+  unreachable: boolean;
+  adding: boolean;
+}): ReactElement | null {
   if (message) {
     return (
-      <p id="add-competitor-error" role="alert" className="mt-3 text-[0.95rem]">
-        {message}
-      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <p id="add-competitor-error" role="alert" className="text-[0.95rem]">
+          {message}
+        </p>
+        {unreachable ? (
+          <Button type="submit" name="anyway" value="1" variant="tertiary" disabled={adding}>
+            Add it anyway
+          </Button>
+        ) : null}
+      </div>
     );
   }
   if (!added) return null;
@@ -108,16 +125,36 @@ function AddNotice({ message, added }: { message: string | null | undefined; add
   );
 }
 
+function AddInput({ invalid }: { invalid: boolean }): ReactElement {
+  return (
+    <Input
+      id="add-competitor"
+      name="competitor"
+      placeholder="their website address"
+      autoComplete="off"
+      autoCapitalize="none"
+      autoCorrect="off"
+      spellCheck={false}
+      enterKeyHint="go"
+      className="sm:flex-1"
+      aria-invalid={invalid ? true : undefined}
+      aria-describedby={invalid ? "add-competitor-error" : undefined}
+    />
+  );
+}
+
 export function AddCompetitor({
   message,
   upgradePlanId,
   returning,
   added,
+  unreachable,
 }: {
   message: string | null | undefined;
   upgradePlanId?: PlanId | null | undefined;
   returning?: boolean | undefined;
   added?: boolean | undefined;
+  unreachable?: boolean | undefined;
 }): ReactElement {
   const navigation = useNavigation();
   const adding = navigation.state !== "idle" && navigation.formData?.get("intent") === "add";
@@ -130,24 +167,17 @@ export function AddCompetitor({
           Add a competitor we missed
         </label>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-          <Input
-            id="add-competitor"
-            name="competitor"
-            placeholder="their website address"
-            autoComplete="off"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            enterKeyHint="go"
-            className="sm:flex-1"
-            aria-invalid={message ? true : undefined}
-            aria-describedby={message ? "add-competitor-error" : undefined}
-          />
+          <AddInput invalid={Boolean(message)} />
           <Button type="submit" variant="secondary" size="lg" disabled={adding}>
             {adding ? "Adding…" : "Add"}
           </Button>
         </div>
-        <AddNotice message={message} added={added === true && !adding} />
+        <AddNotice
+          message={message}
+          added={added === true && !adding}
+          unreachable={unreachable === true}
+          adding={adding}
+        />
       </Form>
       {upgradePlanId ? <PlanGate planId={upgradePlanId} returning={returning === true} /> : null}
     </div>

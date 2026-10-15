@@ -1,5 +1,7 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
+
+import { NEVER_FOUND_REASON } from "../page-reason";
 import {
   RANKED_PRICING_PAGES,
   resumeWantedPricingWatchesStatement,
@@ -180,6 +182,8 @@ const MARK_LINKS_RETRY = "UPDATE page SET links_retry_at = ?2 WHERE id = ?1";
 
 const MARK_DEFERRED = "UPDATE page SET deferred_at = ?2 WHERE id = ?1";
 
+const MARK_UNREACHABLE = "UPDATE page SET transport_reason = ?2 WHERE id = ?1 AND transport IS NULL";
+
 export async function recordPageTransport(input: {
   pageId: string;
   transport: "fetch" | "browser";
@@ -199,6 +203,10 @@ export async function markLinksRetry(pageId: string, at: string): Promise<void> 
 
 export async function markPageDeferred(pageId: string, at: string): Promise<void> {
   await env.DB.prepare(MARK_DEFERRED).bind(pageId, at).run();
+}
+
+export async function markPageUnreachable(pageId: string): Promise<void> {
+  await env.DB.prepare(MARK_UNREACHABLE).bind(pageId, NEVER_FOUND_REASON).run();
 }
 
 export interface OwnSitePage {

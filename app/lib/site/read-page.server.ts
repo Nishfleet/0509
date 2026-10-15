@@ -1,4 +1,4 @@
-import { markPageDeferred, recordPageTransport } from "../data/page.server";
+import { markPageDeferred, markPageUnreachable, recordPageTransport } from "../data/page.server";
 import type { SiteSweepTarget } from "../data/watch.server";
 import { readOrArchive } from "../fetch/archive.server";
 import type { ReadUrlResult } from "../fetch/transport.server";
@@ -91,6 +91,7 @@ export async function readPage(
   const read = await readLive(target, now, options);
   if (!read.ok) {
     if (read.reason === "deferred") await markPageDeferred(target.pageId, now);
+    if (read.reason === "unreachable") await markPageUnreachable(target.pageId);
     return read;
   }
   if (read.fromArchive === true) return read;

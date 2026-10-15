@@ -23,6 +23,7 @@ export interface CompetitorFrameProps {
   lastChecked: string | null;
   pausedOn: string | null;
   unreadable: boolean;
+  notFound?: boolean;
   rail: Omit<CompetitorRailProps, "lastChecked">;
   sweepClock?: string;
 }
@@ -82,7 +83,7 @@ function BiggestMoveSection({ biggestMove, quiet, changes }: BiggestMoveSectionP
 
 type DevelopmentsSectionProps = Pick<
   CompetitorFrameProps,
-  "changes" | "developments" | "lastChecked" | "pausedOn" | "unreadable" | "sweepClock"
+  "changes" | "developments" | "lastChecked" | "pausedOn" | "unreadable" | "notFound" | "sweepClock"
 >;
 
 function DevelopmentsSection({
@@ -91,6 +92,7 @@ function DevelopmentsSection({
   lastChecked,
   pausedOn,
   unreadable,
+  notFound = false,
   sweepClock,
 }: DevelopmentsSectionProps): ReactElement {
   return (
@@ -103,6 +105,12 @@ function DevelopmentsSection({
           Paused {pausedOn}. We've stopped checking. Turn it back on to pick up where it left off.
         </p>
       )}
+      {notFound ? (
+        <p data-slot="site-not-found" className="border-t border-ink pt-3 text-meta text-ink-soft">
+          We couldn't find their website. Check that the address is spelled right. We'll keep trying, and we're still
+          watching everything else about them.
+        </p>
+      ) : null}
       {unreadable ? (
         <p data-slot="site-unreadable" className="border-t border-ink pt-3 text-meta text-ink-soft">
           We couldn't read their website. It may block automated visits. We'll keep trying, and we're still watching
@@ -112,7 +120,7 @@ function DevelopmentsSection({
       ) : null}
       {developments.length > 0 ? (
         <DevelopmentsFeed items={developments} changes={changes} />
-      ) : unreadable ? null : (
+      ) : unreadable || notFound ? null : (
         <EmptyState sentence={developmentsEmpty(lastChecked, sweepClock)} />
       )}
     </section>
@@ -129,6 +137,7 @@ export function CompetitorFrame({
   lastChecked,
   pausedOn,
   unreadable,
+  notFound = false,
   rail,
   sweepClock = SITE_SWEEP_UTC_LABEL,
 }: CompetitorFrameProps): ReactElement {
@@ -144,10 +153,17 @@ export function CompetitorFrame({
           lastChecked={lastChecked}
           pausedOn={pausedOn}
           unreadable={unreadable}
+          notFound={notFound}
           sweepClock={sweepClock}
         />
       </div>
-      <CompetitorRail {...rail} lastChecked={lastChecked} sweepClock={sweepClock} unreadable={unreadable} />
+      <CompetitorRail
+        {...rail}
+        lastChecked={lastChecked}
+        sweepClock={sweepClock}
+        unreadable={unreadable}
+        notFound={notFound}
+      />
     </div>
   );
 }
