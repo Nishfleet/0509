@@ -59,8 +59,8 @@ describe("mail sent before an account has a workspace", () => {
         }),
       ]);
       const dump = JSON.stringify(rows).toLowerCase();
-    expect(dump).not.toContain("reader@0509.io");
-    expect(dump).not.toContain("new@0509.io");
+      expect(dump).not.toContain("reader@0509.io");
+      expect(dump).not.toContain("new@0509.io");
     },
   );
 
