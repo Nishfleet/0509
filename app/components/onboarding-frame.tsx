@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 
+import { OtherBrands, type BrandChoice } from "./client-brands";
 import { StepBar, type OnboardingStep } from "./step-bar";
 import { Footer } from "./footer";
 import { ONBOARDING_PAGE } from "./page-heading";
@@ -8,11 +9,13 @@ export function OnboardingFrame({
   step,
   heading,
   hideHeading = false,
+  otherBrands = [],
   children,
 }: {
   step: OnboardingStep;
   heading: string;
   hideHeading?: boolean;
+  otherBrands?: BrandChoice[];
   children: ReactNode;
 }): ReactElement {
   return (
@@ -27,6 +30,7 @@ export function OnboardingFrame({
           {heading}
         </h1>
         {children}
+        <OtherBrands brands={otherBrands} />
       </main>
       <Footer />
     </div>

@@ -23,6 +23,10 @@ const TITLE: Record<SuppressionScope, string> = {
   all: "Unsubscribe from Five to Nine emails?",
 };
 
+function what(scope: SuppressionScope, teammate: boolean): string {
+  return teammate ? WHAT.brief : WHAT[scope];
+}
+
 const HEADING = "font-display text-2xl font-semibold tracking-[-0.02em]";
 const BODY = "mt-4 leading-[1.65] text-ink-soft";
 
@@ -39,8 +43,8 @@ export function UnsubscribeConfirm({
     <main className="mx-auto max-w-xl px-4 py-16">
       <h1 className={HEADING}>{TITLE[scope]}</h1>
       <p className={BODY}>
-        You will stop getting {WHAT[scope]} from Five to Nine at this address. {teammate ? "" : STILL[scope]} Sign-in
-        links still arrive when you ask for one.
+        You will stop getting {what(scope, teammate)} from Five to Nine at this address.
+        {teammate ? "" : ` ${STILL[scope]} Sign-in links still arrive when you ask for one.`}
       </p>
       <Form method="post" className="mt-8">
         <Button type="submit" size="lg" disabled={busy}>
@@ -103,7 +107,7 @@ export function UnsubscribeDone({
         You're unsubscribed
       </h1>
       <p className={BODY}>
-        We won't send {WHAT[scope]} to this address any more. {teammate ? "" : STILL[scope]}
+        We won't send {what(scope, teammate)} to this address any more. {teammate ? "" : STILL[scope]}
         {teammate ? "" : " Sign-in links still arrive when you ask for one."}
       </p>
       {scope === "all" || teammate ? null : (
