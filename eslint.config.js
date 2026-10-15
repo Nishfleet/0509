@@ -163,6 +163,17 @@ const LOG_IN_CATCH_LOGGED_QUIETLY = {
     "A log written inside a catch clause records a failure, and console.log, console.info and console.debug never reach Sentry. Use console.warn or console.error. Source: 0509#7501.",
 };
 
+// A parameter that defaults to the real clock lets a test lean on today's date
+// without saying so. 2026-10-15: tests/unit/plan-line.test.ts used 15 October
+// 2026 as a plan end in the future; at midnight UTC it became the past and the
+// merge queue went red for every PR. The caller passes the time in, and a test
+// passes a fixed one. Source: docs/incidents/2026-10-15-test-date-went-stale.md.
+const DEFAULT_CLOCK_PARAMETER = {
+  selector: "AssignmentPattern > NewExpression.right[callee.name='Date'][arguments.length=0]",
+  message:
+    "A parameter that defaults to new Date() reads the real clock where a test cannot see it. Make the time a required argument; the caller passes new Date() and a test passes a fixed instant. Source: docs/incidents/2026-10-15-test-date-went-stale.md (plan-line tests broke the merge queue at midnight).",
+};
+
 const SCORE_NAME = "/^(points|weight|multiplier|score|total)$/";
 
 const RAW_SCORE_STRING = {
@@ -427,6 +438,7 @@ const BANNED_SYNTAX = [
   CATCH_RETURNS_NULL,
   FAILURE_EVENT_LOGGED_QUIETLY,
   LOG_IN_CATCH_LOGGED_QUIETLY,
+  DEFAULT_CLOCK_PARAMETER,
   RAW_SCORE_STRING,
   XML_PARSER_CONSTRUCTOR,
   DOMAIN_HOSTNAME_BAN,
