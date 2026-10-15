@@ -11,7 +11,7 @@ const FUNNEL = `SELECT date(w.created_at, 'weekday 0', '-6 days') AS week,
        sum(CASE WHEN p.status IN ('cancelled', 'expired') THEN 1 ELSE 0 END) AS cancelled
   FROM workspace w
   LEFT JOIN plan p ON p.workspace_id = w.id
- WHERE w.created_at >= ?1 AND w.fixture = 0
+ WHERE w.created_at >= ?1 AND w.fixture IS NOT 1
  GROUP BY week
  ORDER BY week DESC`;
 
@@ -26,13 +26,13 @@ const LAST_SEEN = `SELECT CASE
   JOIN plan p ON p.workspace_id = w.id
    AND (p.status IN ('trialing', 'active', 'past_due')
         OR (p.status = 'cancelled' AND p.current_period_end > ?1))
- WHERE w.fixture = 0
+ WHERE w.fixture IS NOT 1
  GROUP BY bucket`;
 
 const CANCELLATIONS = `SELECT substr(p.updated_at, 1, 7) AS month, count(*) AS cancelled
   FROM plan p
-  JOIN workspace w ON w.id = p.workspace_id AND w.fixture = 0
  WHERE p.status IN ('cancelled', 'expired') AND p.updated_at >= ?1
+   AND NOT EXISTS (SELECT 1 FROM workspace f WHERE f.id = p.workspace_id AND f.fixture = 1)
  GROUP BY month
  ORDER BY month DESC`;
 
@@ -44,8 +44,8 @@ const EMAIL_TO_VISIT = `SELECT substr(a.idempotency_key, 1, instr(a.idempotency_
             AND v.day BETWEEN date(a.attempted_at) AND date(a.attempted_at, '+1 day')
        )) AS visited
   FROM send_attempt a
-  JOIN workspace w ON w.id = a.workspace_id AND w.fixture = 0
  WHERE a.status = 'sent' AND a.attempted_at >= ?1 AND instr(a.idempotency_key, ':') > 1
+   AND NOT EXISTS (SELECT 1 FROM workspace f WHERE f.id = a.workspace_id AND f.fixture = 1)
  GROUP BY kind
  ORDER BY sent DESC`;
 
