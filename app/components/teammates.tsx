@@ -15,8 +15,8 @@ function TeammateRow({ mate }: { mate: Teammate }) {
   const navigation = useNavigation();
   const removing = navigation.state !== "idle" && navigation.formData?.get("targetId") === mate.id;
   return (
-    <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-line py-2">
-      <span className="min-w-0 [overflow-wrap:anywhere]">
+    <li className="flex items-start justify-between gap-4 border-b border-line py-2">
+      <span className="min-w-0 flex-1 self-center [overflow-wrap:anywhere]">
         {mate.address}
         {mate.unsubscribed ? <span className="text-ink-soft"> · unsubscribed</span> : null}
         {mate.confirmed || mate.unsubscribed ? null : (
