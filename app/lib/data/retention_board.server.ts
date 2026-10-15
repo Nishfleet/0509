@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import type { RetentionBoard } from "../retention-board";
+import { readActivationBoard } from "./activation_board.server";
 
 const FUNNEL = `SELECT date(w.created_at, 'weekday 0', '-6 days') AS week,
        count(*) AS signed_up,
@@ -92,5 +93,6 @@ export async function readRetentionBoard(now: Date): Promise<RetentionBoard> {
     lastSeen: buckets,
     cancellations: parseRows(cancellationRow, cancellations?.results ?? []),
     emails: parseRows(emailRow, emails?.results ?? []),
+    activation: await readActivationBoard(db, now),
   };
 }

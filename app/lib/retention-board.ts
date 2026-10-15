@@ -1,3 +1,5 @@
+import type { ActivationBoard } from "./activation-board";
+
 interface FunnelWeek {
   week: string;
   signed_up: number;
@@ -12,6 +14,7 @@ export interface RetentionBoard {
   lastSeen: { week: number; drifting: number; away: number; never: number };
   cancellations: { month: string; cancelled: number }[];
   emails: { kind: string; sent: number; visited: number }[];
+  activation: ActivationBoard;
 }
 
 export function percent(part: number, whole: number): string {
