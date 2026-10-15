@@ -47,7 +47,7 @@ export function PlanSection({
       <h2 id="settings-plan" className={BLOCK_HEADING}>
         Your plan
       </h2>
-      <p className="mt-2 max-w-prose leading-[1.55]">{planLine(plan)}</p>
+      <p className="mt-2 max-w-prose leading-[1.55]">{planLine(plan, new Date())}</p>
       {countLine === null ? null : (
         <p data-slot="plan-usage" className="mt-1 text-body-sm text-ink-soft">
           {countLine}

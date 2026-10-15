@@ -9,7 +9,7 @@ const DAY = new Intl.DateTimeFormat(APP_LOCALE, { timeZone: "UTC", day: "numeric
 export async function readDeviceList(
   userId: string,
   currentSessionId: string,
-  now = new Date(),
+  now: Date,
 ): Promise<DeviceItem[]> {
   const rows = await readDevices(env.DB, userId, now);
   return rows.map((row) => {
