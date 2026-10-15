@@ -638,6 +638,48 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     expect(brief.why_line).toBe("We haven't finished reviewing this week's changes yet.");
   });
 
+  it("does not freeze rank when a mentions sweep skipped targets before fetching any, so no signal rows exist", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    await seedWorkspace(schedule);
+    const closesAt = nextBriefAt(schedule, new Date());
+    const startsAt = previousBriefAt(schedule, closesAt);
+    const lastWeek = previousBriefAt(schedule, startsAt).toISOString();
+    await seedFrozenWeek(lastWeek, [
+      [SELF, 1],
+      [RIVAL_A, 2],
+      [RIVAL_B, 3],
+    ]);
+    const during = new Date(startsAt.getTime() + hour).toISOString();
+    await env.DB.prepare(
+      "INSERT INTO sweep_run (id, kind, planned_at, finished_at, wall_ms, pages, failed, reason) VALUES (?1, 'mentions', ?2, ?2, 0, 177, 44, 'gdelt.doc')",
+    )
+      .bind(`${WS}_mentions_run`, during)
+      .run();
+
+    const instance = rolloverInstance(WS, closesAt, "scheduled");
+    await using introspector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, instance.id);
+    await introspector.modify(async (m) => {
+      await m.disableSleeps();
+    });
+    await env.STANDING_ROLLOVER.create(instance);
+    await introspector.waitForStatus("complete");
+
+    const digestId = `digest_${WS}_${instantStamp(closesAt)}`;
+    const digest = await env.DB.prepare("SELECT payload_json FROM digest WHERE id = ?1")
+      .bind(digestId)
+      .first<{ payload_json: string }>();
+    const brief = parseBriefPayload(digest?.payload_json ?? "");
+    expect(brief.is_unjudged).toBe(true);
+    expect(brief.headline_rank).toBeNull();
+    expect(await standingFor(startsAt.toISOString())).toEqual([
+      { entity_id: RIVAL_A, score: 0, rank: null, movement: null },
+      { entity_id: RIVAL_B, score: 0, rank: null, movement: null },
+      { entity_id: RIVAL_C, score: 0, rank: null, movement: null },
+      { entity_id: SELF, score: 0, rank: null, movement: null },
+    ]);
+    await env.DB.prepare("DELETE FROM sweep_run WHERE id = ?1").bind(`${WS}_mentions_run`).run();
+  });
+
   it("freezes rank once an unjudged change is rejudged after Jev recovers", async () => {
     const schedule = scheduleOffsetFromToday(3);
     await seedWorkspace(schedule);

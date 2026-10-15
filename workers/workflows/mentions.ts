@@ -4,6 +4,7 @@ import { captureException } from "@sentry/cloudflare";
 
 import { MENTIONS_SWEEP_CRON, sweepMonitor } from "../../app/lib/cadence";
 import { readCanarySources } from "../../app/lib/data/source.server";
+import { recordSweepRun } from "../../app/lib/data/sweep_run.server";
 import { FAILED_TARGET_MS, SweepBudget, timed } from "../mentions/budget";
 import { runCanary } from "../mentions/canary";
 import { lostSources, mentionsHealth, skippedTargets } from "../mentions/health";
@@ -74,7 +75,24 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
     };
     const deferredTargets = budget.deferred().reduce((sum, entry) => sum + entry.targets, 0);
     console.warn(JSON.stringify({ event: "mentions.sweep", ...result, deferred: deferredTargets }));
+    await this.record(step, event, result);
     return result;
+  }
+
+  private async record(step: WorkflowStep, event: WorkflowEvent<unknown>, result: MentionsOutcome): Promise<void> {
+    await step.do("record", RETRY, async () => {
+      const finishedAt = new Date();
+      await recordSweepRun({
+        id: event.instanceId,
+        kind: "mentions",
+        plannedAt: event.timestamp.toISOString(),
+        finishedAt: finishedAt.toISOString(),
+        wallMs: finishedAt.getTime() - event.timestamp.getTime(),
+        pages: result.targets,
+        failed: result.failed + result.skippedTargets,
+        reason: result.missed.length === 0 ? null : result.missed.join(", "),
+      });
+    });
   }
 
   private async canaries(step: WorkflowStep, now: string): Promise<Map<string, number>> {
