@@ -165,7 +165,7 @@ const JEV_TIMEOUT_MS = 60_000;
 
 const BUDGET_MARGIN = 1.2;
 
-export const NEURONS_PER_CLEF_CALL = 17;
+const NEURONS_PER_CLEF_CALL = 17;
 
 export const NEURONS_PER_MODEL_CALL = 60;
 
