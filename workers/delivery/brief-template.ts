@@ -3,6 +3,7 @@ import { briefPreheader, briefSubject, isFirstRanking } from "../../app/lib/brie
 import { nextStepLine } from "../../app/lib/next-step";
 import { COMPETITORS_LINK, newRivalLines, rankTrendLine, sinceStartedLine } from "../../app/lib/brief-since";
 import { escapeHtml } from "../../app/lib/html";
+import { ownSiteLines, ownSitePageLine } from "../../app/lib/own-site-lines";
 import { countPhrase } from "../../app/lib/quiet-week";
 import { ledgerFooter } from "../../app/lib/work-ledger";
 import { NOTHING_FIRST_LINE, UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
@@ -27,6 +28,7 @@ import { APP_LOCALE } from "../../app/lib/locale";
 const COPY = {
   openBrief: "See every change in your brief",
   open: "Open in Five to Nine",
+  captured: (when: string) => `Captured ${when}`,
   weekOf: (start: string) => `Week of ${start}`,
   headline: (rank: number, total: number) => `You're #${n(rank)} of ${n(total)} this week`,
   noRank: "Add a competitor to see where you stand",
@@ -41,10 +43,6 @@ const COPY = {
   unjudgedNext: "The changes we have seen so far are in Alerts.",
   unjudgedOpen: "Open Alerts",
   yourBrands: "Your tracked brands",
-  ownSiteOk: "Your site looks fine.",
-  ownSiteBroken: (count: number) => `Your site looks broken (${count === 1 ? "1 page" : `${n(count)} pages`}):`,
-  stillBroken: "still broken",
-  fixed: "fixed",
   newRival: "A competitor you may be missing",
   reviewRival: "Review in Competitors",
   footerTitle: "What was checked",
@@ -182,7 +180,7 @@ function renderMark(
   assetBaseUrl: string | null,
 ): { html: string; text: string } {
   const label = mark.entity_name === "" ? mark.source : `${mark.entity_name} · ${mark.source}`;
-  const when = formatDate(mark.observed_at, payload.timezone, true);
+  const when = COPY.captured(formatDate(mark.observed_at, payload.timezone, true));
   const thumb = thumbnailSrc(mark.thumbnail_r2_key, assetBaseUrl);
   const title = mark.title === "" ? siteName(mark.url) : mark.title;
   const href = safeUrl(mark.url);
@@ -231,8 +229,8 @@ function renderReadThisFirst(
 
   if (payload.is_unjudged) {
     return {
-      html: `${heading(COPY.readThisFirst)}<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(COPY.unjudged)} ${escapeHtml(COPY.unjudgedNext)} <a class="brief-ink" href="${ALERTS_LINK}">${escapeHtml(COPY.unjudgedOpen)}</a></p>`,
-      text: `${COPY.readThisFirst}\n${COPY.unjudged} ${COPY.unjudgedNext}\n${COPY.unjudgedOpen}: ${ALERTS_LINK}`,
+      html: `${heading(COPY.readThisFirst)}<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(COPY.unjudgedNext)} <a class="brief-ink" href="${ALERTS_LINK}">${escapeHtml(COPY.unjudgedOpen)}</a></p>`,
+      text: `${COPY.readThisFirst}\n${COPY.unjudgedNext}\n${COPY.unjudgedOpen}: ${ALERTS_LINK}`,
     };
   }
 
@@ -263,7 +261,16 @@ function renderReadThisFirst(
   return { html, text };
 }
 
-function renderBrandLine(line: BriefPayload["brands"][number], first: boolean): { html: string; text: string } {
+function standingLabel(input: { unjudged: boolean; rank: number | null; rankLabel: string; movement: string }): string {
+  if (input.unjudged && input.rank === null) return "";
+  return input.movement === "" ? input.rankLabel : `${input.rankLabel}, ${input.movement}`;
+}
+
+function renderBrandLine(
+  line: BriefPayload["brands"][number],
+  first: boolean,
+  unjudged: boolean,
+): { html: string; text: string } {
   const counts = [
     countPhrase(line.ad_delta, "new ad", "new ads"),
     countPhrase(line.mention_delta, "mention", "mentions"),
@@ -273,14 +280,14 @@ function renderBrandLine(line: BriefPayload["brands"][number], first: boolean): 
 
   const rankLabel = line.rank === null ? "unranked" : `#${n(line.rank)}`;
   const movement = first ? "" : movementText(line.movement, line.is_new);
-  const standing = movement === "" ? rankLabel : `${rankLabel}, ${movement}`;
+  const standing = standingLabel({ unjudged, rank: line.rank, rankLabel, movement });
   const baseline = line.baseline ?? [];
 
   const html = [
     `<div class="brief-rule" style="padding:10px 0;">`,
     `<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">`,
     `<strong>${escapeHtml(line.name)}</strong>`,
-    ` <span class="brief-muted">${escapeHtml(standing)}</span>`,
+    standing === "" ? "" : ` <span class="brief-muted">${escapeHtml(standing)}</span>`,
     `</p>`,
     line.biggest_move !== null
       ? `<p style="margin:2px 0 0;font-family:${FONT};font-size:15px;line-height:22px;">${escapeHtml(line.biggest_move)}</p>`
@@ -293,7 +300,12 @@ function renderBrandLine(line: BriefPayload["brands"][number], first: boolean): 
     `</div>`,
   ].join("");
 
-  const text = [`${line.name} — ${standing}`, line.biggest_move, counts.join(" · "), ...baseline]
+  const text = [
+    standing === "" ? line.name : `${line.name} — ${standing}`,
+    line.biggest_move,
+    counts.join(" · "),
+    ...baseline,
+  ]
     .filter((v): v is string => v !== null)
     .join("\n");
 
@@ -310,7 +322,7 @@ function renderBrands(payload: BriefPayload): { html: string; text: string } {
     };
   }
 
-  const rendered = payload.brands.map((line) => renderBrandLine(line, isFirstRanking(payload)));
+  const rendered = payload.brands.map((line) => renderBrandLine(line, isFirstRanking(payload), payload.is_unjudged));
 
   return {
     html: heading(COPY.yourBrands) + rendered.map((r) => r.html).join(""),
@@ -319,38 +331,16 @@ function renderBrands(payload: BriefPayload): { html: string; text: string } {
 }
 
 function renderOwnSite(payload: BriefPayload): { html: string; text: string } {
-  const { own_site } = payload;
-  const body = (text: string) =>
-    `<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(text)}</p>`;
-
-  if (own_site.status === "ok" || own_site.incidents.length === 0) {
-    return {
-      html: body(COPY.ownSiteOk),
-      text: COPY.ownSiteOk,
-    };
-  }
-
-  const open = own_site.incidents;
-  const lines = open
-    .map((incident) => {
-      const when = formatDate(incident.observed_at, payload.timezone, true);
-      const state = incident.is_open ? COPY.stillBroken : COPY.fixed;
-      const label = incident.kind === "" ? incident.page_url : `${incident.kind} on ${incident.page_url}`;
-      return `${label} — ${state} as of ${when}`;
-    })
-    .join("\n");
-
+  const site = ownSiteLines(payload.own_site);
+  const lines = site.pages.map((page) => ownSitePageLine(page, (iso) => formatDate(iso, payload.timezone, true)));
   const html = [
-    body(COPY.ownSiteBroken(open.length)),
-    `<p style="margin:6px 0 0;font-family:${FONT};font-size:15px;line-height:22px;">`,
-    lines
-      .split("\n")
-      .map((line) => `<span style="display:block;">${escapeHtml(line)}</span>`)
-      .join(""),
-    `</p>`,
+    `<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(site.headline)}</p>`,
+    ...lines.map(
+      (line) =>
+        `<p style="margin:6px 0 0;font-family:${FONT};font-size:15px;line-height:22px;">${escapeHtml(line)}</p>`,
+    ),
   ].join("");
-
-  return { html, text: `${COPY.ownSiteBroken(open.length)}\n${lines}` };
+  return { html, text: [site.headline, ...lines].join("\n") };
 }
 
 function sectionBlock(inner: string): string {
@@ -480,7 +470,7 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
   const footer = renderFooter({ ...payload, why_line: whyLine }, context.unsubscribe_url, context.teammate === true);
   const newRival = renderNewRival(payload, context.teammate === true);
 
-  const subject = briefSubject(payload, COPY.unjudged);
+  const subject = briefSubject(payload);
 
   const html = emailDocument(
     subject,

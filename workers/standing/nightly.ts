@@ -1,4 +1,4 @@
-import { rolloverInstance } from "../../app/lib/brief-schedule";
+import { nightlyCatchUpInstance } from "../../app/lib/brief-schedule";
 import { runPipelineHealth } from "../../app/lib/observability/pipeline-health.server";
 import { createRollovers, loadNightlyPlan } from "./rollover-plan";
 
@@ -17,7 +17,7 @@ export async function runNightlyStanding(env: Env, now: Date): Promise<NightlyRe
     }),
   );
   const { workspaces, scheduled, catchUpAt } = await loadNightlyPlan(env.DB, now);
-  const catchUps = catchUpAt.map((row) => rolloverInstance(row.workspaceId, row.closesAt, "catch-up"));
+  const catchUps = catchUpAt.map((row) => nightlyCatchUpInstance(row.workspaceId, row.closesAt, now));
   const rolloversCreated = await createRollovers(env.STANDING_ROLLOVER, [...scheduled, ...catchUps]);
   const result: NightlyResult = {
     workspaces,

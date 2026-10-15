@@ -381,16 +381,18 @@ describe("per-brand line and own-site status", () => {
               kind: "checkout section removed",
               observed_at: "2026-09-18T10:00:00.000Z",
               is_open: true,
+              opened_at: "2026-09-18T10:00:00.000Z",
             },
           ],
         },
       }),
       CONTEXT,
     );
-    expect(html).toContain("Your site looks broken (1 page):");
-    expect(html).toContain("checkout section removed on https://0509.io/pricing");
-    expect(html).toContain("still broken");
-    expect(text).toContain("still broken");
+    expect(html).toContain("Your site looks broken.");
+    expect(html).toContain(
+      "We saw a problem on https://0509.io/pricing at Fri 18 Sept, 06:00. It isn&#39;t fixed yet.",
+    );
+    expect(text).toContain("We saw a problem on https://0509.io/pricing at Fri 18 Sept, 06:00. It isn't fixed yet.");
   });
 });
 

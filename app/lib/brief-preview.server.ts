@@ -21,6 +21,7 @@ async function previewStanding(workspaceId: string, weekStartAt: string, weekEnd
     env.DB.prepare(PREVIOUS_RANKS).bind(workspaceId, weekStartAt).all(),
   ]);
   const previousRanks = new Map(previousRankRows.parse(previous.results).map((row) => [row.entity_id, row.rank]));
+  if ([...scores.values()].every((score) => score === 0)) return [];
   return rankWeek(
     [...scores].map(([entity_id, score]) => ({ entity_id, score })),
     previousRanks,

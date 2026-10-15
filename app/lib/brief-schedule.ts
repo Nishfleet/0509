@@ -77,3 +77,8 @@ export function rolloverInstance(
     params: { workspaceId, closesAt: closesAt.toISOString() },
   };
 }
+
+export function nightlyCatchUpInstance(workspaceId: string, closesAt: Date, night: Date): RolloverInstance {
+  const base = rolloverInstance(workspaceId, closesAt, "catch-up");
+  return { ...base, id: `${base.id}-${night.toISOString().slice(0, 10).replace(/-/g, "")}` };
+}
