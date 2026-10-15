@@ -9,9 +9,10 @@ const HEADING = "mb-3 font-mono text-eyebrow text-ink-soft uppercase";
 export interface CompetitorNoteProps {
   note: string;
   error: string | null;
+  saved: boolean;
 }
 
-export function CompetitorNote({ note, error }: CompetitorNoteProps): ReactElement {
+export function CompetitorNote({ note, error, saved }: CompetitorNoteProps): ReactElement {
   const navigation = useNavigation();
   const saving = navigation.state !== "idle" && navigation.formData?.get("intent") === "note";
   return (
@@ -43,9 +44,16 @@ export function CompetitorNote({ note, error }: CompetitorNoteProps): ReactEleme
             {error}
           </p>
         )}
-        <Button type="submit" variant="secondary" size="lg" className="self-start" disabled={saving}>
-          {saving ? "Saving…" : "Save note"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Button type="submit" variant="secondary" size="lg" disabled={saving}>
+            {saving ? "Saving…" : "Save note"}
+          </Button>
+          {saved && error === null && !saving ? (
+            <p role="status" className="text-meta text-ink-soft">
+              Saved.
+            </p>
+          ) : null}
+        </div>
       </Form>
     </section>
   );

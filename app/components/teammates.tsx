@@ -3,6 +3,7 @@ import { Form, useFetcher, useNavigation } from "react-router";
 
 import { BLOCK_HEADING } from "./page-heading";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 
 interface Teammate {
   id: string;
@@ -15,8 +16,8 @@ function TeammateRow({ mate }: { mate: Teammate }) {
   const navigation = useNavigation();
   const removing = navigation.state !== "idle" && navigation.formData?.get("targetId") === mate.id;
   return (
-    <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-line py-2">
-      <span className="min-w-0 [overflow-wrap:anywhere]">
+    <li className="flex items-start justify-between gap-4 border-b border-line py-2">
+      <span className="min-w-0 flex-1 self-center [overflow-wrap:anywhere]">
         {mate.address}
         {mate.unsubscribed ? <span className="text-ink-soft"> · unsubscribed</span> : null}
         {mate.confirmed || mate.unsubscribed ? null : (
@@ -49,7 +50,7 @@ function InviteForm() {
       <label htmlFor="teammate-address" className="font-mono text-meta text-ink-soft uppercase">
         Teammate's email
       </label>
-      <input
+      <Input
         id="teammate-address"
         name="address"
         type="email"
@@ -59,7 +60,6 @@ function InviteForm() {
         autoCorrect="off"
         spellCheck={false}
         required
-        className="h-11 border border-line px-3"
         aria-invalid={error === null ? undefined : true}
         aria-describedby={error === null ? undefined : "teammate-error"}
       />
@@ -85,7 +85,7 @@ export function Teammates({ teammates, limit }: { teammates: Teammate[]; limit: 
       <p className="mt-2 max-w-prose leading-[1.55]">
         Up to {limit} teammates get the weekly brief too. They confirm by email first and can unsubscribe themselves.
         Alerts still come only to you, and a teammate only reads the brief: they can't change your plan, billing or
-        rivals.
+        competitors.
       </p>
       {teammates.length === 0 ? null : (
         <ul className="mt-3 max-w-prose">

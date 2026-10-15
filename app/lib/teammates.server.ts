@@ -15,7 +15,9 @@ const INVALID = "Enter an email address, like colleague@company.com.";
 const NO_WORKSPACE = "Finish setting up first, then add a teammate.";
 const RATE_LIMITED = "Too many invitations. Wait a minute, then try again.";
 const DAILY_LIMIT = "You have sent a lot of invitations today. Try again tomorrow.";
-const CANT_ADD = `We can't add that address. You can add up to ${String(MAX_TEAMMATES)} teammates, each address only once.`;
+const OWN_ADDRESS = "That's the address you sign in with. Enter a teammate's address instead.";
+const ALREADY_ADDED = "That address is already on your list.";
+const NO_SPOT = `You can have up to ${String(MAX_TEAMMATES)} teammates. Remove one to add another.`;
 
 export async function readTeammates(workspaceId: string) {
   const mates = await listTeammates(env.DB, workspaceId);
@@ -81,19 +83,19 @@ export async function addTeammateByOwner(input: {
 }): Promise<string | null> {
   const address = normalizeEmailAddress(input.address);
   if (!looksLikeEmailAddress(address)) return INVALID;
-  if (address === normalizeEmailAddress(input.signInEmail)) return CANT_ADD;
+  if (address === normalizeEmailAddress(input.signInEmail)) return OWN_ADDRESS;
   const workspaceId = await readWorkspaceIdForOwner(input.userId);
   if (workspaceId === null) return NO_WORKSPACE;
   const { success } = await env.SIGN_IN_EMAIL_LIMIT.limit({ key: `teammate:${workspaceId}` });
   if (!success) return RATE_LIMITED;
   const current = await listTeammates(env.DB, workspaceId);
-  if (current.some((mate) => mate.target_value === address)) return CANT_ADD;
+  if (current.some((mate) => mate.target_value === address)) return ALREADY_ADDED;
   const now = new Date();
   const used = await invitesUsedToday(workspaceId, now);
   if (used >= INVITES_PER_DAY) return DAILY_LIMIT;
   if (!(await takeRecipientSlot(address, now))) return RECIPIENT_CAPPED;
   const targetId = await addTeammate(env.DB, { workspaceId, address, now: now.toISOString() });
-  if (targetId === null) return CANT_ADD;
+  if (targetId === null) return NO_SPOT;
   return inviteAndCount({ ...input, workspaceId, targetId, address, now, used });
 }
 

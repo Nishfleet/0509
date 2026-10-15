@@ -33,6 +33,7 @@ const CLEAN = {
   siteError: null,
   nameError: null,
   noteError: null,
+  noteSaved: false,
   renamed: false,
 };
 
@@ -81,6 +82,7 @@ describe("handleCompetitorForm", () => {
       expect(await handleCompetitorForm(WS, ENTITY, form({ intent, [name]: "y" }))).toEqual({
         ...CLEAN,
         message: null,
+        noteSaved: intent === "note",
       });
     },
   );

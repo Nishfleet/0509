@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { z } from "zod";
 
 import { PAGE, PageHeading } from "../components/page-heading";
+import { AgentPrompts } from "../components/agent-prompts";
 import { AgentKeys, ConnectedApps, ConnectDetails } from "../components/agent-settings";
 import { createAgentKey, disconnectApp, readAgentAccess, revokeAgentKey } from "../lib/agent/access.server";
 import { oauthHelpersContext } from "../lib/agent/context.server";
@@ -62,6 +63,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         lede="Let Claude, ChatGPT, Cursor or your own code read your brief, competitors and alerts. Agents can only read, and only your own account."
       />
       <ConnectDetails mcpUrl={loaderData.mcpUrl} origin={loaderData.origin} />
+      <AgentPrompts />
       <ConnectedApps apps={loaderData.apps} />
       <AgentKeys
         keys={loaderData.keys}

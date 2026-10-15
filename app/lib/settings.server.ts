@@ -21,9 +21,11 @@ import {
   readBriefScheduleForOwner,
   readChangeAlerts,
   readOwnSiteAlerts,
+  readSlackBrief,
   readWorkspaceIdForOwner,
   setChangeAlerts,
   setOwnSiteAlerts,
+  setSlackBrief,
 } from "./data/workspace.server";
 import { readMailKinds } from "./data/email_suppression.server";
 import { readDeliveryAddress, saveDeliveryAddress, saveMailKinds } from "./delivery-address.server";
@@ -37,8 +39,8 @@ const EMAIL_INVALID = "Enter an email address, like you@company.com.";
 const EMAIL_FAILED = "We couldn't send the link. Try again in a minute.";
 const EMAIL_SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then change your email.";
 const EMAIL_LIMITED = "Too many tries. Wait a minute and try again.";
-const SLACK_INVALID = "That is not a Slack webhook address. It starts with https://hooks.slack.com/services/.";
-const SLACK_FAILED = "Slack did not accept a test message. Check the address and try again.";
+const SLACK_INVALID = "That isn't a Slack webhook address. It starts with https://hooks.slack.com/services/.";
+const SLACK_FAILED = "Slack didn't accept a test message. Check the address and try again.";
 const SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then delete your account.";
 const PASSKEY_SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then remove your passkey.";
 const PLAN_NOT_CANCELLED =
@@ -94,6 +96,7 @@ const NO_WORKSPACE_SETTINGS = {
   changeAlerts: true,
   slackConnected: false,
   slackRevoked: false,
+  slackBrief: false,
   dismissed: [],
   teammates: [],
   plan: null,
@@ -118,12 +121,13 @@ async function readCountLine(workspaceId: string): Promise<string | null> {
 }
 
 async function readWorkspaceSettings(workspaceId: string) {
-  const [ownSiteAlerts, changeAlerts, slackTarget, slackRevoked, dismissed, plan, teammates, countLine] =
+  const [ownSiteAlerts, changeAlerts, slackTarget, slackRevoked, slackBrief, dismissed, plan, teammates, countLine] =
     await Promise.all([
       readOwnSiteAlerts(workspaceId),
       readChangeAlerts(workspaceId),
       readSlackTarget(env.DB, workspaceId),
       readSlackDisconnected(env.DB, workspaceId),
+      readSlackBrief(env.DB, workspaceId),
       readUserDismissed(workspaceId),
       readPlanSummary(workspaceId),
       readTeammates(workspaceId),
@@ -135,6 +139,7 @@ async function readWorkspaceSettings(workspaceId: string) {
     changeAlerts,
     slackConnected: slackTarget !== null,
     slackRevoked,
+    slackBrief,
     dismissed,
     teammates,
     plan,
@@ -165,6 +170,7 @@ export async function readSettings(user: SettingsUser) {
     changeAlerts,
     slackConnected,
     slackRevoked,
+    slackBrief,
     dismissed,
     teammates,
     plan,
@@ -178,6 +184,7 @@ export async function readSettings(user: SettingsUser) {
     changeAlerts,
     slackConnected,
     slackRevoked,
+    slackBrief,
     dismissed,
     delivery,
     mail,
@@ -240,7 +247,7 @@ async function saveMail(user: SettingsUser, form: FormData): Promise<SettingsRes
   });
   if (!saved)
     return result({
-      deliveryError: `We could not change the emails for this address. Switching them back on works from your sign-in address, or write to ${SUPPORT_ADDRESS}.`,
+      deliveryError: `We couldn't change the emails for this address. Switching them back on works from your sign-in address, or write to ${SUPPORT_ADDRESS}.`,
     });
   return result({ saved: true });
 }
@@ -347,6 +354,7 @@ interface IntentCall {
 const INTENTS = new Map<string, (call: IntentCall) => Promise<SettingsResult>>([
   ["own-site-alerts", (c) => saveSwitch(c.user.id, c.form, setOwnSiteAlerts)],
   ["change-alerts", (c) => saveSwitch(c.user.id, c.form, setChangeAlerts)],
+  ["slack-brief", (c) => saveSwitch(c.user.id, c.form, setSlackBrief)],
   ["slack-save", (c) => connectSlack(c.user.id, c.form)],
   ["slack-remove", (c) => disconnectSlack(c.user.id)],
   ["delivery-address", (c) => saveAddress(c.user, c.form)],

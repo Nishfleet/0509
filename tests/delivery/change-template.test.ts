@@ -129,7 +129,7 @@ describe("every string field carries the injection probe escaped, never raw (050
 
   it("ends the change with what to do about it, before the link", () => {
     const { text } = renderChange(CTX);
-    const todo = text.indexOf("Worth a look today");
+    const todo = text.indexOf("Compare it with your own pricing.");
     expect(todo).toBeGreaterThan(text.indexOf("After:"));
     expect(todo).toBeLessThan(text.indexOf("See the before and after"));
   });

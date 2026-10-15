@@ -6,7 +6,7 @@ export const NUDGE_MAX_RIVALS = 2;
 
 export function nudgeLine(rivals: number): string {
   if (rivals === 0)
-    return "You are not watching a competitor yet. Add one and your next brief has someone to compare you with.";
+    return "You're not watching a competitor yet. Add one and your next brief has someone to compare you with.";
   return "You are watching one competitor. Add another and your ranking has more to compare you with.";
 }
 

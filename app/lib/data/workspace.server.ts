@@ -5,6 +5,8 @@ import { resolveEntitlements } from "../billing/entitlements";
 import { entitledTier } from "../billing/subscription-state";
 import { canonicalTimezone } from "../timezone";
 
+import { visitDayStatement } from "./workspace_visit.server";
+
 const SELECT_WORKSPACE_TIMEZONE = "SELECT timezone FROM workspace WHERE id = ?";
 
 const readWorkspaceTimezoneRow = z.object({ timezone: z.string() });
@@ -267,12 +269,30 @@ export async function setChangeAlerts(workspaceId: string, changeAlerts: boolean
     .run();
 }
 
-const SEEN_DEBOUNCE_MS = 20 * 3_600_000;
+const SELECT_SLACK_BRIEF = "SELECT slack_brief FROM workspace WHERE id = ?";
+
+const UPDATE_SLACK_BRIEF = "UPDATE workspace SET slack_brief = ? WHERE id = ?";
+
+const readSlackBriefRow = z.object({ slack_brief: z.number() });
+
+export async function readSlackBrief(db: D1Database, workspaceId: string): Promise<boolean> {
+  const row = readSlackBriefRow.nullable().parse(await db.prepare(SELECT_SLACK_BRIEF).bind(workspaceId).first());
+  return row?.slack_brief === 1;
+}
+
+export async function setSlackBrief(workspaceId: string, slackBrief: boolean): Promise<void> {
+  await env.DB.prepare(UPDATE_SLACK_BRIEF)
+    .bind(slackBrief ? 1 : 0, workspaceId)
+    .run();
+}
 
 const TOUCH_WORKSPACE_SEEN = `UPDATE workspace SET last_seen_at = ?1
-WHERE id = ?2 AND (last_seen_at IS NULL OR last_seen_at < ?3)`;
+WHERE id = ?2 AND (last_seen_at IS NULL OR substr(last_seen_at, 1, 10) < ?3)`;
 
 export async function touchWorkspaceSeen(workspaceId: string, now: Date): Promise<void> {
-  const stale = new Date(now.getTime() - SEEN_DEBOUNCE_MS).toISOString();
-  await env.DB.prepare(TOUCH_WORKSPACE_SEEN).bind(now.toISOString(), workspaceId, stale).run();
+  const today = now.toISOString().slice(0, 10);
+  await env.DB.batch([
+    env.DB.prepare(TOUCH_WORKSPACE_SEEN).bind(now.toISOString(), workspaceId, today),
+    visitDayStatement(workspaceId, now),
+  ]);
 }

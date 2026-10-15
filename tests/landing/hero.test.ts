@@ -1,16 +1,22 @@
-import { createElement } from "react";
+import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { Hero } from "../../app/components/landing/hero";
 import { WATCHED_NOUNS } from "../../app/lib/coverage";
 
 const HEADLINE = "Know where you stand. And who’s gaining on you.";
-const SENTENCE = `We watch ${WATCHED_NOUNS} across your market. We find your competitors for you, so you do not need to know who they are.`;
+const SENTENCE = `We watch ${WATCHED_NOUNS} across your market. We find your competitors for you, so you don't need to know who they are.`;
 const MICROCOPY = "One box to fill in. About a minute to see who’s gaining on you.";
 
+function inRouter(element: ReactElement): string {
+  const Stub = createRoutesStub([{ path: "/", Component: () => element }]);
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
+}
+
 function markup(): string {
-  return renderToStaticMarkup(createElement(Hero, { nouns: WATCHED_NOUNS }));
+  return inRouter(createElement(Hero, { nouns: WATCHED_NOUNS }));
 }
 
 describe("landing hero", () => {
@@ -18,7 +24,7 @@ describe("landing hero", () => {
     const html = markup();
     expect(html).toContain("For founders, brands and creators");
     expect(html).toContain(HEADLINE);
-    expect(html).toContain(SENTENCE);
+    expect(html).toContain(SENTENCE.replaceAll("'", "&#x27;"));
     expect(html).toContain('id="hero"');
     const headline = /<h1[^>]*>([\s\S]*?)<\/h1>/.exec(html)?.[1] ?? "";
     expect(headline).not.toMatch(/0509|five to nine/i);

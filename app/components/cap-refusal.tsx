@@ -1,5 +1,4 @@
 import type { ReactElement } from "react";
-import { Link } from "react-router";
 
 export function CapRefusal({
   result,
@@ -13,9 +12,9 @@ export function CapRefusal({
       {result.upgradePlanId ? (
         <>
           {" "}
-          <Link className="underline decoration-1 underline-offset-4" to="/pricing">
+          <a className="underline decoration-1 underline-offset-4" href="/pricing">
             See plans
-          </Link>
+          </a>
         </>
       ) : null}
     </p>
