@@ -56,7 +56,7 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
     for (const entry of budget.deferred()) {
       console.warn(JSON.stringify({ event: "mentions.targets_skipped", ...entry }));
     }
-    for (const entry of sustainedSkips({ targets, outcomes: settled, run })) {
+    for (const entry of sustainedSkips({ targets, outcomes: settled, run, budget })) {
       const message = JSON.stringify({ event: "mentions.sustained_skips", ...entry });
       console.error(message);
       captureException(new Error(message), { tags: { lane: "mentions", source: entry.pluginKey } });
