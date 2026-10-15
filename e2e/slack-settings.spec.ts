@@ -46,7 +46,7 @@ test("Slack alerts start unconnected and refuse an address that is not a Slack w
 
   await section.getByLabel("Slack webhook address").fill("https://example.com/not-slack");
   await section.getByRole("button", { name: "Connect Slack" }).click();
-  await expect(section.getByRole("alert")).toContainText("That is not a Slack webhook address.");
+  await expect(section.getByRole("alert")).toContainText("That isn't a Slack webhook address.");
   await expect(section.getByRole("button", { name: "Connect Slack" })).toBeVisible();
   await expect(section.getByRole("button", { name: "Disconnect Slack" })).toHaveCount(0);
 });

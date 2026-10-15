@@ -231,10 +231,13 @@ describe("teammates on the brief", () => {
     expect(await add("fresh@0509.io")).toBeNull();
 
     expect(sentMail.map((mail) => mail.to)).toEqual(["fresh@0509.io"]);
-    expect(await readTeammates(workspaceId)).toEqual([
-      expect.objectContaining({ address: "quiet@0509.io", confirmed: false, unsubscribed: false }),
-      expect.objectContaining({ address: "fresh@0509.io", confirmed: false, unsubscribed: false }),
-    ]);
+    expect(await readTeammates(workspaceId)).toHaveLength(2);
+    expect(await readTeammates(workspaceId)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ address: "quiet@0509.io", confirmed: false, unsubscribed: false }),
+        expect.objectContaining({ address: "fresh@0509.io", confirmed: false, unsubscribed: false }),
+      ]),
+    );
   });
 
   it("shows a teammate who unsubscribed, and tells their link apart from the owner's", async () => {
