@@ -23,5 +23,6 @@ async function answers(url: string): Promise<boolean> {
 
 export async function domainAnswers(domain: string): Promise<boolean> {
   if (blankEnvString(env.RIVAL_REACH_CHECK) === "off") return true;
-  return (await answers(`https://${domain}/`)) || (await answers(`https://www.${domain}/`));
+  const [apex, www] = await Promise.all([answers(`https://${domain}/`), answers(`https://www.${domain}/`)]);
+  return apex || www;
 }
