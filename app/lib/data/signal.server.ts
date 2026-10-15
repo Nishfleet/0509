@@ -268,7 +268,7 @@ export function insertMention(signal: MentionSignal): D1PreparedStatement {
     signal.dedupKey,
     toIsoInstant(signal.publishedAt),
     signal.observedAt,
-    signal.isNotAboutBrand ? 1 : 0,
+    signal.isNotAboutBrand || signal.state === "unjudged" ? 1 : 0,
     signal.state,
     signal.titleHash,
     signal.normUrlHash,

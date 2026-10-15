@@ -17,7 +17,7 @@ describe("channel reason strings a customer never reads raw", () => {
 
   it("rewords each stored reason into its own plain words, never the generic fallback", () => {
     expect(plainSourceReason(LOST_CHANNEL_REASON)).toBe("finding the channel again");
-    expect(plainSourceReason(NO_CHANNEL_REASON)).toBe("no YouTube channel on your profile");
+    expect(plainSourceReason(NO_CHANNEL_REASON)).toBe("no YouTube channel found");
     expect(plainSourceReason(LOST_CHANNEL_REASON)).not.toBe("not updating right now");
     expect(plainSourceReason(NO_CHANNEL_REASON)).not.toBe("not updating right now");
   });

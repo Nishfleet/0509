@@ -32,7 +32,7 @@ import type { NoulVerdict } from "../../app/lib/jev/client.server";
 import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
 import { withMentionCall } from "../../app/lib/mentions/call-budget.server";
 import { lookupYoutubeChannel } from "../../app/lib/identity/youtube-channel.server";
-import { noulAction } from "../../app/lib/jev/thresholds";
+import { isAboutBrand, noulAction } from "../../app/lib/jev/thresholds";
 import { mentionReasonLine } from "../../app/lib/mentions/reason-customer";
 import {
   ABOUT_BRAND,
@@ -116,7 +116,7 @@ async function judge(
   const about = await withMentionCall(watch.entity_id, () =>
     askNoul(watch.workspace_id, ABOUT_BRAND, aboutBrandState({ subject, item, reliability: watch.reliability })),
   );
-  if (noulAction(about.p) === "reject") return { about, matters: null };
+  if (!isAboutBrand(about.p)) return { about, matters: null };
   const mattersState = mentionMattersState({
     self: { name: context.self.name, domain: context.self.domain, description: context.self.description },
     subject,
@@ -287,7 +287,7 @@ async function rejudgeUnjudged(
   for (const row of pending) {
     const verdicts = await judgeOrNull(watch, context, row);
     if (verdicts === null) return { statements, stored, attempted: pending.length, jevDown: true };
-    const rejected = noulAction(verdicts.about.p) === "reject";
+    const rejected = !isAboutBrand(verdicts.about.p);
     statements.push(
       resolveUnjudgedMention(row.id, rejected),
       ...judgedStatements({ watch, signalId: row.id, item: row, verdicts, now, alert: !rejected }),
@@ -401,7 +401,7 @@ async function freshMentionStatements(input: FreshMentionInput): Promise<FreshMe
   const { watch, context, item, snapshotId, now } = input;
   const verdicts = input.jevDown ? null : await judgeOrNull(watch, context, item);
   const { mapped, dedupKey, signalId } = await mapFresh({ watch, item, snapshotId, now });
-  const rejected = verdicts !== null && noulAction(verdicts.about.p) === "reject";
+  const rejected = verdicts !== null && !isAboutBrand(verdicts.about.p);
   const insert = insertMention(
     mentionSignal({ mapped, watch, snapshotId, signalId, dedupKey, rejected, judged: verdicts !== null }),
   );
