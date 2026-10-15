@@ -1,17 +1,17 @@
 import type { ReactElement } from "react";
 import { useSearchParams } from "react-router";
 
-import { ALERT_CHIPS, type AlertChipKey } from "../lib/alert-chips";
+import { ALERT_CHIPS, isChipCapped, type AlertChipKey } from "../lib/alert-chips";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 
 export function AlertChips({
   chip,
   counts,
-  hiringCapped,
+  cappedChips,
 }: {
   chip: AlertChipKey;
   counts: Record<AlertChipKey, number>;
-  hiringCapped: boolean;
+  cappedChips: readonly AlertChipKey[];
 }): ReactElement | null {
   const [, setSearchParams] = useSearchParams();
   if (counts.all === 0) return null;
@@ -35,7 +35,7 @@ export function AlertChips({
           {entry.label}{" "}
           <span className="font-mono tabular-nums">
             {counts[entry.key]}
-            {entry.key === "hiring" && hiringCapped ? "+" : ""}
+            {isChipCapped(cappedChips, entry.key) ? "+" : ""}
           </span>
         </ToggleGroupItem>
       ))}

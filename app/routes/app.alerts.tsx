@@ -120,7 +120,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <ChipFeed
         groups={loaderData.groups}
         counts={loaderData.chipCounts}
-        hiringCapped={loaderData.hiringCapped}
+        cappedChips={loaderData.cappedChips}
         hasOpenIncident={loaderData.openIncident !== null}
       />
       <AlertsFoot offLine={loaderData.offLine} />

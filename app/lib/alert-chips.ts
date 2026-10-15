@@ -10,6 +10,10 @@ export const ALERT_CHIPS = [
 
 export type AlertChipKey = (typeof ALERT_CHIPS)[number]["key"];
 
+export function isChipCapped(capped: readonly AlertChipKey[], key: AlertChipKey): boolean {
+  return key === "all" ? capped.length > 0 : capped.includes(key);
+}
+
 export type AlertItemKind = "change" | "note" | "failure" | "signal" | "mention" | "hiring" | "content";
 
 export function parseAlertChip(value: string | null): AlertChipKey {
