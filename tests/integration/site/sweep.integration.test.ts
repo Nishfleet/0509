@@ -233,11 +233,41 @@ describe("nightly site sweep", () => {
     const stored = await env.SNAPSHOTS.get(diffKey);
     const diff: unknown = JSON.parse((await stored?.text()) ?? "null");
     expect(diff).toMatchObject({ hunks: [expect.objectContaining({ lines: expect.any(Array) })] });
+    expect(payload).toMatchObject({ excerpt: [expect.objectContaining({ lines: expect.any(Array) })] });
 
     const polled = await env.DB.prepare("SELECT last_polled_at FROM watch WHERE id = ?")
       .bind(rival.watchId)
       .first<{ last_polled_at: string | null }>();
     expect(polled?.last_polled_at).not.toBeNull();
+  });
+
+  it("reads a rival once for every workspace that watches it when they share one sweep tick", async () => {
+    await env.DB.prepare(
+      `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
+       VALUES ('ws-second', 'Second', ?, 'UTC', 1, 8, ?)`,
+    )
+      .bind(USER, NOW)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES ('plan-second', 'ws-second', 'starter', 'active', ?)`,
+    )
+      .bind(NOW)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
+       VALUES ('ent-rival-second', 'ws-second', 'competitor', 'rival.com', '{}', 'manual', 'on', ?)`,
+    )
+      .bind(NOW)
+      .run();
+
+    const rivals = (await planSiteSweep(NOW)).filter((t) => t.url === "https://rival.com/");
+    expect(rivals).toHaveLength(2);
+    const tick = await nextTick("shared-night");
+    const reads = [];
+    for (const rival of rivals) reads.push(await checkSitePage(rival, tick));
+
+    expect(reads.map((read) => read.outcome)).toEqual(["first", "first"]);
+    expect(calls.filter((call) => call === "GET https://rival.com/")).toHaveLength(1);
   });
 
   it("stores the before and after in readable text, not as the page's character codes", async () => {
@@ -256,6 +286,24 @@ describe("nightly site sweep", () => {
     const diff = JSON.stringify(JSON.parse((await stored?.text()) ?? "null"));
     expect(diff).toContain("Men's & women's plans start at twelve dollars a month.");
     expect(diff).not.toMatch(/&#x27;|&amp;/);
+  });
+
+  it("keeps the page's lines, so one changed word stays one small passage", async () => {
+    const [rival] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
+    if (rival === undefined) throw new Error("expected the rival's homepage");
+    const page = (price: string) =>
+      `<!doctype html><html><body><p>First paragraph about the team.</p><p>Plans start at ${price} a month.</p><p>${PAD}</p><p>Last paragraph about support.</p></body></html>`;
+    readHolder.html = page("ten dollars");
+    await checkSitePage(rival, await nextTick("lines-1"));
+    readHolder.html = page("twelve dollars");
+    const changed = await checkSitePage(rival, await nextTick("lines-2"));
+    if (changed.outcome !== "changed") throw new Error("expected a change");
+    await publishSiteChange(rival, changed);
+
+    const stored = await env.SNAPSHOTS.get(`snapshot/site/${rival.watchId}/${changed.snapshotId}.diff.json`);
+    const diff = JSON.stringify(JSON.parse((await stored?.text()) ?? "null"));
+    expect(diff).toContain("twelve dollars");
+    expect(diff).not.toContain("Last paragraph about support.");
   });
 
   it("files nothing when only the way a character is written changed", async () => {

@@ -1,29 +1,15 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createRoutesStub } from "react-router";
 
 import type * as sonner from "sonner";
 import type { ToasterProps } from "sonner";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// #4116: toasts exist for exactly two moments — "saved" and "undo" — and
-// nothing else in the product may raise one. eslint.config.js holds that lock
-// on the changed file itself: SONNER_IMPORT bans the import and BARE_TOAST the
-// call shape outside app/components/toaster.tsx (tests/eslint-toast-rule.test.ts,
-// 0509#7007). sonner is mocked
-// partially: toast is a vi.fn() so toastSaved's calls are observable, while
-// Toaster stays real so the render tests below produce the markup the axe run
-// checks on production.
-//
-// The stubbed document exists so sonner's module-init __insertCSS actually
-// fires (it no-ops when document is undefined) and hands the suite the exact
-// stylesheet the browser gets — the prefers-reduced-motion pin asserts what
-// reaches the DOM, not the contents of a dist file nothing may load.
 const injectedStyleSheet = vi.hoisted(() => ({ cssText: undefined as string | undefined }));
 const toasterProps = vi.hoisted(() => ({ current: undefined as ToasterProps | undefined }));
 
@@ -38,9 +24,7 @@ vi.mock("sonner", async (importOriginal) => {
   return {
     ...real,
     toast: vi.fn(),
-    // sonner's store subscription lives in an effect, so SSR markup can never
-    // show a seeded toast; capturing the props our Toaster passes is the render
-    // boundary the skin and the position are asserted on instead.
+
     Toaster: (props: ToasterProps) => {
       toasterProps.current = props;
       return createElement(real.Toaster, props);
@@ -55,7 +39,6 @@ vi.mock("../../app/lib/auth.server", () => ({
 import { toast } from "sonner";
 
 import { Toaster, toastSaved } from "../../app/components/toaster";
-import { BriefScheduleSettings } from "../../app/components/brief-schedule-settings";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -85,17 +68,8 @@ describe("toastSaved", () => {
 });
 
 describe("the mount and the skin", () => {
-  it("mounts exactly one polite live region, where the brief time is saved", () => {
-    const Stub = createRoutesStub([
-      {
-        path: "/",
-        Component: () =>
-          createElement(BriefScheduleSettings, {
-            schedule: { weekday: 1, hour: 9, timezone: "UTC", pausedAt: null, nextLine: "Monday" },
-          }),
-      },
-    ]);
-    const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
+  it("mounts exactly one polite live region", () => {
+    const html = renderToStaticMarkup(createElement(Toaster));
     expect(html.match(/<section[^>]*aria-live="polite"/g)).toHaveLength(1);
   });
 
@@ -135,9 +109,20 @@ describe("the mounted toaster", () => {
 
 describe("upstream accessibility guarantees", () => {
   it("injects a stylesheet carrying the reduced-motion cutoff on import", () => {
-    // __insertCSS ran against the stubbed document when the real module
-    // evaluated inside the mock factory; cssText is the exact stylesheet
-    // sonner appends to document.head in the browser.
     expect(injectedStyleSheet.cssText).toContain("@media (prefers-reduced-motion)");
+  });
+});
+
+describe("the app mounts one Toaster", () => {
+  it("mounts the Toaster in app-shell.tsx once and nowhere else under app/", async () => {
+    const appDir = path.join(REPO_ROOT, "app");
+    const entries = await readdir(appDir, { recursive: true });
+    const mounts: string[] = [];
+    for (const entry of entries.filter((name) => name.endsWith(".tsx"))) {
+      const source = await readFile(path.join(appDir, entry), "utf8");
+      const count = source.split("<Toaster").length - 1;
+      if (count > 0) mounts.push(`${path.basename(entry)}:${String(count)}`);
+    }
+    expect(mounts).toEqual(["app-shell.tsx:1"]);
   });
 });

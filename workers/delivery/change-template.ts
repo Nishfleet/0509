@@ -1,10 +1,9 @@
 import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
 import type { ChangeMark } from "../../app/lib/site-change";
-import { neutralizeBareUrls } from "../../app/lib/slack-webhook";
 import { renderAlertFooter, type AlertFooterContext } from "./alert-footer";
 import { formatDate } from "./brief-template";
-import { BODY, EYEBROW, HEADLINE, emailDocument, linkParagraph } from "./email-shell";
+import { BODY, EYEBROW, HEADLINE, emailDocument, linkParagraph, siteName } from "./email-shell";
 
 export interface ChangeContext extends AlertFooterContext {
   headline: string;
@@ -18,10 +17,14 @@ const SUBJECT_MAX = 78;
 const SIDE_MAX = 30;
 const OPEN = "See the before and after in Five to Nine";
 
+function siteNames(text: string): string {
+  return text.replace(/https?:\/\/[^\s]+/gi, siteName);
+}
+
 function oneLine(value: string | null): string | null {
   const flat =
-    value
-      ?.replace(/\s+/g, " ")
+    siteNames(value ?? "")
+      .replace(/\s+/g, " ")
       .replace(/[\p{Cf}\p{Cc}]/gu, "")
       .trim() ?? "";
   return flat === "" || flat.length > SIDE_MAX ? null : flat;
@@ -38,8 +41,8 @@ function subjectFor(headline: string, mark: ChangeMark | null): string {
 function markLines(mark: ChangeMark | null): string[] {
   if (mark === null) return [];
   return [
-    ...(mark.removed === null ? [] : [`Before: ${neutralizeBareUrls(mark.removed)}`]),
-    ...(mark.added === null ? [] : [`After: ${neutralizeBareUrls(mark.added)}`]),
+    ...(mark.removed === null ? [] : [`Before: ${siteNames(mark.removed)}`]),
+    ...(mark.added === null ? [] : [`After: ${siteNames(mark.added)}`]),
   ];
 }
 
@@ -53,7 +56,7 @@ function paragraphs(lines: readonly string[]): string {
 }
 
 export function renderChangeOverflow(ctx: ChangeOverflowContext): RenderedBrief {
-  const subject = `More rivals changed price or plan today`;
+  const subject = `More competitors changed price or plan today`;
   const lines = [
     `You have had ${String(ctx.cap)} price or plan emails today, so we stopped there.`,
     `Every change is still in Alerts and in your Monday brief.`,
@@ -76,19 +79,22 @@ export function renderChangeOverflow(ctx: ChangeOverflowContext): RenderedBrief 
   };
 }
 
+const SO_WHAT = "Worth a look today: does your own pricing page still hold up next to this?";
+
 export function renderChange(ctx: ChangeContext): RenderedBrief {
   const seen = `Seen at ${formatDate(ctx.observed_at, ctx.timezone, true)}.`;
   const lines = [...markLines(ctx.mark), seen];
   const footer = renderAlertFooter(ctx);
   return {
     subject: subjectFor(ctx.headline, ctx.mark),
-    text: [ctx.headline, ...lines, `${OPEN}: ${ctx.link}`, footer.text].join("\n"),
+    text: [ctx.headline, ...lines, SO_WHAT, `${OPEN}: ${ctx.link}`, footer.text].join("\n"),
     html: emailDocument(
       ctx.headline,
       [
         `<p class="brief-muted" style="${EYEBROW}">Price or plan change</p>`,
         `<p style="${HEADLINE}">${escapeHtml(ctx.headline)}</p>`,
         paragraphs(lines),
+        paragraphs([SO_WHAT]),
         linkParagraph(OPEN, ctx.link),
         footer.html,
       ].join(""),

@@ -15,20 +15,34 @@ describe("welcome email", () => {
   it("names the rivals, how many more, and when the first brief lands", () => {
     const { subject, text } = renderWelcome(CTX);
     expect(subject).toBe("We're watching Acme, Globex and 3 more");
-    expect(text).toContain("We're watching Acme, Globex and 3 more.");
+    expect(text).toContain("We read each site every night.");
+    expect(text).not.toContain("We're watching Acme, Globex and 3 more.");
     expect(text).toContain("weekly brief on Monday 19 October");
     expect(text).toContain("https://0509.io/app");
   });
 
   it("asks for rivals when none are watched and drops the date when it is unknown", () => {
     const { text } = renderWelcome({ ...CTX, rivals: [], rival_count: 0, first_brief_at: null });
-    expect(text).toContain("Add the rivals you want to keep an eye on");
+    expect(text).toContain("Add the competitors you want to keep an eye on");
     expect(text).toContain("Your first ranking arrives with your weekly brief.");
   });
 
   it("falls back to a plain welcome when there are no rivals or the names are too long", () => {
     expect(renderWelcome({ ...CTX, rivals: [], rival_count: 0 }).subject).toBe("Welcome to Five to Nine");
     expect(renderWelcome({ ...CTX, rivals: ["x".repeat(50), "y".repeat(50)] }).subject).toBe("Welcome to Five to Nine");
+  });
+
+  it("keeps the names in the body when the subject could not carry them", () => {
+    const long = renderWelcome({ ...CTX, rivals: ["x".repeat(50), "y".repeat(50)] });
+    expect(long.subject).toBe("Welcome to Five to Nine");
+    expect(long.text).toContain(`We're watching ${"x".repeat(50)}, ${"y".repeat(50)} and 3 more.`);
+  });
+
+  it("only promises an email for a price change or a problem with your own site", () => {
+    const { text } = renderWelcome(CTX);
+    expect(text).toContain("A pricing change gets its own email");
+    expect(text).toContain("a problem with your own site");
+    expect(text).not.toContain("breakages");
   });
 
   it("promises nothing about timing", () => {
@@ -39,8 +53,8 @@ describe("welcome email", () => {
   it("previews the rivals line and keeps paragraphs apart in plain text", () => {
     const { html, text } = renderWelcome(CTX);
     expect(html).toContain("display:none");
-    expect(html).toContain("We&#39;re watching Acme, Globex and 3 more.");
-    expect(text).toContain("\n\nWe're watching");
+    expect(html).toContain("We read each site every night.");
+    expect(text).toContain("\n\nWe read each site");
   });
 
   it("links a label in the html and keeps the bare address for plain text", () => {
@@ -48,6 +62,12 @@ describe("welcome email", () => {
     expect(html).toContain('href="https://0509.io/app">Open your first look</a>');
     expect(html).not.toContain(">https://0509.io/app<");
     expect(text).toContain("Open your first look: https://0509.io/app");
+  });
+
+  it("closes with the support line in both parts", () => {
+    const { html, text } = renderWelcome(CTX);
+    expect(html).toContain("mailto:support@0509.io");
+    expect(text).toContain("Questions? Write to support@0509.io.");
   });
 
   it("escapes anything it is handed", () => {

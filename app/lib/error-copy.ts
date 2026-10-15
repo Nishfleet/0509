@@ -4,6 +4,7 @@ export interface ErrorCopy {
   title: string;
   detail: string;
   retry: boolean;
+  action?: { href: string; label: string };
 }
 
 export function errorCopy(error: unknown, pathname: string): ErrorCopy {
@@ -20,11 +21,12 @@ export function errorCopy(error: unknown, pathname: string): ErrorCopy {
       title: "Sign in to continue",
       detail: "You need to be signed in to open this page. Sign in, then open it again.",
       retry: false,
+      action: { href: "/login", label: "Sign in" },
     };
   }
   if (status === 403) {
     return {
-      title: "You cannot open this page",
+      title: "You can't open this page",
       detail: "This page belongs to another account. Sign in with the right one, or go back to the home page.",
       retry: false,
     };

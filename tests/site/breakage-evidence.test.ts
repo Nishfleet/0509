@@ -2,13 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { computeBreakageEvidence } from "../../app/lib/site/breakage-evidence";
 
-// 0509#6490: app/lib/site/breakage-evidence.ts is pure string and number work,
-// so it runs in the node project. The workers copy inside
-// tests/integration/site/judge.integration.test.ts stays where it is; this file
-// is the copy that counts toward the node branch floor. Every branch is pinned
-// here: the status >= 400 comparison on both sides, the strict half-text
-// comparison on both sides, each currency in countPrices with and without its
-// optional space, the no-match nullish arm, and both arms of pricesVanished.
 describe("computeBreakageEvidence", () => {
   it("flips httpError at status 400 and leaves 399 clear", () => {
     const before = "Pro plan £40 a month for teams of ten or more";

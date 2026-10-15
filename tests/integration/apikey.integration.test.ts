@@ -3,15 +3,6 @@ import { describe, expect, it } from "vitest";
 
 import { createAuth } from "../../app/lib/auth.server";
 
-/**
- * P8.1's named risk: a drift between migrations/ and what the apiKey plugin
- * writes surfaces in production as the first query touching the drifted
- * table. better-auth's runtime schema check is off (0509#5721: it cost ~6.5M
- * D1 rows a day), so this drives the plugin through createAuth against real
- * D1 with the real migrations applied — a drift fails here, in CI, and the
- * control arm in auth-schema-check.integration.test.ts still runs the check
- * itself once per CI run.
- */
 const auth = createAuth({
   DB: env.DB,
   EMAIL: { send: async () => ({ messageId: "m-1" }) },
@@ -57,7 +48,7 @@ describe("apikey plugin against the shipped schema", () => {
     expect(row, "the apikey row must exist").not.toBeNull();
     expect(row?.referenceId).toBe("u_apikey_create");
     expect(row?.enabled).toBe(1);
-    // This row SELECT never reads the key column, so the shape itself must lack it.
+
     expect(row).not.toHaveProperty("key");
     expect(created.key.startsWith(row?.start ?? "")).toBe(true);
   });

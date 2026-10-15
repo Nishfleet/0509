@@ -274,6 +274,21 @@ JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
 WHERE w.is_active = 1
 ORDER BY e.workspace_id, e.id, w.id`;
 
+const NAME_KEYED_SOURCES = "SELECT id FROM source WHERE kind IN ('mentions', 'ads')";
+
+const RETIRE_OLD_NAME_WATCHES = `UPDATE watch SET is_active = 0
+WHERE entity_id = ?1 AND is_active = 1 AND target_key <> ?2 AND source_id IN (${NAME_KEYED_SOURCES})`;
+
+const RESUME_NEW_NAME_WATCHES = `UPDATE watch SET is_active = 1
+WHERE entity_id = ?1 AND is_active = 0 AND target_key = ?2 AND source_id IN (${NAME_KEYED_SOURCES})`;
+
+export async function retargetNameWatches(entityId: string, name: string): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(RETIRE_OLD_NAME_WATCHES).bind(entityId, name),
+    env.DB.prepare(RESUME_NEW_NAME_WATCHES).bind(entityId, name),
+  ]);
+}
+
 const DEACTIVATE_WATCH = "UPDATE watch SET is_active = 0 WHERE id = ?1";
 
 const hiringTargetRows = z.array(
@@ -372,7 +387,7 @@ export async function deactivateWatch(watchId: string): Promise<void> {
   await env.DB.prepare(DEACTIVATE_WATCH).bind(watchId).run();
 }
 
-const ALTERNATE_MARKER = (alias: string): string =>
+export const ALTERNATE_MARKER = (alias: string): string =>
   `coalesce(CASE WHEN json_valid(${alias}.config_json) THEN json_extract(${alias}.config_json, '$.alternateHome') END, 0) = 1`;
 
 const BLOCKED_RIVALS = `SELECT e.id AS entity_id, e.workspace_id AS workspace_id, e.domain AS domain

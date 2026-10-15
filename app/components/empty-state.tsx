@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router";
+import { APP_LOCALE } from "../lib/locale";
 
-const CLOCK = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
+const CLOCK = new Intl.DateTimeFormat(APP_LOCALE, { hour: "2-digit", minute: "2-digit" });
 
 const BARE_SENTENCES = new Set(["no data", "nothing here"]);
 
@@ -49,12 +51,12 @@ function Action({ action }: { action: EmptyStateAction }): ReactNode {
     );
   }
   return (
-    <a
+    <Link
       className="mt-1 inline-flex min-h-11 items-center font-display text-[1.02rem] uppercase"
-      href={href(action.href)}
+      to={href(action.href)}
     >
       {action.label}
-    </a>
+    </Link>
   );
 }
 

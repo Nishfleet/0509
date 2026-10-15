@@ -7,25 +7,39 @@ const DETAIL_MAX = 46;
 const SIDE_MAX = 22;
 const PREHEADER_MAX = 110;
 
+const SEGMENTER = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
 function clip(value: string, max: number): string {
   const flat = value.replace(/\s+/g, " ").trim();
-  return flat.length <= max ? flat : `${flat.slice(0, max - 1).trimEnd()}…`;
+  const graphemes = Array.from(SEGMENTER.segment(flat), (part) => part.segment);
+  return graphemes.length <= max
+    ? flat
+    : `${graphemes
+        .slice(0, max - 1)
+        .join("")
+        .trimEnd()}…`;
+}
+
+function isUrl(value: string): boolean {
+  return /^https?:/i.test(value);
 }
 
 function detailOf(mark: Mark): string | null {
-  if (mark.before !== null && mark.after !== null) {
-    return `${clip(mark.before, SIDE_MAX)} → ${clip(mark.after, SIDE_MAX)}`;
-  }
+  const before = mark.before === null ? "" : clip(mark.before, SIDE_MAX);
+  const after = mark.after === null ? "" : clip(mark.after, SIDE_MAX);
+  if (before !== "" && after !== "" && !isUrl(before) && !isUrl(after)) return `${before} → ${after}`;
   const title = clip(mark.title, DETAIL_MAX);
-  return title === "" || /^https?:/i.test(title) ? null : title;
+  return title === "" || isUrl(title) ? null : title;
 }
 
 function moveSubject(lead: Mark, total: number): string {
   const name = clip(lead.entity_name, 30);
   const detail = detailOf(lead);
   const more = total > 1 ? ` (+${(total - 1).toFixed(0)} more)` : "";
-  if (name === "")
-    return clip(detail === null ? `${total.toFixed(0)} rival moves this week` : `${detail}${more}`, SUBJECT_MAX);
+  if (name === "") {
+    const count = `${total.toFixed(0)} ${total === 1 ? "competitor moves" : "competitors move"} this week`;
+    return clip(detail === null ? count : `${detail}${more}`, SUBJECT_MAX);
+  }
   const head = detail === null ? `${name} made a move` : `${name}: ${detail}`;
   return clip(`${head}${more}`, SUBJECT_MAX);
 }
@@ -34,6 +48,7 @@ export function isFirstRanking(payload: BriefPayload): boolean {
   return (
     payload.brands.length > 0 &&
     payload.headline_movement === null &&
+    (payload.headline_earlier ?? null) === null &&
     payload.brands.every((brand) => brand.movement === null && !brand.is_new)
   );
 }

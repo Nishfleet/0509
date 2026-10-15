@@ -11,14 +11,19 @@ const MAX_DIFF_BYTES = 512 * 1024;
 
 const diffKeyRows = z.array(z.object({ id: z.string(), diff_key: z.string().nullable() }));
 
+function errorName(error: unknown): string {
+  return error instanceof Error ? error.name : "unknown";
+}
+
 async function readMark(signalId: string, diffKey: string): Promise<[string, ChangeMark] | null> {
   try {
-    const stored = await env.SNAPSHOTS.get(diffKey);
-    const hunks = stored === null || stored.size > MAX_DIFF_BYTES ? null : parseDiffHunks(await stored.text());
+    const head = await env.SNAPSHOTS.head(diffKey);
+    const stored = head === null || head.size > MAX_DIFF_BYTES ? null : await env.SNAPSHOTS.get(diffKey);
+    const hunks = stored === null ? null : parseDiffHunks(await stored.text());
     const mark = hunks === null ? null : markFromHunks(hunks);
     return mark === null ? null : [signalId, mark];
   } catch (error) {
-    console.warn(JSON.stringify({ event: "brief.mark_wording_failed", signal_id: signalId, error: String(error) }));
+    console.warn(JSON.stringify({ event: "brief.mark_wording_failed", signal_id: signalId, error: errorName(error) }));
     return null;
   }
 }
@@ -34,7 +39,7 @@ async function readDiffKeys(
       .all();
     return diffKeyRows.parse(results);
   } catch (error) {
-    console.warn(JSON.stringify({ event: "brief.mark_wording_failed", error: String(error) }));
+    console.warn(JSON.stringify({ event: "brief.mark_wording_failed", error: errorName(error) }));
     return [];
   }
 }

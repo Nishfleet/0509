@@ -4,24 +4,11 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-// 0509#7015: tests/fixtures/ carried two 1.6 MB gymshark captures
-// (gymshark-2026-09-22-a.html and -b.html) that differed in 4 bytes
-// — the active variant of two A/B experiments. The repo stored the
-// same page twice and every clone paid for it; the b capture is now
-// derived from a inside extract-text.test.ts. This test is the gate
-// that keeps the mistake from coming back: two same-size fixture
-// files that differ in only a handful of bytes are a stored twin,
-// and one of them must be derived instead of committed.
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FIXTURES = path.join(REPO_ROOT, "tests", "fixtures");
 
-// A stored page capture is big; the small before/after pairs
-// (copy-change-*.html, 467 B) hold deliberately different copy and
-// stay under the floor.
 const SIZE_FLOOR = 32 * 1024;
 
-// 4 bytes separated the gymshark pair. 64 leaves room for a captured
-// timestamp or one changed field while still naming a twin.
 const DIFFERENCE_BUDGET = 64;
 
 async function fixtureFiles(dir: string): Promise<string[]> {

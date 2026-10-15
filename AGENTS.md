@@ -75,7 +75,7 @@ you.
   ESLint enforces is same-line comments and the workaround vocabulary
   (`todo`, `hack`, `for now`, `revisit`, …); the rest is the reviewer's job.
   Put the reason in the commit message, where it is read at the moment it
-  matters. Config files and tests are exempt.
+  matters. Config files are exempt.
 - **No user data in logs or Sentry.** `no-restricted-syntax` (NO_USER_DATA_IN_LOGS). Source: 0509#5776.
 - **Tests never skip, focus or sleep.** A vitest test is never focused or disabled
   (`vitest/no-focused-tests`, `vitest/no-disabled-tests`); an e2e spec is never
@@ -86,6 +86,7 @@ you.
   `test.fail()` stay allowed. The full enforced set is the two test-lint blocks
   in `eslint.config.js`. Source: 0509#5785.
 - **An e2e name must still exist.** A name a spec looks up by string literal (`getByRole` name, `getByLabel`, `getByText`, a `button:` field) is checked against app source and e2e seed data by `tests/e2e-names-exist.test.ts`; a name the app builds at run time is listed there with its template. Source: 0509#7430.
+- **Failures reach Sentry.** An event named `_failed`, `_discarded`, `_unavailable`, `_dead_lettered`, `_unreadable`, `_unreached` or `_skipped`, and any log inside a `catch`, must use `console.warn` or `console.error`: `workers/sentry.ts` forwards only those two levels. `no-restricted-syntax` (FAILURE_EVENT_LOGGED_QUIETLY, LOG_IN_CATCH_LOGGED_QUIETLY). Source: 0509#7501.
 - **Formatting is Prettier.** `npm run lint` runs `prettier --check .`; run `npm run format` before committing.
 - **Stock only, at the version named in `docs/dependencies.md`.** `tests/stack-dependencies.test.ts` fails a dependency with no row there. A PR names the library or Cloudflare primitive it uses and what it rejected. Hand-rolled schedulers, diffing, crawlers, queues, retries, auth, billing, email, charts or home-built design systems are rejected. The official upstream shadcn skill in `.agents/skills/shadcn` and the token frontmatter in `DESIGN.md` are allowed: they are stock, not home-built (Nish, 2026-10-09). A hand-written type annotation over a framework value is a hand-rolled assertion: use the generated types.
 - **Jev decides every typed decision** (`docs/REBUILD-JEV.md`, D1–D9). Code never guesses with regexes where a judgment is needed; Jev internals are never shown to customers.
@@ -153,8 +154,8 @@ they name were plans and many never existed. The real layout is below.
 
 - `app/routes.ts` — the route registry. A route not listed here cannot be
   reached. `.agents/skills/verify/feature-map.md` describes every one of them and is updated in
-  the same PR that changes one. Search, never read whole: grep it for the
-  route path (`grep -n "app/alerts" .agents/skills/verify/feature-map.md`) and
+  the same PR that changes one, one file per row under `feature-map/` so parallel PRs never edit the same lines. Search, never read whole: grep it for the
+  route path (`grep -rn "app/alerts" .agents/skills/verify/feature-map.md .agents/skills/verify/feature-map/`) and
   read only that row.
 - `app/routes/*` — route modules: loader, action, component.
 - `app/components/` — shared UI.

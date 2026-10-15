@@ -22,7 +22,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const [settings, passkeys, devices] = await Promise.all([
     readSettings(session.user),
     readPasskeys(request),
-    readDeviceList(session.user.id, session.session.id),
+    readDeviceList(session.user.id, session.session.id, new Date()),
   ]);
   return { ...settings, passkeys, devices };
 }
@@ -43,15 +43,23 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         <SettingsJumps hasBrief={loaderData.schedule !== null} hasPlan={loaderData.plan !== null} />
         <div className="max-w-3xl min-w-0">
           {loaderData.schedule === null ? null : <BriefSection schedule={loaderData.schedule} />}
-          <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
-          <ChangeAlertsSetting on={loaderData.changeAlerts} />
-          <SlackAlertsSetting connected={loaderData.slackConnected} error={actionData?.slackError ?? null} />
+          <div id="settings-alerts">
+            <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
+            <ChangeAlertsSetting on={loaderData.changeAlerts} />
+            <SlackAlertsSetting
+              connected={loaderData.slackConnected}
+              revoked={loaderData.slackRevoked}
+              emailAlerts={loaderData.changeAlerts}
+              error={actionData?.slackError ?? null}
+            />
+          </div>
           <DismissedBrands dismissed={loaderData.dismissed} />
           <AgentsSection />
           <PlanSection plan={loaderData.plan} countLine={loaderData.countLine} returning={loaderData.returning} />
           <AccountSection
             email={loaderData.email}
             delivery={loaderData.delivery}
+            mail={loaderData.mail}
             teammates={loaderData.teammates}
             passkeys={loaderData.passkeys}
             devices={loaderData.devices}

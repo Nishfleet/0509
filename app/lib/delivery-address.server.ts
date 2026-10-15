@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { sendMessage } from "../../workers/delivery/send";
 import { redactEmailShaped } from "./auth/redact-email-shaped";
 import { looksLikeEmailAddress, normalizeEmailAddress } from "./email-address";
-import { clearSuppression, isAddressSuppressed } from "./data/email_suppression.server";
+import { clearSuppression, isAddressSuppressed, readMailKinds, writeMailKinds } from "./data/email_suppression.server";
 import {
   changeEmailTarget,
   ensureOwnerEmailTarget,
@@ -14,17 +14,18 @@ import {
   writeVerifyToken,
 } from "./data/send_target.server";
 import { readWorkspaceIdForOwner } from "./data/workspace.server";
+import { RECIPIENT_CAPPED, takeRecipientSlot } from "./recipient-cap.server";
 import { teammateInviteEmail, verifyAddressEmail } from "./verify-address-email";
 
 const INVALID = "Enter an email address, like you@company.com.";
 const SUPPRESSED =
-  'This address unsubscribed from the brief. Tick "Send the brief to this address again" and save to resume.';
+  'This address unsubscribed from the brief and alerts. Tick "Send the brief and alerts to this address again" and save to resume.';
 const IS_TEAMMATE = "That address already gets the brief as a teammate. Remove them first, or choose another address.";
 const NO_WORKSPACE = "Finish setting up first, then choose where the brief goes.";
 const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const RATE_LIMITED = "Too many confirmation emails. Wait a minute, then save again.";
-const INVITE_FAILED = "We could not send the invitation. Remove the teammate and add them again.";
-const SEND_FAILED = "We could not send the confirmation email. Save again to retry.";
+const INVITE_FAILED = "We couldn't send the invitation. Remove the teammate and add them again.";
+const SEND_FAILED = "We couldn't send the confirmation email. Save again to retry.";
 
 function newVerifyToken(): string {
   const bytes = new Uint8Array(32);
@@ -101,7 +102,7 @@ async function refuseOrResumeSuppressed(
   address: string,
   input: { signInEmail: string; resume: boolean },
 ): Promise<boolean> {
-  if (!(await isAddressSuppressed(address))) return false;
+  if (!(await isAddressSuppressed(address, "brief"))) return false;
   if (!input.resume) return true;
   if (address === normalizeEmailAddress(input.signInEmail)) await clearSuppression(address);
   return false;
@@ -116,6 +117,23 @@ export async function readDeliveryAddress(
   const target = await readEmailTarget(env.DB, workspaceId);
   if (target === null) return { address: signInEmail, verified: true };
   return { address: target.target_value, verified: target.is_verified === 1 };
+}
+
+export async function saveMailKinds(input: {
+  userId: string;
+  signInEmail: string;
+  brief: boolean;
+  alerts: boolean;
+}): Promise<boolean> {
+  const { address, verified } = await readDeliveryAddress(input.userId, input.signInEmail);
+  const normalized = normalizeEmailAddress(address);
+  if (normalized !== normalizeEmailAddress(input.signInEmail)) {
+    const current = await readMailKinds(normalized);
+    if (!verified || (input.brief && !current.brief) || (input.alerts && !current.alerts)) return false;
+  }
+  await writeMailKinds(normalized, { brief: input.brief, alerts: input.alerts });
+  const after = await readMailKinds(normalized);
+  return after.brief === input.brief && after.alerts === input.alerts;
 }
 
 export async function saveDeliveryAddress(input: {
@@ -154,6 +172,7 @@ export async function saveDeliveryAddress(input: {
     return { error: null, suppressed: false };
   }
 
+  if (!(await takeRecipientSlot(address, new Date()))) return { error: RECIPIENT_CAPPED, suppressed: false };
   const error = await sendVerifyConfirmation(input.email, workspaceId, address);
   return { error, suppressed: false };
 }

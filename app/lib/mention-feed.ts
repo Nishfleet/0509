@@ -1,3 +1,4 @@
+import { localDaysAgoLabel } from "./alert-day";
 import { daysAgoLabel } from "./delivery-alert";
 import { noulAction } from "./jev/thresholds";
 import { sourceName } from "./source-name";
@@ -35,8 +36,6 @@ export interface MentionRowModel {
   alsoCount: number;
 }
 
-const FOUND_TODAY = "found today";
-
 export const POSSIBLY_LINE = "Possibly. We were not sure this mattered, so it sits here rather than in your brief.";
 
 export const UNREVIEWED_LINE =
@@ -56,9 +55,20 @@ export function mentionTreatment(p: number): MentionTreatment {
   return "possibly";
 }
 
-export function mentionWhen(publishedAt: string | null, now: Date): string {
-  if (publishedAt === null) return FOUND_TODAY;
-  return daysAgoLabel(publishedAt, now);
+export function mentionWhen(dates: { publishedAt: string | null; observedAt: string }, now: Date): string {
+  if (dates.publishedAt === null) return `found ${daysAgoLabel(dates.observedAt, now)}`;
+  return daysAgoLabel(dates.publishedAt, now);
+}
+
+export function mentionAlertWhen(
+  dates: { publishedAt: string | null; observedAt: string },
+  now: Date,
+  timeZone: string,
+) {
+  const found = localDaysAgoLabel(dates.observedAt, now, timeZone);
+  if (dates.publishedAt === null) return `found ${found}`;
+  const published = localDaysAgoLabel(dates.publishedAt, now, timeZone);
+  return published === found ? `found ${found}` : `found ${found} · published ${published}`;
 }
 
 function storedReason(reason: string | null): string | null {
@@ -81,7 +91,7 @@ export function mentionsFromRows(rows: readonly MentionReadRow[], now: Date): Me
         publishedAt: row.publishedAt,
         observedAt: row.observedAt,
         treatment,
-        when: mentionWhen(row.publishedAt, now),
+        when: mentionWhen(row, now),
         alsoCount: row.alsoCount,
         why: storedReason(row.reason),
         whyFlagged: whyFlagged({

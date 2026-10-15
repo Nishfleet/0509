@@ -2,22 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { JevAnswer } from "../../evals/harness";
 
-// The harness asks its noul question with one request type and reads one answer field,
-// and both come from the endpoint it posts to (0509#7177). The /jev route on this box
-// answers 400 for the wrong request type, so a re-spelling costs a broken eval workflow
-// that only a manual run catches. These cases lock the pair for both endpoints with no
-// live call.
-
 interface Wire {
   type: string;
   field: string;
   value: (answer: JevAnswer) => number | undefined;
 }
 
-// The descriptor is fixed when the harness module is evaluated, so each case imports a
-// fresh copy. beforeEach sets the endpoint-selecting variables first: without it an
-// ambient CLOUDFLARE_ACCOUNT_ID/CLOUDFLARE_API_TOKEN on the host (or in CI) would flip
-// the /jev cases onto the binding path and fail them.
 beforeEach(() => {
   vi.stubEnv("LITELLM_JEV_KEY", "");
   vi.stubEnv("CLOUDFLARE_ACCOUNT_ID", "");

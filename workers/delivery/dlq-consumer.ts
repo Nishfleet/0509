@@ -21,10 +21,10 @@ export const INCIDENT_UNDELIVERED_TITLE = "We could not email you about your sit
 export const INCIDENT_UNDELIVERED_BODY =
   "Your site broke and we tried several times to email you about it, so we have stopped trying. The breakage and every check that followed are on your Alerts page.";
 
-export const CHANGE_UNDELIVERED_TITLE = "We could not email you about a rival change";
+export const CHANGE_UNDELIVERED_TITLE = "We could not email you about a competitor change";
 
 export const CHANGE_UNDELIVERED_BODY =
-  "A rival changed price or plan and we tried several times to email you about it, so we have stopped trying. The change is on your Alerts page.";
+  "A competitor changed price or plan and we tried several times to email you about it, so we have stopped trying. The change is on your Alerts page.";
 
 export function deliveryFailedAlert(input: {
   digest_id: string;
@@ -107,6 +107,16 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
     const parsed = parseMessage(item.body);
     if (parsed === null) {
       console.error("send-email-dlq: unparseable message", item.id);
+      item.ack();
+      continue;
+    }
+
+    if ("target_id" in parsed) {
+      captureException(
+        digestDeadLetterError({ message_id: item.id, digest_id: parsed.digest_id, reason: "teammate send gave up" }),
+        { tags: { queue: "send-email-dlq", lane: "teammates", digest_id: parsed.digest_id } },
+      );
+      console.error(JSON.stringify({ event: "delivery.teammate_dead_lettered", digest_id: parsed.digest_id }));
       item.ack();
       continue;
     }

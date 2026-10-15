@@ -95,8 +95,6 @@ describe("pickBiggestMove", () => {
   });
 
   it("keeps the higher-points signal when a lower-points signal arrives after it", () => {
-    // Same reliability on both, so the bucket weight alone decides the points:
-    // mention_matters is 3 and mention_normal is 1 in V1_ROWS.
     const high = signal({ id: "sig-high", bucket: "mention_matters" });
     const low = signal({ id: "sig-low", bucket: "mention_normal" });
 
@@ -106,8 +104,6 @@ describe("pickBiggestMove", () => {
   });
 
   it("breaks an equal-points tie on the later observedAt in either order", () => {
-    // Same bucket and reliability on both, so the points are equal by
-    // construction and only observedAt can separate them.
     const earlier = signal({
       id: "sig-earlier",
       bucket: "mention_matters",
@@ -126,8 +122,6 @@ describe("pickBiggestMove", () => {
   });
 
   it("breaks an equal-points, equal-observedAt tie on the greater id in either order", () => {
-    // Same bucket, reliability and observedAt on both, so points and time are
-    // equal by construction and only the id can separate them.
     const alpha = signal({
       id: "sig-alpha",
       bucket: "mention_matters",
@@ -141,8 +135,6 @@ describe("pickBiggestMove", () => {
       observedAt: "2026-09-20T10:00:00.000Z",
     });
 
-    // "sig-beta" sorts above "sig-alpha", so the test cannot hide a win by
-    // the smaller id behind JS string order.
     expect(pickBiggestMove([beta, alpha], WEIGHTS)?.signal.id).toBe("sig-beta");
     expect(pickBiggestMove([alpha, beta], WEIGHTS)?.signal.id).toBe("sig-beta");
   });

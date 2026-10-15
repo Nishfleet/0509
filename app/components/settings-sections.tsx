@@ -6,16 +6,18 @@ import { PasskeyList } from "./passkey-list";
 import { BriefScheduleSettings } from "./brief-schedule-settings";
 import { ChangeSignInEmail } from "./change-sign-in-email";
 import { DeliveryAddress } from "./delivery-address";
+import { MailKinds } from "./mail-kinds";
 import { DevicesList } from "./devices-list";
 import { Teammates } from "./teammates";
 import { MAX_TEAMMATES } from "../lib/teammate-limit";
-import { SignOut } from "./account-settings";
+import { SignOut, SignOutEverywhere } from "./account-settings";
 import type { ComponentProps } from "react";
 
 const BLOCK = "mt-10 border-t border-line pt-4";
 
 const JUMPS = [
-  { href: "#settings-brief", label: "Brief and alerts" },
+  { href: "#settings-brief", label: "Brief" },
+  { href: "#settings-alerts", label: "Alerts" },
   { href: "#settings-agents", label: "Agents and API" },
   { href: "#settings-plan", label: "Plan" },
   { href: "#settings-account", label: "Account" },
@@ -88,10 +90,12 @@ interface AccountResult {
 
 function DeliverySettings({
   delivery,
+  mail,
   teammates,
   result,
 }: {
   delivery: ComponentProps<typeof DeliveryAddress>["delivery"];
+  mail: ComponentProps<typeof MailKinds>["mail"];
   teammates: ComponentProps<typeof Teammates>["teammates"];
   result: AccountResult | undefined;
 }) {
@@ -102,6 +106,7 @@ function DeliverySettings({
         error={result?.deliveryError ?? null}
         suppressed={result?.deliverySuppressed ?? false}
       />
+      <MailKinds address={delivery.address} mail={mail} />
       <Teammates teammates={teammates} error={result?.teammateError ?? null} limit={MAX_TEAMMATES} />
     </>
   );
@@ -110,6 +115,7 @@ function DeliverySettings({
 export function AccountSection({
   email,
   delivery,
+  mail,
   teammates,
   passkeys,
   devices,
@@ -117,6 +123,7 @@ export function AccountSection({
 }: {
   email: string;
   delivery: ComponentProps<typeof DeliveryAddress>["delivery"];
+  mail: ComponentProps<typeof MailKinds>["mail"];
   teammates: ComponentProps<typeof Teammates>["teammates"];
   passkeys: ComponentProps<typeof PasskeyList>["passkeys"];
   devices: ComponentProps<typeof DevicesList>["devices"];
@@ -130,12 +137,17 @@ export function AccountSection({
       <p className="mt-2 leading-[1.55] [overflow-wrap:anywhere]">
         Signed in as <strong className="font-semibold">{email}</strong>
       </p>
-      <ChangeSignInEmail sent={result?.emailChangeSent ?? false} error={result?.emailChangeError ?? null} />
-      <DeliverySettings delivery={delivery} teammates={teammates} result={result} />
+      <ChangeSignInEmail
+        email={email}
+        sent={result?.emailChangeSent ?? false}
+        error={result?.emailChangeError ?? null}
+      />
+      <DeliverySettings delivery={delivery} mail={mail} teammates={teammates} result={result} />
       <PasskeyList passkeys={passkeys} />
       <div className="mt-2 flex flex-wrap items-start gap-x-6">
         <AddPasskey />
         <SignOut />
+        <SignOutEverywhere />
       </div>
       <DevicesList devices={devices} />
     </section>
