@@ -60,7 +60,7 @@ test("the brief day saves at once and is still there after a reload", async ({ p
   const next = options.find((value) => value !== before);
   expect(next).toBeDefined();
   await day.selectOption(next ?? before);
-  await expect(page.getByText("Brief time saved")).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Brief time saved." })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("combobox", { name: "Day", exact: true })).toHaveValue(next ?? before);
 });

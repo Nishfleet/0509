@@ -111,6 +111,16 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
       continue;
     }
 
+    if ("slack_target_id" in parsed) {
+      captureException(
+        digestDeadLetterError({ message_id: item.id, digest_id: parsed.digest_id, reason: "slack brief gave up" }),
+        { tags: { queue: "send-email-dlq", lane: "slack_brief", digest_id: parsed.digest_id } },
+      );
+      console.error(JSON.stringify({ event: "delivery.slack_brief_dead_lettered", digest_id: parsed.digest_id }));
+      item.ack();
+      continue;
+    }
+
     if ("target_id" in parsed) {
       captureException(
         digestDeadLetterError({ message_id: item.id, digest_id: parsed.digest_id, reason: "teammate send gave up" }),

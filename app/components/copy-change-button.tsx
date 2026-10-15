@@ -13,21 +13,15 @@ export function CopyChangeButton({ change }: { change: SummarisableChange }): Re
         data-testid="copy-change"
         variant="secondary"
         onClick={() => {
-          void copy(changeSummary(change)).then((result) => {
-            if (result === "copied")
-              void import("./toaster").then((module) => {
-                module.toastSaved("Copied for the team");
-              });
-          });
+          void copy(changeSummary(change));
         }}
       >
         {state === "copied" ? "Copied" : "Copy for the team"}
       </Button>
-      {state === "failed" ? (
-        <p role="status" className="mt-2 text-body-sm text-ink-soft">
-          Copy failed. Select the text above and copy it by hand.
-        </p>
-      ) : null}
+      <p role="status" className="mt-2 text-body-sm text-ink-soft">
+        {state === "copied" ? "Copied for the team." : null}
+        {state === "failed" ? "Copy failed. Select the text above and copy it by hand." : null}
+      </p>
     </div>
   );
 }

@@ -20,6 +20,7 @@ import {
   writeUnsubscribeToken,
 } from "../../app/lib/data/send_target.server";
 import type { SuppressionScope } from "../../app/lib/mail-kind";
+import { readSlackBrief } from "../../app/lib/data/workspace.server";
 import { insertSignalDeliveries } from "../../app/lib/data/signal_delivery.server";
 import { localDay, startOfLocalDay } from "../../app/lib/alert-day";
 import { TEAMMATE_RETRY_DELAY_SECONDS, TEAMMATE_SEND_TRIES } from "../../app/lib/teammate-limit";
@@ -29,6 +30,7 @@ import { parseBriefPayload } from "../../app/lib/brief-payload";
 import { nextHour } from "../../app/lib/home-standing";
 import { neutralizeBareUrls, slackEscape } from "../../app/lib/slack-webhook";
 import { postToSlackOutcome } from "../../app/lib/slack.server";
+import { SLACK_BRIEF_RETRY_DELAY_SECONDS, SLACK_BRIEF_SEND_TRIES, slackBriefText } from "../../app/lib/slack-brief";
 import {
   changeHeadline,
   markFromHunks,
@@ -85,7 +87,12 @@ interface TeammateMessage {
   target_id: string;
 }
 
-export type DeliveryMessage = DigestMessage | IncidentMessage | ChangeMessage | TeammateMessage;
+interface SlackBriefMessage {
+  digest_id: string;
+  slack_target_id: string;
+}
+
+export type DeliveryMessage = DigestMessage | IncidentMessage | ChangeMessage | TeammateMessage | SlackBriefMessage;
 
 type DeliveryOutcome =
   | "sent"
@@ -384,6 +391,52 @@ async function deliverTeammate(env: Env, message: TeammateMessage): Promise<Deli
   return sendToTeammate(env, digest, mate);
 }
 
+async function queueSlackBrief(env: Env, digestId: string): Promise<void> {
+  const digest = await readSentWeekly(env, digestId);
+  if (digest === null || !(await readSlackBrief(env.DB, digest.workspace_id))) return;
+  const target = await readSlackTarget(env.DB, digest.workspace_id);
+  if (target === null || (await hasSendAttempt(env.DB, slackBriefKey(digest.id, target.id)))) return;
+  await env.SEND_EMAIL.sendBatch([{ body: { digest_id: digest.id, slack_target_id: target.id } }]);
+}
+
+function slackBriefKey(digestId: string, targetId: string): string {
+  return `brief-slack:${digestId}:${targetId}`;
+}
+
+async function deliverSlackBrief(env: Env, message: SlackBriefMessage): Promise<DeliveryResult> {
+  const digest = await readSentWeekly(env, message.digest_id);
+  if (digest === null) return { outcome: "no_digest", attempt_id: null, idempotency_key: null };
+  if (!(await readSlackBrief(env.DB, digest.workspace_id))) {
+    return { outcome: "muted", attempt_id: null, idempotency_key: null };
+  }
+  const target = await readSlackTarget(env.DB, digest.workspace_id);
+  if (target?.id !== message.slack_target_id) {
+    return { outcome: "no_target", attempt_id: null, idempotency_key: null };
+  }
+  const idempotencyKey = slackBriefKey(digest.id, target.id);
+  const claim = await claimSendAttempt(env.DB, {
+    idempotencyKey,
+    workspaceId: digest.workspace_id,
+    targetId: target.id,
+    digestId: digest.id,
+  });
+  if (!claim) return { outcome: "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
+  return sendAndResolve(env, {
+    claimId: claim.id,
+    idempotencyKey,
+    send: async () => {
+      const posted = await postToSlackOutcome(target.target_value, slackBriefText(briefOf(digest)));
+      if (posted === "revoked") {
+        await disconnectSlackTarget(env.DB, target.id);
+        return { outcome: "sent", error: "slack webhook revoked; target disconnected" };
+      }
+      return posted === "sent"
+        ? { outcome: "sent", error: null }
+        : { outcome: "failed", error: "slack did not accept the post" };
+    },
+  });
+}
+
 export async function deliver(env: Env, message: DigestMessage): Promise<DeliveryResult> {
   const result = await deliverToOwner(env, message);
   if (result.outcome === "sent" || result.outcome === "duplicate") {
@@ -391,6 +444,13 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
       const error = redactEmailShaped(errorText(cause));
       captureException(new Error(error), { tags: { lane: "teammates", digest_id: message.digest_id } });
       console.error(JSON.stringify({ event: "delivery.teammates_failed", error }));
+    });
+    await queueSlackBrief(env, message.digest_id).catch((cause: unknown) => {
+      const kind = cause instanceof Error ? cause.constructor.name : "unknown";
+      captureException(new Error(`slack brief lane failed: ${kind}`), {
+        tags: { lane: "slack_brief", digest_id: message.digest_id },
+      });
+      console.error(JSON.stringify({ event: "delivery.slack_brief_failed", kind, digest_id: message.digest_id }));
     });
   }
   return result;
@@ -711,25 +771,56 @@ export async function deliverChange(env: Env, message: ChangeMessage): Promise<D
 }
 
 function route(env: Env, parsed: DeliveryMessage): Promise<DeliveryResult> {
+  if ("slack_target_id" in parsed) return deliverSlackBrief(env, parsed);
   if ("target_id" in parsed) return deliverTeammate(env, parsed);
   if ("incident_id" in parsed) return deliverIncident(env, parsed);
   if ("signal_id" in parsed) return deliverChange(env, parsed);
   return deliver(env, parsed);
 }
 
+interface BoundedLane {
+  lane: string;
+  tries: number;
+  delaySeconds: number;
+  error: string;
+  event: string;
+}
+
+const TEAMMATE_LANE: BoundedLane = {
+  lane: "teammates",
+  tries: TEAMMATE_SEND_TRIES,
+  delaySeconds: TEAMMATE_RETRY_DELAY_SECONDS,
+  error: "teammate brief not delivered",
+  event: "delivery.teammate_gave_up",
+};
+
+const SLACK_BRIEF_LANE: BoundedLane = {
+  lane: "slack_brief",
+  tries: SLACK_BRIEF_SEND_TRIES,
+  delaySeconds: SLACK_BRIEF_RETRY_DELAY_SECONDS,
+  error: "slack brief not delivered",
+  event: "delivery.slack_brief_gave_up",
+};
+
+function retryOrGiveUp(item: Message, digestId: string, lane: BoundedLane): void {
+  if (item.attempts < lane.tries) {
+    item.retry({ delaySeconds: lane.delaySeconds });
+    return;
+  }
+  captureException(new Error(lane.error), { tags: { lane: lane.lane, digest_id: digestId } });
+  console.error(JSON.stringify({ event: lane.event, digest_id: digestId }));
+  item.ack();
+}
+
 function settle(item: Message, parsed: DeliveryMessage, result: DeliveryResult): void {
   if (result.outcome !== "failed") {
     item.ack();
-  } else if (!("target_id" in parsed)) {
-    item.retry();
-  } else if (item.attempts < TEAMMATE_SEND_TRIES) {
-    item.retry({ delaySeconds: TEAMMATE_RETRY_DELAY_SECONDS });
+  } else if ("slack_target_id" in parsed) {
+    retryOrGiveUp(item, parsed.digest_id, SLACK_BRIEF_LANE);
+  } else if ("target_id" in parsed) {
+    retryOrGiveUp(item, parsed.digest_id, TEAMMATE_LANE);
   } else {
-    captureException(new Error("teammate brief not delivered"), {
-      tags: { lane: "teammates", digest_id: parsed.digest_id },
-    });
-    console.error(JSON.stringify({ event: "delivery.teammate_gave_up", digest_id: parsed.digest_id }));
-    item.ack();
+    item.retry();
   }
 }
 
@@ -768,7 +859,16 @@ function toDeliveryMessage(parsed: unknown): DeliveryMessage | null {
   if (parsed === null || typeof parsed !== "object") {
     return null;
   }
-  const candidate = parsed as { digest_id?: unknown; target_id?: unknown; incident_id?: unknown; signal_id?: unknown };
+  const candidate = parsed as {
+    digest_id?: unknown;
+    target_id?: unknown;
+    slack_target_id?: unknown;
+    incident_id?: unknown;
+    signal_id?: unknown;
+  };
+  if (typeof candidate.digest_id === "string" && typeof candidate.slack_target_id === "string") {
+    return { digest_id: candidate.digest_id, slack_target_id: candidate.slack_target_id };
+  }
   if (typeof candidate.digest_id === "string" && typeof candidate.target_id === "string") {
     return { digest_id: candidate.digest_id, target_id: candidate.target_id };
   }

@@ -12,6 +12,7 @@ import {
   type ResponseView,
   type SchemaView,
 } from "../lib/agent/api-docs";
+import { PROBLEMS } from "../lib/agent/problems";
 
 const SHELL = "mx-auto w-full max-w-[46rem] min-w-0 bg-bone px-6 py-16 text-ink sm:py-24";
 const TITLE = "font-display text-[clamp(1.75rem,3.6vw,2.9rem)] leading-[1.15] font-semibold tracking-[-0.02em]";
@@ -82,9 +83,35 @@ function LimitsBlock({ settingsHref }: { settingsHref: string }) {
         Rate limits
       </h2>
       <p className={BODY}>
-        The edge shield allows 120 requests a minute. It is per colo and eventually consistent, so a burst can trip in
-        one region and not another. Each key also has its own quota, shown in <SettingsLink href={settingsHref} />.
+        You can send 120 requests a minute from one address. The count is approximate, so a burst near the limit may be
+        stopped a little early or late. Each key also has its own quota, shown in <SettingsLink href={settingsHref} />.
+        Past a limit you get a 429 with a Retry-After header.
       </p>
+    </section>
+  );
+}
+
+function ErrorsBlock() {
+  return (
+    <section aria-labelledby="errors" className="mt-14 scroll-mt-6">
+      <h2 className={HEADING} id="errors">
+        Errors
+      </h2>
+      <p className={BODY}>
+        Every error is JSON with a short code in <span className={MONO}>error</span> and a sentence in{" "}
+        <span className={MONO}>error_description</span>. Branch on the code, show the sentence to a person.
+      </p>
+      <dl className="mt-6 border-t border-line">
+        {Object.entries(PROBLEMS).map(([code, problem]) => (
+          <div className={ROW} key={code}>
+            <dt className={`${MONO} text-ink`}>
+              {code}
+              <span className="mt-1 block font-sans text-body-sm text-ink-soft">{problem.status}</span>
+            </dt>
+            <dd className="min-w-0 leading-[1.6] text-ink-soft">{problem.description}</dd>
+          </div>
+        ))}
+      </dl>
     </section>
   );
 }
@@ -218,6 +245,7 @@ export function ApiReference({
         <AuthBlock document={document} exampleUrl={exampleUrl} settingsHref={settingsHref} />
         <McpBlock mcpUrl={mcpUrl} settingsHref={settingsHref} />
         <LimitsBlock settingsHref={settingsHref} />
+        <ErrorsBlock />
         <Endpoints document={document} />
         <Schemas document={document} />
       </main>
