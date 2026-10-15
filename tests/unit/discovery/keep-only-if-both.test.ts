@@ -3,7 +3,7 @@ vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn() }));
 
 import type { NoulVerdict } from "../../../app/lib/jev/client.server";
 import { keepOnlyIfBoth } from "../../../app/lib/discovery/run.server";
-import { ACT_AT, noulAction, REJECT_AT } from "../../../app/lib/jev/thresholds";
+import { noulAction, REJECT_AT } from "../../../app/lib/jev/thresholds";
 
 function verdict(questionId: string, p: number): NoulVerdict {
   return { questionId, inputHash: `hash-${questionId}`, p, cached: false };
@@ -14,17 +14,16 @@ function combined(competitor: number, category: number): number {
 }
 
 describe("keepOnlyIfBoth", () => {
-  it("lifts a clear yes from the model's compressed scale to an automatic keep", () => {
-    expect(noulAction(combined(0.8169, 0.7408))).toBe("act");
-    expect(noulAction(combined(0.7819, 0.6543))).toBe("act");
-    expect(noulAction(combined(0.9033, 0.9319))).toBe("act");
-    expect(noulAction(combined(0.7545, 0.5444))).toBe("act");
-    expect(noulAction(combined(0.7365, 0.593))).toBe("act");
+  it("passes the model's own score through, so a coin flip stays a coin flip", () => {
+    expect(combined(0.5, 0.5)).toBe(0.5);
+    expect(noulAction(combined(0.5, 0.5))).toBe("maybe");
+    expect(combined(0.8169, 0.7408)).toBe(0.7408);
+    expect(noulAction(combined(0.8169, 0.7408))).toBe("maybe");
   });
 
-  it("keeps a score under the clear-yes mark as it was", () => {
-    expect(combined(0.45, 0.9)).toBe(0.45);
-    expect(noulAction(combined(0.45, 0.9))).toBe("maybe");
+  it("acts only when the model itself is at the act line on both answers", () => {
+    expect(combined(0.95, 0.92)).toBe(0.92);
+    expect(noulAction(combined(0.95, 0.92))).toBe("act");
   });
 
   it("scores a candidate off the category as zero however sure the competitor answer is", () => {
@@ -40,15 +39,12 @@ describe("keepOnlyIfBoth", () => {
     expect(combined(0.084, 0.0469)).toBeLessThanOrEqual(REJECT_AT);
   });
 
-  it("never lowers a score and never passes one", () => {
-    const scores = [0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 1];
-    const lifted = scores.map((p) => combined(p, p));
-    lifted.forEach((value, index) => {
-      expect(value).toBeGreaterThanOrEqual(scores[index] ?? 0);
-      expect(value).toBeLessThanOrEqual(1);
+  it("returns the lowest of the answers and never more", () => {
+    const scores = [0.5, 0.6, 0.7, 0.8, 0.9, 1];
+    scores.forEach((p) => {
+      expect(combined(p, 1)).toBe(p);
+      expect(combined(1, p)).toBe(p);
     });
-    expect(lifted).toEqual([...lifted].sort((a, b) => a - b));
-    expect(lifted[0]).toBeCloseTo(ACT_AT, 10);
   });
 
   it("returns the first verdict's question and hash", () => {
