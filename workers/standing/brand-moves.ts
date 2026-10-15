@@ -1,5 +1,5 @@
 import { pickBiggestMove } from "../../app/lib/biggest-move";
-import { readScoredSignals } from "../../app/lib/data/signal.server";
+import { readScoredSignalsByEntity } from "./scored-signals";
 import { weightsAsOf } from "../../app/lib/standing-score";
 import { ALL_WEIGHTS, weightRows } from "../../app/lib/standing-score.server";
 
@@ -19,15 +19,15 @@ function shorten(text: string): string {
 
 export async function readBrandMoves(db: D1Database, input: BrandMovesInput): Promise<Map<string, string>> {
   const weights = weightsAsOf(weightRows.parse((await db.prepare(ALL_WEIGHTS).all()).results), input.since);
+  const scoredByEntity = await readScoredSignalsByEntity({
+    workspaceId: input.workspaceId,
+    entityIds: input.entityIds,
+    since: input.since,
+    until: input.until,
+  });
   const moves = new Map<string, string>();
   for (const entityId of input.entityIds) {
-    const scored = await readScoredSignals({
-      workspaceId: input.workspaceId,
-      entityId,
-      since: input.since,
-      until: input.until,
-    });
-    const signal = pickBiggestMove(scored, weights)?.signal;
+    const signal = pickBiggestMove(scoredByEntity.get(entityId) ?? [], weights)?.signal;
     const text = [signal?.title, signal?.summary].find((candidate) => candidate?.trim());
     if (text !== undefined && text !== null) moves.set(entityId, shorten(text));
   }

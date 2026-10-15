@@ -1,5 +1,7 @@
+export const PRICING_NEXT_STEP = "Compare it with your own pricing.";
+
 const NEXT_STEP: Readonly<Record<string, string>> = {
-  pricing: "Compare it with your own pricing.",
+  pricing: PRICING_NEXT_STEP,
   offer: "Decide whether your customers will notice it and whether to answer.",
   launch: "Check whether it overlaps with what you are building.",
   removal: "See whether their customers now have a reason to look at you.",
