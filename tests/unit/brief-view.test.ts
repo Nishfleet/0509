@@ -92,7 +92,7 @@ function payload(): BriefPayload {
       degraded_source_keys: [],
       degraded_sources: [],
     },
-    next_brief_at: "2026-09-28T13:00:00.000Z",
+    next_brief_at: "2036-09-29T13:00:00.000Z",
   };
 }
 
@@ -128,7 +128,28 @@ describe("the brief view", () => {
   it("names how each brand moved and when the next brief arrives", () => {
     const html = render({ timezone: "UTC" });
     expect(html).toContain("Oaks: #1, holding steady");
-    expect(html).toContain("Next brief: Monday 28 September 2026, 13:00 UTC");
+    expect(html).toContain("Next brief: Monday 29 September 2036, 13:00 UTC");
+  });
+
+  it("leaves out the next brief line for a past date or an unknown timezone", () => {
+    expect(render({ next_brief_at: "2020-01-06T08:00:00.000Z" })).not.toContain("Next brief");
+    expect(render({ timezone: "Not/AZone" })).not.toContain("Next brief");
+  });
+
+  it("says new for a new brand and keeps the bare rank on a first ranking or no movement", () => {
+    const base = payload();
+    const brands = base.brands.map((brand, index) =>
+      index === 0 ? { ...brand, rank: 4, movement: null, is_new: true } : { ...brand, rank: 2, movement: null },
+    );
+    const html = render({ brands });
+    expect(html).toContain("Oaks: #4, new");
+    expect(html).toContain("Drylight: #2<");
+    const first = render({
+      brands: base.brands.map((brand) => ({ ...brand, movement: null, is_new: false })),
+      headline_movement: null,
+      headline_earlier: null,
+    });
+    expect(first).toContain("Oaks: #1<");
   });
 
   it("leaves out the next brief line when none is scheduled", () => {
