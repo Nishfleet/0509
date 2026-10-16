@@ -154,4 +154,60 @@ describe("re-judging a closing week's mentions before the freeze", () => {
     expect(judged).toBe(0);
     expect((await signalRows(competitorId)).every((row) => row.state === "unjudged")).toBe(true);
   });
+
+  it("gives a mention judged from a cached verdict its own verdict row", async () => {
+    const { workspaceId, competitorId, brand } = await seedWorkspace();
+    stubGdelt();
+    Reflect.set(env, "AI", { run: jevAnswering() });
+    await sweepTarget(await gdeltTargetFor(brand), NIGHT_ONE, null);
+    const kept = (await signalRows(competitorId)).find((row) => row.title.includes("flagship"));
+    const copyKept = (id: string) =>
+      env.DB.prepare(
+        `INSERT INTO signal (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, title, url, canonical_url, url_hash,
+           author, engagement_json, payload_json, dedup_key, published_at, observed_at, last_seen_at, is_tombstoned, state, title_hash, norm_url_hash)
+         SELECT ?1, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, title, url, canonical_url, url_hash,
+           author, engagement_json, payload_json, ?1, published_at, observed_at, last_seen_at, 1, 'unjudged', title_hash, norm_url_hash
+         FROM signal WHERE id = ?2`,
+      )
+        .bind(id, kept?.id ?? "")
+        .run();
+    const window = { workspaceId, windowStartAt: "2026-09-17T00:00:00.000Z", windowEndAt: NIGHT_TWO, limit: 10 };
+
+    await copyKept("sig-twin-a");
+    await rejudgeWindowMentions(window);
+    await copyKept("sig-twin-b");
+    const run = jevAnswering();
+    Reflect.set(env, "AI", { run });
+    await rejudgeWindowMentions(window);
+
+    expect(run).not.toHaveBeenCalled();
+    const questions = (signalId: string) =>
+      env.DB.prepare("SELECT question_id FROM jev_verdict WHERE signal_id = ? ORDER BY question_id")
+        .bind(signalId)
+        .all<{ question_id: string }>();
+    const expected = ["mention_is_about_brand", "mention_matters"];
+    expect((await questions("sig-twin-a")).results.map((row) => row.question_id)).toEqual(expected);
+    expect((await questions("sig-twin-b")).results.map((row) => row.question_id)).toEqual(expected);
+  });
+
+  it("never shows an unjudged mention whose watch is switched off", async () => {
+    const { workspaceId, competitorId, brand } = await seedWorkspace();
+    stubGdelt();
+    Reflect.set(env, "AI", { run: jevDown() });
+    await sweepTarget(await gdeltTargetFor(brand), NIGHT_ONE, null);
+    await env.DB.prepare("UPDATE watch SET is_active = 0 WHERE entity_id = ?").bind(competitorId).run();
+
+    Reflect.set(env, "AI", { run: jevAnswering() });
+    const judged = await rejudgeWindowMentions({
+      workspaceId,
+      windowStartAt: "2026-09-17T00:00:00.000Z",
+      windowEndAt: NIGHT_TWO,
+      limit: 10,
+    });
+    expect(judged).toBe(0);
+    expect((await signalRows(competitorId)).map((row) => [row.state, row.is_tombstoned])).toEqual([
+      ["unjudged", 1],
+      ["unjudged", 1],
+    ]);
+  });
 });

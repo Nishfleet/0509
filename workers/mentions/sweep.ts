@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { insertSignalAlert } from "../../app/lib/data/alert.server";
 import type { DiscoveryContext } from "../../app/lib/data/entity.server";
 import { readDiscoveryContext, readEntityIdentityJson } from "../../app/lib/data/entity.server";
-import { insertVerdict } from "../../app/lib/data/jev_verdict.server";
+import { insertSignalVerdict } from "../../app/lib/data/jev_verdict.server";
 import {
   type DuplicateCandidate,
   findDuplicateCandidate,
@@ -160,6 +160,10 @@ function mentionAlert(input: {
   });
 }
 
+function recordedHash(verdict: NoulVerdict, signalId: string): string {
+  return verdict.cached ? `${verdict.inputHash}:${signalId}` : verdict.inputHash;
+}
+
 function judgedStatements(input: {
   watch: WatchRow;
   signalId: string;
@@ -170,10 +174,10 @@ function judgedStatements(input: {
 }): D1PreparedStatement[] {
   const { watch, signalId, item, verdicts, now } = input;
   const verdictRow = (verdict: NoulVerdict, reason: string | null) =>
-    insertVerdict({
+    insertSignalVerdict({
       workspaceId: watch.workspace_id,
       questionId: verdict.questionId,
-      inputHash: verdict.inputHash,
+      inputHash: recordedHash(verdict, signalId),
       signalId,
       entityId: watch.entity_id,
       p: verdict.p,
@@ -197,10 +201,10 @@ function duplicateStatements(input: {
   verdict: NoulVerdict;
 }): D1PreparedStatement[] {
   const { watch, signalId, candidateId, verdict } = input;
-  const verdictRow = insertVerdict({
+  const verdictRow = insertSignalVerdict({
     workspaceId: watch.workspace_id,
     questionId: verdict.questionId,
-    inputHash: verdict.inputHash,
+    inputHash: recordedHash(verdict, signalId),
     signalId,
     entityId: watch.entity_id,
     p: verdict.p,
