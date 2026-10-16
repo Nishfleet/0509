@@ -2,6 +2,7 @@ import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { claimSendAttempt, resolveSendAttempt } from "../../app/lib/data/send_attempt.server";
 
+import { reportLifecycleFailure } from "./lifecycle-failure";
 import { BRIEF_SENDER, sendMessage } from "./send";
 
 export interface SendOnceInput {
@@ -45,5 +46,6 @@ export async function sendOnce(env: Env, input: SendOnceInput): Promise<boolean>
     subject: "subject" in result ? result.subject : null,
     providerId: "provider_id" in result ? result.provider_id : null,
   });
+  if (result.outcome === "failed") reportLifecycleFailure("delivery.lifecycle_send_failed", result.error);
   return result.outcome === "sent";
 }

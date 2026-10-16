@@ -62,7 +62,7 @@ function jevAnswering() {
   return vi.fn((_model: string, input: { state: { item: { title: string } }; questions: Record<string, unknown> }) => {
     const [questionId] = Object.keys(input.questions);
     const title = input.state.item.title;
-    const p = questionId === "mention_is_about_brand" ? (title.includes("winds") ? 0.03 : 0.96) : 0.94;
+    const p = questionId === "mention_is_about_brand" ? (title.includes("winds") ? 0.3 : 0.96) : 0.94;
     return Promise.resolve({ answers: { [questionId ?? ""]: { type: "noul", noul: p } } });
   });
 }
@@ -121,7 +121,7 @@ describe("re-judging unjudged mentions", () => {
       .all<{ question_id: string; p: number }>();
     expect(rejectVerdict.results).toHaveLength(1);
     expect(rejectVerdict.results[0]?.question_id).toBe("mention_is_about_brand");
-    expect(rejectVerdict.results[0]?.p).toBeLessThanOrEqual(0.1);
+    expect(rejectVerdict.results[0]?.p).toBe(0.3);
 
     const kept = rows.find((row) => row.title.includes("flagship"));
     const keptVerdicts = await env.DB.prepare(

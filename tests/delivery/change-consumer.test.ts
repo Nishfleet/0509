@@ -301,6 +301,10 @@ describe("deliverChange to Slack", () => {
     slots.postToSlackOutcome.mockResolvedValue("revoked");
     const result = await deliverChange(fakeEnv(), { signal_id: "sig-1" });
     expect(result.outcome).toBe("sent");
+    expect(slots.resolveSendAttempt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ outcome: "skipped_revoked" }),
+    );
     expect(slots.disconnectSlackTarget).toHaveBeenCalledWith(expect.anything(), "tgt-slack");
     expect(sent).toHaveLength(1);
   });

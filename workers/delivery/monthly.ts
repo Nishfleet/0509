@@ -1,4 +1,3 @@
-import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { isTesterSubscription } from "../../app/lib/billing/returning.server";
 import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
 import { readMonthlies, type Monthly } from "../../app/lib/data/monthly.server";
@@ -7,6 +6,7 @@ import { hasReminderAttempt } from "../../app/lib/data/trial_reminder.server";
 import { SETTINGS_LINK, unsubscribeHeaders } from "../../app/lib/alert-footer";
 import { ensureUnsubscribeToken, unsubscribeUrlFor } from "./consumer";
 import { renderMonthly } from "./monthly-template";
+import { reportLifecycleFailure } from "./lifecycle-failure";
 import { sendOnce } from "./send-once";
 
 const ALERTS_LINK = "https://0509.io/app/alerts";
@@ -52,7 +52,7 @@ export async function sendMonthlies(
   let sent = 0;
   for (const monthly of await readMonthlies(env.DB, now)) {
     const done = await monthlyOne(env, monthly, isTester).catch((error: unknown) => {
-      console.error(JSON.stringify({ event: "delivery.monthly_failed", error: redactEmailShaped(String(error)) }));
+      reportLifecycleFailure("delivery.monthly_failed", error);
       return false;
     });
     if (done) sent += 1;

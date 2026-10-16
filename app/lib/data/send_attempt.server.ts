@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-const STALE_CLAIM_MS = 60 * 60 * 1000;
+export const STALE_CLAIM_MS = 60 * 60 * 1000;
 const SENT_MARKER_TTL_SECONDS = 8 * 24 * 60 * 60;
 
 const sentMarkerKey = (idempotencyKey: string): string => `send-sent:${idempotencyKey}`;
@@ -103,7 +103,7 @@ export async function resolveSendAttempt(
   input: {
     attemptId: string;
     idempotencyKey: string;
-    outcome: "sent" | "failed";
+    outcome: "sent" | "failed" | "unconfirmed" | "skipped_revoked";
     error: string | null;
     subject?: string | null;
     providerId?: string | null;

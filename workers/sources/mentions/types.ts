@@ -37,7 +37,7 @@ export const SOURCE_SETTINGS = {
     timeoutMs: 24_000,
     timeoutRetries: 1,
     retryBackoffMs: 1_000,
-    rateLimitRetries: 5,
+    rateLimitRetries: 2,
     rateLimitPauseMs: 8_000,
   },
 } as const;
@@ -86,7 +86,9 @@ export async function fetchUpstream(url: string, timeoutMs = 8000, options: Upst
       const kind = retryKind(error, used, options);
       if (kind === null) throw error;
       used = { ...used, [kind]: used[kind] + 1 };
-      await pause((kind === "timeouts" ? options.backoffMs : options.rateLimitPauseMs) ?? 0);
+      const pauseMs =
+        kind === "timeouts" ? options.backoffMs : (options.rateLimitPauseMs ?? 0) * 2 ** (used.limited - 1);
+      await pause(pauseMs ?? 0);
     }
   }
 }

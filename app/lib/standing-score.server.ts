@@ -2,13 +2,7 @@ import { z } from "zod";
 
 import { ACT_AT, REJECT_AT, changeActsSql } from "./jev/thresholds";
 import { CHANGE_HAS_STORED_EVIDENCE, changeJudgedSql } from "./site-change";
-import {
-  D3_QUESTION_ID,
-  D3S_QUESTION_ID,
-  D6_QUESTION_ID,
-  reliabilitySchema,
-  scoreBucketSchema,
-} from "./standing-score";
+import { D3_QUESTION_ID, D3S_QUESTION_ID, reliabilitySchema, scoreBucketSchema } from "./standing-score";
 
 export const COUNT_BUCKETS = `SELECT s.entity_id AS entity_id,
   CASE
@@ -34,12 +28,8 @@ const COUNT_UNJUDGED_INPUTS = `SELECT COUNT(*) AS n
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
 WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.is_tombstoned = 0
-  AND (
-    (s.kind = 'mention' AND NOT EXISTS (
-      SELECT 1 FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id = ?4
-    ))
-    OR (s.kind = 'change' AND (e.role <> 'self' OR ${CHANGE_HAS_STORED_EVIDENCE}) AND NOT ${changeJudgedSql({ noteworthy: "?5", breakage: "?6" })})
-  )`;
+  AND s.kind = 'change' AND (e.role <> 'self' OR ${CHANGE_HAS_STORED_EVIDENCE})
+  AND NOT ${changeJudgedSql({ noteworthy: "?4", breakage: "?5" })}`;
 
 export async function countUnjudgedInputs(
   db: D1Database,
@@ -47,7 +37,7 @@ export async function countUnjudgedInputs(
 ): Promise<number> {
   const row = await db
     .prepare(COUNT_UNJUDGED_INPUTS)
-    .bind(input.workspaceId, input.windowStartAt, input.windowEndAt, D6_QUESTION_ID, D3_QUESTION_ID, D3S_QUESTION_ID)
+    .bind(input.workspaceId, input.windowStartAt, input.windowEndAt, D3_QUESTION_ID, D3S_QUESTION_ID)
     .first<{ n: number }>();
   if (row === null) {
     throw new Error("countUnjudgedInputs returned no row");

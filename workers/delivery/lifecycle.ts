@@ -1,7 +1,6 @@
-import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
-
 import { marketingEmailAllowed } from "../../app/lib/email-shell";
 
+import { reportLifecycleFailure } from "./lifecycle-failure";
 import { sendMonthlies } from "./monthly";
 import { sendRecaps } from "./recap";
 import { sendRivalNudges } from "./rival-nudge";
@@ -22,7 +21,7 @@ export async function sendLifecycleEmails(env: Env, now: Date): Promise<void> {
       continue;
     }
     await send(env, now).catch((error: unknown) => {
-      console.error(JSON.stringify({ event, error: redactEmailShaped(String(error)).slice(0, 200) }));
+      reportLifecycleFailure(event, error);
     });
   }
 }

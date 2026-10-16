@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { RUN_BUDGET_MS, SOURCE_BUDGET_MS, SweepBudget } from "../../../workers/mentions/budget";
 import type { SweepPass } from "../../../workers/mentions/retry";
 import { deferred, retrySkipped, sustainedSkips, track, tripped } from "../../../workers/mentions/retry";
 import type { MentionTarget, TargetOutcome } from "../../../workers/mentions/sweep";
@@ -11,7 +12,7 @@ function target(query: string): MentionTarget {
   return { pluginKey: "gdelt.doc", query, sourceId: "src", minIntervalSeconds: 6, watches: [] } as never;
 }
 
-function pass(outcomes: TargetOutcome[], stillLost: readonly string[] = []) {
+function pass(outcomes: TargetOutcome[], stillLost: readonly string[] = [], budget = new SweepBudget()) {
   const calls: string[] = [];
   const sleeps: string[] = [];
   const step = {
@@ -21,6 +22,7 @@ function pass(outcomes: TargetOutcome[], stillLost: readonly string[] = []) {
   const sweepPass: SweepPass = {
     targets: outcomes.map((_outcome, index) => target(`q${String(index)}`)),
     outcomes,
+    budget,
     run: (item) => {
       calls.push(item.query);
       return Promise.resolve(stillLost.includes(item.query) ? lost : ok);
@@ -65,6 +67,32 @@ describe("mentions retry of skipped targets", () => {
     expect(tripped(streaks, first)).toBe(true);
     track(streaks, first, ok);
     expect(tripped(streaks, first)).toBe(false);
+  });
+
+  it("retries nothing once the run budget is spent, and says nothing about sleeping first", async () => {
+    const budget = new SweepBudget();
+    budget.spend(null, RUN_BUDGET_MS);
+    const { step, sweepPass, calls, sleeps } = pass([lost, lost], [], budget);
+    const result = await retrySkipped(step as never, sweepPass);
+    expect([calls, sleeps]).toEqual([[], []]);
+    expect(result.map((outcome) => outcome?.skipped)).toEqual([1, 1]);
+  });
+
+  it("retries nothing for a source whose own budget is spent", async () => {
+    const budget = new SweepBudget();
+    budget.spend("gdelt.doc", SOURCE_BUDGET_MS);
+    const { step, sweepPass, calls } = pass([lost], [], budget);
+    await retrySkipped(step as never, sweepPass);
+    expect(calls).toEqual([]);
+  });
+
+  it("charges each retry's time and pace sleep to the budget", async () => {
+    const budget = new SweepBudget();
+    const { step, sweepPass } = pass([lost], [], budget);
+    await retrySkipped(step as never, { ...sweepPass, run: () => Promise.resolve({ ...ok, ms: 90_000 }) });
+    expect(budget.reason("gdelt.doc")).toBeNull();
+    budget.spend("gdelt.doc", SOURCE_BUDGET_MS - 90_000 - 6_000);
+    expect(budget.reason("gdelt.doc")).toBe("source_budget");
   });
 
   it("counts a deferred target's watches as skipped", () => {

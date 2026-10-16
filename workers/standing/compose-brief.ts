@@ -10,6 +10,7 @@ import { quietLedgerLine, type WorkLedger } from "../../app/lib/work-ledger";
 import { readWorkLedger } from "../../app/lib/data/work_ledger.server";
 import { UNJUDGED_WEEK_LINE, readThisFirstLine } from "../../app/lib/read-this-first";
 import { effectiveKindSql } from "../../app/lib/source-kind";
+import { lostMentionSources } from "../../app/lib/data/sweep_run.server";
 import { sourceName } from "../../app/lib/source-name";
 import type { RankedEntity } from "../../app/lib/standing-score";
 import type { JudgedWeek } from "./read-this-first";
@@ -189,6 +190,26 @@ type SourceCoverage = z.infer<typeof sourceCoverageRows>[number];
 type OwnSiteIncident = z.infer<typeof incidentRows>[number];
 type PickedSignal = z.infer<typeof pickedSignalRows>[number];
 
+async function withLostMentions(
+  db: D1Database,
+  input: ComposeInput,
+  sources: readonly SourceCoverage[],
+): Promise<SourceCoverage[]> {
+  const lost = await lostMentionSources(db, {
+    startAt: input.week.startsAt.toISOString(),
+    endAt: input.week.closesAt.toISOString(),
+  });
+  const rest = sources.filter((source) => !lost.includes(source.key));
+  const named = lost.map((key) => ({
+    key,
+    kind: "mentions",
+    platform: key.split(".")[0] ?? key,
+    last_landed_at: null,
+    answered: 0,
+  }));
+  return [...rest, ...named];
+}
+
 async function loadBriefRows(db: D1Database, input: ComposeInput) {
   const startsAt = input.week.startsAt.toISOString();
   const closesAt = input.week.closesAt.toISOString();
@@ -214,7 +235,11 @@ async function loadBriefRows(db: D1Database, input: ComposeInput) {
     countsByEntity: new Map(
       signalCountRows.parse(required(counts, "compose-brief.counts").results).map((row) => [row.entity_id, row]),
     ),
-    sources: sourceCoverageRows.parse(required(coverage, "compose-brief.coverage").results),
+    sources: await withLostMentions(
+      db,
+      input,
+      sourceCoverageRows.parse(required(coverage, "compose-brief.coverage").results),
+    ),
     ownSite: incidentRows.parse(required(incidents, "compose-brief.incidents").results),
     pausedNames: pausedCompetitorRows
       .parse(required(pausedRows, "compose-brief.pausedRows").results)

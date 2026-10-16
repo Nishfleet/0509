@@ -579,6 +579,55 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     expect(brief.why_line).toBe("We haven't finished reviewing this week's changes yet.");
   });
 
+  it("still ranks the week when a source flaps, and names the lost sources in what was checked", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    await seedWorkspace(schedule);
+    const closesAt = nextBriefAt(schedule, new Date());
+    const startsAt = previousBriefAt(schedule, closesAt);
+    const lastWeek = previousBriefAt(schedule, startsAt).toISOString();
+    await seedFrozenWeek(lastWeek, [
+      [SELF, 1],
+      [RIVAL_A, 2],
+      [RIVAL_B, 3],
+    ]);
+    const days = [0, 1, 2, 3, 4, 5, 6].map((day) =>
+      new Date(startsAt.getTime() + day * 24 * hour + hour).toISOString(),
+    );
+    const flapping = [true, false, true, true, false, true, true];
+    await env.DB.batch(
+      days.map((at, index) =>
+        env.DB.prepare(
+          "INSERT INTO sweep_run (id, kind, planned_at, finished_at, wall_ms, pages, failed, reason) VALUES (?1, 'mentions', ?2, ?2, 0, 177, ?3, ?4)",
+        ).bind(
+          `${WS}_mentions_run_${String(index)}`,
+          at,
+          flapping[index] ? 44 : 0,
+          flapping[index] ? "gdelt.doc" : null,
+        ),
+      ),
+    );
+
+    const instance = rolloverInstance(WS, closesAt, "scheduled");
+    await using introspector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, instance.id);
+    await introspector.modify(async (m) => {
+      await m.disableSleeps();
+    });
+    await env.STANDING_ROLLOVER.create(instance);
+    await introspector.waitForStatus("complete");
+
+    const ranks = await standingFor(startsAt.toISOString());
+    expect(ranks.every((row) => row.rank !== null)).toBe(true);
+    const digest = await env.DB.prepare("SELECT payload_json FROM digest WHERE id = ?1")
+      .bind(`digest_${WS}_${instantStamp(closesAt)}`)
+      .first<{ payload_json: string }>();
+    const brief = parseBriefPayload(digest?.payload_json ?? "");
+    expect(brief.is_unjudged).toBe(false);
+    expect(brief.headline_rank).not.toBeNull();
+    expect(brief.checked.degraded_source_keys).toEqual(["gdelt.doc"]);
+    expect(brief.checked.degraded_sources).toEqual([{ key: "gdelt.doc", name: "News mentions", last_landed_at: null }]);
+    await env.DB.prepare("DELETE FROM sweep_run WHERE id LIKE ?1").bind(`${WS}_mentions_run_%`).run();
+  });
+
   it("freezes rank once an unjudged change is rejudged after Jev recovers", async () => {
     const schedule = scheduleOffsetFromToday(3);
     await seedWorkspace(schedule);
