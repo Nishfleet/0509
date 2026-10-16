@@ -12,6 +12,7 @@ const PIPELINE_IMPORTERS: Record<string, string> = {
   "app/lib/data/jev_verdict.server.ts": "links a verdict to a signal that must exist",
   "app/lib/data/user_decision.server.ts": "stores a customer's feedback on a change",
   "app/lib/data/onboarding_run.server.ts": "times the first signal of a new workspace",
+  "app/lib/data-export.server.ts": "the account export returns every row the customer owns, shown or not",
   "app/lib/data/incident.server.ts": "reads the first alert's baseline text for a breakage incident",
   "app/lib/data/work_ledger.server.ts": "counts what was set aside, which the gate hides by design",
   "app/lib/standing-score.server.ts": "counts the inputs still waiting for a verdict",
