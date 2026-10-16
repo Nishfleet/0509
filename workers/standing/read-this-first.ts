@@ -7,7 +7,7 @@ import { changeActsSql } from "../../app/lib/jev/thresholds";
 import type { D4Verdict } from "../../app/lib/read-this-first";
 import { pickReadThisFirst, READ_THIS_FIRST, readThisFirstState } from "../../app/lib/read-this-first";
 import { D3_QUESTION_ID, D6_QUESTION_ID } from "../../app/lib/standing-score";
-import { countUnjudgedChanges, countUnjudgedInputs } from "../../app/lib/standing-score.server";
+import { countUnjudgedInputs } from "../../app/lib/standing-score.server";
 import { required } from "../../app/lib/required";
 
 const EFFECTIVE_AT = "COALESCE(datetime(s.published_at), datetime(s.observed_at))";
@@ -60,7 +60,6 @@ export interface JudgedWeek {
   picks: string[];
   judged: number;
   unjudged: boolean;
-  unjudgedChanges: boolean;
 }
 
 interface LocatedItem {
@@ -161,12 +160,9 @@ export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<
   const items = weekItemRows.parse(required(weekItemResult, "read-this-first.items").results);
   const entities = entityRows.parse(required(entityResult, "read-this-first.entities").results);
   const window = { workspaceId: input.workspaceId, windowStartAt: input.startsAt, windowEndAt: input.closesAt };
-  const [unjudgedInputs, unjudgedChanges] = await Promise.all([
-    countUnjudgedInputs(db, window),
-    countUnjudgedChanges(db, window),
-  ]);
+  const unjudgedInputs = await countUnjudgedInputs(db, window);
   if (items.length === 0) {
-    return { picks: [], judged: 0, unjudged: unjudgedInputs > 0, unjudgedChanges: unjudgedChanges > 0 };
+    return { picks: [], judged: 0, unjudged: unjudgedInputs > 0 };
   }
   const byId = new Map(entities.map((entity) => [entity.id, entity]));
   const located = items.flatMap((item) => {
@@ -182,7 +178,6 @@ export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<
       picks: pickReadThisFirst(collected),
       judged: items.length,
       unjudged: unjudgedInputs > 0,
-      unjudgedChanges: unjudgedChanges > 0,
     };
   } catch (error) {
     if (error instanceof JevUnavailableError) {
@@ -193,7 +188,7 @@ export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<
           reason: error.name,
         }),
       );
-      return { picks: [], judged: 0, unjudged: true, unjudgedChanges: true };
+      return { picks: [], judged: 0, unjudged: true };
     }
     throw error;
   }

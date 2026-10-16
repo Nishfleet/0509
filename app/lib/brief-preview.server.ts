@@ -40,7 +40,7 @@ export async function previewBrief(workspaceId: string, schedule: BriefSchedule,
     workspaceId,
     schedule,
     week,
-    readThisFirst: { picks, judged: picks.length, unjudged: false, unjudgedChanges: false },
+    readThisFirst: { picks, judged: picks.length, unjudged: false },
     standing,
   });
   return { ...payload, next_brief_at: closesAt };

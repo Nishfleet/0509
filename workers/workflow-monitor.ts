@@ -23,7 +23,7 @@ function closeCheckIn(
   health: RunHealth,
 ): Promise<string> {
   const failed = health.state === "failed";
-  const signal = health.state === "ok" ? "ok" : "fail";
+  const signal = failed ? "fail" : "ok";
   const body = health.state === "ok" ? undefined : `${health.state}: ${health.reason}`;
   return pingCheck(monitor.slug, signal, body).then(() =>
     captureCheckIn({ checkInId, monitorSlug: monitor.slug, status: failed ? "error" : "ok" }, monitor.config),

@@ -181,7 +181,7 @@ describe("the work ledger against real D1", () => {
       workspaceId: "ws-a",
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: WEEK,
-      readThisFirst: { picks: [], judged: 1, unjudged: false, unjudgedChanges: false },
+      readThisFirst: { picks: [], judged: 1, unjudged: false },
     });
     expect(payload.why_line).toBe(
       "Quiet week: we read 1 page across 1 competitor; saw 1 change, none worth your time.",
