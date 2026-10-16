@@ -91,7 +91,7 @@ function jevAnswering() {
     const p =
       questionId === "mention_is_about_brand"
         ? title.includes("winds")
-          ? 0.03
+          ? 0.3
           : 0.96
         : title.includes("flagship")
           ? 0.94
