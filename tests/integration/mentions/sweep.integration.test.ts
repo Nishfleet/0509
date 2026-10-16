@@ -426,7 +426,7 @@ describe("nightly mentions sweep", () => {
       .first<{ state: string | null }>();
     expect(legacyView?.state).toBeNull();
     const feedWithLegacy = await readMentionFeed(workspaceId, new Date(NOW));
-    expect(feedWithLegacy.find((row) => row.id === legacyId)?.treatment).toBe("unreviewed");
+    expect(feedWithLegacy.find((row) => row.id === legacyId)).toBeUndefined();
   });
 
   it("stores the items after a mid-batch Jev failure as unjudged in the same batch", async () => {

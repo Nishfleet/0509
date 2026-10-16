@@ -8,6 +8,7 @@ import { D3_QUESTION_ID, D6_QUESTION_ID } from "./standing-score";
 import { sourceName } from "./source-name";
 import { SOURCE_KINDS, effectiveKindSql } from "./source-kind";
 import { required } from "./required";
+import { SHOWN_SIGNALS } from "./customer-ready";
 
 const SELECT_COMPETITOR_COUNTS = `SELECT
   COALESCE(SUM(CASE WHEN s.kind = 'ad' AND s.aspect IS NULL AND s.published_at >= ?3 AND s.published_at < ?4 THEN 1 ELSE 0 END), 0) AS new_creatives,
@@ -15,7 +16,7 @@ const SELECT_COMPETITOR_COUNTS = `SELECT
   COALESCE(SUM(CASE WHEN s.kind = 'change' AND ${changeActsSql("s", "v")} THEN 1 ELSE 0 END), 0) AS site_changes,
   COALESCE(SUM(CASE WHEN s.kind = 'mention' AND v.p >= ${String(ACT_AT)} THEN 1 ELSE 0 END), 0) AS mentions,
   COALESCE(SUM(CASE WHEN s.kind = 'hiring' THEN 1 ELSE 0 END), 0) AS new_roles
-FROM signal s
+FROM ${SHOWN_SIGNALS} s
 LEFT JOIN jev_verdict v ON v.signal_id = s.id
   AND v.question_id = CASE s.kind WHEN 'mention' THEN ?5 WHEN 'change' THEN ?6 END
 WHERE s.workspace_id = ?1 AND s.entity_id = ?2

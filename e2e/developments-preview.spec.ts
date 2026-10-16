@@ -17,6 +17,10 @@ const KINDS = [
   { label: "Hiring", kind: "hiring", title: "Senior engineer role" },
 ] as const;
 
+const CAPTURED = JSON.stringify({ before: { textKey: "before.txt" }, after: { textKey: "after.txt" } });
+
+const VERDICT_QUESTIONS: Record<string, string> = { change: "noteworthy_change", mention: "mention_matters" };
+
 function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId: string }): string {
   const stamp = "2026-10-12T00:00:00.000Z";
   const workspaceId = `ws-${suffix}`;
@@ -59,7 +63,7 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
     run(
       db,
       `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, canonical_url, url_hash, aspect, payload_json, dedup_key, observed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       `sig-${item.kind}-${suffix}`,
       workspaceId,
       entityId,
@@ -70,9 +74,24 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
       url,
       `hash-${item.kind}-${suffix}`,
       item.kind === "change" ? "pricing" : null,
+      item.kind === "change" ? CAPTURED : "{}",
       `dedup-${item.kind}-${suffix}`,
       new Date(now - (index + 1) * 3_600_000).toISOString(),
     );
+    const question = VERDICT_QUESTIONS[item.kind];
+    if (question !== undefined) {
+      run(
+        db,
+        "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at) VALUES (?, ?, ?, ?, ?, ?, 0.95, ?)",
+        `jv-${item.kind}-${suffix}`,
+        workspaceId,
+        question,
+        `jhash-${item.kind}-${suffix}`,
+        `sig-${item.kind}-${suffix}`,
+        entityId,
+        new Date(now).toISOString(),
+      );
+    }
   });
   return entityId;
 }

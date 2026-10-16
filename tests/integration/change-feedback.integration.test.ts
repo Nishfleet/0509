@@ -9,7 +9,11 @@ import { action } from "../../app/routes/app.change-feedback";
 
 const AT = "2026-10-10T10:00:00.000Z";
 const SINCE = "2026-10-01T00:00:00.000Z";
-const PAYLOAD = JSON.stringify({ page: { url: "https://a.example/pricing", role: "pricing" } });
+const PAYLOAD = JSON.stringify({
+  page: { url: "https://a.example/pricing", role: "pricing" },
+  before: { textKey: "before.txt" },
+  after: { textKey: "after.txt" },
+});
 
 const seedWorkspace = (ws: string, user: string, entity: string, signal: string) => [
   env.DB.prepare(
@@ -26,6 +30,10 @@ const seedWorkspace = (ws: string, user: string, entity: string, signal: string)
     `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, aspect, payload_json, dedup_key, observed_at)
      VALUES (?1, ?2, ?3, 'src-feedback', 'change', 'Change', 'https://a.example/pricing', 'copy', ?4, ?5, ?6)`,
   ).bind(signal, ws, entity, PAYLOAD, `dedup-${signal}`, AT),
+  env.DB.prepare(
+    `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at)
+     VALUES (?1, ?2, 'noteworthy_change', ?3, ?4, ?5, 0.95, ?6)`,
+  ).bind(`v-${signal}`, ws, `h-${signal}`, signal, entity, AT),
 ];
 
 const feedbackOf = async (ws: string, entity: string) =>

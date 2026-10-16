@@ -13,13 +13,20 @@ async function seedChange(id: string, ws: string, diffKey: string | null): Promi
     `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, dedup_key, observed_at, canonical_url, url_hash, payload_json, aspect)
      VALUES (?1, ?2, 'rv-a', 'src-a', 'change', 'Acme changed its pricing page', ?1, ?3, 'https://x.example/' || ?1, ?1, ?4, 'copy')`,
   )
-    .bind(id, ws, AT, JSON.stringify({ diffKey }))
+    .bind(id, ws, AT, JSON.stringify({ diffKey, before: { textKey: "b.txt" }, after: { textKey: "a.txt" } }))
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at)
+     VALUES ('v-' || ?1, ?2, 'noteworthy_change', 'h-' || ?1, ?1, 'rv-a', 0.95, ?3)`,
+  )
+    .bind(id, ws, AT)
     .run();
 }
 
 describe("mark wording from the stored diff", () => {
   beforeEach(async () => {
-    for (const table of ["signal", "entity", "source", "workspace"]) await env.DB.exec(`DELETE FROM ${table}`);
+    for (const table of ["jev_verdict", "signal", "entity", "source", "workspace"])
+      await env.DB.exec(`DELETE FROM ${table}`);
     await env.DB.exec('DELETE FROM "user"');
     await env.DB.batch([
       env.DB.prepare(

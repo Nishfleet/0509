@@ -54,20 +54,27 @@ const firstBrief: BriefPayload = {
 
 const changePayload = JSON.stringify({
   page: { role: "pricing", url: "https://acme.example/pricing" },
-  before: { snapshotId: "a", screenshotKey: null },
-  after: { snapshotId: "b", screenshotKey: null },
+  before: { snapshotId: "a", screenshotKey: null, textKey: "b.txt" },
+  after: { snapshotId: "b", screenshotKey: null, textKey: "a.txt" },
   diffKey: DIFF_KEY,
   wordsAdded: 2,
   wordsRemoved: 2,
 });
 
-const seedSignal = (id: string, title: string, observedAt: string, payload = "{}") =>
-  env.DB.prepare(
+const seedSignal = async (id: string, title: string, observedAt: string, payload = changePayload) => {
+  await env.DB.prepare(
     `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, aspect, url, payload_json, dedup_key, observed_at)
      VALUES (?1, ?2, ?3, ?4, 'change', ?5, 'pricing', 'https://acme.example/pricing', ?7, ?1, ?6)`,
   )
     .bind(id, WS, RIVAL, SOURCE, title, observedAt, payload)
     .run();
+  await env.DB.prepare(
+    `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at)
+     VALUES ('v-' || ?1, ?2, 'noteworthy_change', 'h-' || ?1, ?1, ?3, 0.95, ?4)`,
+  )
+    .bind(id, WS, RIVAL, observedAt)
+    .run();
+};
 
 describe("the first week and a half of one customer, day by day", () => {
   beforeEach(async () => {
@@ -75,6 +82,7 @@ describe("the first week and a half of one customer, day by day", () => {
       "send_attempt",
       "email_suppression",
       "digest",
+      "jev_verdict",
       "signal",
       "source",
       "entity",

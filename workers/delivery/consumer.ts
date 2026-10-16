@@ -46,6 +46,7 @@ import { SETTINGS_LINK, unsubscribeHeaders, type AlertFooterContext } from "../.
 import { renderChange, renderChangeOverflow } from "./change-template";
 import { renderIncidentFixed, renderIncidentOpen } from "./incident-template";
 import { BRIEF_SENDER, errorText, sendMessage, type SendResult } from "./send";
+import { SENDABLE_SIGNALS } from "../../app/lib/customer-ready";
 
 class PayloadError extends Error {
   constructor(message: string) {
@@ -621,10 +622,10 @@ interface ChangeRow {
 async function readChange(env: Env, signalId: string): Promise<ChangeRow | null> {
   return env.DB.prepare(
     `SELECT s.id, s.workspace_id, s.payload_json, s.observed_at, e.name, e.domain, w.change_alerts, w.timezone
-       FROM signal s
+       FROM ${SENDABLE_SIGNALS} s
        JOIN entity e ON e.id = s.entity_id
        JOIN workspace w ON w.id = s.workspace_id
-      WHERE s.id = ? AND e.role = 'competitor' AND s.is_tombstoned = 0`,
+      WHERE s.id = ? AND e.role = 'competitor'`,
   )
     .bind(signalId)
     .first<ChangeRow>();

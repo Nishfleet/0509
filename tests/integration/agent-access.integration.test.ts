@@ -113,8 +113,8 @@ async function seedCompetitorChange(workspaceId: string) {
   const afterSnapshotId = "snap_agent_a_after";
   const payload = {
     page: { role: "pricing", url: SITE_CHANGE_URL },
-    before: { snapshotId: beforeSnapshotId, screenshotKey: null },
-    after: { snapshotId: afterSnapshotId, screenshotKey: null },
+    before: { snapshotId: beforeSnapshotId, screenshotKey: null, textKey: "agent-a/before.txt" },
+    after: { snapshotId: afterSnapshotId, screenshotKey: null, textKey: "agent-a/after.txt" },
     diffKey: SITE_CHANGE_DIFF_KEY,
     wordsAdded: 3,
     wordsRemoved: 2,
@@ -145,6 +145,10 @@ async function seedCompetitorChange(workspaceId: string) {
       JSON.stringify(payload),
       CHANGE_SEEN_AT,
     ),
+    env.DB.prepare(
+      `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at)
+       VALUES ('jv_agent_a', ?1, 'noteworthy_change', 'jh_agent_a', ?2, 'ent_agent_a', 0.95, ?3)`,
+    ).bind(workspaceId, SITE_CHANGE_ID, NOW),
   ]);
   await env.SNAPSHOTS.put(
     SITE_CHANGE_DIFF_KEY,
@@ -331,8 +335,8 @@ describe("agent access, scoped to one workspace", () => {
     const { workspaceId } = await seedWorkspace("urlless");
     const payload = JSON.stringify({
       page: { role: "pricing", url: SITE_CHANGE_URL },
-      before: { snapshotId: "snap_urlless_before", screenshotKey: null },
-      after: { snapshotId: "snap_urlless_after", screenshotKey: null },
+      before: { snapshotId: "snap_urlless_before", screenshotKey: null, textKey: "urlless/before.txt" },
+      after: { snapshotId: "snap_urlless_after", screenshotKey: null, textKey: "urlless/after.txt" },
       diffKey: null,
       wordsAdded: 3,
       wordsRemoved: 2,
@@ -344,6 +348,12 @@ describe("agent access, scoped to one workspace", () => {
          ?2, 'dedup_urlless', ?3, ?3)`,
     )
       .bind(workspaceId, payload, CHANGE_SEEN_AT)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at)
+       VALUES ('jv_agent_urlless', ?1, 'noteworthy_change', 'jh_agent_urlless', 'sig_agent_urlless', 'ent_agent_urlless', 0.95, ?2)`,
+    )
+      .bind(workspaceId, NOW)
       .run();
 
     const result = competitorResultSchema.parse(
