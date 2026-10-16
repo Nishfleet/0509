@@ -59,6 +59,7 @@ test("the privacy page states retention, deletion, rights, and the 72-hour remov
   await expect(main).toContainText(/one year/i);
   await expect(main).toContainText(/do-not-email/i);
   await expect(main).toContainText(/remove and forget/i);
+  await expect(main).toContainText(/30-day point-in-time history/i);
   await expect(main).toContainText(/72 hours/i);
   await expect(main).toContainText(/data protection authority/i);
   await expect(main).not.toContainText(/30 days after|thirty.day/i);
