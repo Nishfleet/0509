@@ -87,7 +87,7 @@ const weekOne = async (rec = recorder()) => {
     workspaceId: WS,
     schedule: MONDAY,
     week: WEEK_1,
-    readThisFirst: { picks: [SIG_A, SIG_B], judged: 2, unjudged: false },
+    readThisFirst: { picks: [SIG_A, SIG_B], judged: 2, unjudged: false, unjudgedChanges: false },
   });
   await seedDigest("digest-w1", payload, "2026-09-14", "2026-09-21");
   return deliver(envWith(bindingFor(rec)), { digest_id: "digest-w1" });
@@ -220,7 +220,7 @@ describe("delivered once across weeks (0509#4063)", () => {
       .run();
 
     const judged = await judgeWeek(env.DB, weekTwoInput);
-    expect(judged).toEqual({ picks: [SIG_C], judged: 1, unjudged: false });
+    expect(judged).toEqual({ picks: [SIG_C], judged: 1, unjudged: false, unjudgedChanges: false });
 
     const payload = await composeBrief(env.DB, {
       workspaceId: WS,
@@ -246,7 +246,7 @@ describe("delivered once across weeks (0509#4063)", () => {
       workspaceId: WS,
       schedule: MONDAY,
       week: WEEK_1,
-      readThisFirst: { picks: [SIG_A, SIG_B], judged: 2, unjudged: false },
+      readThisFirst: { picks: [SIG_A, SIG_B], judged: 2, unjudged: false, unjudgedChanges: false },
     });
     await seedDigest("digest-w1", payload, "2026-09-14", "2026-09-21");
     await env.DB.prepare(
@@ -277,7 +277,7 @@ describe("delivered once across weeks (0509#4063)", () => {
       workspaceId: WS,
       schedule: MONDAY,
       week: WEEK_1,
-      readThisFirst: { picks: [], judged: 0, unjudged: false },
+      readThisFirst: { picks: [], judged: 0, unjudged: false, unjudgedChanges: false },
     });
     await seedDigest("digest-w1", payload, "2026-09-14", "2026-09-21");
     const result = await deliver(envWith(bindingFor(recorder())), { digest_id: "digest-w1" });
@@ -291,7 +291,7 @@ describe("delivered once across weeks (0509#4063)", () => {
       workspaceId: WS,
       schedule: MONDAY,
       week: WEEK_1,
-      readThisFirst: { picks: [SIG_A, SIG_B], judged: 2, unjudged: false },
+      readThisFirst: { picks: [SIG_A, SIG_B], judged: 2, unjudged: false, unjudgedChanges: false },
     });
     await seedDigest("digest-w1", payload, "2026-09-14", "2026-09-21");
     await env.DB.prepare("DELETE FROM jev_verdict WHERE signal_id = ?").bind(SIG_A).run();

@@ -677,11 +677,12 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     await env.STANDING_ROLLOVER.create(instance);
     await introspector.waitForStatus("complete");
 
+    const digestId = `digest_${WS}_${instantStamp(closesAt)}`;
     expect(await introspector.getOutput()).toEqual({
       workspaceId: WS,
       closesAt: closesAt.toISOString(),
-      digestId: null,
-      skipped: "held_unjudged",
+      digestId,
+      skipped: null,
     });
     expect(await standingFor(startsAt.toISOString())).toEqual([
       { entity_id: RIVAL_A, score: 0, rank: null, movement: null },
@@ -689,10 +690,14 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
       { entity_id: RIVAL_C, score: 0, rank: null, movement: null },
       { entity_id: SELF, score: 0, rank: null, movement: null },
     ]);
-    const digests = await env.DB.prepare("SELECT COUNT(*) AS n FROM digest WHERE id = ?1")
-      .bind(`digest_${WS}_${instantStamp(closesAt)}`)
-      .first<{ n: number }>();
-    expect(digests?.n).toBe(0);
+    const digest = await env.DB.prepare("SELECT payload_json FROM digest WHERE id = ?1")
+      .bind(digestId)
+      .first<{ payload_json: string }>();
+    const brief = parseBriefPayload(digest?.payload_json ?? "");
+    expect(brief.is_unjudged).toBe(true);
+    expect(brief.is_quiet_week).toBe(false);
+    expect(brief.headline_rank).toBeNull();
+    expect(brief.why_line).toBe("We haven't finished reviewing this week's changes yet.");
   });
 
   it("does not freeze rank when a mentions sweep skipped targets before fetching any, so no signal rows exist", async () => {
@@ -721,7 +726,13 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     await env.STANDING_ROLLOVER.create(instance);
     await introspector.waitForStatus("complete");
 
-    expect(await introspector.getOutput()).toMatchObject({ digestId: null, skipped: "held_unjudged" });
+    const digestId = `digest_${WS}_${instantStamp(closesAt)}`;
+    const digest = await env.DB.prepare("SELECT payload_json FROM digest WHERE id = ?1")
+      .bind(digestId)
+      .first<{ payload_json: string }>();
+    const brief = parseBriefPayload(digest?.payload_json ?? "");
+    expect(brief.is_unjudged).toBe(true);
+    expect(brief.headline_rank).toBeNull();
     expect(await standingFor(startsAt.toISOString())).toEqual([
       { entity_id: RIVAL_A, score: 0, rank: null, movement: null },
       { entity_id: RIVAL_B, score: 0, rank: null, movement: null },

@@ -221,7 +221,7 @@ describe("the brief's read-first marks carry the judged kind, through real D1", 
       workspaceId,
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
-      readThisFirst: { picks: [a, b], judged: 2, unjudged: false },
+      readThisFirst: { picks: [a, b], judged: 2, unjudged: false, unjudgedChanges: false },
     });
     expect(payload.read_this_first.map((mark) => mark.kind)).toEqual(["pricing", null]);
   });
@@ -234,7 +234,7 @@ describe("new job posts reach the brief's brand line, through real D1", () => {
       workspaceId,
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
-      readThisFirst: { picks: [], judged: 0, unjudged: false },
+      readThisFirst: { picks: [], judged: 0, unjudged: false, unjudgedChanges: false },
     });
 
     const hiring = payload.brands.find((b) => b.entity_id.startsWith("ent_hiring_"));
@@ -247,7 +247,7 @@ describe("new job posts reach the brief's brand line, through real D1", () => {
       workspaceId,
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
-      readThisFirst: { picks: [], judged: 0, unjudged: false },
+      readThisFirst: { picks: [], judged: 0, unjudged: false, unjudgedChanges: false },
     });
 
     const { text } = renderBrief(parseBriefPayload(JSON.stringify(payload)), {
@@ -265,7 +265,7 @@ describe("new job posts reach the brief's brand line, through real D1", () => {
       workspaceId,
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
-      readThisFirst: { picks: [], judged: 0, unjudged: false },
+      readThisFirst: { picks: [], judged: 0, unjudged: false, unjudgedChanges: false },
     });
 
     const { text } = renderBrief(parseBriefPayload(JSON.stringify(payload)), {
@@ -343,7 +343,7 @@ describe("a zero canary never counts as a source answering, through real D1", ()
       workspaceId: zero.workspaceId,
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
-      readThisFirst: { picks: [], judged: 0, unjudged: false },
+      readThisFirst: { picks: [], judged: 0, unjudged: false, unjudgedChanges: false },
     });
     expect(zeroPayload.checked.degraded_source_keys).toContain(zero.sourceKey);
 
@@ -352,7 +352,7 @@ describe("a zero canary never counts as a source answering, through real D1", ()
       workspaceId: healthy.workspaceId,
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
-      readThisFirst: { picks: [], judged: 0, unjudged: false },
+      readThisFirst: { picks: [], judged: 0, unjudged: false, unjudgedChanges: false },
     });
     expect(healthyPayload.checked.degraded_source_keys).toEqual([]);
   });
@@ -364,7 +364,7 @@ describe("each brand's biggest move reaches its brief line, through real D1", ()
       workspaceId,
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
-      readThisFirst: { picks: [], judged: 0, unjudged: false },
+      readThisFirst: { picks: [], judged: 0, unjudged: false, unjudgedChanges: false },
     });
 
   it("names the week's highest-weighted signal on the brand that has one, and nothing on a quiet brand", async () => {
@@ -415,7 +415,7 @@ describe("the running total of changes reaches the brief, through real D1", () =
         workspaceId,
         schedule: { timezone: "UTC", weekday: 1, hour: 8 },
         week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
-        readThisFirst: { picks: [], judged: 0, unjudged: false },
+        readThisFirst: { picks: [], judged: 0, unjudged: false, unjudgedChanges: false },
       });
     const payload = await compose();
 
@@ -457,7 +457,7 @@ describe("rank over time reaches the brief, through real D1", () => {
       workspaceId,
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date(NOW) },
-      readThisFirst: { picks: [], judged: 0, unjudged: false },
+      readThisFirst: { picks: [], judged: 0, unjudged: false, unjudgedChanges: false },
     });
 
   it("uses the newest standing at least four weeks back, and nothing newer", async () => {
@@ -509,7 +509,7 @@ describe("a rival we found reaches the brief, through real D1", () => {
         startsAt: new Date("2026-09-14T12:00:00.000Z"),
         closesAt: new Date("2026-09-21T12:00:00.000Z"),
       },
-      readThisFirst: { picks: [], judged: 0, unjudged: false },
+      readThisFirst: { picks: [], judged: 0, unjudged: false, unjudgedChanges: false },
     });
 
   it("names the most likely pending rival, and ignores dismissed ones and brands already watched", async () => {

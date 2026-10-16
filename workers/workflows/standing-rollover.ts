@@ -162,7 +162,7 @@ function isSendable(step: WorkflowStep, readThisFirst: JudgedWeek, closesAt: Dat
   return step.do("hold-check", RETRY, () =>
     Promise.resolve(
       weekSendable({
-        unjudgedInputs: readThisFirst.unjudged ? 1 : 0,
+        unjudgedInputs: readThisFirst.unjudgedChanges ? 1 : 0,
         holdDeadlinePassed: holdDeadlinePassed(closesAt, new Date()),
       }),
     ),

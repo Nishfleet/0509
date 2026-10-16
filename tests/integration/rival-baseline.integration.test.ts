@@ -79,7 +79,7 @@ async function compose(ws: string, marks = false) {
     workspaceId: ws,
     schedule: SCHEDULE,
     week: WEEK,
-    readThisFirst: { picks: marks ? ["unused"] : [], judged: 0, unjudged: false },
+    readThisFirst: { picks: marks ? ["unused"] : [], judged: 0, unjudged: false, unjudgedChanges: false },
   });
 }
 

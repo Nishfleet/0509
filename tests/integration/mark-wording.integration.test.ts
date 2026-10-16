@@ -60,7 +60,7 @@ describe("mark wording from the stored diff", () => {
       workspaceId: "ws-a",
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: WEEK,
-      readThisFirst: { picks: ["c1"], judged: 1, unjudged: false },
+      readThisFirst: { picks: ["c1"], judged: 1, unjudged: false, unjudgedChanges: false },
     });
     expect(payload.read_this_first[0]).toMatchObject({ before: "Pro is $20", after: "Pro is $29" });
   });
