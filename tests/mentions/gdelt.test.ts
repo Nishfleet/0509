@@ -53,6 +53,13 @@ describe("gdelt adapter", () => {
     expect(result?.items).toEqual([]);
   });
 
+  it("reports a phrase GDELT refuses as a query nobody can search, not a source failure", async () => {
+    stubFetch("The specified phrase is too short.");
+    await expect(adapterFor("gdelt.doc")?.({ query: "Gap" }, null)).rejects.toMatchObject({
+      name: "UnsearchableQueryError",
+    });
+  });
+
   it("gives GDELT 24 seconds before the request is aborted", async () => {
     stubFetch(gdeltBody);
     const timeoutSpy = vi.spyOn(AbortSignal, "timeout");

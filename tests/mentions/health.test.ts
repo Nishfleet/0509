@@ -27,7 +27,14 @@ describe("mentions run health", () => {
   it("is degraded, naming the source, for 44 skipped targets of 177 with none thrown", () => {
     expect(mentionsHealth({ failed: 0, skippedTargets: 44, targets: 177, missed: ["gdelt.doc"] })).toEqual({
       state: "degraded",
-      reason: "44 of 177 failed: gdelt.doc",
+      reason: "44 skipped of 177: gdelt.doc",
+    });
+  });
+
+  it("says how many failed and how many were skipped when both happened", () => {
+    expect(mentionsHealth({ failed: 1, skippedTargets: 49, targets: 177, missed: ["gdelt.doc"] })).toEqual({
+      state: "degraded",
+      reason: "1 failed and 49 skipped of 177: gdelt.doc",
     });
   });
 
