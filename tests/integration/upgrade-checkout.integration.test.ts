@@ -113,8 +113,18 @@ describe("upgrade checkout when the workspace already has a plan (#7228)", () =>
     const result = await action(upgradeRequest("starter"));
 
     expect(result).toEqual({
-      message: "You already have a plan. To change it, use Manage or cancel plan on this page.",
+      message: "You can't switch plans right now. Use Manage or cancel plan on this page.",
     });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("tells a customer who posts the plan they are on that they already have it", async () => {
+    await seedPlan("active", "2099-01-01T00:00:00Z");
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const result = await action(upgradeRequest("scout"));
+
+    expect(result).toEqual({ message: "You are already on this plan." });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -175,5 +185,73 @@ describe("upgrade checkout when the workspace already has a plan (#7228)", () =>
 
   it("treats a subscription Dodo no longer has as a paid one, so the customer is not stuck", async () => {
     expect(await checkoutBodyAfterLookup("cancelled", 404)).not.toHaveProperty("subscription_data");
+  });
+});
+
+describe("switching plans for a paying customer", () => {
+  async function seedBilled(overrides: { tier?: string; status?: string; trialing?: number } = {}): Promise<void> {
+    await seedOwner();
+    await env.DB.prepare("DELETE FROM plan WHERE workspace_id = 'ws-upgrade'").run();
+    await env.DB.prepare(
+      `INSERT INTO plan (id, workspace_id, tier, status, current_period_end, trialing, provider_customer_id, provider_subscription_id, updated_at)
+       VALUES ('plan-upgrade', 'ws-upgrade', ?1, ?2, '2099-01-01T00:00:00Z', ?3, 'cus_switch', 'sub_switch', '2026-09-29T00:00:00Z')`,
+    )
+      .bind(overrides.tier ?? "scout", overrides.status ?? "active", overrides.trialing ?? 0)
+      .run();
+  }
+
+  it("asks Dodo to change the subscription now, charging the difference, and sends the customer to the plan check", async () => {
+    await seedBilled();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({}, { status: 200 }));
+
+    const result = await action(upgradeRequest("starter"));
+
+    expect((result as Response).status).toBe(302);
+    expect((result as Response).headers.get("Location")).toBe("/app/competitors?upgraded=starter");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0] ?? [];
+    expect(String(url)).toBe("https://test.dodopayments.com/subscriptions/sub_switch/change-plan");
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toEqual({
+      product_id: "pdt_test_starter",
+      quantity: 1,
+      proration_billing_mode: "prorated_immediately",
+      effective_at: "immediately",
+      on_payment_failure: "prevent_change",
+    });
+  });
+
+  it("changes nothing and says so when Dodo refuses, without leaking the raw error", async () => {
+    await seedBilled();
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      Response.json({ message: "card declined for upgrade@example.com" }, { status: 422 }),
+    );
+
+    const result = await action(upgradeRequest("starter"));
+
+    expect(result).toEqual({
+      message: "We couldn't change your plan. You weren't charged. Try again in a few minutes.",
+    });
+    expect(JSON.stringify(logged.mock.calls)).not.toContain("upgrade@example.com");
+    expect(JSON.stringify(logged.mock.calls)).toContain("billing.change_plan_failed");
+    const plan = await env.DB.prepare("SELECT tier FROM plan WHERE workspace_id = 'ws-upgrade'").first<{
+      tier: string;
+    }>();
+    expect(plan?.tier).toBe("scout");
+  });
+
+  it.each([
+    ["a plan on a free trial", { trialing: 1 }, "starter"],
+    ["a downgrade", { tier: "starter" }, "scout"],
+    ["a payment that is overdue", { status: "past_due" }, "starter"],
+  ])("never calls Dodo for %s", async (_label, overrides, target) => {
+    await seedBilled(overrides);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const result = await action(upgradeRequest(target));
+
+    expect(result).toMatchObject({ message: expect.stringContaining("can't switch") });
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
