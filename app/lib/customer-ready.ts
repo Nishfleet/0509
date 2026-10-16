@@ -1,19 +1,17 @@
-import { ACT_AT, BREAKAGE_CLEAR_AT, ABOUT_BRAND_KEEP_AT, changeActsSql } from "./jev/thresholds";
+import { ACT_AT, ABOUT_BRAND_KEEP_AT, changeActsSql } from "./jev/thresholds";
+import { changeJudgedSql } from "./site-change";
 import { D3_QUESTION_ID, D3S_QUESTION_ID, D6_QUESTION_ID } from "./standing-score";
 
 export const PIPELINE_SIGNALS = "signal";
 
 const MENTION_VERDICT = `(SELECT mv.p FROM jev_verdict mv WHERE mv.signal_id = s.id AND mv.question_id = '${D6_QUESTION_ID}' ORDER BY mv.decided_at DESC LIMIT 1)`;
 
-const CHANGE_JUDGED = `EXISTS (
-  SELECT 1 FROM jev_verdict v
-  WHERE v.signal_id = s.id
-    AND (v.question_id = '${D3_QUESTION_ID}'
-      OR (v.question_id = '${D3S_QUESTION_ID}' AND v.p > ${String(BREAKAGE_CLEAR_AT)}))
-)`;
+const CHANGE_JUDGED = changeJudgedSql({ noteworthy: `'${D3_QUESTION_ID}'`, breakage: `'${D3S_QUESTION_ID}'` });
 
-const CHANGE_CAPTURED = `(json_extract(s.payload_json, '$.before.textKey') IS NOT NULL
-  AND json_extract(s.payload_json, '$.after.textKey') IS NOT NULL)`;
+const CHANGE_CAPTURED = `(CASE WHEN json_valid(s.payload_json)
+  THEN json_extract(s.payload_json, '$.before.textKey') IS NOT NULL
+    AND json_extract(s.payload_json, '$.after.textKey') IS NOT NULL
+  ELSE 0 END)`;
 
 const KIND_READY = `CASE s.kind
   WHEN 'mention' THEN s.state IS NOT 'unjudged' AND s.title IS NOT NULL AND s.canonical_url IS NOT NULL AND ${MENTION_VERDICT} >= ${String(ABOUT_BRAND_KEEP_AT)}
