@@ -97,7 +97,9 @@ describe("hideOffBrands", () => {
         line.entity_id === ON ? { ...line, ad_delta: 1, mention_delta: 1, site_change_count: 1 } : line,
       ),
     };
-    expect(hideOffBrands(brief, new Set([OFF])).why_line).toBe("Quiet week: 1 mention, 1 site change, 1 new ad.");
+    expect(hideOffBrands(brief, new Set([OFF])).why_line).toBe(
+      "Quiet week: we checked 1 mention, 1 site change and 1 new ad, and none of it needed your attention.",
+    );
   });
 
   it("rewrites a led-by line with the judged count the brief was composed with, not the picked count", () => {

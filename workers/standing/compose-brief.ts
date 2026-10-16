@@ -179,7 +179,9 @@ export function pausedSentence(names: readonly string[]): string | null {
 }
 
 function brandsFromStanding(results: unknown, standing: readonly RankedEntity[]) {
-  const entities = new Map(rankedBrandRows.parse(results).map((row) => [row.entity_id, row]));
+  const rows = rankedBrandRows.parse(results);
+  if (standing.length === 0) return rows.map((row) => ({ ...row, rank: null, movement: null }));
+  const entities = new Map(rows.map((row) => [row.entity_id, row]));
   return standing.flatMap((ranked) => {
     const entity = entities.get(ranked.entity_id);
     return entity === undefined ? [] : [{ ...entity, rank: ranked.rank, movement: ranked.movement }];
@@ -336,19 +338,54 @@ async function buildLines(
   });
 }
 
-function buildOwnSite(ownSite: readonly OwnSiteIncident[], closesAt: string) {
+function mergeIncident(seen: OwnSitePage | undefined, incident: OwnSiteIncident, closesAt: string): OwnSitePage {
+  const isOpen = incident.closed_at === null || incident.closed_at >= closesAt;
+  const observedAt = isOpen || incident.closed_at === null ? closesAt : incident.closed_at;
+  if (seen === undefined) {
+    return {
+      page_url: incident.page_url,
+      kind: incident.kind,
+      observed_at: observedAt,
+      is_open: isOpen,
+      opened_at: incident.opened_at,
+      closed_at: isOpen ? null : incident.closed_at,
+    };
+  }
+  const open = isOpen || seen.is_open;
   return {
-    status: ownSite.length === 0 ? ("ok" as const) : ("broken" as const),
-    incidents: ownSite.map((incident) => {
-      const isOpen = incident.closed_at === null || incident.closed_at >= closesAt;
-      return {
-        page_url: incident.page_url,
-        kind: incident.kind,
-        observed_at: isOpen || incident.closed_at === null ? closesAt : incident.closed_at,
-        is_open: isOpen,
-      };
-    }),
+    ...seen,
+    observed_at: observedAt > seen.observed_at ? observedAt : seen.observed_at,
+    is_open: open,
+    opened_at: incident.opened_at < seen.opened_at ? incident.opened_at : seen.opened_at,
+    closed_at: open ? null : latest(seen.closed_at, incident.closed_at),
   };
+}
+
+function buildOwnSite(ownSite: readonly OwnSiteIncident[], closesAt: string) {
+  const byPage = new Map<string, OwnSitePage>();
+  for (const incident of ownSite) {
+    byPage.set(incident.page_url, mergeIncident(byPage.get(incident.page_url), incident, closesAt));
+  }
+  const incidents = [...byPage.values()];
+  return {
+    status: incidents.some((incident) => incident.is_open) ? ("broken" as const) : ("ok" as const),
+    incidents,
+  };
+}
+
+interface OwnSitePage {
+  page_url: string;
+  kind: string;
+  observed_at: string;
+  is_open: boolean;
+  opened_at: string;
+  closed_at: string | null;
+}
+
+function latest(a: string | null, b: string | null): string | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return a > b ? a : b;
 }
 
 interface CheckedTotals {

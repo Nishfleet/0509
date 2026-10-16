@@ -221,14 +221,22 @@ FROM entity e JOIN source s ON s.kind = ?1 AND s.is_enabled = 1
 WHERE e.state = 'on'
 ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
 
-const SELECT_WATCHES = `SELECT w.id AS watch_id, w.target_key, w.hn_cursor, w.created_at AS watch_created_at, e.id AS entity_id, e.workspace_id, e.role,
+const WATCH_COLUMNS_FROM = `SELECT w.id AS watch_id, w.target_key, w.hn_cursor, w.created_at AS watch_created_at, e.id AS entity_id, e.workspace_id, e.role,
   COALESCE(NULLIF(e.name, ''), e.domain) AS name, e.domain,
   s.id AS source_id, s.plugin_key, s.reliability,
   COALESCE(json_extract(CASE WHEN json_valid(s.config_json) THEN s.config_json ELSE '{}' END, '$.min_interval_seconds'), 0) AS min_interval_seconds
 FROM watch w
 JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
-JOIN source s ON s.id = w.source_id AND s.kind = ?1 AND s.is_enabled = 1
-WHERE w.is_active = 1 AND w.target_key = COALESCE(NULLIF(e.name, ''), e.domain)
+JOIN source s ON s.id = w.source_id AND s.kind = ?1 AND s.is_enabled = 1`;
+
+const WATCH_ACTIVE = `w.is_active = 1 AND w.target_key = COALESCE(NULLIF(e.name, ''), e.domain)`;
+
+const SELECT_WATCHES = `${WATCH_COLUMNS_FROM}
+WHERE ${WATCH_ACTIVE}
+ORDER BY s.plugin_key, w.target_key, w.id`;
+
+const SELECT_WORKSPACE_WATCHES = `${WATCH_COLUMNS_FROM}
+WHERE e.workspace_id = ?2 AND ${WATCH_ACTIVE}
 ORDER BY s.plugin_key, w.target_key, w.id`;
 
 const watchRow = z.object({
@@ -254,6 +262,11 @@ const watchRows = z.array(watchRow);
 export async function readActiveWatches(kind: "mentions" | "ads"): Promise<WatchRow[]> {
   await env.DB.prepare(ENSURE_WATCHES).bind(kind).run();
   const rows = await env.DB.prepare(SELECT_WATCHES).bind(kind).all();
+  return allowedPaidWatches(watchRows.parse(rows.results));
+}
+
+export async function readWorkspaceMentionWatches(workspaceId: string): Promise<WatchRow[]> {
+  const rows = await env.DB.prepare(SELECT_WORKSPACE_WATCHES).bind("mentions", workspaceId).all();
   return allowedPaidWatches(watchRows.parse(rows.results));
 }
 

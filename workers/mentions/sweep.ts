@@ -13,6 +13,7 @@ import {
   readSeenDedupKeys,
   readSeenNormUrlHashes,
   readUnjudgedMentions,
+  readUnjudgedMentionsInWindow,
   resolveUnjudgedMention,
 } from "../../app/lib/data/signal.server";
 import { insertWatchSnapshot } from "../../app/lib/data/snapshot.server";
@@ -23,6 +24,7 @@ import {
   advanceHnCursor,
   markWatchPolled,
   readActiveWatches,
+  readWorkspaceMentionWatches,
   readWatchConfigJson,
   writeWatchConfigJson,
 } from "../../app/lib/data/watch.server";
@@ -293,6 +295,38 @@ async function rejudgeUnjudged(
     if (!rejected) stored += 1;
   }
   return { statements, stored, attempted: pending.length, jevDown: false };
+}
+
+export async function rejudgeWindowMentions(input: {
+  workspaceId: string;
+  windowStartAt: string;
+  windowEndAt: string;
+  limit: number;
+}): Promise<number> {
+  const [pending, watches, context] = await Promise.all([
+    readUnjudgedMentionsInWindow(input),
+    readWorkspaceMentionWatches(input.workspaceId),
+    readDiscoveryContext(input.workspaceId),
+  ]);
+  if (context === null) return 0;
+  const byId = new Map(watches.map((watch) => [watch.watch_id, watch]));
+  const now = new Date().toISOString();
+  const statements: D1PreparedStatement[] = [];
+  let judged = 0;
+  for (const row of pending) {
+    const watch = byId.get(row.watchId);
+    if (watch === undefined) continue;
+    const verdicts = await judgeOrNull(watch, context, row);
+    if (verdicts === null) break;
+    judged += 1;
+    const rejected = !isAboutBrand(verdicts.about.p);
+    statements.push(
+      resolveUnjudgedMention(row.id, rejected),
+      ...judgedStatements({ watch, signalId: row.id, item: row, verdicts, now, alert: !rejected }),
+    );
+  }
+  if (statements.length > 0) await env.DB.batch(statements);
+  return judged;
 }
 
 function mentionSignal(input: {
