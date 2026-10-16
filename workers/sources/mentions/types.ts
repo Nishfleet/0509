@@ -49,6 +49,13 @@ export class UpstreamBlockedError extends Error {
   }
 }
 
+export class UnsearchableQueryError extends Error {
+  constructor(readonly pluginKey: string) {
+    super(`${pluginKey} cannot search this query`);
+    this.name = "UnsearchableQueryError";
+  }
+}
+
 export function isUpstreamTimeout(error: unknown): boolean {
   return typeof error === "object" && error !== null && (error as { name: unknown }).name === "TimeoutError";
 }

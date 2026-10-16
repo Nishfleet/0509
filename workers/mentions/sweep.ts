@@ -61,7 +61,7 @@ import { storedDedupKey, toSignalRow, type MentionItem, type SignalRow } from ".
 import { recordUpstreamBlock, writeSourcePoint } from "./canary";
 import { adapterFor } from "../sources/registry";
 import { youtubeAdapter } from "../sources/mentions/youtube";
-import { isUpstreamTimeout, UpstreamBlockedError } from "../sources/mentions/types";
+import { isUpstreamTimeout, UnsearchableQueryError, UpstreamBlockedError } from "../sources/mentions/types";
 import type { OkYoutubeFeed } from "../sources/mentions/youtube";
 
 const JUDGED_PER_WATCH = 12;
@@ -809,6 +809,19 @@ async function skipBlockedTarget(target: MentionTarget, status: number): Promise
   return { items: 0, stored: 0, unjudged: 0, skipped: target.watches.length };
 }
 
+async function settleFailedTarget(target: MentionTarget, error: unknown): Promise<TargetOutcome> {
+  if (error instanceof UpstreamBlockedError) return await skipBlockedTarget(target, error.status);
+  if (error instanceof UnsearchableQueryError) {
+    console.warn(JSON.stringify({ event: "mentions.query_unsearchable", source: target.pluginKey }));
+    return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
+  }
+  if (isUpstreamTimeout(error)) {
+    await markSourceTimedOut(target.sourceId);
+    return { items: 0, stored: 0, unjudged: 0, skipped: target.watches.length };
+  }
+  throw error;
+}
+
 export async function sweepTarget(
   target: MentionTarget,
   now: string,
@@ -844,11 +857,6 @@ export async function sweepTarget(
     }
     return { items: result.items.length, stored, unjudged, skipped: 0 };
   } catch (error) {
-    if (error instanceof UpstreamBlockedError) return await skipBlockedTarget(target, error.status);
-    if (isUpstreamTimeout(error)) {
-      await markSourceTimedOut(target.sourceId);
-      return { items: 0, stored: 0, unjudged: 0, skipped: target.watches.length };
-    }
-    throw error;
+    return await settleFailedTarget(target, error);
   }
 }
