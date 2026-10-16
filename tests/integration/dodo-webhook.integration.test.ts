@@ -466,6 +466,31 @@ describe("Dodo webhook (J13)", () => {
       expect(await planRow()).toMatchObject({ tier: "starter", provider_subscription_id: "sub_7EeHq2ewQuadropD2ra" });
     });
 
+    it("moves the same subscription to the new tier when Dodo reports a plan change", async () => {
+      await deliver(
+        signedRequest(
+          "evt_before_switch",
+          eventBody({ data: { product_id: "pdt_test_scout", metadata: await scoutMetadata() } }),
+        ),
+      );
+      expect(await planRow()).toMatchObject({ tier: "scout", provider_subscription_id: "sub_7EeHq2ewQuadropD2ra" });
+
+      const response = await deliver(
+        signedRequest(
+          "evt_switch",
+          eventBody({
+            type: "subscription.plan_changed",
+            timestamp: "2026-10-02T00:00:00Z",
+            data: { metadata: await scoutMetadata() },
+          }),
+        ),
+      );
+
+      expect(response.status).toBe(200);
+      expect(await planRow()).toMatchObject({ tier: "starter", provider_subscription_id: "sub_7EeHq2ewQuadropD2ra" });
+      expect((await readEntitlements(WORKSPACE)).competitors).toBe(15);
+    });
+
     describe("the tester product", () => {
       const TESTER = "pdt_test_tester";
       const testerEvent = async (
