@@ -89,6 +89,27 @@ describe("classifyNavPages", () => {
     expect(request.questions.page_role.criteria).toEqual(PAGE_ROLE.options);
   });
 
+  it("judges every nav page across sweeps whatever its URL looks like", async () => {
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) =>
+      Promise.resolve({ answers: { page_role: { type: "choice", choice: "other" } } }),
+    );
+    Reflect.set(env, "AI", { run });
+    const pages = [
+      ...Array.from({ length: 44 }, (_, index) => ({
+        url: `https://www.gymshark.com/stores/${String(index)}`,
+        title: `Store ${String(index)}`,
+      })),
+      { url: "https://www.gymshark.com/membership", title: "Membership options" },
+    ];
+
+    await classifyNavPages({ workspaceId, entity: ENTITY, pages, now: NOW });
+    await classifyNavPages({ workspaceId, entity: ENTITY, pages, now: NOW });
+
+    const judged = (await readPages()).map((page) => page.url);
+    expect(judged).toHaveLength(pages.length);
+    expect(judged).toContain("https://www.gymshark.com/membership");
+  });
+
   it("leaves an unchanged page alone and asks Jev nothing more", async () => {
     const run = vi.fn((_model: string, _request: unknown, _options?: unknown) =>
       Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }),

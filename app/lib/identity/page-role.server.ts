@@ -91,11 +91,9 @@ export async function classifyNavPages({
 }: ClassifyNavPagesInput): Promise<readonly JudgedPage[]> {
   const hashes = await readPageHashes(entity.id);
   const targets = await Promise.all(
-    pricingLookingFirst(pages)
-      .slice(0, NAV_PAGES_JUDGED)
-      .map(async (page) => ({ page, hash: await pageHash(page) })),
+    pricingLookingFirst(pages).map(async (page) => ({ page, hash: await pageHash(page) })),
   );
-  const stale = targets.filter((target) => hashes.get(target.page.url) !== target.hash);
+  const stale = targets.filter((target) => hashes.get(target.page.url) !== target.hash).slice(0, NAV_PAGES_JUDGED);
   if (stale.length === 0) return [];
 
   const { judged, refusal } = await judgeStale(workspaceId, entity.domain, stale);
