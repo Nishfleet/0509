@@ -231,7 +231,7 @@ describe("switching plans for a paying customer", () => {
     const result = await action(upgradeRequest("starter"));
 
     expect(result).toEqual({
-      message: "We couldn't change your plan. You weren't charged. Try again in a few minutes.",
+      message: "We couldn't confirm your plan change. Check your plan here in a few minutes before trying again.",
     });
     expect(JSON.stringify(logged.mock.calls)).not.toContain("upgrade@example.com");
     expect(JSON.stringify(logged.mock.calls)).toContain("billing.change_plan_failed");

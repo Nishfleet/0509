@@ -21,7 +21,9 @@ const upgradeForm = z.object({
   interval: z.string().default("monthly"),
 });
 
-const SWITCH_FAILED = { message: "We couldn't change your plan. You weren't charged. Try again in a few minutes." };
+const SWITCH_FAILED = {
+  message: "We couldn't confirm your plan change. Check your plan here in a few minutes before trying again.",
+};
 
 const SWITCH_NOT_NOW = { message: "You can't switch plans right now. Use Manage or cancel plan on this page." };
 

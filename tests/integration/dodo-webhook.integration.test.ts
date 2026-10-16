@@ -454,7 +454,11 @@ describe("Dodo webhook (J13)", () => {
       const response = await deliver(
         signedRequest(
           "evt_switch",
-          eventBody({ type: "subscription.plan_changed", timestamp: "2026-10-02T00:00:00Z" }),
+          eventBody({
+            type: "subscription.plan_changed",
+            timestamp: "2026-10-02T00:00:00Z",
+            data: { metadata: await scoutMetadata() },
+          }),
         ),
       );
 
