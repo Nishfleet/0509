@@ -57,6 +57,18 @@ describe("checkSilentRivals", () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('"deferred: no browser budget":1'));
   });
 
+  it("explains a silent rival with no stored failure from the watch state", async () => {
+    await seedRival({ id: "unwatched", discoveredAt: LONG_AGO, paid: true, reason: null });
+    await env.DB.prepare("UPDATE watch SET is_active = 0 WHERE id = 'w-unwatched'").run();
+    await seedRival({ id: "swept", discoveredAt: LONG_AGO, paid: true, reason: null });
+
+    await expect(checkSilentRivals(NOW)).rejects.toThrow("paid competitors with no snapshot for 7 days");
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"no active site watch on the page":1'));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"swept without a recorded result":1'));
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("none recorded"));
+  });
+
   it("ignores free workspaces, brand-new rivals and rivals that have a recent snapshot", async () => {
     await seedRival({ id: "free", discoveredAt: LONG_AGO, paid: false, reason: null });
     await seedRival({ id: "new", discoveredAt: RECENT, paid: true, reason: null });

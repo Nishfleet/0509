@@ -226,7 +226,11 @@ export async function readFailureReasonForWatch(watchId: string): Promise<string
   return row?.reason ?? null;
 }
 
-const SILENT_RIVALS = `SELECT e.workspace_id AS workspace_id, COALESCE(p.last_failure_reason, 'none recorded') AS reason
+const SILENT_RIVALS = `SELECT e.workspace_id AS workspace_id,
+  COALESCE(p.last_failure_reason, CASE WHEN EXISTS (
+    SELECT 1 FROM watch w JOIN source src ON src.id = w.source_id AND src.is_enabled = 1 AND src.platform <> 'feed'
+    WHERE w.entity_id = e.id AND w.target_key = p.url AND w.is_active = 1
+  ) THEN 'swept without a recorded result' ELSE 'no active site watch on the page' END) AS reason
 FROM entity e
 JOIN page p ON p.entity_id = e.id AND p.role = 'home'
 WHERE e.role = 'competitor' AND e.state = 'on' AND p.discovered_at < ?1
