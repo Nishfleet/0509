@@ -333,7 +333,7 @@ const SELECT_UNJUDGED_MENTIONS = `SELECT id, title, canonical_url, published_at,
 WHERE watch_id = ?1 AND kind = 'mention' AND state = 'unjudged'
 ORDER BY observed_at, id LIMIT ?2`;
 
-const SELECT_UNJUDGED_MENTIONS_IN_WINDOW = `SELECT id, watch_id, title, canonical_url, published_at, payload_json FROM signal
+const SELECT_UNJUDGED_MENTIONS_IN_WINDOW = `SELECT id, watch_id, title, canonical_url, published_at, payload_json FROM ${PIPELINE_SIGNALS}
 WHERE workspace_id = ?1 AND kind = 'mention' AND state = 'unjudged' AND watch_id IS NOT NULL
   AND observed_at >= ?2 AND observed_at < ?3
 ORDER BY observed_at, id LIMIT ?4`;
