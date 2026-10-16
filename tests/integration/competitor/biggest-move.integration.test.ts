@@ -16,6 +16,7 @@ interface Seeded {
     | "mentionHigh"
     | "mentionMid"
     | "mentionLow"
+    | "mentionMaybe"
     | "hiring"
     | "tombstoned"
     | "before"
@@ -43,6 +44,7 @@ async function seed(): Promise<Seeded> {
     mentionHigh: `biggest-move-t-sig-mention-high-${run}`,
     mentionMid: `biggest-move-t-sig-mention-mid-${run}`,
     mentionLow: `biggest-move-t-sig-mention-low-${run}`,
+    mentionMaybe: `biggest-move-t-sig-mention-maybe-${run}`,
     hiring: `biggest-move-t-sig-hiring-${run}`,
     tombstoned: `biggest-move-t-sig-tombstoned-${run}`,
     before: `biggest-move-t-sig-before-${run}`,
@@ -150,6 +152,7 @@ async function seed(): Promise<Seeded> {
     mention(ids.mentionHigh, `dedup-mention-high-${run}`, "2026-09-17T10:00:00.000Z"),
     mention(ids.mentionMid, `dedup-mention-mid-${run}`, "2026-09-17T11:00:00.000Z"),
     mention(ids.mentionLow, `dedup-mention-low-${run}`, "2026-09-17T12:00:00.000Z"),
+    mention(ids.mentionMaybe, `dedup-mention-maybe-${run}`, "2026-09-17T12:30:00.000Z"),
     hiring(ids.hiring, entityA, `dedup-hiring-${run}`, "2026-09-18T10:00:00.000Z"),
     hiring(ids.tombstoned, entityA, `dedup-tombstoned-${run}`, "2026-09-18T11:00:00.000Z", 1),
     hiring(ids.before, entityA, `dedup-before-${run}`, "2026-09-10T10:00:00.000Z"),
@@ -172,6 +175,13 @@ async function seed(): Promise<Seeded> {
     ),
     verdict(`biggest-move-t-jev-mention-mid-${run}`, "mention_matters", `ih-mention-mid-${run}`, ids.mentionMid, 0.5),
     verdict(`biggest-move-t-jev-mention-low-${run}`, "mention_matters", `ih-mention-low-${run}`, ids.mentionLow, 0.05),
+    verdict(
+      `biggest-move-t-jev-mention-maybe-${run}`,
+      "mention_matters",
+      `ih-mention-maybe-${run}`,
+      ids.mentionMaybe,
+      0.3,
+    ),
   ]);
 
   return { workspaceId, entityA, ids };
@@ -230,6 +240,7 @@ describe("readScoredSignals against real D1", () => {
 
     expect(ids).not.toContain(seeded.ids.changeMid);
     expect(ids).not.toContain(seeded.ids.mentionLow);
+    expect(ids).not.toContain(seeded.ids.mentionMaybe);
     expect(ids).not.toContain(seeded.ids.tombstoned);
     expect(ids).not.toContain(seeded.ids.before);
     expect(ids).not.toContain(seeded.ids.atUntil);

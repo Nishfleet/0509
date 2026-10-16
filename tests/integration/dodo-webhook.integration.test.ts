@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { Webhook } from "standardwebhooks";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { checkoutProof } from "../../app/lib/billing/checkout-proof.server";
 import { readEntitlements } from "../../app/lib/data/plan.server";
@@ -63,6 +63,10 @@ const eventRow = (id: string) =>
     .first<{ event_type: string; processed_at: string | null }>();
 
 describe("Dodo webhook (J13)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   beforeEach(async () => {
     await env.DB.prepare("DELETE FROM plan").run();
     await env.DB.prepare("DELETE FROM dodo_webhook_event").run();
@@ -272,13 +276,33 @@ describe("Dodo webhook (J13)", () => {
     expect(row?.payload_json).not.toContain("buyer@example.com");
   });
 
-  it("records an unknown product and a non-subscription event and changes no plan", async () => {
-    await deliver(signedRequest("evt_product", eventBody({ data: { product_id: "pdt_not_ours" } })));
+  it("records a non-subscription event and changes no plan", async () => {
     await deliver(signedRequest("evt_payment", eventBody({ type: "payment.succeeded" })));
 
     expect(await planRow()).toBeNull();
-    expect((await eventRow("evt_product"))?.processed_at).not.toBeNull();
     expect(await eventRow("evt_payment")).toMatchObject({ event_type: "payment.succeeded" });
+  });
+
+  it("answers 200, leaves the event unprocessed and reports to Sentry for an unknown product", async () => {
+    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const response = await deliver(signedRequest("evt_product", eventBody({ data: { product_id: "pdt_not_ours" } })));
+
+    expect(response.status).toBe(200);
+    expect(await planRow()).toBeNull();
+    expect((await eventRow("evt_product"))?.processed_at).toBeNull();
+    expect(reported).toHaveBeenCalledWith(expect.stringContaining("billing.webhook_unknown_product"));
+  });
+
+  it("answers 200, leaves the event unprocessed and reports to Sentry for a subscription body it cannot read", async () => {
+    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const body = JSON.stringify({ type: "subscription.active", timestamp: "2026-09-29T10:00:05Z", data: {} });
+
+    const response = await deliver(signedRequest("evt_unreadable", body));
+
+    expect(response.status).toBe(200);
+    expect((await eventRow("evt_unreadable"))?.processed_at).toBeNull();
+    expect(reported).toHaveBeenCalledWith(expect.stringContaining("billing.webhook_unparsed"));
   });
 
   it("answers 500 and leaves the event unprocessed when no workspace exists yet, then applies it on redelivery", async () => {

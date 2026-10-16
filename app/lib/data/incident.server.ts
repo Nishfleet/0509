@@ -46,16 +46,33 @@ const OPEN_BREAKAGE_BASELINES = `SELECT i.page_id AS page_id,
 FROM incident i
 WHERE i.closed_at IS NULL AND i.kind = 'breakage'`;
 
+const UNSENT_OPEN_INCIDENTS = `SELECT i.id AS id FROM incident i
+WHERE i.closed_at IS NULL AND i.kind = 'breakage' AND i.opened_at >= ?1 AND i.opened_at < ?2
+  AND EXISTS (SELECT 1 FROM alert a WHERE a.incident_id = i.id AND a.kind = 'own_site_broken' AND a.severity = 'high')
+  AND NOT EXISTS (SELECT 1 FROM send_attempt s WHERE s.idempotency_key = 'incident:' || i.id || ':open')
+ORDER BY i.opened_at`;
+
+const unsentRows = z.array(z.object({ id: z.string() }));
+
+export async function readUnsentOpenIncidentIds(window: { from: string; until: string }): Promise<string[]> {
+  const rows = await env.DB.prepare(UNSENT_OPEN_INCIDENTS).bind(window.from, window.until).all();
+  return unsentRows.parse(rows.results).map((row) => row.id);
+}
+
 const openRows = z.array(z.object({ id: z.string(), page_id: z.string() }));
 
 const breakageRows = z.array(z.object({ page_id: z.string(), before_key: z.string().nullable() }));
 
 const openIncidentRow = z.object({ id: z.string() });
 
+export async function readOpenIncidentId(pageId: string): Promise<string | null> {
+  const open = openIncidentRow.nullable().parse(await env.DB.prepare(OPEN_INCIDENT_FOR_PAGE).bind(pageId).first());
+  return open?.id ?? null;
+}
+
 export async function openIncident(row: NewIncident): Promise<string | null> {
   await openIncidentStatement(row).run();
-  const open = openIncidentRow.nullable().parse(await env.DB.prepare(OPEN_INCIDENT_FOR_PAGE).bind(row.pageId).first());
-  return open?.id ?? null;
+  return readOpenIncidentId(row.pageId);
 }
 
 export async function readOpenIncidents(): Promise<Record<string, string>> {

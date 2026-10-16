@@ -105,7 +105,7 @@ describe("gdelt adapter", () => {
       .mockResolvedValue(new Response(gdeltBody));
     vi.stubGlobal("fetch", fetchMock);
     const pending = adapterFor("gdelt.doc")?.({ query: "Gymshark" }, null);
-    await vi.advanceTimersByTimeAsync(16_000);
+    await vi.advanceTimersByTimeAsync(24_000);
     expect(await pending).toMatchObject({ canaryCount: 2 });
     expect(fetchMock).toHaveBeenCalledTimes(3);
     vi.useRealTimers();
@@ -127,7 +127,7 @@ describe("gdelt adapter", () => {
     vi.useRealTimers();
   });
 
-  it("gives up with the rate limit error after five more asks", async () => {
+  it("gives up with the rate limit error after two more asks, each wait twice the last", async () => {
     vi.useFakeTimers();
     const fetchMock = vi.fn(async () => new Response("", { status: 429 }));
     vi.stubGlobal("fetch", fetchMock);
@@ -136,9 +136,15 @@ describe("gdelt adapter", () => {
       () => null,
       (error: unknown) => error,
     );
+    await vi.advanceTimersByTimeAsync(7_999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(15_999);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(String(await outcome)).toMatch(/429/);
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     vi.useRealTimers();
   });
 

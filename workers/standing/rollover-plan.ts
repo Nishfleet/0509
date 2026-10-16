@@ -13,6 +13,7 @@ export interface WorkspaceSchedule {
 
 export const CATCH_UP_GRACE_MS = 60 * 60 * 1000;
 const UNRANKED_LOOKBACK_MS = 16 * 24 * 60 * 60 * 1000;
+export const CATCH_UP_WINDOW_MS = 5 * 24 * 60 * 60 * 1000;
 
 const WORKSPACE_SCHEDULES = `SELECT DISTINCT w.id, w.timezone, w.brief_weekday, w.brief_hour, w.brief_paused_at,
        p.status AS status, p.current_period_end AS current_period_end
@@ -24,12 +25,16 @@ ORDER BY w.id`;
 
 const WORKSPACE_SCHEDULE = `SELECT id, timezone, brief_weekday, brief_hour, brief_paused_at FROM workspace WHERE id = ?1`;
 
-const UNRANKED_WEEKS = `SELECT s.workspace_id AS workspace_id, s.week_start_at AS week_start_at
+const UNBRIEFED_WEEKS = `SELECT s.workspace_id AS workspace_id, s.week_start_at AS week_start_at
 FROM standing s
 INNER JOIN entity e ON e.workspace_id = s.workspace_id AND e.role = 'self' AND e.state = 'on'
 WHERE s.week_start_at >= ?1
+  AND NOT EXISTS (
+    SELECT 1 FROM digest d
+    WHERE d.workspace_id = s.workspace_id AND d.kind = 'weekly' AND d.period_start = s.week_start_at
+  )
 GROUP BY s.workspace_id, s.week_start_at
-HAVING COUNT(s.rank) = 0`;
+HAVING COUNT(DISTINCT s.entity_id) >= 2`;
 
 const scheduleRows = z.array(
   z.object({
@@ -81,7 +86,7 @@ export async function readWorkspaceSchedule(db: D1Database, workspaceId: string)
 
 async function readUnrankedWeeks(db: D1Database, now: Date): Promise<ReadonlySet<string>> {
   const since = new Date(now.getTime() - UNRANKED_LOOKBACK_MS).toISOString();
-  const rows = await db.prepare(UNRANKED_WEEKS).bind(since).all();
+  const rows = await db.prepare(UNBRIEFED_WEEKS).bind(since).all();
   return new Set(unrankedRows.parse(rows.results).map((row) => unrankedWeekKey(row.workspace_id, row.week_start_at)));
 }
 
@@ -113,7 +118,8 @@ export function planRollovers(
     const closedWeekStart = previousBriefAt(workspace.schedule, lastClose).toISOString();
     if (
       unrankedWeekStarts.has(unrankedWeekKey(workspace.workspaceId, closedWeekStart)) &&
-      now.getTime() - lastClose.getTime() > CATCH_UP_GRACE_MS
+      now.getTime() - lastClose.getTime() > CATCH_UP_GRACE_MS &&
+      now.getTime() - lastClose.getTime() <= CATCH_UP_WINDOW_MS
     ) {
       catchUpAt.push({ workspaceId: workspace.workspaceId, closesAt: lastClose });
     }

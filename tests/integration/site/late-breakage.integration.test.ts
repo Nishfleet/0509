@@ -3,6 +3,7 @@ import { env as workerEnv } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { rejudgeUnjudgedChanges } from "../../../app/lib/site/judge.server";
+import { requeueUnsentIncidentEmails } from "../../../app/lib/site/requeue-incident-emails.server";
 
 const NOW = new Date().toISOString();
 const HOUR_MS = 3_600_000;
@@ -120,6 +121,44 @@ describe("a breakage judged after the sweep (0509#7337)", () => {
     }>();
     expect(send).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledWith({ incident_id: incident?.id });
+  });
+
+  describe("an incident whose email was never queued", () => {
+    const openIncident = async (openedAt: string) => {
+      await seedPlainChange(NOW);
+      await env.DB.batch([
+        env.DB.prepare(
+          `INSERT INTO incident (id, workspace_id, entity_id, page_id, kind, opened_at) VALUES ('inc-unsent', 'ws-late', 'ent-late', 'page-late', 'breakage', ?1)`,
+        ).bind(openedAt),
+        env.DB.prepare(
+          `INSERT INTO alert (id, workspace_id, entity_id, signal_id, page_id, incident_id, kind, severity, title, body, created_at)
+           VALUES ('incident-inc-unsent', 'ws-late', 'ent-late', 'sig-late', 'page-late', 'inc-unsent', 'own_site_broken', 'high', 'late.example looks broken: breakage', NULL, ?1)`,
+        ).bind(openedAt),
+      ]);
+    };
+    const nowMs = Date.now();
+    const ago = (ms: number) => new Date(nowMs - ms).toISOString();
+
+    it("is queued on the next sweep", async () => {
+      await openIncident(ago(2 * HOUR_MS));
+      expect(await requeueUnsentIncidentEmails(new Date(nowMs))).toBe(1);
+      expect(send).toHaveBeenCalledExactlyOnceWith({ incident_id: "inc-unsent" });
+    });
+
+    it("is left alone once an open email was attempted, or while the first queue is still fresh", async () => {
+      await openIncident(ago(2 * HOUR_MS));
+      await env.DB.prepare(
+        `INSERT INTO send_attempt (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at)
+         VALUES ('att-1', 'ws-late', NULL, NULL, 'incident:inc-unsent:open', 'sent', ?1)`,
+      )
+        .bind(ago(HOUR_MS))
+        .run();
+      expect(await requeueUnsentIncidentEmails(new Date(nowMs))).toBe(0);
+      await env.DB.exec("DELETE FROM send_attempt");
+      await env.DB.prepare("UPDATE incident SET opened_at = ?1").bind(ago(60_000)).run();
+      expect(await requeueUnsentIncidentEmails(new Date(nowMs))).toBe(0);
+      expect(send).not.toHaveBeenCalled();
+    });
   });
 
   it("opens an in-app incident without an email for the check band, as the sweep path does", async () => {

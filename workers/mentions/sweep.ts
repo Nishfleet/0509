@@ -13,6 +13,7 @@ import {
   readSeenDedupKeys,
   readSeenNormUrlHashes,
   readUnjudgedMentions,
+  readUnjudgedMentionsInWindow,
   resolveUnjudgedMention,
 } from "../../app/lib/data/signal.server";
 import { insertWatchSnapshot } from "../../app/lib/data/snapshot.server";
@@ -23,6 +24,7 @@ import {
   advanceHnCursor,
   markWatchPolled,
   readActiveWatches,
+  readWorkspaceMentionWatches,
   readWatchConfigJson,
   writeWatchConfigJson,
 } from "../../app/lib/data/watch.server";
@@ -79,6 +81,7 @@ export interface TargetOutcome {
   stored: number;
   unjudged: number;
   skipped: number;
+  ms?: number;
 }
 
 export async function planTargets(): Promise<MentionTarget[]> {
@@ -176,7 +179,7 @@ function judgedStatements(input: {
       p: verdict.p,
       choice: null,
       reason,
-      decidedAt: now,
+      decidedAt: new Date().toISOString(),
     });
   const statements = [verdictRow(verdicts.about, null)];
   if (verdicts.matters === null) return statements;
@@ -192,9 +195,8 @@ function duplicateStatements(input: {
   signalId: string;
   candidateId: string;
   verdict: NoulVerdict;
-  now: string;
 }): D1PreparedStatement[] {
-  const { watch, signalId, candidateId, verdict, now } = input;
+  const { watch, signalId, candidateId, verdict } = input;
   const verdictRow = insertVerdict({
     workspaceId: watch.workspace_id,
     questionId: verdict.questionId,
@@ -204,7 +206,7 @@ function duplicateStatements(input: {
     p: verdict.p,
     choice: null,
     reason: null,
-    decidedAt: now,
+    decidedAt: new Date().toISOString(),
   });
   return noulAction(verdict.p) === "act" ? [verdictRow, markDuplicateOf(signalId, candidateId)] : [verdictRow];
 }
@@ -265,7 +267,7 @@ async function judgeDuplicate(input: {
   });
   try {
     const verdict = await withMentionCall(watch.entity_id, () => askNoul(watch.workspace_id, DUPLICATE_SIGNAL, state));
-    const statements = duplicateStatements({ watch, signalId, candidateId: candidate.id, verdict, now });
+    const statements = duplicateStatements({ watch, signalId, candidateId: candidate.id, verdict });
     return { statements, asked: true, jevDown: false, collapsed: noulAction(verdict.p) === "act" };
   } catch (error) {
     if (!(error instanceof JevUnavailableError)) throw error;
@@ -293,6 +295,38 @@ async function rejudgeUnjudged(
     if (!rejected) stored += 1;
   }
   return { statements, stored, attempted: pending.length, jevDown: false };
+}
+
+export async function rejudgeWindowMentions(input: {
+  workspaceId: string;
+  windowStartAt: string;
+  windowEndAt: string;
+  limit: number;
+}): Promise<number> {
+  const [pending, watches, context] = await Promise.all([
+    readUnjudgedMentionsInWindow(input),
+    readWorkspaceMentionWatches(input.workspaceId),
+    readDiscoveryContext(input.workspaceId),
+  ]);
+  if (context === null) return 0;
+  const byId = new Map(watches.map((watch) => [watch.watch_id, watch]));
+  const now = new Date().toISOString();
+  const statements: D1PreparedStatement[] = [];
+  let judged = 0;
+  for (const row of pending) {
+    const watch = byId.get(row.watchId);
+    if (watch === undefined) continue;
+    const verdicts = await judgeOrNull(watch, context, row);
+    if (verdicts === null) break;
+    judged += 1;
+    const rejected = !isAboutBrand(verdicts.about.p);
+    statements.push(
+      resolveUnjudgedMention(row.id, rejected),
+      ...judgedStatements({ watch, signalId: row.id, item: row, verdicts, now, alert: !rejected }),
+    );
+  }
+  if (statements.length > 0) await env.DB.batch(statements);
+  return judged;
 }
 
 function mentionSignal(input: {

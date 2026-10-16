@@ -8,8 +8,8 @@ WHERE workspace_id = ? AND status = 'pending'`;
 
 const MARK_FAILED = `UPDATE digest SET status = 'failed' WHERE id = ? AND status = 'pending'`;
 
-const INSERT_WEEKLY_DIGEST = `INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status, payload_json)
-VALUES (?1, ?2, 'weekly', ?3, ?4, ?5, ?6)
+const INSERT_WEEKLY_DIGEST = `INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status, payload_json, subject)
+VALUES (?1, ?2, 'weekly', ?3, ?4, ?5, ?6, ?7)
 ON CONFLICT (id) DO NOTHING`;
 
 const LIST_BRIEFS =
@@ -39,6 +39,7 @@ export interface WeeklyDigest {
   periodEnd: string;
   status: "pending" | "paused";
   payloadJson: string;
+  subject: string;
 }
 
 export function markDigestSentStatement(db: D1Database, digestId: string, sentAt: string): D1PreparedStatement {
@@ -73,9 +74,18 @@ export async function readWorkspaceBrief(workspaceId: string, digestId: string):
   return readBrief(env.DB, workspaceId, digestId);
 }
 
-export async function insertWeeklyDigest(db: D1Database, digest: WeeklyDigest): Promise<void> {
-  await db
+export async function insertWeeklyDigest(db: D1Database, digest: WeeklyDigest): Promise<boolean> {
+  const result = await db
     .prepare(INSERT_WEEKLY_DIGEST)
-    .bind(digest.id, digest.workspaceId, digest.periodStart, digest.periodEnd, digest.status, digest.payloadJson)
+    .bind(
+      digest.id,
+      digest.workspaceId,
+      digest.periodStart,
+      digest.periodEnd,
+      digest.status,
+      digest.payloadJson,
+      digest.subject,
+    )
     .run();
+  return result.meta.changes > 0;
 }

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { readSlackDisconnected, readSlackTarget, saveSlackTarget } from "../../app/lib/data/send_target.server";
 import { CHANGE_DAILY_CAP, deliverChange, handleBatch } from "../../workers/delivery/consumer";
+import { handleDlqBatch } from "../../workers/delivery/dlq-consumer";
 
 const USER = "user-change-lane";
 const WS = "ws-change-lane";
@@ -287,6 +288,11 @@ describe("rival change email lane (0509#6375)", () => {
       expect(posts).toHaveLength(1);
       expect(await readSlackTarget(env.DB, WS)).toBeNull();
       expect(await readSlackDisconnected(env.DB, WS)).toBe(true);
+      const attempts = await env.DB.prepare(
+        "SELECT status, error FROM send_attempt WHERE idempotency_key LIKE 'change-slack:%'",
+      ).all<{ status: string; error: string | null }>();
+      expect(attempts.results.map((row) => row.status)).toEqual(["skipped_revoked"]);
+      expect(attempts.results[0]?.error).toContain("revoked");
     });
 
     it("re-posts once when Slack recovers on retry, never repeats the email and then stays quiet", async () => {
@@ -309,6 +315,28 @@ describe("rival change email lane (0509#6375)", () => {
         "SELECT idempotency_key, status FROM send_attempt WHERE idempotency_key LIKE 'change-slack:%'",
       ).all<{ idempotency_key: string; status: string }>();
       expect(attempts.results.map((row) => row.status)).toEqual(["sent"]);
+    });
+
+    it("tells the customer Slack missed the change, not that the email failed, when only Slack gave up", async () => {
+      await connect(500);
+      const sent: EmailMessageBuilder[] = [];
+      await deliverChange(envWith(sent), { signal_id: SIGNAL });
+      const acked: number[] = [];
+      const batch = {
+        queue: "send-email-dlq",
+        messages: [{ id: "m1", body: { signal_id: SIGNAL }, ack: () => acked.push(1), retry: () => acked.push(-1) }],
+      } as unknown as MessageBatch;
+
+      await handleDlqBatch(env, batch);
+
+      const alerts = await env.DB.prepare("SELECT title, body FROM alert WHERE workspace_id = ?")
+        .bind(WS)
+        .all<{ title: string; body: string }>();
+      expect(sent).toHaveLength(1);
+      expect(alerts.results).toHaveLength(1);
+      expect(alerts.results[0]?.title).toBe("We couldn't post a competitor change to Slack");
+      expect(`${alerts.results[0]?.title} ${alerts.results[0]?.body}`).not.toContain("email you");
+      expect(acked).toEqual([1]);
     });
   });
 });

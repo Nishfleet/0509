@@ -4,7 +4,10 @@ import { captureException } from "@sentry/cloudflare";
 
 import { MENTIONS_SWEEP_CRON, sweepMonitor } from "../../app/lib/cadence";
 import { readCanarySources } from "../../app/lib/data/source.server";
+import { recordSweepRun } from "../../app/lib/data/sweep_run.server";
+import { FAILED_TARGET_MS, SweepBudget, timed } from "../mentions/budget";
 import { runCanary } from "../mentions/canary";
+import { lostSources, mentionsHealth, skippedTargets } from "../mentions/health";
 import type { Streaks } from "../mentions/retry";
 import { deferred, retrySkipped, sustainedSkips, track, tripped } from "../mentions/retry";
 import type { MentionTarget, TargetOutcome } from "../mentions/sweep";
@@ -22,6 +25,8 @@ export interface MentionsOutcome {
   targets: number;
   swept: number;
   failed: number;
+  missed: string[];
+  skippedTargets: number;
   stored: number;
   unjudged: number;
   skipped: number;
@@ -30,17 +35,29 @@ export interface MentionsOutcome {
 export class MentionsSweep extends WorkflowEntrypoint<Env> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<MentionsOutcome | null> {
     if (isNativeSchedule(event)) return null;
-    return withStepCheckIn(step, { slug: "mentions-sweep", config: MONITOR }, () => this.runMentions(event, step));
+    return withStepCheckIn(
+      step,
+      {
+        slug: "mentions-sweep",
+        config: MONITOR,
+        health: mentionsHealth,
+      },
+      () => this.runMentions(event, step),
+    );
   }
 
   private async runMentions(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<MentionsOutcome> {
     const now = event.timestamp.toISOString();
     const targets = await step.do("plan", RETRY, () => planTargets());
     const counts = await this.canaries(step, now);
-    const run = (target: MentionTarget) => sweepTarget(target, now, counts.get(target.sourceId) ?? null);
-    const outcomes = await this.firstPass(step, targets, run);
-    const settled = await retrySkipped(step, { targets, outcomes, run });
-    for (const entry of sustainedSkips({ targets, outcomes: settled, run })) {
+    const run = (target: MentionTarget) => timed(() => sweepTarget(target, now, counts.get(target.sourceId) ?? null));
+    const budget = new SweepBudget();
+    const outcomes = await this.firstPass(step, targets, { run, budget });
+    const settled = await retrySkipped(step, { targets, outcomes, run, budget });
+    for (const entry of budget.deferred()) {
+      console.warn(JSON.stringify({ event: "mentions.targets_skipped", ...entry }));
+    }
+    for (const entry of sustainedSkips({ targets, outcomes: settled, run, budget })) {
       const message = JSON.stringify({ event: "mentions.sustained_skips", ...entry });
       console.error(message);
       captureException(new Error(message), { tags: { lane: "mentions", source: entry.pluginKey } });
@@ -50,12 +67,32 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
       targets: targets.length,
       swept: done.length,
       failed: settled.length - done.length,
+      missed: lostSources(targets, settled),
+      skippedTargets: skippedTargets(settled),
       stored: done.reduce((sum, outcome) => sum + outcome.stored, 0),
       unjudged: done.reduce((sum, outcome) => sum + outcome.unjudged, 0),
       skipped: done.reduce((sum, outcome) => sum + outcome.skipped, 0),
     };
-    console.warn(JSON.stringify({ event: "mentions.sweep", ...result }));
+    const deferredTargets = budget.deferred().reduce((sum, entry) => sum + entry.targets, 0);
+    console.warn(JSON.stringify({ event: "mentions.sweep", ...result, deferred: deferredTargets }));
+    await this.record(step, event, result);
     return result;
+  }
+
+  private async record(step: WorkflowStep, event: WorkflowEvent<unknown>, result: MentionsOutcome): Promise<void> {
+    await step.do("record", RETRY, async () => {
+      const finishedAt = new Date();
+      await recordSweepRun({
+        id: event.instanceId,
+        kind: "mentions",
+        plannedAt: event.timestamp.toISOString(),
+        finishedAt: finishedAt.toISOString(),
+        wallMs: finishedAt.getTime() - event.timestamp.getTime(),
+        pages: result.targets,
+        failed: result.failed + result.skippedTargets,
+        reason: result.missed.length === 0 ? null : result.missed.join(", "),
+      });
+    });
   }
 
   private async canaries(step: WorkflowStep, now: string): Promise<Map<string, number>> {
@@ -74,20 +111,25 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
   private async firstPass(
     step: WorkflowStep,
     targets: MentionTarget[],
-    run: (target: MentionTarget) => Promise<TargetOutcome>,
+    sweep: { run: (target: MentionTarget) => Promise<TargetOutcome>; budget: SweepBudget },
   ): Promise<(TargetOutcome | null)[]> {
+    const { run, budget } = sweep;
     const outcomes: (TargetOutcome | null)[] = [];
     const streaks: Streaks = new Map();
     for (const [index, target] of targets.entries()) {
-      if (tripped(streaks, target)) {
+      const over = budget.reason(target.pluginKey);
+      if (over !== null) budget.defer(target.pluginKey, over);
+      if (over !== null || tripped(streaks, target)) {
         outcomes.push(deferred(target));
         continue;
       }
       try {
         const outcome = await step.do(`sweep ${target.pluginKey} ${target.query}`, RETRY, () => run(target));
+        budget.spend(target.pluginKey, outcome.ms ?? 0);
         track(streaks, target, outcome);
         outcomes.push(outcome);
       } catch (error) {
+        budget.spend(target.pluginKey, FAILED_TARGET_MS);
         console.error(
           JSON.stringify({ event: "mentions.target_failed", source: target.pluginKey, message: String(error) }),
         );
@@ -95,6 +137,7 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
       }
       if (target.minIntervalSeconds > 0 && index < targets.length - 1) {
         await step.sleep(`pace ${String(index)}`, target.minIntervalSeconds * 1000);
+        budget.spend(target.pluginKey, target.minIntervalSeconds * 1000);
       }
     }
     return outcomes;
