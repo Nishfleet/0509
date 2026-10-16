@@ -80,7 +80,7 @@ export async function resolveSendAttempt(
   input: {
     attemptId: string;
     idempotencyKey: string;
-    outcome: "sent" | "failed" | "unconfirmed";
+    outcome: "sent" | "failed" | "unconfirmed" | "skipped_revoked";
     error: string | null;
   },
 ): Promise<void> {

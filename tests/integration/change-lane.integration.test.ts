@@ -271,6 +271,11 @@ describe("rival change email lane (0509#6375)", () => {
       expect(posts).toHaveLength(1);
       expect(await readSlackTarget(env.DB, WS)).toBeNull();
       expect(await readSlackDisconnected(env.DB, WS)).toBe(true);
+      const attempts = await env.DB.prepare(
+        "SELECT status, error FROM send_attempt WHERE idempotency_key LIKE 'change-slack:%'",
+      ).all<{ status: string; error: string | null }>();
+      expect(attempts.results.map((row) => row.status)).toEqual(["skipped_revoked"]);
+      expect(attempts.results[0]?.error).toContain("revoked");
     });
 
     it("re-posts once when Slack recovers on retry, never repeats the email and then stays quiet", async () => {
