@@ -99,6 +99,7 @@ type DeliveryOutcome =
   | "sent"
   | "failed"
   | "unconfirmed"
+  | "skipped_revoked"
   | "suppressed"
   | "duplicate"
   | "no_target"
@@ -412,7 +413,7 @@ async function postSlack(env: Env, target: { id: string; target_value: string },
   const posted = await postToSlackOutcome(target.target_value, text);
   if (posted === "revoked") {
     await disconnectSlackTarget(env.DB, target.id);
-    return { outcome: "sent", error: "slack webhook revoked; target disconnected" };
+    return { outcome: "skipped_revoked", error: "slack webhook revoked; target disconnected" };
   }
   if (posted === "unconfirmed")
     return { outcome: "unconfirmed", error: "slack post unconfirmed after a network error" };

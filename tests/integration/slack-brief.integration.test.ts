@@ -227,6 +227,7 @@ describe("weekly brief also posts to Slack", () => {
     expect(run.acked).toEqual([0]);
     expect(run.retryOptions).toEqual([]);
     expect((await slackConnected(WS))?.is_verified).toBe(0);
+    expect((await slackAttempt("d-sb-3"))?.status).toBe("skipped_revoked");
   });
 
   it("retries a Slack outage on its own, and the retry posts once", async () => {

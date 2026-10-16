@@ -1,7 +1,7 @@
 import { SUPPORT_ADDRESS } from "../../app/components/footer";
 
 export interface SendResult {
-  outcome: "sent" | "failed" | "unconfirmed";
+  outcome: "sent" | "failed" | "unconfirmed" | "skipped_revoked";
   error: string | null;
 }
 
