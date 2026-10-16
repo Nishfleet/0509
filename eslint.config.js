@@ -26,7 +26,29 @@ const FULL_ZOD_IMPORT = {
     'app/components/ ships to the browser; full zod costs about 13 KB gzipped per object schema there. Import from "zod/mini" instead (docs/REBUILD-STACK.md, zod). Source: 0509#4134.',
 };
 
+const PIPELINE_SIGNALS_IMPORT = {
+  group: ["**/customer-ready"],
+  importNames: ["PIPELINE_SIGNALS"],
+  message:
+    "PIPELINE_SIGNALS is the unfiltered signal table, for pipeline code that must see every row. A page, API, feed or email reads SHOWN_SIGNALS or SENDABLE_SIGNALS. A file that really needs every row is added to PIPELINE_SIGNALS_IMPORTERS in eslint.config.js with its reason in the commit. Source: 0509#7660 review, replacing a hand-rolled test that read source files with a regex.",
+};
+
+const PIPELINE_SIGNALS_IMPORTERS = [
+  "app/lib/data/signal.server.ts",
+  "app/lib/data/signal_delivery.server.ts",
+  "app/lib/data/jev_verdict.server.ts",
+  "app/lib/data/user_decision.server.ts",
+  "app/lib/data/onboarding_run.server.ts",
+  "app/lib/data/incident.server.ts",
+  "app/lib/data/work_ledger.server.ts",
+  "app/lib/data-export.server.ts",
+  "app/lib/standing-score.server.ts",
+  "app/lib/site/sweep.server.ts",
+  "workers/delivery/dlq-consumer.ts",
+];
+
 const PAVED_PATH_PATTERNS = [
+  PIPELINE_SIGNALS_IMPORT,
   {
     group: ["better-auth/*", "@better-auth/passkey/*", "@better-auth/api-key/*"],
     message:
@@ -1275,6 +1297,19 @@ export default tseslint.config(
     ignores: ["app/lib/auth.server.ts", "app/lib/auth-client.ts"],
     rules: {
       "no-restricted-imports": ["error", { paths: ONE_PAVED_PATH_IMPORTS, patterns: PAVED_PATH_PATTERNS }],
+    },
+  },
+
+  {
+    files: PIPELINE_SIGNALS_IMPORTERS,
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: ONE_PAVED_PATH_IMPORTS,
+          patterns: PAVED_PATH_PATTERNS.filter((pattern) => pattern !== PIPELINE_SIGNALS_IMPORT),
+        },
+      ],
     },
   },
 
