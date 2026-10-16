@@ -25,6 +25,9 @@ export interface SiteSweepTarget {
   transportTestedAt: string | null;
 }
 
+export const ALTERNATE_MARKER = (alias: string): string =>
+  `coalesce(CASE WHEN json_valid(${alias}.config_json) THEN json_extract(${alias}.config_json, '$.alternateHome') END, 0) = 1`;
+
 const INSERT_WATCH = `INSERT INTO watch (id, entity_id, source_id, target_key, created_at)
 SELECT ?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
 ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
@@ -33,7 +36,7 @@ const UNWATCHED_ENTITIES = `SELECT e.id AS id, e.domain AS domain, CASE WHEN jso
        json_valid(e.identity_json) AS identity_valid
 FROM entity e
 WHERE e.state = 'on'
-  AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = e.id AND w.source_id = ?1)
+  AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = e.id AND w.source_id = ?1 AND NOT (${ALTERNATE_MARKER("w")}))
 ORDER BY e.id`;
 
 const MARK_POLLED = `UPDATE watch SET last_polled_at = ?2 WHERE id = ?1`;
@@ -387,9 +390,6 @@ export async function readFeedTargets(): Promise<readonly FeedTarget[]> {
 export async function deactivateWatch(watchId: string): Promise<void> {
   await env.DB.prepare(DEACTIVATE_WATCH).bind(watchId).run();
 }
-
-export const ALTERNATE_MARKER = (alias: string): string =>
-  `coalesce(CASE WHEN json_valid(${alias}.config_json) THEN json_extract(${alias}.config_json, '$.alternateHome') END, 0) = 1`;
 
 const BLOCKED_RIVALS = `SELECT e.id AS entity_id, e.workspace_id AS workspace_id, e.domain AS domain
 FROM entity e

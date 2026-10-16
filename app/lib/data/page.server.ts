@@ -227,14 +227,21 @@ export async function readFailureReasonForWatch(watchId: string): Promise<string
 }
 
 const SILENT_RIVALS = `SELECT e.workspace_id AS workspace_id,
-  COALESCE(p.last_failure_reason, CASE WHEN EXISTS (
-    SELECT 1 FROM watch w JOIN source src ON src.id = w.source_id AND src.is_enabled = 1 AND src.platform <> 'feed'
-    WHERE w.entity_id = e.id AND w.target_key = p.url AND w.is_active = 1
-  ) THEN 'swept without a recorded result' ELSE 'no active site watch on the page' END) AS reason
+  COALESCE(
+    (SELECT p.last_failure_reason FROM page p
+     WHERE p.entity_id = e.id AND p.role = 'home' AND p.last_failure_reason IS NOT NULL
+     ORDER BY p.last_failure_at DESC LIMIT 1),
+    CASE WHEN EXISTS (
+      SELECT 1 FROM watch w JOIN source src ON src.id = w.source_id AND src.key = 'site.web' AND src.is_enabled = 1
+      WHERE w.entity_id = e.id AND w.is_active = 1
+    ) THEN 'swept without a recorded result' ELSE 'no active site watch' END
+  ) AS reason
 FROM entity e
-JOIN page p ON p.entity_id = e.id AND p.role = 'home'
-WHERE e.role = 'competitor' AND e.state = 'on' AND p.discovered_at < ?1
-  AND NOT EXISTS (SELECT 1 FROM snapshot s WHERE s.page_id = p.id AND s.fetched_at >= ?1)`;
+WHERE e.role = 'competitor' AND e.state = 'on'
+  AND EXISTS (SELECT 1 FROM page h WHERE h.entity_id = e.id AND h.role = 'home' AND h.discovered_at < ?1)
+  AND NOT EXISTS (
+    SELECT 1 FROM snapshot s JOIN page sp ON sp.id = s.page_id WHERE sp.entity_id = e.id AND s.fetched_at >= ?1
+  )`;
 
 const silentRivalRows = z.array(z.object({ workspace_id: z.string(), reason: z.string() }));
 
