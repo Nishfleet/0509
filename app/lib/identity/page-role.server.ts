@@ -83,15 +83,6 @@ async function judgeStale(
   return { judged, refusal: reason instanceof Error ? reason : new Error("page_role left pages unanswered") };
 }
 
-function isSiteRoot(url: string): boolean {
-  return URL.canParse(url) && new URL(url).pathname === "/";
-}
-
-function storedRole(url: string, choice: string): JudgedPage["role"] {
-  const role = pageRole.parse(choice);
-  return role === "home" && !isSiteRoot(url) ? "other" : role;
-}
-
 export async function classifyNavPages({
   workspaceId,
   entity,
@@ -115,7 +106,7 @@ export async function classifyNavPages({
     entityId: entity.id,
     url: page.url,
     title: page.title,
-    role: storedRole(page.url, verdict.choice),
+    role: pageRole.parse(verdict.choice),
     roleDecidedForHash: hash,
     discoveredAt: now,
   }));

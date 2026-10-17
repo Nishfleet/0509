@@ -1,7 +1,8 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { insertPages, upsertJudgedPages, type JudgedPage } from "../../../app/lib/data/page.server";
+import { upsertJudgedPages, type JudgedPage } from "../../../app/lib/data/page.server";
+import { storeTailHome } from "../../../app/lib/identity/tail.server";
 import migration from "../../../migrations/0071_one_home_per_rival.sql?raw";
 
 const NOW = "2026-10-17T04:00:00.000Z";
@@ -50,20 +51,26 @@ describe("one home page per entity", () => {
     });
   });
 
-  it("keeps one home when the real home is stored after the judge, even on another host spelling", async () => {
-    await upsertJudgedPages([judged("https://linear.app/", "home")]);
-    await insertPages([
-      { id: "i1", entityId: ENTITY, url: "https://www.linear.app/", role: "home", discoveredAt: NOW },
-    ]);
-    expect(await roles()).toEqual({ "https://linear.app/": "other", "https://www.linear.app/": "home" });
-  });
-
-  it("never demotes a home that was stored by insertPages", async () => {
-    await insertPages([{ id: "i1", entityId: ENTITY, url: "https://linear.app/", role: "home", discoveredAt: NOW }]);
-    await insertPages([
-      { id: "i2", entityId: ENTITY, url: "https://linear.app/en-gb/", role: "home", discoveredAt: NOW },
-    ]);
-    expect(await roles()).toEqual({ "https://linear.app/": "home", "https://linear.app/en-gb/": "home" });
+  it("keeps the real home stored first by the tail, and stores judged strays as other", async () => {
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO source (id, key, plugin_key, platform, is_enabled) VALUES ('src_site_web', 'site.web', 'site.page', 'web', 1)",
+    ).run();
+    await storeTailHome(
+      {
+        workspaceId: "ws-one-home",
+        entityId: ENTITY,
+        name: "Linear",
+        domain: "linear.app",
+        homepageUrl: "https://linear.app/en-gb/",
+      },
+      NOW,
+    );
+    await upsertJudgedPages([judged("https://linear.app/homepage", "home"), judged("https://linear.app/", "home")]);
+    expect(await roles()).toEqual({
+      "https://linear.app/": "other",
+      "https://linear.app/en-gb/": "home",
+      "https://linear.app/homepage": "other",
+    });
   });
 
   it("lets the judge re-decide the one home page", async () => {

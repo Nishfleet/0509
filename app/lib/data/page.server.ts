@@ -43,16 +43,10 @@ const SELECT_JUDGED_HASHES =
 
 const pageHashes = z.array(z.object({ url: z.string(), role_decided_for_hash: z.string() }));
 
-const DEMOTE_JUDGED_HOMES = `UPDATE page SET role = 'other'
-WHERE entity_id = ?1 AND role = 'home' AND url <> ?2 AND role_decided_for_hash IS NOT NULL`;
-
 export async function insertPages(rows: readonly NewPage[]): Promise<void> {
   if (rows.length === 0) return;
   await env.DB.batch(
-    rows.flatMap((row) => [
-      env.DB.prepare(INSERT_PAGE).bind(row.id, row.entityId, row.url, row.role, row.discoveredAt),
-      ...(row.role === "home" ? [env.DB.prepare(DEMOTE_JUDGED_HOMES).bind(row.entityId, row.url)] : []),
-    ]),
+    rows.map((row) => env.DB.prepare(INSERT_PAGE).bind(row.id, row.entityId, row.url, row.role, row.discoveredAt)),
   );
 }
 
