@@ -89,6 +89,26 @@ describe("classifyNavPages", () => {
     expect(request.questions.page_role.criteria).toEqual(PAGE_ROLE.options);
   });
 
+  it("stores a judged home as home only for the site root", async () => {
+    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) =>
+      Promise.resolve({ answers: { page_role: { type: "choice", choice: "home" } } }),
+    );
+    Reflect.set(env, "AI", { run });
+    const rows = await classifyNavPages({
+      workspaceId,
+      entity: ENTITY,
+      pages: [
+        { url: "https://www.gymshark.com/", title: "Gymshark" },
+        { url: "https://www.gymshark.com/homepage", title: "Home" },
+      ],
+      now: NOW,
+    });
+    expect(rows.map((row) => [row.url, row.role])).toEqual([
+      ["https://www.gymshark.com/", "home"],
+      ["https://www.gymshark.com/homepage", "other"],
+    ]);
+  });
+
   it("leaves an unchanged page alone and asks Jev nothing more", async () => {
     const run = vi.fn((_model: string, _request: unknown, _options?: unknown) =>
       Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }),
