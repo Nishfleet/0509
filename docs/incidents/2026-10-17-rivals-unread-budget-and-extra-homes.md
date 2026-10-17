@@ -15,6 +15,6 @@ After #7686 the 03:00Z nightly still raised `site.rivals_silent` for 3 rivals: 2
 
 - A budget refusal no longer replaces a real failure reason stamped in the same sweep (`recordPageFailure`).
 - `browser.escalation_refused` (warn, workspace id only) is now logged on every refusal, so the next read can see who is refused. It is a Sentry warn event; it fires once per refused read, which only blocked brands reach.
-- The `home` role is kept for one page per rival in both writers (`upsertJudgedPages`, `insertPages`); migration 0071 demotes the strays already stored, keeping the page the sweep watches, else the one the judge never touched, else the site root. Migrations run before the Worker deploys (`deploy-production.yml`), so the order is safe.
+- The `home` role is kept for one page per rival in the judge's writer (`upsertJudgedPages`); `insertPages` stores the real home first and is unchanged, so a changed homepage url is never demoted; migration 0071 demotes the strays already stored, keeping the page the sweep watches, else the one the judge never touched, else the site root. Migrations run before the Worker deploys (`deploy-production.yml`), so the order is safe.
 
 Tests: `failure-cause-kept.integration.test.ts`, `one-home-page.integration.test.ts`.

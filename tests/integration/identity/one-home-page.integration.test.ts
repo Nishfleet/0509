@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { insertPages, upsertJudgedPages, type JudgedPage } from "../../../app/lib/data/page.server";
+import { upsertJudgedPages, type JudgedPage } from "../../../app/lib/data/page.server";
 import migration from "../../../migrations/0071_one_home_per_rival.sql?raw";
 
 const NOW = "2026-10-17T04:00:00.000Z";
@@ -56,12 +56,6 @@ describe("one home page per entity", () => {
     expect(await roles()).toEqual({ "https://linear.app/": "home" });
   });
 
-  it("stores a second home from insertPages as other", async () => {
-    await insertPages([{ id: "i1", entityId: ENTITY, url: "https://linear.app/", role: "home", discoveredAt: NOW }]);
-    await insertPages([{ id: "i2", entityId: ENTITY, url: "https://linear.app/now", role: "home", discoveredAt: NOW }]);
-    expect(await roles()).toEqual({ "https://linear.app/": "home", "https://linear.app/now": "other" });
-  });
-
   it("migration keeps the home the judge never touched over a stray judged root", async () => {
     await env.DB.batch([
       env.DB.prepare(
@@ -70,6 +64,19 @@ describe("one home page per entity", () => {
       env.DB.prepare(
         "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES ('w2', ?1, 'https://brand.example/', 'home', 'h', ?2)",
       ).bind(ENTITY, NOW),
+    ]);
+    await env.DB.exec(migration.replace(/--.*\n/g, "").replace(/\s+/g, " "));
+    expect(await roles()).toEqual({ "https://brand.example/": "other", "https://brand.example/en-gb/": "home" });
+  });
+
+  it("migration keeps a watched home over an unjudged site root", async () => {
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('v1', ?1, 'https://brand.example/', 'home', ?2), ('v2', ?1, 'https://brand.example/en-gb/', 'home', ?2)",
+      ).bind(ENTITY, NOW),
+      env.DB.prepare(
+        "INSERT INTO watch (id, entity_id, source_id, target_key, is_active, config_json) VALUES ('wv', ?1, 'src_site_web', 'https://brand.example/en-gb/', 1, '{}')",
+      ).bind(ENTITY),
     ]);
     await env.DB.exec(migration.replace(/--.*\n/g, "").replace(/\s+/g, " "));
     expect(await roles()).toEqual({ "https://brand.example/": "other", "https://brand.example/en-gb/": "home" });
