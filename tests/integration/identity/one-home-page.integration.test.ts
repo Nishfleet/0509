@@ -1,8 +1,8 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { upsertJudgedPages, type JudgedPage } from "../../../app/lib/data/page.server";
-import migration from "../../../migrations/0070_one_home_per_rival.sql?raw";
+import { insertPages, upsertJudgedPages, type JudgedPage } from "../../../app/lib/data/page.server";
+import migration from "../../../migrations/0071_one_home_per_rival.sql?raw";
 
 const NOW = "2026-10-17T04:00:00.000Z";
 const ENTITY = "e-one-home";
@@ -20,9 +20,7 @@ beforeEach(async () => {
   const userId = "u-one-home";
   const workspaceId = "ws-one-home";
   await env.DB.batch([
-    env.DB.prepare("DELETE FROM page"),
-    env.DB.prepare("DELETE FROM watch"),
-    env.DB.prepare("DELETE FROM entity"),
+    env.DB.prepare("DELETE FROM entity WHERE id = ?1").bind(ENTITY),
     env.DB.prepare("DELETE FROM workspace WHERE id = ?1").bind(workspaceId),
     env.DB.prepare('DELETE FROM "user" WHERE id = ?1').bind(userId),
   ]);
@@ -56,6 +54,25 @@ describe("one home page per entity", () => {
     await upsertJudgedPages([judged("https://linear.app/", "home")]);
     await upsertJudgedPages([judged("https://linear.app/", "home")]);
     expect(await roles()).toEqual({ "https://linear.app/": "home" });
+  });
+
+  it("stores a second home from insertPages as other", async () => {
+    await insertPages([{ id: "i1", entityId: ENTITY, url: "https://linear.app/", role: "home", discoveredAt: NOW }]);
+    await insertPages([{ id: "i2", entityId: ENTITY, url: "https://linear.app/now", role: "home", discoveredAt: NOW }]);
+    expect(await roles()).toEqual({ "https://linear.app/": "home", "https://linear.app/now": "other" });
+  });
+
+  it("migration keeps the home the judge never touched over a stray judged root", async () => {
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('w1', ?1, 'https://brand.example/en-gb/', 'home', ?2)",
+      ).bind(ENTITY, NOW),
+      env.DB.prepare(
+        "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES ('w2', ?1, 'https://brand.example/', 'home', 'h', ?2)",
+      ).bind(ENTITY, NOW),
+    ]);
+    await env.DB.exec(migration.replace(/--.*\n/g, "").replace(/\s+/g, " "));
+    expect(await roles()).toEqual({ "https://brand.example/": "other", "https://brand.example/en-gb/": "home" });
   });
 
   it("migration demotes stray homes already stored and keeps the site root", async () => {

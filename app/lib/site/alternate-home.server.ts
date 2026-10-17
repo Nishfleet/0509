@@ -4,7 +4,7 @@ import { readAlternateAttempts, readBlockedRivals, recordAlternateAttempt } from
 import type { BlockedRival } from "../data/watch.server";
 import { robotsAllows } from "../fetch/robots.server";
 import { readUrl } from "../fetch/transport.server";
-import { takeBrowserAlternateHome } from "./browser-budget.server";
+import { takeBrowserEscalation } from "./browser-budget.server";
 import { ownHostUrls } from "./alternate-sources";
 
 const BLOCKED_RIVALS_PER_SWEEP = 3;
@@ -18,7 +18,7 @@ async function attempt(rival: BlockedRival, url: string, now: string): Promise<A
   if (!(await robotsAllows(url))) return { adopted: false, reason: "robots" };
   const day = now.slice(0, 10);
   const read = await readUrl(url, {
-    mayEscalate: () => takeBrowserAlternateHome(rival.workspaceId, rival.entityId, day),
+    mayEscalate: () => takeBrowserEscalation(rival.workspaceId, rival.entityId, day),
   });
   if (!read.ok) return { adopted: false, reason: read.reason };
   return { adopted: true, transport: read.transport };

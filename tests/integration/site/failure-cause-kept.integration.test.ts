@@ -2,7 +2,6 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { recordPageFailure } from "../../../app/lib/data/page.server";
-import { takeBrowserAlternateHome, takeBrowserEscalation } from "../../../app/lib/site/browser-budget.server";
 
 const SWEEP = "2026-10-16T21:00:16.637Z";
 const LATER_SWEEP = "2026-10-17T21:00:12.000Z";
@@ -58,19 +57,5 @@ describe("the reason a page could not be read", () => {
   it("records a refusal when nothing was recorded before", async () => {
     await recordPageFailure(PAGE, REFUSED, SWEEP);
     expect(await reason()).toBe(REFUSED);
-  });
-});
-
-describe("the browser allowance of one brand for one day", () => {
-  it("is not spent by alternate-home tries, so the home page and its recheck still get theirs", async () => {
-    const day = "2026-10-20";
-    for (let tried = 0; tried < 3; tried += 1) {
-      expect(await takeBrowserAlternateHome(WS, ENTITY, day)).toBe(true);
-    }
-    expect(await takeBrowserAlternateHome(WS, ENTITY, day)).toBe(false);
-    for (let read = 0; read < 4; read += 1) {
-      expect(await takeBrowserEscalation(WS, ENTITY, day)).toBe(true);
-    }
-    expect(await takeBrowserEscalation(WS, ENTITY, day)).toBe(false);
   });
 });

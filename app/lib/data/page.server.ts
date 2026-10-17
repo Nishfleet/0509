@@ -25,7 +25,8 @@ export interface JudgedPage {
 }
 
 const INSERT_PAGE = `INSERT INTO page (id, entity_id, url, role, discovered_at)
-SELECT ?1, ?2, ?3, ?4, ?5 WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
+SELECT ?1, ?2, ?3, CASE WHEN ?4 = 'home' AND EXISTS (SELECT 1 FROM page h WHERE h.entity_id = ?2 AND h.role = 'home' AND h.url <> ?3)
+  THEN 'other' ELSE ?4 END, ?5 WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
 ON CONFLICT (entity_id, url) DO NOTHING`;
 
 const JUDGED_ROLE = `CASE WHEN ?5 = 'home' AND EXISTS (SELECT 1 FROM page h WHERE h.entity_id = ?2 AND h.role = 'home' AND h.url <> ?3)
