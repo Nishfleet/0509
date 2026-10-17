@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 
 const ESCALATIONS_PER_BRAND_PER_DAY = 4;
+const ALTERNATE_HOME_TRIES_PER_BRAND_PER_DAY = 3;
 const SCREENSHOTS_PER_BRAND_PER_DAY = 4;
 const SHARE_IMAGES_PER_WORKSPACE_PER_DAY = 10;
 const BROWSER_CALL_TIMEOUT_MS = 25_000;
@@ -25,9 +26,22 @@ async function recordBrowserMs(res: Response): Promise<void> {
   }
 }
 
+function logRefusal(workspaceId: string, kind: "page" | "alternate-home"): void {
+  console.warn(JSON.stringify({ event: "browser.escalation_refused", workspaceId, kind }));
+}
+
 export async function takeBrowserEscalation(workspaceId: string, entityId: string, day: string): Promise<boolean> {
   const id = env.BROWSER_BUDGET.idFromName(`${workspaceId}:${entityId}:${day}`);
-  return env.BROWSER_BUDGET.get(id).take(ESCALATIONS_PER_BRAND_PER_DAY);
+  const taken = await env.BROWSER_BUDGET.get(id).take(ESCALATIONS_PER_BRAND_PER_DAY);
+  if (!taken) logRefusal(workspaceId, "page");
+  return taken;
+}
+
+export async function takeBrowserAlternateHome(workspaceId: string, entityId: string, day: string): Promise<boolean> {
+  const id = env.BROWSER_BUDGET.idFromName(`${workspaceId}:${entityId}:${day}:alternate-home`);
+  const taken = await env.BROWSER_BUDGET.get(id).take(ALTERNATE_HOME_TRIES_PER_BRAND_PER_DAY);
+  if (!taken) logRefusal(workspaceId, "alternate-home");
+  return taken;
 }
 
 export async function takeBrowserScreenshot(workspaceId: string, entityId: string, day: string): Promise<boolean> {
