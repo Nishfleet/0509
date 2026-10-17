@@ -84,7 +84,7 @@ async function judgeStale(
 }
 
 function isSiteRoot(url: string): boolean {
-  return new URL(url).pathname === "/";
+  return URL.canParse(url) && new URL(url).pathname === "/";
 }
 
 function storedRole(url: string, choice: string): JudgedPage["role"] {
