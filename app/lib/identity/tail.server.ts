@@ -219,6 +219,15 @@ function uniqueTargets(targets: readonly WatchTarget[]): WatchTarget[] {
   });
 }
 
+function homePages(params: IdentityTailParams, siteSourceId: string | null, discoveredAt: string): NewPage[] {
+  if (siteSourceId === null || params.homepageUrl === null) return [];
+  return [{ id: crypto.randomUUID(), entityId: params.entityId, url: params.homepageUrl, role: "home", discoveredAt }];
+}
+
+export async function storeTailHome(params: IdentityTailParams, discoveredAt: string): Promise<void> {
+  await insertPages(homePages(params, await readEnabledSourceId("site.web"), discoveredAt));
+}
+
 export async function seedTailWatches(params: IdentityTailParams, discoveredAt: string): Promise<EntityWatch[]> {
   await persistTail(params);
   const subject = subjectFor(params);
@@ -233,10 +242,7 @@ export async function seedTailWatches(params: IdentityTailParams, discoveredAt: 
     ...(await enabledTargets(ads)),
     ...(await enabledTargets(hiring === null ? [] : [{ sourceKey: hiring.sourceKey, targetKey: hiring.boardUrl }])),
   ];
-  const pages: NewPage[] =
-    siteSourceId !== null && params.homepageUrl !== null
-      ? [{ id: crypto.randomUUID(), entityId: params.entityId, url: params.homepageUrl, role: "home", discoveredAt }]
-      : [];
+  const pages = homePages(params, siteSourceId, discoveredAt);
   const planned: NewWatch[] = uniqueTargets(targets).map((target) => ({
     id: crypto.randomUUID(),
     entityId: params.entityId,

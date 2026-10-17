@@ -28,8 +28,11 @@ const INSERT_PAGE = `INSERT INTO page (id, entity_id, url, role, discovered_at)
 SELECT ?1, ?2, ?3, ?4, ?5 WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
 ON CONFLICT (entity_id, url) DO NOTHING`;
 
+const JUDGED_ROLE = `CASE WHEN ?5 = 'home' AND EXISTS (SELECT 1 FROM page h WHERE h.entity_id = ?2 AND h.role = 'home' AND h.url <> ?3)
+  THEN 'other' ELSE ?5 END`;
+
 const UPSERT_JUDGED_PAGE = `INSERT INTO page (id, entity_id, url, title, role, role_decided_for_hash, discovered_at)
-SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
+SELECT ?1, ?2, ?3, ?4, ${JUDGED_ROLE}, ?6, ?7 WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
 ON CONFLICT (entity_id, url) DO UPDATE SET
   title = excluded.title,
   role = excluded.role,
@@ -201,7 +204,12 @@ export async function markPageDeferred(pageId: string, at: string): Promise<void
   await env.DB.prepare(MARK_DEFERRED).bind(pageId, at).run();
 }
 
-const RECORD_FAILURE = "UPDATE page SET last_failure_reason = ?2, last_failure_at = ?3 WHERE id = ?1";
+const RECORD_FAILURE = `UPDATE page SET
+  last_failure_reason = CASE
+    WHEN ?2 LIKE 'deferred:%' AND last_failure_at = ?3 AND last_failure_reason NOT LIKE 'deferred:%' THEN last_failure_reason
+    ELSE ?2 END,
+  last_failure_at = ?3
+WHERE id = ?1`;
 
 const CLEAR_FAILURE =
   "UPDATE page SET last_failure_reason = NULL, last_failure_at = NULL WHERE id = ?1 AND last_failure_at IS NOT NULL";

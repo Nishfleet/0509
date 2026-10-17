@@ -8,6 +8,7 @@ import {
   enqueueFirstSweep,
   persistTail,
   seedTailWatches,
+  storeTailHome,
   warmTailSiteCard,
 } from "../app/lib/identity/tail.server";
 import type { IdentityTailOutcome, IdentityTailParams } from "../app/lib/identity/tail.server";
@@ -26,6 +27,7 @@ export class IdentityTail extends WorkflowEntrypoint<Env, IdentityTailParams> {
     const discoveryInstanceId = await step.do("start-discovery", RETRY, () =>
       startDiscovery(params.workspaceId, event.timestamp),
     );
+    await step.do("store-home", RETRY, () => storeTailHome(params, event.timestamp.toISOString()));
     await step.do("classify-pages", RETRY, () => classifyTailPages(params, event.timestamp.toISOString()));
     await step.do("warm-site-card", RETRY, () => warmTailSiteCard(params));
     const watches = await step.do("seed-watches", RETRY, () => seedTailWatches(params, event.timestamp.toISOString()));
