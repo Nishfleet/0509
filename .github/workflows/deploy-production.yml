@@ -20,10 +20,10 @@ jobs:
     # 0509#7004: workflow_dispatch can name any ref, so before this guard a
     # dispatch started from a feature branch deployed code that never passed
     # the merge queue. A push arrives from main and a dispatch names its ref,
-    # so only a tree the queue tested gets deployed. Skipping here skips
-    # lighthouse and lighthouse-report with it, because both need this job.
+    # so only a tree the queue tested gets deployed.
     if: github.ref == 'refs/heads/main'
-    # Job-level, so the lighthouse audit below never holds back the next deploy.
+    # Job-level, so a queued deploy waits for the running one instead of
+    # cancelling it, and the running deploy finishes its rollback if it fails.
     concurrency:
       group: deploy-production
       cancel-in-progress: false

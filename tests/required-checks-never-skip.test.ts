@@ -120,8 +120,9 @@ describe("deploy-production.yml holds only the deploy job (0509#7656, fleet-ops#
   });
 
   it("still gates the Lighthouse budgets on the pull request", async () => {
-    const ci = await readFile(path.join(WORKFLOWS, "ci.yml"), "utf8");
-    expect(ci).toContain("npx lhci collect");
-    expect(ci).toContain("npx lhci assert --budgets-file=lighthouse-budget.pr.json");
+    const ci = parse(await readFile(path.join(WORKFLOWS, "ci.yml"), "utf8")) as { jobs: Record<string, WorkflowJob> };
+    const runs = Object.values(ci.jobs).flatMap((job) => job.steps ?? []).map((step) => step.run ?? "");
+    expect(runs.some((run) => run.includes("npx lhci collect"))).toBe(true);
+    expect(runs.some((run) => run.includes("npx lhci assert --budgets-file=lighthouse-budget.pr.json"))).toBe(true);
   });
 });

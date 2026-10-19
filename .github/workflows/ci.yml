@@ -249,10 +249,15 @@ jobs:
       - name: Assert the Lighthouse budgets
         if: steps.scope.outputs.skip != 'true'
         # lighthouse-budget.pr.json is the deterministic subset of the fleet budget (fleet-ops config/lighthouserc.json):
-        # resource sizes and CLS. The timing rows (LCP, TTI) stay on the production
-        # job: on a shared runner the unchanged page measured LCP 1657 one run and under
-        # 1500 the run before (35748475565 vs 35746328688), and a required check that
-        # flips on runner load is not a gate. Production still enforces every row.
+        # resource sizes and CLS. The timing rows (LCP, TTI) are not here: on a shared
+        # runner the unchanged page measured LCP 1657 one run and under 1500 the run
+        # before (35748475565 vs 35746328688), and a required check that flips on
+        # runner load is not a gate. They were enforced on production by the audit
+        # that ran after the deploy, until the site went behind the Cloudflare Access
+        # wall and that audit measured the login page instead (0509#7656,
+        # fleet-ops#9889), so nothing measures production LCP right now. The bar in
+        # docs/REBUILD-DONE.md B stands and the audit returns when 0509#7656 decides
+        # how the audited URLs are reached.
         run: npx lhci assert --budgets-file=lighthouse-budget.pr.json
 
       - name: Keep the trace when it fails
