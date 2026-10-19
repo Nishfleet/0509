@@ -105,14 +105,23 @@ describe("a stale base is caught on the pull request, not in the queue (2026-10-
   });
 });
 
-describe("lighthouse runs after the deploy, not on deployment_status (0509#7013)", () => {
-  it("keeps ci.yml off deployment_status and chains lighthouse to the deploy job", async () => {
+describe("deploy-production.yml holds only the deploy job (0509#7656, fleet-ops#9889)", () => {
+  it("keeps ci.yml off deployment_status", async () => {
     const ci = parse(await readFile(path.join(WORKFLOWS, "ci.yml"), "utf8")) as { on: Record<string, unknown> };
     expect(Object.keys(ci.on)).not.toContain("deployment_status");
+  });
+
+  it("runs no post-deploy job, so a run conclusion is the deploy's conclusion", async () => {
     const deploy = readJobs(
       "deploy-production.yml",
       await readFile(path.join(WORKFLOWS, "deploy-production.yml"), "utf8"),
     );
-    expect(deploy.find(({ key }) => key === "lighthouse")?.job.needs).toEqual(["deploy"]);
+    expect(deploy.map(({ key }) => key)).toEqual(["deploy"]);
+  });
+
+  it("still gates the Lighthouse budgets on the pull request", async () => {
+    const ci = await readFile(path.join(WORKFLOWS, "ci.yml"), "utf8");
+    expect(ci).toContain("npx lhci collect");
+    expect(ci).toContain("npx lhci assert --budgets-file=lighthouse-budget.pr.json");
   });
 });
