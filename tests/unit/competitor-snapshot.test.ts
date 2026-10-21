@@ -3,7 +3,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { CompetitorSnapshot } from "../../app/components/competitor-snapshot";
-import { snapshotCells, snapshotNotes, worthOnePager, type SnapshotCell } from "../../app/lib/competitor-snapshot";
+import {
+  awaitingFirstRead,
+  snapshotCells,
+  snapshotNotes,
+  worthOnePager,
+  type SnapshotCell,
+} from "../../app/lib/competitor-snapshot";
 
 const dashReason = "Meta ads did not respond this week.";
 
@@ -106,6 +112,24 @@ describe("a competitor added today", () => {
     const text = snapshotNotes(snapshotCells(input, { read: true })).map((note) => note.text);
     expect(text.join(" ")).toContain("We're not watching new ads");
     expect(text.join(" ")).not.toContain("first read tonight");
+  });
+
+  it("waits for a first read only while nothing was read, nothing came in and it is on", () => {
+    const view = {
+      lastChecked: null,
+      changes: [],
+      developments: [],
+      watch: { unreadable: false, notFound: false },
+      competitor: { state: "on" },
+      snapshot: fresh,
+    };
+    expect(awaitingFirstRead(view)).toBe(true);
+    expect(awaitingFirstRead({ ...view, lastChecked: "2026-10-12 06:00 UTC" })).toBe(false);
+    expect(awaitingFirstRead({ ...view, developments: [{}] })).toBe(false);
+    expect(awaitingFirstRead({ ...view, snapshot: CELLS })).toBe(false);
+    expect(awaitingFirstRead({ ...view, watch: { unreadable: true, notFound: false } })).toBe(false);
+    expect(awaitingFirstRead({ ...view, watch: { unreadable: false, notFound: true } })).toBe(false);
+    expect(awaitingFirstRead({ ...view, competitor: { state: "off" } })).toBe(false);
   });
 
   it("gets no one-pager until there is a change or a ranked cell", () => {

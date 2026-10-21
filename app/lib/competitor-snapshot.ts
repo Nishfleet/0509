@@ -160,6 +160,19 @@ export function snapshotNotes(cells: readonly SnapshotCell[]): { reason: string;
   }));
 }
 
+export function awaitingFirstRead(view: {
+  lastChecked: string | null;
+  changes: readonly unknown[];
+  developments: readonly unknown[];
+  watch: { unreadable: boolean; notFound: boolean };
+  competitor: { state: string };
+  snapshot: readonly SnapshotCell[];
+}): boolean {
+  const { lastChecked, changes, developments, watch, competitor, snapshot } = view;
+  const quiet = changes.length === 0 && developments.length === 0 && snapshot.every((cell) => cell.value === null);
+  return lastChecked === null && quiet && !watch.unreadable && !watch.notFound && competitor.state === "on";
+}
+
 export function worthOnePager(cells: readonly SnapshotCell[], changeCount: number): boolean {
   return changeCount > 0 || cells.some((cell) => cell.key === "rank" && cell.value !== null);
 }

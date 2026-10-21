@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigation, useSubmit } from "react-router";
 
 import { MAGIC_LINK_TTL_SECONDS } from "../lib/auth/magic-link-email";
+import { BRAND_NAME_SHAPE } from "../lib/identity/brand-name";
 import { inboxLinkFor } from "../lib/inbox-link";
 import { cn } from "../lib/utils";
 import { Footer } from "./footer";
@@ -15,15 +16,13 @@ export const SIGN_IN_SHELL = "mx-auto flex min-h-dvh w-full max-w-[420px] min-w-
 export const SIGN_IN_TITLE = "font-display text-display-2 mt-10 font-extrabold uppercase";
 export const SIGN_IN_LEDE = "text-ink-soft mt-3 leading-[1.55] [overflow-wrap:anywhere]";
 
-const SUBJECT_SHAPE = /^[\p{L}\p{N}][\p{L}\p{N} .&'-]{0,59}$/u;
-
 export function subjectLabel(raw: string | null): string | null {
   const text = (raw ?? "")
     .trim()
     .replace(/^https?:\/\//i, "")
     .replace(/^www\./i, "")
     .replace(/[/?#].*$/, "");
-  return SUBJECT_SHAPE.test(text) ? text : null;
+  return BRAND_NAME_SHAPE.test(text) ? text : null;
 }
 
 export function SignInHeading({ subject }: { subject: string | null }) {

@@ -25,8 +25,9 @@ export interface CompetitorFrameProps {
   pausedOn: string | null;
   unreadable: boolean;
   notFound?: boolean;
-  rail: Omit<CompetitorRailProps, "lastChecked">;
+  rail: Omit<CompetitorRailProps, "lastChecked" | "awaiting">;
   sweepClock?: string;
+  awaiting?: boolean;
 }
 
 export function developmentsEmpty(lastChecked: string | null, sweepClock: string = SITE_SWEEP_UTC_LABEL): string {
@@ -144,12 +145,15 @@ export function CompetitorFrame({
   notFound = false,
   rail,
   sweepClock = SITE_SWEEP_UTC_LABEL,
+  awaiting = false,
 }: CompetitorFrameProps): ReactElement {
   return (
     <div data-slot="competitor-frame" className="grid min-w-0 gap-10 min-[1080px]:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="flex min-w-0 flex-col gap-10">
         <SnapshotSection weekCount={weekCount} pages={pages} lastChecked={lastChecked} />
-        <BiggestMoveSection biggestMove={biggestMove} quiet={quiet} changes={changes} weekCount={weekCount} />
+        {awaiting ? null : (
+          <BiggestMoveSection biggestMove={biggestMove} quiet={quiet} changes={changes} weekCount={weekCount} />
+        )}
         <PricingTimeline steps={pricingTimeline(changes)} />
         <DevelopmentsSection
           changes={changes}
@@ -167,6 +171,7 @@ export function CompetitorFrame({
         sweepClock={sweepClock}
         unreadable={unreadable}
         notFound={notFound}
+        awaiting={awaiting}
       />
     </div>
   );

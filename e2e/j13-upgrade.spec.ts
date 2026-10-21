@@ -160,7 +160,7 @@ test("J13: the plan gate upgrades a workspace and the page flips without a reloa
   if (!isLocalLane()) {
     await watchOneCompetitor(page);
     await expect(page.getByRole("heading", { name: "Start your trial" })).toBeVisible();
-    await page.getByRole("button", { name: /^Upgrade to Starter\s*€46\/month$/ }).click();
+    await page.getByRole("button", { name: /^Start 7-day Starter trial\s*€46\/month$/ }).click();
     await page.waitForURL(/checkout\.dodopayments\.com/, { timeout: 30_000 });
     console.log(
       `J13 stopped at Dodo hosted checkout from /onboarding/plan, no payment made: ${new URL(page.url()).origin}`,

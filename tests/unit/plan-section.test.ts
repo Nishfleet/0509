@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { PlanSection } from "../../app/components/plan-settings";
 import type { PlanSummary } from "../../app/lib/billing/plans";
 
-const PORTAL_UNAVAILABLE = "We couldn't open your billing page. Try again in a few minutes.";
+const PORTAL_UNAVAILABLE = "We couldn't open your billing page. Try again in a few minutes, or email support@0509.io.";
 
 const fetcher = vi.hoisted(() => ({
   value: { state: "idle" as "idle" | "submitting", data: undefined as { message: string } | undefined },

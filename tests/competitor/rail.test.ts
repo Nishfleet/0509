@@ -73,6 +73,23 @@ function peerRow(html: string, entityId: string): string {
   return match?.[0] ?? "";
 }
 
+describe("the competitor rail while it waits for a first read", () => {
+  it("drops the sections that would only say nothing yet and keeps what we watch", () => {
+    const html = render({ awaiting: true, peers: [], facts: [], verdict: null, lastChecked: null });
+    expect(html).not.toContain("How you rank");
+    expect(html).not.toContain("Last 30 days");
+    expect(html).not.toContain("Still a competitor?");
+    expect(html).toContain("What we watch here");
+  });
+
+  it("keeps a section that has something to say", () => {
+    const html = render({ awaiting: true });
+    expect(html).toContain("How you rank");
+    expect(html).toContain("Last 30 days");
+    expect(html).toContain("Still a competitor?");
+  });
+});
+
 describe("the competitor rail", () => {
   it("draws peers, facts, sources and the still-a-competitor answer in order", () => {
     const html = render();

@@ -171,11 +171,12 @@ test("the plan step offers every plan with the trial terms and says so when chec
   await page.goto("/app");
   await expect(page).toHaveURL(/\/onboarding\/plan$/);
   await expect(page.getByRole("heading", { name: "Start your trial" })).toBeVisible();
-  const upgrades = page.getByRole("button", { name: /^Upgrade to / });
+  const upgrades = page.getByRole("button", { name: /^Start 7-day \w+ trial/ });
   await expect(upgrades).toHaveCount(3);
   for (const plan of ["Scout", "Starter", "Agency"]) {
-    await expect(page.getByRole("button", { name: new RegExp(`^Upgrade to ${plan}`) })).toBeVisible();
+    await expect(page.getByRole("button", { name: new RegExp(`^Start 7-day ${plan} trial`) })).toBeVisible();
   }
+  await expect(page.getByText(/Your first plan starts with a 7-day trial/)).toHaveCount(1);
   expect(await horizontalOverflow(page)).toBe(0);
 
   await upgrades.first().click();
@@ -203,7 +204,7 @@ test("while checkout is being confirmed the plan step shows only Almost there, w
   await page.goto("/onboarding/plan?upgraded=agency");
   await expect(page.getByRole("heading", { name: "Almost there" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Start your trial" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^Upgrade to / })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Start 7-day \w+ trial/ })).toHaveCount(0);
   expect(await horizontalOverflow(page)).toBe(0);
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

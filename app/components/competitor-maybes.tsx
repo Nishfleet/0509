@@ -17,6 +17,8 @@ export interface Maybe {
 }
 
 const PLAN_FULL_NOTICE = "Switch one off to add another.";
+export const ONBOARDING_FULL_NOTICE =
+  "That's the most we can start with. After you pick a plan, switch competitors on or off in Competitors.";
 const MUTED = "opacity-60 hover:bg-transparent";
 
 function holdSubmit(event: { preventDefault: () => void }): void {
@@ -35,10 +37,10 @@ function planFullProps(planFull: boolean, noticeId: string): PlanFullProps {
   return { "aria-disabled": true, "aria-describedby": noticeId, className: MUTED, onClick: holdSubmit };
 }
 
-function PlanFullNotice({ id }: { id: string }): ReactElement {
+function PlanFullNotice({ id, text }: { id: string; text: string }): ReactElement {
   return (
     <p id={id} data-slot="plan-full-notice" className="mt-1 text-body-sm text-ink-soft">
-      {PLAN_FULL_NOTICE}
+      {text}
     </p>
   );
 }
@@ -46,9 +48,11 @@ function PlanFullNotice({ id }: { id: string }): ReactElement {
 export function CompetitorMaybes({
   maybes,
   planFull = false,
+  fullNotice = PLAN_FULL_NOTICE,
 }: {
   maybes: readonly Maybe[];
   planFull?: boolean | undefined;
+  fullNotice?: string;
 }): ReactElement | null {
   if (maybes.length === 0) return null;
   return (
@@ -57,7 +61,7 @@ export function CompetitorMaybes({
         Possible competitors
       </h2>
       <p className="mt-1 text-body-sm text-ink-soft">We weren't sure these compete with you. Watch the ones that do.</p>
-      {planFull ? <PlanFullNotice id="maybes-plan-full" /> : null}
+      {planFull ? <PlanFullNotice id="maybes-plan-full" text={fullNotice} /> : null}
       <ul aria-label="Possible competitors" className="mt-3 border-b border-line">
         {maybes.map((maybe) => (
           <MaybeRow key={maybe.suggestionId} maybe={maybe} planFull={planFull} />
@@ -178,6 +182,23 @@ function AddInput({ invalid }: { invalid: boolean }): ReactElement {
   );
 }
 
+function AddRow({ invalid, adding, planFull }: { invalid: boolean; adding: boolean; planFull: boolean }): ReactElement {
+  return (
+    <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+      <AddInput invalid={invalid} />
+      <Button
+        type="submit"
+        variant="secondary"
+        size="lg"
+        disabled={adding}
+        {...planFullProps(planFull, "add-plan-full")}
+      >
+        {adding ? "Adding…" : "Add"}
+      </Button>
+    </div>
+  );
+}
+
 export function AddCompetitor({
   message,
   upgradePlanId,
@@ -185,6 +206,7 @@ export function AddCompetitor({
   added,
   unreachable,
   planFull = false,
+  fullNotice = PLAN_FULL_NOTICE,
 }: {
   message: string | null | undefined;
   upgradePlanId?: PlanId | null | undefined;
@@ -192,6 +214,7 @@ export function AddCompetitor({
   added?: boolean | undefined;
   unreachable?: boolean | undefined;
   planFull?: boolean | undefined;
+  fullNotice?: string;
 }): ReactElement {
   const navigation = useNavigation();
   const adding = navigation.state !== "idle" && navigation.formData?.get("intent") === "add";
@@ -203,19 +226,8 @@ export function AddCompetitor({
         <label htmlFor="add-competitor" className={BLOCK_HEADING}>
           Add a competitor we missed
         </label>
-        {planFull ? <PlanFullNotice id="add-plan-full" /> : null}
-        <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-          <AddInput invalid={Boolean(message)} />
-          <Button
-            type="submit"
-            variant="secondary"
-            size="lg"
-            disabled={adding}
-            {...planFullProps(planFull, "add-plan-full")}
-          >
-            {adding ? "Adding…" : "Add"}
-          </Button>
-        </div>
+        {planFull ? <PlanFullNotice id="add-plan-full" text={fullNotice} /> : null}
+        <AddRow invalid={Boolean(message)} adding={adding} planFull={planFull} />
         <AddNotice
           message={message}
           added={added === true && !adding}

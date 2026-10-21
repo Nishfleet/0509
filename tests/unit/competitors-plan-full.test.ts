@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
-import { AddCompetitor, CompetitorMaybes } from "../../app/components/competitor-maybes";
+import { AddCompetitor, CompetitorMaybes, ONBOARDING_FULL_NOTICE } from "../../app/components/competitor-maybes";
 
 const NOTICE = "Switch one off to add another.";
 const MAYBES = [
@@ -37,6 +37,24 @@ describe("the Add a competitor field when the plan is full", () => {
     expect(html).not.toContain(NOTICE);
     expect(button(html, />Add</)).not.toContain("aria-disabled");
     expect(render(createElement(AddCompetitor, { message: null }))).not.toContain(NOTICE);
+  });
+});
+
+describe("the competitor controls on the onboarding step, before a plan exists", () => {
+  it("explains the limit without naming a plan or a switch that is not on the page", () => {
+    const add = render(
+      createElement(AddCompetitor, { message: null, planFull: true, fullNotice: ONBOARDING_FULL_NOTICE }),
+    );
+    const maybes = render(
+      createElement(CompetitorMaybes, { maybes: MAYBES, planFull: true, fullNotice: ONBOARDING_FULL_NOTICE }),
+    );
+    for (const html of [add, maybes]) {
+      expect(html).toContain("After you pick a plan");
+      expect(html).not.toContain(NOTICE);
+      expect(html).not.toContain("Your plan");
+    }
+    expect(button(add, />Add</)).toContain('aria-disabled="true"');
+    expect(button(maybes, /aria-label="Watch Acme"/)).toContain('aria-disabled="true"');
   });
 });
 

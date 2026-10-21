@@ -12,7 +12,7 @@ import { RivalOnePager } from "../components/rival-one-pager";
 import { handleCompetitorForm } from "../lib/competitor-forms.server";
 import { readEntityNote } from "../lib/data/entity_note.server";
 import { readCompetitorPage } from "../lib/competitor-page.server";
-import { snapshotCells, worthOnePager } from "../lib/competitor-snapshot";
+import { awaitingFirstRead, snapshotCells, worthOnePager } from "../lib/competitor-snapshot";
 import { readCompetitorSnapshot } from "../lib/competitor-snapshot.server";
 import { daysAgoLabel } from "../lib/delivery-alert";
 import { onboardedContext } from "../lib/require-onboarded.server";
@@ -90,6 +90,7 @@ function CompetitorControl(props: { name: string; state: "on" | "off"; stateChan
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   const { competitor } = loaderData;
   const pausedAt = competitor.state === "off" ? competitor.stateChangedAt : null;
+  const awaiting = awaitingFirstRead(loaderData);
   return (
     <main className="mx-auto flex max-w-6xl min-w-0 flex-col gap-10 px-4 py-10">
       <CompetitorHeader
@@ -106,11 +107,12 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           />
         }
       />
-      <CompetitorSnapshot cells={loaderData.snapshot} />
+      {awaiting ? null : <CompetitorSnapshot cells={loaderData.snapshot} />}
       {worthOnePager(loaderData.snapshot, loaderData.changes.length + loaderData.developments.length) ? (
         <OnePager data={loaderData} />
       ) : null}
       <CompetitorFrame
+        awaiting={awaiting}
         changes={loaderData.changes}
         developments={loaderData.developments}
         weekCount={loaderData.weekCount}
