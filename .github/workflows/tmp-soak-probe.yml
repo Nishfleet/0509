@@ -1,12 +1,13 @@
 name: tmp-soak-probe
 on:
+  push:
+    branches: [orch/issue-7711]
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   probe:
     runs-on: ubuntu-latest
-    environment: production-e2e
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
