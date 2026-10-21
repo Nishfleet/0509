@@ -49,7 +49,7 @@ for (const { width, height } of [
     const editName = page.getByRole("button", { name: "edit name" });
     await expect(editName).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
-    await page.getByRole("button", { name: "That's me" }).click();
+    await page.getByRole("button", { name: "Looks right" }).click();
     await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
     const cardConfirmedMs = Date.now() - started;
     test.info().annotations.push({

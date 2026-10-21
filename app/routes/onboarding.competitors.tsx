@@ -13,6 +13,7 @@ import { readOtherBrands } from "../lib/client-brands.server";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import { markCompetitorsReady, markWatchingStarted } from "../lib/data/onboarding_run.server";
 import { readOnboardingScreen } from "../lib/discovery/start.server";
+import { ensureOnboardingRun } from "../lib/onboarding-start.server";
 import { TRIAL_DAYS } from "../lib/billing/plans";
 import { discoveryNotice, type DiscoveryState } from "../lib/discovery/state";
 import { requireFreshSession, requireSession, signOutToLogin } from "../lib/require-session.server";
@@ -54,10 +55,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  const { workspaceId } = await workspaceFor(request, true);
+  const { workspaceId, userId } = await workspaceFor(request, true);
   const form = await request.formData();
   if (startWatchingForm.safeParse(Object.fromEntries(form)).success) {
-    await markWatchingStarted(workspaceId, new Date().toISOString());
+    const now = new Date().toISOString();
+    await ensureOnboardingRun({ workspaceId, userId, now });
+    await markWatchingStarted(workspaceId, now);
     throw redirect("/onboarding/plan");
   }
   return handleCompetitorIntent(workspaceId, form);

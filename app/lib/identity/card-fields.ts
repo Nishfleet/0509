@@ -18,6 +18,10 @@ export interface SiteFields {
 
 export type CardValues = Pick<SiteFields, "name" | "description" | "socials">;
 
+export const NAME_MAX = 120;
+
+export const ABOUT_MAX = 500;
+
 export const DRAFT_FIELDS = ["name", "description"] as const;
 
 export type DraftField = (typeof DRAFT_FIELDS)[number];
@@ -49,6 +53,12 @@ export function creatorRows(subject: Subject): CreatorRows | null {
     channel: subject.platform === undefined ? null : CHANNELS[subject.platform],
     handle: `@${subject.registrable}`,
   };
+}
+
+export function overLimitField(name: unknown, description: unknown): "name" | "about" | null {
+  if (typeof name === "string" && name.trim().length > NAME_MAX) return "name";
+  if (typeof description === "string" && description.trim().length > ABOUT_MAX) return "about";
+  return null;
 }
 
 export function isDraftSave(formData: FormData | undefined): boolean {

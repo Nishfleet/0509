@@ -61,13 +61,13 @@ function confirmButton(html: string): string {
 
 const NEVER = () => new Promise<undefined>(() => undefined);
 
-const FAILS = () => Promise.resolve({ message: "Add your brand's name, then tap That's me." });
+const FAILS = () => Promise.resolve({ message: "Add your brand's name, then tap Looks right." });
 
 describe("the onboarding confirm button", () => {
-  it("reads That's me when the form is idle, and never the entity text", async () => {
+  it("reads Looks right when the form is idle, and never the entity text", async () => {
     const html = await renderCard(routerWithCard(NEVER));
 
-    expect(html).toContain("That&#x27;s me");
+    expect(html).toContain("Looks right");
     expect(html).not.toContain("&amp;apos;");
     expect(confirmButton(html)).not.toContain('disabled=""');
     expect(html).not.toContain("Saving");
@@ -82,11 +82,11 @@ describe("the onboarding confirm button", () => {
 
     expect(router.state.navigation.state).toBe("submitting");
     expect(html).toContain("Saving…");
-    expect(html).not.toContain("That&#x27;s me");
+    expect(html).not.toContain("Looks right");
     expect(confirmButton(html)).toContain('disabled=""');
   });
 
-  it("reads That's me again and re-enables when the confirm action fails", async () => {
+  it("reads Looks right again and re-enables when the confirm action fails", async () => {
     const router = routerWithCard(FAILS);
     const formData = new FormData();
     formData.set("intent", "confirm");
@@ -94,7 +94,7 @@ describe("the onboarding confirm button", () => {
     const html = await renderCard(router);
 
     expect(router.state.navigation.state).toBe("idle");
-    expect(html).toContain("That&#x27;s me");
+    expect(html).toContain("Looks right");
     expect(html).not.toContain("Saving");
     expect(confirmButton(html)).not.toContain('disabled=""');
   });
