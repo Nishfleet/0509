@@ -22,6 +22,9 @@
     // (workers/fixture-site.wrangler.jsonc), which knip does not read — the
     // file is an entry by name.
     "workers/fixture-site.ts",
+    // The hosted staging Worker is built and deployed from this file by `cf`,
+    // which knip does not run — the file is an entry by name.
+    "cloudflare.config.ts",
     "e2e/*.setup.ts",
     "e2e/*.teardown.ts",
   ],
