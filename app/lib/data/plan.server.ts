@@ -4,7 +4,7 @@ import { z } from "zod";
 import { resolveEntitlements, type Entitlements } from "../billing/entitlements";
 import { entitledTier, isWorkspacePaid } from "../billing/subscription-state";
 import { isPlanId, type PlanId, type PlanSummary } from "../billing/plans";
-import { governingWorkspace, LENDING_TIER } from "./active-workspace";
+import { governingWorkspace, LENDING_TIER, liveWorkspace } from "./active-workspace";
 import { readWorkspaceIdForOwner } from "./workspace.server";
 
 const planRow = z.object({
@@ -197,12 +197,14 @@ const paidWorkspaceIdRow = z.object({
 });
 
 const SELECT_PAID_CANDIDATES = `SELECT workspace_id, status, current_period_end FROM plan
+WHERE ${liveWorkspace("plan.workspace_id")}
 UNION ALL
 SELECT w.id, p.status, p.current_period_end
 FROM workspace w
 JOIN workspace gp ON gp.id = w.parent_workspace_id AND gp.owner_user_id = w.owner_user_id
 JOIN plan p ON p.workspace_id = gp.id AND p.tier = '${LENDING_TIER}'
-WHERE w.parent_workspace_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM plan own WHERE own.workspace_id = w.id)`;
+WHERE w.parent_workspace_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM plan own WHERE own.workspace_id = w.id)
+  AND ${liveWorkspace("w.id")}`;
 
 export async function readPaidWorkspaceIds(now: Date): Promise<ReadonlySet<string>> {
   const rows = await env.DB.prepare(SELECT_PAID_CANDIDATES).all();
@@ -238,6 +240,7 @@ const reconcilablePlanRow = z.object({ provider_subscription_id: z.string() });
 
 const SELECT_RECONCILABLE = `SELECT provider_subscription_id FROM plan
 WHERE provider_subscription_id IS NOT NULL
+  AND ${liveWorkspace("plan.workspace_id")}
   AND (status IN ('pending', 'trialing', 'active', 'past_due', 'on_hold', 'failed')
     OR (status IN ('cancelled', 'expired') AND updated_at >= ?2))
 ORDER BY random() LIMIT ?1`;

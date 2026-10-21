@@ -13,6 +13,8 @@ import {
 import { parseSlackWebhook } from "../slack-webhook";
 import { sha256Hex } from "../sha256";
 
+import { liveWorkspace } from "./active-workspace";
+
 const WRITE_UNSUBSCRIBE_TOKEN = `UPDATE send_target SET unsubscribe_token = ? WHERE id = ? AND unsubscribe_token IS NULL`;
 
 const SELECT_EMAIL_TARGET = `SELECT st.target_value, st.is_verified FROM send_target st
@@ -163,6 +165,7 @@ SELECT ?, ?, id, ?, 1, ? FROM channel WHERE key = 'slack'`;
 const SELECT_UNSEALED_SLACK_TARGETS = `SELECT st.id, st.workspace_id, st.target_value FROM send_target st
 JOIN channel c ON c.id = st.channel_id
 WHERE c.key = 'slack' AND st.id > ? AND st.seal_attempts < ? AND st.target_value NOT LIKE 'enc:v2:' || ? || ':%'
+  AND ${liveWorkspace("st.workspace_id")}
 ORDER BY st.id ASC
 LIMIT ?`;
 
@@ -172,11 +175,13 @@ const RECORD_FAILED_SEAL = `UPDATE send_target SET seal_attempts = seal_attempts
 
 const COUNT_UNSEALED_SLACK_TARGETS = `SELECT COUNT(*) AS remaining FROM send_target st
 JOIN channel c ON c.id = st.channel_id
-WHERE c.key = 'slack' AND st.seal_attempts < ? AND st.target_value NOT LIKE 'enc:v2:' || ? || ':%'`;
+WHERE c.key = 'slack' AND st.seal_attempts < ? AND st.target_value NOT LIKE 'enc:v2:' || ? || ':%'
+  AND ${liveWorkspace("st.workspace_id")}`;
 
 const COUNT_STUCK_SLACK_TARGETS = `SELECT COUNT(*) AS stuck FROM send_target st
 JOIN channel c ON c.id = st.channel_id
-WHERE c.key = 'slack' AND st.seal_attempts >= ? AND st.target_value NOT LIKE 'enc:v2:' || ? || ':%'`;
+WHERE c.key = 'slack' AND st.seal_attempts >= ? AND st.target_value NOT LIKE 'enc:v2:' || ? || ':%'
+  AND ${liveWorkspace("st.workspace_id")}`;
 
 const DEFAULT_BACKFILL_BATCH = 50;
 const NIGHTLY_SLACK_BACKFILL_CAP = 500;

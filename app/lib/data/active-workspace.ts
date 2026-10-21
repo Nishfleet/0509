@@ -26,3 +26,7 @@ export function governingWorkspace(idExpr: string): string {
     ${idExpr}
   )`;
 }
+
+export function liveWorkspace(idExpr: string): string {
+  return `EXISTS (SELECT 1 FROM workspace lw WHERE lw.id = ${idExpr} AND lw.fixture = 0)`;
+}
