@@ -39,5 +39,9 @@
   // `@lhci/cli` runs as `npx lhci` in ci.yml, never imported by app code.
   "ignoreDependencies": ["cloudflare", "@react-router/node", "tailwindcss", "@lhci/cli"],
 
+  // `jq` is the runner's own binary, called from deploy-production.yml steps;
+  // knip reads workflow `run:` lines and finds no package that provides it.
+  "ignoreBinaries": ["jq"],
+
   "ignore": ["**/+types/**", "docs/design-directions/**"],
 }

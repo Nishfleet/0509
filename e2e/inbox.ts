@@ -28,7 +28,7 @@ function unknownToMessage(error: unknown): string {
   }
 }
 
-export function laneOrigin(): string {
+function laneOrigin(): string {
   const baseUrl = process.env.PLAYWRIGHT_TEST_BASE_URL;
   if (baseUrl) return new URL(baseUrl).origin;
   const pinned = process.env.PLAYWRIGHT_LOCAL_PORT;
