@@ -23,6 +23,16 @@
                 "requests": 13
               }
             }
+          ],
+          "r2Storage": [
+            {
+              "dimensions": { "bucketName": "bucket-a" },
+              "max": { "payloadSize": 824178608, "metadataSize": 80008 }
+            },
+            {
+              "dimensions": { "bucketName": "bucket-b" },
+              "max": { "payloadSize": 10622432562, "metadataSize": 57542 }
+            }
           ]
         }
       ]

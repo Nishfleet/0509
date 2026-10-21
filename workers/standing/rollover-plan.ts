@@ -3,7 +3,7 @@ import { z } from "zod";
 import { isWorkspacePaid } from "../../app/lib/billing/subscription-state";
 import type { BriefSchedule, RolloverInstance, RolloverParams } from "../../app/lib/brief-schedule";
 import { openWeek, previousBriefAt, rolloverInstance } from "../../app/lib/brief-schedule";
-import { governingWorkspace } from "../../app/lib/data/active-workspace";
+import { governingWorkspace, liveWorkspace } from "../../app/lib/data/active-workspace";
 
 export interface WorkspaceSchedule {
   workspaceId: string;
@@ -28,7 +28,7 @@ const WORKSPACE_SCHEDULE = `SELECT id, timezone, brief_weekday, brief_hour, brie
 const UNBRIEFED_WEEKS = `SELECT s.workspace_id AS workspace_id, s.week_start_at AS week_start_at
 FROM standing s
 INNER JOIN entity e ON e.workspace_id = s.workspace_id AND e.role = 'self' AND e.state = 'on'
-WHERE s.week_start_at >= ?1
+WHERE s.week_start_at >= ?1 AND ${liveWorkspace("s.workspace_id")}
   AND NOT EXISTS (
     SELECT 1 FROM digest d
     WHERE d.workspace_id = s.workspace_id AND d.kind = 'weekly' AND d.period_start = s.week_start_at

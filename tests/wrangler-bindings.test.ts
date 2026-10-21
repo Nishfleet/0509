@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { experimental_readRawConfig } from "wrangler";
 import { describe, expect, it } from "vitest";
 
-import { D1_DATABASE_ID, SNAPSHOT_BUCKET } from "../app/lib/observability/cost-analytics.server";
+import { SNAPSHOT_BUCKET } from "../app/lib/observability/cost-analytics.server";
 import { SITE_URL } from "../app/lib/site-url";
 
 interface KvNamespace {
@@ -103,11 +103,9 @@ describe("deployed wrangler configs", () => {
     expect(rawConfig.vars?.FIXTURE_REAPER, "going live is a reviewed one-line change to this var").toBe("dry-run");
   });
 
-  it("keeps the cost-guard constants equal to the deployed DB and bucket", () => {
+  it("keeps the cost-guard bucket constant equal to the deployed bucket", () => {
     const { rawConfig } = readConfig("wrangler.jsonc");
-    const db = (rawConfig.d1_databases ?? []).find((database) => database.binding === "DB");
     const bucket = (rawConfig.r2_buckets ?? []).find((b) => b.binding === "SNAPSHOTS");
-    expect(db?.database_id).toBe(D1_DATABASE_ID);
     expect(bucket?.bucket_name).toBe(SNAPSHOT_BUCKET);
   });
 
