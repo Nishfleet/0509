@@ -1,5 +1,7 @@
 import { env } from "cloudflare:workers";
 
+import { readWorkspaceFixture } from "../data/workspace.server";
+
 const ESCALATIONS_PER_BRAND_PER_DAY = 4;
 const SCREENSHOTS_PER_BRAND_PER_DAY = 4;
 const SHARE_IMAGES_PER_WORKSPACE_PER_DAY = 10;
@@ -26,16 +28,19 @@ async function recordBrowserMs(res: Response): Promise<void> {
 }
 
 export async function takeBrowserEscalation(workspaceId: string, entityId: string, day: string): Promise<boolean> {
+  if (await readWorkspaceFixture(workspaceId)) return false;
   const id = env.BROWSER_BUDGET.idFromName(`${workspaceId}:${entityId}:${day}`);
   return env.BROWSER_BUDGET.get(id).take(ESCALATIONS_PER_BRAND_PER_DAY);
 }
 
 export async function takeBrowserScreenshot(workspaceId: string, entityId: string, day: string): Promise<boolean> {
+  if (await readWorkspaceFixture(workspaceId)) return false;
   const id = env.BROWSER_BUDGET.idFromName(`${workspaceId}:${entityId}:${day}:screenshot`);
   return env.BROWSER_BUDGET.get(id).take(SCREENSHOTS_PER_BRAND_PER_DAY);
 }
 
 export async function takeBrowserShareImage(workspaceId: string, day: string): Promise<boolean> {
+  if (await readWorkspaceFixture(workspaceId)) return false;
   const id = env.BROWSER_BUDGET.idFromName(`share:${workspaceId}:${day}`);
   return env.BROWSER_BUDGET.get(id).take(SHARE_IMAGES_PER_WORKSPACE_PER_DAY);
 }

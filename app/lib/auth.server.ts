@@ -14,6 +14,7 @@ import { ensureWorkspaceForSignIn } from "./workspace.server";
 import { accessPrecleared } from "./auth/access-preclearance.server";
 import { changeEmailEmail } from "./auth/change-email-email";
 import { changeEmailAllowed } from "./auth/change-email-limit";
+import { fixtureSignupsOverCap } from "./auth/fixture-signup-cap.server";
 import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email";
 import { MAGIC_LINK_PATH } from "./auth/magic-link-path";
 import { redactEmailShaped } from "./auth/redact-email-shaped";
@@ -122,6 +123,32 @@ function authHooks(env: AuthEnv) {
   };
 }
 
+function databaseHooks(env: AuthEnv) {
+  return {
+    user: {
+      create: {
+        before: async (user: { email: string }) => {
+          if (await fixtureSignupsOverCap(env.DB, user.email, new Date())) {
+            throw new APIError("TOO_MANY_REQUESTS", { message: "Too many test accounts today. Try again tomorrow." });
+          }
+        },
+      },
+    },
+    session: {
+      create: {
+        after: async (session: { userId: string }, context: { request?: Request } | null) => {
+          const request = context?.request ?? null;
+          if (!request) return;
+          await ensureWorkspaceForSignIn(env.DB, {
+            userId: session.userId,
+            request,
+          });
+        },
+      },
+    },
+  };
+}
+
 function sendMagicLinkEmail(env: AuthEnv) {
   return async ({ email, url }: { email: string; url: string }) => {
     const message = magicLinkEmail({ email, url });
@@ -204,20 +231,7 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
     },
     disabledPaths: DISABLED_AUTH_PATHS,
     hooks: authHooks(env),
-    databaseHooks: {
-      session: {
-        create: {
-          after: async (session, context) => {
-            const request = context?.request ?? null;
-            if (!request) return;
-            await ensureWorkspaceForSignIn(env.DB, {
-              userId: session.userId,
-              request,
-            });
-          },
-        },
-      },
-    },
+    databaseHooks: databaseHooks(env),
     plugins: authPlugins(env, options),
   });
 }
