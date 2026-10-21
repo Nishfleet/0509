@@ -2,10 +2,14 @@ import { env } from "cloudflare:workers";
 import { createContext, redirect, type RouterContextProvider } from "react-router";
 
 import { createAuth, hasSessionCookie, signOut } from "./auth.server";
+import { deadLinkMessage } from "./login-link-error";
 
 async function loginPath(request: Request, returnTo: string | undefined): Promise<string> {
   const params = new URLSearchParams();
   if (returnTo !== undefined) params.set("next", returnTo);
+  const search = new URL(request.url).searchParams;
+  const linkError = search.get("error");
+  if (linkError !== null && deadLinkMessage(search) !== null) params.set("error", linkError);
   if (await hasSessionCookie(request)) params.set("ended", "1");
   const query = params.toString();
   return query === "" ? "/login" : `/login?${query}`;

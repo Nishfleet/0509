@@ -8,6 +8,7 @@ import { DEAD_LINK_MESSAGE } from "../../app/lib/login-link-error";
 
 const TURNSTILE_SITE_KEY = vi.hoisted(() => "1x00000000000000000000BB");
 const ACTION_ERROR = "We couldn't send the link. Try again in a minute.";
+const CAPTCHA_ERROR = "Still checking you're a person. Give it a few seconds, then tap again.";
 
 vi.mock("cloudflare:workers", () => ({ env: { TURNSTILE_SITE_KEY } }));
 vi.mock("../../app/lib/auth.server", () => ({
@@ -17,7 +18,7 @@ vi.mock("../../app/lib/auth.server", () => ({
 
 import Login from "../../app/routes/login";
 
-function render(options: { linkError?: boolean; actionError?: boolean }): string {
+function render(options: { linkError?: boolean; actionError?: boolean; captchaError?: boolean }): string {
   const Stub = createRoutesStub([
     {
       id: "routes/login",
@@ -39,6 +40,7 @@ function render(options: { linkError?: boolean; actionError?: boolean }): string
           },
         },
         ...(options.actionError === true ? { actionData: { "routes/login": { error: ACTION_ERROR } } } : {}),
+        ...(options.captchaError === true ? { actionData: { "routes/login": { error: CAPTCHA_ERROR } } } : {}),
       },
     }),
   );
@@ -65,6 +67,13 @@ describe("Login sign-in error", () => {
     const input = emailInput(html);
     expect(input).toContain('aria-invalid="true"');
     expect(input).toContain(`aria-describedby="${SIGN_IN_ERROR_ID}"`);
+  });
+
+  it("shows the human-check message without marking the email invalid", () => {
+    const html = render({ captchaError: true });
+    expect(html).toContain("Still checking you&#x27;re a person.");
+    expect(html).toContain('role="alert"');
+    expect(emailInput(html)).not.toContain("aria-invalid");
   });
 
   it("carries no error attributes when the page opens clean", () => {
