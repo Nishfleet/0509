@@ -49,7 +49,7 @@ describe("login magic-link action", () => {
     const refused = await action({
       request: formRequest({ email: "Person@0509.io", "cf-turnstile-response": "  token-1  " }),
     } as Parameters<typeof action>[0]);
-    expect(refused).toEqual({ error: "Confirm you're a person, then we'll send the link." });
+    expect(refused).toEqual({ error: "Still checking you're a person. Give it a few seconds, then tap again." });
     const call = handler.mock.calls[0];
     if (call === undefined) throw new Error("sign-in handler was not called");
     const forwarded = call[0];
@@ -57,7 +57,14 @@ describe("login magic-link action", () => {
     expect(forwarded.url).toBe("https://0509.io/api/auth/sign-in/magic-link");
     expect(forwarded.headers.get("x-captcha-response")).toBe("token-1");
     expect(forwarded.headers.get("origin")).toBe("https://0509.io");
-    expect(await forwarded.json()).toEqual({ email: "person@0509.io", callbackURL: "/app" });
+    expect(await forwarded.json()).toEqual({ email: "person@0509.io", callbackURL: "/app", errorCallbackURL: "/login" });
+  });
+
+  it("sends dead links back to the sign-in page through errorCallbackURL", async () => {
+    await action({
+      request: formRequest({ email: "person@0509.io" }, undefined, "https://0509.io/login?subject=gymshark.com"),
+    } as Parameters<typeof action>[0]);
+    expect(await sentCallbackURL()).toMatchObject({ errorCallbackURL: "/login" });
   });
 
   it("carries the hero subject into the link's return address", async () => {
@@ -67,6 +74,7 @@ describe("login magic-link action", () => {
     expect(await sentCallbackURL()).toEqual({
       email: "person@0509.io",
       callbackURL: "/onboarding/identity?subject=gymshark.com",
+      errorCallbackURL: "/login",
     });
   });
 
@@ -81,6 +89,7 @@ describe("login magic-link action", () => {
     expect(await sentCallbackURL()).toEqual({
       email: "person@0509.io",
       callbackURL: "/onboarding/identity?subject=https%3A%2F%2Fevil.example",
+      errorCallbackURL: "/login",
     });
   });
 
@@ -95,6 +104,7 @@ describe("login magic-link action", () => {
     expect(await sentCallbackURL()).toEqual({
       email: "person@0509.io",
       callbackURL: "/oauth/authorize?client_id=x",
+      errorCallbackURL: "/login",
     });
   });
 
@@ -102,7 +112,7 @@ describe("login magic-link action", () => {
     await action({
       request: formRequest({ email: "person@0509.io" }, undefined, "https://0509.io/login?subject="),
     } as Parameters<typeof action>[0]);
-    expect(await sentCallbackURL()).toEqual({ email: "person@0509.io", callbackURL: "/app" });
+    expect(await sentCallbackURL()).toEqual({ email: "person@0509.io", callbackURL: "/app", errorCallbackURL: "/login" });
   });
 
   it("forwards the client ip and does not invent a captcha header", async () => {

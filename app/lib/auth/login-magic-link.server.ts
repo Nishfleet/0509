@@ -1,5 +1,7 @@
 import { magicLinkRequestURL } from "./magic-link-path";
 
+const DEAD_LINK_RETURN = "/login";
+
 export function formMagicLinkRequest(input: {
   authUrl: string;
   request: Request;
@@ -18,6 +20,6 @@ export function formMagicLinkRequest(input: {
   return new Request(endpoint, {
     method: "POST",
     headers,
-    body: JSON.stringify({ email, callbackURL }),
+    body: JSON.stringify({ email, callbackURL, errorCallbackURL: DEAD_LINK_RETURN }),
   });
 }
