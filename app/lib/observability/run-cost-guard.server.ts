@@ -27,7 +27,9 @@ export async function runCostGuard(
 }> {
   reportMissingAnalyticsToken(apiToken);
   const [cloudflare, browserMs, aiCalls] = await Promise.all([
-    apiToken === undefined ? { day, d1RowsWritten: 0, r2ClassAOps: 0 } : fetchDailyUsage(day, apiToken),
+    apiToken === undefined
+      ? { day, d1RowsWritten: 0, r2ClassAOps: 0, r2StoredBytes: 0 }
+      : fetchDailyUsage(day, apiToken),
     readBrowserMsForDay(day),
     countVerdictsOnDay(db, day),
   ]);
@@ -41,7 +43,15 @@ export async function runCostGuard(
   if (alertIds.length > 0) {
     captureMessage(`cost guard breach on ${day}: ${breaches.map((breach) => breach.line).join(", ")}`, {
       level: "error",
-      fingerprint: ["cost-guard-breach"],
+      fingerprint: ["cost-guard-breach", day],
+      extra: {
+        breaches: breaches.map((breach) => ({
+          line: breach.line,
+          measured: breach.measuredPerBrand,
+          limit: breach.limit,
+          onBrands: breach.onBrands,
+        })),
+      },
     });
   }
   return { usage, onBrands, breaches, alertIds };

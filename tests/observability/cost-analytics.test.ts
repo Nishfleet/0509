@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   ACCOUNT_TAG,
-  D1_DATABASE_ID,
   R2_CLASS_A_ACTIONS,
   SNAPSHOT_BUCKET,
   USAGE_QUERY,
@@ -20,6 +19,7 @@ const DAY = {
   day: "2026-09-22",
   d1RowsWritten: 4677,
   r2ClassAOps: 13,
+  r2StoredBytes: 11_446_748_720,
 };
 
 afterEach(() => {
@@ -42,19 +42,20 @@ describe("parseUsageResponse", () => {
   it("sums an empty row list to zero", () => {
     expect(
       parseUsageResponse("2026-09-22", {
-        data: { viewer: { accounts: [{ d1: [], r2: [] }] } },
+        data: { viewer: { accounts: [{ d1: [], r2: [], r2Storage: [] }] } },
       }),
     ).toEqual({
       day: "2026-09-22",
       d1RowsWritten: 0,
       r2ClassAOps: 0,
+      r2StoredBytes: 0,
     });
   });
 
   it("throws when an alias is not an array", () => {
     expect(() =>
       parseUsageResponse("2026-09-22", {
-        data: { viewer: { accounts: [{ d1: null, r2: [] }] } },
+        data: { viewer: { accounts: [{ d1: null, r2: [], r2Storage: [] }] } },
       }),
     ).toThrow(/cloudflare graphql: d1 is not an array/);
   });
@@ -62,7 +63,7 @@ describe("parseUsageResponse", () => {
   it("throws when a row has no sum", () => {
     expect(() =>
       parseUsageResponse("2026-09-22", {
-        data: { viewer: { accounts: [{ d1: [{}], r2: [] }] } },
+        data: { viewer: { accounts: [{ d1: [{}], r2: [], r2Storage: [] }] } },
       }),
     ).toThrow(/cloudflare graphql: d1 row has no sum/);
   });
@@ -72,7 +73,7 @@ describe("parseUsageResponse", () => {
       parseUsageResponse("2026-09-22", {
         data: {
           viewer: {
-            accounts: [{ d1: [{ sum: { rowsWritten: "4677" } }], r2: [] }],
+            accounts: [{ d1: [{ sum: { rowsWritten: "4677" } }], r2: [], r2Storage: [] }],
           },
         },
       }),
@@ -89,9 +90,84 @@ describe("parseUsageResponse", () => {
     const rows = Array.from({ length: 10000 }, () => ({ sum: { rowsWritten: 0 } }));
     expect(() =>
       parseUsageResponse("2026-09-22", {
-        data: { viewer: { accounts: [{ d1: rows, r2: [] }] } },
+        data: { viewer: { accounts: [{ d1: rows, r2: [], r2Storage: [] }] } },
       }),
     ).toThrow(/cloudflare graphql: d1 hit group limit/);
+  });
+
+  it("throws when the storage alias is missing", () => {
+    expect(() => parseUsageResponse("2026-09-22", { data: { viewer: { accounts: [{ d1: [], r2: [] }] } } })).toThrow(
+      /cloudflare graphql: r2Storage is not an array/,
+    );
+  });
+
+  it("throws when a storage row has no max", () => {
+    expect(() =>
+      parseUsageResponse("2026-09-22", {
+        data: { viewer: { accounts: [{ d1: [], r2: [], r2Storage: [{ dimensions: { bucketName: "a" } }] }] } },
+      }),
+    ).toThrow(/cloudflare graphql: r2Storage row has no max/);
+  });
+
+  it("throws when a storage size is not a number", () => {
+    expect(() =>
+      parseUsageResponse("2026-09-22", {
+        data: {
+          viewer: {
+            accounts: [{ d1: [], r2: [], r2Storage: [{ max: { payloadSize: "9", metadataSize: 1 } }] }],
+          },
+        },
+      }),
+    ).toThrow(/cloudflare graphql: r2Storage payloadSize is not a number/);
+  });
+
+  it("throws when a storage row omits metadataSize", () => {
+    expect(() =>
+      parseUsageResponse("2026-09-22", {
+        data: { viewer: { accounts: [{ d1: [], r2: [], r2Storage: [{ max: { payloadSize: 9 } }] }] } },
+      }),
+    ).toThrow(/cloudflare graphql: r2Storage metadataSize is not a number/);
+  });
+
+  it("adds payload and metadata bytes across every bucket", () => {
+    const usage = parseUsageResponse("2026-09-22", {
+      data: {
+        viewer: {
+          accounts: [
+            {
+              d1: [],
+              r2: [],
+              r2Storage: [
+                { max: { payloadSize: 100, metadataSize: 1 } },
+                { max: { payloadSize: 200, metadataSize: 2 } },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    expect(usage.r2StoredBytes).toBe(303);
+  });
+
+  it("throws when the storage alias hits the group limit", () => {
+    const rows = Array.from({ length: 10000 }, () => ({ max: { payloadSize: 0, metadataSize: 0 } }));
+    expect(() =>
+      parseUsageResponse("2026-09-22", { data: { viewer: { accounts: [{ d1: [], r2: [], r2Storage: rows }] } } }),
+    ).toThrow(/cloudflare graphql: r2Storage hit group limit/);
+  });
+});
+
+describe("USAGE_QUERY", () => {
+  it("reads D1 rows written for the whole account, not one database", () => {
+    expect(USAGE_QUERY).not.toContain("databaseId");
+    expect(USAGE_QUERY).toContain("d1AnalyticsAdaptiveGroups");
+  });
+
+  it("reads R2 storage per bucket for the day", () => {
+    expect(USAGE_QUERY).toContain("r2StorageAdaptiveGroups");
+    expect(USAGE_QUERY).toContain("bucketName");
+    expect(USAGE_QUERY).toContain("payloadSize");
+    expect(USAGE_QUERY).toContain("metadataSize");
   });
 });
 
@@ -124,7 +200,6 @@ describe("fetchDailyUsage", () => {
       query: USAGE_QUERY,
       variables: {
         accountTag: ACCOUNT_TAG,
-        databaseId: D1_DATABASE_ID,
         bucket: SNAPSHOT_BUCKET,
         date: "2026-09-22",
         actions: [...R2_CLASS_A_ACTIONS],

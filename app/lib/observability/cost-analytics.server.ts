@@ -3,8 +3,6 @@ import type { CloudflareUsage } from "./cost-guard";
 
 export const ACCOUNT_TAG = "f670a698e17bf160c8e4679823e68916";
 
-export const D1_DATABASE_ID = "746c6e3d-782e-443a-82d6-28ca93a16294";
-
 export const SNAPSHOT_BUCKET = "0509-snapshots";
 
 export const R2_CLASS_A_ACTIONS: readonly string[] = [
@@ -29,11 +27,15 @@ const GRAPHQL_URL = "https://api.cloudflare.com/client/v4/graphql";
 
 const GROUP_LIMIT = 10000;
 
-export const USAGE_QUERY = `query ($accountTag: string!, $databaseId: string!, $bucket: string!, $date: Date!, $actions: [string!]!) {
+export const USAGE_QUERY = `query ($accountTag: string!, $bucket: string!, $date: Date!, $actions: [string!]!) {
   viewer {
     accounts(filter: { accountTag: $accountTag }) {
-      d1: d1AnalyticsAdaptiveGroups(limit: ${String(GROUP_LIMIT)}, filter: { date: $date, databaseId: $databaseId }) {
+      d1: d1AnalyticsAdaptiveGroups(limit: ${String(GROUP_LIMIT)}, filter: { date: $date }) {
         sum { rowsWritten }
+      }
+      r2Storage: r2StorageAdaptiveGroups(limit: ${String(GROUP_LIMIT)}, filter: { date: $date }) {
+        dimensions { bucketName }
+        max { payloadSize metadataSize }
       }
       r2: r2OperationsAdaptiveGroups(limit: ${String(GROUP_LIMIT)}, filter: { date: $date, bucketName: $bucket, actionType_in: $actions }) {
         sum { requests }
@@ -76,19 +78,27 @@ function firstAccount(body: unknown): Record<string, unknown> | null {
   return account;
 }
 
-function sumRows(rows: unknown, alias: string, field: string): number {
+interface RowShape {
+  aggregate: "sum" | "max";
+  fields: readonly string[];
+}
+
+function sumRows(rows: unknown, alias: string, { aggregate, fields }: RowShape): number {
   if (!isUnknownArray(rows)) throw new Error("cloudflare graphql: " + alias + " is not an array");
   if (rows.length >= GROUP_LIMIT) throw new Error("cloudflare graphql: " + alias + " hit group limit");
   let total = 0;
   for (const row of rows) {
-    if (!isRecord(row) || !isRecord(row.sum)) {
-      throw new Error("cloudflare graphql: " + alias + " row has no sum");
+    const values = isRecord(row) ? row[aggregate] : undefined;
+    if (!isRecord(values)) {
+      throw new Error("cloudflare graphql: " + alias + " row has no " + aggregate);
     }
-    const value = row.sum[field];
-    if (typeof value !== "number" || !Number.isFinite(value)) {
-      throw new Error("cloudflare graphql: " + alias + " " + field + " is not a number");
+    for (const field of fields) {
+      const value = values[field];
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        throw new Error("cloudflare graphql: " + alias + " " + field + " is not a number");
+      }
+      total += value;
     }
-    total += value;
   }
   return total;
 }
@@ -99,8 +109,12 @@ export function parseUsageResponse(day: string, body: unknown): CloudflareUsage 
   if (account === null) throw new Error("cloudflare graphql: missing account");
   return {
     day,
-    d1RowsWritten: sumRows(account.d1, "d1", "rowsWritten"),
-    r2ClassAOps: sumRows(account.r2, "r2", "requests"),
+    d1RowsWritten: sumRows(account.d1, "d1", { aggregate: "sum", fields: ["rowsWritten"] }),
+    r2ClassAOps: sumRows(account.r2, "r2", { aggregate: "sum", fields: ["requests"] }),
+    r2StoredBytes: sumRows(account.r2Storage, "r2Storage", {
+      aggregate: "max",
+      fields: ["payloadSize", "metadataSize"],
+    }),
   };
 }
 
@@ -115,7 +129,6 @@ export async function fetchDailyUsage(day: string, apiToken: string): Promise<Cl
       query: USAGE_QUERY,
       variables: {
         accountTag: ACCOUNT_TAG,
-        databaseId: D1_DATABASE_ID,
         bucket: SNAPSHOT_BUCKET,
         date: day,
         actions: R2_CLASS_A_ACTIONS,
