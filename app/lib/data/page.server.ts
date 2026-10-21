@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
+import { liveWorkspace } from "./active-workspace";
 import {
   RANKED_PRICING_PAGES,
   resumeWantedPricingWatchesStatement,
@@ -86,7 +87,7 @@ const COMPETITORS_TO_CLASSIFY = `SELECT e.id AS entity_id, e.workspace_id AS wor
        COALESCE(NULLIF(e.name, ''), e.domain) AS name, p.id AS page_id, p.url AS url
 FROM entity e
 JOIN page p ON p.entity_id = e.id AND p.role = 'home'
-WHERE e.role = 'competitor' AND e.state = 'on'
+WHERE e.role = 'competitor' AND e.state = 'on' AND ${liveWorkspace("e.workspace_id")}
   AND (
     NOT EXISTS (SELECT 1 FROM page j WHERE j.entity_id = e.id AND j.role_decided_for_hash IS NOT NULL)
     OR CASE WHEN json_valid(e.identity_json)
@@ -145,7 +146,7 @@ export async function syncPricingWatches(sourceId: string): Promise<void> {
 
 const UNWATCHED_PRICING_PAGES = `SELECT r.entity_id AS entity_id, r.url AS url
 FROM (${RANKED_PRICING_PAGES}) r
-WHERE r.position <= ?2
+WHERE r.position <= ?2 AND ${liveWorkspace("r.workspace_id")}
   AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = r.entity_id AND w.source_id = ?1 AND w.target_key = r.url)
 ORDER BY r.entity_id, r.url`;
 
@@ -237,7 +238,7 @@ const SILENT_RIVALS = `SELECT e.workspace_id AS workspace_id,
     ) THEN 'swept without a recorded result' ELSE 'no active site watch' END
   ) AS reason
 FROM entity e
-WHERE e.role = 'competitor' AND e.state = 'on'
+WHERE e.role = 'competitor' AND e.state = 'on' AND ${liveWorkspace("e.workspace_id")}
   AND EXISTS (SELECT 1 FROM page h WHERE h.entity_id = e.id AND h.role = 'home' AND h.discovered_at < ?1)
   AND NOT EXISTS (
     SELECT 1 FROM snapshot s JOIN page sp ON sp.id = s.page_id WHERE sp.entity_id = e.id AND s.fetched_at >= ?1
@@ -260,7 +261,7 @@ export interface OwnSitePage {
 const ENTITIES_WITHOUT_HOME = `SELECT e.id AS id, e.domain AS domain, CASE WHEN json_valid(e.identity_json) THEN json_extract(e.identity_json, '$.url') END AS url,
        json_valid(e.identity_json) AS identity_valid
 FROM entity e
-WHERE e.state = 'on'
+WHERE e.state = 'on' AND ${liveWorkspace("e.workspace_id")}
   AND NOT EXISTS (SELECT 1 FROM page p WHERE p.entity_id = e.id AND p.role = 'home')
 ORDER BY e.id`;
 
@@ -270,7 +271,7 @@ const OWN_SITE_PAGES = `SELECT e.workspace_id AS workspace_id,
        p.url AS url
 FROM entity e
 JOIN page p ON p.entity_id = e.id AND p.role = 'home'
-WHERE e.role = 'self' AND e.state = 'on'
+WHERE e.role = 'self' AND e.state = 'on' AND ${liveWorkspace("e.workspace_id")}
 ORDER BY e.workspace_id, p.id`;
 
 const entityRows = z.array(

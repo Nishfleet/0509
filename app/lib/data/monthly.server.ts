@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { APP_LOCALE } from "../locale";
+import { liveWorkspace } from "./active-workspace";
 
 const SELECT_MONTHLIES = `SELECT w.id AS workspace_id,
        p.provider_subscription_id AS subscription_id,
@@ -30,7 +31,7 @@ const SELECT_MONTHLIES = `SELECT w.id AS workspace_id,
      ORDER BY t.created_at ASC
      LIMIT 1
   )
- WHERE w.brief_paused_at IS NULL AND w.last_seen_at IS NOT NULL AND w.last_seen_at > ?3`;
+ WHERE w.brief_paused_at IS NULL AND w.last_seen_at IS NOT NULL AND w.last_seen_at > ?3 AND ${liveWorkspace("w.id")}`;
 
 const moveRow = z.object({ rival: z.string(), what: z.string() });
 

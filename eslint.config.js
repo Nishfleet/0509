@@ -1,4 +1,5 @@
 import { readdirSync } from "node:fs";
+import path from "node:path";
 
 import js from "@eslint/js";
 import betterTailwindcss from "eslint-plugin-better-tailwindcss";
@@ -869,6 +870,86 @@ const ROW_RULES_PLUGIN = {
   },
 };
 
+// #5774: workspace.fixture marks the throwaway accounts the e2e suite signs up
+// with. A background sweep that selects workspaces, entities, watches or pages
+// without excluding them keeps fetching, judging and emailing for accounts
+// nobody owns, and only two of the sweeps did when the flag landed. This rule
+// reads every SQL string in the armed globs: one that reads `workspace`,
+// `entity`, `watch` or `page` must either build its predicate with
+// `liveWorkspace()` (app/lib/data/active-workspace.ts) or name `fixture`.
+// A read bound to one row by `workspace_id|entity_id|owner_user_id|id = ?N` is a per-request
+// read, not a sweep, and a parenthesised `(SELECT ...)` fragment is only
+// valid inside a host statement that is checked where it is assembled. A
+// `?N IS NULL OR col = ?N` guard is the all-workspaces shape and stays flagged.
+// Exemptions are the `exemptFiles` option on the armed block, never a
+// comment. Source: 0509#5774.
+const SWEEP_SQL_READ = /\b(?:from|join)\s+(?:workspace|entity|watch|page)\b/i;
+const SWEEP_SQL_BOUND_TO_ONE_ROW = /\b(?:\w+\.)?(?:workspace_id|entity_id|owner_user_id|id)\s*=\s*\?\d*/i;
+const SWEEP_SQL_ALL_ROWS_GUARD = /\?(\d*)\s+is\s+null\s+or\s+(?:\w+\.)?\w+\s*=\s*\?\1(?!\d)/gi;
+const SWEEP_SQL_FRAGMENT = /^\s*\(\s*select\b[^]*\)\s*$/i;
+
+const LIVE_WORKSPACE_SWEEP_SQL = {
+  meta: {
+    type: "problem",
+    schema: [
+      {
+        type: "object",
+        properties: {
+          helpers: { type: "array", items: { type: "string" } },
+          exemptFiles: { type: "array", items: { type: "string" } },
+        },
+        additionalProperties: false,
+      },
+    ],
+    messages: {
+      liveWorkspaceSweepSql:
+        "A background read of workspace, entity, watch or page must skip fixture workspaces: build the predicate with liveWorkspace() from app/lib/data/active-workspace.ts, or name `fixture` in the SQL. Per-request reads bound to one row by `workspace_id = ?N`, `entity_id = ?N`, `owner_user_id = ?N` or `id = ?N` are not checked. Exempt a file only in the exemptFiles option in eslint.config.js. live-workspace sweep rule. Source: 0509#5774.",
+    },
+  },
+  create(context) {
+    const options = context.options[0] ?? {};
+    const helpers = new Set(options.helpers ?? ["liveWorkspace"]);
+    const relative = path.relative(context.cwd, context.filename).split(path.sep).join("/");
+    if ((options.exemptFiles ?? []).includes(relative)) return {};
+
+    function mentionsHelper(node) {
+      if (node === null || typeof node !== "object") return false;
+      if (node.type === "Identifier") return helpers.has(node.name);
+      return Object.entries(node).some(
+        ([key, value]) =>
+          key !== "parent" &&
+          (Array.isArray(value) ? value.some((child) => mentionsHelper(child)) : mentionsHelper(value)),
+      );
+    }
+
+    function checkSql(node, text, expressions) {
+      if (!SWEEP_SQL_READ.test(text)) return;
+      if (/fixture/i.test(text)) return;
+      if (expressions.some((expression) => mentionsHelper(expression))) return;
+      if (SWEEP_SQL_FRAGMENT.test(text)) return;
+      if (SWEEP_SQL_BOUND_TO_ONE_ROW.test(text.replace(SWEEP_SQL_ALL_ROWS_GUARD, " "))) return;
+      context.report({ node, messageId: "liveWorkspaceSweepSql" });
+    }
+
+    return {
+      Literal(node) {
+        if (typeof node.value === "string") checkSql(node, node.value, []);
+      },
+      TemplateLiteral(node) {
+        checkSql(node, node.quasis.map((quasi) => quasi.value.cooked ?? "").join(" "), node.expressions);
+      },
+    };
+  },
+};
+
+const SWEEP_RULES_PLUGIN = {
+  "sweep-rules": {
+    rules: {
+      "live-workspace": LIVE_WORKSPACE_SWEEP_SQL,
+    },
+  },
+};
+
 // DESIGN.md rule 8: "The accent is one colour. Green marker. Red exists only as
 // the strike on a 'before' and the rule on an open incident. Nothing else is
 // coloured, ever." These two restricted-class patterns make a second colour a
@@ -1077,6 +1158,22 @@ export default tseslint.config(
     files: ["app/lib/data/**/*.ts"],
     plugins: ROW_RULES_PLUGIN,
     rules: { "row-rules/zod-row-catch": "error", "row-rules/d1-row-parse": "error" },
+  },
+
+  {
+    // Every background sweep reads its targets with SQL that lives in
+    // app/lib/data/ (the D1 readers and writers) or workers/ (the cron, queue
+    // and Workflow entry points). Armed on those two globs. A file whose
+    // fragments are only ever embedded in a checked host statement is listed
+    // in exemptFiles; nothing else is. Source: 0509#5774.
+    files: ["app/lib/data/**/*.ts", "workers/**/*.ts"],
+    plugins: SWEEP_RULES_PLUGIN,
+    rules: {
+      "sweep-rules/live-workspace": [
+        "error",
+        { helpers: ["liveWorkspace"], exemptFiles: ["app/lib/data/active-workspace.ts"] },
+      ],
+    },
   },
 
   {

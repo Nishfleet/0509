@@ -3,6 +3,7 @@ import { z } from "zod";
 import { TRIAL_DAYS } from "../billing/plans";
 import { NUDGE_AFTER_DAYS, NUDGE_MAX_RIVALS, NUDGE_WITHIN_DAYS } from "../rival-nudge";
 
+import { liveWorkspace } from "./active-workspace";
 import { RECAP_DAY } from "./recap.server";
 
 const RIVAL_COUNT = `(SELECT count(*) FROM entity e WHERE e.workspace_id = w.id AND e.role = 'competitor' AND e.state = 'on')`;
@@ -28,7 +29,7 @@ const SELECT_NUDGES = `SELECT w.id AS workspace_id,
      ORDER BY t.created_at ASC
      LIMIT 1
   )
- WHERE w.created_at <= ?1 AND w.created_at > ?2 AND ${RIVAL_COUNT} < ?3
+ WHERE w.created_at <= ?1 AND w.created_at > ?2 AND ${RIVAL_COUNT} < ?3 AND ${liveWorkspace("w.id")}
    AND NOT (p.trialing = 1 AND p.current_period_end > ?4 AND p.current_period_end <= ?5)`;
 
 const fewRow = z.object({ rivals: z.number(), created_at: z.string() });
