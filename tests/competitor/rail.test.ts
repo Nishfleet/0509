@@ -171,12 +171,19 @@ describe("the competitor rail", () => {
     expect(empty).toContain("No ranking yet. It arrives with your first weekly brief.");
     expect(empty).toContain("Nothing new from them in the last 30 days.");
     expect(empty).toContain("We check this every week. The first answer arrives after a week of watching.");
-    expect(empty).toContain("First read tonight at 21:00 UTC.");
+    expect(empty).toContain("First read tonight between 21:00 and 23:00 UTC.");
     expect(
       text(
-        render({ peers: [], facts: [], sources: [], verdict: null, lastChecked: null, sweepClock: "07:30 GMT+5:30" }),
+        render({
+          peers: [],
+          facts: [],
+          sources: [],
+          verdict: null,
+          lastChecked: null,
+          sweepClock: "between 07:30 and 09:30 GMT+5:30",
+        }),
       ),
-    ).toContain("First read tonight at 07:30 GMT+5:30.");
+    ).toContain("First read tonight between 07:30 and 09:30 GMT+5:30.");
   });
 
   it("says the homepage could not be read instead of promising a first read, when the site blocks us", () => {

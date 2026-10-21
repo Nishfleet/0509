@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 
 import { openWeek, type BriefSchedule } from "./brief-schedule";
+import { readFirstLook } from "./data/first_look.server";
+import { firstLookRows, isFirstRun } from "./first-look";
 import type { BriefPayload } from "./brief-payload";
 import { rankWeek } from "./standing-score";
 import { composeBrief } from "../../workers/standing/compose-brief";
@@ -9,6 +11,17 @@ import { readWeekPicks } from "../../workers/standing/read-this-first";
 import { computeWorkspaceScores } from "../../workers/standing/refresh";
 
 const PREVIEW_MARKS = 3;
+
+const ANY_WEEKLY_BRIEF = "SELECT 1 AS found FROM digest WHERE workspace_id = ?1 AND kind = 'weekly' LIMIT 1";
+
+export async function previewFirstRun(workspaceId: string): Promise<{ names: string[] } | null> {
+  const [rivals, sent] = await Promise.all([
+    readFirstLook(workspaceId),
+    env.DB.prepare(ANY_WEEKLY_BRIEF).bind(workspaceId).first(),
+  ]);
+  if (sent !== null || !isFirstRun(firstLookRows(rivals, new Date()))) return null;
+  return { names: rivals.map((rival) => rival.name) };
+}
 
 async function previewStanding(workspaceId: string, weekStartAt: string, weekEndAt: string) {
   const [scores, previous] = await Promise.all([

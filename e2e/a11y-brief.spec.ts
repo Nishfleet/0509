@@ -56,7 +56,7 @@ test("the brief page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 
         await page.keyboard.press("Tab");
         order.push(await page.evaluate(() => document.activeElement?.textContent?.trim() ?? ""));
       }
-      expect(order).toEqual(["Skip to content", "Home", "Competitors", "Alerts", "Settings"]);
+      expect(order).toEqual(["Skip to content", "Home", "Competitors", "Brief", "Alerts", "Settings"]);
       await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Settings" })).toHaveCSS(
         "outline-style",
         "solid",

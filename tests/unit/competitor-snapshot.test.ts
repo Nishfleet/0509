@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { CompetitorSnapshot } from "../../app/components/competitor-snapshot";
-import type { SnapshotCell } from "../../app/lib/competitor-snapshot";
+import { snapshotCells, snapshotNotes, worthOnePager, type SnapshotCell } from "../../app/lib/competitor-snapshot";
 
 const dashReason = "Meta ads did not respond this week.";
 
@@ -85,5 +85,25 @@ describe("the competitor snapshot card", () => {
     expect(visibleText(html)).toContain("#2");
     expect(html).toContain("down 1");
     expect(visibleText(html)).toContain("down 1");
+  });
+});
+
+describe("a competitor added today", () => {
+  const fresh = snapshotCells({
+    standing: null,
+    counts: { newCreatives: 0, copyChanges: 0, noteworthyChanges: 0, mentionsThatMatter: 0, newRoles: 0 },
+    sources: [],
+  });
+
+  it("gets one positive note and never a list of what we do not watch", () => {
+    const text = snapshotNotes(fresh).map((note) => note.text);
+    expect(text).toContain("Nothing to show yet. These fill in as we watch (first read tonight).");
+    expect(text.join(" ")).not.toContain("not watching");
+  });
+
+  it("gets no one-pager until there is a change or a ranked cell", () => {
+    expect(worthOnePager(fresh, 0)).toBe(false);
+    expect(worthOnePager(fresh, 2)).toBe(true);
+    expect(worthOnePager(CELLS, 0)).toBe(true);
   });
 });

@@ -55,7 +55,7 @@ test("before the first brief Home lists where each rival stands", async ({ page,
   await expect(firstLook.getByRole("listitem")).toHaveCount(2);
   await expect(firstLook).toContainText("Zephyrwear");
   await expect(firstLook).toContainText("Northloop");
-  await expect(firstLook.getByText("Reading its site now")).toHaveCount(2);
+  await expect(firstLook.getByText("First read tonight")).toHaveCount(2);
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );

@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
-import { previewBrief } from "../../app/lib/brief-preview.server";
+import { previewBrief, previewFirstRun } from "../../app/lib/brief-preview.server";
 
 const NOW = new Date("2026-10-07T12:00:00.000Z");
 const SCHEDULE = { timezone: "UTC", weekday: 1, hour: 8 };
@@ -104,6 +104,18 @@ describe("the brief preview, against real D1", () => {
     expect(payload.brands.map((brand) => brand.rank)).toEqual([1, 2, 3, 4]);
     expect(payload.brands.map((brand) => brand.name).sort()).toEqual(["Rival 0", "Rival 1", "Rival 2", "Self Brand"]);
     expect(payload.is_unjudged).toBe(false);
+  });
+
+  it("is the first run while no rival was read and no brief was sent, then stops being one", async () => {
+    const workspaceId = await seed(2);
+    expect(await previewFirstRun(workspaceId)).toEqual({ names: ["Rival 0", "Rival 1"] });
+    await env.DB.prepare(
+      "INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status, payload_json) VALUES (?1, ?2, 'weekly', ?3, ?4, 'sent', '{}')",
+    )
+      .bind(`prev-digest-${workspaceId}`, workspaceId, "2026-09-28T08:00:00.000Z", "2026-10-05T08:00:00.000Z")
+      .run();
+    expect(await previewFirstRun(workspaceId)).toBeNull();
+    expect(await previewFirstRun(await seed(0))).toBeNull();
   });
 
   it("shows only three items however many changed, and keeps a quiet workspace quiet", async () => {

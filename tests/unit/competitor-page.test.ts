@@ -192,6 +192,13 @@ describe("the competitor page frame", () => {
     expect(html).not.toContain("Ads running");
   });
 
+  it("hides Pages watched and the whole week block before the first read", () => {
+    const html = frame({ pages: 0, lastChecked: null, weekCount: 0 });
+    expect(html).not.toContain("Pages watched");
+    expect(html).not.toContain("This week");
+    expect(frame({ pages: 2, lastChecked: "2026-09-24 02:09 UTC" })).toContain("Pages watched");
+  });
+
   it("draws a YouTube source as a degraded pill with the lost-channel reason", () => {
     const sources: RailSource[] = [
       {

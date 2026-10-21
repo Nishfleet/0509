@@ -88,6 +88,7 @@ const COUNT_CELLS: readonly CountCellSpec[] = [
 
 const RANK_REASON = "Your rank appears when the week ends.";
 const UNWATCHED_REASON = "We're not watching this for this competitor yet.";
+const NOTHING_YET_NOTE = "Nothing to show yet. These fill in as we watch (first read tonight).";
 
 function rankCell(standing: SnapshotStanding | null): SnapshotCell {
   if (standing === null) {
@@ -133,10 +134,6 @@ export function snapshotCells(input: SnapshotInput): readonly SnapshotCell[] {
 
 const LIST = new Intl.ListFormat(APP_LOCALE, { type: "conjunction" });
 
-function lowerFirst(label: string): string {
-  return label.charAt(0).toLowerCase() + label.slice(1);
-}
-
 export function snapshotNotes(cells: readonly SnapshotCell[]): { reason: string; text: string }[] {
   const byReason = new Map<string, string[]>();
   for (const cell of cells) {
@@ -145,9 +142,10 @@ export function snapshotNotes(cells: readonly SnapshotCell[]): { reason: string;
   }
   return [...byReason].map(([reason, labels]) => ({
     reason,
-    text:
-      reason === UNWATCHED_REASON
-        ? `We're not watching ${LIST.format(labels.map(lowerFirst))} for this competitor yet.`
-        : `${LIST.format(labels)}: ${reason}`,
+    text: reason === UNWATCHED_REASON ? NOTHING_YET_NOTE : `${LIST.format(labels)}: ${reason}`,
   }));
+}
+
+export function worthOnePager(cells: readonly SnapshotCell[], changeCount: number): boolean {
+  return changeCount > 0 || cells.some((cell) => cell.key === "rank" && cell.value !== null);
 }
