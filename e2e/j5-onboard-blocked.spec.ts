@@ -76,7 +76,7 @@ test.describe("J5", () => {
     const name = page.getByRole("textbox", { name: "name" });
     await name.fill("Fixture Brand");
     await name.press("Escape");
-    await page.getByRole("button", { name: "That's me" }).click();
+    await page.getByRole("button", { name: "Looks right" }).click();
 
     await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
     expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);

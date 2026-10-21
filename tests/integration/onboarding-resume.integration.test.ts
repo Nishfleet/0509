@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { insertSelfEntity } from "../../app/lib/data/entity.server";
 import { markWatchingStarted, startOnboardingRun } from "../../app/lib/data/onboarding_run.server";
+import { ensureOnboardingRun } from "../../app/lib/onboarding-start.server";
 import { ensureWorkspace, firstWorkspaceId, workspaceLanding } from "../../app/lib/workspace.server";
 
 async function seedUser(id: string, email: string) {
@@ -86,7 +87,7 @@ describe("workspaceLanding resume point", () => {
     expect(await workspaceLanding(env.DB, input)).toEqual({ workspaceId, landing: null });
   });
 
-  it("a self row with no run row is done", async () => {
+  it("an unpaid self row with no run row resumes at competitors", async () => {
     await seedUser("user-resume-3", "resume-3@example.com");
     const input = { userId: "user-resume-3", timezone: "UTC" };
     await ensureWorkspace(env.DB, {
@@ -105,7 +106,84 @@ describe("workspaceLanding resume point", () => {
     });
     expect(await workspaceLanding(env.DB, input)).toEqual({
       workspaceId,
-      landing: "/onboarding/plan",
+      landing: "/onboarding/competitors",
     });
+  });
+
+  it("a paid self row with no run row still lands on the app", async () => {
+    await seedUser("user-resume-4", "resume-4@example.com");
+    const input = { userId: "user-resume-4", timezone: "UTC" };
+    await ensureWorkspace(env.DB, {
+      userId: "user-resume-4",
+      email: "resume-4@example.com",
+      timezone: "UTC",
+    });
+    const workspaceId = firstWorkspaceId("user-resume-4");
+    await insertSelfEntity({
+      id: "entity-resume-4",
+      workspaceId,
+      domain: "legacy.example",
+      name: "Legacy",
+      identityJson: "{}",
+      now: "2026-09-25T06:00:30.000Z",
+    });
+    await env.DB.prepare(
+      "INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES (?, ?, 'scout', 'active', ?)",
+    )
+      .bind("plan-resume-4", workspaceId, "2026-09-25T06:01:00.000Z")
+      .run();
+    expect(await workspaceLanding(env.DB, input)).toEqual({ workspaceId, landing: null });
+  });
+
+  it("a hero user with a self row and a run row from the identity step lands on competitors, not the plan", async () => {
+    await seedUser("user-resume-5", "resume-5@example.com");
+    const input = { userId: "user-resume-5", timezone: "UTC" };
+    await ensureWorkspace(env.DB, {
+      userId: "user-resume-5",
+      email: "resume-5@example.com",
+      timezone: "UTC",
+    });
+    const workspaceId = firstWorkspaceId("user-resume-5");
+    await insertSelfEntity({
+      id: "entity-resume-5",
+      workspaceId,
+      domain: "hero.example",
+      name: "Hero",
+      identityJson: "{}",
+      now: "2026-09-25T06:00:30.000Z",
+    });
+    await startOnboardingRun({
+      workspaceId,
+      userId: "user-resume-5",
+      inputRaw: "hero.example",
+      startedAt: "2026-09-25T06:00:30.000Z",
+    });
+    expect(await workspaceLanding(env.DB, input)).toEqual({
+      workspaceId,
+      landing: "/onboarding/competitors",
+    });
+  });
+
+  it("starting to watch from competitors with no run row yet moves on to the plan instead of looping", async () => {
+    await seedUser("user-resume-6", "resume-6@example.com");
+    const input = { userId: "user-resume-6", timezone: "UTC" };
+    await ensureWorkspace(env.DB, {
+      userId: "user-resume-6",
+      email: "resume-6@example.com",
+      timezone: "UTC",
+    });
+    const workspaceId = firstWorkspaceId("user-resume-6");
+    await insertSelfEntity({
+      id: "entity-resume-6",
+      workspaceId,
+      domain: "stranded.example",
+      name: "Stranded",
+      identityJson: "{}",
+      now: "2026-09-25T06:00:30.000Z",
+    });
+    expect((await workspaceLanding(env.DB, input)).landing).toBe("/onboarding/competitors");
+    await ensureOnboardingRun({ workspaceId, userId: "user-resume-6", now: "2026-09-25T06:01:00.000Z" });
+    await markWatchingStarted(workspaceId, "2026-09-25T06:01:00.000Z");
+    expect(await workspaceLanding(env.DB, input)).toEqual({ workspaceId, landing: "/onboarding/plan" });
   });
 });

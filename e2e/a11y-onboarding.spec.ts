@@ -71,7 +71,7 @@ async function reachIdentity(page: Page, baseURL: string | undefined): Promise<v
   await newCustomer(page, baseURL, "identity");
   if (isLocalLane()) {
     await page.goto(`/onboarding/identity?subject=${SEEDED_SUBJECT}`);
-    await expect(page.getByRole("button", { name: "That's me" })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("button", { name: "Looks right" })).toBeVisible({ timeout: 30_000 });
     return;
   }
   await page.goto("/onboarding");
@@ -79,9 +79,9 @@ async function reachIdentity(page: Page, baseURL: string | undefined): Promise<v
   await input.fill("nike.com");
   await input.press("Enter");
   await expect(page).toHaveURL(/\/onboarding\/identity\?subject=nike\.com$/);
-  await expect(page.getByRole("button", { name: "That's me" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: "Looks right" })).toBeVisible({ timeout: 30_000 });
   await page.reload();
-  await expect(page.getByRole("button", { name: "That's me" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Looks right" })).toBeVisible();
 }
 
 function axeScan(page: Page, testInfo: TestInfo) {
@@ -139,7 +139,7 @@ test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at
     const name = page.getByRole("textbox", { name: "name" });
     await name.fill("Nike");
     await name.press("Escape");
-    await page.getByRole("button", { name: "That's me" }).click();
+    await page.getByRole("button", { name: "Looks right" }).click();
   }
   await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
   await scanMatrix(page, scan, "competitors", page.url());
@@ -200,7 +200,7 @@ test("screen 2 is operable by keyboard in order, with one polite live region (#4
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "edit about" })).toBeFocused();
 
-  const thatsMe = page.getByRole("button", { name: "That's me" });
+  const thatsMe = page.getByRole("button", { name: "Looks right" });
   for (let i = 0; i < 10; i += 1) {
     await page.keyboard.press("Tab");
     if (await thatsMe.evaluate((el) => el === document.activeElement)) break;

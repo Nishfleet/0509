@@ -1,8 +1,9 @@
 import { z } from "zod";
 
-import { insertSelfEntity, readWorkspaceSelfId } from "../data/entity.server";
+import { insertSelfEntity, readWorkspaceSelfId, updateSelfEntity } from "../data/entity.server";
 import { insertFieldEdits, type FieldEdit } from "../data/user_decision.server";
 import { readCachedSiteValues } from "./card.server";
+import { ABOUT_MAX, NAME_MAX } from "./card-fields";
 import { readLogo } from "./logo-store.server";
 import { creatorSite } from "./creator-site";
 import { normaliseSubject, type Subject } from "./normalise";
@@ -16,8 +17,8 @@ const socialsSchema = z.array(z.object({ platform: z.string().min(1).max(40), ur
 
 const confirmSchema = z.object({
   subject: z.string(),
-  name: z.string().trim().min(1).max(120),
-  description: z.string().trim().max(500),
+  name: z.string().trim().min(1).max(NAME_MAX),
+  description: z.string().trim().max(ABOUT_MAX),
   socials: socialsSchema,
 });
 
@@ -113,8 +114,17 @@ export async function confirmCardLater(
   });
   const entityId = inserted ? id : await readWorkspaceSelfId(workspaceId);
   if (entityId === null) return null;
+  if (!inserted) {
+    await updateSelfEntity({
+      workspaceId,
+      name: card.name,
+      description: card.description === "" ? null : card.description,
+      logoUrl: logo !== null ? `/app/logos/${entityId}` : null,
+      socialsJson: JSON.stringify(card.socials),
+    });
+  }
   const edits = insertFieldEdits(
-    (inserted ? changedEdits(card, cached) : []).map((edit) => ({
+    changedEdits(card, cached).map((edit) => ({
       workspaceId,
       userId,
       entityId,
