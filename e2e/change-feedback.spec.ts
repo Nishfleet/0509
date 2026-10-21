@@ -17,8 +17,8 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
   const url = `https://zephyr-${suffix}.example/pricing`;
   const payload = {
     page: { role: "pricing", url },
-    before: { snapshotId: `snap-b-${suffix}`, screenshotKey: null },
-    after: { snapshotId: `snap-a-${suffix}`, screenshotKey: null },
+    before: { snapshotId: `snap-b-${suffix}`, screenshotKey: null, textKey: `snap-b-${suffix}.txt` },
+    after: { snapshotId: `snap-a-${suffix}`, screenshotKey: null, textKey: `snap-a-${suffix}.txt` },
     diffKey: null,
     wordsAdded: 3,
     wordsRemoved: 2,
@@ -59,6 +59,16 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
     JSON.stringify(payload),
     `dedup-change-${suffix}`,
     stamp,
+    stamp,
+  );
+  run(
+    db,
+    "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at) VALUES (?, ?, 'noteworthy_change', ?, ?, ?, 0.95, ?)",
+    `jv-change-${suffix}`,
+    workspaceId,
+    `hash-change-${suffix}`,
+    `sig-change-${suffix}`,
+    entityId,
     stamp,
   );
   return entityId;

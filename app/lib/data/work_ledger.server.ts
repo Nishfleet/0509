@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { changeActsSql } from "../jev/thresholds";
 import type { WorkLedger } from "../work-ledger";
+import { PIPELINE_SIGNALS } from "../customer-ready";
 
 const CHANGE_ACTS = `EXISTS (SELECT 1 FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id = 'noteworthy_change' AND ${changeActsSql("s", "v")})`;
 const CHANGE_JUDGED = `EXISTS (SELECT 1 FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id = 'noteworthy_change')`;
@@ -13,12 +14,12 @@ LEFT JOIN snapshot sn ON sn.watch_id = w.id AND sn.page_id IS NOT NULL AND sn.fe
 WHERE e.workspace_id = ?1 AND e.role = 'competitor' AND e.state = 'on'`;
 
 const SELECT_SIGNALS = `SELECT
-  SUM(CASE WHEN s.kind = 'change' THEN 1 ELSE 0 END) AS changes_seen,
+  SUM(CASE WHEN s.kind = 'change' AND ${CHANGE_JUDGED} THEN 1 ELSE 0 END) AS changes_seen,
   SUM(CASE WHEN s.kind = 'change' AND ${CHANGE_ACTS} THEN 1 ELSE 0 END) AS changes_told,
   SUM(CASE WHEN s.kind = 'change' AND ${CHANGE_JUDGED} AND NOT ${CHANGE_ACTS} THEN 1 ELSE 0 END) AS changes_set_aside,
   SUM(CASE WHEN s.kind = 'mention' AND (s.state IS NULL OR s.state <> 'unjudged') THEN 1 ELSE 0 END) AS mentions_read,
   SUM(CASE WHEN s.kind = 'mention' AND s.is_tombstoned = 0 AND (s.state IS NULL OR s.state <> 'unjudged') THEN 1 ELSE 0 END) AS mentions_kept
-FROM signal s
+FROM ${PIPELINE_SIGNALS} s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.role = 'competitor' AND e.state = 'on'
 WHERE s.workspace_id = ?1 AND s.kind IN ('change', 'mention') AND s.observed_at >= ?2 AND s.observed_at < ?3
   AND s.duplicate_of IS NULL AND (s.kind = 'mention' OR s.is_tombstoned = 0)`;

@@ -305,7 +305,8 @@ function sqlCounts(workspaceId: string): { ads: number; mentions: number; hiring
       .prepare(
         `SELECT count(*) AS n FROM signal s
          JOIN entity e ON e.id = s.entity_id AND e.state = 'on'
-         WHERE s.workspace_id = ? AND s.kind = 'mention'`,
+         WHERE s.workspace_id = ? AND s.kind = 'mention' AND s.title IS NOT NULL AND s.canonical_url IS NOT NULL
+           AND (SELECT mv.p FROM jev_verdict mv WHERE mv.signal_id = s.id AND mv.question_id = 'mention_matters' ORDER BY mv.decided_at DESC LIMIT 1) >= 0.5`,
       )
       .get(workspaceId) as { n: number };
     const hiring = db
@@ -326,7 +327,7 @@ test("alert type chips filter one feed with honest counts", async ({ page }, tes
   const { cookie, workspaceId } = await seedSession();
   const counts = sqlCounts(workspaceId);
   expect(counts.ads).toBe(2);
-  expect(counts.mentions).toBe(6);
+  expect(counts.mentions).toBe(4);
   expect(counts.hiring).toBe(1);
 
   await page.setExtraHTTPHeaders({ cookie });

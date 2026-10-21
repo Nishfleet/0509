@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 
 import { readPlanSummary } from "./data/plan.server";
 import { listTeammates, readEmailTarget } from "./data/send_target.server";
+import { PIPELINE_SIGNALS } from "./customer-ready";
 
 const SIGNAL_LIMIT = 10_000;
 
@@ -31,7 +32,7 @@ const SELECT_DECISIONS = `SELECT verdict, note, decided_at FROM user_decision WH
 const SELECT_INCIDENTS = `SELECT kind, opened_at, closed_at FROM incident WHERE workspace_id = ? ORDER BY opened_at DESC`;
 
 const SELECT_SIGNALS = `SELECT e.domain AS brand, s.kind, s.title, s.summary, s.url, s.published_at, s.observed_at
-FROM signal s JOIN entity e ON e.id = s.entity_id
+FROM ${PIPELINE_SIGNALS} s JOIN entity e ON e.id = s.entity_id
 WHERE s.workspace_id = ? AND s.is_tombstoned = 0
 ORDER BY s.observed_at DESC LIMIT ?`;
 

@@ -16,7 +16,28 @@ const SELF_CREATED = "2026-09-01T00:00:00.000Z";
 const MANUAL_CREATED = "2026-09-02T00:00:00.000Z";
 const AUTO_CREATED = "2026-09-03T00:00:00.000Z";
 
+const CAPTURED = JSON.stringify({ before: { textKey: "b.txt" }, after: { textKey: "a.txt" } });
+
 let runs = 0;
+
+function verdictStatement(
+  signalId: string,
+  questionId: string,
+  workspaceId: string,
+  entityId: string,
+): D1PreparedStatement {
+  return env.DB.prepare(
+    "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0.95, ?7)",
+  ).bind(
+    `v-${signalId}-${questionId}`,
+    workspaceId,
+    questionId,
+    `h-${signalId}-${questionId}`,
+    signalId,
+    entityId,
+    NOW,
+  );
+}
 
 async function seedWorkspace(): Promise<string> {
   runs += 1;
@@ -43,7 +64,7 @@ async function seedWorkspace(): Promise<string> {
       "INSERT INTO entity (id, workspace_id, role, domain, name, origin, state, state_changed_at, state_changed_by, created_at) VALUES (?1, ?2, 'competitor', 'off.example', 'Off Brand', 'manual', 'off', ?3, 'user', ?4)",
     ).bind(`${workspaceId}-off`, workspaceId, NOW, AUTO_CREATED),
     env.DB.prepare(
-      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, url, dedup_key, observed_at, is_tombstoned) VALUES (?1, ?2, ?3, 'src_site_web', 'change', 'home', ?4, ?5, ?6, 0)",
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, url, dedup_key, observed_at, is_tombstoned, payload_json) VALUES (?1, ?2, ?3, 'src_site_web', 'change', 'home', ?4, ?5, ?6, 0, ?7)",
     ).bind(
       `${workspaceId}-sig-old`,
       workspaceId,
@@ -51,9 +72,10 @@ async function seedWorkspace(): Promise<string> {
       "https://auto.example/",
       `${workspaceId}-sig-old-key`,
       OLD_SIGNAL,
+      CAPTURED,
     ),
     env.DB.prepare(
-      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, url, dedup_key, observed_at, is_tombstoned) VALUES (?1, ?2, ?3, 'src_site_web', 'change', 'home', ?4, ?5, ?6, 0)",
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, url, dedup_key, observed_at, is_tombstoned, payload_json) VALUES (?1, ?2, ?3, 'src_site_web', 'change', 'home', ?4, ?5, ?6, 0, ?7)",
     ).bind(
       `${workspaceId}-sig-recent`,
       workspaceId,
@@ -61,7 +83,10 @@ async function seedWorkspace(): Promise<string> {
       "https://auto.example/",
       `${workspaceId}-sig-recent-key`,
       RECENT_SIGNAL,
+      CAPTURED,
     ),
+    verdictStatement(`${workspaceId}-sig-old`, "noteworthy_change", workspaceId, autoEntityId),
+    verdictStatement(`${workspaceId}-sig-recent`, "noteworthy_change", workspaceId, autoEntityId),
   ]);
   return workspaceId;
 }
@@ -137,7 +162,9 @@ describe("judgeStillCompetitors", () => {
       expect(result.reason).toMatchObject({ choice: "shut_down", cached: false });
     }
 
-    const written = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict").first<{ n: number }>();
+    const written = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM jev_verdict WHERE question_id LIKE 'still_competitor%'",
+    ).first<{ n: number }>();
     expect(written?.n).toBe(0);
   });
 
@@ -157,7 +184,9 @@ describe("judgeStillCompetitors", () => {
       [null, null],
       [null, null],
     ]);
-    const written = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict").first<{ n: number }>();
+    const written = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM jev_verdict WHERE question_id LIKE 'still_competitor%'",
+    ).first<{ n: number }>();
     expect(written?.n).toBe(0);
   });
 
@@ -165,7 +194,7 @@ describe("judgeStillCompetitors", () => {
     const workspaceId = await seedWorkspace();
     const autoEntityId = `${workspaceId}-auto`;
     await env.DB.prepare(
-      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, canonical_url, url_hash, dedup_key, observed_at, is_tombstoned) VALUES (?1, ?2, ?3, 'src_site_web', 'mention', ?4, ?5, ?5, ?6, ?7, ?8, 0)",
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, canonical_url, url_hash, dedup_key, observed_at, is_tombstoned, state) VALUES (?1, ?2, ?3, 'src_site_web', 'mention', ?4, ?5, ?5, ?6, ?7, ?8, 0, 'judged')",
     )
       .bind(
         `${workspaceId}-sig-mention`,
@@ -178,6 +207,7 @@ describe("judgeStillCompetitors", () => {
         RECENT_SIGNAL,
       )
       .run();
+    await verdictStatement(`${workspaceId}-sig-mention`, "mention_matters", workspaceId, autoEntityId).run();
     const context = await readDiscoveryContext(workspaceId);
     if (context === null) throw new Error("seed failed");
     const run = vi.fn(

@@ -130,7 +130,7 @@ test("signed-in Home, competitors, brief, alerts, settings and agents, with 25 r
         for (const kind of ["mention", "hiring"]) {
           run(
             db,
-            "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, canonical_url, url_hash, dedup_key, observed_at, published_at) VALUES (?, ?, ?, 'src-speed', ?, 'A rival story', 'https://e.example/x', ?, ?, ?, ?)",
+            "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, canonical_url, url_hash, dedup_key, observed_at, published_at) VALUES (?, ?, ?, 'src-speed', ?, 'A rival story', 'https://e.example/x', 'https://e.example/x', ?, ?, ?, ?)",
             `sg-${suffix}-${String(i)}-${String(w)}-${kind}`,
             workspaceId,
             rival,
@@ -140,6 +140,18 @@ test("signed-in Home, competitors, brief, alerts, settings and agents, with 25 r
             at,
             at,
           );
+          if (kind === "mention") {
+            run(
+              db,
+              "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at) VALUES (?, ?, 'mention_matters', ?, ?, ?, 0.95, ?)",
+              `jv-${suffix}-${String(i)}-${String(w)}`,
+              workspaceId,
+              `h-${suffix}-${String(i)}-${String(w)}-${kind}`,
+              `sg-${suffix}-${String(i)}-${String(w)}-${kind}`,
+              rival,
+              at,
+            );
+          }
         }
       }
     }

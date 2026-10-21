@@ -26,7 +26,29 @@ const FULL_ZOD_IMPORT = {
     'app/components/ ships to the browser; full zod costs about 13 KB gzipped per object schema there. Import from "zod/mini" instead (docs/REBUILD-STACK.md, zod). Source: 0509#4134.',
 };
 
+const PIPELINE_SIGNALS_IMPORT = {
+  group: ["**/customer-ready"],
+  importNames: ["PIPELINE_SIGNALS"],
+  message:
+    "PIPELINE_SIGNALS is the unfiltered signal table, for pipeline code that must see every row. A page, API, feed or email reads SHOWN_SIGNALS or SENDABLE_SIGNALS. A file that really needs every row is added to PIPELINE_SIGNALS_IMPORTERS in eslint.config.js with its reason in the commit. Source: 0509#7660 review, replacing a hand-rolled test that read source files with a regex.",
+};
+
+const PIPELINE_SIGNALS_IMPORTERS = [
+  "app/lib/data/signal.server.ts",
+  "app/lib/data/signal_delivery.server.ts",
+  "app/lib/data/jev_verdict.server.ts",
+  "app/lib/data/user_decision.server.ts",
+  "app/lib/data/onboarding_run.server.ts",
+  "app/lib/data/incident.server.ts",
+  "app/lib/data/work_ledger.server.ts",
+  "app/lib/data-export.server.ts",
+  "app/lib/standing-score.server.ts",
+  "app/lib/site/sweep.server.ts",
+  "workers/delivery/dlq-consumer.ts",
+];
+
 const PAVED_PATH_PATTERNS = [
+  PIPELINE_SIGNALS_IMPORT,
   {
     group: ["better-auth/*", "@better-auth/passkey/*", "@better-auth/api-key/*"],
     message:
@@ -425,7 +447,14 @@ const PRICE_SUFFIX_COPY = {
     "A price reads '€10/month', from monthlyPrice() in app/lib/billing/plans.ts. '/mo' and 'a month' were three spellings of one price until 0509#7540. The trial email is billing copy and is worded by Nish.",
 };
 
+const RAW_SIGNAL_READ = {
+  selector: "Literal[value=/\\b(FROM|JOIN)\\s+signal\\b/i], TemplateElement[value.raw=/\\b(FROM|JOIN)\\s+signal\\b/i]",
+  message:
+    "A customer-facing read of the signal table must go through the gate in app/lib/customer-ready.ts: `FROM ${SHOWN_SIGNALS} s` for a page, API, feed or export, `FROM ${SENDABLE_SIGNALS} s` for an email, Slack post or brief. The gate drops items nobody judged, duplicates, withdrawn rows and changes with no captured evidence, so none of them can reach a customer by a query that forgot a filter. Pipeline code that must see every row imports PIPELINE_SIGNALS from the same module, and a reviewer sees that import. Source: Nish 2026-10-15, after an unconfirmed 'looks broken' email, a brief sent before its week was judged, and unjudged mentions on a competitor page.",
+};
+
 const BANNED_SYNTAX = [
+  RAW_SIGNAL_READ,
   APP_LOCALE_ONLY,
   RIVAL_COPY,
   WEEKLY_REPORT_COPY,
@@ -1268,6 +1297,19 @@ export default tseslint.config(
     ignores: ["app/lib/auth.server.ts", "app/lib/auth-client.ts"],
     rules: {
       "no-restricted-imports": ["error", { paths: ONE_PAVED_PATH_IMPORTS, patterns: PAVED_PATH_PATTERNS }],
+    },
+  },
+
+  {
+    files: PIPELINE_SIGNALS_IMPORTERS,
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: ONE_PAVED_PATH_IMPORTS,
+          patterns: PAVED_PATH_PATTERNS.filter((pattern) => pattern !== PIPELINE_SIGNALS_IMPORT),
+        },
+      ],
     },
   },
 

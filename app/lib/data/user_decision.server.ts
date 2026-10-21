@@ -3,6 +3,7 @@ import { z } from "zod";
 import { env } from "cloudflare:workers";
 
 import { DRAFT_FIELDS, type DraftField } from "../identity/card-fields";
+import { PIPELINE_SIGNALS } from "../customer-ready";
 
 export type SubjectVerdict = "public_subject:confirmed" | "public_subject:refused";
 
@@ -102,7 +103,7 @@ WHERE workspace_id = ?1 AND signal_id = ?2 AND verdict IN ('change_feedback:usef
 
 const INSERT_CHANGE_FEEDBACK = `INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at)
 SELECT ?1, s.workspace_id, ?3, s.id, s.entity_id, ?4, NULL, ?5
-FROM signal s
+FROM ${PIPELINE_SIGNALS} s
 WHERE s.id = ?2 AND s.workspace_id = ?6 AND s.kind = 'change' AND EXISTS (SELECT 1 FROM "user" WHERE id = ?3)`;
 
 export async function recordChangeFeedback(row: {

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { readSeenDedupKeys, readSiteChanges } from "../../../app/lib/data/signal.server";
 
 const NOW = "2026-09-24T00:00:00Z";
+const CAPTURED = JSON.stringify({ before: { textKey: "b.txt" }, after: { textKey: "a.txt" } });
 
 async function seedWorkspace(id: string): Promise<void> {
   await env.DB.prepare(
@@ -33,7 +34,17 @@ async function insertSignal(
 }
 
 beforeEach(async () => {
-  for (const table of ["signal", "snapshot", "page", "watch", "entity", "source", "workspace", '"user"']) {
+  for (const table of [
+    "jev_verdict",
+    "signal",
+    "snapshot",
+    "page",
+    "watch",
+    "entity",
+    "source",
+    "workspace",
+    '"user"',
+  ]) {
     await env.DB.prepare(`DELETE FROM ${table}`).run();
   }
   await seedWorkspace("ws-a");
@@ -90,19 +101,28 @@ describe("readSeenDedupKeys", () => {
 describe("readSiteChanges", () => {
   async function insertChange(
     id: string,
-    input: { url: string | null } = { url: `https://rival.example/${id}` },
+    input: { url: string | null; verdict: "noteworthy_change" | "own_site_breakage" } = {
+      url: `https://rival.example/${id}`,
+      verdict: "noteworthy_change",
+    },
   ): Promise<void> {
     await env.DB.prepare(
       `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, dedup_key, observed_at,
          is_tombstoned, title, url, payload_json)
-       VALUES (?, 'ws-a', 'ent-rival', 'src_site_web', 'change', 'home', ?, '2026-09-24T00:00:00Z', 0, 'Pricing rewrote its hero', ?, '{}')`,
+       VALUES (?, 'ws-a', 'ent-rival', 'src_site_web', 'change', 'home', ?, '2026-09-24T00:00:00Z', 0, 'Pricing rewrote its hero', ?, ?)`,
     )
-      .bind(id, `dedup-${id}`, input.url)
+      .bind(id, `dedup-${id}`, input.url, CAPTURED)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at)
+       VALUES (?, 'ws-a', ?, ?, ?, 'ent-rival', 0.8, ?)`,
+    )
+      .bind(`verdict-${id}`, input.verdict, `hash-${id}`, id, NOW)
       .run();
   }
 
   it("reads a change row whose url column is NULL", async () => {
-    await insertChange("sig-null-url", { url: null });
+    await insertChange("sig-null-url", { url: null, verdict: "noteworthy_change" });
     const rows = await readSiteChanges({
       workspaceId: "ws-a",
       entityId: null,
@@ -116,7 +136,10 @@ describe("readSiteChanges", () => {
   });
 
   it("reads a change row that nobody has judged, with no verdict columns", async () => {
-    await insertChange("sig-no-verdict");
+    await insertChange("sig-no-verdict", {
+      url: "https://rival.example/sig-no-verdict",
+      verdict: "own_site_breakage",
+    });
 
     const rows = await readSiteChanges({
       workspaceId: "ws-a",
