@@ -43,6 +43,22 @@ describe("soak-report measures the two DONE lines (0509#7076)", () => {
     expect(run).not.toContain("no healthchecks.io read key is a repository secret");
   });
 
+  it("validates every production D1 payload before jq reads it (0509#7711)", () => {
+    const source = readFileSync(path.join(REPO_ROOT, WORKFLOW), "utf8");
+    const jobs = (parse(source) as { jobs: Record<string, { steps?: SoakStep[] }> }).jobs;
+    for (const job of ["jev-failures", "soak-report"]) {
+      const run = (jobs[job]?.steps ?? []).map((entry) => entry.run ?? "").join("\n");
+      expect(run, job).toContain(`jq -e 'type == "array" and (.[0].results | type) == "array"'`);
+    }
+  });
+
+  it("fails the soak closed with the named cause when a Cloudflare read fails", () => {
+    const run = soakStep().run ?? "";
+    expect(run).toContain("could not run: a Cloudflare read failed");
+    expect(run).toContain("::error::a Cloudflare read failed, see the issue comment");
+    expect(run).toContain("cf-read-failed.txt");
+  });
+
   it("is named in the pull_request disk-reading detector list", () => {
     expect(readFileSync(path.join(REPO_ROOT, CI), "utf8")).toContain("tests/unit/soak-report.test.ts");
   });
