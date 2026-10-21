@@ -43,6 +43,16 @@ describe("soak-report measures the two DONE lines (0509#7076)", () => {
     expect(run).not.toContain("no healthchecks.io read key is a repository secret");
   });
 
+  it("reads the staging database and staging Workflows with cf, never wrangler or production names", () => {
+    const run = soakStep().run ?? "";
+    expect(run).not.toContain("wrangler");
+    expect(run).toContain("cf d1 list --name 0509-staging");
+    expect(run).toContain('cf d1 query "$db"');
+    expect(run).toContain('--workflow-name "$1-staging"');
+    expect(run).toContain("workflows/$1-staging/instances");
+    expect(run).toContain("gh issue comment 4730");
+  });
+
   it("is named in the pull_request disk-reading detector list", () => {
     expect(readFileSync(path.join(REPO_ROOT, CI), "utf8")).toContain("tests/unit/soak-report.test.ts");
   });
