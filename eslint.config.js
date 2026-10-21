@@ -1039,6 +1039,7 @@ export default tseslint.config(
       "coverage/**",
       "dist/**",
       ".react-router/**",
+      ".cloudflare/**",
       // wrangler dev / `npm run e2e` write generated bundles under
       // .wrangler/tmp. Git already ignores them (.gitignore); without this
       // entry `eslint .` lints them and `npm run lint` fails after any local
