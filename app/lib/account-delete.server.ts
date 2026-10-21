@@ -23,26 +23,58 @@ export interface AccountDeleteProgress {
   deleted: number | null;
 }
 
-export async function deleteAccount(
-  helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant">,
-  request: Request,
-  userId: string,
-): Promise<{ headers: Headers; instanceId: string } | null> {
-  const cookie = deleteInstanceCookie();
+type GrantHelpers = Pick<OAuthHelpers, "listUserGrants" | "revokeGrant">;
+
+export interface AccountFootprint {
+  owned: OwnedSchedule[];
+  prefixes: string[];
+  entityIds: string[];
+}
+
+export async function readAccountFootprint(userId: string): Promise<AccountFootprint> {
   const owned = await readBriefSchedulesForOwner(userId);
   const [prefixes, entityIds] = await Promise.all([
     Promise.all(owned.map((workspace) => readWorkspaceR2Prefixes(workspace.workspaceId))).then((lists) => lists.flat()),
     Promise.all(owned.map((workspace) => readWorkspaceEntityIds(workspace.workspaceId))).then((lists) => lists.flat()),
   ]);
+  return { owned, prefixes, entityIds };
+}
+
+async function startAccountDelete(prefixes: string[], instanceId: string | undefined): Promise<string> {
+  const params = { prefixes } satisfies AccountDeleteParams;
+  if (instanceId === undefined) return (await env.ACCOUNT_DELETE.create({ params })).id;
+  await env.ACCOUNT_DELETE.createBatch([{ id: instanceId, params }]);
+  return instanceId;
+}
+
+export interface AccountDeleteTarget {
+  userId: string;
+  footprint: AccountFootprint;
+  instanceId?: string;
+}
+
+export async function finishAccountDelete(helpers: GrantHelpers, target: AccountDeleteTarget): Promise<string> {
+  const { userId, footprint, instanceId } = target;
+  await Promise.all(footprint.entityIds.map((entityId) => terminateIdentityTail(entityId)));
+  await Promise.all(footprint.owned.map((workspace) => retireWorkspaceRollovers(workspace)));
+  const grants = revokeGrants(helpers, userId);
+  const id = await startAccountDelete(footprint.prefixes, instanceId);
+  await grants;
+  return id;
+}
+
+export async function deleteAccount(
+  helpers: GrantHelpers,
+  request: Request,
+  userId: string,
+): Promise<{ headers: Headers; instanceId: string } | null> {
+  const cookie = deleteInstanceCookie();
+  const footprint = await readAccountFootprint(userId);
   const headers = await deleteSignedInUser(env, request, new Date());
   if (headers === null) return null;
-  await Promise.all(entityIds.map((entityId) => terminateIdentityTail(entityId)));
-  await Promise.all(owned.map((workspace) => retireWorkspaceRollovers(workspace)));
-  const grants = revokeGrants(helpers, userId);
-  const instance = await env.ACCOUNT_DELETE.create({ params: { prefixes } satisfies AccountDeleteParams });
-  headers.append("set-cookie", await cookie.serialize(instance.id));
-  await grants;
-  return { headers, instanceId: instance.id };
+  const instanceId = await finishAccountDelete(helpers, { userId, footprint });
+  headers.append("set-cookie", await cookie.serialize(instanceId));
+  return { headers, instanceId };
 }
 
 async function retireWorkspaceRollovers(owned: OwnedSchedule): Promise<void> {
@@ -59,7 +91,7 @@ async function retireWorkspaceRollovers(owned: OwnedSchedule): Promise<void> {
   }
 }
 
-async function revokeGrants(helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant">, userId: string) {
+async function revokeGrants(helpers: GrantHelpers, userId: string) {
   let failed = 0;
   let cursor: string | undefined;
   try {

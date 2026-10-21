@@ -174,6 +174,11 @@
     // itself. Changing the value takes a deploy of this file, with no code change.
     // Off until the site-change eval passes.
     "SHARED_RIVAL_CHECKS": "off",
+    // The reaper for per-run e2e accounts (e2e+...@0509.io, never the kept journey
+    // accounts) older than 24 hours with no plan row and only fixture workspaces.
+    // Only the exact value "live" deletes anything; unset, blank or any other
+    // value selects and logs counts and deletes nothing. At most 25 accounts a run.
+    "FIXTURE_REAPER": "dry-run",
     "ACCESS_TEAM_DOMAIN": "https://nish345.cloudflareaccess.com",
     "ACCESS_AUD": "b4fa400a1848c913b92c3212dc0714fcdbd1b1b66eb24659e4a7cc01c790575d",
   },
@@ -442,6 +447,14 @@
       "name": "identity-tail",
       "binding": "IDENTITY_TAIL",
       "class_name": "IdentityTailWorkflow",
+    },
+    // The nightly reaper for per-run e2e accounts older than a day (FIXTURE_REAPER
+    // under vars). Started from the 03:00 cron, or on demand by creating an
+    // instance of this Workflow through the Cloudflare API.
+    {
+      "name": "fixture-reaper",
+      "binding": "FIXTURE_REAPER_WORKFLOW",
+      "class_name": "FixtureReaperWorkflow",
     },
   ],
 

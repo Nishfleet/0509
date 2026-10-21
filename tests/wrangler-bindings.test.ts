@@ -95,6 +95,14 @@ describe("deployed wrangler configs", () => {
     expect(rawConfig.triggers?.crons).toContain("0 5 * * *");
   });
 
+  it("ships the fixture reaper dry-run and starts nothing else on its own schedule", () => {
+    const { rawConfig } = readConfig("wrangler.jsonc");
+    const reaper = (rawConfig.workflows ?? []).find((workflow) => workflow.name === "fixture-reaper");
+    expect(reaper).toMatchObject({ binding: "FIXTURE_REAPER_WORKFLOW", class_name: "FixtureReaperWorkflow" });
+    expect(reaper?.schedules).toBeUndefined();
+    expect(rawConfig.vars?.FIXTURE_REAPER, "going live is a reviewed one-line change to this var").toBe("dry-run");
+  });
+
   it("keeps the cost-guard constants equal to the deployed DB and bucket", () => {
     const { rawConfig } = readConfig("wrangler.jsonc");
     const db = (rawConfig.d1_databases ?? []).find((database) => database.binding === "DB");
