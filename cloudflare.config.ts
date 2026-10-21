@@ -60,7 +60,7 @@ export default defineConfig(({ mode }) => {
       env: {
         BETTER_AUTH_URL: bindings.text(staging ? "https://staging.0509.io" : "https://0509.io"),
         LANDING_WORKSPACE_ID: bindings.text(""),
-        GIT_SHA: bindings.text(""),
+        GIT_SHA: bindings.text(staging ? (process.env.GITHUB_SHA ?? "") : ""),
         DODO_ENVIRONMENT: bindings.text(staging ? "test_mode" : "live_mode"),
         DODO_PRODUCT_SCOUT: bindings.text(staging ? "" : "pdt_0NoeiCehl28XydokfKsmk"),
         DODO_PRODUCT_STARTER: bindings.text(staging ? "" : "pdt_0NoeiCjBmCJTfOHquf26O"),
