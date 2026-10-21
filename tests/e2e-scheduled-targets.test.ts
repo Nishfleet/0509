@@ -32,7 +32,7 @@ const e2eSteps = Object.entries(workflow.jobs).flatMap(([key, job]) =>
     .map((step) => ({
       key,
       target:
-        (step.env ?? {}).PLAYWRIGHT_TEST_BASE_URL ??
+        step.env?.PLAYWRIGHT_TEST_BASE_URL ??
         job.env?.PLAYWRIGHT_TEST_BASE_URL ??
         workflow.env?.PLAYWRIGHT_TEST_BASE_URL,
     })),

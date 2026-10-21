@@ -26,7 +26,7 @@ interface DeployJob {
   if?: string;
   needs?: string | string[];
   concurrency?: { group: string };
-  environment?: { name: string; url?: string } | string;
+  environment?: { name: string; url?: string };
   "timeout-minutes"?: number;
   steps: Step[];
 }
@@ -136,9 +136,7 @@ describe("deploy-production deploys staging with cf and never blocks production"
 
   it("runs from main in the staging environment under its own concurrency group", () => {
     expect(staging().if).toContain("github.ref == 'refs/heads/main'");
-    expect(typeof staging().environment === "string" ? staging().environment : staging().environment?.name).toBe(
-      "staging",
-    );
+    expect(staging().environment?.name).toBe("staging");
     expect(staging().concurrency?.group).toBe("deploy-staging");
     expect(staging().concurrency?.group).not.toBe(job.concurrency?.group);
     expect(staging()["timeout-minutes"]).toBeLessThanOrEqual(15);
