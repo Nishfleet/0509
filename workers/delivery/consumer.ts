@@ -2,7 +2,7 @@ import { captureException } from "@sentry/cloudflare";
 
 import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { isWorkspacePaid } from "../../app/lib/billing/subscription-state";
-import { governingWorkspace } from "../../app/lib/data/active-workspace";
+import { governingWorkspace, liveWorkspace } from "../../app/lib/data/active-workspace";
 import { markDigestSentStatement } from "../../app/lib/data/digest.server";
 import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
 import { claimIncidentNotice, incidentWasAnnounced } from "../../app/lib/data/incident_notice.server";
@@ -204,9 +204,9 @@ async function noTarget(
   return { outcome: "no_target", attempt_id: null, idempotency_key: null };
 }
 
-async function isUnpaidWorkspace(env: Env, workspaceId: string): Promise<boolean> {
+async function isSuppressedWorkspace(env: Env, workspaceId: string): Promise<boolean> {
   const row = await env.DB.prepare(
-    `SELECT status, current_period_end FROM plan WHERE workspace_id = ${governingWorkspace("?1")}`,
+    `SELECT status, current_period_end FROM plan WHERE workspace_id = ${governingWorkspace("?1")} AND ${liveWorkspace("?1")}`,
   )
     .bind(workspaceId)
     .first<{ status: string; current_period_end: string | null }>();
@@ -315,7 +315,7 @@ async function deliverToOwner(env: Env, message: DigestMessage): Promise<Deliver
   if (!digest) {
     return { outcome: "no_digest", attempt_id: null, idempotency_key: null };
   }
-  if (await isUnpaidWorkspace(env, digest.workspace_id)) {
+  if (await isSuppressedWorkspace(env, digest.workspace_id)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
 
@@ -546,7 +546,7 @@ async function incidentBlocked(env: Env, incident: IncidentRow): Promise<Deliver
   if (!(await readEntitlements(incident.workspace_id)).own_site_alerts) {
     return { outcome: "muted", attempt_id: null, idempotency_key: null };
   }
-  if (await isUnpaidWorkspace(env, incident.workspace_id)) {
+  if (await isSuppressedWorkspace(env, incident.workspace_id)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
   return null;
@@ -767,7 +767,7 @@ export async function deliverChange(env: Env, message: ChangeMessage): Promise<D
   if (change.change_alerts === 0) {
     return { outcome: "muted", attempt_id: null, idempotency_key: null };
   }
-  if (await isUnpaidWorkspace(env, change.workspace_id)) {
+  if (await isSuppressedWorkspace(env, change.workspace_id)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
   const slack = await postChangeToSlack(env, { change, payload });

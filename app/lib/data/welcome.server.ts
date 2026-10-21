@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import { TRIAL_DAYS } from "../billing/plans";
 
+import { liveWorkspace } from "./active-workspace";
+
 const SELECT_NEW_TRIALS = `SELECT p.workspace_id,
        p.provider_subscription_id AS subscription_id,
        w.timezone,
@@ -26,7 +28,8 @@ const SELECT_NEW_TRIALS = `SELECT p.workspace_id,
      ORDER BY t.created_at ASC
      LIMIT 1
   )
- WHERE p.trialing = 1 AND p.status = 'active' AND p.current_period_end >= ?1`;
+ WHERE p.trialing = 1 AND p.status = 'active' AND p.current_period_end >= ?1
+   AND ${liveWorkspace("p.workspace_id")}`;
 
 const newTrialRow = z.object({
   workspace_id: z.string(),
