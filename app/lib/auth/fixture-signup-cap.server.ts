@@ -1,12 +1,19 @@
-import { countRecentPerRunFixtureUsers } from "../data/user.server";
+import { takeCount } from "../ai/daily-cap.server";
 import { isPerRunFixtureEmail } from "../fixture-accounts";
 
 export const FIXTURE_SIGNUPS_PER_DAY = 100;
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+export const FIXTURE_MAGIC_LINKS_PER_DAY = 200;
 
-export async function fixtureSignupsOverCap(db: D1Database, email: string, now: Date): Promise<boolean> {
-  if (!isPerRunFixtureEmail(email)) return false;
-  const since = new Date(now.getTime() - DAY_MS).toISOString();
-  return (await countRecentPerRunFixtureUsers(db, since)) >= FIXTURE_SIGNUPS_PER_DAY;
+function chargeFixture(email: string, line: string, limit: number): Promise<boolean> {
+  if (!isPerRunFixtureEmail(email)) return Promise.resolve(true);
+  return takeCount(`${line}:${new Date().toISOString().slice(0, 10)}`, limit);
+}
+
+export function chargeFixtureSignup(email: string): Promise<boolean> {
+  return chargeFixture(email, "fixture-signups", FIXTURE_SIGNUPS_PER_DAY);
+}
+
+export function chargeFixtureMagicLink(email: string): Promise<boolean> {
+  return chargeFixture(email, "fixture-magic-links", FIXTURE_MAGIC_LINKS_PER_DAY);
 }

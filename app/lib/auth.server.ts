@@ -14,7 +14,7 @@ import { ensureWorkspaceForSignIn } from "./workspace.server";
 import { accessPrecleared } from "./auth/access-preclearance.server";
 import { changeEmailEmail } from "./auth/change-email-email";
 import { changeEmailAllowed } from "./auth/change-email-limit";
-import { fixtureSignupsOverCap } from "./auth/fixture-signup-cap.server";
+import { chargeFixtureMagicLink, chargeFixtureSignup } from "./auth/fixture-signup-cap.server";
 import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email";
 import { MAGIC_LINK_PATH } from "./auth/magic-link-path";
 import { redactEmailShaped } from "./auth/redact-email-shaped";
@@ -128,7 +128,7 @@ function databaseHooks(env: AuthEnv): BetterAuthOptions["databaseHooks"] {
     user: {
       create: {
         before: async (user) => {
-          if (await fixtureSignupsOverCap(env.DB, user.email, new Date())) {
+          if (!(await chargeFixtureSignup(user.email))) {
             throw new APIError("TOO_MANY_REQUESTS", { message: "Too many test accounts today. Try again tomorrow." });
           }
         },
@@ -151,6 +151,9 @@ function databaseHooks(env: AuthEnv): BetterAuthOptions["databaseHooks"] {
 
 function sendMagicLinkEmail(env: AuthEnv) {
   return async ({ email, url }: { email: string; url: string }) => {
+    if (!(await chargeFixtureMagicLink(email))) {
+      throw new APIError("TOO_MANY_REQUESTS", { message: "Too many test sign-in links today. Try again tomorrow." });
+    }
     const message = magicLinkEmail({ email, url });
     try {
       await sendOrThrow(env.EMAIL, {
