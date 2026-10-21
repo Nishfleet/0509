@@ -23,16 +23,13 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          echo "--- version"
-          npx wrangler --version 2>&1 | tail -2
-          echo "--- plain count"
           set +e
-          out=$(npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS n FROM send_attempt" 2>&1); rc=$?
-          echo "rc=$rc"
-          echo "$out"
-          echo "--- soak sends query"
-          since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
-          scope=" AND workspace_id IN (SELECT id FROM workspace WHERE owner_user_id IN (SELECT id FROM user WHERE email = 'e2e+soak@0509.io'))"
-          out2=$(npx wrangler d1 execute 0509 --remote --json --command "SELECT CASE WHEN digest_id IS NULL THEN 'other (no digest)' ELSE 'brief' END AS kind, status, COUNT(*) AS n FROM send_attempt WHERE attempted_at >= '$since'$scope GROUP BY 1, 2 ORDER BY 1, 2" 2>&1); rc2=$?
-          echo "rc=$rc2"
-          echo "$out2"
+          echo "--- whoami"
+          npx wrangler whoami 2>&1 | tail -30
+          echo "--- d1 list"
+          npx wrangler d1 list 2>&1 | tail -8
+          echo "--- workflows list"
+          npx wrangler workflows list 2>&1 | tail -8
+          echo "--- accounts endpoint"
+          curl -sS -o /tmp/acc.json -w "http=%{http_code}\n" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/accounts
+          jq -c '{success, errors, result: (.result // [] | map({name, id}))}' /tmp/acc.json
