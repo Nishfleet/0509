@@ -14,7 +14,10 @@ const PREVIEW_MARKS = 3;
 
 const ANY_WEEKLY_BRIEF = "SELECT 1 AS found FROM digest WHERE workspace_id = ?1 AND kind = 'weekly' LIMIT 1";
 
-export async function previewFirstRun(workspaceId: string): Promise<{ names: string[] } | null> {
+export async function previewFirstRun(workspaceId: string, payload: BriefPayload): Promise<{ names: string[] } | null> {
+  if (payload.headline_rank !== null || payload.read_this_first.length > 0 || payload.checked.mention_count > 0) {
+    return null;
+  }
   const [rivals, sent] = await Promise.all([
     readFirstLook(workspaceId),
     env.DB.prepare(ANY_WEEKLY_BRIEF).bind(workspaceId).first(),

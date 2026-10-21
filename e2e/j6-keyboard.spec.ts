@@ -93,7 +93,7 @@ test("the per-brand switch is operable with a keyboard alone @own-signin", async
 
   await page.reload();
   const order: string[] = [];
-  for (let i = 0; i < 5; i += 1) {
+  for (let i = 0; i < 6; i += 1) {
     await page.keyboard.press("Tab");
     order.push(await page.evaluate(() => document.activeElement?.textContent?.trim() ?? ""));
   }

@@ -44,7 +44,9 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     developments: page.developments.map((item) => ({ ...item, when: daysAgoLabel(item.observedAt, now) })),
     note,
     now: now.getTime(),
-    snapshot: snapshotCells(snapshot),
+    snapshot: snapshotCells(snapshot, {
+      read: page.watch.lastPolledAt !== null || page.watch.unreadable || page.watch.notFound,
+    }),
   };
 }
 

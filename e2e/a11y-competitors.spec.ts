@@ -45,7 +45,7 @@ test("the Competitors page is landmarked, ordered and keyboard-operable at 1440 
 
       await page.reload();
       const order: string[] = [];
-      for (let i = 0; i < 5; i += 1) {
+      for (let i = 0; i < 6; i += 1) {
         await page.keyboard.press("Tab");
         order.push(await page.evaluate(() => document.activeElement?.textContent?.trim() ?? ""));
       }

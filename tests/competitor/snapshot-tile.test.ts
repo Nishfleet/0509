@@ -37,7 +37,7 @@ describe("the competitor snapshot notes", () => {
     reason: "We're not watching this for this competitor yet.",
   });
 
-  it("gives cells that are not watched one positive note, not a run-on list", () => {
+  it("says what is not watched as one sentence, not a run-on list", () => {
     const html = renderToStaticMarkup(
       createElement(CompetitorSnapshot, {
         cells: [
@@ -47,8 +47,9 @@ describe("the competitor snapshot notes", () => {
         ],
       }),
     );
-    expect(html).toContain("Nothing to show yet. These fill in as we watch (first read tonight).");
-    expect(html.match(/data-slot="snapshot-missing"/g)).toHaveLength(1);
+    expect(html).toContain(
+      "We&#x27;re not watching new ads, ad wording changes and new job openings for this competitor yet.",
+    );
     expect(html).not.toContain("New ads, Ad wording changes");
   });
 });

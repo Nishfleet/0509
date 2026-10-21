@@ -88,6 +88,7 @@ const COUNT_CELLS: readonly CountCellSpec[] = [
 
 const RANK_REASON = "Your rank appears when the week ends.";
 const UNWATCHED_REASON = "We're not watching this for this competitor yet.";
+const FIRST_READ_REASON = "Your first read is tonight.";
 const NOTHING_YET_NOTE = "Nothing to show yet. These fill in as we watch (first read tonight).";
 
 function rankCell(standing: SnapshotStanding | null): SnapshotCell {
@@ -103,10 +104,11 @@ function rankCell(standing: SnapshotStanding | null): SnapshotCell {
   };
 }
 
-function countCell(spec: CountCellSpec, input: SnapshotInput): SnapshotCell {
+function countCell(spec: CountCellSpec, input: SnapshotInput, read: boolean): SnapshotCell {
   const ofKind = input.sources.filter((source) => source.kind === spec.kind);
   if (ofKind.length === 0) {
-    return { key: spec.key, label: spec.label, value: null, movement: null, reason: UNWATCHED_REASON };
+    const reason = read ? UNWATCHED_REASON : FIRST_READ_REASON;
+    return { key: spec.key, label: spec.label, value: null, movement: null, reason };
   }
   const silent = ofKind.filter((source) => !source.answered).map((source) => source.name);
   if (silent.length > 0) {
@@ -128,11 +130,23 @@ function countCell(spec: CountCellSpec, input: SnapshotInput): SnapshotCell {
   };
 }
 
-export function snapshotCells(input: SnapshotInput): readonly SnapshotCell[] {
-  return [rankCell(input.standing), ...COUNT_CELLS.map((spec) => countCell(spec, input))];
+export function snapshotCells(input: SnapshotInput, { read = true }: { read?: boolean } = {}): readonly SnapshotCell[] {
+  return [rankCell(input.standing), ...COUNT_CELLS.map((spec) => countCell(spec, input, read))];
 }
 
 const LIST = new Intl.ListFormat(APP_LOCALE, { type: "conjunction" });
+
+function lowerFirst(label: string): string {
+  return label.charAt(0).toLowerCase() + label.slice(1);
+}
+
+function noteText(reason: string, labels: readonly string[]): string {
+  if (reason === FIRST_READ_REASON) return NOTHING_YET_NOTE;
+  if (reason === UNWATCHED_REASON) {
+    return `We're not watching ${LIST.format(labels.map(lowerFirst))} for this competitor yet.`;
+  }
+  return `${LIST.format(labels)}: ${reason}`;
+}
 
 export function snapshotNotes(cells: readonly SnapshotCell[]): { reason: string; text: string }[] {
   const byReason = new Map<string, string[]>();
@@ -142,7 +156,7 @@ export function snapshotNotes(cells: readonly SnapshotCell[]): { reason: string;
   }
   return [...byReason].map(([reason, labels]) => ({
     reason,
-    text: reason === UNWATCHED_REASON ? NOTHING_YET_NOTE : `${LIST.format(labels)}: ${reason}`,
+    text: noteText(reason, labels),
   }));
 }
 

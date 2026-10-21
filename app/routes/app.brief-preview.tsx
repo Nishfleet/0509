@@ -18,10 +18,8 @@ export async function loader({ context }: Route.LoaderArgs) {
   if (workspaceId === null) throw redirect("/onboarding");
   const owned = await readBriefScheduleForOwner(session.user.id);
   if (owned === null) throw redirect("/onboarding");
-  const [payload, firstRun] = await Promise.all([
-    previewBrief(workspaceId, owned.schedule, new Date()),
-    previewFirstRun(workspaceId),
-  ]);
+  const payload = await previewBrief(workspaceId, owned.schedule, new Date());
+  const firstRun = await previewFirstRun(workspaceId, payload);
   const sendsAt = formatBriefAt(new Date(payload.period_end), owned.schedule.timezone);
   return {
     payload,

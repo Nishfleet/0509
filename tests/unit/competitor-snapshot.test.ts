@@ -89,16 +89,23 @@ describe("the competitor snapshot card", () => {
 });
 
 describe("a competitor added today", () => {
-  const fresh = snapshotCells({
+  const input = {
     standing: null,
     counts: { newCreatives: 0, copyChanges: 0, noteworthyChanges: 0, mentionsThatMatter: 0, newRoles: 0 },
     sources: [],
-  });
+  };
+  const fresh = snapshotCells(input, { read: false });
 
   it("gets one positive note and never a list of what we do not watch", () => {
     const text = snapshotNotes(fresh).map((note) => note.text);
     expect(text).toContain("Nothing to show yet. These fill in as we watch (first read tonight).");
     expect(text.join(" ")).not.toContain("not watching");
+  });
+
+  it("keeps the honest sentence, without a first read tonight, once it has been read", () => {
+    const text = snapshotNotes(snapshotCells(input, { read: true })).map((note) => note.text);
+    expect(text.join(" ")).toContain("We're not watching new ads");
+    expect(text.join(" ")).not.toContain("first read tonight");
   });
 
   it("gets no one-pager until there is a change or a ranked cell", () => {
