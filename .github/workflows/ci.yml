@@ -89,6 +89,7 @@ jobs:
           tests/required-checks-never-skip.test.ts
           tests/deploy-production-pipeline.test.ts
           tests/unit/soak-report.test.ts
+          tests/e2e-scheduled-targets.test.ts
       - name: Test coverage floor
         if: github.event_name == 'merge_group'
         run: npx vitest run --project node --coverage
