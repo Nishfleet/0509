@@ -57,7 +57,11 @@ describe("login magic-link action", () => {
     expect(forwarded.url).toBe("https://0509.io/api/auth/sign-in/magic-link");
     expect(forwarded.headers.get("x-captcha-response")).toBe("token-1");
     expect(forwarded.headers.get("origin")).toBe("https://0509.io");
-    expect(await forwarded.json()).toEqual({ email: "person@0509.io", callbackURL: "/app", errorCallbackURL: "/login" });
+    expect(await forwarded.json()).toEqual({
+      email: "person@0509.io",
+      callbackURL: "/app",
+      errorCallbackURL: "/login",
+    });
   });
 
   it("sends dead links back to the sign-in page through errorCallbackURL", async () => {
@@ -112,7 +116,11 @@ describe("login magic-link action", () => {
     await action({
       request: formRequest({ email: "person@0509.io" }, undefined, "https://0509.io/login?subject="),
     } as Parameters<typeof action>[0]);
-    expect(await sentCallbackURL()).toEqual({ email: "person@0509.io", callbackURL: "/app", errorCallbackURL: "/login" });
+    expect(await sentCallbackURL()).toEqual({
+      email: "person@0509.io",
+      callbackURL: "/app",
+      errorCallbackURL: "/login",
+    });
   });
 
   it("forwards the client ip and does not invent a captcha header", async () => {

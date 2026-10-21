@@ -71,8 +71,8 @@ export function SignInSent({
           Check your email
         </h1>
         <p className={SIGN_IN_LEDE}>
-          We sent a sign-in link to <strong className="font-semibold text-ink">{email}</strong>. Check spam if you do
-          not see it within a minute. It works once and expires in {minutes} minutes.
+          We sent a sign-in link to <strong className="font-semibold text-ink">{email}</strong>. Check spam if you don't
+          see it within a minute. It works once and expires in {minutes} minutes.
         </p>
         <TurnstileWidget siteKey={turnstileSiteKey} />
         <OpenInbox email={email} />

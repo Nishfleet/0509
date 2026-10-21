@@ -44,7 +44,7 @@ describe("SignInSent names the recipient and the expiry (0509#6886)", () => {
     expect(html).toContain(`<strong class="font-semibold text-ink">${EMAIL}</strong>`);
     expect(html).toContain(`expires in ${minutes} minutes`);
     expect(html).toContain("We sent a sign-in link to ");
-    expect(html).toContain("Check spam if you do not see it within a minute.");
+    expect(html).toContain("Check spam if you don&#x27;t see it within a minute.");
     expect(html).not.toContain("can sign in");
   });
 
