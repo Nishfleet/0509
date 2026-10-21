@@ -132,7 +132,7 @@ function homepageLine(state: {
   if (state.notFound) return "We couldn't find the homepage. Check the address. We try again every night.";
   if (state.unreadable) return "We couldn't read the homepage. We try again every night.";
   return state.lastChecked === null
-    ? `Homepage, read every night. First read tonight at ${state.sweepClock}.`
+    ? `Homepage, read every night. First read tonight ${state.sweepClock}.`
     : `Homepage, read every night. Last read ${state.lastChecked}.`;
 }
 

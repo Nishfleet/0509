@@ -12,7 +12,7 @@ import { RivalOnePager } from "../components/rival-one-pager";
 import { handleCompetitorForm } from "../lib/competitor-forms.server";
 import { readEntityNote } from "../lib/data/entity_note.server";
 import { readCompetitorPage } from "../lib/competitor-page.server";
-import { snapshotCells } from "../lib/competitor-snapshot";
+import { snapshotCells, worthOnePager } from "../lib/competitor-snapshot";
 import { readCompetitorSnapshot } from "../lib/competitor-snapshot.server";
 import { daysAgoLabel } from "../lib/delivery-alert";
 import { onboardedContext } from "../lib/require-onboarded.server";
@@ -44,7 +44,9 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     developments: page.developments.map((item) => ({ ...item, when: daysAgoLabel(item.observedAt, now) })),
     note,
     now: now.getTime(),
-    snapshot: snapshotCells(snapshot),
+    snapshot: snapshotCells(snapshot, {
+      read: page.watch.lastPolledAt !== null || page.watch.unreadable || page.watch.notFound,
+    }),
   };
 }
 
@@ -105,7 +107,9 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         }
       />
       <CompetitorSnapshot cells={loaderData.snapshot} />
-      <OnePager data={loaderData} />
+      {worthOnePager(loaderData.snapshot, loaderData.changes.length + loaderData.developments.length) ? (
+        <OnePager data={loaderData} />
+      ) : null}
       <CompetitorFrame
         changes={loaderData.changes}
         developments={loaderData.developments}
