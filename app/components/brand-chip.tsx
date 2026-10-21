@@ -21,6 +21,7 @@ export interface BrandChipBrand {
   logoUrl?: string | null;
   self?: boolean;
   off?: boolean;
+  wrap?: boolean;
 }
 
 export function brandMonogram(name: string): string {
@@ -61,11 +62,12 @@ function flagAttrs(self: boolean, off: boolean): Record<string, string | undefin
   return { "data-self": self ? "" : undefined, "data-off": off ? "" : undefined };
 }
 
-function chipClass(self: boolean, off: boolean): string {
+function chipClass(self: boolean, off: boolean, wrap: boolean): string {
   return cn(
     "h-auto min-h-11 max-w-full min-w-0 shrink gap-[7px] rounded-none border-[1.5px] border-line bg-card py-[5px] pr-[11px] pl-[5px] text-[0.85rem] font-medium text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink",
     self && "border-ink font-semibold",
     off && "border-dashed text-ink-soft",
+    wrap && "shrink-0 whitespace-normal",
   );
 }
 
@@ -110,16 +112,23 @@ function BrandAvatar({ logo, monogram, self, off }: BrandAvatarProps): ReactElem
   );
 }
 
-export function BrandChip({ name, href, logoUrl, self = false, off = false }: BrandChipBrand): ReactElement | null {
+export function BrandChip({
+  name,
+  href,
+  logoUrl,
+  self = false,
+  off = false,
+  wrap = false,
+}: BrandChipBrand): ReactElement | null {
   const trimmed = name.trim();
   const monogram = brandMonogram(trimmed);
   const to = safeHref(href);
   if (trimmed === "" || monogram === "" || to === null) return null;
 
   return (
-    <Badge variant="outline" render={chipLink(to)} {...flagAttrs(self, off)} className={chipClass(self, off)}>
+    <Badge variant="outline" render={chipLink(to)} {...flagAttrs(self, off)} className={chipClass(self, off, wrap)}>
       <BrandAvatar logo={safeLogo(logoUrl)} monogram={monogram} self={self} off={off} />
-      <span className="block min-w-0 truncate">{chipLabel(trimmed, self, off)}</span>
+      <span className={cn("block min-w-0", wrap ? "break-words" : "truncate")}>{chipLabel(trimmed, self, off)}</span>
     </Badge>
   );
 }
