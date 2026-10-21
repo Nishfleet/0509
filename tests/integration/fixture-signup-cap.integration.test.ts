@@ -37,7 +37,7 @@ async function userExists(email: string): Promise<boolean> {
 afterEach(async () => {
   await env.DB.prepare(`DELETE FROM "user" WHERE id LIKE 'cap-%'`).run();
   await env.DB.prepare(
-    `DELETE FROM "user" WHERE email IN ('e2e+extra@0509.io','e2e+j7@0509.io','person@example.com')`,
+    `DELETE FROM "user" WHERE email IN ('e2e+extra@0509.io','e2e+extra2@0509.io','e2e+j7@0509.io','person@example.com')`,
   ).run();
 });
 
@@ -54,6 +54,13 @@ describe("per-run fixture sign-up cap", () => {
 
     await signUp("e2e+extra@0509.io");
     expect(await userExists("e2e+extra@0509.io")).toBe(true);
+  });
+
+  it("counts a fixture user that better-auth wrote itself against the same cutoff", async () => {
+    await seedFixtureUsers(FIXTURE_SIGNUPS_PER_DAY - 1, new Date(Date.now() - HOUR_MS).toISOString(), "cap-recent");
+    await signUp("e2e+extra@0509.io");
+
+    await expect(signUp("e2e+extra2@0509.io")).rejects.toMatchObject({ statusCode: 429 });
   });
 
   it("does not count fixture users older than 24 hours", async () => {

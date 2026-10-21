@@ -1,5 +1,5 @@
 import { createCookie } from "react-router";
-import { betterAuth } from "better-auth";
+import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { captcha, magicLink } from "better-auth/plugins";
 import { apiKey } from "@better-auth/api-key";
@@ -123,11 +123,11 @@ function authHooks(env: AuthEnv) {
   };
 }
 
-function databaseHooks(env: AuthEnv) {
+function databaseHooks(env: AuthEnv): BetterAuthOptions["databaseHooks"] {
   return {
     user: {
       create: {
-        before: async (user: { email: string }) => {
+        before: async (user) => {
           if (await fixtureSignupsOverCap(env.DB, user.email, new Date())) {
             throw new APIError("TOO_MANY_REQUESTS", { message: "Too many test accounts today. Try again tomorrow." });
           }
@@ -136,7 +136,7 @@ function databaseHooks(env: AuthEnv) {
     },
     session: {
       create: {
-        after: async (session: { userId: string }, context: { request?: Request } | null) => {
+        after: async (session, context) => {
           const request = context?.request ?? null;
           if (!request) return;
           await ensureWorkspaceForSignIn(env.DB, {
