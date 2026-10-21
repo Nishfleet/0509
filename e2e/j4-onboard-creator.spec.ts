@@ -1,6 +1,7 @@
 import { expect, test } from "./test";
 
 import {
+  addCompetitorWhileDiscoveryIsUnavailable,
   confirmPublicSubject,
   consoleFailures,
   deleteCreatedAccount,
@@ -101,8 +102,7 @@ test.describe("J4 onboard a creator handle", () => {
       await page.getByRole("button", { name: "That's me" }).click();
       await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
 
-      const competitorRows = page.locator('ul[aria-label="Watching"] li, ul[aria-label="Possible competitors"] li');
-      await expect.poll(async () => competitorRows.count(), { timeout: 60_000 }).toBeGreaterThan(0);
+      await addCompetitorWhileDiscoveryIsUnavailable(page);
       const competitors = Date.now() - started;
       expect(competitors).toBeLessThan(60_000);
       test.info().annotations.push({ type: "input-to-competitors-ms", description: String(competitors) });

@@ -452,6 +452,15 @@ export async function signInWithMagicLink(
   return { link, status: response?.status() ?? 0 };
 }
 
+export async function addCompetitorWhileDiscoveryIsUnavailable(page: Page): Promise<void> {
+  await expect(page.getByText("We couldn't look for competitors just now.")).toBeVisible({ timeout: 60_000 });
+  await page.locator("#add-competitor").fill("nike.com");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("list", { name: "Watching" }).getByRole("listitem").first()).toBeVisible({
+    timeout: 30_000,
+  });
+}
+
 export async function confirmPublicSubject(page: Page, subject?: string): Promise<void> {
   const business = page.getByRole("button", { name: "Yes, a business or creator" });
   await expect(async () => {
