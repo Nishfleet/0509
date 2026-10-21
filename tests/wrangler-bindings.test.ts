@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { SNAPSHOT_BUCKET } from "../app/lib/observability/cost-analytics.server";
 import { SITE_URL } from "../app/lib/site-url";
+import { queueRole } from "../workers/queue-role";
 
 interface KvNamespace {
   binding: string;
@@ -160,20 +161,11 @@ describe("deployed wrangler configs", () => {
     }
   });
 
-  it("routes every consumer queue in wrangler.jsonc to its own branch in queue()", () => {
+  it("routes every consumer queue in wrangler.jsonc to its own role in queue()", () => {
     const { rawConfig } = readConfig("wrangler.jsonc");
     const consumers = (rawConfig.queues?.consumers ?? []).map((queue) => queue.queue);
-    const constants = Object.fromEntries(
-      [
-        ...readFileSync("workers/sources/fetch-sweep-consumer.ts", "utf8").matchAll(/export const (\w+) = "([^"]+)"/g),
-      ].map((match) => [match[1], match[2]]),
-    );
-    const source = readFileSync("workers/app.ts", "utf8");
-    const branched = [...source.matchAll(/batch\.queue === (?:"([^"]+)"|(\w+))/g)].map(
-      (match) => match[1] ?? constants[match[2] ?? ""],
-    );
-    const fallthrough = "send-email";
-    expect(consumers).toContain(fallthrough);
-    expect(consumers.filter((queue) => queue !== fallthrough).sort()).toEqual([...branched].sort());
+    const roles = consumers.map((queue) => queueRole(queue));
+    expect([...roles].sort()).toEqual(["fetch-sweep", "fetch-sweep-dlq", "send-email", "send-email-dlq"]);
+    expect([...consumers].sort()).toEqual([...roles].sort());
   });
 });
