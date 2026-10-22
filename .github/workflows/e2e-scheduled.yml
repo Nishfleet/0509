@@ -486,6 +486,9 @@ jobs:
         run: |
           set -euo pipefail
           since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          # Same validator and redaction as soak-report's d1() below; this copy
+          # fails the job (return 1) while that one collects into a file. Change
+          # both together.
           d1() {
             local out rc=0 msg="" errf
             errf=$(mktemp)
@@ -494,6 +497,7 @@ jobs:
               msg=$(jq -r '[(.error.text // ""), ((.error.notes // []) | map(.text) | join("; "))] | map(select(. != "")) | join(" | ")' <<< "$out" 2> /dev/null) || msg=""
               [ -n "$msg" ] || msg=$(grep -m1 -F '[ERROR]' "$errf" 2> /dev/null || true)
               msg=$(sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g' <<< "${msg:-no error text}" | tr -d '\300\256\256' | head -n 1)
+              # % is escaped for the annotation parser, 32-hex ids for a public repo.
               echo "::error::D1 read failed (wrangler exit $rc): $(sed -E 's/[0-9a-f]{32}/<redacted>/g; s/%/%25/g' <<< "$msg" | tr '\n' ' ')"
               rm -f "$errf"
               return 1
@@ -542,6 +546,10 @@ jobs:
           label="soak workspace"
           cf_read_failed="$RUNNER_TEMP/cf-read-failed.txt"
           : > "$cf_read_failed"
+          # Same validator and redaction as jev-failures' d1() above; this copy
+          # collects every failure into $cf_read_failed and lets the report post
+          # once, while that one fails the job on the first bad read. Change both
+          # together.
           d1() {
             local out rc=0 msg="" errf
             errf=$(mktemp)
