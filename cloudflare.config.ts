@@ -1,6 +1,6 @@
 import { bindings, defineConfig, exports, triggers } from "cf/config";
 
-const STAGING_ACCESS_AUD = "4d713d09a17fe8acfcbee861f29b743a0158892737e95ec52c0b659f7362dd7f";
+const STAGING_ACCESS_AUD = "4d713d09a17fe8acfcbee861f29b743a0158892737e95ec52c0b659f7362dd7f"; // gitleaks:allow
 
 export default defineConfig(({ mode }) => {
   const staging = mode === "staging";
@@ -76,7 +76,7 @@ export default defineConfig(({ mode }) => {
         SHARED_RIVAL_CHECKS: bindings.text("off"),
         ACCESS_TEAM_DOMAIN: bindings.text("https://nish345.cloudflareaccess.com"),
         ACCESS_AUD: bindings.text(
-          staging ? STAGING_ACCESS_AUD : "5dcfc6477175c13fa2dbdbdbc91242e7458da2ae9028131ab776995cbda2bd7f",
+          staging ? STAGING_ACCESS_AUD : "5dcfc6477175c13fa2dbdbdbc91242e7458da2ae9028131ab776995cbda2bd7f", // gitleaks:allow
         ),
         FIXTURE_REAPER: bindings.text("dry-run"),
         ...(staging ? { AI_DAILY_CAP_SCALE: bindings.text("0.05") } : {}),
