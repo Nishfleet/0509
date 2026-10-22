@@ -12,6 +12,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "0509",
+  "workers_dev": false,
   // >= 2026-08-04 turns nodejs_compat on by default; still set it so a
   // Vitest inject cannot hide a missing production flag
   // (https://developers.cloudflare.com/workers/configuration/compatibility-flags/).
