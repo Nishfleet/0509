@@ -9,14 +9,6 @@
 # that touches any path outside its arm allowlist `needs-coordinator` and does
 # not arm auto-merge, plus the merge queue's one required check, `ci-ok`, on every
 # merge; it needs every gate job in ci.yml to succeed.
-*.sh @nish3451
-*.py @nish3451
-*.bash @nish3451
-*.zsh @nish3451
-/bin/ @nish3451
-/scripts/ @nish3451
-**/bin/ @nish3451
-**/scripts/ @nish3451
 /.github/CODEOWNERS @nish3451
 
 # Migration lock: merging to main applies migrations/ to production D1
