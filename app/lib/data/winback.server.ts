@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { liveWorkspace } from "./active-workspace";
 import { parseLatest } from "./recap.server";
 
 const SELECT_WINBACKS = `SELECT w.id AS workspace_id,
@@ -31,7 +32,7 @@ const SELECT_WINBACKS = `SELECT w.id AS workspace_id,
      ORDER BY t.created_at ASC
      LIMIT 1
   )
- WHERE w.last_seen_at IS NOT NULL AND w.last_seen_at <= ?1`;
+ WHERE w.last_seen_at IS NOT NULL AND w.last_seen_at <= ?1 AND ${liveWorkspace("w.id")}`;
 
 const winbackRow = z.object({
   workspace_id: z.string(),

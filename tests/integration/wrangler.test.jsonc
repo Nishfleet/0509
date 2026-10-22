@@ -102,6 +102,11 @@
       "binding": "IDENTITY_TAIL",
       "class_name": "IdentityTailWorkflow",
     },
+    {
+      "name": "fixture-reaper-test",
+      "binding": "FIXTURE_REAPER_WORKFLOW",
+      "class_name": "FixtureReaperWorkflow",
+    },
   ],
   "kv_namespaces": [
     { "binding": "IDENTITY_CACHE", "id": "test" },

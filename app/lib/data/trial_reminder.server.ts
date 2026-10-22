@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { liveWorkspace } from "./active-workspace";
 import { STALE_CLAIM_MS } from "./send_attempt.server";
 
 const SELECT_TRIALS_ENDING = `SELECT p.workspace_id,
@@ -19,7 +20,8 @@ const SELECT_TRIALS_ENDING = `SELECT p.workspace_id,
      ORDER BY t.created_at ASC
      LIMIT 1
   )
- WHERE p.trialing = 1 AND p.status = 'active' AND p.current_period_end > ?1 AND p.current_period_end <= ?2`;
+ WHERE p.trialing = 1 AND p.status = 'active' AND p.current_period_end > ?1 AND p.current_period_end <= ?2
+   AND ${liveWorkspace("p.workspace_id")}`;
 
 const trialEndingRow = z.object({
   workspace_id: z.string(),
