@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { classifyNavPages, PAGE_ROLE } from "../../../app/lib/identity/page-role.server";
+import { classifyNavPages, NAV_PAGES_JUDGED, PAGE_ROLE } from "../../../app/lib/identity/page-role.server";
 
 import { JEV_BATCH_SIZE } from "../../../app/lib/jev/client.server";
 
@@ -90,8 +90,15 @@ describe("classifyNavPages", () => {
   });
 
   it("judges every nav page across sweeps whatever its URL looks like", async () => {
-    const run = vi.fn((_model: string, _request: unknown, _options?: unknown) =>
-      Promise.resolve({ answers: { page_role: { type: "choice", choice: "other" } } }),
+    const run = vi.fn((_model: string, request: { state: { item: { url: string } } }) =>
+      Promise.resolve({
+        answers: {
+          page_role: {
+            type: "choice",
+            choice: request.state.item.url === "https://www.gymshark.com/membership" ? "pricing" : "other",
+          },
+        },
+      }),
     );
     Reflect.set(env, "AI", { run });
     const pages = [
@@ -103,11 +110,18 @@ describe("classifyNavPages", () => {
     ];
 
     await classifyNavPages({ workspaceId, entity: ENTITY, pages, now: NOW });
+    expect(run).toHaveBeenCalledTimes(NAV_PAGES_JUDGED);
+    expect(await readPages()).toHaveLength(NAV_PAGES_JUDGED);
+
     await classifyNavPages({ workspaceId, entity: ENTITY, pages, now: NOW });
+    expect(run).toHaveBeenCalledTimes(pages.length);
 
     const judged = (await readPages()).map((page) => page.url);
     expect(judged).toHaveLength(pages.length);
     expect(judged).toContain("https://www.gymshark.com/membership");
+    expect((await readPages()).find((page) => page.url === "https://www.gymshark.com/membership")?.role).toBe(
+      "pricing",
+    );
   });
 
   it("leaves an unchanged page alone and asks Jev nothing more", async () => {

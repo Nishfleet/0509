@@ -5,7 +5,7 @@ import { readPageHashes, upsertJudgedPages, type JudgedPage } from "../data/page
 import { askChoices, type ChoiceQuestion, type ChoiceVerdict } from "../jev/client.server";
 import { sha256Hex } from "../sha256";
 
-const NAV_PAGES_JUDGED = 40;
+export const NAV_PAGES_JUDGED = 40;
 
 const PRICING_LOOKING = /pric|plans?\b|packages?\b|subscri|buy|shop|store|catalog/i;
 

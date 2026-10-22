@@ -24,6 +24,10 @@ describe("keepOnlyIfBoth", () => {
   it("acts only when the model itself is at the act line on both answers", () => {
     expect(combined(0.95, 0.92)).toBe(0.92);
     expect(noulAction(combined(0.95, 0.92))).toBe("act");
+    expect(combined(0.9, 0.9)).toBe(0.9);
+    expect(noulAction(combined(0.9, 0.9))).toBe("act");
+    expect(combined(0.9, 0.89)).toBe(0.89);
+    expect(noulAction(combined(0.9, 0.89))).toBe("maybe");
   });
 
   it("scores a candidate off the category as zero however sure the competitor answer is", () => {
