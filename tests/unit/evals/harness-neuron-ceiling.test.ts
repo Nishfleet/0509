@@ -68,6 +68,46 @@ describe("EVAL_MAX_NEURONS", () => {
   });
 });
 
+async function ceilingOnly(value: string): Promise<typeof Harness.runEval> {
+  vi.resetModules();
+  vi.stubEnv("EVAL_MAX_NEURONS", value);
+  return (await import("../../evals/harness")).runEval;
+}
+
+describe("EVAL_MAX_NEURONS as the repository variable of 0509#10054", () => {
+  const rows = Array.from({ length: 60 }, (_, index) => ({
+    id: `row-${String(index)}`,
+    split: "test" as const,
+    why: "w",
+  }));
+  const asked = () => Promise.resolve({ model: "m", p: null, choice: "x" });
+  const scored = () => ({ points: 1, uncertain: false, key: "k" });
+
+  it("refuses the 60-row same_category plan at the reviewed default of 2000", async () => {
+    const runEval = await ceilingOnly("2000");
+
+    await expect(runEval("same_category", rows, asked, scored)).rejects.toThrow(
+      /needs about 3060 neurons \(60 rows x 3 repeats x 17 per call\).*over the ceiling of 2000/,
+    );
+  });
+
+  it("admits the same plan once the variable is above 3060, before any Workers AI call", async () => {
+    const runEval = await ceilingOnly("3400");
+
+    const report = await runEval("same_category", rows, asked, scored);
+
+    expect(report.neuronCeiling).toBe(3400);
+    expect(report.splits.map((split) => split.cases)).toEqual([60]);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("refuses a value that is not a positive integer instead of turning the ceiling off", async () => {
+    await expect(ceilingOnly("4,000")).rejects.toThrow(
+      /EVAL_MAX_NEURONS must be a positive integer or empty, got 4,000/,
+    );
+  });
+});
+
 describe("runEval ceiling fit", () => {
   const scored = () => ({ points: 1, uncertain: false, key: "k" });
   const asked = () => Promise.resolve({ model: "m", p: null, choice: "x" });

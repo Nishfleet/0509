@@ -48,7 +48,7 @@ jobs:
         run: npm run eval -- ${FILTER:+"$FILTER"} 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
         env:
           EVAL_SPLIT: ${{ inputs.split || 'test' }}
-          EVAL_MAX_NEURONS: "2000"
+          EVAL_MAX_NEURONS: ${{ vars.EVAL_MAX_NEURONS || '2000' }}
           EVAL_DAILY_NEURON_CEILING: "9000"
           FILTER: ${{ github.event_name == 'schedule' && 'read-this-first' || inputs.filter }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
