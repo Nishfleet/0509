@@ -1,6 +1,13 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { parse } from "yaml";
 
 import type * as Harness from "../../evals/harness";
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 const run = vi.fn((): Promise<unknown> => Promise.resolve({ response: "{}" }));
 
@@ -101,10 +108,35 @@ describe("EVAL_MAX_NEURONS as the repository variable of 0509#10054", () => {
     expect(run).not.toHaveBeenCalled();
   });
 
-  it("refuses a value that is not a positive integer instead of turning the ceiling off", async () => {
+  it("refuses a value that is not a non-negative integer instead of turning the ceiling off", async () => {
     await expect(ceilingOnly("4,000")).rejects.toThrow(
-      /EVAL_MAX_NEURONS must be a positive integer or empty, got 4,000/,
+      /EVAL_MAX_NEURONS must be a non-negative integer or empty, got 4,000/,
     );
+  });
+
+  it("keeps 0 as the unset value it has always been: no per-run ceiling", async () => {
+    const runEval = await ceilingOnly("0");
+
+    const report = await runEval("same_category", rows, asked, scored);
+
+    expect(report.neuronCeiling).toBe(0);
+    expect(report.splits.map((split) => split.cases)).toEqual([60]);
+    expect(run).not.toHaveBeenCalled();
+  });
+});
+
+describe("evals.yml, the workflow that sets the ceiling", () => {
+  const workflow = path.join(REPO_ROOT, ".github/workflows/evals.yml");
+
+  it("reads EVAL_MAX_NEURONS from the repository variable and keeps 2000 as the reviewed default", async () => {
+    const parsed = parse(await readFile(workflow, "utf8")) as {
+      jobs: { evals: { steps: { env?: Record<string, string> }[] } };
+    };
+    const ceilings = parsed.jobs.evals.steps.flatMap((step) =>
+      step.env?.EVAL_MAX_NEURONS === undefined ? [] : [step.env.EVAL_MAX_NEURONS],
+    );
+
+    expect(ceilings).toEqual(["${{ vars.EVAL_MAX_NEURONS || '2000' }}"]);
   });
 });
 

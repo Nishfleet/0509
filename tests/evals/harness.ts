@@ -173,8 +173,8 @@ function readCeiling(name: string, fallback: number): number {
   const raw = process.env[name] ?? "";
   if (raw === "") return fallback;
   const value = Number(raw);
-  if (!Number.isInteger(value) || value <= 0) {
-    throw new Error(`${name} must be a positive integer or empty, got ${raw}`);
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`${name} must be a non-negative integer or empty, got ${raw}`);
   }
   return value;
 }
@@ -555,7 +555,7 @@ export async function runEval<T extends EvalRow>(
   const plannedNeurons = selectedRows * REPEATS * neuronsPerCall;
   if (NEURON_CEILING > 0 && neuronsSpent + plannedNeurons > NEURON_CEILING) {
     throw new Error(
-      `eval refused before any paid call: ${questionId} needs about ${String(plannedNeurons)} neurons (${String(selectedRows)} rows x ${String(REPEATS)} repeats x ${String(neuronsPerCall)} per call) on top of ${String(neuronsSpent)} already spent, over the ceiling of ${String(NEURON_CEILING)}; narrow the run with the evals.yml split or filter input, or EVAL_SPLIT here, or raise the EVAL_MAX_NEURONS repository variable (0509#10054)`,
+      `eval refused before any paid call: ${questionId} needs about ${String(plannedNeurons)} neurons (${String(selectedRows)} rows x ${String(REPEATS)} repeats x ${String(neuronsPerCall)} per call) on top of ${String(neuronsSpent)} already spent, over the ceiling of ${String(NEURON_CEILING)}; narrow the run with the evals.yml split or filter input, or EVAL_SPLIT here, or set the EVAL_MAX_NEURONS repository variable (one run still stops at EVAL_DAILY_NEURON_CEILING) (0509#10054)`,
     );
   }
   for (const split of wanted) {
