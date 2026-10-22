@@ -8,6 +8,7 @@ import { createOAuthProvider } from "../app/lib/agent/oauth.server";
 import { runNightlySlackBackfill } from "../app/lib/data/send_target.server";
 import { stampFirstSignals } from "../app/lib/data/onboarding_run.server";
 import { startBillingReconcile } from "../app/lib/billing/reconcile.server";
+import { startFixtureReaper } from "../app/lib/fixture-reaper.server";
 import { startNightlyDiscovery, startWeeklyRefresh } from "../app/lib/discovery/start.server";
 import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
 import { withTransportSecurityHeaders } from "../app/lib/security-headers";
@@ -32,6 +33,7 @@ import {
 import { AccountDelete } from "./workflows/account-delete";
 import { Discovery } from "./workflows/discovery";
 import { FeedSweep } from "./workflows/feed-sweep";
+import { FixtureReaper } from "./workflows/fixture-reaper";
 import { HiringSweep } from "./workflows/hiring-sweep";
 import { OwnSiteCheck } from "./workflows/own-site-check";
 import { SiteSweep } from "./workflows/site-sweep";
@@ -82,6 +84,7 @@ const handler = {
           stampFirstSignals(),
           runNightlySlackBackfill(env.DB),
           runNightlyCostGuard(env.DB, env.CLOUDFLARE_API_TOKEN, controller.scheduledTime),
+          startFixtureReaper(now),
         ]);
         reportNightlyResults(results);
         return;
@@ -139,6 +142,8 @@ export { FixtureState } from "./fixture-site";
 export class StandingRolloverWorkflow extends instrumentWorkflowWithSentry(sentryOptions, StandingRollover) {}
 
 export class AccountDeleteWorkflow extends instrumentWorkflowWithSentry(sentryOptions, AccountDelete) {}
+
+export class FixtureReaperWorkflow extends instrumentWorkflowWithSentry(sentryOptions, FixtureReaper) {}
 
 export class DiscoveryWorkflow extends instrumentWorkflowWithSentry(sentryOptions, Discovery) {}
 

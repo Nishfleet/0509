@@ -154,6 +154,37 @@ describe("per-source canary in the mentions sweep (#4003 slice 2/6)", () => {
     }
   });
 
+  it("reports an adapter that throws to Sentry, so a parser bug is not mistaken for a quiet night", async () => {
+    const source = await seedCanarySource("b4");
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("not json", { status: 200 })),
+    );
+
+    try {
+      await runCanary(source, NOW);
+      expect(logged).toHaveBeenCalledWith(expect.stringContaining("mentions.canary_failed"));
+    } finally {
+      logged.mockRestore();
+      await env.DB.prepare("DELETE FROM source WHERE id = ?").bind(source.id).run();
+    }
+  });
+
+  it("records nothing and reports it when the source has no adapter, instead of striking it", async () => {
+    const source = { ...(await seedCanarySource("b5")), pluginKey: "no.such.adapter" };
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      expect(await runCanary(source, NOW)).toBeNull();
+      expect(logged).toHaveBeenCalledWith(expect.stringContaining("mentions.canary_failed"));
+      expect((await readSource(source.id))?.canary_strikes).toBeNull();
+    } finally {
+      logged.mockRestore();
+      await env.DB.prepare("DELETE FROM source WHERE id = ?").bind(source.id).run();
+    }
+  });
+
   it("a good night between two empty ones clears the strikes, so a blip costs nothing (0509#7191)", async () => {
     const source = await seedCanarySource("b3");
     try {

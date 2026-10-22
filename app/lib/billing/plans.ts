@@ -82,6 +82,12 @@ export function nextPlan(tier: string): (typeof PLANS)[number] | null {
   return index < 0 ? null : (PLANS[index + 1] ?? null);
 }
 
+export function canSwitchPlan(plan: PlanSummary, target: PlanId): boolean {
+  const from = PLANS.findIndex((entry) => entry.id === plan.tier);
+  const to = PLANS.findIndex((entry) => entry.id === target);
+  return plan.billed && plan.status === "active" && !plan.trialing && to > from && from >= 0;
+}
+
 export function monthlyPrice(eur: number): string {
   return `€${String(eur)}/month`;
 }

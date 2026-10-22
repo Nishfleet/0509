@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { getDomain } from "tldts";
 
 import { insertIncidentAlertStatement } from "../data/alert.server";
-import { openIncidentStatement } from "../data/incident.server";
+import { openIncidentStatement, readOpenIncidentId } from "../data/incident.server";
 import {
   insertPages,
   readEntitiesWithoutHomePage,
@@ -410,9 +410,10 @@ async function openBreakageIncident(change: SiteChangeInput, filing: BreakageFil
       verdictIds: filing.judgment.verdictIds,
     }).run();
   }
-  if (results[1]?.meta.changes === 1 && filing.band === "alert") {
-    await env.SEND_EMAIL.send({ incident_id: ids.incident });
-  }
+  const retried = results[0]?.meta.changes === 0;
+  if (filing.band !== "alert" || (results[1]?.meta.changes !== 1 && !retried)) return;
+  const incidentId = await readOpenIncidentId(change.target.pageId);
+  if (incidentId !== null) await env.SEND_EMAIL.send({ incident_id: incidentId });
 }
 
 async function storeDiff(diffKey: string, diff: ReturnType<typeof diffPageText> | null) {

@@ -22,6 +22,11 @@ const SELECT_LAST_STILL_COMPETITOR =
 const INSERT_VERDICT =
   "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, choice, reason, decided_at, shared_hash) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11 WHERE EXISTS (SELECT 1 FROM workspace WHERE id = ?2) ON CONFLICT (question_id, input_hash) DO NOTHING";
 
+const INSERT_SIGNAL_VERDICT = INSERT_VERDICT.replace(
+  " ON CONFLICT",
+  " AND NOT EXISTS (SELECT 1 FROM jev_verdict WHERE signal_id = ?5 AND question_id = ?3) ON CONFLICT",
+);
+
 const LINK_VERDICTS = `UPDATE jev_verdict SET signal_id = ?1
 WHERE workspace_id = ?2 AND signal_id IS NULL
   AND id IN (SELECT value FROM json_each(?3))
@@ -128,6 +133,22 @@ export async function readLastStillCompetitor(
 
 export function insertVerdict(row: VerdictRow): D1PreparedStatement {
   return env.DB.prepare(INSERT_VERDICT).bind(
+    crypto.randomUUID(),
+    row.workspaceId,
+    row.questionId,
+    row.inputHash,
+    row.signalId,
+    row.entityId,
+    row.p,
+    row.choice,
+    row.reason,
+    row.decidedAt,
+    row.sharedHash ?? null,
+  );
+}
+
+export function insertSignalVerdict(row: VerdictRow & { signalId: string }): D1PreparedStatement {
+  return env.DB.prepare(INSERT_SIGNAL_VERDICT).bind(
     crypto.randomUUID(),
     row.workspaceId,
     row.questionId,

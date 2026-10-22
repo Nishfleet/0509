@@ -10,6 +10,7 @@ import { quietLedgerLine, type WorkLedger } from "../../app/lib/work-ledger";
 import { readWorkLedger } from "../../app/lib/data/work_ledger.server";
 import { UNJUDGED_WEEK_LINE, readThisFirstLine } from "../../app/lib/read-this-first";
 import { effectiveKindSql } from "../../app/lib/source-kind";
+import { lostMentionSources } from "../../app/lib/data/sweep_run.server";
 import { sourceName } from "../../app/lib/source-name";
 import type { RankedEntity } from "../../app/lib/standing-score";
 import type { JudgedWeek } from "./read-this-first";
@@ -178,7 +179,9 @@ export function pausedSentence(names: readonly string[]): string | null {
 }
 
 function brandsFromStanding(results: unknown, standing: readonly RankedEntity[]) {
-  const entities = new Map(rankedBrandRows.parse(results).map((row) => [row.entity_id, row]));
+  const rows = rankedBrandRows.parse(results);
+  if (standing.length === 0) return rows.map((row) => ({ ...row, rank: null, movement: null }));
+  const entities = new Map(rows.map((row) => [row.entity_id, row]));
   return standing.flatMap((ranked) => {
     const entity = entities.get(ranked.entity_id);
     return entity === undefined ? [] : [{ ...entity, rank: ranked.rank, movement: ranked.movement }];
@@ -188,6 +191,26 @@ function brandsFromStanding(results: unknown, standing: readonly RankedEntity[])
 type SourceCoverage = z.infer<typeof sourceCoverageRows>[number];
 type OwnSiteIncident = z.infer<typeof incidentRows>[number];
 type PickedSignal = z.infer<typeof pickedSignalRows>[number];
+
+async function withLostMentions(
+  db: D1Database,
+  input: ComposeInput,
+  sources: readonly SourceCoverage[],
+): Promise<SourceCoverage[]> {
+  const lost = await lostMentionSources(db, {
+    startAt: input.week.startsAt.toISOString(),
+    endAt: input.week.closesAt.toISOString(),
+  });
+  const rest = sources.filter((source) => !lost.includes(source.key));
+  const named = lost.map((key) => ({
+    key,
+    kind: "mentions",
+    platform: key.split(".")[0] ?? key,
+    last_landed_at: null,
+    answered: 0,
+  }));
+  return [...rest, ...named];
+}
 
 async function loadBriefRows(db: D1Database, input: ComposeInput) {
   const startsAt = input.week.startsAt.toISOString();
@@ -214,7 +237,11 @@ async function loadBriefRows(db: D1Database, input: ComposeInput) {
     countsByEntity: new Map(
       signalCountRows.parse(required(counts, "compose-brief.counts").results).map((row) => [row.entity_id, row]),
     ),
-    sources: sourceCoverageRows.parse(required(coverage, "compose-brief.coverage").results),
+    sources: await withLostMentions(
+      db,
+      input,
+      sourceCoverageRows.parse(required(coverage, "compose-brief.coverage").results),
+    ),
     ownSite: incidentRows.parse(required(incidents, "compose-brief.incidents").results),
     pausedNames: pausedCompetitorRows
       .parse(required(pausedRows, "compose-brief.pausedRows").results)
@@ -311,19 +338,54 @@ async function buildLines(
   });
 }
 
-function buildOwnSite(ownSite: readonly OwnSiteIncident[], closesAt: string) {
+function mergeIncident(seen: OwnSitePage | undefined, incident: OwnSiteIncident, closesAt: string): OwnSitePage {
+  const isOpen = incident.closed_at === null || incident.closed_at >= closesAt;
+  const observedAt = isOpen || incident.closed_at === null ? closesAt : incident.closed_at;
+  if (seen === undefined) {
+    return {
+      page_url: incident.page_url,
+      kind: incident.kind,
+      observed_at: observedAt,
+      is_open: isOpen,
+      opened_at: incident.opened_at,
+      closed_at: isOpen ? null : incident.closed_at,
+    };
+  }
+  const open = isOpen || seen.is_open;
   return {
-    status: ownSite.length === 0 ? ("ok" as const) : ("broken" as const),
-    incidents: ownSite.map((incident) => {
-      const isOpen = incident.closed_at === null || incident.closed_at >= closesAt;
-      return {
-        page_url: incident.page_url,
-        kind: incident.kind,
-        observed_at: isOpen || incident.closed_at === null ? closesAt : incident.closed_at,
-        is_open: isOpen,
-      };
-    }),
+    ...seen,
+    observed_at: observedAt > seen.observed_at ? observedAt : seen.observed_at,
+    is_open: open,
+    opened_at: incident.opened_at < seen.opened_at ? incident.opened_at : seen.opened_at,
+    closed_at: open ? null : latest(seen.closed_at, incident.closed_at),
   };
+}
+
+function buildOwnSite(ownSite: readonly OwnSiteIncident[], closesAt: string) {
+  const byPage = new Map<string, OwnSitePage>();
+  for (const incident of ownSite) {
+    byPage.set(incident.page_url, mergeIncident(byPage.get(incident.page_url), incident, closesAt));
+  }
+  const incidents = [...byPage.values()];
+  return {
+    status: incidents.some((incident) => incident.is_open) ? ("broken" as const) : ("ok" as const),
+    incidents,
+  };
+}
+
+interface OwnSitePage {
+  page_url: string;
+  kind: string;
+  observed_at: string;
+  is_open: boolean;
+  opened_at: string;
+  closed_at: string | null;
+}
+
+function latest(a: string | null, b: string | null): string | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return a > b ? a : b;
 }
 
 interface CheckedTotals {

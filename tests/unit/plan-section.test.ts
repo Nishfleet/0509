@@ -122,6 +122,20 @@ describe("PlanSection", () => {
     expect(html).not.toContain("Upgrade to");
   });
 
+  it("offers a paying Scout customer a switch to Starter that posts to the upgrade action", () => {
+    const html = render({ ...BILLED, tier: "scout" });
+    expect(html).toContain("Switch to Starter");
+    expect(html).toContain('action="/app/upgrade"');
+    expect(html).toContain('name="plan" value="starter"');
+    expect(html).not.toContain("Upgrade to");
+  });
+
+  it("offers no switch on the top plan, during a trial or to someone who does not pay yet", () => {
+    expect(render({ ...BILLED, tier: "agency" })).not.toContain("Switch to");
+    expect(render({ ...BILLED, tier: "scout", trialing: true })).not.toContain("Switch to");
+    expect(render({ ...BILLED, tier: "scout", billed: false })).not.toContain("Switch to");
+  });
+
   it("announces the billing-page-unavailable message as an alert, not a polite status", () => {
     fetcher.value = { state: "idle", data: { message: PORTAL_UNAVAILABLE } };
     const html = render(BILLED);

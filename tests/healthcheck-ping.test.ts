@@ -35,6 +35,22 @@ describe("pingCheck", () => {
     warn.mockRestore();
   });
 
+  it("logs the body it sent, so the counts and ids of a degraded run are provable from the logs", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    send.mockResolvedValue(new Response("OK", { status: 200 }));
+    await pingCheck("site-sweep", "fail", "degraded: 13 of 140 failed: page-a");
+    expect(lines(warn)).toEqual([
+      {
+        event: "healthcheck.ping_ok",
+        check: "site-sweep",
+        signal: "fail",
+        status: 200,
+        body: "degraded: 13 of 140 failed: page-a",
+      },
+    ]);
+    warn.mockRestore();
+  });
+
   it("logs healthcheck.ping_failed with the status when healthchecks.io refuses the ping", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     send.mockResolvedValue(new Response("no", { status: 404 }));

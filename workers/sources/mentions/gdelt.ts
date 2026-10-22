@@ -1,8 +1,11 @@
 import type { MentionsAdapter } from "./types";
-import { fetchUpstream, mentionItemSchema, SOURCE_SETTINGS } from "./types";
+import { fetchUpstream, mentionItemSchema, SOURCE_SETTINGS, UnsearchableQueryError } from "./types";
 import { GDELT_SEARCH_URL, gdeltResponseSchema, gdeltSeendateToIso } from "../../../app/lib/discovery/gdelt";
 
+const PHRASE_TOO_SHORT = "The specified phrase is too short";
+
 function parseBody(rawBody: string): unknown {
+  if (rawBody.includes(PHRASE_TOO_SHORT)) throw new UnsearchableQueryError("gdelt.doc");
   try {
     return JSON.parse(rawBody) as unknown;
   } catch (error) {

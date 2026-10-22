@@ -139,7 +139,7 @@ describe("own-site check", () => {
   });
 
   it("opens nothing while the customer's own site loads", async () => {
-    expect(await runCheck("own-healthy")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await runCheck("own-healthy")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0, missed: [] });
     expect(await incidents()).toEqual([]);
     expect(await alerts()).toEqual([]);
   });
@@ -157,7 +157,7 @@ describe("own-site check", () => {
     )
       .bind(WS, NOW)
       .run();
-    expect(await runCheck("own-scout")).toEqual({ pages: 0, opened: 0, closed: 0, failed: 0 });
+    expect(await runCheck("own-scout")).toEqual({ pages: 0, opened: 0, closed: 0, failed: 0, missed: [] });
     expect(fetched).toEqual([]);
     const scout = await incidents();
     expect(scout).toHaveLength(1);
@@ -172,7 +172,7 @@ describe("own-site check", () => {
     )
       .bind(NOW)
       .run();
-    expect(await runCheck("own-broken")).toEqual({ pages: 1, opened: 1, closed: 0, failed: 0 });
+    expect(await runCheck("own-broken")).toEqual({ pages: 1, opened: 1, closed: 0, failed: 0, missed: [] });
     const [open] = await incidents();
     expect(open).toMatchObject({ entity_id: "ent-self", kind: "error 503", closed_at: null });
     const [alert] = await alerts();
@@ -182,12 +182,12 @@ describe("own-site check", () => {
       title: `shop.mybrand.com looks broken: ${open?.kind ?? ""}`,
     });
 
-    expect(await runCheck("own-still-broken")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await runCheck("own-still-broken")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0, missed: [] });
     expect(await incidents()).toHaveLength(1);
     expect(await alerts()).toHaveLength(1);
 
     site.status = 200;
-    expect(await runCheck("own-fixed")).toEqual({ pages: 1, opened: 0, closed: 1, failed: 0 });
+    expect(await runCheck("own-fixed")).toEqual({ pages: 1, opened: 0, closed: 1, failed: 0, missed: [] });
     const [closed] = await incidents();
     expect(closed?.closed_at).not.toBeNull();
   });
@@ -222,13 +222,13 @@ describe("own-site check", () => {
     });
 
     site.html = SOFT_BROKEN_HTML;
-    expect(await runCheck("own-soft-broken")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await runCheck("own-soft-broken")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0, missed: [] });
     const [open] = await incidents();
     expect(open).toMatchObject({ kind: "breakage", closed_at: null });
     expect(send).not.toHaveBeenCalled();
 
     site.html = PRICED_HTML;
-    expect(await runCheck("own-soft-fixed")).toEqual({ pages: 1, opened: 0, closed: 1, failed: 0 });
+    expect(await runCheck("own-soft-fixed")).toEqual({ pages: 1, opened: 0, closed: 1, failed: 0, missed: [] });
     const [closed] = await incidents();
     expect(closed?.closed_at).not.toBeNull();
     expect(send).toHaveBeenCalledTimes(1);
@@ -237,16 +237,16 @@ describe("own-site check", () => {
 
   it("never calls a bot wall or a refusal a break", async () => {
     site.status = 403;
-    expect(await runCheck("own-forbidden")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await runCheck("own-forbidden")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0, missed: [] });
     site.status = 503;
     site.challenge = true;
-    expect(await runCheck("own-challenge")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await runCheck("own-challenge")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0, missed: [] });
     expect(await incidents()).toEqual([]);
   });
 
   it("reads a site that lives only on www as healthy", async () => {
     site.apexDown = true;
-    expect(await runCheck("own-www")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await runCheck("own-www")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0, missed: [] });
     expect(await incidents()).toEqual([]);
   });
 
@@ -257,7 +257,7 @@ describe("own-site check", () => {
     )
       .bind(NOW)
       .run();
-    expect(await runCheck("own-www-home")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await runCheck("own-www-home")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0, missed: [] });
     expect(await incidents()).toEqual([]);
     expect(fetched).toContain("https://mybrand.com/");
     expect(fetched.some((u) => u.includes("www.www."))).toBe(false);
@@ -266,7 +266,7 @@ describe("own-site check", () => {
   it("keeps guarding the customer's own site when the nightly sweep's source is paused", async () => {
     await env.DB.exec("UPDATE source SET is_enabled = 0 WHERE id = 'src_site_web'");
     site.status = 500;
-    expect(await runCheck("own-paused")).toEqual({ pages: 1, opened: 1, closed: 0, failed: 0 });
+    expect(await runCheck("own-paused")).toEqual({ pages: 1, opened: 1, closed: 0, failed: 0, missed: [] });
   });
 
   it("never opens an incident for a competitor's site", async () => {
@@ -278,7 +278,7 @@ describe("own-site check", () => {
   it("never fetches the customer's page when robots.txt disallows FiveToNineBot", async () => {
     site.robots = "User-agent: FiveToNineBot\nDisallow: /\n";
     site.status = 503;
-    expect(await runCheck("own-robots")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await runCheck("own-robots")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0, missed: [] });
     expect(await incidents()).toEqual([]);
     expect(fetched.filter((u) => !u.endsWith("/robots.txt"))).toEqual([]);
   });
@@ -286,7 +286,7 @@ describe("own-site check", () => {
   it("never fetches the retry host's page when its robots.txt disallows FiveToNineBot", async () => {
     site.apexDown = true;
     hostRobots.set("www.mybrand.com", "User-agent: FiveToNineBot\nDisallow: /\n");
-    expect(await runCheck("own-robots-twin")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await runCheck("own-robots-twin")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0, missed: [] });
     expect(await incidents()).toEqual([]);
     expect(fetched).toContain("https://www.mybrand.com/robots.txt");
     expect(fetched).not.toContain("https://www.mybrand.com/");

@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { formatBriefAt } from "../lib/brief-settings";
 import { isFirstRanking } from "../lib/brief-subject";
 import { movementLabel } from "../lib/home-standing";
+import { ownSiteLines, ownSitePageLine } from "../lib/own-site-lines";
 import { ledgerFooter } from "../lib/work-ledger";
 import { ReadThisFirst } from "./read-this-first";
 import type { BriefPayload } from "../lib/brief-payload";
@@ -18,7 +19,7 @@ export function BriefView({ payload }: { payload: BriefPayload }) {
   return (
     <article data-brief="view" className="min-w-0 border border-line p-4 break-words">
       {headlineBlock(payload)}
-      <ReadThisFirst marks={payload.read_this_first} unjudged={payload.is_unjudged} />
+      {payload.is_unjudged ? null : <ReadThisFirst marks={payload.read_this_first} />}
       {brandsBlock(payload)}
       {ownSiteBlock(payload)}
       {newRivalBlock(payload)}
@@ -67,7 +68,7 @@ function brandsBlock(payload: BriefPayload): ReactElement {
         payload.brands.map((brand) => (
           <div key={brand.entity_id} className={LINE}>
             <p>
-              {brand.name}: {standingText(brand, first)}
+              {payload.is_unjudged && brand.rank === null ? brand.name : `${brand.name}: ${standingText(brand, first)}`}
             </p>
             {brand.biggest_move === null ? null : <p className="text-ink-soft">{brand.biggest_move}</p>}
             {(brand.baseline ?? []).map((row) => (
@@ -83,24 +84,16 @@ function brandsBlock(payload: BriefPayload): ReactElement {
 }
 
 function ownSiteBlock(payload: BriefPayload): ReactElement {
-  const fine = payload.own_site.status === "ok";
+  const site = ownSiteLines(payload.own_site);
   return (
     <section data-brief-block="own-site" className={SECTION}>
       <h3 className={HEAD}>Your site</h3>
-      {fine ? (
-        <p className={BODY}>Your site looks fine.</p>
-      ) : (
-        <Fragment>
-          <p className={BODY}>Your site looks broken.</p>
-          {payload.own_site.incidents.map((incident) => (
-            <p key={`${incident.page_url} ${incident.observed_at} ${String(incident.is_open)}`} className={LINE}>
-              {incident.kind === ""
-                ? incident.page_url
-                : `${incident.kind} on ${incident.page_url}, ${incident.is_open ? "still broken" : "fixed"}`}
-            </p>
-          ))}
-        </Fragment>
-      )}
+      <p className={BODY}>{site.headline}</p>
+      {site.pages.map((page) => (
+        <p key={page.url} className={LINE}>
+          {ownSitePageLine(page, (iso) => briefWhen(iso, payload.timezone))}
+        </p>
+      ))}
     </section>
   );
 }
@@ -143,6 +136,14 @@ function checkedBlock(payload: BriefPayload): ReactElement {
       {next === null ? null : <p className="mt-1 font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft">{next}</p>}
     </section>
   );
+}
+
+function briefWhen(iso: string, timezone: string): string {
+  try {
+    return formatBriefAt(new Date(iso), timezone);
+  } catch {
+    return iso;
+  }
 }
 
 function countLabel(count: number, one: string, many: string): string {

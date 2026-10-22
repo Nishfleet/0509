@@ -2,9 +2,10 @@ import { Link, useFetcher } from "react-router";
 
 import { isPaymentFailed, isPaymentHeld, isPlanLapsed } from "../lib/billing/subscription-state";
 import { planLine } from "../lib/billing/plan-line";
-import { nextPlan, type PlanSummary } from "../lib/billing/plans";
+import { canSwitchPlan, nextPlan, type PlanSummary } from "../lib/billing/plans";
 import { BLOCK_HEADING } from "./page-heading";
 import { PlanGate } from "./plan-gate";
+import { PlanSwitch } from "./plan-switch";
 import { Button } from "./ui/button";
 
 function BillingButton({ label }: { label: string }) {
@@ -28,6 +29,11 @@ function billingLabel(plan: PlanSummary, retryable: boolean): string {
   if (isPaymentHeld(plan)) return "Update payment method";
   if (retryable) return "See billing history";
   return plan.status === "cancelled" ? "Manage billing" : "Manage or cancel plan";
+}
+
+function SwitchOffer({ plan }: { plan: PlanSummary }) {
+  const target = nextPlan(plan.tier);
+  return target !== null && canSwitchPlan(plan, target.id) ? <PlanSwitch planId={target.id} /> : null;
 }
 
 export function PlanSection({
@@ -55,6 +61,7 @@ export function PlanSection({
         </p>
       )}
       {plan.billed ? <BillingButton label={billingLabel(plan, retryable)} /> : null}
+      <SwitchOffer plan={plan} />
       {plan.billed && !retryable ? null : (
         <>
           {upgrade === null ? null : <PlanGate planId={upgrade.id} returning={returning} />}

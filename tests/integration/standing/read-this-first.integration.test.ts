@@ -137,7 +137,7 @@ describe("judgeWeek", () => {
 
     const result = await judgeWeek(env.DB, inputFor(seeded.workspaceId));
 
-    expect(result).toEqual({ picks: [seeded.signalA, seeded.signalB], judged: 2, unjudged: true });
+    expect(result).toEqual({ picks: [seeded.signalA, seeded.signalB], judged: 2, unjudged: false });
     expect(run).toHaveBeenCalledTimes(2);
     expect(askedTitles(run)).not.toContain(seeded.titleC);
     const written = await env.DB.prepare(

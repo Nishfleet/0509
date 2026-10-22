@@ -6,6 +6,7 @@ import { recordSweepRun } from "../../app/lib/data/sweep_run.server";
 import { pingLiveness } from "../../app/lib/liveness-ping.server";
 import { classifyCompetitorSites } from "../../app/lib/site/classify-competitors.server";
 import { rejudgeUnjudgedChanges } from "../../app/lib/site/judge.server";
+import { requeueUnsentIncidentEmails } from "../../app/lib/site/requeue-incident-emails.server";
 import { sweepRunReason, type SweepStepFailure } from "../../app/lib/site/sweep-run-reason";
 import {
   CHUNK_SIZE,
@@ -14,6 +15,7 @@ import {
   publishSiteChange,
   uncoveredItems,
 } from "../../app/lib/site/sweep.server";
+import { sweepHealth, type RunHealth } from "../../app/lib/sweep-health";
 import { plannedAt } from "../../app/lib/workflow-time";
 import { isNativeSchedule } from "../workflow-crons";
 import { withStepCheckIn } from "../workflow-monitor";
@@ -31,7 +33,13 @@ export type SiteSweepOutcome = Record<PageOutcome, number> & {
   pages: number;
   rechecked: number;
   recorded: boolean;
+  missed: string[];
 };
+
+function siteSweepHealth(outcome: SiteSweepOutcome): RunHealth {
+  if (!outcome.recorded) return { state: "failed", reason: "run not recorded" };
+  return sweepHealth({ failed: outcome.failed, attempted: outcome.pages, missed: outcome.missed });
+}
 
 type FailureSink = (failure: SweepStepFailure) => void;
 
@@ -194,7 +202,15 @@ async function recordRun(
 export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: string }> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<SiteSweepOutcome | null> {
     if (isNativeSchedule(event)) return null;
-    return withStepCheckIn(step, { slug: "site-sweep", config: MONITOR }, () => this.runSweep(event, step));
+    return withStepCheckIn(
+      step,
+      {
+        slug: "site-sweep",
+        config: MONITOR,
+        health: siteSweepHealth,
+      },
+      () => this.runSweep(event, step),
+    );
   }
 
   private async runSweep(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<SiteSweepOutcome> {
@@ -213,6 +229,9 @@ export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: 
     const recheckByPage = new Map(missing.map((target, index) => [target.pageId, recheckOutcomes[index]] as const));
     const finalOutcomes = targets.map((target, index) => recheckByPage.get(target.pageId) ?? outcomes[index]);
     await rejudgeChanges(step);
+    await settle("requeue incident emails", () =>
+      step.do("requeue incident emails", RETRY, () => requeueUnsentIncidentEmails(new Date())),
+    );
 
     const count = (outcome: PageOutcome) => finalOutcomes.filter((o) => o === outcome).length;
     const pages = finalOutcomes.length;
@@ -228,6 +247,7 @@ export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: 
       changed: count("changed"),
       rechecked: missing.length,
       recorded,
+      missed: targets.flatMap((target, index) => (finalOutcomes[index] === "failed" ? [target.pageId] : [])),
     };
     console.log(JSON.stringify({ event: "site.sweep", ...summary }));
     await step.do("report", RETRY, async () => {

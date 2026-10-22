@@ -1,4 +1,3 @@
-import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { isTesterSubscription } from "../../app/lib/billing/returning.server";
 import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
 import { readRivalNudges, rivalNudgeKey, type RivalNudge } from "../../app/lib/data/rival_nudge.server";
@@ -7,6 +6,7 @@ import { hasReminderAttempt } from "../../app/lib/data/trial_reminder.server";
 import { SETTINGS_LINK, unsubscribeHeaders } from "../../app/lib/alert-footer";
 import { ensureUnsubscribeToken, unsubscribeUrlFor } from "./consumer";
 import { renderRivalNudge } from "./rival-nudge-template";
+import { reportLifecycleFailure } from "./lifecycle-failure";
 import { sendOnce } from "./send-once";
 
 const COMPETITORS_LINK = "https://0509.io/app/competitors";
@@ -48,7 +48,7 @@ export async function sendRivalNudges(
   let sent = 0;
   for (const nudge of await readRivalNudges(env.DB, now)) {
     const done = await nudgeOne(env, nudge, isTester).catch((error: unknown) => {
-      console.error(JSON.stringify({ event: "delivery.rival_nudge_failed", error: redactEmailShaped(String(error)) }));
+      reportLifecycleFailure("delivery.rival_nudge_failed", error);
       return false;
     });
     if (done) sent += 1;

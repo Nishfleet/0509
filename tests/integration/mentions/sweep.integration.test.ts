@@ -91,7 +91,7 @@ function jevAnswering() {
     const p =
       questionId === "mention_is_about_brand"
         ? title.includes("winds")
-          ? 0.03
+          ? 0.3
           : 0.96
         : title.includes("flagship")
           ? 0.94
@@ -124,8 +124,15 @@ describe("nightly mentions sweep", () => {
     stubGdelt();
     Reflect.set(env, "AI", { run: jevAnswering() });
 
+    const startedAt = new Date().toISOString();
     const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
     expect(outcome).toEqual({ items: 3, stored: 2, unjudged: 0, skipped: 0 });
+
+    const decided = await env.DB.prepare("SELECT decided_at FROM jev_verdict WHERE workspace_id = ?")
+      .bind(workspaceId)
+      .all<{ decided_at: string }>();
+    expect(decided.results.length).toBeGreaterThan(0);
+    for (const row of decided.results) expect(row.decided_at >= startedAt).toBe(true);
 
     const alerts = await readSignalAlerts(env.DB, workspaceId);
     expect(alerts.map((alert) => alert.title)).toEqual([`${brand}: Zephyrwear opens a London flagship`]);
@@ -380,17 +387,17 @@ describe("nightly mentions sweep", () => {
       .bind(competitorId)
       .all<{ title: string; state: string | null; is_tombstoned: number }>();
     expect(signals.results.map((row) => [row.title, row.state, row.is_tombstoned])).toEqual([
-      ["Ten hoodies we liked, Zephyrwear among them", "unjudged", 0],
-      ["Zephyr winds expected this weekend", "unjudged", 0],
-      ["Zephyrwear opens a London flagship", "unjudged", 0],
+      ["Ten hoodies we liked, Zephyrwear among them", "unjudged", 1],
+      ["Zephyr winds expected this weekend", "unjudged", 1],
+      ["Zephyrwear opens a London flagship", "unjudged", 1],
     ]);
     const view = await env.DB.prepare("SELECT state FROM mention WHERE entity_id = ? ORDER BY title")
       .bind(competitorId)
       .all<{ state: string | null }>();
-    expect(view.results.map((row) => row.state)).toEqual(["unjudged", "unjudged", "unjudged"]);
+    expect(view.results).toEqual([]);
 
     const feed = await readMentionFeed(workspaceId, new Date(NOW));
-    expect(feed.map((row) => row.treatment)).toEqual(["pending", "pending", "pending"]);
+    expect(feed).toEqual([]);
 
     const verdicts = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE workspace_id = ?")
       .bind(workspaceId)
@@ -445,8 +452,8 @@ describe("nightly mentions sweep", () => {
       .bind(competitorId)
       .all<{ title: string; state: string | null; is_tombstoned: number }>();
     expect(signals.results.map((row) => [row.title, row.state, row.is_tombstoned])).toEqual([
-      ["Ten hoodies we liked, Zephyrwear among them", "unjudged", 0],
-      ["Zephyr winds expected this weekend", "unjudged", 0],
+      ["Ten hoodies we liked, Zephyrwear among them", "unjudged", 1],
+      ["Zephyr winds expected this weekend", "unjudged", 1],
       ["Zephyrwear opens a London flagship", "judged", 0],
     ]);
     const verdicts = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE workspace_id = ?")

@@ -292,10 +292,10 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
     expect(openNotice.sent_at).toMatch(ISO_UTC);
     expect(await readAttempt(`incident:${incident.id}:open`)).toMatchObject({ status: "sent" });
 
-    expect(await runCheck("recheck-tick-1")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await runCheck("recheck-tick-1")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0, missed: [] });
     expect((await readIncident())[0]?.closed_at).toBeNull();
     expect(send).toHaveBeenCalledTimes(1);
-    expect(await runCheck("recheck-tick-2")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await runCheck("recheck-tick-2")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0, missed: [] });
     expect((await readIncident())[0]?.closed_at).toBeNull();
     expect(send).toHaveBeenCalledTimes(1);
     const openRedelivery = await deliverIncident(emailEnv(rec), { incident_id: incident.id });
@@ -304,7 +304,7 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
     expect(await readNotices(self.pageId)).toHaveLength(1);
 
     expect((await flip("off")).status).toBe(200);
-    expect(await runCheck("recheck-fixed")).toEqual({ pages: 1, opened: 0, closed: 1, failed: 0 });
+    expect(await runCheck("recheck-fixed")).toEqual({ pages: 1, opened: 0, closed: 1, failed: 0, missed: [] });
     const [closed] = await readIncident();
     if (closed?.closed_at == null) throw new Error("expected closed_at to be set");
     expect(closed.closed_at).toMatch(ISO_UTC);

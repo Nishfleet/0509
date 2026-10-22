@@ -149,7 +149,7 @@ describe("unjudged week readers", () => {
       expect(text).not.toContain("Quiet week");
       expect(text).not.toContain("collecting your first week of data");
     }
-    expect(email.subject).toBe(UNJUDGED_WEEK_LINE);
+    expect(email.subject).toBe("Your weekly brief");
     expect(standing.kind).toBe("unjudged");
     expect(share).toBeNull();
   });
