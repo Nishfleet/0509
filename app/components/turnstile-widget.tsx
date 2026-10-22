@@ -62,13 +62,7 @@ export function turnstileResponse(): string {
   return field.value.trim();
 }
 
-export function TurnstileWidget({
-  siteKey,
-  onState,
-}: {
-  siteKey: string;
-  onState?: (state: CaptchaState) => void;
-}) {
+export function TurnstileWidget({ siteKey, onState }: { siteKey: string; onState?: (state: CaptchaState) => void }) {
   const container = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
