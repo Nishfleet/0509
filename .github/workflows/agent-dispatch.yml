@@ -3,8 +3,7 @@ name: agent-dispatch
 on:
   issues:
     types: [labeled, closed, reopened]
-  # A park: comment starts a miss review (fleet-ops#9211).
-  issue_comment:
+  issue_comment: # A park: comment starts a miss review (fleet-ops#9211).
     types: [created]
   workflow_dispatch:
     inputs:
@@ -22,12 +21,13 @@ on:
   workflow_run:
     workflows: [CI]
     types: [completed]
-  schedule:
-    # Hourly: picks up walled issues requeued with GITHUB_TOKEN, which fires no run (fleet-ops#8969).
+  schedule: # Hourly: picks up walled issues requeued with GITHUB_TOKEN, which fires no run (fleet-ops#8969).
     - cron: '17 * * * *'
 concurrency:
   group: ${{ github.event_name == 'pull_request_target' && github.event.action != 'closed' && format('agent-dispatch-pr-{0}-{1}-{2}', github.repository, github.event.pull_request.number, github.event.action) || format('agent-dispatch-stub-{0}', github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request_target' && github.event.action == 'synchronize' }}
+permissions:
+  contents: read
 jobs:
   dispatch:
     if: github.event_name != 'pull_request_target' || github.event.action == 'closed' || github.event.pull_request.head.repo.full_name == github.repository
