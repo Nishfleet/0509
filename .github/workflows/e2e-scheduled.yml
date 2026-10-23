@@ -1,20 +1,21 @@
 name: e2e-scheduled
 
 # Journeys that need calendar time or break the fixture for hours run here on
-# their own clock, never per deploy (0509#4124, 0509#4128). The full production
-# suite (the `e2e-production` job below) runs everything except @scheduled, and
+# their own clock, never per deploy (0509#4124, 0509#4128). The full suite
+# (the `e2e-production` job below) runs everything except @scheduled, and
 # its sign-ins send real emails against the daily quota (0509#6033, 0509#6034).
 # It runs once a week on the Sunday cron (07:40 UTC, clear of the 04:17 signin
 # and 06:30 soak, and not on the Wednesday j12 run, so no other job holds the
 # live-ai group and replaces a waiting shard), from main: a predictable cost
 # (about 75 emails a week) instead of on-demand runs, which cost 152 emails in
 # one day on 2026-10-09. `suite` is not a dispatch choice: agents verify on the
-# local lane (PLAYWRIGHT_TEST_BASE_URL unset, AGENTS.md). Every job that reaches
-# production declares `environment: production-e2e`, whose deployment branch
-# policy is `main` only.
+# local lane (PLAYWRIGHT_TEST_BASE_URL unset, AGENTS.md). Every job runs against
+# https://staging.0509.io (the workflow-level env) and declares `environment:
+# staging`, except `signin`, `backup-proof` and `jev-failures`, which stay on
+# production and `production-e2e`. Both environments allow `main` only.
 # The weekly `j12` job also runs J11, whose kept account needs a 6-day gap.
 # `signin` is the one real sign-in smoke a day (0509#6093): the only production
-# run that sends a real email besides the suite, once, at 04:17 UTC.
+# run that sends a real email, once, at 04:17 UTC.
 # `soak-report` posts one comment a day on #4730 while the 7-day soak runs
 # (0509#4730), at 06:30 UTC, after the 02:00 site sweep and 03:00 rollover.
 # Not a required check.
@@ -32,12 +33,15 @@ on:
         options: [none, j12, signin, j8-hard, j8-soft, soak-report, backup-proof, jev-failures]
         default: none
       spec:
-        description: 'One spec file to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts, no flags (0509 sign-up verdict, 2026-09-28; 0509#7186)'
+        description: 'One spec file to run now against https://staging.0509.io, e.g. e2e/j3-onboard-domain.spec.ts, no flags (0509 sign-up verdict, 2026-09-28; 0509#7186)'
         type: string
         default: ''
 
 permissions:
   contents: read
+
+env:
+  PLAYWRIGHT_TEST_BASE_URL: https://staging.0509.io
 
 concurrency:
   group: e2e-scheduled-${{ inputs.spec && 'spec' || github.event.schedule == '30 6 * * *' && 'soak' || inputs.journey == 'soak-report' && 'soak' || github.event.schedule == '40 7 * * 0' && 'suite' || github.event.schedule == '17 4 * * *' && 'signin' || inputs.journey == 'signin' && 'signin' || startsWith(inputs.journey, 'j8-') && 'j8' || inputs.journey == 'backup-proof' && 'backup' || inputs.journey == 'jev-failures' && 'jev-failures' || 'j12' }}
@@ -65,7 +69,7 @@ jobs:
     name: j12
     if: github.event.schedule == '5 10 * * 3' || (inputs.journey == 'j12' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    environment: production-e2e
+    environment: staging
     # One live-AI job at a time: they share the account's Clef call rate (about 60
     # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
     # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
@@ -89,14 +93,13 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Run J12 and J11 against production
+      - name: Run J12 and J11 against staging
         # J11 rides the weekly clock too (#7061): its kept account gets a
         # catch-up brief only when the last one is 6 or more days old.
         id: e2e
         timeout-minutes: 65
         run: npm run e2e -- e2e/j12-rollovers.spec.ts e2e/j11-weekly-brief.spec.ts --project=desktop-1440 --retries=0 --reporter=github,list
         env:
-          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
@@ -111,7 +114,6 @@ jobs:
         timeout-minutes: 5
         run: npm run e2e -- --project=session-teardown --retries=0 --reporter=github,list
         env:
-          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
       - name: Print what the page showed when it failed
@@ -126,7 +128,7 @@ jobs:
     # cookie (0509#5999); a failure is read from the job log.
     if: inputs.spec != ''
     runs-on: ubuntu-latest
-    environment: production-e2e
+    environment: staging
     # See the live-ai note on the j12 job.
     concurrency:
       group: live-ai
@@ -149,13 +151,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Run the spec against production
+      - name: Run the spec against staging
         id: e2e
         timeout-minutes: 22
         run: npm run e2e -- "$SPEC" --project=public-1440 --project=desktop-1440 --retries=0 --reporter=github,list
         env:
           SPEC: ${{ inputs.spec }}
-          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
@@ -171,7 +172,6 @@ jobs:
         timeout-minutes: 5
         run: npm run e2e -- --project=session-teardown --retries=0 --reporter=github,list
         env:
-          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
       - name: Print what the page showed when it failed
@@ -240,7 +240,7 @@ jobs:
     # the 6 hour cap.
     if: startsWith(inputs.journey, 'j8-') && inputs.spec == '' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: production-e2e
+    environment: staging
     timeout-minutes: 350
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -255,14 +255,12 @@ jobs:
       - name: Exchange the Access service token for its cookie
         run: npm run e2e -- --project=setup --retries=0 --reporter=github,list
         env:
-          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-      - name: Run J8 against production
+      - name: Run J8 against staging
         run: npm run e2e -- e2e/j8-own-site-break.spec.ts --grep "J8 your own site breaks ${MODE}:" --project=desktop-1440 --no-deps --retries=0 --workers=1 --reporter=github,list
         env:
           MODE: ${{ inputs.journey == 'j8-hard' && 'hard' || 'soft' }}
-          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
@@ -322,7 +320,7 @@ jobs:
     needs: production-sha
     if: github.event.schedule == '40 7 * * 0'
     runs-on: ubuntu-latest
-    environment: production-e2e
+    environment: staging
     # See the live-ai note on the j12 job.
     concurrency:
       group: live-ai
@@ -350,14 +348,13 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Run this shard of the suite against production
+      - name: Run this shard of the suite against staging
         id: e2e
         # @scheduled journeys run on their own clock above: J12 now, J8 with its spec (0509#4124, 0509#4128).
         # https://playwright.dev/docs/test-sharding
         timeout-minutes: 25
         run: npm run e2e -- --shard=${{ matrix.shard }}/4 --reporter=github,list --grep-invert @scheduled --retries=0
         env:
-          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
@@ -373,7 +370,6 @@ jobs:
         timeout-minutes: 5
         run: npm run e2e -- --project=session-teardown --retries=0 --reporter=github,list
         env:
-          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
       - name: Print what the page showed when it failed
@@ -494,7 +490,7 @@ jobs:
     # with the read-only HEALTHCHECKS_API_KEY repository secret.
     if: github.event.schedule == '30 6 * * *' || (inputs.journey == 'soak-report' && inputs.spec == '' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    environment: production-e2e
+    environment: staging
     timeout-minutes: 10
     permissions:
       contents: read
@@ -518,16 +514,18 @@ jobs:
         run: |
           set -euo pipefail
           since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          db=$(npx cf d1 list --name 0509-staging | jq -r '.[] | select(.name == "0509-staging") | .uuid')
+          test -n "$db"
           scope=" AND workspace_id IN (SELECT id FROM workspace WHERE owner_user_id IN (SELECT id FROM user WHERE email = 'e2e+soak@0509.io'))"
           label="soak workspace"
-          sends=$(npx wrangler d1 execute 0509 --remote --json --command "SELECT CASE WHEN digest_id IS NULL THEN 'other (no digest)' ELSE 'brief' END AS kind, status, COUNT(*) AS n FROM send_attempt WHERE attempted_at >= '$since'$scope GROUP BY 1, 2 ORDER BY 1, 2" | jq -r '.[0].results | if length == 0 then "none" else map("\(.kind) \(.status): \(.n)") | join(", ") end')
-          sweeps=$(npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS runs, COALESCE(SUM(pages), 0) AS pages, COALESCE(SUM(failed), 0) AS failed FROM sweep_run WHERE finished_at >= '$since'" | jq -r '.[0].results[0] | "\(.runs) finished, \(.pages) pages, \(.failed) failed pages"')
+          sends=$(npx cf d1 query "$db" --sql "SELECT CASE WHEN digest_id IS NULL THEN 'other (no digest)' ELSE 'brief' END AS kind, status, COUNT(*) AS n FROM send_attempt WHERE attempted_at >= '$since'$scope GROUP BY 1, 2 ORDER BY 1, 2" | jq -r '.[0].results | if length == 0 then "none" else map("\(.kind) \(.status): \(.n)") | join(", ") end')
+          sweeps=$(npx cf d1 query "$db" --sql "SELECT COUNT(*) AS runs, COALESCE(SUM(pages), 0) AS pages, COALESCE(SUM(failed), 0) AS failed FROM sweep_run WHERE finished_at >= '$since'" | jq -r '.[0].results[0] | "\(.runs) finished, \(.pages) pages, \(.failed) failed pages"')
           instances() {
             page=1
             rows=""
             while [ "$page" -le 50 ]; do
               batch=$(curl -sS --fail-with-body -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-                "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workflows/$1/instances?per_page=100&page=$page&date_start=$since" \
+                "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workflows/$1-staging/instances?per_page=100&page=$page&date_start=$since" \
                 | jq -c '.result')
               rows="$rows$batch"$'\n'
               [ "$(jq 'length' <<< "$batch")" -eq 100 ] || break
@@ -536,12 +534,12 @@ jobs:
             jq -s -r 'add | if length == 0 then "no instances" else (group_by(.status) | map("\(.[0].status): \(length)") | join(", ")) end' <<< "$rows"
           }
           d1() {
-            npx wrangler d1 execute 0509 --remote --json --command "$1" | jq -c '.[0].results'
+            npx cf d1 query "$db" --sql "$1" | jq -c '.[0].results'
           }
           failed=0
           missed=""
           cron_instances() {
-            npx wrangler workflows instances list "$1" --date-start "$since" --per-page 100 --json | jq -s -r --arg prefix "$1-" '(add // []) | map(select(.id | startswith($prefix))) | length'
+            npx cf workflows instances list --workflow-name "$1-staging" --start "$since" --per-page 100 | jq -s -r --arg prefix "$1-" '(add // []) | map(select(.id | startswith($prefix))) | length'
           }
           crons=""
           for name in mentions-sweep site-sweep hiring-sweep feed-sweep snapshot-backup; do

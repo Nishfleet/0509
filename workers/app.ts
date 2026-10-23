@@ -24,12 +24,8 @@ import { sendLifecycleEmails } from "./delivery/lifecycle";
 import { sentryOptions } from "./sentry";
 import { runNightlyStanding } from "./standing/nightly";
 import { IdentityTail } from "./identity-tail-workflow";
-import {
-  FETCH_SWEEP_DLQ,
-  FETCH_SWEEP_QUEUE,
-  handleFetchSweepBatch,
-  handleFetchSweepDlqBatch,
-} from "./sources/fetch-sweep-consumer";
+import { handleFetchSweepBatch, handleFetchSweepDlqBatch } from "./sources/fetch-sweep-consumer";
+import { routeQueueBatch } from "./queue-role";
 import { AccountDelete } from "./workflows/account-delete";
 import { Discovery } from "./workflows/discovery";
 import { FeedSweep } from "./workflows/feed-sweep";
@@ -119,19 +115,12 @@ const handler = {
 
   async queue(batch: MessageBatch, env: Env) {
     setTag("queue", batch.queue);
-    if (batch.queue === "send-email-dlq") {
-      await handleDlqBatch(env, batch);
-      return;
-    }
-    if (batch.queue === FETCH_SWEEP_DLQ) {
-      await handleFetchSweepDlqBatch(batch);
-      return;
-    }
-    if (batch.queue === FETCH_SWEEP_QUEUE) {
-      await handleFetchSweepBatch(batch);
-      return;
-    }
-    await handleBatch(env, batch);
+    await routeQueueBatch(batch, {
+      "send-email": (queued) => handleBatch(env, queued),
+      "send-email-dlq": (queued) => handleDlqBatch(env, queued),
+      "fetch-sweep": handleFetchSweepBatch,
+      "fetch-sweep-dlq": handleFetchSweepDlqBatch,
+    });
   },
 } satisfies ExportedHandler<WorkerEnv>;
 

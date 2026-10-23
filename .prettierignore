@@ -14,3 +14,4 @@ tests/fixtures/
 # Vendored upstream shadcn skill, byte-for-byte at shadcn-ui/ui 2d3f1cd4, and its lock file.
 .agents/skills/shadcn/
 skills-lock.json
+.cloudflare/

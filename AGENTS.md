@@ -127,8 +127,10 @@ Signing in locally needs the `--var` overrides in `.agents/skills/verify/SKILL.m
 `PLAYWRIGHT_TEST_BASE_URL` unset, `playwright.config.ts` starts `wrangler dev`
 itself and tests the built Worker — that is what `preview-assert` runs on every
 PR. With it set, there is no local server and the suite runs against that URL —
-that is what the `e2e-scheduled.yml` jobs run against production. Same
+that is what the `e2e-scheduled.yml` jobs run against a hosted Worker. Same
 assertions both times.
+
+**The hosted e2e target is `https://staging.0509.io`**, the `0509-staging` Worker on its own D1, R2, KV and queues, deployed with `cf` from `cloudflare.config.ts` (`CLOUDFLARE_VITE_FORCE_BUILD_OUTPUT=true npx react-router build --mode staging`, then `npx cf deploy --prebuilt --mode staging`). Production keeps only the daily sign-in check and the public-page smoke, and still deploys with wrangler until #6085.
 
 **Run it before the PR opens.** A diff that touches only `docs/` or `.agents/` runs `npx prettier --check` on the changed files and nothing else. A change under `app/`, `workers/` or `e2e/`
 runs the specs that cover it locally first, in preview mode, by file:
@@ -222,7 +224,7 @@ coordinator reviews it before it merges.
 `lighthouse` runs in `deploy-production.yml` after the deploy job. Verify a fix on the local lane:
 `PLAYWRIGHT_TEST_BASE_URL` unset, so `npm run e2e -- e2e/<name>.spec.ts` starts `wrangler dev --local` with simulated
 email, a local D1 and `AI_SPEND` off. Do not dispatch `e2e-scheduled.yml` to verify a fix, and do not point a run at
-https://0509.io: each production sign-in sends a real email, the specs delete and recreate production D1 rows, and the
+https://0509.io (hosted e2e belongs on https://staging.0509.io): each production sign-in sends a real email, the specs delete and recreate production D1 rows, and the
 live-AI journeys spend Workers AI neurons. Production e2e runs only on its schedule from `main`, and every job that
 reaches production declares the `production-e2e` environment, whose deployment branch policy allows `main` only.
 Neither `lighthouse` nor the production e2e is **required**, deliberately: they cannot run on a pull request, and a
