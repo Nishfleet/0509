@@ -1,4 +1,4 @@
-# Trigger stub for Nishfleet/fleet-ops' dispatch; its stub- group must not equal the callee's per-run group (deadlock).
+# version: 1 — trigger stub for Nishfleet/fleet-ops' dispatch (README.md, "Workflows that act on their own": switch it off, delete it); its stub- group must not equal the callee's per-run group (deadlock).
 name: agent-dispatch
 on:
   issues:
