@@ -64,13 +64,14 @@ describe("the production D1 reads use the environment that holds the token (0509
     expect(jobs()["soak-report"]?.environment).toBe("production");
   });
 
-  it("type-checks the wrangler payload and names a redacted Cloudflare error", () => {
-    for (const job of ["jev-failures", "soak-report"]) {
-      const reads = (jobs()[job]?.steps ?? [])
+  it("type-checks every wrangler D1 read and names a redacted Cloudflare error", () => {
+    const reads = (job: string) =>
+      (jobs()[job]?.steps ?? [])
         .flatMap((step) => (step.run ?? "").split("\n"))
-        .filter((line) => line.includes("wrangler d1 execute") && line.includes("jq"));
-      expect(reads.length).toBeGreaterThan(0);
-      for (const line of reads) {
+        .filter((line) => line.includes("wrangler d1 execute") && line.includes("--json"));
+    expect([reads("jev-failures").length, reads("soak-report").length]).toEqual([2, 3]);
+    for (const job of ["jev-failures", "soak-report"]) {
+      for (const line of reads(job)) {
         expect(line).toContain('type == "array"');
         expect(line).toContain("D1 read failed");
         expect(line).toContain('gsub("[0-9a-f]{32}"');
