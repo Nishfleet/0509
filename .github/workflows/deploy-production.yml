@@ -200,6 +200,11 @@ jobs:
       contents: read
     uses: Nishfleet/fleet-ops/.github/workflows/lighthouse.yml@main
     with:
+      # The site is behind the team-only Access wall (0509#7656), so the audit
+      # measures the login page and would fail every run of a good deploy.
+      # non_blocking keeps the verdict flowing to lighthouse-report as the red
+      # output instead of reddening the run the Grafana deploy alert reads.
+      non_blocking: true
       # The public pages: no Access, no session, so a deploy sends no
       # email and needs no secret. / is the homepage (the landing LCP bar in
       # docs/REBUILD-DONE.md B). The signed-in pages are measured by the
@@ -228,7 +233,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Open or update the issue that dispatches the fix
-        if: needs.lighthouse.result == 'failure' || needs.lighthouse.result == 'cancelled'
+        if: needs.lighthouse.result == 'failure' || needs.lighthouse.result == 'cancelled' || needs.lighthouse.outputs.red == 'true'
         id: red
         uses: JasonEtco/create-an-issue@1b14a70e4d8dc185e5cc76d3bec9eab20257b2c5 # v2.9.2
         env:
@@ -242,13 +247,13 @@ jobs:
       - name: Hand the issue to a worker
         # A GITHUB_TOKEN label fires no workflow, so dispatch by number;
         # agent.yml's Gate sizes it. needs-split alone left #4620 unworked.
-        if: (needs.lighthouse.result == 'failure' || needs.lighthouse.result == 'cancelled') && steps.red.outputs.number
+        if: (needs.lighthouse.result == 'failure' || needs.lighthouse.result == 'cancelled' || needs.lighthouse.outputs.red == 'true') && steps.red.outputs.number
         env:
           GH_TOKEN: ${{ github.token }}
           N: ${{ steps.red.outputs.number }}
         run: gh workflow run agent-dispatch.yml --repo "$GITHUB_REPOSITORY" -f issue="$N"
       - name: Close the issue once this check is green again
-        if: needs.lighthouse.result == 'success'
+        if: needs.lighthouse.result == 'success' && needs.lighthouse.outputs.red != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
