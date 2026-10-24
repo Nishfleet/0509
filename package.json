@@ -75,7 +75,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.70.1",
-    "vite": "^8.0.3",
+    "vite": "^8.3.5",
     "vitest": "4.1.12",
     "wrangler": "^4.144.0",
     "yaml": "^2.9.1"
