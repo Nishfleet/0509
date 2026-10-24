@@ -30,7 +30,9 @@ function subjectFor(ctx: RecapContext): string {
 
 function standingLines(ctx: RecapContext): string[] {
   return [
-    "Nothing has changed on their sites yet. Here is what we know about each.",
+    ctx.standing.length === 0
+      ? "Nothing has changed on their sites yet."
+      : "Nothing has changed on their sites yet. Here is what we know about each.",
     ...ctx.standing.map((entry) => [clip(entry.rival, RIVAL_MAX), ...entry.lines].join("\n")),
   ];
 }
@@ -43,7 +45,7 @@ function lines(ctx: RecapContext): string[] {
     ? [counted]
     : [
         counted,
-        `Most recent: ${clip(ctx.latest.rival, RIVAL_MAX)}, ${clip(ctx.latest.what, WHAT_MAX)}`,
+        `Most recent: ${clip(ctx.latest.rival, RIVAL_MAX)}: ${clip(ctx.latest.what, WHAT_MAX)}`,
         "Each one is kept as a before and after.",
       ];
 }

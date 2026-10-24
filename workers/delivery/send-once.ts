@@ -43,6 +43,8 @@ export async function sendOnce(env: Env, input: SendOnceInput): Promise<boolean>
     idempotencyKey: input.key,
     outcome: result.outcome,
     error: result.error,
+    subject: "subject" in result ? result.subject : null,
+    providerId: "provider_id" in result ? result.provider_id : null,
   });
   if (result.outcome === "failed") reportLifecycleFailure("delivery.lifecycle_send_failed", result.error);
   return result.outcome === "sent";

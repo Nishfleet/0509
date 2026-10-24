@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { errorText, sendMessage, sendOrThrow } from "../../workers/delivery/send";
+import { errorText, sendMessage } from "../../workers/delivery/send";
 
 interface Failure {
   value: unknown;
@@ -80,7 +80,7 @@ describe("sendMessage", () => {
 
     const result = await sendMessage(bindingFor(rec), MESSAGE);
 
-    expect(result).toEqual({ outcome: "sent", error: null });
+    expect(result).toEqual({ outcome: "sent", error: null, subject: "Sign in", provider_id: "m-1" });
     expect(rec.sent).toEqual([{ ...MESSAGE, replyTo: "support@0509.io" }]);
   });
 
@@ -98,7 +98,7 @@ describe("sendMessage", () => {
 
     const result = await sendMessage(bindingFor(rec), MESSAGE);
 
-    expect(result).toEqual({ outcome: "failed", error: "Email Service rejected the send" });
+    expect(result).toEqual({ outcome: "failed", error: "Email Service rejected the send", subject: "Sign in" });
     expect(rec.sent).toEqual([]);
   });
 
@@ -108,7 +108,7 @@ describe("sendMessage", () => {
 
     const result = await sendMessage(bindingFor(rec), MESSAGE);
 
-    expect(result).toEqual({ outcome: "failed", error: "binding is closed" });
+    expect(result).toEqual({ outcome: "failed", error: "binding is closed", subject: "Sign in" });
     expect(rec.sent).toEqual([]);
   });
 
@@ -118,32 +118,7 @@ describe("sendMessage", () => {
 
     const result = await sendMessage(bindingFor(rec), MESSAGE);
 
-    expect(result).toEqual({ outcome: "failed", error: "queue is full" });
-    expect(rec.sent).toEqual([]);
-  });
-});
-
-describe("sendOrThrow", () => {
-  it("resolves on a successful send", async () => {
-    const rec = recorder();
-
-    await expect(sendOrThrow(bindingFor(rec), MESSAGE)).resolves.toBeUndefined();
-    expect(rec.sent).toEqual([{ ...MESSAGE, replyTo: "support@0509.io" }]);
-  });
-
-  it("throws the failure text when the send rejects", async () => {
-    const rec = recorder();
-    rec.fail = failing(new Error("throttled"));
-
-    await expect(sendOrThrow(bindingFor(rec), MESSAGE)).rejects.toThrow("throttled");
-    expect(rec.sent).toEqual([]);
-  });
-
-  it("throws the failure text when the binding throws synchronously", async () => {
-    const rec = recorder();
-    rec.fail = failing(new Error("no such target"), true);
-
-    await expect(sendOrThrow(bindingFor(rec), MESSAGE)).rejects.toThrow("no such target");
+    expect(result).toEqual({ outcome: "failed", error: "queue is full", subject: "Sign in" });
     expect(rec.sent).toEqual([]);
   });
 });

@@ -16,7 +16,7 @@ describe("recap email", () => {
     const { subject, text } = renderRecap(CTX);
     expect(subject).toBe("3 competitor changes caught so far, latest: Acme");
     expect(text).toContain("caught 3 changes");
-    expect(text).toContain("Most recent: Acme, Homepage headline changed");
+    expect(text).toContain("Most recent: Acme: Homepage headline changed");
     expect(text).toContain("https://0509.io/app/alerts");
   });
 
@@ -33,10 +33,16 @@ describe("recap email", () => {
   });
 
   it("leads the inbox preview with the latest move, or the count when there is none", () => {
-    expect(renderRecap(CTX).html).toMatch(/display:none[^>]*>Most recent: Acme, Homepage headline changed/);
+    expect(renderRecap(CTX).html).toMatch(/display:none[^>]*>Most recent: Acme: Homepage headline changed/);
     expect(renderRecap({ ...CTX, latest: null }).html).toMatch(
       /display:none[^>]*>In your first days we(?:'|&#39;)ve caught 3 changes across your competitors\./,
     );
+  });
+
+  it("promises nothing to list when no change and no standing exist", () => {
+    const { text } = renderRecap({ ...CTX, change_count: 0, latest: null });
+    expect(text).toContain("Nothing has changed on their sites yet.");
+    expect(text).not.toContain("Here is what we know about each");
   });
 
   it("offers one labelled link and no real-time promise", () => {

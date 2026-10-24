@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { readFewRivals } from "../../app/lib/data/rival_nudge.server";
+import { expectSendRecord, PROVIDER_ID } from "./send-record";
 import { sendRivalNudges } from "../../workers/delivery/rival-nudge";
 
 const lookup = { tester: false as boolean | null };
@@ -18,7 +19,7 @@ const envWith = (sent: EmailMessageBuilder[]): Env =>
     EMAIL: {
       send(message: EmailMessageBuilder) {
         sent.push(message);
-        return Promise.resolve({} as EmailSendResult);
+        return Promise.resolve({ messageId: PROVIDER_ID });
       },
     },
   }) as Env;
@@ -79,6 +80,7 @@ describe("add-a-rival nudge", () => {
     expect(sent[0]?.subject).toBe("Your brief compares you with one competitor so far");
     expect(sent[0]?.text).toContain("You are watching Rival 1");
     expect(sent[0]?.headers?.["List-Unsubscribe"]).toContain("?type=brief");
+    await expectSendRecord("rival_nudge", sent[0]?.subject);
   });
 
   it("follows the brief switch: an alerts-only stop still gets it", async () => {
