@@ -1,3 +1,5 @@
+import { useRouteLoaderData } from "react-router";
+
 import type { Route } from "./+types/landing";
 
 import { env } from "cloudflare:workers";
@@ -18,6 +20,7 @@ import { readRegistrySources } from "../lib/data/source.server";
 import { FAQ } from "../lib/faq";
 import { landingSources } from "../lib/landing-sources";
 import { daysBefore, readLandingMarks } from "../lib/site-changes.server";
+import { NavigationPending } from "../components/navigation-pending";
 import { MAIN_CONTENT_ID, SkipLink } from "../components/skip-link";
 import {
   SITE_URL,
@@ -79,11 +82,13 @@ export async function loader(_: Route.LoaderArgs) {
 }
 
 export default function Landing({ loaderData }: Route.ComponentProps) {
+  const signedIn = useRouteLoaderData<{ signedIn?: boolean }>("root")?.signedIn === true;
   return (
     <div className="bg-bone text-ink">
+      <NavigationPending />
       <SkipLink />
       <Ticker items={loaderData.ticker} />
-      <Header />
+      <Header signedIn={signedIn} />
       <main id={MAIN_CONTENT_ID} tabIndex={-1}>
         <Hero nouns={loaderData.claims.nouns} />
         <Marks marks={loaderData.marks} now={loaderData.now} />

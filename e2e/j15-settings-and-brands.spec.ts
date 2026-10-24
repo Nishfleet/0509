@@ -46,10 +46,10 @@ test.describe("J15 a signed-in customer changes settings", () => {
     await expect(page.getByText(/Paused since/)).toHaveCount(0);
   });
 
-  test("J15 the own-site alerts switch keeps its state across a reload", async ({ page }) => {
+  test("J15 the change alerts switch keeps its state across a reload", async ({ page }) => {
     await openSettings(page);
     const control = (): ReturnType<Page["getByRole"]> =>
-      page.getByRole("switch", { name: /Immediate alerts for your own site/ });
+      page.getByRole("switch", { name: /Immediate alerts when a competitor changes price or plan/ });
     const flip = async (): Promise<void> => {
       const saved = page.waitForResponse(
         (response) => response.request().method() === "POST" && response.url().includes("/app/settings"),

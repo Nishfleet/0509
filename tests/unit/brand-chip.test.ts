@@ -13,6 +13,10 @@ function chip(props: BrandChipBrand): string {
   return render(createElement(BrandChip, props));
 }
 
+function anchorClass(html: string): string {
+  return /^<a\b[^>]*\sclass="([^"]*)"/.exec(html)?.[1] ?? "";
+}
+
 describe("the brand chip", () => {
   it("derives the monogram from the brand name", () => {
     expect(brandMonogram("gymshark")).toBe("G");
@@ -136,5 +140,23 @@ describe("the brand chip", () => {
     expect(html).toContain('href="/onboarding"');
     expect(html).toContain("+ Add a competitor");
     expect(html.match(/data-slot="avatar"/g)?.length).toBe(6);
+  });
+
+  it("keeps the default look: the name truncates and the chip may shrink", () => {
+    const html = chip({ name: "Northbeam International Holdings", href: "/app/competitors/northbeam" });
+    expect(html).toContain('<span class="block min-w-0 truncate">Northbeam International Holdings</span>');
+    expect(html).toContain("max-w-full min-w-0 shrink gap-[7px]");
+    expect(anchorClass(html)).not.toContain("shrink-0");
+    expect(html).not.toContain("break-words");
+    expect(html).not.toContain("whitespace-normal");
+  });
+
+  it("lets the whole name wrap on its own line only when asked to", () => {
+    const html = chip({ name: "Northbeam International Holdings", href: "/app/competitors/northbeam", wrap: true });
+    expect(anchorClass(html)).toContain("shrink-0");
+    expect(html).toContain("whitespace-normal");
+    expect(html).toContain("break-words");
+    expect(html).not.toContain("truncate");
+    expect(html).toContain("Northbeam International Holdings");
   });
 });

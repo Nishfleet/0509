@@ -21,4 +21,22 @@ describe("landing header", () => {
     }
     expect(/<a\b[^>]*href="\/login"[^>]*>/.exec(html)?.[0]).toContain("min-h-11");
   });
+
+  it("shows Sign in and no Open app by default", () => {
+    const html = markup();
+    expect(html).toContain("Sign in");
+    expect(html).not.toContain("Open app");
+    expect(html).toContain('href="/login"');
+    expect(html).not.toContain('href="/app"');
+  });
+
+  it("swaps Sign in for an Open app link to /app only when the visitor is signed in", () => {
+    const html = renderToStaticMarkup(createElement(Header, { signedIn: true }));
+    expect(html).toContain("Open app");
+    expect(html).not.toContain("Sign in");
+    expect(html).not.toContain('href="/login"');
+    const link = /<a\b[^>]*href="\/app"[^>]*>/.exec(html)?.[0];
+    expect(link).toContain("min-h-11");
+    expect(renderToStaticMarkup(createElement(Header, { signedIn: false }))).toBe(markup());
+  });
 });

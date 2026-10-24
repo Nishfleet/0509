@@ -188,6 +188,21 @@ describe("handleCompetitorIntent intent=add", () => {
     expect(rows?.n).toBe(0);
   });
 
+  it("refuses junk text without looking anything up or adding a row", async () => {
+    const workspaceId = await seedWorkspace();
+    const fetched = vi.fn(NOT_FOUND);
+    vi.stubGlobal("fetch", fetched);
+
+    expect(await handleCompetitorIntent(workspaceId, addForm("' OR 1=1; --"))).toEqual({
+      message: "We couldn't find that brand's website. Try their main website, like brand.com.",
+    });
+    expect(fetched).not.toHaveBeenCalled();
+    const rows = await env.DB.prepare("SELECT COUNT(*) AS n FROM entity WHERE workspace_id = ? AND role = 'competitor'")
+      .bind(workspaceId)
+      .first<{ n: number }>();
+    expect(rows?.n).toBe(0);
+  });
+
   it("asks to check the spelling when the address does not answer, and adds nothing", async () => {
     const workspaceId = await seedWorkspace();
     const fetched = vi.fn((_input: RequestInfo | URL) => Promise.reject(new TypeError("fetch failed")));

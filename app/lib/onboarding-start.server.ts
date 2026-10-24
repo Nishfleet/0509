@@ -1,9 +1,12 @@
+import { redirect } from "react-router";
 import { z } from "zod";
 
+import { readDiscoveryContext } from "./data/entity.server";
 import { startOnboardingRun } from "./data/onboarding_run.server";
 import { isTakenDown } from "./data/takedown.server";
 import { readWorkspaceIdForOwner } from "./data/workspace.server";
 import { withinProbeLimit } from "./identity/card.server";
+import { ABOUT_MAX, NAME_MAX, overLimitField } from "./identity/card-fields";
 import { normaliseSubject } from "./identity/normalise";
 import { screenOnboardingSubject } from "./onboarding-screen.server";
 import { subjectRedirect } from "./onboarding-subject";
@@ -107,4 +110,65 @@ export async function submitOnboardingSubject(input: {
   }
   const path = subjectRedirect(raw);
   return path === null ? { status: "reply", reply: UNRESOLVED } : { status: "next", path };
+}
+
+export async function ensureOnboardingRun(input: { workspaceId: string; userId: string; now: string }): Promise<void> {
+  const context = await readDiscoveryContext(input.workspaceId);
+  if (context === null) return;
+  await startOnboardingRun({
+    workspaceId: input.workspaceId,
+    userId: input.userId,
+    inputRaw: context.self.domain,
+    startedAt: input.now,
+  });
+}
+
+export async function screenIdentitySubject(
+  timings: Timings,
+  input: { workspaceId: string; userId: string; rawSubject: string | undefined },
+): Promise<{ message: string } | null> {
+  const { workspaceId, userId, rawSubject } = input;
+  if (rawSubject === undefined) return null;
+  const normalised = normaliseSubject(rawSubject);
+  if (!normalised.ok) return null;
+  if (!(await timings.measure("limit", withinProbeLimit(userId)))) {
+    return { message: "You've tried a lot of addresses in the last minute. Wait a minute, then try again." };
+  }
+  const screened = await timings.measure(
+    "screen",
+    screenOnboardingSubject({
+      workspaceId,
+      userId,
+      subject: normalised.subject,
+      raw: rawSubject,
+      answer: null,
+      now: new Date().toISOString(),
+    }),
+  );
+  if (screened.kind !== "proceed") throw redirect("/onboarding");
+  return null;
+}
+
+export async function startIdentityRun(input: {
+  workspaceId: string;
+  userId: string;
+  rawSubject: string | undefined;
+}): Promise<void> {
+  if (input.rawSubject === undefined) return;
+  await startOnboardingRun({
+    workspaceId: input.workspaceId,
+    userId: input.userId,
+    inputRaw: input.rawSubject,
+    startedAt: new Date().toISOString(),
+  });
+}
+
+const confirmFields = z.object({ name: z.string().optional(), description: z.string().optional() });
+
+export function confirmFailureMessage(formData: FormData): string {
+  const fields = confirmFields.safeParse(Object.fromEntries(formData));
+  const tooLong = fields.success ? overLimitField(fields.data.name, fields.data.description) : null;
+  if (tooLong === "name") return `That name is too long. Keep it to ${String(NAME_MAX)} characters or fewer.`;
+  if (tooLong === "about") return `That about line is too long. Keep it to ${String(ABOUT_MAX)} characters or fewer.`;
+  return "Add your brand's name, then tap Looks right.";
 }

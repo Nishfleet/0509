@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigation, useSubmit } from "react-router";
 
 import { MAGIC_LINK_TTL_SECONDS } from "../lib/auth/magic-link-email";
+import { BRAND_NAME_SHAPE } from "../lib/identity/brand-name";
 import { inboxLinkFor } from "../lib/inbox-link";
 import { cn } from "../lib/utils";
 import { Footer } from "./footer";
@@ -14,6 +15,34 @@ const RESEND_AFTER_SECONDS = 30;
 export const SIGN_IN_SHELL = "mx-auto flex min-h-dvh w-full max-w-[420px] min-w-0 flex-col justify-center px-5 py-12";
 export const SIGN_IN_TITLE = "font-display text-display-2 mt-10 font-extrabold uppercase";
 export const SIGN_IN_LEDE = "text-ink-soft mt-3 leading-[1.55] [overflow-wrap:anywhere]";
+
+export function subjectLabel(raw: string | null): string | null {
+  const text = (raw ?? "")
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/^www\./i, "")
+    .replace(/[/?#].*$/, "");
+  return BRAND_NAME_SHAPE.test(text) ? text : null;
+}
+
+export function SignInHeading({ subject }: { subject: string | null }) {
+  if (subject === null) {
+    return (
+      <>
+        <h1 className={SIGN_IN_TITLE}>Sign in</h1>
+        <p className={SIGN_IN_LEDE}>
+          New or returning, we email you a link. Tap it and you're in. There is no password.
+        </p>
+      </>
+    );
+  }
+  return (
+    <>
+      <h1 className={cn(SIGN_IN_TITLE, "[overflow-wrap:anywhere]")}>Start watching {subject}</h1>
+      <p className={SIGN_IN_LEDE}>Enter your email. We'll send a link that creates your account. No password.</p>
+    </>
+  );
+}
 
 export function SignInSent({
   email,
@@ -41,10 +70,10 @@ export function SignInSent({
           Check your email
         </h1>
         <p className={SIGN_IN_LEDE}>
-          If <strong className="font-semibold text-ink">{email}</strong> can sign in, a link is on its way. It works
-          once and expires in {minutes} minutes.
+          We sent a sign-in link to <strong className="font-semibold text-ink">{email}</strong>. Check spam if you don't
+          see it within a minute. It works once and expires in {minutes} minutes.
         </p>
-        <TurnstileWidget siteKey={turnstileSiteKey} startOn="mount" />
+        <TurnstileWidget siteKey={turnstileSiteKey} />
         <OpenInbox email={email} />
         <ResendControls email={email} onChangeEmail={onChangeEmail} />
       </main>

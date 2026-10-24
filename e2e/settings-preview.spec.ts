@@ -82,9 +82,9 @@ test("pausing the brief says so, survives a reload, and resuming undoes it", asy
   await expect(page.getByText(/Your weekly brief has been paused since/)).toHaveCount(0);
 });
 
-test("the own-site alerts switch keeps its state across a reload", async ({ page, baseURL }) => {
+test("the change alerts switch keeps its state across a reload", async ({ page, baseURL }) => {
   await signIn(page, baseURL);
-  const control = page.getByRole("switch", { name: /Immediate alerts for your own site/ });
+  const control = page.getByRole("switch", { name: /Immediate alerts when a competitor changes price or plan/ });
   const was = await control.isChecked();
   const saved = page.waitForResponse(
     (response) => response.request().method() === "POST" && response.url().includes("/app/settings"),
@@ -152,5 +152,7 @@ test("the Alerts jump on Settings puts the next Tab on the first alert switch", 
   await signIn(page, baseURL);
   await page.getByRole("navigation", { name: "Settings sections" }).getByRole("link", { name: "Alerts" }).click();
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("switch", { name: /Immediate alerts for your own site/ })).toBeFocused();
+  await expect(
+    page.getByRole("switch", { name: /Immediate alerts when a competitor changes price or plan/ }),
+  ).toBeFocused();
 });

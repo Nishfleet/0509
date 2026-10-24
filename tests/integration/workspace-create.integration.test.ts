@@ -260,7 +260,7 @@ describe("ensureWorkspace against migrations/0001_rebuild.sql", () => {
       .run();
     expect(await workspaceLanding(env.DB, input)).toEqual({
       workspaceId,
-      landing: "/onboarding/plan",
+      landing: "/onboarding/competitors",
     });
     expect(await workspaceCount("user-5")).toBe(1);
     const plans = await env.DB.prepare("SELECT count(*) AS n FROM plan WHERE workspace_id = ?")

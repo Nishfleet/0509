@@ -98,7 +98,7 @@ test.describe("J4 onboard a creator handle", () => {
           { type: "source-socials", description: "subject URL + youtube channel page" },
         );
 
-      await page.getByRole("button", { name: "That's me" }).click();
+      await page.getByRole("button", { name: "Looks right" }).click();
       await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
 
       const competitorRows = page.locator('ul[aria-label="Watching"] li, ul[aria-label="Possible competitors"] li');

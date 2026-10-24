@@ -76,7 +76,7 @@ test("ranked home passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and
       });
       const order: string[] = [];
 
-      for (let i = 0; i < 11; i += 1) {
+      for (let i = 0; i < 12; i += 1) {
         await page.keyboard.press("Tab");
         order.push(await page.evaluate(activeName));
       }
@@ -84,6 +84,7 @@ test("ranked home passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and
         "Skip to content",
         "HOME",
         "COMPETITORS",
+        "BRIEF",
         "ALERTS",
         "SETTINGS",
         "HOW THIS IS RANKED",

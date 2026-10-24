@@ -13,6 +13,9 @@ interface TurnstileApi {
       appearance: "interaction-only";
       tabindex: 0;
       "response-field-name": string;
+      callback: () => void;
+      "expired-callback": () => void;
+      "error-callback": () => void;
     },
   ) => string;
   remove: (widgetId: string) => void;
@@ -23,6 +26,8 @@ declare global {
     turnstile?: TurnstileApi;
   }
 }
+
+export type CaptchaState = "checking" | "ready" | "unavailable";
 
 export const TURNSTILE_RENDER_OPTIONS = {
   appearance: "interaction-only",
@@ -57,7 +62,7 @@ export function turnstileResponse(): string {
   return field.value.trim();
 }
 
-export function TurnstileWidget({ siteKey, startOn }: { siteKey: string; startOn: "email-focus" | "mount" }) {
+export function TurnstileWidget({ siteKey, onState }: { siteKey: string; onState?: (state: CaptchaState) => void }) {
   const container = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -65,30 +70,28 @@ export function TurnstileWidget({ siteKey, startOn }: { siteKey: string; startOn
     if (!element) return;
     let widgetId: string | null = null;
     let cancelled = false;
-    const start = () => {
-      loadTurnstile()
-        .then((api) => {
-          if (cancelled || widgetId !== null) return;
-          widgetId = api.render(element, { sitekey: siteKey, ...TURNSTILE_RENDER_OPTIONS });
-        })
-        .catch((error: unknown) => {
-          if (cancelled) return;
-          console.error(JSON.stringify({ event: "turnstile.load_failed", reason: String(error) }));
-          setFailed(true);
+    loadTurnstile()
+      .then((api) => {
+        if (cancelled || widgetId !== null) return;
+        widgetId = api.render(element, {
+          sitekey: siteKey,
+          ...TURNSTILE_RENDER_OPTIONS,
+          callback: () => onState?.("ready"),
+          "expired-callback": () => onState?.("checking"),
+          "error-callback": () => onState?.("unavailable"),
         });
-    };
-    const email = document.getElementById("email");
-    if (startOn === "mount") start();
-    else if (email instanceof HTMLInputElement) {
-      email.addEventListener("focus", start, { once: true });
-      if (document.activeElement === email) start();
-    } else return;
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        console.error(JSON.stringify({ event: "turnstile.load_failed", reason: String(error) }));
+        setFailed(true);
+        onState?.("unavailable");
+      });
     return () => {
       cancelled = true;
-      if (email instanceof HTMLInputElement) email.removeEventListener("focus", start);
       if (widgetId !== null) window.turnstile?.remove(widgetId);
     };
-  }, [siteKey, startOn]);
+  }, [siteKey, onState]);
   const notice = failed && (
     <p role="alert" className="text-[0.95rem]">
       {LOAD_FAILED_NOTICE}
