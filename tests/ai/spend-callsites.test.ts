@@ -21,6 +21,10 @@ describe("the ai spend kill switch (0509#7191)", () => {
     expect(aiCallSites).toEqual(["app/lib/discovery/generators/ai.server.ts", "app/lib/jev/client.server.ts"]);
   });
 
+  it("refuses fixture workspaces beside the kill switch at the one call site that can see a workspace", () => {
+    expect(readFileSync("app/lib/jev/client.server.ts", "utf8")).toContain("refuseWhenFixtureWorkspace(workspaceId)");
+  });
+
   it(`refuses to spend at every call site, so ${AI_SPEND_VAR}=off stops the scheduled and request paths alike`, () => {
     for (const path of aiCallSites) {
       expect(readFileSync(path, "utf8"), `${path} must check the kill switch before calling the model`).toContain(

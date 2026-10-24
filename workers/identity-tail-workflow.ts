@@ -1,6 +1,7 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
+import { readWorkspaceFixture } from "../app/lib/data/workspace.server";
 import { startDiscovery } from "../app/lib/discovery/start.server";
 import { attemptSiteFill, markSiteFill, siteWasReached } from "../app/lib/identity/site-fill.server";
 import {
@@ -55,6 +56,7 @@ export class IdentityTail extends WorkflowEntrypoint<Env, IdentityTailParams> {
     const { workspaceId, entityId, homepageUrl } = site;
     const reached = await step.do("site-reached", RETRY, () => siteWasReached(homepageUrl));
     if (reached) return null;
+    if (await step.do("fixture-workspace", RETRY, () => readWorkspaceFixture(workspaceId))) return null;
     await step.do("site-fill-pending", RETRY, () => markSiteFill(workspaceId, entityId, "pending"));
     for (let attempt = 1; attempt <= SITE_FILL_ATTEMPTS; attempt += 1) {
       await step.sleep(`site-fill-wait-${String(attempt)}`, SITE_FILL_WAIT);

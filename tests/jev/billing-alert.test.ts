@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const ai = vi.hoisted(() => ({ run: vi.fn() }));
 
 vi.mock("cloudflare:workers", () => ({ env: { AI: ai, AI_SPEND: "on" } }));
+vi.mock("../../app/lib/data/workspace.server", () => ({ readWorkspaceFixture: () => Promise.resolve(false) }));
 vi.mock("../../app/lib/ai/daily-cap.server", () => ({
   JEV_CALLS_PER_DAY: 1,
   takeAiCall: () => Promise.resolve(),
