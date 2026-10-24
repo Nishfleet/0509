@@ -858,7 +858,7 @@ jobs:
           PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.target_url }}
 ```
 
-This repo's deployments come from `environment: production` in `deploy-production.yml`; the production e2e suite now runs from `e2e-scheduled.yml` and lighthouse runs as a job after the deploy (0509#7013). Official container image: `mcr.microsoft.com/playwright:v1.63.0-noble`.
+This repo's deployments come from `environment: production` in `deploy-production.yml`; the production e2e suite now runs from `e2e-scheduled.yml` and lighthouse ran as a job after the deploy until the site went behind the Cloudflare Access wall (0509#7656, fleet-ops#9889). Official container image: `mcr.microsoft.com/playwright:v1.63.0-noble`.
 
 ### 6.3 Lighthouse CI
 
