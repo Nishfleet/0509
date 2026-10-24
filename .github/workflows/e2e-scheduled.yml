@@ -11,7 +11,12 @@ name: e2e-scheduled
 # one day on 2026-10-09. `suite` is not a dispatch choice: agents verify on the
 # local lane (PLAYWRIGHT_TEST_BASE_URL unset, AGENTS.md). Every job that reaches
 # production declares `environment: production-e2e`, whose deployment branch
-# policy is `main` only.
+# policy is `main` only. The two jobs that read production D1 (`jev-failures`,
+# `soak-report`) declare `environment: production` instead. `production-e2e`
+# holds no Cloudflare secrets, so a job under it falls back to the
+# repository-level CLOUDFLARE_API_TOKEN, which the D1 query endpoint refuses
+# with error 7403 (0509#7711). `production` holds the token the deploy job
+# queries D1 with.
 # The weekly `j12` job also runs J11, whose kept account needs a 6-day gap.
 # `signin` is the one real sign-in smoke a day (0509#6093): the only production
 # run that sends a real email besides the suite, once, at 04:17 UTC.
@@ -463,7 +468,7 @@ jobs:
     # Dispatch: `journey=jev-failures`, then read the job log.
     if: inputs.journey == 'jev-failures' && inputs.spec == '' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: production-e2e
+    environment: production
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -481,10 +486,29 @@ jobs:
         run: |
           set -euo pipefail
           since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          # Same validator and redaction as soak-report's d1() below; this copy
+          # fails the job (return 1) while that one collects into a file. Change
+          # both together.
+          d1() {
+            local out rc=0 msg="" errf
+            errf=$(mktemp)
+            out=$(npx wrangler d1 execute 0509 --remote --json --command "$1" 2> "$errf") || rc=$?
+            if [ "$rc" -ne 0 ] || ! jq -e 'type == "array" and (.[0].results | type) == "array"' <<< "$out" > /dev/null 2>&1; then
+              msg=$(jq -r '[(.error.text // ""), ((.error.notes // []) | map(.text) | join("; "))] | map(select(. != "")) | join(" | ")' <<< "$out" 2> /dev/null) || msg=""
+              [ -n "$msg" ] || msg=$(grep -m1 -F '[ERROR]' "$errf" 2> /dev/null || true)
+              msg=$(sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g' <<< "${msg:-no error text}" | tr -d '\300\256\256' | head -n 1)
+              # % is escaped for the annotation parser, 32-hex ids for a public repo.
+              echo "::error::D1 read failed (wrangler exit $rc): $(sed -E 's/[0-9a-f]{32}/<redacted>/g; s/%/%25/g' <<< "$msg" | tr '\n' ' ')"
+              rm -f "$errf"
+              return 1
+            fi
+            rm -f "$errf"
+            jq -c '.[0].results[]' <<< "$out"
+          }
           echo "== last 24 h by kind and code"
-          npx wrangler d1 execute 0509 --remote --json --command "SELECT kind, code, COUNT(*) AS n, MIN(occurred_at) AS first, MAX(occurred_at) AS last FROM jev_failure WHERE occurred_at >= '$since' GROUP BY kind, code ORDER BY n DESC" | jq -c '.[0].results[]'
+          d1 "SELECT kind, code, COUNT(*) AS n, MIN(occurred_at) AS first, MAX(occurred_at) AS last FROM jev_failure WHERE occurred_at >= '$since' GROUP BY kind, code ORDER BY n DESC"
           echo "== latest 20"
-          npx wrangler d1 execute 0509 --remote --json --command "SELECT occurred_at, kind, code, question, message FROM jev_failure ORDER BY occurred_at DESC LIMIT 20" | jq -c '.[0].results[]'
+          d1 "SELECT occurred_at, kind, code, question, message FROM jev_failure ORDER BY occurred_at DESC LIMIT 20"
   soak-report:
     name: soak-report
     # Reads counts only, never rows: no email, report text or other customer
@@ -494,7 +518,7 @@ jobs:
     # with the read-only HEALTHCHECKS_API_KEY repository secret.
     if: github.event.schedule == '30 6 * * *' || (inputs.journey == 'soak-report' && inputs.spec == '' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    environment: production-e2e
+    environment: production
     timeout-minutes: 10
     permissions:
       contents: read
@@ -520,23 +544,46 @@ jobs:
           since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
           scope=" AND workspace_id IN (SELECT id FROM workspace WHERE owner_user_id IN (SELECT id FROM user WHERE email = 'e2e+soak@0509.io'))"
           label="soak workspace"
-          sends=$(npx wrangler d1 execute 0509 --remote --json --command "SELECT CASE WHEN digest_id IS NULL THEN 'other (no digest)' ELSE 'brief' END AS kind, status, COUNT(*) AS n FROM send_attempt WHERE attempted_at >= '$since'$scope GROUP BY 1, 2 ORDER BY 1, 2" | jq -r '.[0].results | if length == 0 then "none" else map("\(.kind) \(.status): \(.n)") | join(", ") end')
-          sweeps=$(npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS runs, COALESCE(SUM(pages), 0) AS pages, COALESCE(SUM(failed), 0) AS failed FROM sweep_run WHERE finished_at >= '$since'" | jq -r '.[0].results[0] | "\(.runs) finished, \(.pages) pages, \(.failed) failed pages"')
+          cf_read_failed="$RUNNER_TEMP/cf-read-failed.txt"
+          : > "$cf_read_failed"
+          # Same validator and redaction as jev-failures' d1() above; this copy
+          # collects every failure into $cf_read_failed and lets the report post
+          # once, while that one fails the job on the first bad read. Change both
+          # together.
+          d1() {
+            local out rc=0 msg="" errf
+            errf=$(mktemp)
+            out=$(npx wrangler d1 execute 0509 --remote --json --command "$1" 2> "$errf") || rc=$?
+            if [ "$rc" -ne 0 ] || ! jq -e 'type == "array" and (.[0].results | type) == "array"' <<< "$out" > /dev/null 2>&1; then
+              msg=$(jq -r '[(.error.text // ""), ((.error.notes // []) | map(.text) | join("; "))] | map(select(. != "")) | join(" | ")' <<< "$out" 2> /dev/null) || msg=""
+              [ -n "$msg" ] || msg=$(grep -m1 -F '[ERROR]' "$errf" 2> /dev/null || true)
+              msg=$(sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g' <<< "${msg:-no error text}" | tr -d '\300\256\256' | head -n 1)
+              printf '%s\n' "D1 read failed (wrangler exit $rc): $(sed -E 's/[0-9a-f]{32}/<redacted>/g' <<< "$msg")" >> "$cf_read_failed"
+              rm -f "$errf"
+              echo '[]'
+              return 0
+            fi
+            rm -f "$errf"
+            jq -c '.[0].results' <<< "$out"
+          }
+          sends=$(d1 "SELECT CASE WHEN digest_id IS NULL THEN 'other (no digest)' ELSE 'brief' END AS kind, status, COUNT(*) AS n FROM send_attempt WHERE attempted_at >= '$since'$scope GROUP BY 1, 2 ORDER BY 1, 2" | jq -r 'if length == 0 then "none" else map("\(.kind) \(.status): \(.n)") | join(", ") end')
+          sweeps=$(d1 "SELECT COUNT(*) AS runs, COALESCE(SUM(pages), 0) AS pages, COALESCE(SUM(failed), 0) AS failed FROM sweep_run WHERE finished_at >= '$since'" | jq -r '.[0] | "\(.runs) finished, \(.pages) pages, \(.failed) failed pages"')
           instances() {
             page=1
             rows=""
             while [ "$page" -le 50 ]; do
-              batch=$(curl -sS --fail-with-body -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-                "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workflows/$1/instances?per_page=100&page=$page&date_start=$since" \
-                | jq -c '.result')
+              if ! body=$(curl -sS --fail-with-body -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workflows/$1/instances?per_page=100&page=$page&date_start=$since"); then
+                printf '%s\n' "workflows instances $1 page $page: $(jq -r '(.errors // []) | map("\(.code) \(.message)") | join("; ")' <<< "$body" 2> /dev/null | sed -E 's/[0-9a-f]{32}/<redacted>/g')" >> "$cf_read_failed"
+                echo "unreadable"
+                return 0
+              fi
+              batch=$(jq -c '.result // []' <<< "$body")
               rows="$rows$batch"$'\n'
               [ "$(jq 'length' <<< "$batch")" -eq 100 ] || break
               page=$((page + 1))
             done
-            jq -s -r 'add | if length == 0 then "no instances" else (group_by(.status) | map("\(.[0].status): \(length)") | join(", ")) end' <<< "$rows"
-          }
-          d1() {
-            npx wrangler d1 execute 0509 --remote --json --command "$1" | jq -c '.[0].results'
+            jq -s -r 'add // [] | if length == 0 then "no instances" else (group_by(.status) | map("\(.[0].status): \(length)") | join(", ")) end' <<< "$rows"
           }
           failed=0
           missed=""
@@ -557,8 +604,8 @@ jobs:
           [ -z "$missing" ] || failed=1
           stale=$(d1 "SELECT s.key AS key FROM source s WHERE s.is_enabled = 1 AND s.degraded_reason IS NULL AND (s.latest_fetched_at IS NULL OR s.latest_fetched_at < '$since') AND EXISTS (SELECT 1 FROM watch w WHERE w.source_id = s.id AND w.is_active = 1 AND COALESCE(CASE WHEN json_valid(w.config_json) THEN json_extract(w.config_json, '$.noChannel.state') END, '') <> 'degraded') ORDER BY s.key" | jq -r 'map(.key) | join(", ")')
           [ -z "$stale" ] || failed=1
-          gdelt=$(d1 "SELECT COUNT(*) AS n FROM snapshot sn JOIN watch w ON w.id = sn.watch_id JOIN source s ON s.id = w.source_id WHERE s.key = 'gdelt.doc' AND sn.item_count > 0 AND sn.fetched_at >= '$since'" | jq -r '.[0].n')
-          mentions=$(d1 "SELECT COUNT(*) AS n FROM signal WHERE kind = 'mention' AND observed_at >= '$since'" | jq -r '.[0].n')
+          gdelt=$(d1 "SELECT COUNT(*) AS n FROM snapshot sn JOIN watch w ON w.id = sn.watch_id JOIN source s ON s.id = w.source_id WHERE s.key = 'gdelt.doc' AND sn.item_count > 0 AND sn.fetched_at >= '$since'" | jq -r '.[0].n // 0')
+          mentions=$(d1 "SELECT COUNT(*) AS n FROM signal WHERE kind = 'mention' AND observed_at >= '$since'" | jq -r '.[0].n // 0')
           [ "$gdelt" -gt 0 ] && [ "$mentions" -gt 0 ] || failed=1
           users=$(d1 "SELECT COUNT(*) AS total, SUM((email LIKE 'e2e+%@0509.io' OR email LIKE 'canary%' OR email LIKE '%@fixture.0509.in') AND email NOT IN ('e2e+j7@0509.io', 'e2e+j8-hard@0509.io', 'e2e+j8-soft@0509.io', 'e2e+j8-hard-v2@0509.io', 'e2e+j8-soft-v2@0509.io', 'e2e+j9-mentions@0509.io', 'e2e+j12-rollovers@0509.io', 'e2e+soak@0509.io', 'e2e+onboarded-desktop@0509.io', 'e2e+onboarded-phone@0509.io', 'e2e+j6-desktop@0509.io', 'e2e+j6-phone@0509.io', 'e2e+j11@0509.io')) AS leftover FROM \"user\"" | jq -r '.[0] | "\(.total) users, \(.leftover) leftover test accounts (the thirteen kept journey accounts are not counted)"')
           pricing=$(d1 "SELECT e.domain AS brand, p.url IS NOT NULL AS judged, COUNT(DISTINCT w.id) AS watches, COUNT(sn.id) AS snapshots FROM entity e LEFT JOIN page p ON p.entity_id = e.id AND p.role = 'pricing' AND p.role_decided_for_hash IS NOT NULL LEFT JOIN watch w ON w.entity_id = e.id AND w.target_key = p.url AND w.is_active = 1 AND w.source_id = (SELECT id FROM source WHERE key = 'site.web') LEFT JOIN snapshot sn ON sn.watch_id = w.id AND sn.fetched_at >= '$since' WHERE e.role = 'competitor' AND e.state = 'on'$scope GROUP BY e.id ORDER BY e.domain")
@@ -569,7 +616,7 @@ jobs:
           feeds=$(d1 "SELECT e.domain AS brand, COUNT(DISTINCT w.id) AS watches, COUNT(sn.id) AS snapshots FROM entity e LEFT JOIN watch w ON w.entity_id = e.id AND w.is_active = 1 AND w.source_id = (SELECT id FROM source WHERE key = 'feed.rss') LEFT JOIN snapshot sn ON sn.watch_id = w.id AND sn.fetched_at >= '$since' WHERE e.role = 'competitor' AND e.state = 'on'$scope GROUP BY e.id ORDER BY e.domain")
           feed_lines=$(jq -r 'map("\(.brand) " + (if .watches == 0 then "no feed found" elif .snapshots == 0 then "feed watched, NOT READ" else "feed read, \(.snapshots) snapshots" end)) | join("; ")' <<< "$feeds")
           feed_bad=$(jq -r '[.[] | select(.watches > 0 and .snapshots == 0)] | length' <<< "$feeds")
-          feed_posts=$(d1 "SELECT COUNT(*) AS n FROM signal WHERE kind = 'content' AND observed_at >= '$since'$scope" | jq -r '.[0].n')
+          feed_posts=$(d1 "SELECT COUNT(*) AS n FROM signal WHERE kind = 'content' AND observed_at >= '$since'$scope" | jq -r '.[0].n // 0')
           [ "$feed_bad" -eq 0 ] || failed=1
           sentry_day=$(date -u -d '24 hours ago' +%Y-%m-%d)
           sentry_json=$(gh issue list --state all --search "author:app/sentry created:>=$sentry_day" --limit 100 --json number,createdAt) || sentry_json=null
@@ -592,6 +639,16 @@ jobs:
             hc_line="$hc_lines"
           fi
           [ "$hc_up" -gt 0 ] && [ "$hc_bad" -eq 0 ] || failed=1
+          if [ -s "$cf_read_failed" ]; then
+            {
+              echo "Soak report for the 24 hours before $(date -u +%Y-%m-%dT%H:%MZ) could not run: a Cloudflare read failed, so the lines below name the failure instead of the day's numbers."
+              echo
+              sed 's/^/- /' "$cf_read_failed"
+            } > comment.md
+            gh issue comment 4730 --body-file comment.md
+            echo "::error::a Cloudflare read failed, see the issue comment"
+            exit 1
+          fi
           {
             echo "Soak report for the 24 hours before $(date -u +%Y-%m-%dT%H:%MZ) (send counts: $label)."
             echo
