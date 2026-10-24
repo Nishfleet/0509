@@ -15,6 +15,16 @@ interface SoakStep {
   run?: string;
 }
 
+interface SoakJob {
+  environment?: string;
+  steps?: SoakStep[];
+}
+
+function jobs(): Record<string, SoakJob> {
+  const source = readFileSync(path.join(REPO_ROOT, WORKFLOW), "utf8");
+  return (parse(source) as { jobs: Record<string, SoakJob> }).jobs;
+}
+
 function soakStep(): SoakStep {
   const source = readFileSync(path.join(REPO_ROOT, WORKFLOW), "utf8");
   const jobs = (parse(source) as { jobs: Record<string, { steps?: SoakStep[] }> }).jobs;
@@ -45,5 +55,26 @@ describe("soak-report measures the two DONE lines (0509#7076)", () => {
 
   it("is named in the pull_request disk-reading detector list", () => {
     expect(readFileSync(path.join(REPO_ROOT, CI), "utf8")).toContain("tests/unit/soak-report.test.ts");
+  });
+});
+
+describe("the production D1 reads use the environment that holds the token (0509#7736)", () => {
+  it("declares `production` for jev-failures and soak-report", () => {
+    expect(jobs()["jev-failures"]?.environment).toBe("production");
+    expect(jobs()["soak-report"]?.environment).toBe("production");
+  });
+
+  it("type-checks the wrangler payload and names a redacted Cloudflare error", () => {
+    for (const job of ["jev-failures", "soak-report"]) {
+      const reads = (jobs()[job]?.steps ?? [])
+        .flatMap((step) => (step.run ?? "").split("\n"))
+        .filter((line) => line.includes("wrangler d1 execute") && line.includes("jq"));
+      expect(reads.length).toBeGreaterThan(0);
+      for (const line of reads) {
+        expect(line).toContain('type == "array"');
+        expect(line).toContain("D1 read failed");
+        expect(line).toContain('gsub("[0-9a-f]{32}"');
+      }
+    }
   });
 });

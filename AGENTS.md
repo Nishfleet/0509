@@ -247,6 +247,9 @@ email, a local D1 and `AI_SPEND` off. Do not dispatch `e2e-scheduled.yml` to ver
 https://0509.io: each production sign-in sends a real email, the specs delete and recreate production D1 rows, and the
 live-AI journeys spend Workers AI neurons. Production e2e runs only on its schedule from `main`, and every job that
 reaches production declares the `production-e2e` environment, whose deployment branch policy allows `main` only.
+The exception is `jev-failures` and `soak-report`: they read production D1 remote, and only the `production`
+environment holds a `CLOUDFLARE_API_TOKEN` that D1 accepts (`production-e2e` holds no Cloudflare secrets, so the job
+falls back to the repository token and every read fails with error 7403 — 0509#7736).
 Neither `lighthouse` nor the production e2e is **required**, deliberately: they cannot run on a pull request, and a
 required check that cannot report blocks the queue forever. The suite is off the
 deploy path because every sign-in in it sends a real email against the Email
