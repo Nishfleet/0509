@@ -1,5 +1,6 @@
 import { expect, test } from "./test";
 
+import { magicLinkEmail } from "../app/lib/auth/magic-link-email";
 import {
   decodedBodies,
   deleteCreatedAccount,
@@ -22,8 +23,6 @@ test.afterEach(async ({ page }, testInfo) => {
   }
 });
 
-test.skip(isLocalLane(), "the sign-in email only exists on the production mail path");
-
 function htmlBodyFrom(raw: string): string {
   for (const body of decodedBodies(raw)) {
     const hay = body.toLowerCase();
@@ -36,9 +35,19 @@ function htmlBodyFrom(raw: string): string {
   return "";
 }
 
+test("the expiry line reaches the reader once, although the hidden preheader repeats it", async ({ page }) => {
+  const { html } = magicLinkEmail({
+    email: "reader@0509.io",
+    url: "https://0509.io/api/auth/magic-link/verify?token=abc123",
+  });
+  await page.setContent(html);
+  await expect(page.getByText("expires in 5 minutes").filter({ visible: true })).toHaveCount(1);
+});
+
 test("the sign-in email names the address, the expiry and the ignore line, and renders at 600 px in light and dark @own-signin", async ({
   page,
 }, testInfo) => {
+  test.skip(isLocalLane(), "the sign-in email only exists on the production mail path");
   test.setTimeout(180_000);
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
@@ -69,7 +78,7 @@ test("the sign-in email names the address, the expiry and the ignore line, and r
   await page.setViewportSize({ width: 600, height: 900 });
   await page.setContent(html);
   await expect(page.getByText(email)).toBeVisible();
-  await expect(page.getByText("expires in 5 minutes")).toBeVisible();
+  await expect(page.getByText("expires in 5 minutes").filter({ visible: true })).toBeVisible();
   await expect(page.getByText("ignore this email")).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
 
