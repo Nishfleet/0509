@@ -77,9 +77,10 @@ test("clearing the app session leaves the Cloudflare Access cookie alone", async
   await page.context().addCookies([
     { name: "CF_Authorization", value: "access", domain: host, path: "/" },
     { name: "better-auth.session_token", value: "session", domain: host, path: "/" },
+    { name: "__Secure-better-auth.session_token", value: "secure", domain: host, path: "/", secure: true },
   ]);
   await clearAppSession(page);
-  const names = (await page.context().cookies()).map((cookie) => cookie.name);
-  expect(names).toContain("CF_Authorization");
-  expect(names).not.toContain("better-auth.session_token");
+  const cleared = (await page.context().cookies()).map((cookie) => cookie.name);
+  expect(cleared).toContain("CF_Authorization");
+  expect(cleared.filter((name) => name.endsWith("better-auth.session_token"))).toEqual([]);
 });

@@ -22,7 +22,8 @@ test.describe("J15 a signed-in customer changes settings", () => {
 
   async function saveDay(page: Page, day: Locator, value: string): Promise<void> {
     const posted = page.waitForResponse(
-      (response) => response.request().method() === "POST" && response.url().includes("/app/settings"),
+      (response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/app/settings",
+      { timeout: 30_000 },
     );
     await day.selectOption(value);
     expect((await posted).ok()).toBe(true);

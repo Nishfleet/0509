@@ -421,7 +421,7 @@ let signedInThisWorker: readonly string[] = [];
 
 const MAGIC_LINK_SEND_FAILED = "We couldn't send the link. Try again in a minute.";
 
-const APP_SESSION_COOKIE = /better-auth\./;
+const APP_SESSION_COOKIE = /^(?:__Secure-)?better-auth\./;
 
 export async function clearAppSession(page: Page): Promise<void> {
   await page.context().clearCookies({ name: APP_SESSION_COOKIE });
