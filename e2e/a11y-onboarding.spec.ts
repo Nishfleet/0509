@@ -5,6 +5,7 @@ import { type Page, type TestInfo } from "@playwright/test";
 import { expect, test } from "./test";
 
 import {
+  clearAppSession,
   deleteCreatedAccount,
   isLocalLane,
   requireInboxToken,
@@ -53,11 +54,11 @@ async function signInAtStep(page: Page, baseURL: string | undefined, step: Step)
     },
     { livePlan: false },
   );
-  await page.context().clearCookies();
   await signIn(page, baseURL, cookie);
 }
 
 async function newCustomer(page: Page, baseURL: string | undefined, step: Step): Promise<void> {
+  await clearAppSession(page);
   if (isLocalLane()) {
     await signInAtStep(page, baseURL, step);
     return;
