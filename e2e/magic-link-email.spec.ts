@@ -69,7 +69,7 @@ test("the sign-in email names the address, the expiry and the ignore line, and r
   await page.setViewportSize({ width: 600, height: 900 });
   await page.setContent(html);
   await expect(page.getByText(email)).toBeVisible();
-  await expect(page.getByText("expires in 5 minutes")).toBeVisible();
+  await expect(page.getByText("It works once and expires in 5 minutes.")).toBeVisible();
   await expect(page.getByText("ignore this email")).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
 

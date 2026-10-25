@@ -67,7 +67,7 @@ test("a stale session lands on sign-in with a calm explanation", async ({ page, 
   await page.goto("/app");
   await expect(page).toHaveURL(/\/login\?.*ended=1/);
   await expect(page.getByRole("alert")).toContainText("You were signed out");
-  await page.context().clearCookies();
+  await page.context().clearCookies({ name: /better-auth\.session_token$/ });
   await page.goto("/app");
   await expect(page).toHaveURL(/\/login$/);
 });

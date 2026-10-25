@@ -64,6 +64,7 @@ async function newCustomer(page: Page, baseURL: string | undefined, step: Step):
   }
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   createdEmail = email;
+  await page.context().clearCookies({ name: /better-auth\.session_token$/ });
   await signInWithMagicLink(page, email, requireInboxToken());
 }
 
