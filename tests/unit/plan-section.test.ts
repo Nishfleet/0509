@@ -44,6 +44,14 @@ const BILLED: PlanSummary = {
   billed: true,
 };
 
+const UNBILLED: PlanSummary = {
+  tier: "scout",
+  status: "none",
+  currentPeriodEnd: null,
+  trialing: false,
+  billed: false,
+};
+
 function paragraphWrapping(html: string, text: string): string {
   const start = html.indexOf(text);
   if (start < 0) throw new Error(`no paragraph renders "${text}"`);
@@ -62,7 +70,7 @@ describe("PlanSection", () => {
   });
 
   it("offers the next plan to someone with no payment set up", () => {
-    const html = render({ tier: "scout", status: "none", currentPeriodEnd: null, trialing: false, billed: false });
+    const html = render(UNBILLED);
     expect(html).toContain("Upgrade to Starter");
     expect(html).toContain("€46/month");
   });
@@ -128,8 +136,8 @@ describe("PlanSection", () => {
     expect(html).toContain("invoices are in the Dodo portal");
   });
 
-  it("says nothing about the seller of record to a workspace with no card on file", () => {
-    const html = render({ tier: "scout", status: "none", currentPeriodEnd: null, trialing: false, billed: false });
+  it("says nothing about the seller of record to a workspace with no payment method on file", () => {
+    const html = render(UNBILLED);
     expect(html).not.toContain("Dodo");
   });
 

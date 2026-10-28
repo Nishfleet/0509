@@ -65,7 +65,7 @@ export function PlanSection({
           <BillingButton label={billingLabel(plan, retryable)} />
           <p className="mt-2 max-w-prose font-mono text-meta leading-[1.55] text-ink-soft">
             Dodo Payments is the seller of record. It takes payment, charges any tax and sends your receipts. Your
-            invoices are in the Dodo portal, which the button above opens.
+            invoices are in the Dodo portal, which the billing button opens.
           </p>
         </>
       ) : null}
