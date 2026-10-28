@@ -5,10 +5,10 @@ import { planLine } from "../../app/lib/billing/plan-line";
 describe("planLine", () => {
   const NOW = new Date("2026-10-01T00:00:00.000Z");
 
-  it("says no payment is set up when nothing is billed", () => {
+  it("says nothing is charged while no payment method is on file", () => {
     expect(
       planLine({ tier: "scout", status: "none", currentPeriodEnd: null, trialing: false, billed: false }, NOW),
-    ).toBe("You're on Scout. No payment is set up.");
+    ).toBe("You're on Scout. No payment method is on file, so nothing is charged.");
   });
 
   it("gives the renewal date of an active plan", () => {
