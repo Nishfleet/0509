@@ -139,7 +139,7 @@ describe("artifact uploads declare a bounded retention (0509#7188)", () => {
     expect(labels).toContain("ci.yml: Keep the trace when it fails");
   });
 
-  it("gives every upload step an explicit retention", async () => {
+  it("gives every upload step a usable retention", async () => {
     const undeclared = (await allUploads()).flatMap((upload) => {
       const problem = retentionProblem(upload.step);
       return problem === undefined ? [] : [`${label(upload)} ${problem}`];
