@@ -40,9 +40,7 @@ describe("fixture workspaces and the nightly plan (0509#5774)", () => {
     const keptLane = await onboard("u-kept-lane", "e2e+onboarded-desktop@0509.io");
     const fixture = await onboard("u-fix", "e2e+abc123@0509.io");
 
-    const marks = await env.DB.prepare(
-      "SELECT id, fixture FROM workspace WHERE id IN (?, ?, ?, ?) ORDER BY id",
-    )
+    const marks = await env.DB.prepare("SELECT id, fixture FROM workspace WHERE id IN (?, ?, ?, ?) ORDER BY id")
       .bind(real, kept, keptLane, fixture)
       .all<{
         id: string;
