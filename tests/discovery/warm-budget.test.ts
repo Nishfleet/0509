@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const budget = vi.hoisted(() => ({ take: vi.fn(), idFromName: vi.fn((name: string) => name) }));
 const warmProposals = vi.hoisted(() => vi.fn());
+const fixture = vi.hoisted(() => ({ read: vi.fn() }));
 
 vi.mock("cloudflare:workers", () => ({
   env: { BROWSER_BUDGET: { idFromName: budget.idFromName, get: () => ({ take: budget.take }) } },
 }));
 vi.mock("../../app/lib/discovery/generators/ai.server", () => ({ warmProposals }));
+vi.mock("../../app/lib/data/workspace.server", () => ({ readWorkspaceFixture: fixture.read }));
 
 import { warmDiscovery } from "../../app/lib/discovery/warm.server";
 import type { SiteFields } from "../../app/lib/identity/card-fields";
@@ -18,6 +20,8 @@ const site = Promise.resolve({ unfound: false, name: "Allbirds", description: "S
 beforeEach(() => {
   budget.take.mockReset();
   warmProposals.mockReset();
+  fixture.read.mockReset();
+  fixture.read.mockResolvedValue(false);
 });
 
 describe("warming rival suggestions while the brand card shows", () => {
@@ -36,6 +40,17 @@ describe("warming rival suggestions while the brand card shows", () => {
 
     await warmDiscovery("ws-1", subject, site);
 
+    expect(warmProposals).not.toHaveBeenCalled();
+  });
+
+  it("asks nothing and draws no allowance for a fixture workspace", async () => {
+    fixture.read.mockResolvedValue(true);
+    budget.take.mockResolvedValue(true);
+
+    await warmDiscovery("ws-fixture", subject, site);
+
+    expect(fixture.read).toHaveBeenCalledWith("ws-fixture");
+    expect(budget.take).not.toHaveBeenCalled();
     expect(warmProposals).not.toHaveBeenCalled();
   });
 

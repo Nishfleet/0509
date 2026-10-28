@@ -226,11 +226,13 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   await page.setViewportSize({ width: 600, height: 900 });
   await page.setContent(html);
   const text = (await page.locator("body").textContent()) ?? "";
-  const variant = text.includes("Quiet week:") ? "quiet" : "blind-source";
+  const isQuiet = text.includes("Quiet week:");
+  const variant = isQuiet ? "quiet" : "blind-source";
+  const headline = isQuiet ? "Quiet week:" : "so we can't say this was a quiet week.";
   expect(
-    text.includes("Quiet week:") || text.includes("so we cannot say this was a quiet week"),
+    text,
     "nothing noteworthy still sends, either as a quiet week or naming a source that has not answered",
-  ).toBe(true);
+  ).toContain(headline);
   expect(text, "no D4 picks, so the read-this-first block is the one block a quiet week drops").not.toContain(
     "Read this first",
   );

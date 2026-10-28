@@ -1,6 +1,6 @@
 import { expect, test } from "./test";
 
-import { consoleFailures, deleteCreatedAccount, settleSignInWidget, watchConsole } from "./inbox";
+import { clearAppSession, consoleFailures, deleteCreatedAccount, settleSignInWidget, watchConsole } from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -67,7 +67,20 @@ test("a stale session lands on sign-in with a calm explanation", async ({ page, 
   await page.goto("/app");
   await expect(page).toHaveURL(/\/login\?.*ended=1/);
   await expect(page.getByRole("alert")).toContainText("You were signed out");
-  await page.context().clearCookies();
+  await clearAppSession(page);
   await page.goto("/app");
   await expect(page).toHaveURL(/\/login$/);
+});
+
+test("clearing the app session leaves the Cloudflare Access cookie alone", async ({ page, baseURL }) => {
+  const host = new URL(baseURL ?? "http://localhost").hostname;
+  await page.context().addCookies([
+    { name: "CF_Authorization", value: "access", domain: host, path: "/" },
+    { name: "better-auth.session_token", value: "session", domain: host, path: "/" },
+    { name: "__Secure-better-auth.session_token", value: "secure", domain: host, path: "/", secure: true },
+  ]);
+  await clearAppSession(page);
+  const cleared = (await page.context().cookies()).map((cookie) => cookie.name);
+  expect(cleared).toContain("CF_Authorization");
+  expect(cleared.filter((name) => name.endsWith("better-auth.session_token"))).toEqual([]);
 });
