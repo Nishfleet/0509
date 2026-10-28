@@ -169,9 +169,18 @@ const NEURONS_PER_CLEF_CALL = 17;
 
 export const NEURONS_PER_MODEL_CALL = 60;
 
-const NEURON_CEILING = Number(process.env.EVAL_MAX_NEURONS ?? "") || 0;
+function readCeiling(name: string, fallback: number): number {
+  const raw = process.env[name] ?? "";
+  if (raw === "") return fallback;
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(`${name} must be a non-negative integer or empty, got ${raw}`);
+  }
+  return Number(raw);
+}
 
-const DAILY_CEILING = Number(process.env.EVAL_DAILY_NEURON_CEILING ?? "") || 9000;
+const NEURON_CEILING = readCeiling("EVAL_MAX_NEURONS", 0);
+
+const DAILY_CEILING = readCeiling("EVAL_DAILY_NEURON_CEILING", 9000);
 
 const GRAPHQL_URL = "https://api.cloudflare.com/client/v4/graphql";
 
@@ -270,7 +279,7 @@ function spendCall(neurons: number): void {
   if (callsUsed >= callBudget) throw new Error(`eval stopped: call budget of ${String(callBudget)} spent`);
   if (NEURON_CEILING > 0 && neuronsSpent + neurons > NEURON_CEILING) {
     throw new Error(
-      `eval stopped: neuron ceiling of ${String(NEURON_CEILING)} spent (estimated ${String(neuronsSpent)}); set by EVAL_MAX_NEURONS in .github/workflows/evals.yml (0509#7249)`,
+      `eval stopped: neuron ceiling of ${String(NEURON_CEILING)} spent (estimated ${String(neuronsSpent)}); EVAL_MAX_NEURONS sets it, a repository variable whose evals.yml default is 2000 (0509#7249)`,
     );
   }
   callsUsed += 1;
@@ -552,7 +561,7 @@ export async function runEval<T extends EvalRow>(
   const plannedNeurons = selectedRows * REPEATS * neuronsPerCall;
   if (NEURON_CEILING > 0 && neuronsSpent + plannedNeurons > NEURON_CEILING) {
     throw new Error(
-      `eval refused before any paid call: ${questionId} needs about ${String(plannedNeurons)} neurons (${String(selectedRows)} rows x ${String(REPEATS)} repeats x ${String(neuronsPerCall)} per call) on top of ${String(neuronsSpent)} already spent, over the ceiling of ${String(NEURON_CEILING)}; narrow the run with the evals.yml split or filter input, or EVAL_SPLIT here (0509#7249)`,
+      `eval refused before any paid call: ${questionId} needs about ${String(plannedNeurons)} neurons (${String(selectedRows)} rows x ${String(REPEATS)} repeats x ${String(neuronsPerCall)} per call) on top of ${String(neuronsSpent)} already spent, over the ceiling of ${String(NEURON_CEILING)}; narrow the run with the evals.yml split or filter input, or EVAL_SPLIT here, or set the EVAL_MAX_NEURONS repository variable (one run still stops at EVAL_DAILY_NEURON_CEILING) (0509#10054)`,
     );
   }
   for (const split of wanted) {

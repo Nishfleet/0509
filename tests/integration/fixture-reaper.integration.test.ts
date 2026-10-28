@@ -245,8 +245,11 @@ describe("the e2e fixture account reaper", () => {
       });
     }
 
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const first = await reapFixtureAccounts("live", NOW, direct);
 
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).toContain('"event":"fixture_reaper.ceiling_hit"');
     expect(first).toMatchObject({
       selected: FIXTURE_REAPER_CEILING,
       deleted: FIXTURE_REAPER_CEILING,
@@ -256,6 +259,7 @@ describe("the e2e fixture account reaper", () => {
     expect(left.results.map((row) => row.id)).toEqual(ids.slice(FIXTURE_REAPER_CEILING));
 
     const second = await reapFixtureAccounts("live", NOW, direct);
+    expect(warn).toHaveBeenCalledTimes(1);
     expect(second).toMatchObject({ selected: 5, deleted: 5, ceilingHit: false });
     expect(await count('SELECT COUNT(*) AS n FROM "user"')).toBe(0);
 
