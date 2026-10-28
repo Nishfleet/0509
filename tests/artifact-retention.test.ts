@@ -20,6 +20,25 @@ jobs:
           retention-days: 7
 `;
 
+const ABSENT_RETENTION = `on: pull_request
+jobs:
+  preview-assert:
+    steps:
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-no-retention
+`;
+
+const UNUSABLE_RETENTION = `on: pull_request
+jobs:
+  preview-assert:
+    steps:
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-zero-retention
+          retention-days: 0
+`;
+
 interface WorkflowStep {
   name?: string;
   uses?: string;
@@ -35,6 +54,8 @@ interface Upload {
   step: WorkflowStep;
 }
 
+type Retention = { kind: "days"; days: number } | { kind: "absent" } | { kind: "unusable"; declared: unknown };
+
 function uploadsOf(source: string): WorkflowStep[] {
   const jobs = (parse(source) as { jobs?: Record<string, WorkflowJob> }).jobs ?? {};
   return Object.values(jobs)
@@ -42,10 +63,38 @@ function uploadsOf(source: string): WorkflowStep[] {
     .filter((step) => step.uses?.split("@")[0] === UPLOAD_ACTION);
 }
 
-function retentionDays(step: WorkflowStep): number | undefined {
+function retentionOf(step: WorkflowStep): Retention {
   const declared = step.with?.["retention-days"];
+  if (declared === undefined) {
+    return { kind: "absent" };
+  }
   const days = typeof declared === "string" ? Number(declared) : declared;
-  return typeof days === "number" && Number.isInteger(days) && days > 0 ? days : undefined;
+  if (typeof days === "number" && Number.isInteger(days) && days > 0) {
+    return { kind: "days", days };
+  }
+  return { kind: "unusable", declared };
+}
+
+function retentionDays(step: WorkflowStep): number | undefined {
+  const retention = retentionOf(step);
+  return retention.kind === "days" ? retention.days : undefined;
+}
+
+function retentionProblem(step: WorkflowStep): string | undefined {
+  const retention = retentionOf(step);
+  if (retention.kind === "absent") {
+    return "declares no retention-days";
+  }
+  if (retention.kind === "unusable") {
+    return `declares an unusable retention-days: ${JSON.stringify(retention.declared)}`;
+  }
+  return undefined;
+}
+
+function singleUpload(source: string): WorkflowStep {
+  const uploads = uploadsOf(source);
+  expect(uploads).toHaveLength(1);
+  return uploads[0];
 }
 
 function label({ file, step }: Upload): string {
@@ -68,8 +117,21 @@ async function allUploads(): Promise<Upload[]> {
 
 describe("artifact uploads declare a bounded retention (0509#7188)", () => {
   it("reads a retention-days value from an upload step", () => {
-    const [upload] = uploadsOf(FIXTURE);
+    const upload = singleUpload(FIXTURE);
+    expect(retentionProblem(upload)).toBeUndefined();
     expect(retentionDays(upload)).toBe(7);
+  });
+
+  it("names an upload step that declares no retention-days", () => {
+    const upload = singleUpload(ABSENT_RETENTION);
+    expect(retentionProblem(upload)).toBe("declares no retention-days");
+    expect(retentionDays(upload)).toBeUndefined();
+  });
+
+  it("names an upload step whose retention-days value is unusable", () => {
+    const upload = singleUpload(UNUSABLE_RETENTION);
+    expect(retentionProblem(upload)).toBe("declares an unusable retention-days: 0");
+    expect(retentionDays(upload)).toBeUndefined();
   });
 
   it("finds the artifact uploads the workflows declare", async () => {
@@ -78,9 +140,10 @@ describe("artifact uploads declare a bounded retention (0509#7188)", () => {
   });
 
   it("gives every upload step an explicit retention", async () => {
-    const undeclared = (await allUploads())
-      .filter((upload) => retentionDays(upload.step) === undefined)
-      .map((upload) => `${label(upload)} declares no retention-days`);
+    const undeclared = (await allUploads()).flatMap((upload) => {
+      const problem = retentionProblem(upload.step);
+      return problem === undefined ? [] : [`${label(upload)} ${problem}`];
+    });
     expect(undeclared).toEqual([]);
   });
 
