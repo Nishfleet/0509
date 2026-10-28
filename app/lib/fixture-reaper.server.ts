@@ -4,6 +4,7 @@ import { finishAccountDelete, readAccountFootprint } from "./account-delete.serv
 import type { AccountFootprint } from "./account-delete.server";
 import { oauthHelpers } from "./agent/oauth.server";
 import { deleteUserWithApiKeys, readFixtureReapCandidates } from "./data/user.server";
+import { readForeignChildSchedules } from "./data/workspace.server";
 import { FIXTURE_ACCOUNTS, isPerRunFixtureEmail } from "./fixture-accounts";
 
 export const FIXTURE_REAPER_CEILING = 25;
@@ -48,7 +49,9 @@ async function selectFixtureUsers(now: Date): Promise<ReaperSelection> {
 
 async function reapUser(mode: ReaperMode, user: { userId: string; label: string }, step: ReaperStep) {
   const { userId, label } = user;
-  const footprint = await step(`footprint ${label}`, () => readAccountFootprint(userId));
+  const footprint = await step(`footprint ${label}`, async () =>
+    readAccountFootprint(userId, await readForeignChildSchedules(userId)),
+  );
   if (mode === "dry-run") return { footprint, deleted: 0 };
   await step(`purge ${label}`, () =>
     finishAccountDelete(oauthHelpers(env), { userId, footprint, instanceId: `fixture-reaper-${userId}` }),
