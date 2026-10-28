@@ -122,6 +122,17 @@ describe("PlanSection", () => {
     expect(html).not.toContain("Upgrade to");
   });
 
+  it("names Dodo Payments as the seller of record and says where the invoices are", () => {
+    const html = render(BILLED);
+    expect(html).toContain("Dodo Payments is the seller of record.");
+    expect(html).toContain("invoices are in the Dodo portal");
+  });
+
+  it("says nothing about the seller of record to a workspace with no card on file", () => {
+    const html = render({ tier: "scout", status: "none", currentPeriodEnd: null, trialing: false, billed: false });
+    expect(html).not.toContain("Dodo");
+  });
+
   it("offers a paying Scout customer a switch to Starter that posts to the upgrade action", () => {
     const html = render({ ...BILLED, tier: "scout" });
     expect(html).toContain("Switch to Starter");

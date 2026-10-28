@@ -32,7 +32,7 @@ function troubledLine(plan: PlanSummary, name: string): string | null {
 
 function runningLine(plan: PlanSummary, name: string, now: Date): string {
   const date = formatDay(plan.currentPeriodEnd);
-  if (!plan.billed) return `You're on ${name}. No payment is set up.`;
+  if (!plan.billed) return `You're on ${name}. No card is on file, so nothing is charged.`;
   const troubled = troubledLine(plan, name);
   if (troubled !== null) return troubled;
   if (plan.status === "cancelled") {
