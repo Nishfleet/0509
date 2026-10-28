@@ -110,7 +110,7 @@ npm run lint       # eslint . && knip && jscpd && prettier --check .
 npm run format     # prettier --write .
 npm test           # vitest run
 npm run e2e        # playwright test
-npm run eval       # vitest run --config vitest.evals.config.ts; live Workers AI, EVAL_MAX_NEURONS caps one run (evals.yml sets 2000; unset = no cap)
+npm run eval       # vitest run --config vitest.evals.config.ts; live Workers AI, EVAL_MAX_NEURONS caps one run (evals.yml sets it from the EVAL_MAX_NEURONS repository variable, default 2000; unset or 0 means no cap; any other non-integer value aborts the run)
 npm run deploy     # wrangler deploy
 npm run verify:start # chrome-devtools start, headless, Playwright's Chromium, --no-sandbox
 npm run verify:stop  # chrome-devtools stop
@@ -164,10 +164,18 @@ the live app works.
 
 ## Reproducing a user report
 
-1. **Read the raw report.** `npx wrangler d1 execute 0509 --remote --command "select raw from support_report where id = '<id>'"`, where `<id>` is the report id in the issue body. This is a read; never run any other statement against `--remote`. Never paste any of the raw text into the issue, the PR, a commit message or a spec.
+1. **Read the raw report.** `npx wrangler d1 execute 0509 --remote --command "select raw from support_report where id = '<id>'"`, where `<id>` is the report id in the issue body. This is a read; never run any other statement against `--remote`. Never paste any of the raw text into the issue, the PR, a commit message or a spec. No agent session on this host can run that command, because the runner hides the Cloudflare credential directory from every job (see "Cloudflare credentials on this host" below). A worker that needs the raw report parks the issue with `blocked-on: orchestrator`, the `needs-orchestrator` label and the report id, instead of running a command that cannot authenticate.
 2. **Map the report to rows of `.agents/skills/verify/feature-map.md` and `.agents/skills/verify/feature-map/`** by the paths in the issue body and the words in the raw text, following the procedure in `.agents/skills/verify/SKILL.md#reproduce-a-vague-user-report` — link it, do not restate it. If no row matches, say in the issue whether the map is missing a feature or the report is not about this product, and stop.
 3. **Drive the local lane through the e2e suite.** `PLAYWRIGHT_TEST_BASE_URL` unset, then `npm run e2e -- e2e/report-<id>.spec.ts` (simulated email, local D1, AI off). Do not run it against https://0509.io: each production sign-in sends a real email and churns production D1. If the report depends on production-only data, say so in the issue instead. The deliverable is one spec `e2e/report-<id>.spec.ts` whose test title contains the report id. If the report reproduces, the test asserts the correct behaviour and is marked `test.fail()`, so CI stays green until the fix lands. If it does not reproduce, the test has no `test.fail()` and the issue gets a no-repro comment listing each step tried with its UTC timestamp.
 4. **The PR that fixes the report** removes the `test.fail()` from that spec and keeps the spec.
+
+## Cloudflare credentials on this host
+
+The self-hosted runner unit hides `~/.config/cloudflare` from every job it runs, and the first step of every agent job fails the run if that directory becomes readable (fleet-ops#9983, 2026-10-22). So no agent session on this host — a worker or an orchestrator hand-off — can read a Cloudflare token, mint one, or run `wrangler` against a remote database.
+
+- A Cloudflare credential an agent session needs goes in the seat-config directory, the one credential directory both the runner unit and the worker jail leave visible. Its exact path is not written here because this repo is public and the repo's own private-detail rule keeps that path out of it; the fleet-ops dispatch workflow that writes the seat env files is the source of truth. A worker that needs one parks the issue `blocked-on: orchestrator` with the `needs-orchestrator` label, rather than guessing a home path.
+- This repo's production D1 read token is an Actions secret. It is read-only and read by a workflow in this repo. A worker session on the VPS cannot read it, because the worker App token carries no permission to read Actions secrets.
+- The Cloudflare Access service token for driving production is not in this repo and sits on no path an agent can read. Driving production from a worker is forbidden anyway; the production suite runs on its own schedule from `main`.
 
 ## Architecture
 
@@ -241,14 +249,17 @@ AI grader: CI is the gate, and a PR that touches `.github/`, `migrations/`,
 `app/lib/auth*` or `app/lib/data/` is labelled `needs-coordinator` and the
 coordinator reviews it before it merges.
 
-`lighthouse` runs in `deploy-production.yml` after the deploy job. Verify a fix on the local lane:
+The production Lighthouse audit is out of `deploy-production.yml` while the site is behind the
+Cloudflare Access wall (0509#7656): it measured the login page and reddened a good deploy, which the
+fleet's deploy-failed alert read as an outage (fleet-ops#9889). The budgets still gate every pull
+request in `ci.yml` (resource sizes and CLS, against the built Worker). Verify a fix on the local lane:
 `PLAYWRIGHT_TEST_BASE_URL` unset, so `npm run e2e -- e2e/<name>.spec.ts` starts `wrangler dev --local` with simulated
 email, a local D1 and `AI_SPEND` off. Do not dispatch `e2e-scheduled.yml` to verify a fix, and do not point a run at
 https://0509.io: each production sign-in sends a real email, the specs delete and recreate production D1 rows, and the
 live-AI journeys spend Workers AI neurons. Production e2e runs only on its schedule from `main`, and every job that
 reaches production declares the `production-e2e` environment, whose deployment branch policy allows `main` only.
-Neither `lighthouse` nor the production e2e is **required**, deliberately: they cannot run on a pull request, and a
-required check that cannot report blocks the queue forever. The suite is off the
+The production e2e is **not required**, deliberately: it cannot run on a pull request, and a required
+check that cannot report blocks the queue forever. The suite is off the
 deploy path because every sign-in in it sends a real email against the Email
 Service daily quota (Nish 2026-09-28).
 
@@ -297,8 +308,7 @@ Service daily quota (Nish 2026-09-28).
 - The site is gated until the audit passes. Which paths bypass Access is set
   in Cloudflare, not in code; a route's feature-map row says whether it is
   public (`/u/:token` is). `/login`, `/app`, `/onboarding`, `/api/auth` sit
-  behind Cloudflare Access (Nish by email, agents by the service token in
-  `~/.config/cloudflare/access-0509-agents.env`). A bare `curl` returning 302
+  behind Cloudflare Access (Nish by email). A bare `curl` returning 302
   to `cloudflareaccess.com` is the gate, not a bug. `0509.in` is a zone
   Redirect Rule, never code.
 

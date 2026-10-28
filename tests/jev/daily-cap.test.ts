@@ -4,6 +4,7 @@ const ai = vi.hoisted(() => ({ run: vi.fn() }));
 const caps = vi.hoisted(() => ({ share: vi.fn() }));
 
 vi.mock("cloudflare:workers", () => ({ env: { AI: ai, AI_SPEND: "on" } }));
+vi.mock("../../app/lib/data/workspace.server", () => ({ readWorkspaceFixture: () => Promise.resolve(false) }));
 vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn() }));
 vi.mock("../../app/lib/data/jev_verdict.server", () => ({
   readCachedNoul: () => Promise.resolve(null),

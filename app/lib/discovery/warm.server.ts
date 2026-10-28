@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 
+import { readWorkspaceFixture } from "../data/workspace.server";
 import type { SiteFields } from "../identity/card-fields";
 import { creatorSite } from "../identity/creator-site";
 import type { Subject } from "../identity/normalise";
@@ -14,6 +15,7 @@ function takeWarm(workspaceId: string): Promise<boolean> {
 }
 
 export async function warmDiscovery(workspaceId: string, subject: Subject, site: Promise<SiteFields>): Promise<void> {
+  if (await readWorkspaceFixture(workspaceId)) return;
   const fields = await site;
   if (fields.unfound || fields.name === null || fields.name === "") return;
   if (!(await takeWarm(workspaceId))) return;
