@@ -517,9 +517,12 @@ jobs:
         run: |
           set -euo pipefail
           d1() {
-            npx wrangler d1 execute 0509 --remote --json --command "$1" | jq -c '.[0].results'
+            out=$(npx wrangler d1 execute 0509 --remote --json --command "$1" 2>&1) || echo "wrangler exit $?" >&2
+            # The shapes differ by lane: --local prints an array of result
+            # objects, the remote REST path an object. Accept both.
+            printf '%s' "$out" | jq -c 'if type == "array" then .[0].results else .results end'
           }
-          ws="(SELECT workspace_id FROM entity WHERE role = 'self' AND domain LIKE '%bluorng%')"
+          ws="(SELECT workspace_id FROM entity WHERE role = 'self' AND domain LIKE '%bluorng%' AND workspace_id IN (SELECT id FROM workspace WHERE owner_user_id IN (SELECT id FROM user WHERE email NOT LIKE '%@fixture.0509.in' AND email NOT LIKE 'canary%' AND email NOT LIKE 'e2e+%@0509.io')))"
           echo "== read at $(date -u +%Y-%m-%dT%H:%M:%SZ), workspace ids shown to 8 chars"
           echo "== workspace"
           d1 "SELECT substr(id, 1, 8) AS id_prefix, created_at, timezone, brief_weekday, brief_hour, brief_paused_at FROM workspace WHERE id IN $ws"
