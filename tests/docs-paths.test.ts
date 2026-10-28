@@ -28,7 +28,7 @@ const LIVE = [
   /site is gated until the audit passes/,
 ] as const;
 
-const HIDDEN_CREDENTIAL_DIRS = ["~/.config/cloudflare"] as const;
+const HIDDEN_CREDENTIAL_DIRS = ["~/.config/cloudflare", "~/.cloudflare", "~/.wrangler"] as const;
 
 function homePathsIn(text: string): string[] {
   const normalized = text.replace(/\/(?:home|Users)\/[\w.-]+(?=\/)/g, "~");
