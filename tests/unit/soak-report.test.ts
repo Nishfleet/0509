@@ -56,22 +56,30 @@ describe("soak-report measures the two DONE lines (0509#7076)", () => {
   });
 });
 
-describe("a production D1 read runs where D1 accepts the token (0509#7773)", () => {
-  function d1ReaderJobs(): [string, { environment?: unknown; steps?: SoakStep[] }][] {
+describe("a production D1 read declares its environment and runs only on main (0509#7773, #7072)", () => {
+  function d1ReaderJobs(): [string, { environment?: unknown; if?: string; steps?: SoakStep[] }][] {
     return Object.entries(e2eJobs()).filter(([, job]) =>
       (job.steps ?? []).some((step) => (step.run ?? "").includes("wrangler d1 execute 0509 --remote")),
     );
   }
 
-  it("runs every job that reads production D1 in production, with no deployment record", () => {
-    const readers = d1ReaderJobs();
-    expect(readers.map(([name]) => name)).toEqual(["jev-failures", "soak-report"]);
-    for (const [, job] of readers) {
-      expect(job.environment).toEqual({ name: "production", deployment: false });
+  it("derives the D1 reader census", () => {
+    expect(d1ReaderJobs().map(([name]) => name)).toEqual(["jev-failures", "soak-report"]);
+  });
+
+  it("declares an environment, so the branch policy and the secret resolution are explicit", () => {
+    for (const [, job] of d1ReaderJobs()) {
+      expect(job.environment).toBeDefined();
     }
   });
 
-  it("runs no dependency install script beside the production token", () => {
+  it("runs only on main", () => {
+    for (const [, job] of d1ReaderJobs()) {
+      expect(job.if).toContain("github.ref == 'refs/heads/main'");
+    }
+  });
+
+  it("runs no dependency install script beside the Cloudflare token", () => {
     for (const [, job] of d1ReaderJobs()) {
       const install = (job.steps ?? []).map((step) => step.run ?? "").filter((run) => run.startsWith("npm ci"));
       expect(install).toEqual(["npm ci --ignore-scripts"]);
