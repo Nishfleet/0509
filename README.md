@@ -113,9 +113,9 @@ pins the two together. Version: 1.
 GitHub's stock Dependabot recipe (0509#7747). On a pull request opened by
 Dependabot, `dependabot/fetch-metadata` reads the update type, and for
 `version-update:semver-patch` or `version-update:semver-minor` the job runs
-`gh pr merge --auto`. A major update is left for a person. Arming only queues
-the pull request: `ci-ok`, `base-fresh` and `ratchet / ratchet` still gate it in
-the merge queue, and fleet-ops' `hold-risky` job, reached through
+`gh pr merge --auto --squash`. A major update is left for a person. Arming only
+queues the pull request: `ci-ok`, `base-fresh` and `ratchet / ratchet` still gate
+it in the merge queue, and fleet-ops' `hold-risky` job, reached through
 `agent-dispatch.yml`, still holds one that matches a risky path.
 Version: 1.
 
@@ -123,3 +123,14 @@ Version: 1.
   still opens its pull requests; a person arms them.
 - Remove it: delete `.github/workflows/dependabot-auto-merge.yml`, its section
   here and its entry in `tests/workflows-documented.test.ts`.
+- The trigger is `pull_request`, not `pull_request_target`, because zizmor
+  1.30.1 fails `pull_request_target` as a fundamentally insecure trigger, and
+  `.github/zizmor.yml` exempts `agent-dispatch.yml` only. A Dependabot
+  run gets a read-only `GITHUB_TOKEN` by default, so the job raises it to
+  `contents: write` and `pull-requests: write`. The workflow reads no
+  repository secret, and it checks out no pull request code.
+- Open question: the Dependabot recipe notes that on a branch which requires a
+  merge queue the built-in `GITHUB_TOKEN` cannot add a pull request to the
+  queue, and `main` requires one. No run has yet proved the arm either way on
+  this repository, and no personal access token or GitHub App token with merge
+  permission is held as a secret here. Tracked in #7781.
