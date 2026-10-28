@@ -47,3 +47,26 @@ describe("soak-report measures the two DONE lines (0509#7076)", () => {
     expect(readFileSync(path.join(REPO_ROOT, CI), "utf8")).toContain("tests/unit/soak-report.test.ts");
   });
 });
+
+describe("soak-report's wrangler reads name themselves on failure (0509#10755)", () => {
+  it("captures wrangler's output and prints the exit code and the body before failing", () => {
+    const run = soakStep().run ?? "";
+    expect(run).toContain('out=$(npx wrangler d1 execute 0509 --remote --json --command "$1" 2>"$errf")');
+    expect(run).toContain('echo "wrangler d1 execute exited $?"');
+    expect(run).toContain('echo "$out"');
+  });
+
+  it("keeps wrangler's stderr out of the JSON jq parses, so noise cannot re-hide the cause", () => {
+    const run = soakStep().run ?? "";
+    expect(run).toContain('2>"$errf"');
+    expect(run).not.toContain('2>&1');
+    expect(run).toContain('cat "$errf"');
+  });
+
+  it("runs the sends and sweeps reads through that helper, leaving no bare wrangler pipe into jq", () => {
+    const run = soakStep().run ?? "";
+    expect(run).toContain("sends=$(d1 ");
+    expect(run).toContain("sweeps=$(d1 ");
+    expect(run).not.toMatch(/wrangler d1 execute[^\n]*\| jq/);
+  });
+});
