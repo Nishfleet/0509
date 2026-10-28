@@ -69,7 +69,7 @@ async function openIssue(token: string, report: ReportMail): Promise<Response> {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      title: `user report ${report.id}`,
+      title: `Support: ${report.id}`,
       body: issueBody(report),
       labels: ["user-report", "machine-reported"],
     }),

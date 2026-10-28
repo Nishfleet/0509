@@ -91,7 +91,7 @@ describe("0509-support-inbox-v2", () => {
 
     const issue = issueBody(fetchSpy);
     const row = await env.DB.prepare("SELECT id FROM support_report").first<{ id: string }>();
-    expect(issue.title).toBe(`user report ${row?.id ?? "<missing>"}`);
+    expect(issue.title).toBe(`Support: ${row?.id ?? "<missing>"}`);
     expect(issue.labels).toEqual(["user-report", "machine-reported"]);
     expect(issue.body).toContain("/app/pages");
     expect(issue.body).toContain("Thunderbird 128");
