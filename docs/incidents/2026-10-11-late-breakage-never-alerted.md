@@ -2,7 +2,7 @@
 
 ## What customers saw
 
-Possibly nothing: J8 soft (#7337) saw no "looks broken" email after the 21:00Z sweep on 2026-10-10. Whether this gap caused that miss is not yet proven.
+Nothing from this gap. J8 soft (#7337) saw no "looks broken" email after the 21:00Z sweep on 2026-10-10, but this gap did not cause that miss: that night's `own_site_breakage` verdict was recorded at 21:11:16Z and the incident opened at 21:11:17Z, so the judgment was neither deferred nor failed and the sweep did take the `openBreakageIncident` path. That miss is a different cause, written up in `2026-10-10-j8-soft-break-check-band-no-email.md`.
 
 ## Start and end (UTC)
 
