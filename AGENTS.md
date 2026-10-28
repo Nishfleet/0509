@@ -110,7 +110,7 @@ npm run lint       # eslint . && knip && jscpd && prettier --check .
 npm run format     # prettier --write .
 npm test           # vitest run
 npm run e2e        # playwright test
-npm run eval       # vitest run --config vitest.evals.config.ts; live Workers AI, EVAL_MAX_NEURONS caps one run (evals.yml default 2000, the EVAL_MAX_NEURONS repository variable raises it, a value that is not a non-negative integer aborts the run; unset = no cap)
+npm run eval       # vitest run --config vitest.evals.config.ts; live Workers AI, EVAL_MAX_NEURONS caps one run (evals.yml sets it from the EVAL_MAX_NEURONS repository variable, default 2000; unset or 0 means no cap; any other non-integer value aborts the run)
 npm run deploy     # wrangler deploy
 npm run verify:start # chrome-devtools start, headless, Playwright's Chromium, --no-sandbox
 npm run verify:stop  # chrome-devtools stop

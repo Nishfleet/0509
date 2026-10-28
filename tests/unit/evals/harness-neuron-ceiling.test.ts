@@ -114,6 +114,14 @@ describe("EVAL_MAX_NEURONS as the repository variable of 0509#10054", () => {
     );
   });
 
+  it("refuses the forms Number() would have accepted, so the ceiling is never a surprise", async () => {
+    for (const value of ["0x10", "1e3", " 2000 "]) {
+      await expect(ceilingOnly(value)).rejects.toThrow(
+        `EVAL_MAX_NEURONS must be a non-negative integer or empty, got ${value}`,
+      );
+    }
+  });
+
   it("keeps 0 as the unset value it has always been: no per-run ceiling", async () => {
     const runEval = await ceilingOnly("0");
 
@@ -253,6 +261,23 @@ describe("EVAL_DAILY_NEURON_CEILING", () => {
     const { postWorkersAi } = await started("2000");
 
     await expect(postWorkersAi(MODEL, {})).rejects.toThrow(/cannot read today's neurons/);
+
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("refuses a daily value that is not a non-negative integer instead of turning the guard off", async () => {
+    vi.stubEnv("EVAL_DAILY_NEURON_CEILING", "9,000");
+
+    await expect(started("2000")).rejects.toThrow(
+      /EVAL_DAILY_NEURON_CEILING must be a non-negative integer or empty, got 9,000/,
+    );
+  });
+
+  it("refuses every paid call when the daily ceiling is 0, so 0 fails closed", async () => {
+    vi.stubEnv("EVAL_DAILY_NEURON_CEILING", "0");
+    const { postWorkersAi } = await started("2000");
+
+    await expect(postWorkersAi(MODEL, {})).rejects.toThrow(/daily ceiling of 0/);
 
     expect(run).not.toHaveBeenCalled();
   });

@@ -172,11 +172,10 @@ export const NEURONS_PER_MODEL_CALL = 60;
 function readCeiling(name: string, fallback: number): number {
   const raw = process.env[name] ?? "";
   if (raw === "") return fallback;
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 0) {
+  if (!/^\d+$/.test(raw)) {
     throw new Error(`${name} must be a non-negative integer or empty, got ${raw}`);
   }
-  return value;
+  return Number(raw);
 }
 
 const NEURON_CEILING = readCeiling("EVAL_MAX_NEURONS", 0);
