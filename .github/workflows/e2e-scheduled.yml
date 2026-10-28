@@ -517,7 +517,7 @@ jobs:
         run: |
           set -euo pipefail
           d1() {
-            out=$(npx wrangler d1 execute 0509 --remote --json --command "$1" 2>&1) || echo "wrangler exit $?" >&2
+            out=$(npx wrangler d1 execute 0509 --remote --json --command "$1" 2>&1) || { echo "wrangler exit $?"; echo "$out"; return 1; }
             # The shapes differ by lane: --local prints an array of result
             # objects, the remote REST path an object. Accept both.
             printf '%s' "$out" | jq -c 'if type == "array" then .[0].results else .results end'
