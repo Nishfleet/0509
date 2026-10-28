@@ -10,11 +10,8 @@ name: e2e-scheduled
 # (about 75 emails a week) instead of on-demand runs, which cost 152 emails in
 # one day on 2026-10-09. `suite` is not a dispatch choice: agents verify on the
 # local lane (PLAYWRIGHT_TEST_BASE_URL unset, AGENTS.md). Every job that reaches
-# production declares `production-e2e`, whose deployment branch policy is
-# `main` only. The two D1 readers (jev-failures, soak-report) run there too:
-# their D1 reads are red until the token scoped to D1 read of 0509#7072 lands
-# (the repo-level token is refused by D1, 0509#7773), and both install with
-# `npm ci --ignore-scripts` so no install script runs beside a Cloudflare token.
+# production declares `environment: production-e2e`, whose deployment branch
+# policy is `main` only; the D1 readers (jev-failures, soak-report) install with `npm ci --ignore-scripts` (0509#7773), and their D1 reads wait on the D1-read token of #7072 (the repo-level token is refused by D1).
 # The weekly `j12` job also runs J11, whose kept account needs a 6-day gap.
 # `signin` is the one real sign-in smoke a day (0509#6093): the only production
 # run that sends a real email besides the suite, once, at 04:17 UTC.

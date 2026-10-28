@@ -15,20 +15,21 @@ interface SoakStep {
   run?: string;
 }
 
-function soakStep(): SoakStep {
-  const step = e2eJobs()["soak-report"]?.steps?.find((entry) => (entry.run ?? "").includes("Soak report for the 24 hours"));
-  if (step === undefined) throw new Error("soak-report has no comment-posting run step");
-  return step;
-}
-
 interface JobWithEnvironment {
   environment?: unknown;
+  if?: string;
   steps?: SoakStep[];
 }
 
 function e2eJobs(): Record<string, JobWithEnvironment> {
   const source = readFileSync(path.join(REPO_ROOT, WORKFLOW), "utf8");
   return (parse(source) as { jobs: Record<string, JobWithEnvironment> }).jobs;
+}
+
+function soakStep(): SoakStep {
+  const step = e2eJobs()["soak-report"]?.steps?.find((entry) => (entry.run ?? "").includes("Soak report for the 24 hours"));
+  if (step === undefined) throw new Error("soak-report has no comment-posting run step");
+  return step;
 }
 
 describe("soak-report measures the two DONE lines (0509#7076)", () => {
@@ -57,19 +58,19 @@ describe("soak-report measures the two DONE lines (0509#7076)", () => {
 });
 
 describe("a production D1 read declares its environment and runs only on main (0509#7773, #7072)", () => {
-  function d1ReaderJobs(): [string, { environment?: unknown; if?: string; steps?: SoakStep[] }][] {
+  function d1ReaderJobs(): [string, JobWithEnvironment][] {
     return Object.entries(e2eJobs()).filter(([, job]) =>
       (job.steps ?? []).some((step) => (step.run ?? "").includes("wrangler d1 execute 0509 --remote")),
     );
   }
 
   it("derives the D1 reader census", () => {
-    expect(d1ReaderJobs().map(([name]) => name)).toEqual(["jev-failures", "soak-report"]);
+    expect(d1ReaderJobs().map(([name]) => name).sort()).toEqual(["jev-failures", "soak-report"].sort());
   });
 
-  it("declares an environment, so the branch policy and the secret resolution are explicit", () => {
+  it("runs in production-e2e, the environment the D1-read token of #7072 lands in", () => {
     for (const [, job] of d1ReaderJobs()) {
-      expect(job.environment).toBeDefined();
+      expect(job.environment).toBe("production-e2e");
     }
   });
 
