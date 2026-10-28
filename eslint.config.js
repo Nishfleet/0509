@@ -1,4 +1,5 @@
 import { readdirSync } from "node:fs";
+import path from "node:path";
 
 import js from "@eslint/js";
 import betterTailwindcss from "eslint-plugin-better-tailwindcss";
@@ -37,7 +38,7 @@ const PAVED_PATH_PATTERNS = [
 const SONNER_IMPORT = {
   name: "sonner",
   message:
-    "sonner is imported in exactly one module, app/components/toaster.tsx, which owns every toast() call behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo' — a second import site is a second toast authority. Source: 0509#4116.",
+    "sonner is removed. Its toast is a tabindex=0 list item at the end of the page, shows no focus ring, and sends focus back to the previous element when you Tab out, which loops a keyboard user at the end of the page. Show 'saved' as an inline role=status line beside the control. Source: 0509#4116 (the toaster this replaces), polish/accessibility.md 2026-10-15.",
 };
 
 const UPLOT_IMPORT = {
@@ -143,6 +144,35 @@ const CATCH_RETURNS_NULL = {
   selector: "CatchClause > BlockStatement[body.length=1] > ReturnStatement[argument.value=null]",
   message:
     "A catch whose only statement is `return null` swallows the error, so a thrown fetch or a bug fails as silently as a real 'not found'. Give the clause an error binding and a logged failure path (or rethrow). Source: 0509#4462.",
+};
+
+// console.log, console.info and console.debug reach Workers Logs but never
+// Sentry, so a failure logged at that level is invisible to the alerting that
+// watches console.warn and console.error. 2026-10-13: site.change_discarded,
+// site.check_failed and archive.read_failed all logged at info level and
+// nobody was paged. An event named for a failure, or any log inside a catch
+// clause, must use console.warn or console.error. Source: 0509#7501.
+const QUIET_LOG_LEVEL = "[callee.object.name='console'][callee.property.name=/^(log|info|debug)$/]";
+const FAILURE_EVENT_LOGGED_QUIETLY = {
+  selector: `CallExpression${QUIET_LOG_LEVEL}:has(Property[key.name='event'] > Literal[value=/(failed|discarded|unavailable|dead_lettered|unreadable|unreached|skipped)$/])`,
+  message:
+    "An event named for a failure (_failed, _discarded, _unavailable, _dead_lettered, _unreadable, _unreached, _skipped) logged with console.log, console.info or console.debug never reaches Sentry. Use console.warn or console.error. Source: 0509#7501 (site.change_discarded, site.check_failed and archive.read_failed went unseen on 2026-10-13).",
+};
+const LOG_IN_CATCH_LOGGED_QUIETLY = {
+  selector: `CatchClause CallExpression${QUIET_LOG_LEVEL}`,
+  message:
+    "A log written inside a catch clause records a failure, and console.log, console.info and console.debug never reach Sentry. Use console.warn or console.error. Source: 0509#7501.",
+};
+
+// A parameter that defaults to the real clock lets a test lean on today's date
+// without saying so. 2026-10-15: tests/unit/plan-line.test.ts used 15 October
+// 2026 as a plan end in the future; at midnight UTC it became the past and the
+// merge queue went red for every PR. The caller passes the time in, and a test
+// passes a fixed one. Source: docs/incidents/2026-10-15-test-date-went-stale.md.
+const DEFAULT_CLOCK_PARAMETER = {
+  selector: "AssignmentPattern > NewExpression.right[callee.name='Date'][arguments.length=0]",
+  message:
+    "A parameter that defaults to new Date() reads the real clock where a test cannot see it. Make the time a required argument; the caller passes new Date() and a test passes a fixed instant. Source: docs/incidents/2026-10-15-test-date-went-stale.md (plan-line tests broke the merge queue at midnight).",
 };
 
 const SCORE_NAME = "/^(points|weight|multiplier|score|total)$/";
@@ -355,7 +385,7 @@ const ESLINT_DISK_PROBE_BAN = {
 const BARE_TOAST = {
   selector: "CallExpression[callee.name='toast'], MemberExpression[object.name='toast']",
   message:
-    "toast() is called in exactly one module, app/components/toaster.tsx, behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo'. The sonner import ban does not catch a toast reached another way, so the call shape is banned too. Source: 0509#4116, 0509#7007.",
+    "No toast() call: toasts are removed (focus loop at the end of the page, no focus ring). Show 'saved' as an inline role=status line beside the control. The sonner import ban does not catch a toast reached another way, so the call shape is banned too. Source: 0509#4116, 0509#7007, polish/accessibility.md 2026-10-15.",
 };
 
 const HAND_ROLLED_ARIA_TAB = {
@@ -365,13 +395,51 @@ const HAND_ROLLED_ARIA_TAB = {
     "Tabs come from app/components/ui/tabs.tsx (shadcn on @base-ui/react/tabs). A hand-rolled role=tab/tablist/tabpanel has no arrow keys and no roving tabIndex. Source: 0509#7014.",
 };
 
+const APP_LOCALE_ONLY = {
+  selector:
+    "NewExpression[callee.object.name='Intl'][callee.property.name=/^(DateTimeFormat|NumberFormat|RelativeTimeFormat)$/][arguments.0.type='Literal']",
+  message:
+    "A literal locale gives this screen its own month abbreviation and clock: en-US printed 'Sep' and '3:30 PM' where the rest of the app printed 'Sept' and '15:30'. Pass APP_LOCALE from app/lib/locale.ts. Source: ci/stripe-bar consistency sweep, 0509#7540.",
+};
+
+const COPY_NAME = (word) =>
+  [
+    `Literal[value=/^(?=.*\\s)(?=.*${word})/i]`,
+    `TemplateElement[value.raw=/^(?=.*\\s)(?=.*${word})/i]`,
+    `JSXText[value=/^(?=.*\\s)(?=.*${word})/i]`,
+  ].join(", ");
+
+const RIVAL_COPY = {
+  selector: COPY_NAME("\\brivals?\\b"),
+  message:
+    "Customer copy calls them competitors, as the nav, the URLs and the buttons do; eight lines said 'rival' until the sweep in 0509#7540. A prompt for Jev is exempt in the block that lists it. Source: 0509#7540.",
+};
+
+const WEEKLY_REPORT_COPY = {
+  selector: COPY_NAME("\\bweekly reports?\\b"),
+  message: "The weekly email and its page are the brief. 'Report' is a second name for one thing. Source: 0509#7540.",
+};
+
+const PRICE_SUFFIX_COPY = {
+  selector: `Literal[value=/€\\s?\\d+\\s?(\\/mo\\b|a month|per month)/i], TemplateElement[value.raw=/€\\s?\\d+\\s?(\\/mo\\b|a month|per month)/i], JSXText[value=/€\\s?\\d+\\s?(\\/mo\\b|a month|per month)/i]`,
+  message:
+    "A price reads '€10/month', from monthlyPrice() in app/lib/billing/plans.ts. '/mo' and 'a month' were three spellings of one price until 0509#7540. The trial email is billing copy and is worded by Nish.",
+};
+
 const BANNED_SYNTAX = [
+  APP_LOCALE_ONLY,
+  RIVAL_COPY,
+  WEEKLY_REPORT_COPY,
+  PRICE_SUFFIX_COPY,
   HAND_ROLLED_ARIA_TAB,
   BARE_TOAST,
   SUPPORT_ADDRESS_BAN,
   GOOGLE_FONTS_BAN,
   CRAWLER_USER_AGENT_BAN,
   CATCH_RETURNS_NULL,
+  FAILURE_EVENT_LOGGED_QUIETLY,
+  LOG_IN_CATCH_LOGGED_QUIETLY,
+  DEFAULT_CLOCK_PARAMETER,
   RAW_SCORE_STRING,
   XML_PARSER_CONSTRUCTOR,
   DOMAIN_HOSTNAME_BAN,
@@ -477,7 +545,7 @@ export const TABLE_WRITER_BLOCKS = readdirSync(new URL("./app/lib/data/", import
     rules: {
       "no-restricted-syntax": [
         "error",
-        ...BANNED_SYNTAX,
+        ...BANNED_SYNTAX.filter((rule) => rule !== RIVAL_COPY),
         ...NO_USER_DATA_IN_LOGS,
         FEED_STATE_LITERAL,
         D1_ROW_TYPE_ARGUMENT,
@@ -802,68 +870,83 @@ const ROW_RULES_PLUGIN = {
   },
 };
 
-const STATIC_HOME_HTML_PARSER = {
-  meta: { name: "static-home-html" },
-  parse(text) {
-    const lines = text.split("\n");
-    const last = lines.length - 1;
-    return {
-      type: "Program",
-      body: [],
-      sourceType: "script",
-      comments: [],
-      tokens: [],
-      loc: {
-        start: { line: 1, column: 0 },
-        end: { line: lines.length, column: lines[last].length },
+// #5774: workspace.fixture marks the throwaway accounts the e2e suite signs up
+// with. A background sweep that selects workspaces, entities, watches or pages
+// without excluding them keeps fetching, judging and emailing for accounts
+// nobody owns, and only two of the sweeps did when the flag landed. This rule
+// reads every SQL string in the armed globs: one that reads `workspace`,
+// `entity`, `watch` or `page` must either build its predicate with
+// `liveWorkspace()` (app/lib/data/active-workspace.ts) or name `fixture`.
+// A read bound to one row by `workspace_id|entity_id|owner_user_id|id = ?N` is a per-request
+// read, not a sweep, and a parenthesised `(SELECT ...)` fragment is only
+// valid inside a host statement that is checked where it is assembled. A
+// `?N IS NULL OR col = ?N` guard is the all-workspaces shape and stays flagged.
+// Exemptions are the `exemptFiles` option on the armed block, never a
+// comment. Source: 0509#5774.
+const SWEEP_SQL_READ = /\b(?:from|join)\s+(?:workspace|entity|watch|page)\b/i;
+const SWEEP_SQL_BOUND_TO_ONE_ROW = /\b(?:\w+\.)?(?:workspace_id|entity_id|owner_user_id|id)\s*=\s*\?\d*/i;
+const SWEEP_SQL_ALL_ROWS_GUARD = /\?(\d*)\s+is\s+null\s+or\s+(?:\w+\.)?\w+\s*=\s*\?\1(?!\d)/gi;
+const SWEEP_SQL_FRAGMENT = /^\s*\(\s*select\b[^]*\)\s*$/i;
+
+const LIVE_WORKSPACE_SWEEP_SQL = {
+  meta: {
+    type: "problem",
+    schema: [
+      {
+        type: "object",
+        properties: {
+          helpers: { type: "array", items: { type: "string" } },
+          exemptFiles: { type: "array", items: { type: "string" } },
+        },
+        additionalProperties: false,
       },
-      range: [0, text.length],
+    ],
+    messages: {
+      liveWorkspaceSweepSql:
+        "A background read of workspace, entity, watch or page must skip fixture workspaces: build the predicate with liveWorkspace() from app/lib/data/active-workspace.ts, or name `fixture` in the SQL. Per-request reads bound to one row by `workspace_id = ?N`, `entity_id = ?N`, `owner_user_id = ?N` or `id = ?N` are not checked. Exempt a file only in the exemptFiles option in eslint.config.js. live-workspace sweep rule. Source: 0509#5774.",
+    },
+  },
+  create(context) {
+    const options = context.options[0] ?? {};
+    const helpers = new Set(options.helpers ?? ["liveWorkspace"]);
+    const relative = path.relative(context.cwd, context.filename).split(path.sep).join("/");
+    if ((options.exemptFiles ?? []).includes(relative)) return {};
+
+    function mentionsHelper(node) {
+      if (node === null || typeof node !== "object") return false;
+      if (node.type === "Identifier") return helpers.has(node.name);
+      return Object.entries(node).some(
+        ([key, value]) =>
+          key !== "parent" &&
+          (Array.isArray(value) ? value.some((child) => mentionsHelper(child)) : mentionsHelper(value)),
+      );
+    }
+
+    function checkSql(node, text, expressions) {
+      if (!SWEEP_SQL_READ.test(text)) return;
+      if (/fixture/i.test(text)) return;
+      if (expressions.some((expression) => mentionsHelper(expression))) return;
+      if (SWEEP_SQL_FRAGMENT.test(text)) return;
+      if (SWEEP_SQL_BOUND_TO_ONE_ROW.test(text.replace(SWEEP_SQL_ALL_ROWS_GUARD, " "))) return;
+      context.report({ node, messageId: "liveWorkspaceSweepSql" });
+    }
+
+    return {
+      Literal(node) {
+        if (typeof node.value === "string") checkSql(node, node.value, []);
+      },
+      TemplateLiteral(node) {
+        checkSql(node, node.quasis.map((quasi) => quasi.value.cooked ?? "").join(" "), node.expressions);
+      },
     };
   },
 };
 
-const STATIC_HOME_FONT_PRELOAD = {
-  meta: {
-    type: "problem",
-    schema: [],
-    messages: {
-      preload:
-        "The static home must not preload a font. A preload holds the headline paint until the face arrives, so simulated LCP misses the fleet Lighthouse budget (fleet-ops config/lighthouserc.json). The three faces stay on the @font-face rules with font-display: swap. Source: 0509#5580.",
-      fontFace:
-        "The static home must not declare @font-face in the document. A face that finishes before the headline is a simulated-LCP dependency and misses the fleet Lighthouse budget (fleet-ops config/lighthouserc.json). The three faces live in /home-faces.css. Source: 0509#5598.",
-      scannerLink:
-        "The static home must not include a link element. The preload scanner fetches it before the headline paints, which puts /home-faces.css on the simulated LCP chain. Source: 0509#5630.",
-      lateFaces:
-        "The static home must append /home-faces.css from a load listener placed after </main>, so the brand faces are requested after the headline paints. Source: 0509#5630.",
+const SWEEP_RULES_PLUGIN = {
+  "sweep-rules": {
+    rules: {
+      "live-workspace": LIVE_WORKSPACE_SWEEP_SQL,
     },
-  },
-  create(context) {
-    return {
-      Program(node) {
-        const text = context.sourceCode.getText();
-        const preloadsFont =
-          /<link\b[^>]*\brel="preload"[^>]*\bas="font"/.test(text) ||
-          /<link\b[^>]*\bas="font"[^>]*\brel="preload"/.test(text);
-        if (preloadsFont) {
-          context.report({ node, messageId: "preload" });
-        }
-        if (text.includes("@font-face")) {
-          context.report({ node, messageId: "fontFace" });
-        }
-        if (/<link\b/i.test(text)) {
-          context.report({ node, messageId: "scannerLink" });
-        }
-        const mainEnd = text.lastIndexOf("</main>");
-        const scriptAt = text.indexOf("<script>");
-        const scriptEnd = scriptAt < 0 ? -1 : text.indexOf("</script>", scriptAt);
-        const script = scriptAt >= 0 && scriptEnd > scriptAt ? text.slice(scriptAt, scriptEnd) : "";
-        const asksAfterLoad =
-          script.includes('addEventListener("load"') && script.includes('faces.href = "/home-faces.css"');
-        if (mainEnd < 0 || scriptAt < mainEnd || !asksAfterLoad) {
-          context.report({ node, messageId: "lateFaces" });
-        }
-      },
-    };
   },
 };
 
@@ -884,9 +967,6 @@ const TAILWIND_DEFAULT_PALETTE = {
   message:
     "The Tailwind default palette is banned: every colour is a @theme token in app/app.css (bg-green is the one accent, DESIGN.md rule 8). Source: 0509#5871.",
 };
-
-const TW_ANIMATE_STOCK_CLASSES =
-  "(?:^|:)(?:animate-in|animate-out|fade-in-0|fade-out-0|zoom-in-95|zoom-out-95|slide-in-from-(?:top|bottom|left|right)-2)$";
 
 // The plugin lints a `const X = "..."` class list only when it has been told
 // the name: its own defaults are `className`, `classNames`, `classes` and
@@ -1053,6 +1133,19 @@ export default tseslint.config(
   },
 
   {
+    files: ["app/lib/discovery/run.server.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== RIVAL_COPY),
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  {
     // app/lib/data/** is the only D1 row reader, so it is the only place a row
     // schema lives. `.catch(...)` on one silences the row-parse contract.
     // `row-rules/d1-row-parse` requires `.first` / `.all` / `.raw` to be
@@ -1065,6 +1158,22 @@ export default tseslint.config(
     files: ["app/lib/data/**/*.ts"],
     plugins: ROW_RULES_PLUGIN,
     rules: { "row-rules/zod-row-catch": "error", "row-rules/d1-row-parse": "error" },
+  },
+
+  {
+    // Every background sweep reads its targets with SQL that lives in
+    // app/lib/data/ (the D1 readers and writers) or workers/ (the cron, queue
+    // and Workflow entry points). Armed on those two globs. A file whose
+    // fragments are only ever embedded in a checked host statement is listed
+    // in exemptFiles; nothing else is. Source: 0509#5774.
+    files: ["app/lib/data/**/*.ts", "workers/**/*.ts"],
+    plugins: SWEEP_RULES_PLUGIN,
+    rules: {
+      "sweep-rules/live-workspace": [
+        "error",
+        { helpers: ["liveWorkspace"], exemptFiles: ["app/lib/data/active-workspace.ts"] },
+      ],
+    },
   },
 
   {
@@ -1182,28 +1291,10 @@ export default tseslint.config(
   },
 
   {
-    // The one toast() call site, behind toastSaved(). It is client code, so
-    // BARE_FETCH stays off as in the client block above. Flat config replaces
-    // no-restricted-syntax wholesale, so this restates the list. 0509#7007.
-    files: ["app/components/toaster.tsx"],
-    rules: {
-      "no-restricted-syntax": [
-        "error",
-        ...BANNED_SYNTAX.filter((rule) => rule !== BARE_FETCH && rule !== BARE_TOAST),
-        ...NO_USER_DATA_IN_LOGS,
-        RAW_DML_WRITER,
-        FEED_STATE_LITERAL,
-      ],
-    },
-  },
-
-  {
-    // The browser paved path, where the bounded calls live by definition, and
-    // the retained ads transport (J10, #3974), which is dropped-feature code
-    // that is not extended. The array restates the shared list because a later
-    // matching block's no-restricted-syntax entry replaces the earlier one
-    // wholesale. 0509#7296.
-    files: ["app/lib/site/browser-budget.server.ts", "app/lib/ads/transport-browser.ts"],
+    // The browser paved path, where the bounded calls live by definition. The
+    // array restates the shared list because a later matching block's
+    // no-restricted-syntax entry replaces the earlier one wholesale. 0509#7296.
+    files: ["app/lib/site/browser-budget.server.ts"],
     rules: {
       "no-restricted-syntax": [
         "error",
@@ -1271,7 +1362,7 @@ export default tseslint.config(
 
   {
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
-    ignores: ["app/lib/auth.server.ts", "app/lib/auth-client.ts", "app/components/toaster.tsx"],
+    ignores: ["app/lib/auth.server.ts", "app/lib/auth-client.ts"],
     rules: {
       "no-restricted-imports": ["error", { paths: ONE_PAVED_PATH_IMPORTS, patterns: PAVED_PATH_PATTERNS }],
     },
@@ -1294,14 +1385,7 @@ export default tseslint.config(
 
   {
     files: ["app/**/*.{ts,tsx}"],
-    ignores: [
-      "app/**/*.server.ts",
-      "app/routes/**",
-      "app/root.tsx",
-      "app/entry.*.tsx",
-      "app/lib/auth-client.ts",
-      "app/components/toaster.tsx",
-    ],
+    ignores: ["app/**/*.server.ts", "app/routes/**", "app/root.tsx", "app/entry.*.tsx", "app/lib/auth-client.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -1315,7 +1399,7 @@ export default tseslint.config(
 
   {
     files: ["app/components/**/*.{ts,tsx}"],
-    ignores: ["app/components/toaster.tsx", "app/components/four-week-plot.tsx"],
+    ignores: ["app/components/four-week-plot.tsx"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -1340,24 +1424,6 @@ export default tseslint.config(
         "error",
         {
           paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT],
-        },
-      ],
-    },
-  },
-
-  {
-    files: ["app/components/toaster.tsx"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          paths: [
-            ...ONE_PAVED_PATH_IMPORTS.filter((p) => p !== SONNER_IMPORT),
-            CLOUDFLARE_WORKERS_IMPORT,
-            FULL_ZOD_IMPORT,
-            ...CHART_IMPORTS,
-          ],
-          patterns: PAVED_PATH_PATTERNS,
         },
       ],
     },
@@ -1525,6 +1591,23 @@ export default tseslint.config(
                 "The delivery-address save is the second app-side sender after app/lib/auth.server.ts, and it goes through the one paved path (workers/delivery/send.ts) instead of calling env.EMAIL.send a second time. Only that one file reaches the worker; every other server leaf keeps the boundary. Source: 0509#5811.",
             },
             {
+              from: { file: { path: "app/lib/brief-preview.server.ts" } },
+              allow: {
+                to: {
+                  file: {
+                    path: [
+                      "workers/standing/compose-brief.ts",
+                      "workers/standing/freeze.ts",
+                      "workers/standing/read-this-first.ts",
+                      "workers/standing/refresh.ts",
+                    ],
+                  },
+                },
+              },
+              message:
+                "The brief preview composes the brief with the email's own compose step (workers/standing/compose-brief.ts) so the page and the email cannot drift. Only that one server leaf reaches those four worker files; every other server leaf keeps the boundary. Source: the brief preview PR (0509#7607), same shape as 0509#5811.",
+            },
+            {
               from: { element: { type: "data-writer" } },
               disallow: {
                 to: [
@@ -1671,6 +1754,29 @@ export default tseslint.config(
     },
   },
 
+  // 0509#7423 and the coordinator's ask of 2026-10-13: every e2e spec gets the
+  // console-error and failed-request guard from ./test, so `test` is never
+  // imported from @playwright/test in a spec. Setup and teardown files import
+  // it under another name and are not specs.
+  {
+    files: ["e2e/**/*.spec.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@playwright/test",
+              importNames: ["test"],
+              message:
+                'Import { test } from "./test": it fails any test that logs a console error or a failed request (0509#7423).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // 0509#7229: e2e gets full strictTypeChecked. Number interpolation is the
   // one relaxation: a report label like `step ${i}` is safe and the #7183
   // comment named timeout numbers as the reason this rule was off. Every
@@ -1724,45 +1830,38 @@ export default tseslint.config(
   },
 
   // 0509#7073 / #7233: type-aware lint is on for e2e, tests and *.config.ts.
-  // The comment exemption used to live on the disableTypeChecked block that
-  // also listed those globs; keep it here so inline comments in specs,
-  // configs and tests stay allowed (AGENTS.md: config files and tests are
-  // exempt).
+  // Only config files are exempt from the comment rules; tests are not
+  // (0509#7469, Nish 2026-10-14).
   {
-    files: ["e2e/**/*.ts", "tests/**/*.ts", "*.config.ts"],
+    files: ["*.config.ts"],
     rules: {
       "no-inline-comments": "off",
       "no-warning-comments": "off",
     },
   },
 
-  // 0509#7233: tests/** is off disableTypeChecked. **/*.js, **/*.mjs,
-  // **/*.cjs and public/index.html stay untyped.
   {
-    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "public/index.html"],
+    files: ["e2e/**/*.ts", "tests/**/*.{ts,tsx}"],
+    plugins: { "no-comments": noComments },
+    rules: {
+      "no-comments/disallowComments": [
+        "error",
+        { allow: ["eslint-(?:disable|enable|env)", "global ", "@ts-", "@vite-ignore", "/\\s*<reference"] },
+      ],
+      "no-inline-comments": ["error", { ignorePattern: "@vite-ignore" }],
+      "no-warning-comments": ["error", { terms: WORKAROUND_TERMS, location: "anywhere" }],
+    },
+  },
+
+  // 0509#7233: tests/** is off disableTypeChecked. **/*.js, **/*.mjs and
+  // **/*.cjs stay untyped.
+  {
+    files: ["**/*.js", "**/*.mjs", "**/*.cjs"],
     extends: [tseslint.configs.disableTypeChecked],
     rules: {
       "no-inline-comments": "off",
       "no-warning-comments": "off",
       "@typescript-eslint/no-unsafe-assignment": "off",
-    },
-  },
-
-  {
-    files: ["public/index.html"],
-    plugins: {
-      "static-home": {
-        rules: {
-          "no-font-preload": STATIC_HOME_FONT_PRELOAD,
-        },
-      },
-    },
-    languageOptions: {
-      parser: STATIC_HOME_HTML_PARSER,
-      parserOptions: { projectService: false },
-    },
-    rules: {
-      "static-home/no-font-preload": "error",
     },
   },
 
@@ -1772,7 +1871,11 @@ export default tseslint.config(
   // `(?:[^\s]*:)*` because a variant prefix is not always one word: this repo
   // writes `max-[859px]:`, `aria-[current=page]:` and `[&:hover]:`, and a
   // prefix pattern of `[a-z0-9-]+` let a banned colour hide behind all three.
-  // The `ui/` ignore list keeps only the tw-animate-css classes (0509#7071):
+  // `ui/` no longer ignores the tw-animate-css classes: the app never imports
+  // that package, so animate-in, fade-in-0 and the rest silently did nothing and
+  // every shadcn dialog and popover appeared without animating (the fix that
+  // moved them to Base UI's starting and ending style states). An unknown
+  // animation class is now as red here as anywhere else. Earlier note (0509#7071):
   // the stock shadcn semantic tokens used to be ignored here too, on the false
   // premise that they were dead on main. They are not — DialogContent carries
   // `bg-popover` — so those tokens are now aliased onto the house palette in
@@ -1795,12 +1898,6 @@ export default tseslint.config(
         { restrict: [TAILWIND_ARBITRARY_COLOUR, TAILWIND_DEFAULT_PALETTE] },
       ],
       "better-tailwindcss/enforce-consistent-class-order": "error",
-    },
-  },
-  {
-    files: ["app/components/ui/**/*.tsx"],
-    rules: {
-      "better-tailwindcss/no-unknown-classes": ["error", { ignore: [TW_ANIMATE_STOCK_CLASSES] }],
     },
   },
 

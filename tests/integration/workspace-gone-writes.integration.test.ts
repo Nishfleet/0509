@@ -1,8 +1,3 @@
-// 0509#6009: an account deleted while an onboarding request is in flight took
-// the workspace with it (workspace.owner_user_id cascades), and the verdict and
-// decision writes that followed failed on the workspace foreign key. Sentry
-// captured the same D1_ERROR: FOREIGN KEY constraint failed out of
-// screenPublicSubject / screenOnboardingSubject.
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -29,7 +24,6 @@ async function seedWorkspace(): Promise<{ userId: string; workspaceId: string }>
   return { userId, workspaceId };
 }
 
-/** What the account delete does: better-auth drops the user, the workspace cascades. */
 async function deleteAccount(userId: string, workspaceId: string): Promise<void> {
   await env.DB.prepare('DELETE FROM "user" WHERE id = ?').bind(userId).run();
   const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM workspace WHERE id = ?")
@@ -231,7 +225,7 @@ describe("an account deleted mid-request", () => {
       kind: "refuse",
       message: "Five to Nine tracks brands and creators, not private individuals.",
     });
-    // The refusal was recorded, so the same subject is not asked again.
+
     expect(await countRows("jev_verdict", workspaceId)).toBe(verdicts + 1);
     expect(await countRows("user_decision", workspaceId)).toBe(decisions + 1);
     expect(await readSubjectDecision(workspaceId, "livebrand.com")).toBe("public_subject:refused");

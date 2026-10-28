@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   backfillSlackTargets,
   countUnsealedSlackTargets,
+  disconnectSlackTarget,
+  readSlackDisconnected,
   readSlackTarget,
   runNightlySlackBackfill,
   saveSlackTarget,
@@ -148,7 +150,7 @@ describe("Slack alerts setting (0509#6376)", () => {
 
     const outcome = await call({ intent: "slack-save", webhook: "https://internal.example/hook" });
 
-    expect(outcome.slackError).toContain("not a Slack webhook");
+    expect(outcome.slackError).toContain("a Slack webhook");
     expect(posts).toHaveLength(0);
     expect(await readSlackTarget(env.DB, WS)).toBeNull();
   });
@@ -158,8 +160,24 @@ describe("Slack alerts setting (0509#6376)", () => {
 
     const outcome = await call({ intent: "slack-save", webhook: HOOK });
 
-    expect(outcome.slackError).toContain("did not accept");
+    expect(outcome.slackError).toContain("didn't accept");
     expect(await readSlackTarget(env.DB, WS)).toBeNull();
+  });
+
+  it("shows a disconnected Slack after a revoked webhook, and reconnects with a new address", async () => {
+    stubSlack(200);
+    await call({ intent: "slack-save", webhook: HOOK });
+    const target = await readSlackTarget(env.DB, WS);
+    expect(await readSlackDisconnected(env.DB, WS)).toBe(false);
+
+    await disconnectSlackTarget(env.DB, target?.id ?? "none");
+
+    expect(await readSlackTarget(env.DB, WS)).toBeNull();
+    expect(await readSlackDisconnected(env.DB, WS)).toBe(true);
+
+    await call({ intent: "slack-save", webhook: OTHER_HOOK });
+    expect((await readSlackTarget(env.DB, WS))?.target_value).toBe(OTHER_HOOK);
+    expect(await readSlackDisconnected(env.DB, WS)).toBe(false);
   });
 
   it("replaces the old address on reconnect and removes it on disconnect", async () => {

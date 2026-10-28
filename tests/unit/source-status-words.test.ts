@@ -42,7 +42,7 @@ describe("what a customer reads about a source", () => {
     }
   });
 
-  it("says a blocked answer is simply not answering right now", () => {
-    expect(plainSourceReason("blocked: HTTP 429")).toBe("not answering right now");
+  it("says a blocked answer is simply could not be checked right now", () => {
+    expect(plainSourceReason("blocked: HTTP 429")).toBe("could not be checked right now");
   });
 });

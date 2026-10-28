@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import { alertDayGroup } from "../../app/lib/alert-day";
 import { daysAgoLabel } from "../../app/lib/delivery-alert";
 import {
   alsoReportedLine,
+  mentionAlertWhen,
   mentionsFromRows,
   mentionWhen,
   showInFeed,
@@ -40,11 +42,43 @@ describe("alsoReportedLine", () => {
 });
 
 describe("mentionWhen", () => {
-  it("says found today when there is no published date and matches daysAgoLabel otherwise", () => {
+  it("says when we found it when there is no published date and matches daysAgoLabel otherwise", () => {
     const twoDaysAgo = "2026-09-23T12:00:00.000Z";
-    expect(mentionWhen(null, NOW)).toBe("found today");
-    expect(mentionWhen(twoDaysAgo, NOW)).toBe(daysAgoLabel(twoDaysAgo, NOW));
-    expect(mentionWhen(twoDaysAgo, NOW)).toBe("2 days ago");
+    expect(mentionWhen({ publishedAt: null, observedAt: NOW.toISOString() }, NOW)).toBe("found today");
+    expect(mentionWhen({ publishedAt: null, observedAt: twoDaysAgo }, NOW)).toBe("found 2 days ago");
+    expect(mentionWhen({ publishedAt: twoDaysAgo, observedAt: NOW.toISOString() }, NOW)).toBe(
+      daysAgoLabel(twoDaysAgo, NOW),
+    );
+    expect(mentionWhen({ publishedAt: twoDaysAgo, observedAt: NOW.toISOString() }, NOW)).toBe("2 days ago");
+  });
+});
+
+describe("mentionAlertWhen", () => {
+  const LONDON = "Europe/London";
+
+  it("names the day we found it by the workspace's calendar, the same day the Alerts group uses", () => {
+    const justAfterMidnight = "2026-10-14T23:10:00.000Z";
+    const now = new Date("2026-10-15T08:00:00.000Z");
+    expect(mentionAlertWhen({ publishedAt: null, observedAt: justAfterMidnight }, now, LONDON)).toBe("found today");
+    expect(alertDayGroup(justAfterMidnight, now, LONDON)).toBe("Today");
+  });
+
+  it("calls an item found late yesterday yesterday, even when it is under 24 hours old", () => {
+    const lateYesterday = "2026-10-14T22:30:00.000Z";
+    const now = new Date("2026-10-15T00:30:00.000Z");
+    expect(mentionAlertWhen({ publishedAt: null, observedAt: lateYesterday }, now, "UTC")).toBe("found yesterday");
+    expect(alertDayGroup(lateYesterday, now, "UTC")).toBe("Yesterday");
+  });
+
+  it("shows the published day as secondary text only when it differs from the day found", () => {
+    const now = new Date("2026-10-15T12:00:00.000Z");
+    const found = "2026-10-15T09:00:00.000Z";
+    expect(mentionAlertWhen({ publishedAt: "2026-10-12T09:00:00.000Z", observedAt: found }, now, LONDON)).toBe(
+      "found today · published 3 days ago",
+    );
+    expect(mentionAlertWhen({ publishedAt: "2026-10-15T01:00:00.000Z", observedAt: found }, now, LONDON)).toBe(
+      "found today",
+    );
   });
 });
 

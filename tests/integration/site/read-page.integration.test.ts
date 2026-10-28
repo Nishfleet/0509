@@ -244,4 +244,55 @@ describe("readPage (0509#5299)", () => {
     expect(row?.deferred_at).toBe(NOW);
     expect(browserHolder.current?.closed).toBe(0);
   });
+
+  it("keeps the failure reason and leaves a page the queue lane could not escalate un-deferred", async () => {
+    const url = "https://rival.com/needs-browser";
+    fetchState.responses.set(url, THIN_PAGE);
+    const [target] = await seed("ent-read-page-queue-lane", [url]);
+    if (target === undefined) throw new Error("expected a sweep target");
+
+    const result = await readPage(target, NOW, { browser: false });
+
+    expect(result).toMatchObject({ ok: false, reason: "deferred" });
+    const row = await env.DB.prepare("SELECT deferred_at, last_failure_reason, last_failure_at FROM page WHERE id = ?")
+      .bind(target.pageId)
+      .first<{ deferred_at: string | null; last_failure_reason: string | null; last_failure_at: string | null }>();
+    expect(row).toEqual({
+      deferred_at: null,
+      last_failure_reason: "deferred: no browser budget callback wired (thin-text)",
+      last_failure_at: NOW,
+    });
+    expect(browserHolder.current?.calls).toEqual([]);
+  });
+
+  it("records unreachable as the failure reason when the address cannot be connected to", async () => {
+    const url = "https://rival-typo.com/";
+    const [target] = await seed("ent-read-page-unreachable", [url]);
+    if (target === undefined) throw new Error("expected a sweep target");
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("fetch failed")));
+
+    const result = await readPage(target, NOW, { browser: false });
+
+    expect(result).toMatchObject({ ok: false, reason: "unreachable" });
+    const row = await env.DB.prepare("SELECT transport, last_failure_reason FROM page WHERE id = ?")
+      .bind(target.pageId)
+      .first<{ transport: string | null; last_failure_reason: string | null }>();
+    expect(row).toEqual({ transport: null, last_failure_reason: "unreachable" });
+  });
+
+  it("clears the failure reason after the next good read", async () => {
+    const url = "https://rival.com/recovers";
+    fetchState.responses.set(url, THIN_PAGE);
+    const [target] = await seed("ent-read-page-recover", [url]);
+    if (target === undefined) throw new Error("expected a sweep target");
+    await readPage(target, NOW, { browser: false });
+
+    const result = await readPage(target, NEXT_DAY);
+
+    expect(result.ok).toBe(true);
+    const row = await env.DB.prepare("SELECT last_failure_reason, last_failure_at FROM page WHERE id = ?")
+      .bind(target.pageId)
+      .first<{ last_failure_reason: string | null; last_failure_at: string | null }>();
+    expect(row).toEqual({ last_failure_reason: null, last_failure_at: null });
+  });
 });

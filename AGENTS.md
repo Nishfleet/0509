@@ -75,8 +75,9 @@ you.
   ESLint enforces is same-line comments and the workaround vocabulary
   (`todo`, `hack`, `for now`, `revisit`, …); the rest is the reviewer's job.
   Put the reason in the commit message, where it is read at the moment it
-  matters. Config files and tests are exempt.
+  matters. Config files are exempt.
 - **No user data in logs or Sentry.** `no-restricted-syntax` (NO_USER_DATA_IN_LOGS). Source: 0509#5776.
+- **Copy has a bar.** `tests/user-copy-bar.test.ts` scans every string people read (routes, components, `app/lib`, all of `workers/`) for the phrases in `tests/user-copy-phrases.ts`, for Title Case button labels and for "rival" in screen text. To ban a phrase, add a line to that file; to exempt a path, add it there with the reason. Source: coordinator ask under Nish's polish goal, 2026-10-15.
 - **Tests never skip, focus or sleep.** A vitest test is never focused or disabled
   (`vitest/no-focused-tests`, `vitest/no-disabled-tests`); an e2e spec is never
   focused or unconditionally skipped, never waits on a fixed sleep and never
@@ -85,6 +86,8 @@ you.
   `playwright/no-networkidle`). Conditional `test.skip(condition, reason)` and
   `test.fail()` stay allowed. The full enforced set is the two test-lint blocks
   in `eslint.config.js`. Source: 0509#5785.
+- **An e2e name must still exist.** A name a spec looks up by string literal (`getByRole` name, `getByLabel`, `getByText`, a `button:` field) is checked against app source and e2e seed data by `tests/e2e-names-exist.test.ts`; a name the app builds at run time is listed there with its template. Source: 0509#7430.
+- **Failures reach Sentry.** An event named `_failed`, `_discarded`, `_unavailable`, `_dead_lettered`, `_unreadable`, `_unreached` or `_skipped`, and any log inside a `catch`, must use `console.warn` or `console.error`: `workers/sentry.ts` forwards only those two levels. `no-restricted-syntax` (FAILURE_EVENT_LOGGED_QUIETLY, LOG_IN_CATCH_LOGGED_QUIETLY). Source: 0509#7501.
 - **Formatting is Prettier.** `npm run lint` runs `prettier --check .`; run `npm run format` before committing.
 - **Stock only, at the version named in `docs/dependencies.md`.** `tests/stack-dependencies.test.ts` fails a dependency with no row there. A PR names the library or Cloudflare primitive it uses and what it rejected. Hand-rolled schedulers, diffing, crawlers, queues, retries, auth, billing, email, charts or home-built design systems are rejected. The official upstream shadcn skill in `.agents/skills/shadcn` and the token frontmatter in `DESIGN.md` are allowed: they are stock, not home-built (Nish, 2026-10-09). A hand-written type annotation over a framework value is a hand-rolled assertion: use the generated types.
 - **Jev decides every typed decision** (`docs/REBUILD-JEV.md`, D1–D9). Code never guesses with regexes where a judgment is needed; Jev internals are never shown to customers.
@@ -107,7 +110,7 @@ npm run lint       # eslint . && knip && jscpd && prettier --check .
 npm run format     # prettier --write .
 npm test           # vitest run
 npm run e2e        # playwright test
-npm run eval       # vitest run --config vitest.evals.config.ts; live Workers AI, EVAL_MAX_NEURONS caps one run (evals.yml sets 2000; unset = no cap)
+npm run eval       # vitest run --config vitest.evals.config.ts; live Workers AI, EVAL_MAX_NEURONS caps one run (evals.yml sets it from the EVAL_MAX_NEURONS repository variable, default 2000; unset or 0 means no cap; any other non-integer value aborts the run)
 npm run deploy     # wrangler deploy
 npm run verify:start # chrome-devtools start, headless, Playwright's Chromium, --no-sandbox
 npm run verify:stop  # chrome-devtools stop
@@ -137,12 +140,42 @@ worker (25% of a core, 55-minute wall) the full local set is what timed
 workers out on 2026-09-23. Chromium is already installed on this host
 (`~/.cache/ms-playwright`).
 
+## Run it and prove it
+
+Live: <https://0509.io>. `/`, `/privacy`, `/terms` and `/api/health` are the
+only paths a signed-out visitor reaches; every other path redirects to
+sign-in. So `/api/health` is the one route a worker can prove from outside.
+
+- Run: `npm test`, plus the e2e specs that cover your change (see Commands and
+  "Run it before the PR opens").
+- Prove: `curl -s https://0509.io/api/health` prints
+  `{"status":"ok","app":"0509","d1":"ok","timestamp":"…","commit":"<sha>"}`.
+  `status` and `d1` are both `ok`, and `commit` is the deployed commit, so
+  `git rev-parse origin/main` says which merge is live. A 503 with
+  `"status":"error","d1":"error"` means D1 did not answer
+  (`app/lib/observability/health.server.ts`): a real failure, never a flake.
+- Test login: none. Sign-in is a magic link, and the e2e suite signs in as a
+  fixture account (`e2e+j7@0509.io`) through the local simulated inbox. Never
+  sign in to production from a worker: each production sign-in sends a real
+  email and churns production D1.
+
+That command and its output are the `Verification:` line in a PR that claims
+the live app works.
+
 ## Reproducing a user report
 
-1. **Read the raw report.** `npx wrangler d1 execute 0509 --remote --command "select raw from support_report where id = '<id>'"`, where `<id>` is the report id in the issue body. This is a read; never run any other statement against `--remote`. Never paste any of the raw text into the issue, the PR, a commit message or a spec.
-2. **Map the report to rows of `.agents/skills/verify/feature-map.md`** by the paths in the issue body and the words in the raw text, following the procedure in `.agents/skills/verify/SKILL.md#reproduce-a-vague-user-report` — link it, do not restate it. If no row matches, say in the issue whether the map is missing a feature or the report is not about this product, and stop.
+1. **Read the raw report.** `npx wrangler d1 execute 0509 --remote --command "select raw from support_report where id = '<id>'"`, where `<id>` is the report id in the issue body. This is a read; never run any other statement against `--remote`. Never paste any of the raw text into the issue, the PR, a commit message or a spec. No agent session on this host can run that command, because the runner hides the Cloudflare credential directory from every job (see "Cloudflare credentials on this host" below). A worker that needs the raw report parks the issue with `blocked-on: orchestrator`, the `needs-orchestrator` label and the report id, instead of running a command that cannot authenticate.
+2. **Map the report to rows of `.agents/skills/verify/feature-map.md` and `.agents/skills/verify/feature-map/`** by the paths in the issue body and the words in the raw text, following the procedure in `.agents/skills/verify/SKILL.md#reproduce-a-vague-user-report` — link it, do not restate it. If no row matches, say in the issue whether the map is missing a feature or the report is not about this product, and stop.
 3. **Drive the local lane through the e2e suite.** `PLAYWRIGHT_TEST_BASE_URL` unset, then `npm run e2e -- e2e/report-<id>.spec.ts` (simulated email, local D1, AI off). Do not run it against https://0509.io: each production sign-in sends a real email and churns production D1. If the report depends on production-only data, say so in the issue instead. The deliverable is one spec `e2e/report-<id>.spec.ts` whose test title contains the report id. If the report reproduces, the test asserts the correct behaviour and is marked `test.fail()`, so CI stays green until the fix lands. If it does not reproduce, the test has no `test.fail()` and the issue gets a no-repro comment listing each step tried with its UTC timestamp.
 4. **The PR that fixes the report** removes the `test.fail()` from that spec and keeps the spec.
+
+## Cloudflare credentials on this host
+
+The self-hosted runner unit hides `~/.config/cloudflare` from every job it runs, and the first step of every agent job fails the run if that directory becomes readable (fleet-ops#9983, 2026-10-22). So no agent session on this host — a worker or an orchestrator hand-off — can read a Cloudflare token, mint one, or run `wrangler` against a remote database.
+
+- A Cloudflare credential an agent session needs goes in the seat-config directory, the one credential directory both the runner unit and the worker jail leave visible. Its exact path is not written here because this repo is public and the repo's own private-detail rule keeps that path out of it; the fleet-ops dispatch workflow that writes the seat env files is the source of truth. A worker that needs one parks the issue `blocked-on: orchestrator` with the `needs-orchestrator` label, rather than guessing a home path.
+- This repo's production D1 read token is an Actions secret. It is read-only and read by a workflow in this repo. A worker session on the VPS cannot read it, because the worker App token carries no permission to read Actions secrets.
+- The Cloudflare Access service token for driving production is not in this repo and sits on no path an agent can read. Driving production from a worker is forbidden anyway; the production suite runs on its own schedule from `main`.
 
 ## Architecture
 
@@ -152,8 +185,8 @@ they name were plans and many never existed. The real layout is below.
 
 - `app/routes.ts` — the route registry. A route not listed here cannot be
   reached. `.agents/skills/verify/feature-map.md` describes every one of them and is updated in
-  the same PR that changes one. Search, never read whole: grep it for the
-  route path (`grep -n "app/alerts" .agents/skills/verify/feature-map.md`) and
+  the same PR that changes one, one file per row under `feature-map/` so parallel PRs never edit the same lines. Search, never read whole: grep it for the
+  route path (`grep -rn "app/alerts" .agents/skills/verify/feature-map.md .agents/skills/verify/feature-map/`) and
   read only that row.
 - `app/routes/*` — route modules: loader, action, component.
 - `app/components/` — shared UI.
@@ -162,7 +195,6 @@ they name were plans and many never existed. The real layout is below.
   `competitor/`, `feeds/`, `hiring/`, `mentions/`, `standing/`, `agent/` for the
   API and MCP, `data/` for the table writers).
 - `app/lib/*.ts` — shared pure logic.
-- `app/lib/ads/` is retained code for a dropped feature (J10, #3974); do not extend it.
 - `app/lib/public-routes.ts` — the sitemap paths, robots.txt and llms.txt.
 - `workers/app.ts` — the Worker entry and the `scheduled` handler.
 - `workers/workflows/` — the Workflows (site, feed, hiring and mentions sweeps,
@@ -175,7 +207,7 @@ they name were plans and many never existed. The real layout is below.
   `tests/integration/` and `tests/unit/site/` run in the workers project.
   The site tests need HTMLRewriter, which exists only in workerd. The
   integration project also applies migrations to local D1.
-- `e2e/` — Playwright. Every test traces to a row in `.agents/skills/verify/feature-map.md`.
+- `e2e/` — Playwright. Every test traces to a row in `.agents/skills/verify/feature-map.md` or `.agents/skills/verify/feature-map/`.
 
 ## Stack
 
@@ -190,8 +222,8 @@ rejection**, not a review comment. The row format is asserted by
 
 ## What gates a merge
 
-One required check on the `main-merge-queue` ruleset (id 21391031), **empty
-bypass list**: `ci-ok`. It is a job in `ci.yml` that needs the six gate jobs
+Three required checks on the `main-merge-queue` ruleset (id 21391031), **empty
+bypass list**: `ci-ok`, `base-fresh` and `ratchet / ratchet`. `ci-ok` is a job in `ci.yml` that needs the six gate jobs
 
 ```
 codex-node-checks   vitest-shard   Gitleaks   semgrep   preview-assert   base-fresh
@@ -204,6 +236,8 @@ four-way matrix (`vitest-shard (1)` … `(4)`, vitest's own `--shard`); its
 result in `needs` is `success` only when every shard succeeded (0509#7163).
 `base-fresh` fails a PR whose head lacks the newest `main` commit that touched a gate file, and `stale-base-retest.yml` reruns it on every open PR when one lands (`docs/incidents/2026-10-07-stale-base-queue-ejections.md`).
 
+`ratchet / ratchet` (2026-10-12) is the fleet's no-glue gate: a PR's net added lines under `.github/workflows`, `.github/actions`, `scripts` and `bin` must be 0 or fewer. `.github/workflows/ratchet.yml` only calls `Nishfleet/fleet-ops/.github/workflows/ratchet.yml@main` (a SHA pin would queue forever on the runner group), so the rule is fleet-ops' main copy and a PR cannot loosen it; a PR that edits the caller's `ratchet` job fails. Ruleset before: required `ci-ok`, `base-fresh`; after: those plus `ratchet / ratchet`; nothing else changed. Bypass list: `gh api repos/Nishfleet/0509/rulesets/21391031 --jq '.bypass_actors, .current_user_can_bypass'` prints `[]` and `"never"`; it was already empty (admin `always` existed 2026-09-21 17:07 to 17:08 IST, one direct push by nish3451 in that window, none since), and no workflow or script here merges through the REST API. Undo (Nish only): `gh api repos/Nishfleet/0509/rulesets/21391031 | jq '{name,target,enforcement,bypass_actors,conditions,rules:(.rules|map(if .type=="required_status_checks" then .parameters.required_status_checks|=map(select(.context!="ratchet / ratchet")) else . end))}' | gh api -X PUT repos/Nishfleet/0509/rulesets/21391031 --input -`.
+
 Renaming `ci-ok` is not cosmetic. A required check that never reports fails
 closed and nothing can merge again, including the PR that renamed it. A
 _skipped_ job counts as passing, so no gate job carries a job-level `if:` that
@@ -215,21 +249,30 @@ AI grader: CI is the gate, and a PR that touches `.github/`, `migrations/`,
 `app/lib/auth*` or `app/lib/data/` is labelled `needs-coordinator` and the
 coordinator reviews it before it merges.
 
-`lighthouse` runs in `deploy-production.yml` after the deploy job. Verify a fix on the local lane:
+The production Lighthouse audit is out of `deploy-production.yml` while the site is behind the
+Cloudflare Access wall (0509#7656): it measured the login page and reddened a good deploy, which the
+fleet's deploy-failed alert read as an outage (fleet-ops#9889). The budgets still gate every pull
+request in `ci.yml` (resource sizes and CLS, against the built Worker). Verify a fix on the local lane:
 `PLAYWRIGHT_TEST_BASE_URL` unset, so `npm run e2e -- e2e/<name>.spec.ts` starts `wrangler dev --local` with simulated
 email, a local D1 and `AI_SPEND` off. Do not dispatch `e2e-scheduled.yml` to verify a fix, and do not point a run at
 https://0509.io: each production sign-in sends a real email, the specs delete and recreate production D1 rows, and the
 live-AI journeys spend Workers AI neurons. Production e2e runs only on its schedule from `main`, and every job that
 reaches production declares the `production-e2e` environment, whose deployment branch policy allows `main` only.
-Neither `lighthouse` nor the production e2e is **required**, deliberately: they cannot run on a pull request, and a
-required check that cannot report blocks the queue forever. The suite is off the
+The production e2e is **not required**, deliberately: it cannot run on a pull request, and a required
+check that cannot report blocks the queue forever. The suite is off the
 deploy path because every sign-in in it sends a real email against the Email
 Service daily quota (Nish 2026-09-28).
 
 ## Rules that are not about code
 
+- If this repo's claim PR is already open, not a draft, not CONFLICTING, with no red required check and no open finding, only exit 0 and do not push, even when mergeable is still BLOCKED because checks are pending (0509#6993, 0509#7316).
 - Nothing merges on its own author's say-so. An independent reviewer or Nish,
   never the author reviewing itself.
+- A claim PR whose current head carries a `coordinator-approval: <head sha>`
+  comment and has no red required check on the PR itself is finished: exit 0
+  without pushing. A push to that head invalidates the approval, restarts the
+  review loop and can strand the PR after a merge-queue dequeue (0509#7084,
+  0509#7323).
 - A feature's finish line cites a real production record — a row id, a Workflow instance id or a run URL — created after the merge, not only a green test (0509#5736).
 - Production state stays gated: secrets and provider mutations need Nish's
   explicit authorization. Merging a reviewed green PR is ordinary work.
@@ -265,8 +308,7 @@ Service daily quota (Nish 2026-09-28).
 - The site is gated until the audit passes. Which paths bypass Access is set
   in Cloudflare, not in code; a route's feature-map row says whether it is
   public (`/u/:token` is). `/login`, `/app`, `/onboarding`, `/api/auth` sit
-  behind Cloudflare Access (Nish by email, agents by the service token in
-  `~/.config/cloudflare/access-0509-agents.env`). A bare `curl` returning 302
+  behind Cloudflare Access (Nish by email). A bare `curl` returning 302
   to `cloudflareaccess.com` is the gate, not a bug. `0509.in` is a zone
   Redirect Rule, never code.
 

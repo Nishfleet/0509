@@ -4,27 +4,43 @@ import { TRIAL_DAYS, TRIAL_TERMS } from "./billing/plans";
 import { LIVE_COVERAGE, PLAN_NOTE } from "./coverage";
 import { FAQ } from "./faq";
 import { LEGAL_UPDATED } from "./legal/document";
+import { SECURITY_UPDATED } from "./legal/security";
 import { planNames, planPriceList } from "./pricing-page";
 import { plainSourceReason } from "./source-status-words";
 import { SITE_URL } from "./structured-data";
-import { watchedClaims } from "./watched-claims";
+import { UNANSWERED_NOUNS, watchedClaims } from "./watched-claims";
 
 export interface LlmsTxtSource {
   source: SourceRow;
   snapshot: SourceSnapshot | null;
 }
 
-export const PUBLIC_PATHS = ["/pricing", "/privacy", "/terms"] as const;
-export const SITEMAP_PATHS = ["/pricing", "/privacy", "/terms", "/llms.txt"] as const;
+export const PUBLIC_PATHS = ["/", "/pricing", "/privacy", "/terms", "/security", "/status"] as const;
+export const SITEMAP_PATHS = ["/", "/pricing", "/privacy", "/terms", "/security", "/status", "/llms.txt"] as const;
 export const SITEMAP_LASTMOD: Readonly<Record<string, string>> = {
   "/privacy": LEGAL_UPDATED,
   "/terms": LEGAL_UPDATED,
+  "/security": SECURITY_UPDATED,
 };
-export const DISALLOWED_PREFIXES = ["/app", "/api", "/u", "/v", "/login", "/onboarding", "/oauth", "/design"] as const;
+export const DISALLOWED_PREFIXES = [
+  "/app",
+  "/api",
+  "/u/",
+  "/v/",
+  "/login",
+  "/onboarding",
+  "/signup",
+  "/oauth",
+  "/design",
+] as const;
 export const AGENT_PATHS = ["/mcp", "/api/v1/openapi.json", "/.well-known/http-message-signatures-directory"] as const;
 export const MCP_URL = `${SITE_URL}/mcp`;
 
 const PAGE_SUMMARIES: Record<(typeof PUBLIC_PATHS)[number], { title: string; summary: string }> = {
+  "/": {
+    title: "Home",
+    summary: "what Five to Nine watches, how the Monday brief works, the plans and the answers to common questions",
+  },
   "/pricing": {
     title: "Pricing",
     summary: `the ${planNames()} plans with monthly prices in euros, and the ${String(TRIAL_DAYS)}-day trial terms`,
@@ -37,6 +53,14 @@ const PAGE_SUMMARIES: Record<(typeof PUBLIC_PATHS)[number], { title: string; sum
     title: "Terms",
     summary:
       "who can use 0509, fair use, agent access, plans and cancelling, and how either side can end the agreement",
+  },
+  "/security": {
+    title: "Security",
+    summary: "where the data lives, how you sign in, what agents can touch, and how to report a security problem",
+  },
+  "/status": {
+    title: "Status",
+    summary: "whether the Five to Nine site and its database are working right now",
   },
 };
 
@@ -71,13 +95,18 @@ export function robotsTxt(origin: string): string {
   );
 }
 
+function watchedPhrase(sources: readonly LlmsTxtSource[], now: number): string {
+  const { nouns } = watchedClaims(sources, now);
+  return nouns === UNANSWERED_NOUNS ? `their ${nouns}` : `their ${nouns} from public sources`;
+}
+
 export function llmsTxt(origin: string, sources: readonly LlmsTxtSource[], now: number = Date.now()): string {
   const prices = planPriceList();
   return (
     [
       "# Five to Nine",
       "",
-      `> Five to Nine (0509.io) is a competitor tracker for founders, brands and creators. It finds your competitors for you, watches their ${watchedClaims(sources, now).nouns} from public sources, ranks you against them every week, and emails one brief every Monday with a screenshot behind every change.`,
+      `> Five to Nine (0509.io) is a competitor tracker for founders, brands and creators. It finds your competitors for you, watches ${watchedPhrase(sources, now)}, ranks you against them every week, and emails one brief every Monday with a screenshot behind every change.`,
       "",
       `- Plans: ${prices}. ${TRIAL_TERMS}`,
       `- Agents: every plan includes a read-only API and an MCP server at ${MCP_URL}.`,
@@ -159,5 +188,5 @@ function llmsWatchesBlock(sources: readonly LlmsTxtSource[], now: number): reado
   if (!degraded) {
     return ["What it watches today:", "", ...lines];
   }
-  return ["What it watches today:", "", "Some sources are not answering today; those lines say so.", "", ...lines];
+  return ["What it watches today:", "", "Some sources aren't answering today; those lines say so.", "", ...lines];
 }

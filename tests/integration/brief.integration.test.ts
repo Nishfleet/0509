@@ -6,15 +6,6 @@ import { renderBrief } from "../../workers/delivery/brief-template";
 import { composeBrief } from "../../workers/standing/compose-brief";
 import { refreshWorkspaceScores } from "../../workers/standing/refresh";
 
-/**
- * The per-brand query and the render, against the real D1 the deploy ships.
- *
- * A unit test over a restated query cannot prove the OFF rule: the claim
- * "OFF brands are absent, not zeroed" is a claim about the SQL, so the proof has
- * to run the SQL. This applies migrations/0001_rebuild.sql to real local D1,
- * inserts a workspace with one ON and one OFF brand, and reads the brief's own
- * brand-block input back.
- */
 let seededRuns = 0;
 
 async function seed(): Promise<{ workspaceId: string; weekStart: string; onEntity: string }> {
@@ -117,11 +108,6 @@ describe("the brief's per-brand read, against real D1", () => {
   });
 });
 
-/**
- * The brand's own block of the brief's text: its name line, its biggest_move
- * line and its counts line, up to the next brand. The counts live on the line
- * after the name, so a test that wants the counts has to take the block.
- */
 function brandLine(text: string, name: string): string {
   const lines = text.split("\n");
   const start = lines.findIndex((l) => l.startsWith(`${name} —`));
@@ -171,9 +157,6 @@ async function seedHiring(): Promise<{ workspaceId: string; hiredEntity: string 
     ).bind(`st_idle_${run}`, workspaceId, idleEntity, weekStart, now),
   ]);
 
-  // Two hiring signals in the window on Hiring Brand, and one before the window
-  // so the SUM cannot be counting the whole table: only the in-window pair may
-  // reach the brief.
   await env.DB.batch([
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, ?6, ?7)",
@@ -213,10 +196,38 @@ async function seedHiring(): Promise<{ workspaceId: string; hiredEntity: string 
   return { workspaceId, hiredEntity };
 }
 
+describe("the brief's read-first marks carry the judged kind, through real D1", () => {
+  it("copies the change_kind choice onto the mark, and null when none was judged", async () => {
+    const { workspaceId, hiredEntity } = await seedHiring();
+    const a =
+      (
+        await env.DB.prepare("SELECT id FROM signal WHERE workspace_id = ? AND title = 'Senior Accountant'")
+          .bind(workspaceId)
+          .first<{ id: string }>()
+      )?.id ?? "";
+    const b =
+      (
+        await env.DB.prepare("SELECT id FROM signal WHERE workspace_id = ? AND title = 'Growth Lead'")
+          .bind(workspaceId)
+          .first<{ id: string }>()
+      )?.id ?? "";
+    await env.DB.prepare(
+      `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, choice, decided_at)
+       VALUES ('jv-kind-1', ?1, 'change_kind', 'kind-hash-1', ?2, ?3, 'pricing', '2026-09-20T00:00:00Z')`,
+    )
+      .bind(workspaceId, a, hiredEntity)
+      .run();
+    const payload = await composeBrief(env.DB, {
+      workspaceId,
+      schedule: { timezone: "UTC", weekday: 1, hour: 8 },
+      week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
+      readThisFirst: { picks: [a, b], judged: 2, unjudged: false },
+    });
+    expect(payload.read_this_first.map((mark) => mark.kind)).toEqual(["pricing", null]);
+  });
+});
+
 describe("new job posts reach the brief's brand line, through real D1", () => {
-  // #4728: the count has to survive the real SIGNAL_COUNTS query, not a
-  // restated one, so each case seeds real hiring rows and runs composeBrief
-  // against the real D1 the deploy ships.
   it("counts only the week's hiring signals on that brand", async () => {
     const { workspaceId } = await seedHiring();
     const payload = await composeBrief(env.DB, {
@@ -269,9 +280,7 @@ describe("new job posts reach the brief's brand line, through real D1", () => {
 
   it("leaves the standing score alone — the two roles still score through the existing weight", async () => {
     const { workspaceId, hiredEntity } = await seedHiring();
-    // Recompute the week's scores from the same real rows. The brief change
-    // adds no weight, so two hiring roles must land at exactly
-    // 2 x hiring_new_role(1) x reliability_official_api(1) = 2, unchanged.
+
     const scores = await refreshWorkspaceScores(env.DB, {
       workspaceId,
       weekStartAt: "2026-09-14T12:00:00.000Z",
@@ -283,13 +292,6 @@ describe("new job posts reach the brief's brand line, through real D1", () => {
   });
 });
 
-/**
- * The brief's quiet-week claim rests on source coverage: a source that did not
- * answer this week lands in degraded_source_keys, and the template refuses to
- * vouch for a quiet week while one is there. A canary of zero on the snapshot
- * means the source is degraded, so it must not count as having answered. These
- * cases run the real SOURCE_COVERAGE query against real D1.
- */
 let canaryRuns = 0;
 
 async function seedCanary(canaryCount: number | null): Promise<{ workspaceId: string; sourceKey: string }> {
@@ -353,5 +355,177 @@ describe("a zero canary never counts as a source answering, through real D1", ()
       readThisFirst: { picks: [], judged: 0, unjudged: false },
     });
     expect(healthyPayload.checked.degraded_source_keys).toEqual([]);
+  });
+});
+
+describe("each brand's biggest move reaches its brief line, through real D1", () => {
+  const compose = (workspaceId: string) =>
+    composeBrief(env.DB, {
+      workspaceId,
+      schedule: { timezone: "UTC", weekday: 1, hour: 8 },
+      week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
+      readThisFirst: { picks: [], judged: 0, unjudged: false },
+    });
+
+  it("names the week's highest-weighted signal on the brand that has one, and nothing on a quiet brand", async () => {
+    const { workspaceId } = await seedHiring();
+    const payload = await compose(workspaceId);
+
+    expect(payload.brands.find((b) => b.entity_id.startsWith("ent_hiring_"))?.biggest_move).toBe("Growth Lead");
+    expect(payload.brands.find((b) => b.entity_id.startsWith("ent_idle_"))?.biggest_move).toBeNull();
+  });
+
+  it("prints it on that brand's line in the brief", async () => {
+    const { workspaceId } = await seedHiring();
+    const { text } = renderBrief(parseBriefPayload(JSON.stringify(await compose(workspaceId))), {
+      unsubscribe_url: "https://0509.io/u/token",
+      asset_base_url: "https://assets.0509.io",
+    });
+
+    expect(brandLine(text, "Hiring Brand")).toContain("Growth Lead");
+    expect(brandLine(text, "Quiet Brand")).not.toContain("Growth Lead");
+  });
+});
+
+describe("the running total of changes reaches the brief, through real D1", () => {
+  const addChanges = async (workspaceId: string, entityId: string, sourceId: string, times: readonly string[]) => {
+    await env.DB.batch(
+      times.map((observedAt, index) =>
+        env.DB.prepare(
+          "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, aspect, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'change', 'Page changed', 'pricing', ?1, ?5)",
+        ).bind(`sig_total_${workspaceId}_${String(index)}`, workspaceId, entityId, sourceId, observedAt),
+      ),
+    );
+  };
+
+  it("counts every change up to the week's close, this week's and earlier ones, and none after", async () => {
+    const { workspaceId, hiredEntity } = await seedHiring();
+    const sourceRow = await env.DB.prepare("SELECT source_id FROM signal WHERE workspace_id = ?1 LIMIT 1")
+      .bind(workspaceId)
+      .first<{ source_id: string }>();
+    expect(sourceRow).not.toBeNull();
+    await addChanges(workspaceId, hiredEntity, sourceRow?.source_id ?? "", [
+      "2026-08-20T10:00:00.000Z",
+      "2026-09-02T10:00:00.000Z",
+      "2026-09-16T10:00:00.000Z",
+      "2026-09-30T10:00:00.000Z",
+    ]);
+    const compose = () =>
+      composeBrief(env.DB, {
+        workspaceId,
+        schedule: { timezone: "UTC", weekday: 1, hour: 8 },
+        week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
+        readThisFirst: { picks: [], judged: 0, unjudged: false },
+      });
+    const payload = await compose();
+
+    expect(payload.checked.site_change_count).toBe(1);
+    expect(payload.checked.total_change_count).toBe(3);
+
+    await env.DB.prepare("UPDATE entity SET state = 'off' WHERE id = ?1").bind(hiredEntity).run();
+    expect((await compose()).checked.total_change_count).toBe(3);
+  });
+});
+
+describe("rank over time reaches the brief, through real D1", () => {
+  const NOW = "2026-09-21T12:00:00.000Z";
+
+  const seedSelf = async (tag: string, ranks: Readonly<Record<string, number>>): Promise<string> => {
+    const workspaceId = `ws_trend_${tag}`;
+    const selfId = `ent_trend_${tag}`;
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, 'T', ?2, 1, ?3, ?3)",
+      ).bind(`u_trend_${tag}`, `trend-${tag}@example.test`, NOW),
+      env.DB.prepare(
+        "INSERT INTO workspace (id, name, owner_user_id, timezone, created_at) VALUES (?1, 'Trend', ?2, 'UTC', ?3)",
+      ).bind(workspaceId, `u_trend_${tag}`, NOW),
+      env.DB.prepare(
+        "INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES (?1, ?2, 'self', ?3, 'Me', 'on', ?4)",
+      ).bind(selfId, workspaceId, `me-${tag}.example`, NOW),
+      ...Object.entries(ranks).map(([weekStart, rank]) =>
+        env.DB.prepare(
+          "INSERT INTO standing (id, workspace_id, entity_id, week_start_at, score, rank, computed_at) VALUES (?1, ?2, ?3, ?4, 1, ?5, ?6)",
+        ).bind(`st_trend_${tag}_${weekStart}`, workspaceId, selfId, weekStart, rank, NOW),
+      ),
+    ]);
+    return workspaceId;
+  };
+
+  const compose = (workspaceId: string) =>
+    composeBrief(env.DB, {
+      workspaceId,
+      schedule: { timezone: "UTC", weekday: 1, hour: 8 },
+      week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date(NOW) },
+      readThisFirst: { picks: [], judged: 0, unjudged: false },
+    });
+
+  it("uses the newest standing at least four weeks back, and nothing newer", async () => {
+    const workspaceId = await seedSelf("far", {
+      "2026-07-27T12:00:00.000Z": 6,
+      "2026-08-10T12:00:00.000Z": 5,
+      "2026-08-31T12:00:00.000Z": 1,
+      "2026-09-14T12:00:00.000Z": 3,
+    });
+    expect((await compose(workspaceId)).headline_earlier).toEqual({ rank: 5, weeks: 5 });
+  });
+
+  it("stays out until there are four weeks of history", async () => {
+    const workspaceId = await seedSelf("near", { "2026-08-31T12:00:00.000Z": 1, "2026-09-14T12:00:00.000Z": 3 });
+    expect((await compose(workspaceId)).headline_earlier).toBeNull();
+  });
+});
+
+describe("a rival we found reaches the brief, through real D1", () => {
+  const seed = async (tag: string): Promise<string> => {
+    const workspaceId = `ws_rival_${tag}`;
+    const now = "2026-09-21T12:00:00.000Z";
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, 'T', ?2, 1, ?3, ?3)",
+      ).bind(`u_rival_${tag}`, `rival-${tag}@example.test`, now),
+      env.DB.prepare(
+        "INSERT INTO workspace (id, name, owner_user_id, timezone, created_at) VALUES (?1, 'Rival', ?2, 'UTC', ?3)",
+      ).bind(workspaceId, `u_rival_${tag}`, now),
+      env.DB.prepare(
+        "INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES (?1, ?2, 'competitor', ?3, 'Known', 'on', ?4)",
+      ).bind(`ent_known_${tag}`, workspaceId, `known-${tag}.example`, now),
+    ]);
+    return workspaceId;
+  };
+
+  const suggest = (workspaceId: string, row: { id: string; domain: string; p: number; status: string }) =>
+    env.DB.prepare(
+      "INSERT INTO suggestion (id, workspace_id, kind, candidate_domain, candidate_name, verdict_p, verdict_reason, status, created_at) VALUES (?1, ?2, 'add', ?3, ?4, ?5, 'Named alongside you by 3 publishers', ?6, '2026-09-20T00:00:00.000Z')",
+    )
+      .bind(row.id, workspaceId, row.domain, row.domain.split(".")[0], row.p, row.status)
+      .run();
+
+  const compose = (workspaceId: string) =>
+    composeBrief(env.DB, {
+      workspaceId,
+      schedule: { timezone: "UTC", weekday: 1, hour: 8 },
+      week: {
+        startsAt: new Date("2026-09-14T12:00:00.000Z"),
+        closesAt: new Date("2026-09-21T12:00:00.000Z"),
+      },
+      readThisFirst: { picks: [], judged: 0, unjudged: false },
+    });
+
+  it("names the most likely pending rival, and ignores dismissed ones and brands already watched", async () => {
+    const workspaceId = await seed("pick");
+    await suggest(workspaceId, { id: "s1", domain: "low.example", p: 0.8, status: "pending" });
+    await suggest(workspaceId, { id: "s2", domain: "best.example", p: 0.97, status: "pending" });
+    await suggest(workspaceId, { id: "s3", domain: "no.example", p: 0.99, status: "dismissed" });
+    await suggest(workspaceId, { id: "s4", domain: "known-pick.example", p: 0.99, status: "pending" });
+    expect((await compose(workspaceId)).new_rival).toEqual({
+      name: "best",
+      domain: "best.example",
+      reason: "Named alongside you by 3 publishers",
+    });
+  });
+
+  it("is null when nothing is waiting", async () => {
+    expect((await compose(await seed("none"))).new_rival).toBeNull();
   });
 });

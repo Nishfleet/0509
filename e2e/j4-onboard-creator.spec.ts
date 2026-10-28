@@ -1,19 +1,23 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
-import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+import {
+  addCompetitorWhileDiscoveryIsUnavailable,
+  confirmPublicSubject,
+  consoleFailures,
+  deleteCreatedAccount,
+  requireInboxToken,
+  signInWithMagicLink,
+  watchConsole,
+} from "./inbox";
 
 let createdEmail = "";
-// The end-of-test screenshot is report evidence, not an assertion. Playwright's
-// recorder attaches it and drops a capture that fails instead of failing the
-// test; e2e/reduced-motion.spec.ts has the why.
+
 test.use({ screenshot: "on" });
 
 test.afterEach(async ({ page }, testInfo) => {
   if (createdEmail === "") return;
   testInfo.setTimeout(testInfo.timeout + 60_000);
-  // The delete failing is a test failure, not a reason to keep the address:
-  // clearing in finally means the next test in this worker cannot try to
-  // delete an account that is already gone.
+
   try {
     await deleteCreatedAccount(page, createdEmail);
   } finally {
@@ -50,10 +54,11 @@ test.describe("J4 onboard a creator handle", () => {
       const started = Date.now();
       await input.press("Enter");
 
+      await confirmPublicSubject(page);
       try {
-        await expect(
-          page.getByRole("heading", { name: "Check your details. Fix anything that's wrong." }),
-        ).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Check your details. Fix anything that's wrong." })).toBeVisible(
+          { timeout: 30_000 },
+        );
       } catch (error) {
         const shown = await page
           .locator("main")
@@ -97,8 +102,7 @@ test.describe("J4 onboard a creator handle", () => {
       await page.getByRole("button", { name: "That's me" }).click();
       await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
 
-      const competitorRows = page.locator('ul[aria-label="Watching"] li, ul[aria-label="Possible competitors"] li');
-      await expect.poll(async () => competitorRows.count(), { timeout: 60_000 }).toBeGreaterThan(0);
+      await addCompetitorWhileDiscoveryIsUnavailable(page);
       const competitors = Date.now() - started;
       expect(competitors).toBeLessThan(60_000);
       test.info().annotations.push({ type: "input-to-competitors-ms", description: String(competitors) });

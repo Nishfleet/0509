@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { Price } from "../../app/components/landing/price";
+import { MAX_CLIENT_BRANDS } from "../../app/lib/client-brands";
 import { monthlyPrice, PLANS, TRIAL_TERMS } from "../../app/lib/billing/plans";
 
 function markup(): string {
@@ -24,6 +25,29 @@ describe("landing price", () => {
       expect(body).toContain(plan.name);
       expect(body).toContain(`€${String(plan.monthlyPriceEur)}<`);
     }
+  });
+
+  it("opens each higher plan with what it builds on, so the lists do not repeat", () => {
+    const cards = new Map(
+      section(markup())
+        .split("<h3")
+        .slice(1)
+        .map((card) => [card.slice(card.indexOf(">") + 1, card.indexOf("</h3>")), card]),
+    );
+    const cardOf = (id: string) => cards.get(PLANS.find((plan) => plan.id === id)?.name ?? "");
+    expect(cardOf("scout")).not.toContain("Everything in");
+    expect(cardOf("starter")).toContain("Everything in Scout, plus");
+    expect(cardOf("agency")).toContain("Everything in Starter, plus");
+  });
+
+  it("states the client brand fair use limit the app enforces", () => {
+    expect(markup()).toContain(`Unlimited client brands (fair use ${String(MAX_CLIENT_BRANDS)}, more on request)`);
+  });
+
+  it("draws every plan card the same, with no plan marked as the one to pick", () => {
+    const cards = section(markup()).match(/<li class="min-w-0[^"]*"/g) ?? [];
+    expect(cards).toHaveLength(PLANS.length);
+    expect(new Set(cards).size).toBe(1);
   });
 
   it("shows the trial line from the module", () => {

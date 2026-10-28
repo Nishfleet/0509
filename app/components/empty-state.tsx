@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router";
+import { APP_LOCALE } from "../lib/locale";
+import { Input } from "./ui/input";
 
-const CLOCK = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
+const CLOCK = new Intl.DateTimeFormat(APP_LOCALE, { hour: "2-digit", minute: "2-digit" });
 
 const BARE_SENTENCES = new Set(["no data", "nothing here"]);
 
@@ -33,8 +36,8 @@ function Action({ action }: { action: EmptyStateAction }): ReactNode {
     return (
       <label className="mt-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
         <span className="font-display text-[1.02rem] uppercase">{action.label}</span>
-        <input
-          className="min-h-11 w-full min-w-0 border border-line px-3 py-2 text-[0.88rem] sm:flex-1"
+        <Input
+          className="sm:flex-1"
           name={action.name}
           placeholder={action.placeholder}
           type="text"
@@ -49,12 +52,12 @@ function Action({ action }: { action: EmptyStateAction }): ReactNode {
     );
   }
   return (
-    <a
+    <Link
       className="mt-1 inline-flex min-h-11 items-center font-display text-[1.02rem] uppercase"
-      href={href(action.href)}
+      to={href(action.href)}
     >
       {action.label}
-    </a>
+    </Link>
   );
 }
 

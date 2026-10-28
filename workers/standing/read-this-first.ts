@@ -137,6 +137,21 @@ async function judgeAll(context: JudgeContext, located: readonly LocatedItem[]):
   return collected;
 }
 
+export async function readWeekPicks(
+  db: D1Database,
+  input: { workspaceId: string; startsAt: string; closesAt: string },
+  limit: number,
+): Promise<string[]> {
+  const result = await db
+    .prepare(WEEK_ITEMS)
+    .bind(input.workspaceId, input.startsAt, input.closesAt, D3_QUESTION_ID, D6_QUESTION_ID)
+    .all();
+  return weekItemRows
+    .parse(result.results)
+    .slice(0, limit)
+    .map((row) => row.signal_id);
+}
+
 export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<JudgedWeek> {
   const [weekItemResult, entityResult] = await db.batch([
     db.prepare(WEEK_ITEMS).bind(input.workspaceId, input.startsAt, input.closesAt, D3_QUESTION_ID, D6_QUESTION_ID),
@@ -144,11 +159,8 @@ export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<
   ]);
   const items = weekItemRows.parse(required(weekItemResult, "read-this-first.items").results);
   const entities = entityRows.parse(required(entityResult, "read-this-first.entities").results);
-  const unjudgedInputs = await countUnjudgedInputs(db, {
-    workspaceId: input.workspaceId,
-    windowStartAt: input.startsAt,
-    windowEndAt: input.closesAt,
-  });
+  const window = { workspaceId: input.workspaceId, windowStartAt: input.startsAt, windowEndAt: input.closesAt };
+  const unjudgedInputs = await countUnjudgedInputs(db, window);
   if (items.length === 0) {
     return { picks: [], judged: 0, unjudged: unjudgedInputs > 0 };
   }
@@ -162,9 +174,20 @@ export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<
 
   try {
     const collected = await judgeAll({ db, input, self, entities }, located);
-    return { picks: pickReadThisFirst(collected), judged: items.length, unjudged: unjudgedInputs > 0 };
+    return {
+      picks: pickReadThisFirst(collected),
+      judged: items.length,
+      unjudged: unjudgedInputs > 0,
+    };
   } catch (error) {
     if (error instanceof JevUnavailableError) {
+      console.warn(
+        JSON.stringify({
+          event: "standing.read_this_first_unavailable",
+          workspaceId: input.workspaceId,
+          reason: error.name,
+        }),
+      );
       return { picks: [], judged: 0, unjudged: true };
     }
     throw error;

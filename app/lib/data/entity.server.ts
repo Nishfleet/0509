@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
+import { governingWorkspace } from "./active-workspace";
 import { readEntitlements } from "./plan.server";
 import { shouldRetryD1, tryWhile } from "./retries.server";
 import { resetYoutubeWatchStatement } from "./watch.server";
@@ -83,6 +84,9 @@ const readEntityDomainRow = z.object({ domain: z.string() });
 
 const SET_COMPETITOR_STATE =
   "UPDATE entity SET state = ?1, state_changed_at = ?2, state_changed_by = 'user', state_reason = NULL WHERE id = ?3 AND workspace_id = ?4 AND role = 'competitor' AND state IN ('on', 'off') AND state <> ?1 AND (?1 = 'off' OR (SELECT count(*) FROM entity WHERE workspace_id = ?4 AND role = 'competitor' AND state = 'on') < ?5)";
+
+const RENAME_COMPETITOR =
+  "UPDATE entity SET name = ?1 WHERE id = ?2 AND workspace_id = ?3 AND role = 'competitor' AND state IN ('on', 'off')";
 
 const DELETE_COMPETITOR = "DELETE FROM entity WHERE id = ? AND workspace_id = ? AND role = 'competitor'";
 
@@ -174,6 +178,14 @@ export async function setCompetitorState(input: {
   const cap = (await readEntitlements(workspaceId)).competitors;
   const result = await tryWhile(
     () => env.DB.prepare(SET_COMPETITOR_STATE).bind(state, now, entityId, workspaceId, cap).run(),
+    shouldRetryD1,
+  );
+  return result.meta.changes === 1;
+}
+
+export async function renameCompetitor(workspaceId: string, entityId: string, name: string): Promise<boolean> {
+  const result = await tryWhile(
+    () => env.DB.prepare(RENAME_COMPETITOR).bind(name, entityId, workspaceId).run(),
     shouldRetryD1,
   );
   return result.meta.changes === 1;
@@ -293,8 +305,7 @@ const SELECT_SELF =
 const SELECT_KNOWN =
   "SELECT domain, name, role, state FROM entity WHERE workspace_id = ?1 UNION ALL SELECT candidate_domain, candidate_name, 'suggestion', status FROM suggestion WHERE workspace_id = ?1 AND status <> 'pending'";
 
-const SELECT_DISCOVERABLE_WORKSPACES =
-  "SELECT e.workspace_id AS workspace_id, w.created_at AS created_at, p.status AS status, p.current_period_end AS current_period_end FROM entity e JOIN workspace w ON w.id = e.workspace_id JOIN plan p ON p.workspace_id = w.id WHERE e.role = 'self' AND w.fixture = 0 ORDER BY e.workspace_id";
+const SELECT_DISCOVERABLE_WORKSPACES = `SELECT e.workspace_id AS workspace_id, w.created_at AS created_at, p.status AS status, p.current_period_end AS current_period_end FROM entity e JOIN workspace w ON w.id = e.workspace_id JOIN plan p ON p.workspace_id = ${governingWorkspace("w.id")} WHERE e.role = 'self' AND w.fixture = 0 ORDER BY e.workspace_id`;
 
 const readDiscoverableWorkspacesRow = z.object({
   workspace_id: z.string(),
@@ -553,6 +564,21 @@ export async function fillCompetitorSocials(input: {
 }): Promise<boolean> {
   const result = await env.DB.prepare(FILL_COMPETITOR_SOCIALS)
     .bind(input.entityId, input.workspaceId, input.socialsJson, input.readAt)
+    .run();
+  return result.meta.changes === 1;
+}
+
+const SET_COMPETITOR_DESCRIPTION =
+  "UPDATE entity SET identity_json = json_set(identity_json, '$.description', ?3, '$.descriptionReadAt', ?4) WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor' AND json_valid(identity_json) AND coalesce(json_extract(identity_json, '$.description'), '') <> ?3";
+
+export async function setCompetitorDescription(input: {
+  workspaceId: string;
+  entityId: string;
+  description: string;
+  readAt: string;
+}): Promise<boolean> {
+  const result = await env.DB.prepare(SET_COMPETITOR_DESCRIPTION)
+    .bind(input.entityId, input.workspaceId, input.description, input.readAt)
     .run();
   return result.meta.changes === 1;
 }

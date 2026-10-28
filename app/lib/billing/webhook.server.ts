@@ -4,8 +4,9 @@ import { z } from "zod";
 
 import { markWebhookEventProcessed, recordWebhookEvent } from "../data/dodo_webhook_event.server";
 import { readPlanSubscription, readWorkspaceIdBySubscription, upsertSubscriptionPlan } from "../data/plan.server";
+import { tryFirstLook } from "../site/first-look.server";
 import { isCheckoutProof } from "./checkout-proof.server";
-import { isSubscriptionLive } from "./entitlements";
+import { isSubscriptionLive } from "./subscription-state";
 import { planIdForProduct, testerProductId } from "./products.server";
 import { isTrialing } from "./trial";
 
@@ -31,9 +32,15 @@ const subscriptionEvent = z.object({ data: subscriptionData });
 
 const OK = { status: 200 };
 
-function log(event: string, fields: Record<string, string>): void {
-  console.log(JSON.stringify({ event, ...fields }));
-}
+type Level = "log" | "warn" | "error";
+
+const emit = (level: Level) => (event: string, fields: Record<string, string>) => {
+  console[level](JSON.stringify({ event, ...fields }));
+};
+
+const log = emit("log");
+const warn = emit("warn");
+const fail = emit("error");
 
 type Workspace = { kind: "found"; id: string } | { kind: "retry" } | { kind: "ignore" };
 
@@ -46,7 +53,7 @@ async function resolveWorkspace(data: z.infer<typeof subscriptionData>): Promise
     return { kind: "retry" };
   }
   if (!(await isCheckoutProof(claimed, data.product_id, data.metadata?.proof))) {
-    log("billing.webhook_unproven", { subscription: data.subscription_id });
+    warn("billing.webhook_unproven", { subscription: data.subscription_id });
     return { kind: "ignore" };
   }
   return { kind: "found", id: claimed };
@@ -70,17 +77,27 @@ async function displacement(input: {
   return Date.parse(input.timestamp) > since ? "same" : "stale";
 }
 
-async function applySubscription(body: unknown, type: string, timestamp: string): Promise<"done" | "retry"> {
+const firstLookWhenActive = (type: string, workspaceId: string): Promise<void> =>
+  type === "subscription.active" ? tryFirstLook(workspaceId) : Promise.resolve();
+
+export interface SubscriptionEvent {
+  type: string;
+  timestamp: string;
+  expectedUpdatedAt?: string;
+}
+
+export async function applySubscription(body: unknown, event: SubscriptionEvent): Promise<"done" | "retry" | "hold"> {
+  const { type, timestamp } = event;
   const parsed = subscriptionEvent.safeParse(body);
   if (!parsed.success) {
-    log("billing.webhook_unparsed", { type });
-    return "done";
+    fail("billing.webhook_unparsed", { type });
+    return "hold";
   }
   const { data } = parsed.data;
   const tier = planIdForProduct(data.product_id);
   if (tier === null) {
-    log("billing.webhook_unknown_product", { type, product: data.product_id });
-    return "done";
+    fail("billing.webhook_unknown_product", { type, product: data.product_id });
+    return "hold";
   }
   const workspace = await resolveWorkspace(data);
   if (workspace.kind === "retry") return "retry";
@@ -94,7 +111,7 @@ async function applySubscription(body: unknown, type: string, timestamp: string)
     timestamp,
   });
   if (change === "stale") {
-    log("billing.webhook_other_subscription_ignored", { type, subscription: data.subscription_id });
+    warn("billing.webhook_other_subscription_ignored", { type, subscription: data.subscription_id });
     return "done";
   }
   const cancelledNow = data.status === "cancelled" && data.cancel_at_next_billing_date !== true;
@@ -114,7 +131,9 @@ async function applySubscription(body: unknown, type: string, timestamp: string)
       }),
     updatedAt: timestamp,
     replace: change === "takeover",
+    expectedUpdatedAt: event.expectedUpdatedAt,
   });
+  await firstLookWhenActive(type, workspaceId);
   return "done";
 }
 
@@ -152,7 +171,7 @@ export async function handleDodoWebhook(request: Request): Promise<Response> {
   const json = readJson(body);
   const event = envelope.safeParse(json);
   if (!event.success) {
-    log("billing.webhook_ignored", { reason: "unexpected_payload" });
+    warn("billing.webhook_ignored", { reason: "unexpected_payload" });
     return new Response(null, OK);
   }
   const { type, timestamp, data } = event.data;
@@ -164,8 +183,9 @@ export async function handleDodoWebhook(request: Request): Promise<Response> {
     receivedAt: now,
   });
   if (state === "processed") return new Response(null, OK);
-  const outcome = type.startsWith("subscription.") ? await applySubscription(json, type, timestamp) : "done";
+  const outcome = type.startsWith("subscription.") ? await applySubscription(json, { type, timestamp }) : "done";
   if (outcome === "retry") return new Response(null, { status: 500 });
+  if (outcome === "hold") return new Response(null, OK);
   await markWebhookEventProcessed(id, now);
   return new Response(null, OK);
 }

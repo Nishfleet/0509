@@ -6,6 +6,7 @@ import { ApiReference } from "../../app/components/api-reference";
 import { schemaFields, schemaLabel, type JsonRecord } from "../../app/lib/agent/api-docs";
 import { openApiDocument } from "../../app/lib/agent/openapi";
 import { MCP_PATH } from "../../app/lib/agent/paths";
+import { PROBLEMS } from "../../app/lib/agent/problems";
 
 const ORIGIN = "https://0509.io";
 const SETTINGS = "/app/settings/agents";
@@ -14,6 +15,7 @@ function page(): string {
   return renderToStaticMarkup(
     createElement(ApiReference, {
       document: openApiDocument(ORIGIN) as unknown as JsonRecord,
+      exampleUrl: `${ORIGIN}/api/v1/brief`,
       mcpUrl: `${ORIGIN}${MCP_PATH}`,
       settingsHref: SETTINGS,
     }),
@@ -21,6 +23,14 @@ function page(): string {
 }
 
 describe("the API reference page", () => {
+  it("shows a copy-paste curl line with the bearer header", () => {
+    expect(page()).toContain(`curl -H &quot;Authorization: Bearer &lt;key&gt;&quot; ${ORIGIN}/api/v1/brief`);
+  });
+
+  it("shows a Claude Code line that adds the MCP server by its address", () => {
+    expect(page()).toContain(`claude mcp add --transport http five-to-nine ${ORIGIN}${MCP_PATH}`);
+  });
+
   it("renders every path key of the OpenAPI document", () => {
     const document = openApiDocument(ORIGIN);
     const html = page();
@@ -36,9 +46,16 @@ describe("the API reference page", () => {
     expect(html).toContain("Authorization: Bearer");
     expect(html).toContain(`${ORIGIN}${MCP_PATH}`);
     expect(html).toContain(`href="${SETTINGS}"`);
-    expect(html).toContain("per colo");
-    expect(html).toContain("eventually consistent");
-    expect(html).toContain("120");
+    expect(html).toContain("120 requests a minute");
+    expect(html).toContain("Retry-After");
+  });
+
+  it("lists every error code the API can return with its status and sentence", () => {
+    const html = page();
+    for (const [code, problem] of Object.entries(PROBLEMS)) {
+      expect(html, code).toContain(code);
+      expect(html, code).toContain(problem.description.replaceAll("<", "&lt;").replaceAll(">", "&gt;"));
+    }
   });
 
   it("shows each path's parameters, response descriptions, and referenced fields", () => {

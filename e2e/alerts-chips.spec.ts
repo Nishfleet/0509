@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { consoleFailures, isLocalLane, readPreview, run, seedPreviewSession, watchConsole } from "./inbox";
 
@@ -128,6 +129,26 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
     null,
     "2026-09-25T07:00:00.000Z",
   );
+  const sixDaysAgo = new Date(Date.now() - 6 * 86_400_000).toISOString();
+  const now = new Date().toISOString();
+  mention(
+    `sig-fresh-${suffix}`,
+    onId,
+    "src_mentions_gdelt",
+    "Zephyrwear fresh coverage of an old story",
+    "https://news.example/fresh",
+    sixDaysAgo,
+    now,
+  );
+  mention(
+    `sig-week-${suffix}`,
+    onId,
+    "src_mentions_gdelt",
+    "Zephyrwear coverage found last week",
+    "https://news.example/week",
+    null,
+    new Date(Date.now() - 5 * 86_400_000).toISOString(),
+  );
   mention(
     `sig-held-${suffix}`,
     onId,
@@ -177,6 +198,15 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
     0.42,
     "A roundup mention, not a move of its own.",
     "2026-09-25T07:00:00.000Z",
+  );
+  verdict(`jev-fresh-${suffix}`, `sig-fresh-${suffix}`, onId, 0.92, "An old story, newly picked up.", now);
+  verdict(
+    `jev-week-${suffix}`,
+    `sig-week-${suffix}`,
+    onId,
+    0.9,
+    "Coverage worth knowing about.",
+    new Date(Date.now() - 5 * 86_400_000).toISOString(),
   );
   verdict(
     `jev-held-${suffix}`,
@@ -238,7 +268,7 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
     run(
       db,
       `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, summary, url, payload_json, dedup_key, published_at, observed_at)
-         VALUES (?, ?, ?, ?, 'hiring', ?, 'Berlin · Platform', ?, '{}', ?, NULL, '2026-09-26T08:00:00.000Z')`,
+         VALUES (?, ?, ?, ?, 'hiring', ?, 'Berlin · Platform', ?, '{}', ?, NULL, ?)`,
       id,
       workspaceId,
       entityId,
@@ -246,6 +276,7 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
       title,
       `https://boards.example/${id}`,
       `dedup-${id}`,
+      new Date(Date.now() - 86_400_000).toISOString(),
     );
   };
   role(`sig-role-${suffix}`, onId, "Senior Backend Engineer");
@@ -296,7 +327,7 @@ test("alert type chips filter one feed with honest counts", async ({ page }, tes
   const { cookie, workspaceId } = await seedSession();
   const counts = sqlCounts(workspaceId);
   expect(counts.ads).toBe(2);
-  expect(counts.mentions).toBe(4);
+  expect(counts.mentions).toBe(6);
   expect(counts.hiring).toBe(1);
 
   await page.setExtraHTTPHeaders({ cookie });
@@ -306,8 +337,11 @@ test("alert type chips filter one feed with honest counts", async ({ page }, tes
   await expect(page.getByTestId("alert-chip-ads")).toContainText(String(counts.ads));
   await expect(page.getByTestId("alert-chip-mentions")).toContainText(String(counts.mentions));
   await expect(page.getByTestId("alert-chip-hiring")).toContainText(String(counts.hiring));
-  await expect(page.getByTestId("alert-chip-site-changes")).toBeDisabled();
+  await expect(page.getByTestId("alert-chip-site-changes")).toHaveCount(0);
 
+  await page.goto("/app/alerts?kind=site-changes");
+  await expect(page.getByTestId("alert-chip-site-changes")).toHaveAttribute("aria-pressed", "true");
+  await page.goto("/app/alerts");
   await page.getByTestId("alert-chip-ads").click();
   await expect(page).toHaveURL(/[?&]kind=ads/);
   await expect(page.getByText("Zephyrwear ran ad 1")).toBeVisible();
@@ -344,6 +378,24 @@ test("alert type chips filter one feed with honest counts", async ({ page }, tes
     const widths = await measure(page);
     expect(widths.scrollWidth, JSON.stringify(widths)).toBe(widths.clientWidth);
   }
+
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
+});
+
+test("Alerts groups a mention by the day we found it and says when it was published", async ({ page }, testInfo) => {
+  const watched = watchConsole(page);
+  const { cookie } = await seedSession();
+  await page.setExtraHTTPHeaders({ cookie });
+  await page.goto("/app/alerts?kind=mentions");
+
+  const today = page.getByTestId("alert-day").filter({ has: page.getByRole("heading", { name: "Today" }) });
+  const fresh = today.getByTestId("mention-row").filter({ hasText: "Zephyrwear fresh coverage of an old story" });
+  await expect(fresh).toContainText("found today · published 6 days ago");
+
+  const earlier = page.getByTestId("alert-day").filter({ has: page.getByRole("heading", { name: "Earlier" }) });
+  const week = earlier.getByTestId("mention-row").filter({ hasText: "Zephyrwear coverage found last week" });
+  await expect(week).toContainText("found 5 days ago");
+  await expect(today.getByText("Zephyrwear coverage found last week")).toHaveCount(0);
 
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

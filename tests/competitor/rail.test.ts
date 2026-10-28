@@ -178,4 +178,17 @@ describe("the competitor rail", () => {
       ),
     ).toContain("First read tonight at 07:30 GMT+5:30.");
   });
+
+  it("says the homepage could not be read instead of promising a first read, when the site blocks us", () => {
+    const blocked = text(render({ sources: [], lastChecked: null, unreadable: true }));
+    expect(blocked).toContain("read the homepage. We try again every night.");
+    expect(blocked).not.toContain("First read tonight");
+  });
+
+  it("tells the customer to check the address when the site could not be found at all", () => {
+    const missing = text(render({ sources: [], lastChecked: null, notFound: true }));
+    expect(missing).toContain("find the homepage. Check the address.");
+    expect(missing).not.toContain("First read tonight");
+    expect(missing).not.toContain("block");
+  });
 });

@@ -1,9 +1,10 @@
 import { env } from "cloudflare:workers";
 
-import { isWorkspacePaid } from "./billing/entitlements";
+import { isWorkspacePaid } from "./billing/subscription-state";
+import { activeFirstOrder } from "./data/active-workspace";
 import { clearWorkspaceDeletedSuppression } from "./data/email_suppression.server";
 import { ensureOwnerEmailTarget } from "./data/send_target.server";
-import { isPerRunFixtureEmail } from "./fixture-accounts";
+import { isE2eFixtureEmail } from "./fixture-accounts";
 import {
   fillWorkspaceTimezone,
   insertWorkspace,
@@ -27,9 +28,9 @@ interface WorkspaceRow {
   created_at: string;
 }
 
-const SELECT_WORKSPACE = `SELECT id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at
-FROM workspace WHERE owner_user_id = ?
-ORDER BY created_at ASC
+const SELECT_WORKSPACE = `SELECT w.id AS id, w.name AS name, w.owner_user_id AS owner_user_id, w.timezone AS timezone, w.brief_weekday AS brief_weekday, w.brief_hour AS brief_hour, w.created_at AS created_at
+FROM workspace w WHERE w.owner_user_id = ?1
+ORDER BY ${activeFirstOrder("?1")}
 LIMIT 1`;
 
 export function firstWorkspaceId(userId: string): string {
@@ -90,7 +91,7 @@ export async function ensureWorkspace(
       ownerUserId: input.userId,
       timezone,
       createdAt,
-      fixture: isPerRunFixtureEmail(input.email),
+      fixture: isE2eFixtureEmail(input.email),
     });
     await clearWorkspaceDeletedSuppression(input.email, db);
   } catch (error) {

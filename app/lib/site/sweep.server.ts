@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { getDomain } from "tldts";
 
 import { insertIncidentAlertStatement } from "../data/alert.server";
-import { openIncidentStatement } from "../data/incident.server";
+import { openIncidentStatement, readOpenIncidentId } from "../data/incident.server";
 import {
   insertPages,
   readEntitiesWithoutHomePage,
@@ -12,21 +12,24 @@ import {
 } from "../data/page.server";
 import { linkVerdictsStatement } from "../data/jev_verdict.server";
 import { insertChangeSignalStatement } from "../data/signal.server";
-import { readCoveredPagePairs } from "../data/snapshot.server";
+import { hashSeenSince, readCoveredPagePairs } from "../data/snapshot.server";
 import { readEnabledSourceId } from "../data/source.server";
 import type { SiteSweepTarget } from "../data/watch.server";
 import { readPaidWorkspaceIds } from "../data/plan.server";
 import { insertWatches, markWatchPolled, readSiteSweepTargets, readUnwatchedEntities } from "../data/watch.server";
 import { robotsAllows } from "../fetch/robots.server";
+import { decodeHtmlEntities } from "../html";
 import { normaliseSubject } from "../identity/normalise";
+import { changeExcerpt } from "../site-change-excerpt";
 import { takeBrowserScreenshot } from "./browser-budget.server";
 import { computeBreakageEvidence } from "./breakage-evidence";
 import type { CheckPageResult } from "./check-page.server";
 import { checkPage } from "./check-page.server";
-import { diffPageText } from "./diff";
+import { changedWordCounts, diffPageText } from "./diff";
 import type { JudgedChange, JudgeInput } from "./judge.server";
 import { judgeChange } from "./judge.server";
 import { readPage } from "./read-page.server";
+import { rememberRivalDescription } from "./rival-profile.server";
 
 const SITE_SOURCE_KEY = "site.web";
 
@@ -34,15 +37,57 @@ export const CHUNK_SIZE = 10;
 
 export type ChangedPage = Extract<CheckPageResult, { outcome: "changed" }>;
 
-const WORDS = new Intl.Segmenter("en", { granularity: "word" });
-
-function wordCount(value: string): number {
-  return Array.from(WORDS.segment(value)).filter((segment) => segment.isWordLike).length;
-}
-
 async function readText(key: string): Promise<string | null> {
   const object = await env.SNAPSHOTS.get(key);
   return object === null ? null : object.text();
+}
+
+function squash(text: string | null): string | null {
+  return text === null ? null : text.replace(/\s+/g, " ").trim();
+}
+
+function sameVisibleText(changed: ChangedPage, before: string | null, after: string | null): boolean {
+  return changed.previousTextKey !== changed.textKey && before !== null && squash(before) === squash(after);
+}
+
+const FLAP_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+async function isFlapBack(target: SiteSweepTarget, changed: ChangedPage): Promise<boolean> {
+  if (target.entityRole !== "competitor" || target.pageRole === "pricing") return false;
+  return hashSeenSince({
+    watchId: target.watchId,
+    pageId: target.pageId,
+    hash: changed.hash,
+    exceptId: changed.snapshotId,
+    since: new Date(Date.now() - FLAP_WINDOW_MS).toISOString(),
+  });
+}
+
+async function storedLang(key: string): Promise<string | null> {
+  const head = await env.SNAPSHOTS.head(key);
+  return head?.customMetadata?.lang ?? null;
+}
+
+async function isLocaleSwitch(target: SiteSweepTarget, changed: ChangedPage): Promise<boolean> {
+  if (target.entityRole !== "competitor") return false;
+  const [before, after] = await Promise.all([storedLang(changed.previousTextKey), storedLang(changed.textKey)]);
+  return before !== null && after !== null && before !== after;
+}
+
+async function skipEvent(
+  target: SiteSweepTarget,
+  changed: ChangedPage,
+  text: { before: string | null; after: string | null },
+): Promise<string | null> {
+  if (sameVisibleText(changed, text.before, text.after)) return "site.change_same_text";
+  if (await isLocaleSwitch(target, changed)) return "site.change_locale_switch";
+  if (await isFlapBack(target, changed)) return "site.change_flap";
+  return null;
+}
+
+async function readVisibleText(key: string): Promise<string | null> {
+  const raw = await readText(key);
+  return raw === null ? null : decodeHtmlEntities(raw);
 }
 
 function enteredHomeUrl(entity: { domain: string; url: string | null }): string | null {
@@ -123,13 +168,20 @@ export interface CheckSitePageOptions {
   browser?: boolean;
 }
 
+const URL_PATTERN = /https?:\/\/\S+/g;
+const HOST_PATTERN = /\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi;
+
+function redactedDetail(detail: string): string {
+  return detail.replace(URL_PATTERN, "<url>").replace(HOST_PATTERN, "<host>").slice(0, 300);
+}
+
 export async function checkSitePage(
   target: SiteSweepTarget,
   tick: SweepTick,
   options: CheckSitePageOptions = {},
 ): Promise<CheckPageResult> {
   if (target.entityRole === "self" && !(await robotsAllows(target.url))) {
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "site.check_failed",
         pageId: target.pageId,
@@ -140,6 +192,7 @@ export async function checkSitePage(
     return { outcome: "failed", reason: "robots", detail: "disallowed by robots.txt" };
   }
   const read = await readPage(target, tick.plannedAt, { browser: options.browser ?? true });
+  await rememberRivalDescription(target, read);
   const result = await checkPage({
     watchId: target.watchId,
     pageId: target.pageId,
@@ -153,12 +206,12 @@ export async function checkSitePage(
         : () => takeBrowserScreenshot(target.workspaceId, target.entityId, tick.plannedAt.slice(0, 10)),
   });
   if (result.outcome === "failed") {
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "site.check_failed",
         pageId: target.pageId,
         reason: result.reason,
-        detail: result.detail,
+        detail: redactedDetail(result.detail),
       }),
     );
     return result;
@@ -195,7 +248,7 @@ function changeSignalPayload(
   input: Pick<SiteChangeInput, "target" | "changed" | "diff"> & { diffKey: string },
 ): string {
   const { target, changed, diff, diffKey } = input;
-  const words = diff?.words ?? [];
+  const counts = changedWordCounts(diff);
   return JSON.stringify({
     page: { role: target.pageRole, url: target.url },
     before: {
@@ -209,8 +262,9 @@ function changeSignalPayload(
       screenshotKey: changed.screenshotKey,
     },
     diffKey: diff === null ? null : diffKey,
-    wordsAdded: words.filter((c) => c.added).reduce((n, c) => n + wordCount(c.value), 0),
-    wordsRemoved: words.filter((c) => c.removed).reduce((n, c) => n + wordCount(c.value), 0),
+    excerpt: diff === null ? [] : changeExcerpt(diff.hunks.map((hunk) => hunk.lines)),
+    wordsAdded: counts.added,
+    wordsRemoved: counts.removed,
     status: changed.status,
     transport: changed.transport,
     ...(changed.viaArchive ? { viaArchive: true } : {}),
@@ -235,7 +289,7 @@ async function judgeUnlessFailed(change: SiteChangeInput, signalId: string | nul
   try {
     return await judgeChange(judgeInputFor(change, signalId));
   } catch (error) {
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "site.change_judge_failed",
         pageId: change.target.pageId,
@@ -356,9 +410,10 @@ async function openBreakageIncident(change: SiteChangeInput, filing: BreakageFil
       verdictIds: filing.judgment.verdictIds,
     }).run();
   }
-  if (results[1]?.meta.changes === 1 && filing.band === "alert") {
-    await env.SEND_EMAIL.send({ incident_id: ids.incident });
-  }
+  const retried = results[0]?.meta.changes === 0;
+  if (filing.band !== "alert" || (results[1]?.meta.changes !== 1 && !retried)) return;
+  const incidentId = await readOpenIncidentId(change.target.pageId);
+  if (incidentId !== null) await env.SEND_EMAIL.send({ incident_id: incidentId });
 }
 
 async function storeDiff(diffKey: string, diff: ReturnType<typeof diffPageText> | null) {
@@ -373,7 +428,7 @@ async function emailPricingChange(signalId: string, judgment: JudgedChange | nul
   try {
     await env.SEND_EMAIL.send({ signal_id: signalId });
   } catch (error) {
-    console.log(JSON.stringify({ event: "site.change_email_enqueue_failed", signalId }));
+    console.warn(JSON.stringify({ event: "site.change_email_enqueue_failed", signalId }));
     captureException(error, { tags: { queue: "send-email", lane: "change" } });
   }
 }
@@ -382,7 +437,7 @@ async function fileUnlessDiscarded(change: SiteChangeInput, payloadJson: string,
   const { target } = change;
   const competitorJudgment = await judgeCompetitorChange(change);
   if (competitorJudgment?.noteworthy?.band === "discard") {
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "site.change_discarded",
         pageId: target.pageId,
@@ -399,7 +454,15 @@ async function fileUnlessDiscarded(change: SiteChangeInput, payloadJson: string,
 }
 
 export async function publishSiteChange(target: SiteSweepTarget, changed: ChangedPage): Promise<string> {
-  const [before, after] = await Promise.all([readText(changed.previousTextKey), readText(changed.textKey)]);
+  const [before, after] = await Promise.all([
+    readVisibleText(changed.previousTextKey),
+    readVisibleText(changed.textKey),
+  ]);
+  const skipped = await skipEvent(target, changed, { before, after });
+  if (skipped !== null) {
+    console.log(JSON.stringify({ event: skipped, pageId: target.pageId }));
+    return changed.snapshotId;
+  }
   const diff = pageTextDiff(before, after, changed);
   const diffKey = `snapshot/site/${target.watchId}/${changed.snapshotId}.diff.json`;
   await storeDiff(diffKey, diff);

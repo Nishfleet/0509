@@ -17,21 +17,12 @@ export function freshnessText(entry: FreshnessEntry): string {
 export function FreshnessLine({ entries }: { entries: readonly FreshnessEntry[] }): ReactElement | null {
   if (entries.length === 0) return null;
   return (
-    <p data-home="freshness" className="mt-2 font-mono text-eyebrow text-ink-soft">
-      {entries.flatMap((entry, index) =>
-        index === 0
-          ? [
-              <span key={entry.key} data-state={entry.state}>
-                {freshnessText(entry)}
-              </span>,
-            ]
-          : [
-              " · ",
-              <span key={entry.key} data-state={entry.state}>
-                {freshnessText(entry)}
-              </span>,
-            ],
-      )}
-    </p>
+    <ul data-home="freshness" className="mt-2 flex flex-col gap-1 font-mono text-eyebrow text-ink-soft">
+      {entries.map((entry) => (
+        <li key={entry.key} data-state={entry.state}>
+          {freshnessText(entry)}
+        </li>
+      ))}
+    </ul>
   );
 }

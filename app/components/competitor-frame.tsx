@@ -3,11 +3,14 @@ import type { CSSProperties, ReactElement } from "react";
 import { BiggestMove } from "./biggest-move";
 import { DevelopmentsFeed } from "./developments-feed";
 import { EmptyState } from "./empty-state";
+import { PricingTimeline } from "./pricing-timeline";
 import { CompetitorRail, type CompetitorRailProps } from "./competitor-rail";
 import type { SiteChangeItemData } from "./site-change-item";
 import { SITE_SWEEP_UTC_LABEL } from "../lib/cadence";
 import type { BiggestMoveView } from "../lib/biggest-move";
+import { quietWithChanges } from "../lib/quiet-with-changes";
 import type { DevelopmentItem } from "../lib/developments";
+import { pricingTimeline } from "../lib/pricing-timeline";
 
 const HEADING = "mb-3 font-mono text-eyebrow text-ink-soft uppercase";
 
@@ -21,6 +24,7 @@ export interface CompetitorFrameProps {
   lastChecked: string | null;
   pausedOn: string | null;
   unreadable: boolean;
+  notFound?: boolean;
   rail: Omit<CompetitorRailProps, "lastChecked">;
   sweepClock?: string;
 }
@@ -61,9 +65,9 @@ function SnapshotSection({ weekCount, pages, lastChecked }: SnapshotProps): Reac
   );
 }
 
-type BiggestMoveSectionProps = Pick<CompetitorFrameProps, "biggestMove" | "quiet" | "changes">;
+type BiggestMoveSectionProps = Pick<CompetitorFrameProps, "biggestMove" | "quiet" | "changes" | "weekCount">;
 
-function BiggestMoveSection({ biggestMove, quiet, changes }: BiggestMoveSectionProps): ReactElement {
+function BiggestMoveSection({ biggestMove, quiet, changes, weekCount }: BiggestMoveSectionProps): ReactElement {
   return (
     <section data-section="biggest-move" aria-labelledby="competitor-biggest-move" className="min-w-0">
       <h2 id="competitor-biggest-move" className={HEADING}>
@@ -71,7 +75,7 @@ function BiggestMoveSection({ biggestMove, quiet, changes }: BiggestMoveSectionP
       </h2>
       <BiggestMove
         move={biggestMove}
-        quiet={quiet}
+        quiet={quietWithChanges(quiet, weekCount)}
         change={changes.find((change) => change.id === biggestMove?.id) ?? null}
       />
     </section>
@@ -80,7 +84,7 @@ function BiggestMoveSection({ biggestMove, quiet, changes }: BiggestMoveSectionP
 
 type DevelopmentsSectionProps = Pick<
   CompetitorFrameProps,
-  "changes" | "developments" | "lastChecked" | "pausedOn" | "unreadable" | "sweepClock"
+  "changes" | "developments" | "lastChecked" | "pausedOn" | "unreadable" | "notFound" | "sweepClock"
 >;
 
 function DevelopmentsSection({
@@ -89,6 +93,7 @@ function DevelopmentsSection({
   lastChecked,
   pausedOn,
   unreadable,
+  notFound = false,
   sweepClock,
 }: DevelopmentsSectionProps): ReactElement {
   return (
@@ -101,16 +106,23 @@ function DevelopmentsSection({
           Paused {pausedOn}. We've stopped checking. Turn it back on to pick up where it left off.
         </p>
       )}
+      {notFound && !unreadable ? (
+        <p data-slot="site-not-found" className="border-t border-ink pt-3 text-meta text-ink-soft">
+          We couldn't find their website. Check that the address is spelled right. We'll keep trying, and we're still
+          watching everything else about them.
+        </p>
+      ) : null}
       {unreadable ? (
         <p data-slot="site-unreadable" className="border-t border-ink pt-3 text-meta text-ink-soft">
           We couldn't read their website. It may block automated visits. We'll keep trying, and we're still watching
-          everything else about them.
+          everything else about them. If you know another website of theirs, add it under Another website of theirs
+          below.
         </p>
       ) : null}
-      {developments.length === 0 ? (
-        <EmptyState sentence={developmentsEmpty(lastChecked, sweepClock)} />
-      ) : (
+      {developments.length > 0 ? (
         <DevelopmentsFeed items={developments} changes={changes} />
+      ) : unreadable || notFound ? null : (
+        <EmptyState sentence={developmentsEmpty(lastChecked, sweepClock)} />
       )}
     </section>
   );
@@ -126,6 +138,7 @@ export function CompetitorFrame({
   lastChecked,
   pausedOn,
   unreadable,
+  notFound = false,
   rail,
   sweepClock = SITE_SWEEP_UTC_LABEL,
 }: CompetitorFrameProps): ReactElement {
@@ -133,17 +146,25 @@ export function CompetitorFrame({
     <div data-slot="competitor-frame" className="grid min-w-0 gap-10 min-[1080px]:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="flex min-w-0 flex-col gap-10">
         <SnapshotSection weekCount={weekCount} pages={pages} lastChecked={lastChecked} />
-        <BiggestMoveSection biggestMove={biggestMove} quiet={quiet} changes={changes} />
+        <BiggestMoveSection biggestMove={biggestMove} quiet={quiet} changes={changes} weekCount={weekCount} />
+        <PricingTimeline steps={pricingTimeline(changes)} />
         <DevelopmentsSection
           changes={changes}
           developments={developments}
           lastChecked={lastChecked}
           pausedOn={pausedOn}
           unreadable={unreadable}
+          notFound={notFound}
           sweepClock={sweepClock}
         />
       </div>
-      <CompetitorRail {...rail} lastChecked={lastChecked} sweepClock={sweepClock} />
+      <CompetitorRail
+        {...rail}
+        lastChecked={lastChecked}
+        sweepClock={sweepClock}
+        unreadable={unreadable}
+        notFound={notFound}
+      />
     </div>
   );
 }

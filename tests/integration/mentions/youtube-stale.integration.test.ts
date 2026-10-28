@@ -113,12 +113,15 @@ async function snapshotCount(watchId: string): Promise<number> {
 
 afterEach(async () => {
   vi.unstubAllGlobals();
-  await env.IDENTITY_CACHE.delete("identity:gymshark:youtube-channel");
+  await env.IDENTITY_CACHE.delete("identity:@gymshark:youtube-channel");
 });
 
 describe("YouTube sweep stale channel", () => {
   it("flags a brand whose confirmed card has no channel URL with the no-channel reason", async () => {
-    const { watchId, watch } = await seed('{"description":"no socials"}', "{}");
+    const { watchId, watch } = await seed(
+      '{"description":"no socials","socials":[],"socialsReadAt":"2026-09-24T21:05:00.000Z"}',
+      "{}",
+    );
     stubFeeds();
 
     const outcome = await sweepTarget(
@@ -162,12 +165,16 @@ describe("YouTube sweep stale channel", () => {
 
     expect(JSON.parse(await configOf(watchId))).toEqual({
       degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: NOW },
+      pageMiss: { reason: "youtube page 404", at: NOW },
     });
   });
 
   it("replaces a stale lost-channel flag with the no-channel flag once the card loses its YouTube URL", async () => {
     const stale = { degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: "2026-09-23T00:00:00.000Z" } };
-    const { watchId, watch } = await seed('{"description":"no socials"}', JSON.stringify(stale));
+    const { watchId, watch } = await seed(
+      '{"description":"no socials","socials":[],"socialsReadAt":"2026-09-24T21:05:00.000Z"}',
+      JSON.stringify(stale),
+    );
     stubFeeds();
 
     await sweepTarget(
@@ -438,11 +445,12 @@ describe("YouTube sweep stale channel", () => {
     expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
     expect(JSON.parse(await configOf(watchId))).toEqual({
       degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: NOW },
+      pageMiss: { reason: "youtube page 404", at: NOW },
     });
     expect(await snapshotCount(watchId)).toBe(0);
   });
 
-  it("leaves the watch unmarked when the feed fails with 503", async () => {
+  it("does not flag the channel lost when the feed fails with 503, and notes the failure", async () => {
     const { watchId, watch } = await seed("{}", JSON.stringify({ channelId: "UCzzzzzzzzzzzzzzzzzzzzzz" }));
     stubFeeds();
 
@@ -458,7 +466,10 @@ describe("YouTube sweep stale channel", () => {
       null,
     );
 
-    expect(JSON.parse(await configOf(watchId))).toEqual({ channelId: "UCzzzzzzzzzzzzzzzzzzzzzz" });
+    expect(JSON.parse(await configOf(watchId))).toEqual({
+      channelId: "UCzzzzzzzzzzzzzzzzzzzzzz",
+      feedError: { status: 503, at: NOW },
+    });
     expect(await snapshotCount(watchId)).toBe(0);
   });
 
@@ -542,7 +553,78 @@ describe("YouTube sweep stale channel", () => {
     expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
     expect(JSON.parse(await configOf(watchId))).toEqual({
       degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: NOW },
+      pageMiss: { reason: expect.any(String), at: NOW },
     });
     expect(await snapshotCount(watchId)).toBe(0);
+  });
+});
+
+describe("YouTube sweep before the homepage was read", () => {
+  it("leaves a brand whose socials were never read unflagged and polled", async () => {
+    const { watchId, watch } = await seed('{"description":"not read yet"}', "{}");
+    stubFeeds();
+
+    const outcome = await sweepTarget(
+      {
+        sourceId: watch.source_id,
+        pluginKey: watch.plugin_key,
+        query: watch.target_key,
+        minIntervalSeconds: watch.min_interval_seconds,
+        watches: [watch],
+      },
+      NOW,
+      null,
+    );
+
+    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
+    expect(await configOf(watchId)).toBe("{}");
+    expect(await snapshotCount(watchId)).toBe(0);
+  });
+  it("clears a no-channel flag set before the card was known to be unread", async () => {
+    const stale = { noChannel: { state: "degraded", reason: NO_CHANNEL_REASON, at: "2026-09-23T00:00:00.000Z" } };
+    const { watchId, watch } = await seed('{"description":"not read yet","socialsReadAt":null}', JSON.stringify(stale));
+    stubFeeds();
+
+    await sweepTarget(
+      {
+        sourceId: watch.source_id,
+        pluginKey: watch.plugin_key,
+        query: watch.target_key,
+        minIntervalSeconds: watch.min_interval_seconds,
+        watches: [watch],
+      },
+      NOW,
+      null,
+    );
+
+    expect(JSON.parse(await configOf(watchId))).toEqual({});
+  });
+});
+
+describe("YouTube sweep failed feed", () => {
+  it("records the status and night on the watch, writes no snapshot, and clears when the feed answers", async () => {
+    const downId = "UCbbbbbbbbbbbbbbbbbbbbbb";
+    const { watchId, watch } = await seed('{"description":"x"}', JSON.stringify({ channelId: downId }));
+    stubFeeds();
+    const target = {
+      sourceId: watch.source_id,
+      pluginKey: watch.plugin_key,
+      query: watch.target_key,
+      minIntervalSeconds: watch.min_interval_seconds,
+      watches: [watch],
+    };
+
+    await sweepTarget(target, NOW, null);
+
+    expect(JSON.parse(await configOf(watchId))).toEqual({
+      channelId: downId,
+      feedError: { status: 503, at: NOW },
+    });
+    expect(await snapshotCount(watchId)).toBe(0);
+
+    await writeWatchConfigJson(watchId, JSON.stringify({ channelId: LIVE_ID, feedError: { status: 503, at: NOW } }));
+    await sweepTarget(target, NOW, null);
+
+    expect(JSON.parse(await configOf(watchId))).toEqual({ channelId: LIVE_ID });
   });
 });

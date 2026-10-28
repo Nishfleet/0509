@@ -1,8 +1,13 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-import { entitledTier, resolveEntitlements } from "../billing/entitlements";
+import { resolveEntitlements } from "../billing/entitlements";
+import { entitledTier } from "../billing/subscription-state";
+import { MAX_CLIENT_BRANDS } from "../client-brands";
 import { canonicalTimezone } from "../timezone";
+import { activeFirstOrder, coveredWorkspace, governingWorkspace } from "./active-workspace";
+
+import { visitDayStatement } from "./workspace_visit.server";
 
 const SELECT_WORKSPACE_TIMEZONE = "SELECT timezone FROM workspace WHERE id = ?";
 
@@ -15,6 +20,17 @@ export async function readWorkspaceTimezone(workspaceId: string): Promise<string
   return canonicalTimezone(row?.timezone);
 }
 
+const SELECT_WORKSPACE_FIXTURE = "SELECT fixture FROM workspace WHERE id = ?";
+
+const workspaceFixtureRow = z.object({ fixture: z.number() });
+
+export async function readWorkspaceFixture(workspaceId: string): Promise<boolean> {
+  const row = workspaceFixtureRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_WORKSPACE_FIXTURE).bind(workspaceId).first());
+  return row?.fixture === 1;
+}
+
 const SELECT_WORKSPACE_WATCHES = `SELECT w.id FROM watch w
 JOIN entity e ON e.id = w.entity_id
 WHERE e.workspace_id = ?
@@ -22,8 +38,8 @@ ORDER BY w.id`;
 
 const DELETE_WORKSPACE = "DELETE FROM workspace WHERE id = ?";
 
-const SELECT_WORKSPACE_BY_OWNER = `SELECT id FROM workspace WHERE owner_user_id = ?
-ORDER BY created_at LIMIT 1`;
+const SELECT_WORKSPACE_BY_OWNER = `SELECT w.id AS id FROM workspace w WHERE w.owner_user_id = ?1
+ORDER BY ${activeFirstOrder("?1")} LIMIT 1`;
 
 const workspaceIdRow = z.object({ id: z.string() });
 
@@ -41,9 +57,9 @@ LEFT JOIN entity e ON e.id = (
 LEFT JOIN onboarding_run r ON r.id = (
   SELECT id FROM onboarding_run WHERE workspace_id = w.id ORDER BY started_at ASC LIMIT 1
 )
-LEFT JOIN plan p ON p.workspace_id = w.id
-WHERE w.owner_user_id = ?
-ORDER BY w.created_at ASC
+LEFT JOIN plan p ON p.workspace_id = ${governingWorkspace("w.id")}
+WHERE w.owner_user_id = ?1
+ORDER BY ${activeFirstOrder("?1", "w.id", "w.created_at")}
 LIMIT 1`;
 
 const workspaceLandingRow = z.object({
@@ -90,12 +106,10 @@ export class WorkspaceCapError extends Error {
   }
 }
 
-const INSERT_WORKSPACE = `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at, fixture)
-SELECT ?, ?, ?, ?, 1, 8, ?, ?
-WHERE ? = 1
-OR (
-  SELECT count(*) FROM workspace WHERE owner_user_id = ?
-) < ?
+const INSERT_WORKSPACE = `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at, fixture, parent_workspace_id)
+SELECT ?1, ?2, ?3, ?4, 1, 8, ?5, ?6, ?7
+WHERE (?8 = 1 OR (SELECT count(*) FROM workspace WHERE owner_user_id = ?3) < ?9)
+AND (?7 IS NULL OR (SELECT count(*) FROM workspace WHERE parent_workspace_id = ?7) < ?10)
 ON CONFLICT(id) DO NOTHING`;
 
 const FILL_TIMEZONE = `UPDATE workspace SET timezone = ? WHERE id = ? AND timezone = 'UTC'`;
@@ -130,7 +144,15 @@ async function ownerWorkspacesMax(db: WorkspaceDb, ownerUserId: string): Promise
 
 export async function insertWorkspace(
   db: WorkspaceDb,
-  input: { id: string; name: string; ownerUserId: string; timezone: string; createdAt: string; fixture: boolean },
+  input: {
+    id: string;
+    name: string;
+    ownerUserId: string;
+    timezone: string;
+    createdAt: string;
+    fixture: boolean;
+    parentWorkspaceId?: string | null;
+  },
 ): Promise<void> {
   const cap = await ownerWorkspacesMax(db, input.ownerUserId);
   const result = await db
@@ -142,9 +164,10 @@ export async function insertWorkspace(
       input.timezone,
       input.createdAt,
       input.fixture ? 1 : 0,
+      input.parentWorkspaceId ?? null,
       cap === null ? 1 : 0,
-      input.ownerUserId,
       cap ?? 0,
+      MAX_CLIENT_BRANDS,
     )
     .run();
   if (result.meta.changes === 1) return;
@@ -181,8 +204,8 @@ export async function deleteWorkspace(workspaceId: string): Promise<void> {
   await env.DB.prepare(DELETE_WORKSPACE).bind(workspaceId).run();
 }
 
-const SELECT_SCHEDULE_BY_OWNER = `SELECT id, timezone, brief_weekday, brief_hour, brief_paused_at FROM workspace WHERE owner_user_id = ?
-ORDER BY created_at LIMIT 1`;
+const SELECT_SCHEDULE_BY_OWNER = `SELECT w.id AS id, w.timezone AS timezone, w.brief_weekday AS brief_weekday, w.brief_hour AS brief_hour, w.brief_paused_at AS brief_paused_at FROM workspace w WHERE w.owner_user_id = ?1
+ORDER BY ${activeFirstOrder("?1")} LIMIT 1`;
 
 const UPDATE_SCHEDULE = `UPDATE workspace SET timezone = ?, brief_weekday = ?, brief_hour = ? WHERE id = ?`;
 
@@ -199,11 +222,7 @@ const readBriefScheduleForOwnerRow = z.object({
   brief_paused_at: z.string().nullable(),
 });
 
-export async function readBriefScheduleForOwner(userId: string): Promise<OwnedSchedule | null> {
-  const row = readBriefScheduleForOwnerRow
-    .nullable()
-    .parse(await env.DB.prepare(SELECT_SCHEDULE_BY_OWNER).bind(userId).first());
-  if (row === null) return null;
+function ownedScheduleFromRow(row: z.infer<typeof readBriefScheduleForOwnerRow>): OwnedSchedule {
   return {
     workspaceId: row.id,
     schedule: {
@@ -213,6 +232,13 @@ export async function readBriefScheduleForOwner(userId: string): Promise<OwnedSc
       pausedAt: row.brief_paused_at,
     },
   };
+}
+
+export async function readBriefScheduleForOwner(userId: string): Promise<OwnedSchedule | null> {
+  const row = readBriefScheduleForOwnerRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_SCHEDULE_BY_OWNER).bind(userId).first());
+  return row === null ? null : ownedScheduleFromRow(row);
 }
 
 export async function updateBriefSchedule(
@@ -264,4 +290,83 @@ export async function setChangeAlerts(workspaceId: string, changeAlerts: boolean
   await env.DB.prepare(UPDATE_CHANGE_ALERTS)
     .bind(changeAlerts ? 1 : 0, workspaceId)
     .run();
+}
+
+const SELECT_SLACK_BRIEF = "SELECT slack_brief FROM workspace WHERE id = ?";
+
+const UPDATE_SLACK_BRIEF = "UPDATE workspace SET slack_brief = ? WHERE id = ?";
+
+const readSlackBriefRow = z.object({ slack_brief: z.number() });
+
+export async function readSlackBrief(db: D1Database, workspaceId: string): Promise<boolean> {
+  const row = readSlackBriefRow.nullable().parse(await db.prepare(SELECT_SLACK_BRIEF).bind(workspaceId).first());
+  return row?.slack_brief === 1;
+}
+
+export async function setSlackBrief(workspaceId: string, slackBrief: boolean): Promise<void> {
+  await env.DB.prepare(UPDATE_SLACK_BRIEF)
+    .bind(slackBrief ? 1 : 0, workspaceId)
+    .run();
+}
+
+const TOUCH_WORKSPACE_SEEN = `UPDATE workspace SET last_seen_at = ?1
+WHERE id = ?2 AND (last_seen_at IS NULL OR substr(last_seen_at, 1, 10) < ?3)`;
+
+export async function touchWorkspaceSeen(workspaceId: string, now: Date): Promise<void> {
+  const today = now.toISOString().slice(0, 10);
+  await env.DB.batch([
+    env.DB.prepare(TOUCH_WORKSPACE_SEEN).bind(now.toISOString(), workspaceId, today),
+    visitDayStatement(workspaceId, now),
+  ]);
+}
+
+const SELECT_OWNED_WORKSPACES = `SELECT w.id AS id,
+  COALESCE((SELECT e.name FROM entity e WHERE e.workspace_id = w.id AND e.role = 'self' ORDER BY e.created_at ASC LIMIT 1), w.name) AS name,
+  w.parent_workspace_id AS parent_workspace_id,
+  ${coveredWorkspace("w.id")} AS covered
+FROM workspace w
+WHERE w.owner_user_id = ?
+ORDER BY w.created_at ASC`;
+
+const ownedWorkspaceRow = z.object({
+  id: z.string(),
+  name: z.string(),
+  parent_workspace_id: z.string().nullable(),
+  covered: z.number(),
+});
+
+export async function readOwnedWorkspaces(userId: string) {
+  const { results } = await env.DB.prepare(SELECT_OWNED_WORKSPACES).bind(userId).all();
+  return ownedWorkspaceRow.array().parse(results);
+}
+
+const SELECT_BILLING_WORKSPACE = `SELECT COALESCE(
+  (SELECT gw.parent_workspace_id FROM workspace gw
+     JOIN workspace par ON par.id = gw.parent_workspace_id AND par.owner_user_id = gw.owner_user_id
+    WHERE gw.id = ?1 AND NOT EXISTS (SELECT 1 FROM plan own WHERE own.workspace_id = gw.id)),
+  ?1
+) AS id FROM workspace WHERE id = ?1`;
+
+export async function readBillingWorkspaceId(workspaceId: string): Promise<string | null> {
+  const row = workspaceIdRow.nullable().parse(await env.DB.prepare(SELECT_BILLING_WORKSPACE).bind(workspaceId).first());
+  return row === null ? null : row.id;
+}
+
+const SELECT_ROOT_WORKSPACE = `SELECT COALESCE(
+  (SELECT p.id FROM workspace c JOIN workspace p ON p.id = c.parent_workspace_id AND p.owner_user_id = c.owner_user_id
+    WHERE c.id = ?1),
+  ?1
+) AS id FROM workspace WHERE id = ?1`;
+
+export async function readRootWorkspaceId(workspaceId: string): Promise<string | null> {
+  const row = workspaceIdRow.nullable().parse(await env.DB.prepare(SELECT_ROOT_WORKSPACE).bind(workspaceId).first());
+  return row === null ? null : row.id;
+}
+
+const SELECT_SCHEDULES_BY_OWNER = `SELECT id, timezone, brief_weekday, brief_hour, brief_paused_at FROM workspace WHERE owner_user_id = ?
+ORDER BY created_at`;
+
+export async function readBriefSchedulesForOwner(userId: string): Promise<OwnedSchedule[]> {
+  const { results } = await env.DB.prepare(SELECT_SCHEDULES_BY_OWNER).bind(userId).all();
+  return readBriefScheduleForOwnerRow.array().parse(results).map(ownedScheduleFromRow);
 }

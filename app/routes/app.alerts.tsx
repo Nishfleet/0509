@@ -1,16 +1,15 @@
 import type { Route } from "./+types/app.alerts";
 
-import { Link } from "react-router";
+import { Link, type ShouldRevalidateFunctionArgs } from "react-router";
 import { z } from "zod";
 
-import { AlertChipEmpty } from "../components/alert-chip-empty";
-import { AlertChips } from "../components/alert-chips";
-import { AlertFeed } from "../components/alert-feed";
+import { ChipFeed } from "../components/alert-chip-feed";
+import { AlertsFoot } from "../components/alert-help";
 import { IncidentSlot } from "../components/incident-block";
 import { PAGE, PageHeading } from "../components/page-heading";
 import { SourcePill } from "../components/source-pill";
 import { acknowledgeOwnSiteIncident, loadAlertsPage } from "../lib/alerts-page.server";
-import { parseAlertChip } from "../lib/alert-chips";
+import { newSinceBriefLine } from "../lib/alerts-new";
 import { listWorkspaceBriefs } from "../lib/data/digest.server";
 import { onboardedContext } from "../lib/require-onboarded.server";
 import { requireFreshSession } from "../lib/require-session.server";
@@ -26,18 +25,23 @@ const acknowledgeForm = z.object({
   alertId: z.string(),
 });
 
-async function readLatestBrief(workspaceId: string | null) {
-  return workspaceId === null ? undefined : (await listWorkspaceBriefs(workspaceId))[0];
+async function readBriefs(workspaceId: string | null) {
+  return workspaceId === null ? [] : listWorkspaceBriefs(workspaceId);
 }
 
-export async function loader({ request, context }: Route.LoaderArgs) {
+export function shouldRevalidate({ currentUrl, nextUrl, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {
+  const onlyFilterChanged = currentUrl.pathname === nextUrl.pathname && currentUrl.search !== nextUrl.search;
+  return onlyFilterChanged ? false : defaultShouldRevalidate;
+}
+
+export async function loader({ context }: Route.LoaderArgs) {
   const { workspaceId } = context.get(onboardedContext);
-  const [page, latest] = await Promise.all([
-    loadAlertsPage(workspaceId, parseAlertChip(new URL(request.url).searchParams.get("kind"))),
-    readLatestBrief(workspaceId),
-  ]);
+  const [page, briefs] = await Promise.all([loadAlertsPage(workspaceId), readBriefs(workspaceId)]);
+  const latest = briefs[0];
+  const lastSent = briefs.find((brief) => brief.status === "sent");
   const failedBrief = latest?.status === "failed" ? { id: latest.id } : null;
-  return { ...page, failedBrief };
+  const times = page.groups.flatMap((group) => group.items.map((item) => item.at));
+  return { ...page, failedBrief, newSince: newSinceBriefLine(times, lastSent?.period_end) };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -51,7 +55,7 @@ export async function action({ request }: Route.ActionArgs) {
 function BriefSendFailed({ failed }: { failed: { id: string } }) {
   return (
     <p role="alert" data-alert="brief-send-failed" className="mt-4 leading-[1.65]">
-      We could not email your weekly brief.{" "}
+      We couldn't email your weekly brief.{" "}
       <Link
         className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4"
         to={`/app/brief/${failed.id}`}
@@ -59,6 +63,15 @@ function BriefSendFailed({ failed }: { failed: { id: string } }) {
         Read it in the app
       </Link>
       .
+    </p>
+  );
+}
+
+function NewSince({ line }: { line: string | null }) {
+  if (line === null) return null;
+  return (
+    <p data-testid="alerts-new-since" className="mt-4 font-display font-bold">
+      {line}
     </p>
   );
 }
@@ -84,8 +97,10 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     <main className={PAGE}>
       <PageHeading title="Alerts" />
       <p data-testid="alerts-contract" className="mt-2 leading-[1.65] text-ink-soft">
-        We only email you right away when your own website breaks. Everything else waits here.
+        We email you right away when your own website breaks or a competitor changes price or plan. Everything else
+        waits here and in your weekly brief.
       </p>
+      <NewSince line={loaderData.newSince} />
       {loaderData.failedBrief === null ? null : <BriefSendFailed failed={loaderData.failedBrief} />}
       <IncidentSlot incident={loaderData.openIncident} />
       {loaderData.sources.length > 0 ? (
@@ -103,20 +118,13 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       {loaderData.incidents.map((incident) => (
         <OwnSiteIncident key={incident.id} incident={incident} />
       ))}
-      <AlertChips chip={loaderData.chip} counts={loaderData.chipCounts} hiringCapped={loaderData.hiringCapped} />
-      {loaderData.chipCounts.all === 0 && loaderData.openIncident === null ? (
-        <p className="mt-8 leading-[1.65]">
-          Nothing yet. When a competitor changes its website, gets a mention or posts a job, it will show up here.
-        </p>
-      ) : (
-        <AlertChipEmpty chip={loaderData.chip} counts={loaderData.chipCounts} groups={loaderData.groups} />
-      )}
-      <AlertFeed groups={loaderData.groups} />
-      {loaderData.offLine === null ? null : (
-        <p data-testid="alerts-off-footer" className="mt-10 border-t border-line pt-6 leading-[1.65] text-ink-soft">
-          {loaderData.offLine}
-        </p>
-      )}
+      <ChipFeed
+        groups={loaderData.groups}
+        counts={loaderData.chipCounts}
+        cappedChips={loaderData.cappedChips}
+        hasOpenIncident={loaderData.openIncident !== null}
+      />
+      <AlertsFoot offLine={loaderData.offLine} />
     </main>
   );
 }

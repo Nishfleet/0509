@@ -1,23 +1,37 @@
-import { isWorkspacePaid } from "../../app/lib/billing/entitlements";
+import { captureException } from "@sentry/cloudflare";
+
+import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
+import { isWorkspacePaid } from "../../app/lib/billing/subscription-state";
+import { governingWorkspace, liveWorkspace } from "../../app/lib/data/active-workspace";
 import { markDigestSentStatement } from "../../app/lib/data/digest.server";
 import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
-import { claimIncidentNotice } from "../../app/lib/data/incident_notice.server";
+import { claimIncidentNotice, incidentWasAnnounced } from "../../app/lib/data/incident_notice.server";
 import { readEntitlements } from "../../app/lib/data/plan.server";
 import {
   claimChangeSlot,
   claimSendAttempt,
+  hasSendAttempt,
   readUnrecordedSend,
   resolveSendAttempt,
 } from "../../app/lib/data/send_attempt.server";
-import { readSlackTarget, writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
+import {
+  disconnectSlackTarget,
+  readConfirmedTeammates,
+  readSlackTarget,
+  writeUnsubscribeToken,
+} from "../../app/lib/data/send_target.server";
+import type { SuppressionScope } from "../../app/lib/mail-kind";
+import { readSlackBrief } from "../../app/lib/data/workspace.server";
 import { insertSignalDeliveries } from "../../app/lib/data/signal_delivery.server";
 import { localDay, startOfLocalDay } from "../../app/lib/alert-day";
+import { TEAMMATE_RETRY_DELAY_SECONDS, TEAMMATE_SEND_TRIES } from "../../app/lib/teammate-limit";
 import { canonicalTimezone } from "../../app/lib/timezone";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
 import { nextHour } from "../../app/lib/home-standing";
 import { neutralizeBareUrls, slackEscape } from "../../app/lib/slack-webhook";
-import { postToSlack } from "../../app/lib/slack.server";
+import { postToSlackOutcome } from "../../app/lib/slack.server";
+import { SLACK_BRIEF_RETRY_DELAY_SECONDS, SLACK_BRIEF_SEND_TRIES, slackBriefText } from "../../app/lib/slack-brief";
 import {
   changeHeadline,
   markFromHunks,
@@ -28,10 +42,10 @@ import {
 import { pageHost } from "../../app/lib/site/own-site.server";
 
 import { renderBrief } from "./brief-template";
-import { SETTINGS_LINK, unsubscribeHeaders, type AlertFooterContext } from "./alert-footer";
+import { SETTINGS_LINK, unsubscribeHeaders, type AlertFooterContext } from "../../app/lib/alert-footer";
 import { renderChange, renderChangeOverflow } from "./change-template";
 import { renderIncidentFixed, renderIncidentOpen } from "./incident-template";
-import { errorText, sendMessage, type SendResult } from "./send";
+import { BRIEF_SENDER, errorText, sendMessage, type SendResult } from "./send";
 
 class PayloadError extends Error {
   constructor(message: string) {
@@ -46,6 +60,7 @@ interface MessageRow {
   kind: string;
   subject: string | null;
   payload_json: string;
+  status: string;
 }
 
 interface TargetRow {
@@ -68,16 +83,29 @@ export interface ChangeMessage {
   signal_id: string;
 }
 
-export type DeliveryMessage = DigestMessage | IncidentMessage | ChangeMessage;
+interface TeammateMessage {
+  digest_id: string;
+  target_id: string;
+}
+
+interface SlackBriefMessage {
+  digest_id: string;
+  slack_target_id: string;
+}
+
+export type DeliveryMessage = DigestMessage | IncidentMessage | ChangeMessage | TeammateMessage | SlackBriefMessage;
 
 type DeliveryOutcome =
   | "sent"
   | "failed"
+  | "unconfirmed"
+  | "skipped_revoked"
   | "suppressed"
   | "duplicate"
   | "no_target"
   | "no_digest"
   | "no_incident"
+  | "unannounced"
   | "not_self"
   | "muted"
   | "no_signal"
@@ -96,7 +124,7 @@ export const CHANGE_DAILY_CAP = 5;
 
 async function readDigest(env: Env, digestId: string): Promise<MessageRow | null> {
   return env.DB.prepare(
-    `SELECT id, workspace_id, kind, subject, payload_json
+    `SELECT id, workspace_id, kind, subject, payload_json, status
        FROM digest
       WHERE id = ? AND status <> 'failed'`,
   )
@@ -146,7 +174,7 @@ async function readTarget(env: Env, workspaceId: string): Promise<TargetRow | nu
     `SELECT st.id, st.workspace_id, st.channel_id, st.target_value, st.unsubscribe_token
        FROM send_target st
        JOIN channel c ON c.id = st.channel_id
-      WHERE st.workspace_id = ? AND c.key = ? AND c.is_enabled = 1 AND st.is_verified = 1
+      WHERE st.workspace_id = ? AND c.key = ? AND c.is_enabled = 1 AND st.is_verified = 1 AND st.role = 'owner'
       ORDER BY st.created_at ASC
       LIMIT 1`,
   )
@@ -165,7 +193,7 @@ async function noTarget(
     `SELECT st.is_verified, c.is_enabled
        FROM send_target st
        JOIN channel c ON c.id = st.channel_id
-      WHERE st.workspace_id = ? AND c.key = ?
+      WHERE st.workspace_id = ? AND c.key = ? AND st.role = 'owner'
       ORDER BY st.created_at ASC
       LIMIT 1`,
   )
@@ -176,8 +204,10 @@ async function noTarget(
   return { outcome: "no_target", attempt_id: null, idempotency_key: null };
 }
 
-async function isUnpaidWorkspace(env: Env, workspaceId: string): Promise<boolean> {
-  const row = await env.DB.prepare("SELECT status, current_period_end FROM plan WHERE workspace_id = ?")
+async function isSuppressedWorkspace(env: Env, workspaceId: string): Promise<boolean> {
+  const row = await env.DB.prepare(
+    `SELECT status, current_period_end FROM plan WHERE workspace_id = ${governingWorkspace("?1")} AND ${liveWorkspace("?1")}`,
+  )
     .bind(workspaceId)
     .first<{ status: string; current_period_end: string | null }>();
   return !isWorkspacePaid(
@@ -192,7 +222,10 @@ function newUnsubscribeToken(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function ensureUnsubscribeToken(env: Env, target: TargetRow): Promise<string> {
+export async function ensureUnsubscribeToken(
+  env: Env,
+  target: Pick<TargetRow, "id" | "unsubscribe_token">,
+): Promise<string> {
   if (target.unsubscribe_token !== null) return target.unsubscribe_token;
   await writeUnsubscribeToken(env.DB, { targetId: target.id, token: newUnsubscribeToken() });
   const row = await env.DB.prepare(`SELECT unsubscribe_token FROM send_target WHERE id = ?`)
@@ -206,7 +239,9 @@ async function ensureUnsubscribeToken(env: Env, target: TargetRow): Promise<stri
 
 const UNSUBSCRIBE_BASE_URL = "https://0509.io/u/";
 
-const BRIEF_SENDER = { email: "brief@0509.io", name: "Five to Nine" };
+export function unsubscribeUrlFor(token: string, scope: SuppressionScope): string {
+  return `${UNSUBSCRIBE_BASE_URL}${token}?type=${scope}`;
+}
 
 function briefOf(message: MessageRow): BriefPayload {
   try {
@@ -217,10 +252,18 @@ function briefOf(message: MessageRow): BriefPayload {
   }
 }
 
-function render(message: MessageRow, to: string, token: string): EmailMessageBuilder {
+const BRIEF_OPEN_URL = "https://0509.io/app/brief";
+
+function render(message: MessageRow, recipient: { to: string; token: string; owner: boolean }): EmailMessageBuilder {
+  const { to, token, owner } = recipient;
   const payload = briefOf(message);
-  const unsubscribeUrl = `${UNSUBSCRIBE_BASE_URL}${token}`;
-  const rendered = renderBrief(payload, { unsubscribe_url: unsubscribeUrl, asset_base_url: null });
+  const unsubscribeUrl = unsubscribeUrlFor(token, "brief");
+  const rendered = renderBrief(payload, {
+    unsubscribe_url: unsubscribeUrl,
+    asset_base_url: null,
+    open_url: owner ? BRIEF_OPEN_URL : null,
+    teammate: !owner,
+  });
   return {
     to,
     from: BRIEF_SENDER,
@@ -244,24 +287,35 @@ async function sendAndResolve(env: Env, input: SendAndResolveInput): Promise<Del
   try {
     const result = await send();
     sent = result.outcome === "sent";
-    await resolveSendAttempt(env.DB, { attemptId: claimId, outcome: result.outcome, error: result.error });
+    await resolveSendAttempt(env.DB, {
+      attemptId: claimId,
+      idempotencyKey,
+      outcome: result.outcome,
+      error: result.error,
+    });
+    if (result.outcome === "unconfirmed") reportUnconfirmed(idempotencyKey);
     if (onSent !== undefined && result.outcome === "sent") {
       await onSent();
     }
     return { outcome: result.outcome, attempt_id: claimId, idempotency_key: idempotencyKey };
   } catch (cause) {
     if (sent) throw cause;
-    await resolveSendAttempt(env.DB, { attemptId: claimId, outcome: "failed", error: errorText(cause) });
+    await resolveSendAttempt(env.DB, {
+      attemptId: claimId,
+      idempotencyKey,
+      outcome: "failed",
+      error: errorText(cause),
+    });
     return { outcome: "failed", attempt_id: claimId, idempotency_key: idempotencyKey };
   }
 }
 
-export async function deliver(env: Env, message: DigestMessage): Promise<DeliveryResult> {
+async function deliverToOwner(env: Env, message: DigestMessage): Promise<DeliveryResult> {
   const digest = await readDigest(env, message.digest_id);
   if (!digest) {
     return { outcome: "no_digest", attempt_id: null, idempotency_key: null };
   }
-  if (await isUnpaidWorkspace(env, digest.workspace_id)) {
+  if (await isSuppressedWorkspace(env, digest.workspace_id)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
 
@@ -270,7 +324,7 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
     return noTarget(env, digest.workspace_id, { digest_id: digest.id });
   }
 
-  if (await isAddressSuppressed(target.target_value, env.DB)) {
+  if (await isAddressSuppressed(target.target_value, "brief", env.DB)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
 
@@ -290,11 +344,131 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
     idempotencyKey,
     send: async () => {
       const token = await ensureUnsubscribeToken(env, target);
-      const email = render(digest, target.target_value, token);
+      const email = render(digest, { to: target.target_value, token, owner: true });
       return sendMessage(env.EMAIL, email);
     },
     onSent: () => recordBriefSent(env, { digest, target, attemptId: claim.id }),
   });
+}
+
+async function sendToTeammate(env: Env, digest: MessageRow, mate: TargetRow): Promise<DeliveryResult> {
+  if (await isAddressSuppressed(mate.target_value, "brief", env.DB)) {
+    return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
+  }
+  const idempotencyKey = `digest:${digest.id}:${mate.id}`;
+  const claim = await claimSendAttempt(env.DB, {
+    idempotencyKey,
+    workspaceId: digest.workspace_id,
+    targetId: mate.id,
+    digestId: digest.id,
+  });
+  if (!claim) return { outcome: "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
+  return sendAndResolve(env, {
+    claimId: claim.id,
+    idempotencyKey,
+    send: async () => {
+      const token = await ensureUnsubscribeToken(env, mate);
+      return sendMessage(env.EMAIL, render(digest, { to: mate.target_value, token, owner: false }));
+    },
+  });
+}
+
+async function readSentWeekly(env: Env, digestId: string): Promise<MessageRow | null> {
+  const digest = await readDigest(env, digestId);
+  return digest?.status === "sent" && digest.kind === "weekly" ? digest : null;
+}
+
+async function queueTeammates(env: Env, digestId: string): Promise<void> {
+  const digest = await readSentWeekly(env, digestId);
+  if (digest === null) return;
+  const confirmed = await readConfirmedTeammates(env.DB, digest.workspace_id);
+  const asked = await Promise.all(confirmed.map((mate) => hasSendAttempt(env.DB, `digest:${digestId}:${mate.id}`)));
+  const mates = confirmed.filter((_, index) => !asked[index]);
+  if (mates.length === 0) return;
+  await env.SEND_EMAIL.sendBatch(mates.map((mate) => ({ body: { digest_id: digestId, target_id: mate.id } })));
+}
+
+async function deliverTeammate(env: Env, message: TeammateMessage): Promise<DeliveryResult> {
+  const digest = await readSentWeekly(env, message.digest_id);
+  if (digest === null) return { outcome: "no_digest", attempt_id: null, idempotency_key: null };
+  const mates = await readConfirmedTeammates(env.DB, digest.workspace_id);
+  const mate = mates.find((candidate) => candidate.id === message.target_id);
+  if (mate === undefined) return { outcome: "no_target", attempt_id: null, idempotency_key: null };
+  return sendToTeammate(env, digest, mate);
+}
+
+async function queueSlackBrief(env: Env, digestId: string): Promise<void> {
+  const digest = await readSentWeekly(env, digestId);
+  if (digest === null || !(await readSlackBrief(env.DB, digest.workspace_id))) return;
+  const target = await readSlackTarget(env.DB, digest.workspace_id);
+  if (target === null || (await hasSendAttempt(env.DB, slackBriefKey(digest.id, target.id)))) return;
+  await env.SEND_EMAIL.sendBatch([{ body: { digest_id: digest.id, slack_target_id: target.id } }]);
+}
+
+function slackBriefKey(digestId: string, targetId: string): string {
+  return `brief-slack:${digestId}:${targetId}`;
+}
+
+async function postSlack(env: Env, target: { id: string; target_value: string }, text: string): Promise<SendResult> {
+  const posted = await postToSlackOutcome(target.target_value, text);
+  if (posted === "revoked") {
+    await disconnectSlackTarget(env.DB, target.id);
+    return { outcome: "skipped_revoked", error: "slack webhook revoked; target disconnected" };
+  }
+  if (posted === "unconfirmed")
+    return { outcome: "unconfirmed", error: "slack post unconfirmed after a network error" };
+  return posted === "sent"
+    ? { outcome: "sent", error: null }
+    : { outcome: "failed", error: "slack did not accept the post" };
+}
+
+function reportUnconfirmed(idempotencyKey: string): void {
+  console.error(JSON.stringify({ event: "delivery.slack_post_unconfirmed", idempotency_key: idempotencyKey }));
+  captureException(new Error("slack post unconfirmed after a network error"), { tags: { lane: "slack" } });
+}
+
+async function deliverSlackBrief(env: Env, message: SlackBriefMessage): Promise<DeliveryResult> {
+  const digest = await readSentWeekly(env, message.digest_id);
+  if (digest === null) return { outcome: "no_digest", attempt_id: null, idempotency_key: null };
+  if (!(await readSlackBrief(env.DB, digest.workspace_id))) {
+    return { outcome: "muted", attempt_id: null, idempotency_key: null };
+  }
+  const target = await readSlackTarget(env.DB, digest.workspace_id);
+  if (target?.id !== message.slack_target_id) {
+    return { outcome: "no_target", attempt_id: null, idempotency_key: null };
+  }
+  const idempotencyKey = slackBriefKey(digest.id, target.id);
+  const claim = await claimSendAttempt(env.DB, {
+    idempotencyKey,
+    workspaceId: digest.workspace_id,
+    targetId: target.id,
+    digestId: digest.id,
+  });
+  if (!claim) return { outcome: "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
+  return sendAndResolve(env, {
+    claimId: claim.id,
+    idempotencyKey,
+    send: () => postSlack(env, target, slackBriefText(briefOf(digest))),
+  });
+}
+
+export async function deliver(env: Env, message: DigestMessage): Promise<DeliveryResult> {
+  const result = await deliverToOwner(env, message);
+  if (result.outcome === "sent" || result.outcome === "duplicate") {
+    await queueTeammates(env, message.digest_id).catch((cause: unknown) => {
+      const error = redactEmailShaped(errorText(cause));
+      captureException(new Error(error), { tags: { lane: "teammates", digest_id: message.digest_id } });
+      console.error(JSON.stringify({ event: "delivery.teammates_failed", error }));
+    });
+    await queueSlackBrief(env, message.digest_id).catch((cause: unknown) => {
+      const kind = cause instanceof Error ? cause.constructor.name : "unknown";
+      captureException(new Error(`slack brief lane failed: ${kind}`), {
+        tags: { lane: "slack_brief", digest_id: message.digest_id },
+      });
+      console.error(JSON.stringify({ event: "delivery.slack_brief_failed", kind, digest_id: message.digest_id }));
+    });
+  }
+  return result;
 }
 
 async function resumeSent(
@@ -332,7 +506,7 @@ async function recordBriefSent(env: Env, input: BriefSent): Promise<void> {
 }
 
 function renderIncidentEmail(incident: IncidentRow, to: string, token: string) {
-  const unsubscribeUrl = `${UNSUBSCRIBE_BASE_URL}${token}`;
+  const unsubscribeUrl = unsubscribeUrlFor(token, "alerts");
   const site = pageHost(incident.page_url);
   const rendered =
     incident.closed_at === null
@@ -372,10 +546,15 @@ async function incidentBlocked(env: Env, incident: IncidentRow): Promise<Deliver
   if (!(await readEntitlements(incident.workspace_id)).own_site_alerts) {
     return { outcome: "muted", attempt_id: null, idempotency_key: null };
   }
-  if (await isUnpaidWorkspace(env, incident.workspace_id)) {
+  if (await isSuppressedWorkspace(env, incident.workspace_id)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
   return null;
+}
+
+async function unannouncedFixed(env: Env, incident: IncidentRow): Promise<DeliveryResult | null> {
+  if (incident.closed_at === null || (await incidentWasAnnounced(env.DB, incident.id))) return null;
+  return { outcome: "unannounced", attempt_id: null, idempotency_key: null };
 }
 
 export async function deliverIncident(env: Env, message: IncidentMessage): Promise<DeliveryResult> {
@@ -383,7 +562,7 @@ export async function deliverIncident(env: Env, message: IncidentMessage): Promi
   if (!incident) {
     return { outcome: "no_incident", attempt_id: null, idempotency_key: null };
   }
-  const blocked = await incidentBlocked(env, incident);
+  const blocked = (await incidentBlocked(env, incident)) ?? (await unannouncedFixed(env, incident));
   if (blocked) return blocked;
 
   const target = await readTarget(env, incident.workspace_id);
@@ -391,7 +570,7 @@ export async function deliverIncident(env: Env, message: IncidentMessage): Promi
     return noTarget(env, incident.workspace_id, { incident_id: incident.id });
   }
 
-  if (await isAddressSuppressed(target.target_value, env.DB)) {
+  if (await isAddressSuppressed(target.target_value, "alerts", env.DB)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
 
@@ -517,7 +696,7 @@ async function sendChange(
     idempotencyKey,
     send: async () => {
       const token = await ensureUnsubscribeToken(env, target);
-      const footer = { unsubscribe_url: `${UNSUBSCRIBE_BASE_URL}${token}`, settings_link: SETTINGS_LINK };
+      const footer = { unsubscribe_url: unsubscribeUrlFor(token, "alerts"), settings_link: SETTINGS_LINK };
       const rendered = await renderChangeEmail(env, { change, payload, capped, footer });
       return sendMessage(env.EMAIL, {
         to: target.target_value,
@@ -560,11 +739,7 @@ async function postChangeToSlack(
   return sendAndResolve(env, {
     claimId: claim.id,
     idempotencyKey,
-    send: async () => {
-      const text = slackText(change, payload, await readChangeMark(env, payload.diffKey));
-      const posted = await postToSlack(target.target_value, text);
-      return posted ? { outcome: "sent", error: null } : { outcome: "failed", error: "slack did not accept the post" };
-    },
+    send: async () => postSlack(env, target, slackText(change, payload, await readChangeMark(env, payload.diffKey))),
   });
 }
 
@@ -577,7 +752,7 @@ async function emailChange(
   if (!target) {
     return noTarget(env, change.workspace_id, { signal_id: change.id });
   }
-  if (await isAddressSuppressed(target.target_value, env.DB)) {
+  if (await isAddressSuppressed(target.target_value, "alerts", env.DB)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
   return sendChange(env, { change, payload, target });
@@ -592,7 +767,7 @@ export async function deliverChange(env: Env, message: ChangeMessage): Promise<D
   if (change.change_alerts === 0) {
     return { outcome: "muted", attempt_id: null, idempotency_key: null };
   }
-  if (await isUnpaidWorkspace(env, change.workspace_id)) {
+  if (await isSuppressedWorkspace(env, change.workspace_id)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
   const slack = await postChangeToSlack(env, { change, payload });
@@ -601,9 +776,57 @@ export async function deliverChange(env: Env, message: ChangeMessage): Promise<D
 }
 
 function route(env: Env, parsed: DeliveryMessage): Promise<DeliveryResult> {
+  if ("slack_target_id" in parsed) return deliverSlackBrief(env, parsed);
+  if ("target_id" in parsed) return deliverTeammate(env, parsed);
   if ("incident_id" in parsed) return deliverIncident(env, parsed);
   if ("signal_id" in parsed) return deliverChange(env, parsed);
   return deliver(env, parsed);
+}
+
+interface BoundedLane {
+  lane: string;
+  tries: number;
+  delaySeconds: number;
+  error: string;
+  event: string;
+}
+
+const TEAMMATE_LANE: BoundedLane = {
+  lane: "teammates",
+  tries: TEAMMATE_SEND_TRIES,
+  delaySeconds: TEAMMATE_RETRY_DELAY_SECONDS,
+  error: "teammate brief not delivered",
+  event: "delivery.teammate_gave_up",
+};
+
+const SLACK_BRIEF_LANE: BoundedLane = {
+  lane: "slack_brief",
+  tries: SLACK_BRIEF_SEND_TRIES,
+  delaySeconds: SLACK_BRIEF_RETRY_DELAY_SECONDS,
+  error: "slack brief not delivered",
+  event: "delivery.slack_brief_gave_up",
+};
+
+function retryOrGiveUp(item: Message, digestId: string, lane: BoundedLane): void {
+  if (item.attempts < lane.tries) {
+    item.retry({ delaySeconds: lane.delaySeconds });
+    return;
+  }
+  captureException(new Error(lane.error), { tags: { lane: lane.lane, digest_id: digestId } });
+  console.error(JSON.stringify({ event: lane.event, digest_id: digestId }));
+  item.ack();
+}
+
+function settle(item: Message, parsed: DeliveryMessage, result: DeliveryResult): void {
+  if (result.outcome !== "failed") {
+    item.ack();
+  } else if ("slack_target_id" in parsed) {
+    retryOrGiveUp(item, parsed.digest_id, SLACK_BRIEF_LANE);
+  } else if ("target_id" in parsed) {
+    retryOrGiveUp(item, parsed.digest_id, TEAMMATE_LANE);
+  } else {
+    item.retry();
+  }
 }
 
 export async function handleBatch(env: Env, batch: MessageBatch): Promise<DeliveryResult[]> {
@@ -616,11 +839,7 @@ export async function handleBatch(env: Env, batch: MessageBatch): Promise<Delive
       continue;
     }
     const result = await route(env, parsed);
-    if (result.outcome === "failed") {
-      item.retry();
-    } else {
-      item.ack();
-    }
+    settle(item, parsed, result);
     results.push(result);
   }
   return results;
@@ -645,7 +864,19 @@ function toDeliveryMessage(parsed: unknown): DeliveryMessage | null {
   if (parsed === null || typeof parsed !== "object") {
     return null;
   }
-  const candidate = parsed as { digest_id?: unknown; incident_id?: unknown; signal_id?: unknown };
+  const candidate = parsed as {
+    digest_id?: unknown;
+    target_id?: unknown;
+    slack_target_id?: unknown;
+    incident_id?: unknown;
+    signal_id?: unknown;
+  };
+  if (typeof candidate.digest_id === "string" && typeof candidate.slack_target_id === "string") {
+    return { digest_id: candidate.digest_id, slack_target_id: candidate.slack_target_id };
+  }
+  if (typeof candidate.digest_id === "string" && typeof candidate.target_id === "string") {
+    return { digest_id: candidate.digest_id, target_id: candidate.target_id };
+  }
   if (typeof candidate.digest_id === "string") {
     return { digest_id: candidate.digest_id };
   }

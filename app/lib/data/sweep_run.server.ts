@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 
 const INSERT_SWEEP_RUN = `INSERT INTO sweep_run
   (id, kind, planned_at, finished_at, wall_ms, pages, failed, reason)
@@ -13,7 +14,7 @@ ON CONFLICT (id) DO UPDATE SET
 
 export interface SweepRun {
   id: string;
-  kind: "site";
+  kind: "site" | "mentions";
   plannedAt: string;
   finishedAt: string;
   wallMs: number;
@@ -26,4 +27,18 @@ export async function recordSweepRun(run: SweepRun): Promise<void> {
   await env.DB.prepare(INSERT_SWEEP_RUN)
     .bind(run.id, run.kind, run.plannedAt, run.finishedAt, run.wallMs, run.pages, run.failed, run.reason)
     .run();
+}
+
+const LOST_MENTION_RUNS = `SELECT reason FROM sweep_run
+WHERE kind = 'mentions' AND failed > 0 AND finished_at >= ?1 AND finished_at < ?2`;
+
+const reasonRows = z.array(z.object({ reason: z.string().nullable() }));
+
+export async function lostMentionSources(
+  db: D1Database,
+  window: { startAt: string; endAt: string },
+): Promise<string[]> {
+  const result = await db.prepare(LOST_MENTION_RUNS).bind(window.startAt, window.endAt).all();
+  const keys = reasonRows.parse(result.results).flatMap((row) => (row.reason === null ? [] : row.reason.split(", ")));
+  return [...new Set(keys)].sort();
 }

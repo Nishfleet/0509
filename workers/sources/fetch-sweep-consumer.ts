@@ -1,6 +1,7 @@
 import { captureException } from "@sentry/cloudflare";
 import { z } from "zod";
 
+import { readFailureReasonForWatch } from "../../app/lib/data/page.server";
 import { readSiteSweepTarget } from "../../app/lib/data/watch.server";
 import { checkSitePage, publishSiteChange, type SweepTick } from "../../app/lib/site/sweep.server";
 
@@ -17,7 +18,7 @@ const fetchSweepMessage = z.object({
 export type FetchSweepMessage = z.infer<typeof fetchSweepMessage>;
 
 export type FetchSweepOutcome =
-  "not_collectable" | "first" | "unchanged" | "changed" | "disallowed" | "failed" | "unparseable";
+  "not_collectable" | "first" | "unchanged" | "changed" | "disallowed" | "deferred" | "failed" | "unparseable";
 
 export function parseFetchSweepMessage(body: unknown): FetchSweepMessage | null {
   const parsed = fetchSweepMessage.safeParse(typeof body === "string" ? readJson(body) : body);
@@ -72,7 +73,7 @@ async function collectWatch(message: FetchSweepMessage, tick: SweepTick): Promis
   if (result.outcome === "gone") return "not_collectable";
   if (result.outcome !== "failed") return result.outcome;
   if (result.reason === "robots") return "disallowed";
-  if (result.reason === "deferred") return "failed";
+  if (result.reason === "deferred") return result.escalation === "timeout" ? "failed" : "deferred";
 
   captureException(
     new Error(
@@ -111,27 +112,32 @@ export async function handleFetchSweepBatch(batch: MessageBatch): Promise<FetchS
   const failed = results.filter((outcome) => outcome === "failed").length;
   const unparseable = results.filter((outcome) => outcome === "unparseable").length;
   const disallowed = results.filter((outcome) => outcome === "disallowed").length;
+  const deferred = results.filter((outcome) => outcome === "deferred").length;
   console.log(
     JSON.stringify({
       event: "fetch-sweep.batch",
       queue: batch.queue,
       instanceId: batch.messages[0]?.id ?? null,
       messages: batch.messages.length,
-      collected: results.length - failed - unparseable - disallowed,
+      collected: results.length - failed - unparseable - disallowed - deferred,
+      deferred,
       failed,
     }),
   );
   return results;
 }
 
-export function handleFetchSweepDlqBatch(batch: MessageBatch): void {
+export async function handleFetchSweepDlqBatch(batch: MessageBatch): Promise<void> {
   for (const item of batch.messages) {
+    const parsed = parseFetchSweepMessage(item.body);
+    const reason = parsed === null ? null : await readFailureReasonForWatch(parsed.watchId).catch(() => null);
     captureException(
       new Error(
         JSON.stringify({
           event: "fetch-sweep.dead_lettered",
           queue: FETCH_SWEEP_DLQ,
           message_id: item.id,
+          reason,
         }),
       ),
       { tags: { queue: FETCH_SWEEP_DLQ } },

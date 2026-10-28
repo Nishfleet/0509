@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { diffPageText, toSentenceLines } from "../../../app/lib/site/diff";
+import { changedWordCounts, diffPageText, toSentenceLines } from "../../../app/lib/site/diff";
 import { extractPageText } from "../../../app/lib/site/extract-text";
 
 describe("diffPageText", () => {
@@ -22,11 +22,10 @@ describe("diffPageText", () => {
 
     expect(toSentenceLines(prev.text)).toBe("Plans start at $10.\nCancel any time.");
     expect(toSentenceLines(next.text)).toBe("Plans start at $12.\nCancel any time.");
-    // diff@9.0.0 attaches "$" to the preceding token. The unchanged word is
-    // "Plans start at $" and the removed and added words are "10" and "12".
-    expect(pageDiff.words.some((change) => change.removed && change.value.includes("10"))).toBe(true);
-    expect(pageDiff.words.some((change) => change.added && change.value.includes("12"))).toBe(true);
-    expect(pageDiff.words.some((change) => !change.added && !change.removed && change.value.endsWith("$"))).toBe(true);
+
+    expect(pageDiff.words?.some((change) => change.removed && change.value.includes("10"))).toBe(true);
+    expect(pageDiff.words?.some((change) => change.added && change.value.includes("12"))).toBe(true);
+    expect(pageDiff.words?.some((change) => !change.added && !change.removed && change.value.endsWith("$"))).toBe(true);
     expect(pageDiff.hunks.length).toBe(1);
     expect(pageDiff.hunks[0]?.oldStart).toBe(1);
     expect(pageDiff.hunks[0]?.lines).toContain("-Plans start at $10.");
@@ -45,5 +44,34 @@ describe("diffPageText", () => {
     expect(hunk).toBeDefined();
     if (hunk === undefined) return;
     expect(hunk.oldStart + hunk.oldLines - 1).toBeGreaterThanOrEqual(3);
+  });
+
+  it("counts the changed words of a small edit from the word diff", async () => {
+    const prev = await extractPageText("<p>Plans start at $10. Cancel any time.</p>");
+    const next = await extractPageText("<p>Plans start at $12 per month. Cancel any time.</p>");
+    const pageDiff = diffPageText(prev, next);
+
+    expect(pageDiff?.words).not.toBeNull();
+    expect(changedWordCounts(pageDiff)).toEqual({ added: 3, removed: 1 });
+  });
+
+  it("skips the word diff on a page that changed almost everywhere and counts from the sentence diff", async () => {
+    const sentences = (prefix: string) =>
+      Array.from(
+        { length: 1200 },
+        (_, i) => `<p>${prefix}${i} alpha${prefix}${i} beta${prefix}${i} gamma${prefix}${i}.</p>`,
+      ).join("");
+    const prev = await extractPageText(sentences("a"));
+    const next = await extractPageText(sentences("b"));
+    const pageDiff = diffPageText(prev, next);
+
+    expect(pageDiff).not.toBeNull();
+    expect(pageDiff?.words).toBeNull();
+    expect(pageDiff?.hunks.length).toBeGreaterThan(0);
+    expect(changedWordCounts(pageDiff)).toEqual({ added: 4800, removed: 4800 });
+  });
+
+  it("counts no words when there is no diff", () => {
+    expect(changedWordCounts(null)).toEqual({ added: 0, removed: 0 });
   });
 });

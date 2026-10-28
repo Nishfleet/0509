@@ -11,8 +11,10 @@
 # job may carry a job-level `if:` that can skip it;
 # tests/required-checks-never-skip.test.ts pins it.
 #
-# Lighthouse against production runs in deploy-production.yml after the deploy
-# job, so this workflow has no deployment_status trigger (0509#7013).
+# No deployment_status trigger (0509#7013): no job here reads a deployment, the
+# production e2e suite runs from e2e-scheduled.yml, and the post-deploy audit is
+# out of deploy-production.yml while the site is behind the Cloudflare Access
+# wall (0509#7656, fleet-ops#9889).
 name: CI
 
 on:
@@ -40,7 +42,7 @@ jobs:
           # Two commits so HEAD^1 (the base side of the PR merge ref) exists
           # for `vitest --changed` below.
           fetch-depth: 2
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -122,7 +124,7 @@ jobs:
           # Two commits so HEAD^1 (the base side of the PR merge ref) exists
           # for `vitest --changed` below.
           fetch-depth: 2
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -191,7 +193,7 @@ jobs:
     # Hosted for every event. Public repo: minutes are free and the hosted pool
     # is wider than the 3 owned runners (fleet-ops#5935 reversed 2026-09-22).
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -203,7 +205,7 @@ jobs:
         id: scope
         if: github.event_name == 'pull_request'
         run: if git diff --quiet HEAD^1 HEAD -- . ':(exclude)docs' ':(exclude)tests' ':(exclude).agents' ':(exclude)*.md'; then echo skip=true >> "$GITHUB_OUTPUT"; fi
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.scope.outputs.skip != 'true'
         with:
           node-version: 22
@@ -236,30 +238,34 @@ jobs:
 
       - name: Collect Lighthouse against the built Worker
         if: steps.scope.outputs.skip != 'true'
-        # Same budgets as the production lighthouse audit, on the PR, so a
-        # regression is red before merge (poteto 03:24: a trace per change, not
-        # per deploy; #4224). lhci starts wrangler dev itself: start-server-command
+        # The deterministic subset of the fleet budget (asserted below), on the
+        # PR, so a regression is red before merge (poteto 03:24: a trace per
+        # change, not per deploy; #4224). lhci starts wrangler dev itself: start-server-command
         # and the ready pattern are stock lhci flags. No loop, no script.
         # A per-process port, like playwright.config.ts: the fleet-ci runners share
         # this host with worker checkouts that run wrangler dev too (merge-group runs
         # 35746786576, 35748807411: "Address already in use").
-        # / is a static asset, so it never enters the Worker. /design/landing does,
-        # and the Worker answers 503 until BETTER_AUTH_SECRET is present (run
-        # 36060236500). Same --env-file as playwright.config.ts.
-        run: P=$((18000 + $$ % 1000)); npx lhci collect --url=http://127.0.0.1:$P/ --url=http://127.0.0.1:$P/design/landing --start-server-command="npx wrangler dev --env-file .dev.vars.example --port $P --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
+        # / is the Worker's landing route, and the Worker answers 503 until
+        # BETTER_AUTH_SECRET is present (run 36060236500). Same --env-file as playwright.config.ts.
+        run: P=$((18000 + $$ % 1000)); npx lhci collect --url=http://127.0.0.1:$P/ --start-server-command="npx wrangler dev --env-file .dev.vars.example --port $P --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
 
       - name: Assert the Lighthouse budgets
         if: steps.scope.outputs.skip != 'true'
         # lighthouse-budget.pr.json is the deterministic subset of the fleet budget (fleet-ops config/lighthouserc.json):
-        # resource sizes and CLS. The timing rows (LCP, TTI) stay on the production
-        # job: on a shared runner the unchanged page measured LCP 1657 one run and under
-        # 1500 the run before (35748475565 vs 35746328688), and a required check that
-        # flips on runner load is not a gate. Production still enforces every row.
+        # resource sizes and CLS. The timing rows (LCP, TTI) are not here: on a shared
+        # runner the unchanged page measured LCP 1657 one run and under 1500 the run
+        # before (35748475565 vs 35746328688), and a required check that flips on
+        # runner load is not a gate. They were enforced on production by the audit
+        # that ran after the deploy, until the site went behind the Cloudflare Access
+        # wall and that audit measured the login page instead (0509#7656,
+        # fleet-ops#9889), so nothing measures production LCP right now. The bar in
+        # docs/REBUILD-DONE.md B stands and the audit returns when 0509#7656 decides
+        # how the audited URLs are reached.
         run: npx lhci assert --budgets-file=lighthouse-budget.pr.json
 
       - name: Keep the trace when it fails
         if: failure() || cancelled()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-preview
           path: |

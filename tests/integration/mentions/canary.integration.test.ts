@@ -23,13 +23,6 @@ const ONE_ARTICLE = {
 
 let runs = 0;
 
-/**
- * A dedicated mentions source row for the canary cases: a distinct platform
- * keeps it clear of the seeded rows' UNIQUE (platform, kind, plugin_key), and
- * is_enabled = 0 keeps readActiveWatches from auto-watching it, so the sibling
- * sweep suite's target counts are untouched. It still routes to the real gdelt
- * adapter through plugin_key.
- */
 async function seedCanarySource(slot: string): Promise<CanarySource> {
   const sourceId = `src_canary_${slot}`;
   await env.DB.prepare(
@@ -157,6 +150,37 @@ describe("per-source canary in the mentions sweep (#4003 slice 2/6)", () => {
       expect(row?.canary_strikes).toBe(2);
       expect(row?.degraded_reason).toBe("not answering");
     } finally {
+      await env.DB.prepare("DELETE FROM source WHERE id = ?").bind(source.id).run();
+    }
+  });
+
+  it("reports an adapter that throws to Sentry, so a parser bug is not mistaken for a quiet night", async () => {
+    const source = await seedCanarySource("b4");
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("not json", { status: 200 })),
+    );
+
+    try {
+      await runCanary(source, NOW);
+      expect(logged).toHaveBeenCalledWith(expect.stringContaining("mentions.canary_failed"));
+    } finally {
+      logged.mockRestore();
+      await env.DB.prepare("DELETE FROM source WHERE id = ?").bind(source.id).run();
+    }
+  });
+
+  it("records nothing and reports it when the source has no adapter, instead of striking it", async () => {
+    const source = { ...(await seedCanarySource("b5")), pluginKey: "no.such.adapter" };
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      expect(await runCanary(source, NOW)).toBeNull();
+      expect(logged).toHaveBeenCalledWith(expect.stringContaining("mentions.canary_failed"));
+      expect((await readSource(source.id))?.canary_strikes).toBeNull();
+    } finally {
+      logged.mockRestore();
       await env.DB.prepare("DELETE FROM source WHERE id = ?").bind(source.id).run();
     }
   });

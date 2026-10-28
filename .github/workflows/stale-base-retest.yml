@@ -1,9 +1,9 @@
-# When a gate file changes on main, re-decide base-fresh (ci.yml) for every open
+# version: 1 — README.md, "Workflows that act on their own": switch it off, delete it. When a gate file changes on main, re-decide base-fresh (ci.yml) for every open
 # pull request, so a head that predates the change goes red before anything arms
 # or queues it (docs/incidents/2026-10-07-stale-base-queue-ejections.md).
-# Rerunning only that job also reruns ci-ok, its one dependent. The path list is
-# the one in ci.yml's base-fresh job; tests/required-checks-never-skip.test.ts
-# pins them equal.
+# A pull request with auto-merge armed is skipped: the queue tests its real merge
+# on the new gate (docs/incidents/2026-10-14-base-fresh-queue-churn.md). Path list:
+# same as ci.yml's base-fresh job; tests/required-checks-never-skip.test.ts pins them.
 name: Retest stale pull requests
 
 on:
@@ -52,7 +52,7 @@ jobs:
         # request cannot stop the rest.
         run: |
           limit=1000
-          shas=$(gh pr list --state open --base main --limit "$limit" --json headRefOid --jq '.[].headRefOid')
+          shas=$(gh pr list --state open --base main --limit "$limit" --json headRefOid,autoMergeRequest --jq '.[] | select(.autoMergeRequest == null) | .headRefOid')
           [ "$(wc -w <<< "$shas")" -lt "$limit" ] || echo "::warning::open pull requests reached the $limit limit; the rest were not retested"
           for sha in $shas; do
             run=$(gh run list --workflow ci.yml --event pull_request --commit "$sha" --limit 1 --json databaseId,status --jq '.[] | select(.status == "completed") | .databaseId') || { echo "::warning::could not list runs for $sha"; continue; }

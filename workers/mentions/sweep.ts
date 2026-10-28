@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { insertSignalAlert } from "../../app/lib/data/alert.server";
 import type { DiscoveryContext } from "../../app/lib/data/entity.server";
 import { readDiscoveryContext, readEntityIdentityJson } from "../../app/lib/data/entity.server";
-import { insertVerdict } from "../../app/lib/data/jev_verdict.server";
+import { insertSignalVerdict } from "../../app/lib/data/jev_verdict.server";
 import {
   type DuplicateCandidate,
   findDuplicateCandidate,
@@ -13,6 +13,7 @@ import {
   readSeenDedupKeys,
   readSeenNormUrlHashes,
   readUnjudgedMentions,
+  readUnjudgedMentionsInWindow,
   resolveUnjudgedMention,
 } from "../../app/lib/data/signal.server";
 import { insertWatchSnapshot } from "../../app/lib/data/snapshot.server";
@@ -23,6 +24,7 @@ import {
   advanceHnCursor,
   markWatchPolled,
   readActiveWatches,
+  readWorkspaceMentionWatches,
   readWatchConfigJson,
   writeWatchConfigJson,
 } from "../../app/lib/data/watch.server";
@@ -30,7 +32,7 @@ import type { NoulVerdict } from "../../app/lib/jev/client.server";
 import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
 import { withMentionCall } from "../../app/lib/mentions/call-budget.server";
 import { lookupYoutubeChannel } from "../../app/lib/identity/youtube-channel.server";
-import { noulAction } from "../../app/lib/jev/thresholds";
+import { isAboutBrand, noulAction } from "../../app/lib/jev/thresholds";
 import { mentionReasonLine } from "../../app/lib/mentions/reason-customer";
 import {
   ABOUT_BRAND,
@@ -42,7 +44,9 @@ import {
 } from "../../app/lib/mentions/questions";
 import {
   readWatchConfig,
+  withFeedError,
   withLostChannel,
+  withPageMiss,
   withNoChannel,
   withoutLostChannel,
   withoutNoChannel,
@@ -57,7 +61,7 @@ import { storedDedupKey, toSignalRow, type MentionItem, type SignalRow } from ".
 import { recordUpstreamBlock, writeSourcePoint } from "./canary";
 import { adapterFor } from "../sources/registry";
 import { youtubeAdapter } from "../sources/mentions/youtube";
-import { isUpstreamTimeout, UpstreamBlockedError } from "../sources/mentions/types";
+import { isUpstreamTimeout, UnsearchableQueryError, UpstreamBlockedError } from "../sources/mentions/types";
 import type { OkYoutubeFeed } from "../sources/mentions/youtube";
 
 const JUDGED_PER_WATCH = 12;
@@ -77,6 +81,7 @@ export interface TargetOutcome {
   stored: number;
   unjudged: number;
   skipped: number;
+  ms?: number;
 }
 
 export async function planTargets(): Promise<MentionTarget[]> {
@@ -112,7 +117,7 @@ async function judge(
   const about = await withMentionCall(watch.entity_id, () =>
     askNoul(watch.workspace_id, ABOUT_BRAND, aboutBrandState({ subject, item, reliability: watch.reliability })),
   );
-  if (noulAction(about.p) === "reject") return { about, matters: null };
+  if (!isAboutBrand(about.p)) return { about, matters: null };
   const mattersState = mentionMattersState({
     self: { name: context.self.name, domain: context.self.domain, description: context.self.description },
     subject,
@@ -155,6 +160,10 @@ function mentionAlert(input: {
   });
 }
 
+function recordedHash(verdict: NoulVerdict, signalId: string): string {
+  return verdict.cached ? `${verdict.inputHash}:${signalId}` : verdict.inputHash;
+}
+
 function judgedStatements(input: {
   watch: WatchRow;
   signalId: string;
@@ -165,16 +174,16 @@ function judgedStatements(input: {
 }): D1PreparedStatement[] {
   const { watch, signalId, item, verdicts, now } = input;
   const verdictRow = (verdict: NoulVerdict, reason: string | null) =>
-    insertVerdict({
+    insertSignalVerdict({
       workspaceId: watch.workspace_id,
       questionId: verdict.questionId,
-      inputHash: verdict.inputHash,
+      inputHash: recordedHash(verdict, signalId),
       signalId,
       entityId: watch.entity_id,
       p: verdict.p,
       choice: null,
       reason,
-      decidedAt: now,
+      decidedAt: new Date().toISOString(),
     });
   const statements = [verdictRow(verdicts.about, null)];
   if (verdicts.matters === null) return statements;
@@ -190,19 +199,18 @@ function duplicateStatements(input: {
   signalId: string;
   candidateId: string;
   verdict: NoulVerdict;
-  now: string;
 }): D1PreparedStatement[] {
-  const { watch, signalId, candidateId, verdict, now } = input;
-  const verdictRow = insertVerdict({
+  const { watch, signalId, candidateId, verdict } = input;
+  const verdictRow = insertSignalVerdict({
     workspaceId: watch.workspace_id,
     questionId: verdict.questionId,
-    inputHash: verdict.inputHash,
+    inputHash: recordedHash(verdict, signalId),
     signalId,
     entityId: watch.entity_id,
     p: verdict.p,
     choice: null,
     reason: null,
-    decidedAt: now,
+    decidedAt: new Date().toISOString(),
   });
   return noulAction(verdict.p) === "act" ? [verdictRow, markDuplicateOf(signalId, candidateId)] : [verdictRow];
 }
@@ -263,7 +271,7 @@ async function judgeDuplicate(input: {
   });
   try {
     const verdict = await withMentionCall(watch.entity_id, () => askNoul(watch.workspace_id, DUPLICATE_SIGNAL, state));
-    const statements = duplicateStatements({ watch, signalId, candidateId: candidate.id, verdict, now });
+    const statements = duplicateStatements({ watch, signalId, candidateId: candidate.id, verdict });
     return { statements, asked: true, jevDown: false, collapsed: noulAction(verdict.p) === "act" };
   } catch (error) {
     if (!(error instanceof JevUnavailableError)) throw error;
@@ -283,7 +291,7 @@ async function rejudgeUnjudged(
   for (const row of pending) {
     const verdicts = await judgeOrNull(watch, context, row);
     if (verdicts === null) return { statements, stored, attempted: pending.length, jevDown: true };
-    const rejected = noulAction(verdicts.about.p) === "reject";
+    const rejected = !isAboutBrand(verdicts.about.p);
     statements.push(
       resolveUnjudgedMention(row.id, rejected),
       ...judgedStatements({ watch, signalId: row.id, item: row, verdicts, now, alert: !rejected }),
@@ -291,6 +299,38 @@ async function rejudgeUnjudged(
     if (!rejected) stored += 1;
   }
   return { statements, stored, attempted: pending.length, jevDown: false };
+}
+
+export async function rejudgeWindowMentions(input: {
+  workspaceId: string;
+  windowStartAt: string;
+  windowEndAt: string;
+  limit: number;
+}): Promise<number> {
+  const [pending, watches, context] = await Promise.all([
+    readUnjudgedMentionsInWindow(input),
+    readWorkspaceMentionWatches(input.workspaceId),
+    readDiscoveryContext(input.workspaceId),
+  ]);
+  if (context === null) return 0;
+  const byId = new Map(watches.map((watch) => [watch.watch_id, watch]));
+  const now = new Date().toISOString();
+  const statements: D1PreparedStatement[] = [];
+  let judged = 0;
+  for (const row of pending) {
+    const watch = byId.get(row.watchId);
+    if (watch === undefined) continue;
+    const verdicts = await judgeOrNull(watch, context, row);
+    if (verdicts === null) break;
+    judged += 1;
+    const rejected = !isAboutBrand(verdicts.about.p);
+    statements.push(
+      resolveUnjudgedMention(row.id, rejected),
+      ...judgedStatements({ watch, signalId: row.id, item: row, verdicts, now, alert: !rejected }),
+    );
+  }
+  if (statements.length > 0) await env.DB.batch(statements);
+  return judged;
 }
 
 function mentionSignal(input: {
@@ -365,7 +405,7 @@ async function freshMentionStatements(input: FreshMentionInput): Promise<FreshMe
   const { watch, context, item, snapshotId, now } = input;
   const verdicts = input.jevDown ? null : await judgeOrNull(watch, context, item);
   const { mapped, dedupKey, signalId } = await mapFresh({ watch, item, snapshotId, now });
-  const rejected = verdicts !== null && noulAction(verdicts.about.p) === "reject";
+  const rejected = verdicts !== null && !isAboutBrand(verdicts.about.p);
   const insert = insertMention(
     mentionSignal({ mapped, watch, snapshotId, signalId, dedupKey, rejected, judged: verdicts !== null }),
   );
@@ -600,6 +640,19 @@ async function flagLostChannel(watchId: string, now: string): Promise<void> {
   if (flagged !== current) await writeWatchConfigJson(watchId, flagged);
 }
 
+async function notePageMiss(watchId: string, reason: string | undefined, now: string): Promise<void> {
+  if (reason === undefined) return;
+  const current = await requireWatchConfigJson(watchId);
+  const noted = withPageMiss(current, reason, now);
+  if (noted !== current) await writeWatchConfigJson(watchId, noted);
+}
+
+async function clearNoChannel(watchId: string): Promise<void> {
+  const current = await requireWatchConfigJson(watchId);
+  const cleared = withoutNoChannel(current);
+  if (cleared !== current) await writeWatchConfigJson(watchId, cleared);
+}
+
 async function flagNoChannel(watchId: string, now: string): Promise<void> {
   const current = await requireWatchConfigJson(watchId);
   const flagged = withNoChannel(withoutLostChannel(current), now);
@@ -626,7 +679,8 @@ async function commitYoutubeFeed(input: {
     (currentConfig.channelId !== channelId ||
       currentConfig.degraded !== null ||
       currentConfig.noChannel !== null ||
-      currentConfig.pendingChannelId !== null)
+      currentConfig.pendingChannelId !== null ||
+      currentConfig.record.feedError !== undefined)
   ) {
     await writeWatchConfigJson(watch.watch_id, withResolvedChannel(current, channelId));
   }
@@ -644,6 +698,13 @@ async function commitYoutubeFeed(input: {
   return { items: feed.items.length, stored: committed.stored, unjudged: committed.unjudged, skipped: 0 };
 }
 
+async function skipFailedFeed(watchId: string, status: number, now: string): Promise<TargetOutcome> {
+  const current = await requireWatchConfigJson(watchId);
+  await writeWatchConfigJson(watchId, withFeedError(current, status, now));
+  await markWatchPolled(watchId, now);
+  return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
+}
+
 async function verifyPendingYoutube(watch: WatchRow, pendingId: string, run: YoutubeRun): Promise<TargetOutcome> {
   const { now } = run;
   const result = await youtubeAdapter({ query: pendingId }, null);
@@ -654,9 +715,10 @@ async function verifyPendingYoutube(watch: WatchRow, pendingId: string, run: You
     const current = await requireWatchConfigJson(watch.watch_id);
     const flagged = withLostChannel(withoutPendingChannel(current), now);
     await writeWatchConfigJson(watch.watch_id, flagged);
+    await markWatchPolled(watch.watch_id, now);
+    return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
   }
-  await markWatchPolled(watch.watch_id, now);
-  return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
+  return skipFailedFeed(watch.watch_id, result.status, now);
 }
 
 async function resolveYoutubeChannel(
@@ -667,12 +729,17 @@ async function resolveYoutubeChannel(
   switch (lookup.status) {
     case "id":
       return { found: true, channelId: lookup.channelId };
+    case "unread":
+      await clearNoChannel(watch.watch_id);
+      await markWatchPolled(watch.watch_id, now);
+      return { found: false, outcome: { items: 0, stored: 0, unjudged: 0, skipped: 0 } };
     case "no-url":
       await flagNoChannel(watch.watch_id, now);
       await markWatchPolled(watch.watch_id, now);
       return { found: false, outcome: { items: 0, stored: 0, unjudged: 0, skipped: 0 } };
     case "unresolved":
       await flagLostChannel(watch.watch_id, now);
+      await notePageMiss(watch.watch_id, lookup.reason, now);
       await markWatchPolled(watch.watch_id, now);
       return { found: false, outcome: { items: 0, stored: 0, unjudged: 0, skipped: 0 } };
   }
@@ -709,8 +776,7 @@ async function sweepOneYoutube(watch: WatchRow, run: YoutubeRun): Promise<Target
   if (first.feedState === "ok") {
     return commitYoutubeFeed({ watch, feed: first, run, channelId });
   }
-  await markWatchPolled(watch.watch_id, now);
-  return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
+  return skipFailedFeed(watch.watch_id, first.status, now);
 }
 
 async function sweepYoutubeTarget(
@@ -745,6 +811,19 @@ async function sweepYoutubeTarget(
 async function skipBlockedTarget(target: MentionTarget, status: number): Promise<TargetOutcome> {
   await recordUpstreamBlock(target.sourceId, target.pluginKey, status);
   return { items: 0, stored: 0, unjudged: 0, skipped: target.watches.length };
+}
+
+async function settleFailedTarget(target: MentionTarget, error: unknown): Promise<TargetOutcome> {
+  if (error instanceof UpstreamBlockedError) return await skipBlockedTarget(target, error.status);
+  if (error instanceof UnsearchableQueryError) {
+    console.warn(JSON.stringify({ event: "mentions.query_unsearchable", source: target.pluginKey }));
+    return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
+  }
+  if (isUpstreamTimeout(error)) {
+    await markSourceTimedOut(target.sourceId);
+    return { items: 0, stored: 0, unjudged: 0, skipped: target.watches.length };
+  }
+  throw error;
 }
 
 export async function sweepTarget(
@@ -782,11 +861,6 @@ export async function sweepTarget(
     }
     return { items: result.items.length, stored, unjudged, skipped: 0 };
   } catch (error) {
-    if (error instanceof UpstreamBlockedError) return await skipBlockedTarget(target, error.status);
-    if (isUpstreamTimeout(error)) {
-      await markSourceTimedOut(target.sourceId);
-      return { items: 0, stored: 0, unjudged: 0, skipped: target.watches.length };
-    }
-    throw error;
+    return await settleFailedTarget(target, error);
   }
 }

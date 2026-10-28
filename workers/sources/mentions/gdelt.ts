@@ -1,8 +1,11 @@
 import type { MentionsAdapter } from "./types";
-import { fetchUpstream, mentionItemSchema, SOURCE_SETTINGS } from "./types";
+import { fetchUpstream, mentionItemSchema, SOURCE_SETTINGS, UnsearchableQueryError } from "./types";
 import { GDELT_SEARCH_URL, gdeltResponseSchema, gdeltSeendateToIso } from "../../../app/lib/discovery/gdelt";
 
+const PHRASE_TOO_SHORT = "The specified phrase is too short";
+
 function parseBody(rawBody: string): unknown {
+  if (rawBody.includes(PHRASE_TOO_SHORT)) throw new UnsearchableQueryError("gdelt.doc");
   try {
     return JSON.parse(rawBody) as unknown;
   } catch (error) {
@@ -11,10 +14,13 @@ function parseBody(rawBody: string): unknown {
 }
 
 export const gdelt: MentionsAdapter = async (target, _cursor) => {
-  const { timeoutMs, timeoutRetries, retryBackoffMs } = SOURCE_SETTINGS["gdelt.doc"];
+  const { timeoutMs, timeoutRetries, retryBackoffMs, rateLimitRetries, rateLimitPauseMs } =
+    SOURCE_SETTINGS["gdelt.doc"];
   const response = await fetchUpstream(GDELT_SEARCH_URL + encodeURIComponent(`"${target.query}"`), timeoutMs, {
     retries: timeoutRetries,
     backoffMs: retryBackoffMs,
+    rateLimitRetries,
+    rateLimitPauseMs,
   });
   if (!response.ok) throw new Error(`gdelt answered ${String(response.status)}`);
   const rawBody = await response.text();

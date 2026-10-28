@@ -1,19 +1,20 @@
 import type { ReactElement } from "react";
 import { useSearchParams } from "react-router";
 
-import { ALERT_CHIPS, type AlertChipKey } from "../lib/alert-chips";
+import { ALERT_CHIPS, isChipCapped, type AlertChipKey } from "../lib/alert-chips";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 
 export function AlertChips({
   chip,
   counts,
-  hiringCapped,
+  cappedChips,
 }: {
   chip: AlertChipKey;
   counts: Record<AlertChipKey, number>;
-  hiringCapped: boolean;
-}): ReactElement {
+  cappedChips: readonly AlertChipKey[];
+}): ReactElement | null {
   const [, setSearchParams] = useSearchParams();
+  if (counts.all === 0) return null;
   return (
     <ToggleGroup
       value={[chip]}
@@ -22,20 +23,19 @@ export function AlertChips({
         setSearchParams(next === "all" ? {} : { kind: next }, { preventScrollReset: true });
       }}
       data-testid="alert-chips"
-      className="mt-8 flex w-full flex-wrap gap-2"
+      className="mt-8 grid w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap"
     >
-      {ALERT_CHIPS.map((entry) => (
+      {ALERT_CHIPS.filter((entry) => counts[entry.key] > 0 || entry.key === chip).map((entry) => (
         <ToggleGroupItem
           key={entry.key}
           value={entry.key}
           data-testid={"alert-chip-" + entry.key}
-          disabled={counts[entry.key] === 0 && entry.key !== chip}
           className="min-h-11 rounded-none border border-line text-ink-soft hover:bg-card hover:text-ink aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-bone"
         >
           {entry.label}{" "}
           <span className="font-mono tabular-nums">
             {counts[entry.key]}
-            {entry.key === "hiring" && hiringCapped ? "+" : ""}
+            {isChipCapped(cappedChips, entry.key) ? "+" : ""}
           </span>
         </ToggleGroupItem>
       ))}

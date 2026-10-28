@@ -7,7 +7,7 @@ import {
   readVerdictIds,
   type VerdictRow,
 } from "../data/jev_verdict.server";
-import { readRecentSignals, readUnjudgedChanges, type UnjudgedChange } from "../data/signal.server";
+import { readRecentChangeDiffs, readUnjudgedChanges, type UnjudgedChange } from "../data/signal.server";
 import {
   askMixed,
   askNoul,
@@ -26,9 +26,10 @@ import {
   PRICING_ACT_AT,
   REJECT_AT,
 } from "../jev/thresholds";
-import { parseDiffHunks, parseSiteChangePayload, type SiteChangePayload } from "../site-change";
+import { markFromHunks, parseDiffHunks, parseSiteChangePayload, type SiteChangePayload } from "../site-change";
 import { daysBefore } from "../site-changes.server";
 import { computeBreakageEvidence, type BreakageEvidence } from "./breakage-evidence";
+import { openLateBreakage } from "./late-breakage.server";
 
 const CHANGE_VERDICT_ROWS_PER_BRAND_PER_DAY = 6;
 
@@ -37,6 +38,8 @@ const JEV_BREAKAGE_PER_BRAND_PER_DAY = 6;
 const HISTORY_DAYS = 30;
 
 const HISTORY_LIMIT = 20;
+
+const HISTORY_WORDED = 5;
 
 const PUBLISH_P = ACT_AT;
 
@@ -112,6 +115,8 @@ export interface ChangeStateInput {
 export interface HistoryEntry {
   kind: string | null;
   at: string;
+  change?: string;
+  customer_said?: "useful" | "not_useful";
 }
 
 export interface ChangeState<H = HistoryEntry> {
@@ -166,6 +171,7 @@ function verdictRow(input: {
   p: number | null;
   choice: string | null;
   decidedAt: string;
+  sharedHash?: string;
 }): VerdictRow {
   return {
     workspaceId: input.workspaceId,
@@ -177,15 +183,32 @@ function verdictRow(input: {
     choice: input.choice,
     reason: null,
     decidedAt: input.decidedAt,
+    sharedHash: input.sharedHash,
   };
 }
 
+function wordingOf(mark: ReturnType<typeof markFromHunks>): string | undefined {
+  if (mark === null) return undefined;
+  if (mark.removed !== null && mark.added !== null) return `${mark.removed} \u2192 ${mark.added}`;
+  if (mark.added !== null) return `added: ${mark.added}`;
+  return mark.removed === null ? undefined : `removed: ${mark.removed}`;
+}
+
 async function readHistory30d(entityId: string, since: string): Promise<HistoryEntry[]> {
-  const recent = await readRecentSignals(entityId, since);
-  return recent
-    .filter((row) => row.kind === "change")
-    .slice(0, HISTORY_LIMIT)
-    .map((row) => ({ kind: row.aspect, at: row.observedAt }));
+  const changes = await readRecentChangeDiffs(entityId, since, HISTORY_LIMIT);
+  return Promise.all(
+    changes.map(async (row, index) => {
+      const entry: HistoryEntry = {
+        kind: row.aspect,
+        at: row.observedAt,
+        ...(row.customerSaid === null ? {} : { customer_said: row.customerSaid }),
+      };
+      if (index >= HISTORY_WORDED) return entry;
+      const hunks = await readStoredHunks(row.diffKey);
+      const change = wordingOf(markFromHunks(hunks.map((hunk) => hunk.lines)));
+      return change === undefined ? entry : { ...entry, change };
+    }),
+  );
 }
 
 function logJevUnavailable(error: JevUnavailableError): null {
@@ -247,7 +270,7 @@ async function judgeNoteworthy(
 ): Promise<{ noteworthy: NonNullable<JudgedChange["noteworthy"]>; rows: VerdictRow[] } | null> {
   let mixed: MixedVerdict;
   try {
-    mixed = await askMixed(input.workspaceId, { noul: D3_NOTEWORTHY, choice: D3_KIND }, state);
+    mixed = await askMixed(input.workspaceId, { noul: D3_NOTEWORTHY, choice: D3_KIND, shared: !input.isSelf }, state);
   } catch (error) {
     return degradeUnlessRateLimited(error, input.stopOnUnavailable);
   }
@@ -258,8 +281,22 @@ async function judgeNoteworthy(
   return {
     noteworthy: { p, kind, band: noteworthyBandOf(p, kind) },
     rows: [
-      verdictRow({ ...base, questionId: D3_NOTEWORTHY_QID, inputHash: noul.inputHash, p, choice: null }),
-      verdictRow({ ...base, questionId: D3_KIND_QID, inputHash: choice.inputHash, p: null, choice: kind }),
+      verdictRow({
+        ...base,
+        questionId: D3_NOTEWORTHY_QID,
+        inputHash: noul.inputHash,
+        sharedHash: noul.sharedHash,
+        p,
+        choice: null,
+      }),
+      verdictRow({
+        ...base,
+        questionId: D3_KIND_QID,
+        inputHash: choice.inputHash,
+        sharedHash: choice.sharedHash,
+        p: null,
+        choice: kind,
+      }),
     ],
   };
 }
@@ -366,6 +403,10 @@ async function rejudgeStoredChange(row: UnjudgedChange): Promise<boolean> {
   const input = await judgeInputFromStored(row);
   if (input === null) return false;
   const judged = await judgeChange(input);
+  const band = judged.selfBreakage?.band;
+  if (row.entityRole === "self" && (band === "alert" || band === "check")) {
+    await openLateBreakage(row, band, new Date());
+  }
   if (judged.verdictIds.length > 0) {
     await linkVerdictsStatement({
       signalId: row.id,

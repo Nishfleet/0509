@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Nav } from "./nav";
+import { OfflineNotice } from "./offline-notice";
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
@@ -11,6 +12,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         Skip to content
       </a>
+      <OfflineNotice />
       <Nav />
       <div className="min-w-0 flex-1 pb-[92px] min-[860px]:pb-0" id="app-content" tabIndex={-1}>
         {children}

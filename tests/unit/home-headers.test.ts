@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -30,35 +29,7 @@ function headerValue(block: string, name: string): string | undefined {
   return line?.slice(line.indexOf(":") + 1).trim();
 }
 
-describe("static home analytics", () => {
-  it("sets no-transform on / so the edge cannot inject the analytics module", () => {
-    const html = readFileSync(join(REPO_ROOT, "public/index.html"), "utf8");
-    const cacheControl = headerValue(headersBlock("/"), "Cache-Control");
-    if (cacheControl === undefined) {
-      throw new Error("public/_headers / block has no Cache-Control");
-    }
-    const directives = cacheControl
-      .split(",")
-      .map((part) => part.trim())
-      .filter((part) => part.length > 0);
-
-    expect(directives).toContain("public");
-    expect(directives).toContain("max-age=300");
-    expect(directives).toContain("no-transform");
-    expect(html).toContain("Quietly, we");
-    expect(html).not.toContain("<script src");
-    expect(html).not.toContain("cloudflareinsights.com");
-    expect(html).toContain('addEventListener("load"');
-    expect(Buffer.byteLength(html)).toBeLessThan(8_000);
-  });
-
-  // 0509#5758 / audit V16. `/` is served by the static-assets pipeline, not by
-  // app/entry.server.tsx, so it is the only HTML page on the origin with no
-  // security headers at all. The four the launch audit names (CSP, HSTS,
-  // X-Frame-Options, Referrer-Policy) are asserted here against the `/*` block,
-  // which Cloudflare applies to every static asset in addition to the more
-  // specific Cache-Control blocks ("an incoming request which matches multiple
-  // rules' URL patterns will inherit all rules' headers").
+describe("static asset headers", () => {
   it("sends the four security headers on every static asset", () => {
     const all = headersBlock("/*");
     expect(headerValue(all, "Content-Security-Policy")).toBeDefined();
@@ -67,32 +38,17 @@ describe("static home analytics", () => {
     expect(headerValue(all, "Referrer-Policy")).toBe("same-origin");
   });
 
-  // The one script the static home ships is inline and load-bearing: it appends
-  // /home-faces.css after the headline paints (0509#5630), and the eslint rule
-  // in eslint.config.js forbids replacing it with a <link>. A static _headers
-  // file cannot carry the Worker's per-response nonce, so the only way to keep
-  // a real script-src is the script's SHA-256. If the inline script is ever
-  // edited, the CSP hash goes stale and the browser blocks the font load — a
-  // silent failure. This test recomputes the hash from the HTML, so the two
-  // cannot drift: edit the script and this goes red until the hash is updated.
-  it("pins every inline script by hash in the static CSP", () => {
-    const html = readFileSync(join(REPO_ROOT, "public/index.html"), "utf8");
-    // Only inline scripts carry a hash in the CSP: a `<script src=...>` is
-    // covered by `script-src 'self'` and never appears as a digest. The
-    // negative lookahead keeps that distinction, and the flags keep a
-    // `<SCRIPT>` tag or one with attributes matching rather than silently
-    // yielding no script.
-    const inline = [...html.matchAll(/<script(?![^>]*\bsrc\b)[^>]*>([\s\S]*?)<\/script\s*>/gi)].map(
-      (match) => match[1] ?? "",
-    );
-    if (inline.length === 0) {
-      throw new Error("public/index.html has no inline <script>");
-    }
+  it("allows no inline script and no framing in the static CSP", () => {
     const csp = headerValue(headersBlock("/*"), "Content-Security-Policy");
-    for (const script of inline) {
-      const digest = createHash("sha256").update(Buffer.from(script, "utf8")).digest("base64");
-      expect(csp).toContain(`'sha256-${digest}'`);
-    }
+    expect(csp).toContain("script-src 'self';");
+    expect(csp).not.toContain("sha256-");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("object-src 'none'");
+  });
+
+  it("leaves the homepage cache policy to the Worker, which sends no-transform", () => {
+    const headers = readFileSync(join(REPO_ROOT, "public/_headers"), "utf8");
+    expect(headers.split("\n")).not.toContain("/");
   });
 
   it.each(["/og.png", "/logo.svg", "/favicon.ico", "/apple-touch-icon.png", "/app-faces.css", "/home-faces.css"])(

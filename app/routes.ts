@@ -1,10 +1,13 @@
-import { type RouteConfig, layout, route } from "@react-router/dev/routes";
+import { type RouteConfig, index, layout, route } from "@react-router/dev/routes";
 
 export default [
+  index("routes/landing.tsx"),
   route("login", "routes/login.tsx"),
   route("privacy", "routes/privacy.tsx"),
   route("terms", "routes/terms.tsx"),
+  route("security", "routes/security.tsx"),
   route("pricing", "routes/pricing.tsx"),
+  route("signup", "routes/signup.ts"),
   route("robots.txt", "routes/robots[.]txt.ts"),
   route("sitemap.xml", "routes/sitemap[.]xml.ts"),
   route(".well-known/http-message-signatures-directory", "routes/[.]well-known.http-message-signatures-directory.ts"),
@@ -15,6 +18,8 @@ export default [
     route("app/upgrade", "routes/app.upgrade.ts"),
     route("app/tester", "routes/app.tester.ts"),
     route("app/alerts", "routes/app.alerts.tsx"),
+    route("app/changes/feedback", "routes/app.change-feedback.ts"),
+    route("app/brief-preview", "routes/app.brief-preview.tsx"),
     route("app/brief/:digestId?", "routes/app.brief.tsx"),
   ]),
   layout("routes/app-settings-layout.tsx", [
@@ -27,11 +32,14 @@ export default [
   layout("routes/app-session-layout.tsx", [
     route("app/share.png", "routes/app.share[.]png.ts"),
     route("app/logos/:entityId", "routes/app.logo.ts"),
+    route("app/brands", "routes/app.brands.ts"),
+    route("app/admin/retention", "routes/app.admin.retention.tsx"),
   ]),
   route("app/changes/:signalId/:side", "routes/app.change-shot.ts"),
   route("u/:token", "routes/u.$token.tsx"),
   route("v/:token", "routes/v.$token.tsx"),
   route("api/health", "routes/api.health.ts"),
+  route("status", "routes/status.tsx"),
   route("api/auth/*", "routes/api.auth.$.ts"),
   route("api/webhooks/dodo", "routes/api.webhooks.dodo.ts"),
   route("mcp", "routes/mcp.ts"),
@@ -48,6 +56,5 @@ export default [
   route("onboarding/competitors", "routes/onboarding.competitors.tsx"),
   route("onboarding/plan", "routes/onboarding.plan.tsx"),
   route("llms.txt", "routes/llms[.]txt.ts"),
-  route("design/landing", "routes/landing.tsx"),
   route("onboarding/identity", "routes/onboarding.identity.tsx"),
 ] satisfies RouteConfig;

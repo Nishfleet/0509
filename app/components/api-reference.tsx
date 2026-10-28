@@ -12,6 +12,7 @@ import {
   type ResponseView,
   type SchemaView,
 } from "../lib/agent/api-docs";
+import { PROBLEMS } from "../lib/agent/problems";
 
 const SHELL = "mx-auto w-full max-w-[46rem] min-w-0 bg-bone px-6 py-16 text-ink sm:py-24";
 const TITLE = "font-display text-[clamp(1.75rem,3.6vw,2.9rem)] leading-[1.15] font-semibold tracking-[-0.02em]";
@@ -29,7 +30,15 @@ function SettingsLink({ href }: { href: string }) {
   );
 }
 
-function AuthBlock({ document, settingsHref }: { document: JsonRecord; settingsHref: string }) {
+function AuthBlock({
+  document,
+  exampleUrl,
+  settingsHref,
+}: {
+  document: JsonRecord;
+  exampleUrl: string | null;
+  settingsHref: string;
+}) {
   return (
     <section aria-labelledby="authentication" className="mt-14 scroll-mt-6">
       <h2 className={HEADING} id="authentication">
@@ -40,6 +49,12 @@ function AuthBlock({ document, settingsHref }: { document: JsonRecord; settingsH
       </p>
       <p className={`mt-3 ${MONO}`}>{`Authorization: Bearer <key>`}</p>
       <p className={BODY}>{bearerCopy(document)}.</p>
+      {exampleUrl === null ? null : (
+        <>
+          <p className={BODY}>For example:</p>
+          <p className={`mt-3 ${MONO}`}>{`curl -H "Authorization: Bearer <key>" ${exampleUrl}`}</p>
+        </>
+      )}
     </section>
   );
 }
@@ -55,6 +70,8 @@ function McpBlock({ mcpUrl, settingsHref }: { mcpUrl: string; settingsHref: stri
         <SettingsLink href={settingsHref} />.
       </p>
       <p className={`mt-3 ${MONO}`}>{mcpUrl}</p>
+      <p className={BODY}>In Claude Code, run:</p>
+      <p className={`mt-3 ${MONO}`}>{`claude mcp add --transport http five-to-nine ${mcpUrl}`}</p>
     </section>
   );
 }
@@ -66,9 +83,35 @@ function LimitsBlock({ settingsHref }: { settingsHref: string }) {
         Rate limits
       </h2>
       <p className={BODY}>
-        The edge shield allows 120 requests a minute. It is per colo and eventually consistent, so a burst can trip in
-        one region and not another. Each key also has its own quota, shown in <SettingsLink href={settingsHref} />.
+        You can send 120 requests a minute from one address. The count is approximate, so a burst near the limit may be
+        stopped a little early or late. Each key also has its own quota, shown in <SettingsLink href={settingsHref} />.
+        Past a limit you get a 429 with a Retry-After header.
       </p>
+    </section>
+  );
+}
+
+function ErrorsBlock() {
+  return (
+    <section aria-labelledby="errors" className="mt-14 scroll-mt-6">
+      <h2 className={HEADING} id="errors">
+        Errors
+      </h2>
+      <p className={BODY}>
+        Every error is JSON with a short code in <span className={MONO}>error</span> and a sentence in{" "}
+        <span className={MONO}>error_description</span>. Branch on the code, show the sentence to a person.
+      </p>
+      <dl className="mt-6 border-t border-line">
+        {Object.entries(PROBLEMS).map(([code, problem]) => (
+          <div className={ROW} key={code}>
+            <dt className={`${MONO} text-ink`}>
+              {code}
+              <span className="mt-1 block font-sans text-body-sm text-ink-soft">{problem.status}</span>
+            </dt>
+            <dd className="min-w-0 leading-[1.6] text-ink-soft">{problem.description}</dd>
+          </div>
+        ))}
+      </dl>
     </section>
   );
 }
@@ -182,10 +225,12 @@ function Schemas({ document }: { document: JsonRecord }) {
 
 export function ApiReference({
   document,
+  exampleUrl,
   mcpUrl,
   settingsHref,
 }: {
   document: JsonRecord;
+  exampleUrl: string | null;
   mcpUrl: string;
   settingsHref: string;
 }) {
@@ -197,9 +242,10 @@ export function ApiReference({
       </header>
       <main id={MAIN_CONTENT_ID} tabIndex={-1} className="mt-8 min-w-0">
         <h1 className={TITLE}>API reference</h1>
-        <AuthBlock document={document} settingsHref={settingsHref} />
+        <AuthBlock document={document} exampleUrl={exampleUrl} settingsHref={settingsHref} />
         <McpBlock mcpUrl={mcpUrl} settingsHref={settingsHref} />
         <LimitsBlock settingsHref={settingsHref} />
+        <ErrorsBlock />
         <Endpoints document={document} />
         <Schemas document={document} />
       </main>

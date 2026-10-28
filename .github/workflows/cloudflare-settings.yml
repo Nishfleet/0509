@@ -3,8 +3,8 @@ name: cloudflare-settings
 # Cloudflare settings that live outside wrangler.jsonc, applied with stock
 # wrangler commands, on demand and from main only (Nish 2026-10-03). Never runs
 # on push or schedule. R2: the backup bucket carries the same per-prefix
-# retention as 0509-snapshots (0509#5950). Email Routing: support@ and brief@
-# (the weekly brief's reply address) go to the support-inbox Worker (0509#5699).
+# retention as 0509-snapshots (0509#5950). Email Routing: support@, brief@ and hello@
+# (the brief reply address and the sign-in email reply address) go to the support-inbox Worker (0509#5699).
 # Safe to re-run: the lifecycle `set` replaces the whole rule list, and each
 # address is updated if its rule exists and created if it does not. This job
 # holds its own Cloudflare token (CLOUDFLARE_SETTINGS_TOKEN), so it installs
@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
       - run: npm ci
@@ -44,10 +44,10 @@ jobs:
         run: npx wrangler r2 bucket lifecycle set 0509-snapshots-backup --file .github/cloudflare/r2-backup-lifecycle.json --force
       - name: Backup bucket lifecycle rules, after
         run: npx wrangler r2 bucket lifecycle list 0509-snapshots-backup
-      - name: Route support@ and brief@ to the support-inbox Worker
+      - name: Route support@, brief@ and hello@ to the support-inbox Worker
         run: |
           set -o pipefail
-          for name in support brief; do
+          for name in support brief hello; do
             id=$(npx wrangler email routing rules list 0509.io | awk -v m="Matchers: to:$name@0509.io" '/^Rule:/ {id=$2} $0 ~ m"$" {print id}')
             if [ -n "$id" ]; then verb=(update 0509.io "$id"); else verb=(create 0509.io); fi
             npx wrangler email routing rules "${verb[@]}" --name "$name" \

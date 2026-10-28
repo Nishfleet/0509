@@ -1,7 +1,11 @@
+import { SUPPORT_ADDRESS } from "../../app/components/footer";
+
 export interface SendResult {
-  outcome: "sent" | "failed";
+  outcome: "sent" | "failed" | "unconfirmed" | "skipped_revoked";
   error: string | null;
 }
+
+export const BRIEF_SENDER = { email: "brief@0509.io", name: "Five to Nine" };
 
 const MAX_ERROR_CHARS = 2_000;
 
@@ -18,7 +22,7 @@ export { errorText };
 
 export async function sendMessage(email: SendEmail, message: EmailMessageBuilder): Promise<SendResult> {
   try {
-    await email.send(message);
+    await email.send({ replyTo: SUPPORT_ADDRESS, ...message });
   } catch (end) {
     return { outcome: "failed", error: errorText(end) };
   }

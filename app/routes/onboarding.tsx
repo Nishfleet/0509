@@ -2,6 +2,7 @@ import type { Route } from "./+types/onboarding";
 
 import { redirect } from "react-router";
 
+import { readOtherBrands } from "../lib/client-brands.server";
 import { requireFreshSession, requireSession, signOutToLogin } from "../lib/require-session.server";
 import { ONBOARDING_COMPETITORS, ONBOARDING_PLAN, workspaceLandingForRequest } from "../lib/workspace.server";
 import { OneInput } from "../components/one-input";
@@ -26,7 +27,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (landing === null || landing === ONBOARDING_COMPETITORS || landing === ONBOARDING_PLAN) {
     throw redirect(landing ?? "/app");
   }
-  return { email: session.user.email };
+  return { email: session.user.email, otherBrands: await readOtherBrands(session.user.id) };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -45,7 +46,12 @@ export async function action({ request }: Route.ActionArgs) {
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   useTimezoneCookie();
   return (
-    <OnboardingFrame step={1} heading="Your website or social username" hideHeading>
+    <OnboardingFrame
+      step={1}
+      heading="Your website or social username"
+      hideHeading
+      otherBrands={loaderData.otherBrands}
+    >
       <p className="mt-3 max-w-prose leading-[1.55] text-ink-soft">
         Enter your website address or your social username, like @yourbrand. We'll read it, fill in your details, then
         find your competitors.

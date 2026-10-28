@@ -25,6 +25,11 @@ describe("document security headers", () => {
     expect(merged.get("strict-transport-security")).toContain("max-age=31536000");
     expect(merged.get("x-content-type-options")).toBe("nosniff");
     expect(merged.get("x-frame-options")).toBe("DENY");
+    expect(merged.get("cross-origin-opener-policy")).toBe("same-origin");
+    expect(merged.get("cross-origin-resource-policy")).toBe("same-origin");
+    expect(merged.get("permissions-policy")).toBe(
+      "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()",
+    );
     expect(merged.get("content-security-policy")).toContain("'nonce-n1'");
     expect(route.has("content-security-policy")).toBe(false);
   });

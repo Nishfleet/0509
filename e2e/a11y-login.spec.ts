@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { deleteCreatedAccount, settleSignInWidget } from "./inbox";
 
@@ -8,9 +8,7 @@ test.afterEach(async ({ page }, testInfo) => {
   if (createdEmail === "") return;
   testInfo.setTimeout(testInfo.timeout + 60_000);
   await page.clock.resume();
-  // The delete failing is a test failure, not a reason to keep the address:
-  // clearing in finally means the next test in this worker cannot try to
-  // delete an account that is already gone.
+
   try {
     await deleteCreatedAccount(page, createdEmail);
   } finally {
@@ -18,9 +16,6 @@ test.afterEach(async ({ page }, testInfo) => {
   }
 });
 
-// #4148: /login is measured with Deque's axe-core at WCAG 2.2 AA on both of its
-// states, in both themes, at both config widths. The form and the sent state are
-// separate tests so a violation names which state it is in.
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
 for (const scheme of ["light", "dark"] as const) {
@@ -57,11 +52,6 @@ for (const scheme of ["light", "dark"] as const) {
   });
 }
 
-// 0509#6531: DESIGN.md:473 sets a 44px minimum tap target. The wordmark is the
-// home link on /login and on the sign-in-sent screen, and with no height class
-// its box is one text line, about 19px. Measured on the rendered page at both
-// widths rather than read back out of the class string, and covering both
-// projects' viewports from one run.
 test("the wordmark home link is a 44px tap target on /login (#6531) @smoke", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop-1440", "this spec sets 1440 and 390 itself");
   for (const width of [1440, 390]) {

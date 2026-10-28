@@ -1,5 +1,5 @@
 import { createCookie } from "react-router";
-import { betterAuth } from "better-auth";
+import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { captcha, magicLink } from "better-auth/plugins";
 import { apiKey } from "@better-auth/api-key";
@@ -8,11 +8,13 @@ import { passkey } from "@better-auth/passkey";
 import { API_KEY_PREFIX, READ_SCOPE } from "./agent/paths";
 import { cancelPendingDigests } from "./data/digest.server";
 import { suppressWorkspaceTargets } from "./data/email_suppression.server";
-import { readWorkspaceIdForOwner } from "./data/workspace.server";
+import { readOwnedWorkspaces } from "./data/workspace.server";
+import { withEmailLanding } from "./email-change-landing";
 import { ensureWorkspaceForSignIn } from "./workspace.server";
 import { accessPrecleared } from "./auth/access-preclearance.server";
 import { changeEmailEmail } from "./auth/change-email-email";
 import { changeEmailAllowed } from "./auth/change-email-limit";
+import { chargeFixtureMagicLink, chargeFixtureSignup } from "./auth/fixture-signup-cap.server";
 import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email";
 import { MAGIC_LINK_PATH } from "./auth/magic-link-path";
 import { redactEmailShaped } from "./auth/redact-email-shaped";
@@ -58,7 +60,11 @@ function sendChangeEmailMessage(
   email: SendEmail,
   input: { kind: "approve" | "confirm"; to: string; named: string; url: string },
 ): Promise<void> {
-  const message = changeEmailEmail({ kind: input.kind, email: input.named, url: input.url });
+  const message = changeEmailEmail({
+    kind: input.kind,
+    email: input.named,
+    url: withEmailLanding(input.url, input.kind),
+  });
   return sendOrThrow(email, {
     to: input.to,
     from: { email: "hello@0509.io", name: "Five to Nine" },
@@ -117,8 +123,37 @@ function authHooks(env: AuthEnv) {
   };
 }
 
+function databaseHooks(env: AuthEnv): BetterAuthOptions["databaseHooks"] {
+  return {
+    user: {
+      create: {
+        before: async (user) => {
+          if (!(await chargeFixtureSignup(user.email))) {
+            throw new APIError("TOO_MANY_REQUESTS", { message: "Too many test accounts today. Try again tomorrow." });
+          }
+        },
+      },
+    },
+    session: {
+      create: {
+        after: async (session, context) => {
+          const request = context?.request ?? null;
+          if (!request) return;
+          await ensureWorkspaceForSignIn(env.DB, {
+            userId: session.userId,
+            request,
+          });
+        },
+      },
+    },
+  };
+}
+
 function sendMagicLinkEmail(env: AuthEnv) {
   return async ({ email, url }: { email: string; url: string }) => {
+    if (!(await chargeFixtureMagicLink(email))) {
+      throw new APIError("TOO_MANY_REQUESTS", { message: "Too many test sign-in links today. Try again tomorrow." });
+    }
     const message = magicLinkEmail({ email, url });
     try {
       await sendOrThrow(env.EMAIL, {
@@ -199,20 +234,7 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
     },
     disabledPaths: DISABLED_AUTH_PATHS,
     hooks: authHooks(env),
-    databaseHooks: {
-      session: {
-        create: {
-          after: async (session, context) => {
-            const request = context?.request ?? null;
-            if (!request) return;
-            await ensureWorkspaceForSignIn(env.DB, {
-              userId: session.userId,
-              request,
-            });
-          },
-        },
-      },
-    },
+    databaseHooks: databaseHooks(env),
     plugins: authPlugins(env, options),
   });
 }
@@ -227,19 +249,27 @@ export async function signOut(env: AuthEnv, request: Request): Promise<Headers> 
   return headers;
 }
 
+export async function signOutEverywhere(env: AuthEnv, request: Request): Promise<Headers> {
+  await createAuth(env).api.revokeSessions({ headers: request.headers });
+  return signOut(env, request);
+}
+
 async function silenceWorkspace(db: D1Database, userId: string): Promise<void> {
-  const workspaceId = await readWorkspaceIdForOwner(userId);
-  if (workspaceId === null) return;
-  await suppressWorkspaceTargets(workspaceId);
-  await cancelPendingDigests(db, workspaceId);
+  for (const { id: workspaceId } of await readOwnedWorkspaces(userId)) {
+    await suppressWorkspaceTargets(workspaceId);
+    await cancelPendingDigests(db, workspaceId);
+  }
+}
+
+export async function hasFreshSession(env: AuthEnv, request: Request, now: Date): Promise<boolean> {
+  const session = await createAuth(env).api.getSession({ headers: request.headers, query: FRESH });
+  if (!session) return false;
+  return now.getTime() - new Date(session.session.createdAt).getTime() < FRESH_SESSION_SECONDS * 1000;
 }
 
 export async function deleteSignedInUser(env: AuthEnv, request: Request, now: Date): Promise<Headers | null> {
+  if (!(await hasFreshSession(env, request, now))) return null;
   const auth = createAuth(env);
-  const session = await auth.api.getSession({ headers: request.headers, query: FRESH });
-  if (!session) return null;
-  const age = now.getTime() - new Date(session.session.createdAt).getTime();
-  if (age >= FRESH_SESSION_SECONDS * 1000) return null;
   const { apiKeys } = await auth.api.listApiKeys({ headers: request.headers });
   await Promise.all(
     apiKeys.map((key) => auth.api.deleteApiKey({ body: { keyId: key.id }, headers: request.headers, query: FRESH })),
@@ -266,13 +296,11 @@ export async function requestEmailChange(
   env: AuthEnv & { CHANGE_EMAIL_LIMIT: RateLimit },
   request: Request,
   newEmail: string,
-): Promise<"sent" | "limited"> {
+): Promise<"sent" | "limited" | "stale"> {
   const auth = createAuth(env);
   const session = await auth.api.getSession({ headers: request.headers, query: FRESH });
-  if (!session) throw new Error("no session");
-  if (Date.now() - new Date(session.session.createdAt).getTime() >= FRESH_SESSION_SECONDS * 1000) {
-    throw new Error("session not fresh");
-  }
+  if (!session) return "stale";
+  if (Date.now() - new Date(session.session.createdAt).getTime() >= FRESH_SESSION_SECONDS * 1000) return "stale";
   if (!(await changeEmailAllowed(env.CHANGE_EMAIL_LIMIT, session.user.id, newEmail))) return "limited";
   await auth.api.changeEmail({
     body: { newEmail, callbackURL: "/app/settings" },

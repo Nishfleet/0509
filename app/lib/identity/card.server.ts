@@ -7,7 +7,7 @@ import { sha256Hex } from "../sha256";
 import { takeBrowserEscalation } from "../site/browser-budget.server";
 import type { CardReview, CardValues, DraftField, SiteFields } from "./card-fields";
 import { extractIdentity } from "./extract";
-import { reviewFields } from "./field-confidence.server";
+import { reviewFields, unreviewedFields } from "./field-confidence.server";
 import { readLogo, storeLogo } from "./logo-store.server";
 import { logoCandidatesFor, logoCandidateUrls } from "./logo-cascade";
 import type { LogoCandidates } from "./logo-cascade";
@@ -40,6 +40,8 @@ function hasIdentity(card: SiteCard): boolean {
 const readSiteCardSchema = siteCardSchema.refine(hasIdentity);
 
 const ICON_PROBE_V = 3;
+
+const CARD_BUDGET_MS = 28_000;
 
 const logoSchema = z.object({ v: z.literal(ICON_PROBE_V), url: z.string().nullable() });
 
@@ -152,7 +154,7 @@ async function readProfileCard(
     return { card, reached: true };
   } catch (error) {
     const subjectSha256 = await sha256Hex(subject.registrable);
-    console.log(
+    console.warn(
       JSON.stringify({
         event: unreachedEvent("creator", error),
         probe,
@@ -179,7 +181,7 @@ export async function readSiteCard(
     };
   } catch (error) {
     const subjectSha256 = await sha256Hex(subject.registrable);
-    console.log(
+    console.warn(
       JSON.stringify({
         event: unreachedEvent("site", error),
         reason: probeFailureReason(error),
@@ -272,26 +274,50 @@ export async function backfillLogo(registrable: string): Promise<R2ObjectBody | 
   return readLogo(subject.registrable);
 }
 
+async function orElseAfter<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<T>((resolve) => {
+    timer = setTimeout(() => {
+      resolve(fallback);
+    }, ms);
+  });
+  try {
+    return await Promise.race([work, expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function startCard(
   workspaceId: string,
   subject: Subject,
   edited: readonly DraftField[],
-): { site: Promise<SiteFields>; logo: Promise<string | null> } {
-  const read = readSiteCard(subject, brandBudget(workspaceId, subject.registrable));
+): { site: Promise<SiteFields>; logo: Promise<string | null>; settled: Promise<void> } {
+  const deadline = Date.now() + CARD_BUDGET_MS;
+  const unbounded = readSiteCard(subject, brandBudget(workspaceId, subject.registrable));
+  const read = orElseAfter(unbounded, CARD_BUDGET_MS, { card: UNREACHED, reached: false });
   const site = read.then(async ({ card, reached }): Promise<SiteFields> => {
     const values = cardValues(subject, card);
     const review: CardReview = reached
-      ? await reviewFields({ workspaceId, subject, fields: values, edited, now: new Date().toISOString() })
+      ? await orElseAfter(
+          reviewFields({ workspaceId, subject, fields: values, edited, now: new Date().toISOString() }),
+          Math.max(deadline - Date.now(), 0),
+          unreviewedFields(values, edited),
+        )
       : fillReview(values);
     return { ...applyReview(values, review), unfound: subject.kind === "domain" && !reached };
   });
   const logo = read
     .then(({ card, reached }) => (reached ? logoDataUrl(subject, card) : null))
     .catch((error: unknown) => {
-      console.log(JSON.stringify({ event: "identity-logo-failed", workspaceId, error: String(error) }));
+      console.warn(JSON.stringify({ event: "identity-logo-failed", workspaceId, error: String(error) }));
       return null;
     });
-  return { site, logo };
+  const settled = unbounded.then(
+    () => undefined,
+    () => undefined,
+  );
+  return { site, logo, settled };
 }
 
 export async function readCachedSiteProof(subject: Subject): Promise<{ adLibraryHints: string[]; navLinks: string[] }> {

@@ -1,19 +1,10 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { type Locator, type Page } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { previousBriefAt } from "../app/lib/brief-schedule";
 import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
 import { decodedBodies, laneOrigin, readRawMessage, requireInboxToken, signInWithMagicLink } from "./inbox";
 
-// J11 from docs/REBUILD-DONE.md §A. Of the three lanes — local, merge-queue
-// Preview and production — J11 runs in production only. One project — the
-// phone project would send a second brief, and the check the contract asks
-// for is the HTML at 600 px.
-// The account is FIXTURE_ACCOUNTS.j11, kept between runs with a complimentary
-// plan row (migration 0048, #7225): a per-run address stops at
-// /onboarding/plan since #7061. A kept workspace gets a catch-up brief only
-// when its last one is 6 or more days old (rescheduleRollover), so J11 is
-// @scheduled and runs weekly from e2e-scheduled.yml. It ends by unsubscribing,
-// so it opens by re-subscribing.
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL || laneOrigin() !== "https://0509.io",
   "J11 proves the production mail path: the brief is sent by the send-email queue consumer on the production Worker. The local Worker cannot mail, and a merge-queue Preview cannot consume queues (https://developers.cloudflare.com/workers/previews/resources/#queue-consumers)",
@@ -140,7 +131,7 @@ async function onboard(page: Page): Promise<void> {
 
 async function resubscribe(page: Page): Promise<void> {
   await page.goto("/app/settings");
-  const resume = page.getByLabel("Send the brief to this address again");
+  const resume = page.getByLabel("Send the brief and alerts to this address again");
   if ((await resume.count()) === 0) return;
   await resume.check();
   await page.getByRole("button", { name: "Save" }).click();
@@ -235,11 +226,13 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   await page.setViewportSize({ width: 600, height: 900 });
   await page.setContent(html);
   const text = (await page.locator("body").textContent()) ?? "";
-  const variant = text.includes("Quiet week:") ? "quiet" : "blind-source";
+  const isQuiet = text.includes("Quiet week:");
+  const variant = isQuiet ? "quiet" : "blind-source";
+  const headline = isQuiet ? "Quiet week:" : "so we can't say this was a quiet week.";
   expect(
-    text.includes("Quiet week:") || text.includes("so we cannot say this was a quiet week"),
+    text,
     "nothing noteworthy still sends, either as a quiet week or naming a source that has not answered",
-  ).toBe(true);
+  ).toContain(headline);
   expect(text, "no D4 picks, so the read-this-first block is the one block a quiet week drops").not.toContain(
     "Read this first",
   );
@@ -298,8 +291,6 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   expect(Date.now() - followUpClose.getTime()).toBeLessThan(HOUR_MS);
   await saveSchedule(page, followUp);
 
-  // A poll that succeeds on the first read cannot prove the next send was
-  // skipped. Wait the window the first brief used, then read again.
   const suppressDeadline = Date.now() + SUPPRESS_WAIT_MS;
   await expect
     .poll(() => Date.now(), {

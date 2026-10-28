@@ -1,8 +1,10 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-import { entitledTier, isWorkspacePaid, resolveEntitlements, type Entitlements } from "../billing/entitlements";
+import { resolveEntitlements, type Entitlements } from "../billing/entitlements";
+import { entitledTier, isWorkspacePaid } from "../billing/subscription-state";
 import { isPlanId, type PlanId, type PlanSummary } from "../billing/plans";
+import { governingWorkspace, LENDING_TIER, liveWorkspace } from "./active-workspace";
 import { readWorkspaceIdForOwner } from "./workspace.server";
 
 const planRow = z.object({
@@ -16,11 +18,10 @@ const planRow = z.object({
 
 type PlanRow = z.infer<typeof planRow>;
 
-const SELECT_PLAN =
-  "SELECT tier, status, current_period_end, trialing, limits_json, provider_customer_id FROM plan WHERE workspace_id = ?";
+const SELECT_PLAN = `SELECT tier, status, current_period_end, trialing, limits_json, provider_customer_id FROM plan WHERE workspace_id = ${governingWorkspace("?1")}`;
 
-const SELECT_WORKSPACE_PLANS =
-  "SELECT workspace_id, tier, status, current_period_end, limits_json FROM plan WHERE workspace_id IN (SELECT value FROM json_each(?1))";
+const SELECT_WORKSPACE_PLANS = `SELECT j.value AS workspace_id, p.tier, p.status, p.current_period_end, p.limits_json
+FROM json_each(?1) j JOIN plan p ON p.workspace_id = ${governingWorkspace("j.value")}`;
 
 const SELECT_WORKSPACE_BY_SUBSCRIPTION = "SELECT workspace_id FROM plan WHERE provider_subscription_id = ?";
 
@@ -35,7 +36,7 @@ ON CONFLICT(workspace_id) DO UPDATE SET
   current_period_end = excluded.current_period_end,
   trialing = excluded.trialing,
   updated_at = excluded.updated_at
-WHERE ? = 1 OR excluded.updated_at >= plan.updated_at`;
+WHERE (? = 1 OR excluded.updated_at >= plan.updated_at) AND (? IS NULL OR plan.updated_at = ?)`;
 
 async function readPlan(workspaceId: string, db: D1Database = env.DB): Promise<{ tier: string; row: PlanRow | null }> {
   const row = planRow.nullable().parse(await db.prepare(SELECT_PLAN).bind(workspaceId).first());
@@ -179,6 +180,7 @@ export async function readPlanSubscription(workspaceId: string): Promise<PlanSub
 export interface SubscriptionPlan {
   workspaceId: string;
   replace?: boolean;
+  expectedUpdatedAt?: string;
   tier: PlanId;
   status: string;
   customerId: string;
@@ -194,8 +196,18 @@ const paidWorkspaceIdRow = z.object({
   current_period_end: z.string().nullable(),
 });
 
+const SELECT_PAID_CANDIDATES = `SELECT workspace_id, status, current_period_end FROM plan
+WHERE ${liveWorkspace("plan.workspace_id")}
+UNION ALL
+SELECT w.id, p.status, p.current_period_end
+FROM workspace w
+JOIN workspace gp ON gp.id = w.parent_workspace_id AND gp.owner_user_id = w.owner_user_id
+JOIN plan p ON p.workspace_id = gp.id AND p.tier = '${LENDING_TIER}'
+WHERE w.parent_workspace_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM plan own WHERE own.workspace_id = w.id)
+  AND ${liveWorkspace("w.id")}`;
+
 export async function readPaidWorkspaceIds(now: Date): Promise<ReadonlySet<string>> {
-  const rows = await env.DB.prepare("SELECT workspace_id, status, current_period_end FROM plan").all();
+  const rows = await env.DB.prepare(SELECT_PAID_CANDIDATES).all();
   return new Set(
     paidWorkspaceIdRow
       .array()
@@ -218,6 +230,28 @@ export async function upsertSubscriptionPlan(input: SubscriptionPlan): Promise<v
       input.updatedAt,
       input.workspaceId,
       input.replace === true ? 1 : 0,
+      input.expectedUpdatedAt ?? null,
+      input.expectedUpdatedAt ?? null,
     )
     .run();
+}
+
+const reconcilablePlanRow = z.object({ provider_subscription_id: z.string() });
+
+const SELECT_RECONCILABLE = `SELECT provider_subscription_id FROM plan
+WHERE provider_subscription_id IS NOT NULL
+  AND ${liveWorkspace("plan.workspace_id")}
+  AND (status IN ('pending', 'trialing', 'active', 'past_due', 'on_hold', 'failed')
+    OR (status IN ('cancelled', 'expired') AND updated_at >= ?2))
+ORDER BY random() LIMIT ?1`;
+
+export async function readReconcilablePlans(
+  limit: number,
+  endedSince: string,
+): Promise<readonly { subscriptionId: string }[]> {
+  const rows = await env.DB.prepare(SELECT_RECONCILABLE).bind(limit, endedSince).all();
+  return reconcilablePlanRow
+    .array()
+    .parse(rows.results)
+    .map((row) => ({ subscriptionId: row.provider_subscription_id }));
 }

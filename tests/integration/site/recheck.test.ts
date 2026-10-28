@@ -10,20 +10,6 @@ import { formatDate } from "../../../workers/delivery/brief-template";
 import { deliverIncident } from "../../../workers/delivery/consumer";
 import fixtureWorker from "../../../workers/fixture-site";
 
-/**
- * 0509#4047's acceptance, verbatim: a real round-trip on the fixture Worker.
- * Break fixture.0509.in soft (a 200 that lost its pricing section), let the
- * paved open path (real snapshot read, code-computed evidence, D3s verdict,
- * publishSiteChange) raise the incident, let the real own-site-check Workflow hold
- * it open while the evidence is still bad, repair the fixture, and watch the
- * Workflow set closed_at and enqueue the one fixed notice.
- *
- * Everything here is real: the fixture Worker module, its Durable Object, the
- * D1 rows, the Workflow engine and the delivery consumer. The only doubles are
- * the Jev seat (its env.AI gateway answers the scripted D3s verdict) and the
- * EMAIL binding, which records instead of hitting Email Service.
- */
-
 const USER = "user-recheck";
 const WS = "ws-recheck";
 const NOW = "2026-09-28T02:00:00Z";
@@ -36,11 +22,6 @@ const FIXTURE_URL = `${FIXTURE_ORIGIN}/`;
 
 type FixtureEnv = Parameters<typeof fixtureWorker.fetch>[1];
 
-/**
- * The runtime always hands `fetch` an ExecutionContext, which the fixture
- * Worker ignores. The module's own export type keeps `fetch` at the two
- * parameters it declares, so this alias carries the third argument.
- */
 const fixtureFetch = fixtureWorker.fetch as unknown as (
   request: Request,
   env: FixtureEnv,
@@ -63,8 +44,6 @@ const flip = (mode: "off" | "hard" | "soft") =>
     headers: { authorization: `Bearer ${fixtureEnv().FIXTURE_SITE_TOKEN ?? ""}` },
   });
 
-// Every outbound fetch to the fixture host runs the real fixture Worker module
-// against the real STATE Durable Object; anything else is a leak and fails loud.
 const dispatch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const request = input instanceof Request ? input : new Request(String(input), init);
   const url = new URL(request.url);
@@ -215,8 +194,7 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
     )
       .bind(TARGET_ID, WS, CHANNEL, TARGET, NOW)
       .run();
-    // The entered host shares the entity's registrable domain, so the paved
-    // planner itself points the watch at the fixture Worker (0509#5834 shape).
+
     await env.DB.prepare(
       `INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, origin, state, created_at)
        VALUES (?, ?, 'self', '0509.in', 'Five to Nine', ?, 'manual', 'on', ?)`,
@@ -244,26 +222,22 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
   });
 
   it("breaks soft, holds the incident across two ticks without resending, then closes it with exactly one fixed notice", async () => {
-    // The paved planner creates the home page row and watch for the fixture URL.
     const targets = await planSiteSweep(NOW);
     const self = targets.find((target) => target.entityId === SELF);
     if (self === undefined) throw new Error("expected the fixture self target");
     expect(self.url).toBe(FIXTURE_URL);
     expect(self.entityRole).toBe("self");
 
-    // Healthy baseline through the real transport and the real fixture Worker.
     const baseline = await checkPage({
       watchId: self.watchId,
       pageId: self.pageId,
       url: self.url,
     });
     if (baseline.outcome !== "first") throw new Error("expected the baseline capture");
-    // The before capture pair is what the incident's alert links as evidence.
+
     const baselinePngKey = baseline.textKey.replace(/\.txt$/, ".png");
     await env.SNAPSHOTS.put(baselinePngKey, "png-bytes");
 
-    // Soft break, set through the fixture's real token-gated route: a 200 page
-    // whose pricing section is gone.
     expect((await flip("soft")).status).toBe(200);
     const softRead = await fixtureFetch(new Request(FIXTURE_URL), fixtureEnv(), createExecutionContext());
     expect(softRead.status).toBe(200);
@@ -299,18 +273,15 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
 
     const recheckAt = nextHour(new Date(incident.opened_at)).toISOString();
 
-    // The baseline the close lane resolves is the one the paved opener stored
-    // as previousTextKey (the shape COALESCE now reads on either dialect).
     const baselines = await readOpenBreakageBaselines();
     expect(baselines[self.pageId]).toBe(changed.previousTextKey);
 
-    // Deliver the open notice for real through the consumer's recorder binding.
     const rec: Recorder = { sent: [] };
     const openDelivery = await deliverIncident(emailEnv(rec), { incident_id: incident.id });
     expect(openDelivery.outcome).toBe("sent");
     expect(openDelivery.idempotency_key).toBe(`incident:${incident.id}:open`);
     expect(rec.sent).toHaveLength(1);
-    expect(rec.sent[0].subject).toBe("fixture.0509.in looks broken: breakage");
+    expect(rec.sent[0].subject).toBe("fixture.0509.in looks broken");
     const promised = formatDate(recheckAt, "UTC", true);
     expect(rec.sent[0].text).toContain(`We re-check at ${promised} and email you once when it is fixed.`);
     expect(rec.sent[0].text).not.toContain("soon");
@@ -321,13 +292,10 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
     expect(openNotice.sent_at).toMatch(ISO_UTC);
     expect(await readAttempt(`incident:${incident.id}:open`)).toMatchObject({ status: "sent" });
 
-    // Two own-site ticks with the fixture still soft-broken: the open incident
-    // is re-checked first, the code-computed evidence still says broken, so it
-    // neither closes nor re-sends.
-    expect(await runCheck("recheck-tick-1")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await runCheck("recheck-tick-1")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0, missed: [] });
     expect((await readIncident())[0]?.closed_at).toBeNull();
     expect(send).toHaveBeenCalledTimes(1);
-    expect(await runCheck("recheck-tick-2")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await runCheck("recheck-tick-2")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0, missed: [] });
     expect((await readIncident())[0]?.closed_at).toBeNull();
     expect(send).toHaveBeenCalledTimes(1);
     const openRedelivery = await deliverIncident(emailEnv(rec), { incident_id: incident.id });
@@ -335,10 +303,8 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
     expect(rec.sent).toHaveLength(1);
     expect(await readNotices(self.pageId)).toHaveLength(1);
 
-    // Repair through the real fixture route, then the hourly tick re-checks,
-    // finds the evidence clear and closes the incident itself.
     expect((await flip("off")).status).toBe(200);
-    expect(await runCheck("recheck-fixed")).toEqual({ pages: 1, opened: 0, closed: 1, failed: 0 });
+    expect(await runCheck("recheck-fixed")).toEqual({ pages: 1, opened: 0, closed: 1, failed: 0, missed: [] });
     const [closed] = await readIncident();
     if (closed?.closed_at == null) throw new Error("expected closed_at to be set");
     expect(closed.closed_at).toMatch(ISO_UTC);
@@ -349,11 +315,10 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
     expect(fixedDelivery.outcome).toBe("sent");
     expect(fixedDelivery.idempotency_key).toBe(`incident:${incident.id}:fixed`);
     expect(rec.sent).toHaveLength(2);
-    expect(rec.sent[1].subject).toBe("fixture.0509.in looks fixed: breakage");
+    expect(rec.sent[1].subject).toBe("fixture.0509.in looks fixed");
     expect(rec.sent[1].text).toContain("We re-checked fixture.0509.in at");
     expect(rec.sent[1].text).toContain("looks fixed");
 
-    // Exactly one resolution notice; a replayed queue message is a duplicate.
     const fixedRedelivery = await deliverIncident(emailEnv(rec), { incident_id: incident.id });
     expect(fixedRedelivery.outcome).toBe("duplicate");
     expect(rec.sent).toHaveLength(2);
@@ -363,7 +328,6 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
     expect(notices.map((row) => row.is_resolution)).toEqual([0, 1]);
     expect(await readAttempt(`incident:${incident.id}:fixed`)).toMatchObject({ status: "sent" });
 
-    // The acceptance citations, printed for the PR body.
     console.log(
       JSON.stringify({
         incident_id: incident.id,

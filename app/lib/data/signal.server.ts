@@ -5,7 +5,7 @@ import type { ScoredSignal } from "../biggest-move";
 import { isFeedKind, type DevelopmentItem } from "../developments";
 import { toIsoInstant } from "../iso-instant";
 import type { WeekEvidence } from "../home-standing";
-import { ACT_AT, REJECT_AT, changeActsSql } from "../jev/thresholds";
+import { ABOUT_BRAND_KEEP_AT, ACT_AT, changeActsSql } from "../jev/thresholds";
 import { CHANGE_HAS_STORED_EVIDENCE, changeJudgedSql } from "../site-change";
 import {
   D3_QUESTION_ID,
@@ -16,6 +16,8 @@ import {
 } from "../standing-score";
 import { effectiveKindSql } from "../source-kind";
 import type { HiringSignalState, HiringSignalUpdate } from "../hiring/role-lifecycle";
+
+import { liveWorkspace } from "./active-workspace";
 
 export interface ChangeSignalRow {
   id: string;
@@ -268,7 +270,7 @@ export function insertMention(signal: MentionSignal): D1PreparedStatement {
     signal.dedupKey,
     toIsoInstant(signal.publishedAt),
     signal.observedAt,
-    signal.isNotAboutBrand ? 1 : 0,
+    signal.isNotAboutBrand || signal.state === "unjudged" ? 1 : 0,
     signal.state,
     signal.titleHash,
     signal.normUrlHash,
@@ -333,6 +335,11 @@ const SELECT_UNJUDGED_MENTIONS = `SELECT id, title, canonical_url, published_at,
 WHERE watch_id = ?1 AND kind = 'mention' AND state = 'unjudged'
 ORDER BY observed_at, id LIMIT ?2`;
 
+const SELECT_UNJUDGED_MENTIONS_IN_WINDOW = `SELECT id, watch_id, title, canonical_url, published_at, payload_json FROM signal
+WHERE workspace_id = ?1 AND kind = 'mention' AND state = 'unjudged' AND watch_id IS NOT NULL
+  AND observed_at >= ?2 AND observed_at < ?3
+ORDER BY observed_at, id LIMIT ?4`;
+
 const RESOLVE_UNJUDGED_MENTION = `UPDATE signal SET state = 'judged', is_tombstoned = ?2
 WHERE id = ?1 AND kind = 'mention' AND state = 'unjudged'`;
 
@@ -367,17 +374,50 @@ export async function readUnjudgedMentions(watchId: string, limit: number): Prom
   }));
 }
 
+const windowMentionRows = z.array(
+  z.object({
+    id: z.string(),
+    watch_id: z.string(),
+    title: z.string(),
+    canonical_url: z.string(),
+    published_at: z.string().nullable(),
+    payload_json: z.string(),
+  }),
+);
+
+export async function readUnjudgedMentionsInWindow(input: {
+  workspaceId: string;
+  windowStartAt: string;
+  windowEndAt: string;
+  limit: number;
+}): Promise<(UnjudgedMention & { watchId: string })[]> {
+  const rows = await env.DB.prepare(SELECT_UNJUDGED_MENTIONS_IN_WINDOW)
+    .bind(input.workspaceId, input.windowStartAt, input.windowEndAt, input.limit)
+    .all();
+  return windowMentionRows.parse(rows.results).map((row) => ({
+    id: row.id,
+    watchId: row.watch_id,
+    title: row.title,
+    url: row.canonical_url,
+    publishedAt: row.published_at,
+    publisher: mentionPayload.parse(JSON.parse(row.payload_json)).publisher ?? null,
+  }));
+}
+
 export function resolveUnjudgedMention(id: string, tombstoned: boolean): D1PreparedStatement {
   return env.DB.prepare(RESOLVE_UNJUDGED_MENTION).bind(id, tombstoned ? 1 : 0);
 }
 
 const SELECT_UNJUDGED_CHANGES = `SELECT s.id AS id, s.workspace_id AS workspace_id, s.entity_id AS entity_id,
-  s.url AS url, s.aspect AS aspect, s.payload_json AS payload_json,
+  s.url AS url, s.aspect AS aspect, s.payload_json AS payload_json, s.observed_at AS observed_at,
+  (SELECT p.id FROM watch w JOIN page p ON p.entity_id = w.entity_id AND p.url = w.target_key
+   WHERE w.id = s.watch_id) AS page_id,
   e.role AS entity_role, e.name AS entity_name, e.domain AS entity_domain
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.state = 'on'
 WHERE s.kind = 'change' AND s.is_tombstoned = 0
   AND (?1 IS NULL OR s.workspace_id = ?1)
+  AND ${liveWorkspace("s.workspace_id")}
   AND s.observed_at >= ?2 AND s.observed_at < ?3
   AND (e.role <> 'self' OR ${CHANGE_HAS_STORED_EVIDENCE})
   AND NOT ${changeJudgedSql({ noteworthy: "?5", breakage: "?6" })}
@@ -392,11 +432,19 @@ const unjudgedChangeRows = z.array(
     url: z.string().nullable(),
     aspect: z.string().nullable(),
     payload_json: z.string(),
+    observed_at: z.string(),
+    page_id: z.string().nullable(),
     entity_role: z.enum(["self", "competitor"]),
     entity_name: z.string().nullable(),
     entity_domain: z.string(),
   }),
 );
+
+const MARK_SIGNAL_BREAKAGE = "UPDATE signal SET aspect = 'breakage' WHERE id = ?1";
+
+export function markSignalBreakageStatement(signalId: string): D1PreparedStatement {
+  return env.DB.prepare(MARK_SIGNAL_BREAKAGE).bind(signalId);
+}
 
 export interface UnjudgedChange {
   id: string;
@@ -405,6 +453,8 @@ export interface UnjudgedChange {
   url: string | null;
   aspect: string | null;
   payloadJson: string;
+  observedAt: string;
+  pageId: string | null;
   entityRole: "self" | "competitor";
   entityName: string | null;
   entityDomain: string;
@@ -426,6 +476,8 @@ export async function readUnjudgedChanges(input: {
     url: row.url,
     aspect: row.aspect,
     payloadJson: row.payload_json,
+    observedAt: row.observed_at,
+    pageId: row.page_id,
     entityRole: row.entity_role,
     entityName: row.entity_name,
     entityDomain: row.entity_domain,
@@ -465,6 +517,45 @@ export async function readRecentSignals(entityId: string, since: string): Promis
       url: row.url,
       aspect: row.aspect,
       observedAt: row.observed_at,
+    }));
+}
+
+const SELECT_RECENT_CHANGE_DIFFS = `SELECT aspect, observed_at, json_extract(CASE WHEN json_valid(payload_json) THEN payload_json ELSE '{}' END, '$.diffKey') AS diff_key,
+  (SELECT ud.verdict FROM user_decision ud
+   WHERE ud.signal_id = signal.id AND ud.workspace_id = signal.workspace_id AND ud.verdict IN ('change_feedback:useful', 'change_feedback:not_useful')
+   ORDER BY ud.decided_at DESC LIMIT 1) AS feedback
+FROM signal
+WHERE entity_id = ? AND kind = 'change' AND observed_at >= ? AND is_tombstoned = 0 AND duplicate_of IS NULL
+ORDER BY observed_at DESC LIMIT ?`;
+
+const recentChangeDiffRow = z.object({
+  aspect: z.string().nullable(),
+  observed_at: z.string(),
+  diff_key: z.string().nullable(),
+  feedback: z.enum(["change_feedback:useful", "change_feedback:not_useful"]).nullable(),
+});
+
+export interface RecentChangeDiff {
+  aspect: string | null;
+  observedAt: string;
+  diffKey: string | null;
+  customerSaid: "useful" | "not_useful" | null;
+}
+
+export async function readRecentChangeDiffs(
+  entityId: string,
+  since: string,
+  limit: number,
+): Promise<RecentChangeDiff[]> {
+  const { results } = await env.DB.prepare(SELECT_RECENT_CHANGE_DIFFS).bind(entityId, since, limit).all();
+  return z
+    .array(recentChangeDiffRow)
+    .parse(results)
+    .map((row) => ({
+      aspect: row.aspect,
+      observedAt: row.observed_at,
+      diffKey: row.diff_key,
+      customerSaid: row.feedback === null ? null : row.feedback === "change_feedback:useful" ? "useful" : "not_useful",
     }));
 }
 
@@ -520,6 +611,7 @@ const siteChangeRow = z.object({
   verdict_p: z.number().nullable(),
   verdict_reason: z.string().nullable(),
   verdict_decided_at: z.string().nullable(),
+  feedback: z.enum(["change_feedback:useful", "change_feedback:not_useful"]).nullable(),
 });
 
 export type SiteChangeRow = z.infer<typeof siteChangeRow>;
@@ -527,7 +619,10 @@ export type SiteChangeRow = z.infer<typeof siteChangeRow>;
 const SELECT_SITE_CHANGES = `SELECT s.id, s.entity_id, e.name AS entity_name, e.domain AS entity_domain,
   e.role AS entity_role, s.url, s.payload_json, s.observed_at,
   b.fetched_at AS before_at, a.fetched_at AS after_at,
-  v.id AS verdict_id, v.p AS verdict_p, v.reason AS verdict_reason, v.decided_at AS verdict_decided_at
+  v.id AS verdict_id, v.p AS verdict_p, v.reason AS verdict_reason, v.decided_at AS verdict_decided_at,
+  (SELECT ud.verdict FROM user_decision ud
+   WHERE ud.signal_id = s.id AND ud.workspace_id = s.workspace_id AND ud.verdict IN ('change_feedback:useful', 'change_feedback:not_useful')
+   ORDER BY ud.decided_at DESC LIMIT 1) AS feedback
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id
 LEFT JOIN snapshot a ON a.id = s.snapshot_id
@@ -637,7 +732,7 @@ const SELECT_SCORED_SIGNALS = `SELECT * FROM (SELECT s.id, s.kind, s.title, s.su
   src.platform, src.reliability,
   CASE
     WHEN s.kind = 'mention' AND v.p >= ${String(ACT_AT)} THEN 'mention_matters'
-    WHEN s.kind = 'mention' AND v.p > ${String(REJECT_AT)} THEN 'mention_normal'
+    WHEN s.kind = 'mention' AND v.p >= ${String(ABOUT_BRAND_KEEP_AT)} THEN 'mention_normal'
     WHEN s.kind = 'change' AND ${changeActsSql("s", "v")} THEN 'site_change_noteworthy'
     WHEN s.kind = 'ad' AND s.aspect IS NOT NULL THEN 'ad_copy_change'
     WHEN s.kind = 'ad' AND s.published_at >= ?3 AND s.published_at < ?4 THEN 'ad_new_creative'
@@ -737,4 +832,32 @@ export type ContentPost = z.infer<typeof workspaceHiringRows>[number];
 export async function readWorkspaceContent(workspaceId: string, since: string, limit: number): Promise<ContentPost[]> {
   const { results } = await env.DB.prepare(SELECT_WORKSPACE_CONTENT).bind(workspaceId, since, limit).all();
   return workspaceHiringRows.parse(results);
+}
+
+const SELECT_CHANGES_WITHOUT_EXCERPT = `SELECT id, json_extract(payload_json, '$.diffKey') AS diff_key
+FROM signal
+WHERE kind = 'change' AND json_valid(payload_json) AND ${liveWorkspace("signal.workspace_id")}
+  AND json_extract(payload_json, '$.excerpt') IS NULL
+  AND json_extract(payload_json, '$.diffKey') IS NOT NULL
+ORDER BY observed_at DESC, id DESC
+LIMIT ?1`;
+
+const SAVE_CHANGE_EXCERPT = `UPDATE signal SET payload_json = json_set(payload_json, '$.excerpt', json(?2))
+WHERE id = ?1 AND json_valid(payload_json)`;
+
+const changeWithoutExcerptRow = z.object({ id: z.string(), diff_key: z.string() });
+
+export async function readChangesWithoutExcerpt(limit: number): Promise<{ id: string; diffKey: string }[]> {
+  const { results } = await env.DB.prepare(SELECT_CHANGES_WITHOUT_EXCERPT).bind(limit).all();
+  return z
+    .array(changeWithoutExcerptRow)
+    .parse(results)
+    .map((row) => ({ id: row.id, diffKey: row.diff_key }));
+}
+
+export async function saveChangeExcerpts(
+  rows: readonly { id: string; excerpt: readonly { lines: readonly string[] }[] }[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  await env.DB.batch(rows.map((row) => env.DB.prepare(SAVE_CHANGE_EXCERPT).bind(row.id, JSON.stringify(row.excerpt))));
 }

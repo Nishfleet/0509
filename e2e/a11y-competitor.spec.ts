@@ -1,14 +1,9 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { onboardedStatePath } from "../playwright.config";
+import { signInOnLocalLane } from "./quality";
 
-// One competitor's own page measured at each shape the product ships, the same
-// production lane and the same reason as e2e/a11y-alerts.spec.ts: the preview
-// Worker cannot mint a session, so this spec skips there. The shared onboarded
-// session already tracks competitors (e2e/competitor-page.spec.ts opens its
-// nike.com row), so the spec follows the first row of the Competitors list. It
-// reads only: it toggles no switch and adds no competitor.
 test.use({
   storageState: async ({}, use, testInfo) => {
     await use(
@@ -18,10 +13,9 @@ test.use({
     );
   },
 });
-test.skip(
-  !process.env.PLAYWRIGHT_TEST_BASE_URL,
-  "a competitor page needs a real session; the local preview Worker cannot mint one",
-);
+test.beforeEach(async ({ page, baseURL }) => {
+  await signInOnLocalLane(page, baseURL, "a11y-competitor");
+});
 
 test("a competitor page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and 390 in light and dark (#4152)", async ({
   page,
@@ -72,10 +66,6 @@ test("a competitor page passes axe at WCAG 2.2 AA and is keyboard-operable at 14
       });
       expect(ring).toBe(true);
       await expect(toggle).toHaveAttribute("aria-checked", /^(true|false)$/);
-
-      await page.screenshot({
-        path: testInfo.outputPath(`competitor-focus-${String(viewport.width)}-${colorScheme}.png`),
-      });
 
       expect(results.violations).toEqual([]);
     }

@@ -66,7 +66,12 @@ export interface PlanSummary {
 
 export const TRIAL_DAYS = 7;
 
-export const TRIAL_TERMS = `Every plan starts with a ${String(TRIAL_DAYS)}-day trial. Your card is taken up front and charged on day ${String(TRIAL_DAYS + 1)} unless you cancel.`;
+export const NO_TRIAL_TERMS =
+  "You've already had your free trial, so you're billed today. Cancel any time from Settings.";
+
+export const TRIAL_TERMS = `Your first plan starts with a ${String(TRIAL_DAYS)}-day trial. Your card is taken up front and charged on day ${String(TRIAL_DAYS + 1)} unless you cancel.`;
+
+export const TRIAL_SUMMARY = `${String(TRIAL_DAYS)}-day trial, card charged on day ${String(TRIAL_DAYS + 1)} unless you cancel.`;
 
 export function isPlanId(value: unknown): value is PlanId {
   return PLANS.some((plan) => plan.id === value);
@@ -77,6 +82,12 @@ export function nextPlan(tier: string): (typeof PLANS)[number] | null {
   return index < 0 ? null : (PLANS[index + 1] ?? null);
 }
 
+export function canSwitchPlan(plan: PlanSummary, target: PlanId): boolean {
+  const from = PLANS.findIndex((entry) => entry.id === plan.tier);
+  const to = PLANS.findIndex((entry) => entry.id === target);
+  return plan.billed && plan.status === "active" && !plan.trialing && to > from && from >= 0;
+}
+
 export function monthlyPrice(eur: number): string {
-  return `€${String(eur)}/mo`;
+  return `€${String(eur)}/month`;
 }

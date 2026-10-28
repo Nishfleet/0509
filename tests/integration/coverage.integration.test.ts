@@ -6,12 +6,6 @@ import { readRegistrySources } from "../../app/lib/data/source.server";
 import { llmsTxt } from "../../app/lib/public-routes";
 import { watchedClaims } from "../../app/lib/watched-claims";
 
-// "Live" in app/lib/coverage.ts is what the homepage, FAQ, /llms.txt and the
-// JSON-LD claim to customers and to search and AI answer engines. It has to
-// match what the migrations actually switch on, both ways: a live claim with a
-// source key needs that source enabled, and an enabled source needs a live
-// claim, so the PR that switches a source on also puts it on the homepage.
-
 describe("coverage matches the enabled sources", () => {
   it("claims a source as live exactly when its row is enabled", async () => {
     const rows = await env.DB.prepare("SELECT key FROM source WHERE is_enabled = 1").all<{ key: string }>();
@@ -48,7 +42,7 @@ describe("coverage matches the enabled sources", () => {
     try {
       const body = llmsTxt("https://0509.io", await readRegistrySources(), Date.parse("2026-09-28T12:00:00.000Z"));
       expect(body).toContain("- Mentions: News (not answering today: slow to answer)");
-      expect(body).toContain("Some sources are not answering today; those lines say so.");
+      expect(body).toContain("Some sources aren't answering today; those lines say so.");
     } finally {
       await env.DB.prepare("UPDATE source SET degraded_reason = NULL WHERE key = ?").bind(news.sourceKey).run();
     }

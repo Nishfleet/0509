@@ -3,7 +3,8 @@ import { Fragment, type ReactElement } from "react";
 import { Mark } from "./mark";
 import type { BriefPayload } from "../lib/brief-payload";
 import { httpUrl } from "../lib/http-url";
-import { UNJUDGED_WEEK_LINE } from "../lib/read-this-first";
+import { nextStepLine } from "../lib/next-step";
+import { NOTHING_FIRST_LINE, UNJUDGED_WEEK_LINE } from "../lib/read-this-first";
 
 const SECTION = "mt-5 border-t border-line pt-4";
 const HEAD = "font-mono text-eyebrow text-ink-soft uppercase";
@@ -13,6 +14,7 @@ const MAX_MARKS = 3;
 
 function markBlock(mark: BriefPayload["read_this_first"][number]): ReactElement {
   const href = httpUrl(mark.url);
+  const next = nextStepLine(mark.kind);
   const title =
     mark.before === null || mark.after === null ? (
       href === null ? (
@@ -33,6 +35,7 @@ function markBlock(mark: BriefPayload["read_this_first"][number]): ReactElement 
       <p className="mt-2 text-[0.88rem] leading-[1.6] text-ink-soft">
         {mark.entity_name}: {mark.jev_reason}
       </p>
+      {next === null ? null : <p className="mt-1 text-[0.88rem] leading-[1.6] text-ink-soft">{next}</p>}
     </Fragment>
   );
 }
@@ -53,7 +56,7 @@ export function ReadThisFirst({
       {unjudged ? (
         <p className={BODY}>{UNJUDGED_WEEK_LINE}</p>
       ) : marks.length === 0 ? (
-        <p className={BODY}>Nothing this week needed reading first.</p>
+        <p className={BODY}>{NOTHING_FIRST_LINE}</p>
       ) : (
         marks.slice(0, MAX_MARKS).map(markBlock)
       )}

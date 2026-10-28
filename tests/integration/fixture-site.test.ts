@@ -1,41 +1,17 @@
 import { createExecutionContext, env as workerdEnv, waitOnExecutionContext } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { computeBreakageEvidence } from "../../app/lib/site/breakage-evidence";
+import { extractPageText } from "../../app/lib/site/extract-text";
 import worker from "../../workers/fixture-site";
+import { FIXTURE_HEALTHY_TEXT, FIXTURE_SOFT_TEXT } from "../fixtures/fixture-page-texts";
 
-/**
- * The J8 fixture's whole reason to exist, pinned in a merge gate: the healthy
- * page carries a pricing section with real price tokens, the hard break is a
- * 500, the soft break is a 200 with that section gone, and the flip back to
- * healthy is a real repair (0509#4046; docs/engines/delivery.md P7.5). The soft
- * case is the one D3s actually exercises, so its assertion is on the pricing
- * markup, not on a status code — a 200 that lost its prices is the regression.
- *
- * Real workerd against a real local SQLite Durable Object, the same binding kinds
- * production has: a broken gate or a break state that does not survive the
- * round-trip fails here rather than in a live incident run.
- *
- * The flip route mirrors the e2e inbox's token gate (0509#3927), including the
- * 503 when the secret is missing: a fixture that reads healthy because its
- * token was never set is worse than no fixture.
- */
 const TOKEN = "integration-token";
 
-/**
- * The fixture-site project's bindings, from
- * tests/integration/wrangler.fixture-site.test.jsonc. `env` from cloudflare:test
- * is typed as the app Worker's Env, which has no STATE namespace, so it is
- * narrowed here once for the whole file.
- */
 type FixtureEnv = Parameters<typeof worker.fetch>[1];
 
 const env = workerdEnv as unknown as FixtureEnv;
 
-/**
- * The runtime always hands `fetch` an ExecutionContext. The module's own export
- * type keeps `fetch` at the two parameters it declares, so this alias carries
- * the third argument the runtime passes and the handler ignores.
- */
 const callFetch = worker.fetch as (request: Request, env: FixtureEnv, ctx: ExecutionContext) => Promise<Response>;
 
 const state = () => env.STATE.getByName("fixture.0509.in");
@@ -78,13 +54,11 @@ const readPricing = (html: string) => {
 };
 
 describe("0509-fixture-site", () => {
-  // One Durable Object instance backs every test, so a flip in one test would leak into the next
-  // and make the suite order-dependent. Reset to healthy before each: the
-  // healthy-page test only passes reliably because it runs first otherwise, and
-  // --sequence.shuffle turns that into a red gate.
   beforeEach(async () => {
     await state().put("break-mode", "off");
     await state().put("bot-wall", "off");
+    await state().put("price-variant", "base");
+    await state().delete("price-flipped-at");
   });
 
   it("serves the healthy page with its pricing section and price tokens", async () => {
@@ -94,11 +68,11 @@ describe("0509-fixture-site", () => {
     expect(html).toContain("<h1>");
     const pricing = readPricing(html);
     expect(pricing).not.toBeNull();
-    // Real price tokens, not a placeholder: the D3 verdict that consumes this
-    // fixture keys off priced content being present or absent.
+
     expect(pricing).toContain("₹499");
     expect(pricing).toContain("₹2,499");
     expect(html).toMatch(/href="https:\/\/0509\.io\/checkout\?plan=pro"/);
+    expect((await extractPageText(html)).text).toBe(FIXTURE_HEALTHY_TEXT);
   });
 
   it("flips to a hard break and answers 500", async () => {
@@ -124,7 +98,7 @@ describe("0509-fixture-site", () => {
     expect(await state().get("break-mode")).toBe("hard");
   });
 
-  it("flips to a soft break and answers 200 with the pricing section absent", async () => {
+  it("flips to a soft break: a 200 whose visible content is all gone, the shape D3s must call broken", async () => {
     const ctx = createExecutionContext();
     await callFetch(
       new Request("https://fixture.0509.in/__break?mode=soft", {
@@ -136,13 +110,19 @@ describe("0509-fixture-site", () => {
     );
     await waitOnExecutionContext(ctx);
     const res = await get();
-    // The status is the trap, not the proof: the soft case is a 200.
+
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(readPricing(html)).toBeNull();
-    // The headline survives, which is what makes this a content regression the
-    // diff sees rather than a dead page.
-    expect(html).toContain("<h1>");
+
+    expect(html).not.toContain("<h1>");
+    expect(html).toContain('data-mode="soft"');
+    const broken = await extractPageText(html);
+    expect(broken.text).toBe(FIXTURE_SOFT_TEXT);
+
+    expect(
+      computeBreakageEvidence({ status: 200, beforeText: FIXTURE_HEALTHY_TEXT, afterText: broken.text }),
+    ).toMatchObject({ httpError: false, textHalved: true, pricesVanished: true });
   });
 
   it("repairs back to the healthy page with the pricing section restored", async () => {
@@ -174,9 +154,6 @@ describe("0509-fixture-site", () => {
   });
 
   it("403s on a wrong token of the same length, so the constant-time compare is really exercised", async () => {
-    // Same byte length as `Bearer integration-token` (23): the gate short-circuits
-    // on byteLength before timingSafeEqual, so a shorter wrong token never reaches
-    // the compare and a stubbed timingSafeEqual would still pass.
     expect((await flip("hard", "integration-tokeX")).status).toBe(403);
   });
 
@@ -295,10 +272,6 @@ describe("price variant", () => {
 });
 
 describe("bot wall", () => {
-  // Its own key, never BREAK_KEY: J5 turns the wall on to make the site refuse
-  // both our fetch and the browser, and it must not leave J8's break mode dirty
-  // (0509#5339). The wall survives the reset by default so every later test
-  // starts unwalled.
   beforeEach(async () => {
     await state().put("break-mode", "off");
     await state().put("bot-wall", "off");
@@ -335,8 +308,7 @@ describe("bot wall", () => {
     await setWall("on");
     await setWall("off");
     const html = await (await get()).text();
-    // Still soft after the wall round-trip: the wall is stored under its own
-    // key, so a J5 run never repairs or breaks J8's state.
+
     expect(readPricing(html)).toBeNull();
     expect(await state().get("break-mode")).toBe("soft");
     expect(await state().get("bot-wall")).toBe("off");

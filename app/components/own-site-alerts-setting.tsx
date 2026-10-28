@@ -59,9 +59,21 @@ export function ChangeAlertsSetting({ on }: { on: boolean }): ReactElement {
     <AlertSwitch
       on={on}
       intent="change-alerts"
-      label="Immediate alerts when a rival changes price or plan"
-      note="Off stops the email. The change still shows in Alerts and in your Monday brief."
+      label="Immediate alerts when a competitor changes price or plan"
+      note="Off stops the email and the Slack post. The change still shows in Alerts and in your Monday brief."
       testId="change-alerts-setting"
+    />
+  );
+}
+
+export function SlackBriefSetting({ on }: { on: boolean }): ReactElement {
+  return (
+    <AlertSwitch
+      on={on}
+      intent="slack-brief"
+      label="Weekly brief in Slack"
+      note="Off by default. On posts your weekly brief to the Slack channel too: your rank, why, the top three items and a link."
+      testId="slack-brief-setting"
     />
   );
 }

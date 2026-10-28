@@ -233,11 +233,129 @@ describe("nightly site sweep", () => {
     const stored = await env.SNAPSHOTS.get(diffKey);
     const diff: unknown = JSON.parse((await stored?.text()) ?? "null");
     expect(diff).toMatchObject({ hunks: [expect.objectContaining({ lines: expect.any(Array) })] });
+    expect(payload).toMatchObject({ excerpt: [expect.objectContaining({ lines: expect.any(Array) })] });
 
     const polled = await env.DB.prepare("SELECT last_polled_at FROM watch WHERE id = ?")
       .bind(rival.watchId)
       .first<{ last_polled_at: string | null }>();
     expect(polled?.last_polled_at).not.toBeNull();
+  });
+
+  it("reads a rival once for every workspace that watches it when they share one sweep tick", async () => {
+    await env.DB.prepare(
+      `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
+       VALUES ('ws-second', 'Second', ?, 'UTC', 1, 8, ?)`,
+    )
+      .bind(USER, NOW)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO plan (id, workspace_id, tier, status, updated_at) VALUES ('plan-second', 'ws-second', 'starter', 'active', ?)`,
+    )
+      .bind(NOW)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
+       VALUES ('ent-rival-second', 'ws-second', 'competitor', 'rival.com', '{}', 'manual', 'on', ?)`,
+    )
+      .bind(NOW)
+      .run();
+
+    const rivals = (await planSiteSweep(NOW)).filter((t) => t.url === "https://rival.com/");
+    expect(rivals).toHaveLength(2);
+    const tick = await nextTick("shared-night");
+    const reads = [];
+    for (const rival of rivals) reads.push(await checkSitePage(rival, tick));
+
+    expect(reads.map((read) => read.outcome)).toEqual(["first", "first"]);
+    expect(calls.filter((call) => call === "GET https://rival.com/")).toHaveLength(1);
+  });
+
+  it("stores the before and after in readable text, not as the page's character codes", async () => {
+    const [rival] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
+    if (rival === undefined) throw new Error("expected the rival's homepage");
+    const page = (price: string) =>
+      `<!doctype html><html><body><p>Men&#x27;s &amp; women&#x27;s plans start at ${price} a month.</p><p>${PAD}</p></body></html>`;
+    readHolder.html = page("ten dollars");
+    await checkSitePage(rival, await nextTick("codes-1"));
+    readHolder.html = page("twelve dollars");
+    const changed = await checkSitePage(rival, await nextTick("codes-2"));
+    if (changed.outcome !== "changed") throw new Error("expected a change");
+    await publishSiteChange(rival, changed);
+
+    const stored = await env.SNAPSHOTS.get(`snapshot/site/${rival.watchId}/${changed.snapshotId}.diff.json`);
+    const diff = JSON.stringify(JSON.parse((await stored?.text()) ?? "null"));
+    expect(diff).toContain("Men's & women's plans start at twelve dollars a month.");
+    expect(diff).not.toMatch(/&#x27;|&amp;/);
+  });
+
+  it("keeps the page's lines, so one changed word stays one small passage", async () => {
+    const [rival] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
+    if (rival === undefined) throw new Error("expected the rival's homepage");
+    const page = (price: string) =>
+      `<!doctype html><html><body><p>First paragraph about the team.</p><p>Plans start at ${price} a month.</p><p>${PAD}</p><p>Last paragraph about support.</p></body></html>`;
+    readHolder.html = page("ten dollars");
+    await checkSitePage(rival, await nextTick("lines-1"));
+    readHolder.html = page("twelve dollars");
+    const changed = await checkSitePage(rival, await nextTick("lines-2"));
+    if (changed.outcome !== "changed") throw new Error("expected a change");
+    await publishSiteChange(rival, changed);
+
+    const stored = await env.SNAPSHOTS.get(`snapshot/site/${rival.watchId}/${changed.snapshotId}.diff.json`);
+    const diff = JSON.stringify(JSON.parse((await stored?.text()) ?? "null"));
+    expect(diff).toContain("twelve dollars");
+    expect(diff).not.toContain("Last paragraph about support.");
+  });
+
+  it("files nothing when only the way a character is written changed", async () => {
+    const [rival] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
+    if (rival === undefined) throw new Error("expected the rival's homepage");
+    const page = (apostrophe: string) =>
+      `<!doctype html><html><body><p>Men${apostrophe}s plans start at ten dollars a month.</p><p>${PAD}</p></body></html>`;
+    readHolder.html = page("&#x27;");
+    await checkSitePage(rival, await nextTick("same-1"));
+    readHolder.html = page("'");
+    const changed = await checkSitePage(rival, await nextTick("same-2"));
+    expect(changed.outcome).toBe("changed");
+    if (changed.outcome !== "changed") throw new Error("expected a change");
+    await publishSiteChange(rival, changed);
+
+    expect(await signals()).toEqual([]);
+  });
+
+  it("files nothing when a rival's page goes back to wording it showed within two weeks", async () => {
+    const [rival] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
+    if (rival === undefined) throw new Error("expected the rival's homepage");
+    const page = (word: string) =>
+      `<!doctype html><html><body><p>Plans start at ten dollars a month. ${word}</p><p>${PAD}</p></body></html>`;
+    const publish = async (html: string, tick: string) => {
+      readHolder.html = html;
+      const result = await checkSitePage(rival, await nextTick(tick));
+      if (result.outcome === "changed") await publishSiteChange(rival, result);
+    };
+    await publish(page("Sort by relevance."), "flap-1");
+    await publish(page("Sort by featured."), "flap-2");
+    expect(await signals()).toHaveLength(1);
+    await publish(page("Sort by relevance."), "flap-3");
+    expect(await signals()).toHaveLength(1);
+    await publish(page("Sort by newest."), "flap-4");
+    expect(await signals()).toHaveLength(2);
+  });
+
+  it("files nothing when a rival's page switches language and files the next real change in that language", async () => {
+    const [rival] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
+    if (rival === undefined) throw new Error("expected the rival's homepage");
+    const page = (lang: string, word: string) =>
+      `<!doctype html><html lang="${lang}"><body><p>${word} plans start soon.</p><p>${PAD}</p></body></html>`;
+    const publish = async (html: string, tick: string) => {
+      readHolder.html = html;
+      const result = await checkSitePage(rival, await nextTick(tick));
+      if (result.outcome === "changed") await publishSiteChange(rival, result);
+    };
+    await publish(page("en-US", "Monthly"), "lang-1");
+    await publish(page("de-DE", "Monatliche"), "lang-2");
+    expect(await signals()).toHaveLength(0);
+    await publish(page("de-DE", "Jaehrliche"), "lang-3");
+    expect(await signals()).toHaveLength(1);
   });
 
   it("judges the filed change signal, and a retried publish judges the same signal", async () => {
@@ -417,10 +535,30 @@ describe("nightly site sweep", () => {
       throw new Error("expected the self and rival homepages");
     }
 
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     expect((await checkSitePage(self, await nextTick("robots-self"))).outcome).toBe("failed");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"event":"site.check_failed"'));
+    warn.mockRestore();
     expect(fetched).not.toContain("https://mybrand.com/");
     expect((await checkSitePage(rival, await nextTick("robots-rival"))).outcome).toBe("first");
     expect(fetched).not.toContain("https://rival.com/robots.txt");
+  });
+
+  it("logs a failed check without the brand's address, as a URL or a bare host", async () => {
+    vi.stubGlobal("fetch", () =>
+      Promise.reject(new Error("getaddrinfo ENOTFOUND www.rival.com via https://www.rival.com/")),
+    );
+    const [target] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
+    if (target === undefined) throw new Error("expected the rival homepage");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    expect((await checkSitePage(target, await nextTick("redact"))).outcome).toBe("failed");
+
+    const lines = warn.mock.calls.map((call) => String(call[0]));
+    warn.mockRestore();
+    const failed = lines.find((line) => line.includes('"event":"site.check_failed"'));
+    expect(failed).toContain("<host>");
+    expect(failed).not.toContain("rival.com");
   });
 
   it("stops planning a brand once it is turned off", async () => {
@@ -612,6 +750,25 @@ describe("nightly site sweep", () => {
         n: number;
       }>();
       expect(unlinked?.n).toBe(0);
+    });
+
+    it("queues the email when the publish is retried after the first enqueue failed", async () => {
+      installJev(0.8);
+      await baseline("ent-self", SELF_BEFORE_HTML);
+      const target = (await planSiteSweep(NOW)).find((t) => t.entityId === "ent-self");
+      if (target === undefined) throw new Error("expected the ent-self homepage");
+      readHolder.html = SELF_BROKEN_HTML;
+      const changed = await checkSitePage(target, await nextTick("self-broken-retry"));
+      if (changed.outcome !== "changed") throw new Error("expected a change");
+      send.mockRejectedValueOnce(new Error("queue down"));
+
+      await expect(publishSiteChange(target, changed)).rejects.toThrow("queue down");
+      await publishSiteChange(target, changed);
+
+      const filed = await rows();
+      expect(filed.incidents).toHaveLength(1);
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(send).toHaveBeenLastCalledWith({ incident_id: filed.incidents[0]?.id });
     });
 
     it("still opens the incident and queues the email when the brand's budget went on mention verdicts", async () => {

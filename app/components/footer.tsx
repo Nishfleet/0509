@@ -1,7 +1,7 @@
 export const SUPPORT_ADDRESS = "support@0509.io";
 
 const linkClass =
-  "text-ink-soft hover:text-ink underline decoration-1 underline-offset-4 transition-colors duration-150";
+  "text-ink-soft hover:text-ink underline decoration-1 underline-offset-4 transition-colors duration-140 ease-push";
 
 const footerLinkClass = `${linkClass} inline-flex min-h-11 items-center`;
 
@@ -22,6 +22,18 @@ export function Footer() {
       </a>
       <a className={footerLinkClass} href="/terms">
         Terms
+      </a>
+      <a className={footerLinkClass} href="/pricing">
+        Pricing
+      </a>
+      <a className={footerLinkClass} href="/api/docs">
+        API docs
+      </a>
+      <a className={footerLinkClass} href="/security">
+        Security
+      </a>
+      <a className={footerLinkClass} href="/status">
+        Status
       </a>
     </footer>
   );

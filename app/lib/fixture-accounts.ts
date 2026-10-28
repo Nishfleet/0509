@@ -3,7 +3,7 @@ export const FIXTURE_ACCOUNTS = {
   j8Hard: { email: "e2e+j8-hard-v2@0509.io", maxCompetitors: 0 },
   j8Soft: { email: "e2e+j8-soft-v2@0509.io", maxCompetitors: 0 },
   j9Mentions: { email: "e2e+j9-mentions@0509.io", maxCompetitors: 1 },
-  j12Rollovers: { email: "e2e+j12-rollovers@0509.io", maxCompetitors: 4 },
+  j12Rollovers: { email: "e2e+j12-rollovers@0509.io", maxCompetitors: 15 },
   soak: { email: "e2e+soak@0509.io", maxCompetitors: 4 },
   onboardedDesktop: { email: "e2e+onboarded-desktop@0509.io", maxCompetitors: 2 },
   onboardedPhone: { email: "e2e+onboarded-phone@0509.io", maxCompetitors: 2 },
@@ -17,9 +17,13 @@ export function isFixtureAccount(email: string): boolean {
   return Object.values(FIXTURE_ACCOUNTS).some((account) => account.email === normalized);
 }
 
-const PER_RUN_FIXTURE = /^e2e\+[^@]+@0509\.io$/;
+const E2E_FIXTURE = /^e2e\+[^@]+@0509\.io$/;
+
+export function isE2eFixtureEmail(email: string): boolean {
+  return E2E_FIXTURE.test(email.toLowerCase());
+}
 
 export function isPerRunFixtureEmail(email: string): boolean {
   const normalized = email.toLowerCase();
-  return PER_RUN_FIXTURE.test(normalized) && !isFixtureAccount(normalized);
+  return E2E_FIXTURE.test(normalized) && !isFixtureAccount(normalized);
 }

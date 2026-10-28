@@ -3,6 +3,12 @@ import { z } from "zod";
 
 const SELECT_VERDICT = "SELECT p FROM jev_verdict WHERE question_id = ?1 AND input_hash = ?2";
 
+const SELECT_SHARED_VERDICT =
+  "SELECT p FROM jev_verdict WHERE question_id = ?1 AND shared_hash = ?2 ORDER BY decided_at, rowid LIMIT 1";
+
+const SELECT_SHARED_CHOICE =
+  "SELECT choice FROM jev_verdict WHERE question_id = ?1 AND shared_hash = ?2 ORDER BY decided_at, rowid LIMIT 1";
+
 const SELECT_CHOICE = "SELECT choice FROM jev_verdict WHERE question_id = ?1 AND input_hash = ?2";
 
 const COUNT_VERDICTS =
@@ -14,7 +20,12 @@ const SELECT_LAST_STILL_COMPETITOR =
   "SELECT choice, decided_at FROM jev_verdict WHERE workspace_id = ?1 AND entity_id = ?2 AND question_id = 'still_competitor_reason' AND choice IS NOT NULL ORDER BY decided_at DESC LIMIT 1";
 
 const INSERT_VERDICT =
-  "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, choice, reason, decided_at) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10 WHERE EXISTS (SELECT 1 FROM workspace WHERE id = ?2) ON CONFLICT (question_id, input_hash) DO NOTHING";
+  "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, choice, reason, decided_at, shared_hash) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11 WHERE EXISTS (SELECT 1 FROM workspace WHERE id = ?2) ON CONFLICT (question_id, input_hash) DO NOTHING";
+
+const INSERT_SIGNAL_VERDICT = INSERT_VERDICT.replace(
+  " ON CONFLICT",
+  " AND NOT EXISTS (SELECT 1 FROM jev_verdict WHERE signal_id = ?5 AND question_id = ?3) ON CONFLICT",
+);
 
 const LINK_VERDICTS = `UPDATE jev_verdict SET signal_id = ?1
 WHERE workspace_id = ?2 AND signal_id IS NULL
@@ -45,6 +56,7 @@ export interface VerdictRow {
   choice: string | null;
   reason: string | null;
   decidedAt: string;
+  sharedHash?: string | null;
 }
 
 const countVerdictRow = z.object({ n: z.number() });
@@ -83,12 +95,26 @@ export async function readCachedNoul(questionId: string, inputHash: string): Pro
   return row?.p ?? null;
 }
 
+export async function readSharedNoul(questionId: string, sharedHash: string): Promise<number | null> {
+  const row = readCachedNoulRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_SHARED_VERDICT).bind(questionId, sharedHash).first());
+  return row?.p ?? null;
+}
+
 const readCachedChoiceRow = z.object({ choice: z.string().nullable() });
 
 export async function readCachedChoice(questionId: string, inputHash: string): Promise<string | null> {
   const row = readCachedChoiceRow
     .nullable()
     .parse(await env.DB.prepare(SELECT_CHOICE).bind(questionId, inputHash).first());
+  return row?.choice ?? null;
+}
+
+export async function readSharedChoice(questionId: string, sharedHash: string): Promise<string | null> {
+  const row = readCachedChoiceRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_SHARED_CHOICE).bind(questionId, sharedHash).first());
   return row?.choice ?? null;
 }
 
@@ -117,6 +143,23 @@ export function insertVerdict(row: VerdictRow): D1PreparedStatement {
     row.choice,
     row.reason,
     row.decidedAt,
+    row.sharedHash ?? null,
+  );
+}
+
+export function insertSignalVerdict(row: VerdictRow & { signalId: string }): D1PreparedStatement {
+  return env.DB.prepare(INSERT_SIGNAL_VERDICT).bind(
+    crypto.randomUUID(),
+    row.workspaceId,
+    row.questionId,
+    row.inputHash,
+    row.signalId,
+    row.entityId,
+    row.p,
+    row.choice,
+    row.reason,
+    row.decidedAt,
+    row.sharedHash ?? null,
   );
 }
 

@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { classifyNavPages, PAGE_ROLE } from "../../../app/lib/identity/page-role.server";
+import { classifyNavPages, NAV_PAGES_JUDGED, PAGE_ROLE } from "../../../app/lib/identity/page-role.server";
 
 import { JEV_BATCH_SIZE } from "../../../app/lib/jev/client.server";
 
@@ -87,6 +87,41 @@ describe("classifyNavPages", () => {
     const request = run.mock.calls[0]?.[1] as { questions: { page_role: { type: string; criteria: unknown } } };
     expect(request.questions.page_role.type).toBe("choice");
     expect(request.questions.page_role.criteria).toEqual(PAGE_ROLE.options);
+  });
+
+  it("judges every nav page across sweeps whatever its URL looks like", async () => {
+    const run = vi.fn((_model: string, request: { state: { item: { url: string } } }) =>
+      Promise.resolve({
+        answers: {
+          page_role: {
+            type: "choice",
+            choice: request.state.item.url === "https://www.gymshark.com/membership" ? "pricing" : "other",
+          },
+        },
+      }),
+    );
+    Reflect.set(env, "AI", { run });
+    const pages = [
+      ...Array.from({ length: 44 }, (_, index) => ({
+        url: `https://www.gymshark.com/stores/${String(index)}`,
+        title: `Store ${String(index)}`,
+      })),
+      { url: "https://www.gymshark.com/membership", title: "Membership options" },
+    ];
+
+    await classifyNavPages({ workspaceId, entity: ENTITY, pages, now: NOW });
+    expect(run).toHaveBeenCalledTimes(NAV_PAGES_JUDGED);
+    expect(await readPages()).toHaveLength(NAV_PAGES_JUDGED);
+
+    await classifyNavPages({ workspaceId, entity: ENTITY, pages, now: NOW });
+    expect(run).toHaveBeenCalledTimes(pages.length);
+
+    const judged = (await readPages()).map((page) => page.url);
+    expect(judged).toHaveLength(pages.length);
+    expect(judged).toContain("https://www.gymshark.com/membership");
+    expect((await readPages()).find((page) => page.url === "https://www.gymshark.com/membership")?.role).toBe(
+      "pricing",
+    );
   });
 
   it("leaves an unchanged page alone and asks Jev nothing more", async () => {
@@ -239,7 +274,7 @@ describe("classifyNavPages under load", () => {
     expect(peak).toBeLessThanOrEqual(JEV_BATCH_SIZE);
   });
 
-  it("keeps the verdicts that landed and stops asking once rate limited", async () => {
+  it("keeps the verdicts that landed, stops asking once rate limited and reports the page set as unfinished", async () => {
     let calls = 0;
     const run = vi.fn(() => {
       calls += 1;
@@ -249,9 +284,8 @@ describe("classifyNavPages under load", () => {
     });
     Reflect.set(env, "AI", { run });
 
-    const rows = await classifyNavPages({ workspaceId, entity: ENTITY, pages, now: NOW });
+    await expect(classifyNavPages({ workspaceId, entity: ENTITY, pages, now: NOW })).rejects.toThrow(/Rate limit/);
 
-    expect(rows).toHaveLength(JEV_BATCH_SIZE - 1);
     expect(run).toHaveBeenCalledTimes(JEV_BATCH_SIZE);
     expect(await readPages()).toHaveLength(JEV_BATCH_SIZE - 1);
   });
