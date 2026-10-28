@@ -20,7 +20,7 @@ on:
       journey:
         description: Journey to run now
         type: choice
-        options: [none, j12, suite, signin, j8-hard, j8-soft, soak-report, backup-proof, jev-failures]
+        options: [none, j12, suite, signin, j8-hard, j8-soft, soak-report, backup-proof, jev-failures, owner-readback]
         default: none
       spec:
         description: 'One spec or a filter to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts (0509 sign-up verdict, 2026-09-28)'
@@ -31,7 +31,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: e2e-scheduled-${{ inputs.spec && 'spec' || github.event.schedule == '30 6 * * *' && 'soak' || inputs.journey == 'soak-report' && 'soak' || inputs.journey == 'suite' && 'suite' || github.event.schedule == '17 4 * * *' && 'signin' || inputs.journey == 'signin' && 'signin' || startsWith(inputs.journey, 'j8-') && 'j8' || inputs.journey == 'backup-proof' && 'backup' || inputs.journey == 'jev-failures' && 'jev-failures' || 'j12' }}
+  group: e2e-scheduled-${{ inputs.spec && 'spec' || github.event.schedule == '30 6 * * *' && 'soak' || inputs.journey == 'soak-report' && 'soak' || inputs.journey == 'suite' && 'suite' || github.event.schedule == '17 4 * * *' && 'signin' || inputs.journey == 'signin' && 'signin' || startsWith(inputs.journey, 'j8-') && 'j8' || inputs.journey == 'backup-proof' && 'backup' || inputs.journey == 'jev-failures' && 'jev-failures' || inputs.journey == 'owner-readback' && 'owner-readback' || 'j12' }}
   cancel-in-progress: false
 
 jobs:
@@ -488,3 +488,45 @@ jobs:
           } > comment.md
           gh issue comment 4730 --body-file comment.md
           [ "$failed" -eq 0 ] || { echo "An engine check failed, see the issue comment"; exit 1; }
+
+  owner-readback:
+    name: owner-readback
+    # Read-only production read-back for 0509#6966: the entity count and the
+    # brief send record for the one workspace that tracks bluorng.com as its
+    # own site. Counts, truncated ids and timestamps only — never a subject
+    # line, a name or other customer content (the soak-report rule). Run it
+    # with: gh workflow run e2e-scheduled -f journey=owner-readback
+    if: inputs.journey == 'owner-readback' && inputs.spec == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Read the owner workspace back
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          d1() {
+            npx wrangler d1 execute 0509 --remote --json --command "$1" | jq -c '.[0].results'
+          }
+          ws="(SELECT workspace_id FROM entity WHERE role = 'self' AND domain LIKE '%bluorng%')"
+          echo "== read at $(date -u +%Y-%m-%dT%H:%M:%SZ), workspace ids shown to 8 chars"
+          echo "== workspace"
+          d1 "SELECT substr(id, 1, 8) AS id_prefix, created_at, timezone, brief_weekday, brief_hour, brief_paused_at FROM workspace WHERE id IN $ws"
+          echo "== entities by role and state"
+          d1 "SELECT role, state, COUNT(*) AS n FROM entity WHERE workspace_id IN $ws GROUP BY role, state ORDER BY role, state"
+          echo "== weekly brief digests, newest 6 (subject and payload are not read)"
+          d1 "SELECT substr(id, 1, 8) AS digest_prefix, kind, period_start, period_end, status, sent_at FROM digest WHERE workspace_id IN $ws ORDER BY period_end DESC LIMIT 6"
+          echo "== send attempts over the last 30 days by kind and status"
+          since=$(date -u -d '30 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          d1 "SELECT CASE WHEN digest_id IS NULL THEN 'other (no digest)' ELSE 'brief' END AS kind, status, COUNT(*) AS n FROM send_attempt WHERE workspace_id IN $ws AND attempted_at >= '$since' GROUP BY 1, 2 ORDER BY 1, 2"
