@@ -140,6 +140,28 @@ worker (25% of a core, 55-minute wall) the full local set is what timed
 workers out on 2026-09-23. Chromium is already installed on this host
 (`~/.cache/ms-playwright`).
 
+## Run it and prove it
+
+Live: <https://0509.io>. `/`, `/privacy`, `/terms` and `/api/health` are the
+only paths a signed-out visitor reaches; every other path redirects to
+sign-in. So `/api/health` is the one route a worker can prove from outside.
+
+- Run: `npm test`, plus the e2e specs that cover your change (see Commands and
+  "Run it before the PR opens").
+- Prove: `curl -s https://0509.io/api/health` prints
+  `{"status":"ok","app":"0509","d1":"ok","timestamp":"…","commit":"<sha>"}`.
+  `status` and `d1` are both `ok`, and `commit` is the deployed commit, so
+  `git rev-parse origin/main` says which merge is live. A 503 with
+  `"status":"error","d1":"error"` means D1 did not answer
+  (`app/lib/observability/health.server.ts`): a real failure, never a flake.
+- Test login: none. Sign-in is a magic link, and the e2e suite signs in as a
+  fixture account (`e2e+j7@0509.io`) through the local simulated inbox. Never
+  sign in to production from a worker: each production sign-in sends a real
+  email and churns production D1.
+
+That command and its output are the `Verification:` line in a PR that claims
+the live app works.
+
 ## Reproducing a user report
 
 1. **Read the raw report.** `npx wrangler d1 execute 0509 --remote --command "select raw from support_report where id = '<id>'"`, where `<id>` is the report id in the issue body. This is a read; never run any other statement against `--remote`. Never paste any of the raw text into the issue, the PR, a commit message or a spec.
@@ -219,14 +241,17 @@ AI grader: CI is the gate, and a PR that touches `.github/`, `migrations/`,
 `app/lib/auth*` or `app/lib/data/` is labelled `needs-coordinator` and the
 coordinator reviews it before it merges.
 
-`lighthouse` runs in `deploy-production.yml` after the deploy job. Verify a fix on the local lane:
+The production Lighthouse audit is out of `deploy-production.yml` while the site is behind the
+Cloudflare Access wall (0509#7656): it measured the login page and reddened a good deploy, which the
+fleet's deploy-failed alert read as an outage (fleet-ops#9889). The budgets still gate every pull
+request in `ci.yml` (resource sizes and CLS, against the built Worker). Verify a fix on the local lane:
 `PLAYWRIGHT_TEST_BASE_URL` unset, so `npm run e2e -- e2e/<name>.spec.ts` starts `wrangler dev --local` with simulated
 email, a local D1 and `AI_SPEND` off. Do not dispatch `e2e-scheduled.yml` to verify a fix, and do not point a run at
 https://0509.io: each production sign-in sends a real email, the specs delete and recreate production D1 rows, and the
 live-AI journeys spend Workers AI neurons. Production e2e runs only on its schedule from `main`, and every job that
 reaches production declares the `production-e2e` environment, whose deployment branch policy allows `main` only.
-Neither `lighthouse` nor the production e2e is **required**, deliberately: they cannot run on a pull request, and a
-required check that cannot report blocks the queue forever. The suite is off the
+The production e2e is **not required**, deliberately: it cannot run on a pull request, and a required
+check that cannot report blocks the queue forever. The suite is off the
 deploy path because every sign-in in it sends a real email against the Email
 Service daily quota (Nish 2026-09-28).
 

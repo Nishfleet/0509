@@ -858,7 +858,7 @@ jobs:
           PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.target_url }}
 ```
 
-This repo's deployments come from `environment: production` in `deploy-production.yml`; the production e2e suite now runs from `e2e-scheduled.yml` and lighthouse runs as a job after the deploy (0509#7013). Official container image: `mcr.microsoft.com/playwright:v1.63.0-noble`.
+This repo's deployments come from `environment: production` in `deploy-production.yml`; the production e2e suite now runs from `e2e-scheduled.yml` and lighthouse ran as a job after the deploy until the site went behind the Cloudflare Access wall (0509#7656, fleet-ops#9889). Official container image: `mcr.microsoft.com/playwright:v1.63.0-noble`.
 
 ### 6.3 Lighthouse CI
 
@@ -877,7 +877,7 @@ This repo's deployments come from `environment: production` in `deploy-productio
 
 **There is no `fail:` input.** The action runs `lhci assert`, reads `assertion-results.json`, and calls `core.setFailed()` for any assertion at `level: "error"`; `"warn"` only annotates. **Failing the build therefore means declaring the assertion at `error` level** — budgets default to `error`. A budget written entirely at `warn` is green and useless.
 
-This is the gate for the rebuild bar Nish set on 2026-09-21: LCP under 1.5 s on 4G, against a prod landing page that measured 4.50 s server time.
+This was the gate for the rebuild bar Nish set on 2026-09-21: LCP under 1.5 s on 4G, against a prod landing page that measured 4.50 s server time. No job asserts those timing rows right now: the audit is out of the deploy workflow while the site is behind the Access wall (0509#7656, fleet-ops#9889), and `ci.yml` asserts only the deterministic subset of the budget on pull requests.
 
 ### 6.4 lychee
 

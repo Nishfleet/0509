@@ -317,6 +317,13 @@ function answerOf(body: JevResponse, questionId: string): JevAnswer {
   return answer;
 }
 
+interface HistoryCase {
+  kind: string | null;
+  at: string;
+  change?: string;
+  customer_said?: "useful" | "not_useful";
+}
+
 interface SiteChangeCase {
   id: string;
   split: Split;
@@ -326,7 +333,7 @@ interface SiteChangeCase {
   pageRole: string | null;
   hunks: { lines: readonly string[] }[];
   evidence: BreakageEvidence;
-  history_30d: (string | null)[];
+  history_30d: (string | null | HistoryCase)[];
   labels: Record<string, boolean | string>;
   why: Record<string, string>;
 }

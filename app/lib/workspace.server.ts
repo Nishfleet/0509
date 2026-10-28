@@ -4,7 +4,7 @@ import { isWorkspacePaid } from "./billing/subscription-state";
 import { activeFirstOrder } from "./data/active-workspace";
 import { clearWorkspaceDeletedSuppression } from "./data/email_suppression.server";
 import { ensureOwnerEmailTarget } from "./data/send_target.server";
-import { isPerRunFixtureEmail } from "./fixture-accounts";
+import { isE2eFixtureEmail } from "./fixture-accounts";
 import {
   fillWorkspaceTimezone,
   insertWorkspace,
@@ -91,7 +91,7 @@ export async function ensureWorkspace(
       ownerUserId: input.userId,
       timezone,
       createdAt,
-      fixture: isPerRunFixtureEmail(input.email),
+      fixture: isE2eFixtureEmail(input.email),
     });
     await clearWorkspaceDeletedSuppression(input.email, db);
   } catch (error) {

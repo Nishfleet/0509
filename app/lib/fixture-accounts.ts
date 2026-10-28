@@ -17,9 +17,13 @@ export function isFixtureAccount(email: string): boolean {
   return Object.values(FIXTURE_ACCOUNTS).some((account) => account.email === normalized);
 }
 
-const PER_RUN_FIXTURE = /^e2e\+[^@]+@0509\.io$/;
+const E2E_FIXTURE = /^e2e\+[^@]+@0509\.io$/;
+
+export function isE2eFixtureEmail(email: string): boolean {
+  return E2E_FIXTURE.test(email.toLowerCase());
+}
 
 export function isPerRunFixtureEmail(email: string): boolean {
   const normalized = email.toLowerCase();
-  return PER_RUN_FIXTURE.test(normalized) && !isFixtureAccount(normalized);
+  return E2E_FIXTURE.test(normalized) && !isFixtureAccount(normalized);
 }
