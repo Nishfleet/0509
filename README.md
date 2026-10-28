@@ -115,7 +115,8 @@ Dependabot, `dependabot/fetch-metadata` reads the update type, and for
 `version-update:semver-patch` or `version-update:semver-minor` the job runs
 `gh pr merge --auto`. A major update is left for a person. Arming only queues
 the pull request: `ci-ok`, `base-fresh` and `ratchet / ratchet` still gate it in
-the merge queue, and `hold-risky` still holds one that matches a risky path.
+the merge queue, and fleet-ops' `hold-risky` job, reached through
+`agent-dispatch.yml`, still holds one that matches a risky path.
 Version: 1.
 
 - Switch it off: `gh workflow disable dependabot-auto-merge.yml`. Dependabot
