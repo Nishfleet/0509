@@ -31,8 +31,11 @@ export interface AccountFootprint {
   entityIds: string[];
 }
 
-export async function readAccountFootprint(userId: string): Promise<AccountFootprint> {
-  const owned = await readBriefSchedulesForOwner(userId);
+export async function readAccountFootprint(
+  userId: string,
+  foreignChildren: OwnedSchedule[] = [],
+): Promise<AccountFootprint> {
+  const owned = [...(await readBriefSchedulesForOwner(userId)), ...foreignChildren];
   const [prefixes, entityIds] = await Promise.all([
     Promise.all(owned.map((workspace) => readWorkspaceR2Prefixes(workspace.workspaceId))).then((lists) => lists.flat()),
     Promise.all(owned.map((workspace) => readWorkspaceEntityIds(workspace.workspaceId))).then((lists) => lists.flat()),
