@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { FIXTURE_ACCOUNTS, isFixtureAccount, isPerRunFixtureEmail } from "../app/lib/fixture-accounts";
+import {
+  FIXTURE_ACCOUNTS,
+  isE2eFixtureEmail,
+  isFixtureAccount,
+  isPerRunFixtureEmail,
+} from "../app/lib/fixture-accounts";
 
 const FIXED = [
   "e2e+j7@0509.io",
@@ -62,5 +67,14 @@ describe("fixture accounts", () => {
     for (const email of FIXED) expect(isPerRunFixtureEmail(email)).toBe(false);
     expect(isPerRunFixtureEmail("someone@gymshark.com")).toBe(false);
     expect(isPerRunFixtureEmail("e2e+x@example.com")).toBe(false);
+  });
+
+  it("counts every kept account and every per-run address as an e2e fixture, and no real user", () => {
+    for (const email of FIXED) expect(isE2eFixtureEmail(email)).toBe(true);
+    expect(isE2eFixtureEmail("E2E+J7@0509.IO")).toBe(true);
+    expect(isE2eFixtureEmail("e2e+j3-123@0509.io")).toBe(true);
+    expect(isE2eFixtureEmail("someone@gymshark.com")).toBe(false);
+    expect(isE2eFixtureEmail("e2e+x@example.com")).toBe(false);
+    expect(isE2eFixtureEmail("")).toBe(false);
   });
 });

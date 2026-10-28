@@ -110,7 +110,7 @@ npm run lint       # eslint . && knip && jscpd && prettier --check .
 npm run format     # prettier --write .
 npm test           # vitest run
 npm run e2e        # playwright test
-npm run eval       # vitest run --config vitest.evals.config.ts; live Workers AI, EVAL_MAX_NEURONS caps one run (evals.yml sets 2000; unset = no cap)
+npm run eval       # vitest run --config vitest.evals.config.ts; live Workers AI, EVAL_MAX_NEURONS caps one run (evals.yml sets it from the EVAL_MAX_NEURONS repository variable, default 2000; unset or 0 means no cap; any other non-integer value aborts the run)
 npm run deploy     # wrangler deploy
 npm run verify:start # chrome-devtools start, headless, Playwright's Chromium, --no-sandbox
 npm run verify:stop  # chrome-devtools stop
@@ -249,14 +249,17 @@ AI grader: CI is the gate, and a PR that touches `.github/`, `migrations/`,
 `app/lib/auth*` or `app/lib/data/` is labelled `needs-coordinator` and the
 coordinator reviews it before it merges.
 
-`lighthouse` runs in `deploy-production.yml` after the deploy job. Verify a fix on the local lane:
+The production Lighthouse audit is out of `deploy-production.yml` while the site is behind the
+Cloudflare Access wall (0509#7656): it measured the login page and reddened a good deploy, which the
+fleet's deploy-failed alert read as an outage (fleet-ops#9889). The budgets still gate every pull
+request in `ci.yml` (resource sizes and CLS, against the built Worker). Verify a fix on the local lane:
 `PLAYWRIGHT_TEST_BASE_URL` unset, so `npm run e2e -- e2e/<name>.spec.ts` starts `wrangler dev --local` with simulated
 email, a local D1 and `AI_SPEND` off. Do not dispatch `e2e-scheduled.yml` to verify a fix, and do not point a run at
 https://0509.io: each production sign-in sends a real email, the specs delete and recreate production D1 rows, and the
 live-AI journeys spend Workers AI neurons. Production e2e runs only on its schedule from `main`, and every job that
 reaches production declares the `production-e2e` environment, whose deployment branch policy allows `main` only.
-Neither `lighthouse` nor the production e2e is **required**, deliberately: they cannot run on a pull request, and a
-required check that cannot report blocks the queue forever. The suite is off the
+The production e2e is **not required**, deliberately: it cannot run on a pull request, and a required
+check that cannot report blocks the queue forever. The suite is off the
 deploy path because every sign-in in it sends a real email against the Email
 Service daily quota (Nish 2026-09-28).
 
