@@ -64,9 +64,10 @@ the commits a PR adds are scanned, so old history cannot fail a PR. The job is
 
 ## Workflows that act on their own
 
-Two workflows here start without a person: `agent-dispatch.yml` starts a worker
-on an issue, and `stale-base-retest.yml` re-decides `base-fresh` on the open
-pull requests when a gate file lands on `main`. Each file opens with a
+Three workflows here start without a person: `agent-dispatch.yml` starts a worker
+on an issue, `stale-base-retest.yml` re-decides `base-fresh` on the open
+pull requests when a gate file lands on `main`, and `dependabot-auto-merge.yml`
+arms auto-merge on Dependabot's patch and minor pull requests. Each file opens with a
 `# version:` line and the section below states the same version, so a reader can
 tell whether this page describes the file in front of them. A change to what a
 workflow does bumps both in the same pull request, and
@@ -106,3 +107,18 @@ pins the two together. Version: 1.
 - Remove it: delete `.github/workflows/stale-base-retest.yml`, its section here,
   and the path-list test in `tests/required-checks-never-skip.test.ts` that reads
   the file.
+
+### `dependabot-auto-merge.yml`
+
+GitHub's stock Dependabot recipe (0509#7747). On a pull request opened by
+Dependabot, `dependabot/fetch-metadata` reads the update type, and for
+`version-update:semver-patch` or `version-update:semver-minor` the job runs
+`gh pr merge --auto`. A major update is left for a person. Arming only queues
+the pull request: `ci-ok`, `base-fresh` and `ratchet / ratchet` still gate it in
+the merge queue, and `hold-risky` still holds one that matches a risky path.
+Version: 1.
+
+- Switch it off: `gh workflow disable dependabot-auto-merge.yml`. Dependabot
+  still opens its pull requests; a person arms them.
+- Remove it: delete `.github/workflows/dependabot-auto-merge.yml`, its section
+  here and its entry in `tests/workflows-documented.test.ts`.

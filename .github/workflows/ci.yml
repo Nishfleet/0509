@@ -10,9 +10,6 @@
 # and on GitHub a skipped required check counts as passing (#4664): no gate
 # job may carry a job-level `if:` that can skip it;
 # tests/required-checks-never-skip.test.ts pins it.
-#
-# Lighthouse against production runs in deploy-production.yml after the deploy
-# job, so this workflow has no deployment_status trigger (0509#7013).
 name: CI
 
 on:
@@ -50,10 +47,7 @@ jobs:
         # and the route types, so `tsc -b` cannot run before them.
         run: npm run typecheck
       - name: Lint
-        # Rung 2 of the correction ladder (docs/REBUILD-TRUST.md B): every
-        # mistake worth correcting twice becomes a rule here rather than a
-        # sentence in a doc. `npm run lint` is `eslint . && knip` — the rules
-        # and the dead-code finder in one gate. It runs after typecheck because
+        # Rung 2 of the correction ladder (docs/REBUILD-TRUST.md B). After typecheck:
         # typed lint rules need the generated route types that typecheck emits.
         run: npm run lint
       - name: Lint the workflows (actionlint)
@@ -97,11 +91,6 @@ jobs:
 
   vitest-shard:
     # The test files, split four ways by vitest's own --shard (0509#7163).
-    # One job ran them all and hit codex-node-checks' 25 min timeout on PR
-    # #7163 (run 37344289176): touching two app/lib/data writers selected
-    # 54 files, mostly workerd integration tests, and the step was cancelled
-    # at 23m11s. The full non-node suite already took 830-940 s per
-    # merge_group run, so any PR touching a core writer was near the limit.
     # vitest shards after --changed has filtered, by a hash of the file path,
     # so each shard runs a quarter of whatever the event selected. The matrix
     # reports as `vitest-shard (n)`; ci-ok needs `vitest-shard`, whose result
@@ -118,8 +107,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # Two commits so HEAD^1 (the base side of the PR merge ref) exists
-          # for `vitest --changed` below.
           fetch-depth: 2
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -132,7 +119,6 @@ jobs:
         # config reruns everything (forceRerunTriggers default). The full suite
         # runs on merge_group below, so nothing merges untested; this only
         # moves the verdict for unrelated files from the PR to the queue.
-        # 545 s of the 17 min PR run 36432985831 was the full suite (#5849).
         # --passWithNoTests: a small selection leaves some shards empty.
         if: github.event_name == 'pull_request'
         run: npx vitest run --changed HEAD^1 --passWithNoTests --shard "$SHARD"
@@ -143,8 +129,6 @@ jobs:
 
   Gitleaks:
     name: Gitleaks
-    # Hosted for every event. Public repo: minutes are free and the hosted pool
-    # is wider than the 3 owned runners (fleet-ops#5935 reversed 2026-09-22).
     # Stays on a hosted runner: the docker:// step below runs as root and leaves
     # root-owned files in a persistent fleet-ci workspace, which broke every later
     # checkout on that runner (three merge_group failures, 2026-09-22 01:33-01:47 IST).
@@ -187,8 +171,6 @@ jobs:
     # A PR whose lint, typecheck or unit tests are red cannot merge, so it must not hold
     # a hosted slot for the browser suites; the free plan allows 20 org-wide (#5381).
     needs: [codex-node-checks, vitest-shard]
-    # Hosted for every event. Public repo: minutes are free and the hosted pool
-    # is wider than the 3 owned runners (fleet-ops#5935 reversed 2026-09-22).
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -224,11 +206,6 @@ jobs:
 
       - name: Run the e2e suite against the built Worker
         if: steps.scope.outputs.skip != 'true'
-        # This replaced a curl-and-grep loop against /api/health. The proof is
-        # the same shape — build it, run it, ask it — but now the agent that
-        # wrote the change runs the same suite a user's browser would, and a
-        # route that renders blank fails here instead of in production.
-        #
         # PLAYWRIGHT_TEST_BASE_URL is deliberately unset: playwright.config.ts
         # then starts `wrangler dev` itself through webServer and tears it down.
         run: npm run e2e

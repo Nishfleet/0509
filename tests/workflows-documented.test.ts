@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const DOCUMENTED = ["agent-dispatch.yml", "stale-base-retest.yml"] as const;
+const DOCUMENTED = ["agent-dispatch.yml", "stale-base-retest.yml", "dependabot-auto-merge.yml"] as const;
 
 interface Concurrency {
   group: string;
