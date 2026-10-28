@@ -48,6 +48,16 @@ function retentionDays(step: WorkflowStep): number | undefined {
   return typeof days === "number" && Number.isInteger(days) && days > 0 ? days : undefined;
 }
 
+function retentionProblem(upload: Upload): string | undefined {
+  if (!upload.step.with || !("retention-days" in upload.step.with)) {
+    return `${label(upload)} declares no retention-days`;
+  }
+  if (retentionDays(upload.step) === undefined) {
+    return `${label(upload)} has an unusable retention-days ${JSON.stringify(upload.step.with["retention-days"])}`;
+  }
+  return undefined;
+}
+
 function label({ file, step }: Upload): string {
   return `${file}: ${step.name ?? step.uses ?? "?"}`;
 }
@@ -68,8 +78,9 @@ async function allUploads(): Promise<Upload[]> {
 
 describe("artifact uploads declare a bounded retention (0509#7188)", () => {
   it("reads a retention-days value from an upload step", () => {
-    const [upload] = uploadsOf(FIXTURE);
-    expect(retentionDays(upload)).toBe(7);
+    const uploads = uploadsOf(FIXTURE);
+    expect(uploads).toHaveLength(1);
+    expect(retentionDays(uploads[0])).toBe(7);
   });
 
   it("finds the artifact uploads the workflows declare", async () => {
@@ -78,10 +89,8 @@ describe("artifact uploads declare a bounded retention (0509#7188)", () => {
   });
 
   it("gives every upload step an explicit retention", async () => {
-    const undeclared = (await allUploads())
-      .filter((upload) => retentionDays(upload.step) === undefined)
-      .map((upload) => `${label(upload)} declares no retention-days`);
-    expect(undeclared).toEqual([]);
+    const problems = (await allUploads()).map(retentionProblem).filter(Boolean);
+    expect(problems).toEqual([]);
   });
 
   it("keeps every retention inside the week the preview report needs", async () => {
