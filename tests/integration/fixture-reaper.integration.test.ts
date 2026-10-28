@@ -225,6 +225,7 @@ describe("the e2e fixture account reaper", () => {
 
     expect(report).toMatchObject({ selected: 1, workspaces: 2, prefixes: 2, deleted: 1 });
     expect(await userExists("u-foreign")).toBe(true);
+    expect(await count("SELECT COUNT(*) AS n FROM workspace WHERE id = 'ws-u-foreign'")).toBe(1);
     expect(await count("SELECT COUNT(*) AS n FROM workspace WHERE id = 'ws-u-parent'")).toBe(0);
     expect(await count("SELECT COUNT(*) AS n FROM workspace WHERE id = 'wc-u-parent'")).toBe(0);
     await introspector.waitForStatus("complete");
