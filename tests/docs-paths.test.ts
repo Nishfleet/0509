@@ -28,6 +28,26 @@ const LIVE = [
   /site is gated until the audit passes/,
 ] as const;
 
+const HIDDEN_CREDENTIAL_DIRS = ["~/.config/cloudflare", "~/.cloudflare", "~/.wrangler"] as const;
+
+function homePathsIn(text: string): string[] {
+  const normalized = text.replace(/\/(?:home|Users)\/[\w.-]+(?=\/)/g, "~");
+  return [...normalized.matchAll(/(?:~|\$\{?HOME\}?)\/[^\s`"'<>),;]+/g)].map((match) =>
+    (match[0] ?? "").replace(/^\$\{?HOME\}?/, "~"),
+  );
+}
+
+function trackedMarkdown(): string[] {
+  return execFileSync("git", ["ls-files", "-z", "--", "*.md"], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    maxBuffer: 64 * 1024 * 1024,
+  })
+    .toString("utf8")
+    .split("\0")
+    .filter((name) => name !== "")
+    .map((name) => join(fileURLToPath(new URL("..", import.meta.url)), name));
+}
+
 describe("agent entry docs", () => {
   it.each(ENTRY_DOCS)("%s names only paths that exist", (doc) => {
     const text = readFileSync(new URL(`../${doc}`, import.meta.url), "utf8");
@@ -47,6 +67,17 @@ describe("agent entry docs", () => {
     const text = readFileSync(new URL("../AGENTS.md", import.meta.url), "utf8");
     const missing = LIVE.filter((pattern) => !pattern.test(text)).map((pattern) => pattern.source);
     expect(missing).toEqual([]);
+  });
+
+  it("no tracked doc names a file inside a credential directory the runner hides", () => {
+    const unreachable = trackedMarkdown().flatMap((doc) =>
+      homePathsIn(readFileSync(doc, "utf8")).map((home) => `${doc}: ${home}`),
+    );
+    expect(
+      unreachable.filter((entry) =>
+        HIDDEN_CREDENTIAL_DIRS.some((dir) => entry.replace(/\/+$/, "").includes(`${dir}/`)),
+      ),
+    ).toEqual([]);
   });
 });
 
