@@ -27,7 +27,9 @@ function e2eJobs(): Record<string, JobWithEnvironment> {
 }
 
 function soakStep(): SoakStep {
-  const step = e2eJobs()["soak-report"]?.steps?.find((entry) => (entry.run ?? "").includes("Soak report for the 24 hours"));
+  const step = e2eJobs()["soak-report"]?.steps?.find((entry) =>
+    (entry.run ?? "").includes("Soak report for the 24 hours"),
+  );
   if (step === undefined) throw new Error("soak-report has no comment-posting run step");
   return step;
 }
@@ -65,7 +67,11 @@ describe("a production D1 read declares its environment and runs only on main (0
   }
 
   it("derives the D1 reader census", () => {
-    expect(d1ReaderJobs().map(([name]) => name).sort()).toEqual(["jev-failures", "soak-report"].sort());
+    expect(
+      d1ReaderJobs()
+        .map(([name]) => name)
+        .sort(),
+    ).toEqual(["jev-failures", "soak-report"].sort());
   });
 
   it("runs in production-e2e, the environment the D1-read token of #7072 lands in", () => {
