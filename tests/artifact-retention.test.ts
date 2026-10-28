@@ -39,6 +39,16 @@ jobs:
           retention-days: 0
 `;
 
+const NON_NUMERIC_RETENTION = `on: pull_request
+jobs:
+  preview-assert:
+    steps:
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-word-retention
+          retention-days: seven
+`;
+
 interface WorkflowStep {
   name?: string;
   uses?: string;
@@ -134,12 +144,18 @@ describe("artifact uploads declare a bounded retention (0509#7188)", () => {
     expect(retentionDays(upload)).toBeUndefined();
   });
 
+  it("names an upload step whose retention-days is not a number", () => {
+    const upload = singleUpload(NON_NUMERIC_RETENTION);
+    expect(retentionProblem(upload)).toBe('declares an unusable retention-days: "seven"');
+    expect(retentionDays(upload)).toBeUndefined();
+  });
+
   it("finds the artifact uploads the workflows declare", async () => {
     const labels = (await allUploads()).map(label);
     expect(labels).toContain("ci.yml: Keep the trace when it fails");
   });
 
-  it("gives every upload step a usable retention", async () => {
+  it("gives every upload step a positive integer retention", async () => {
     const undeclared = (await allUploads()).flatMap((upload) => {
       const problem = retentionProblem(upload.step);
       return problem === undefined ? [] : [`${label(upload)} ${problem}`];
