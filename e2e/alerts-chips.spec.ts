@@ -268,7 +268,7 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
     run(
       db,
       `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, summary, url, payload_json, dedup_key, published_at, observed_at)
-         VALUES (?, ?, ?, ?, 'hiring', ?, 'Berlin · Platform', ?, '{}', ?, NULL, '2026-09-26T08:00:00.000Z')`,
+         VALUES (?, ?, ?, ?, 'hiring', ?, 'Berlin · Platform', ?, '{}', ?, NULL, ?)`,
       id,
       workspaceId,
       entityId,
@@ -276,6 +276,7 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
       title,
       `https://boards.example/${id}`,
       `dedup-${id}`,
+      new Date(Date.now() - 86_400_000).toISOString(),
     );
   };
   role(`sig-role-${suffix}`, onId, "Senior Backend Engineer");
