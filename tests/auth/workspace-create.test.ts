@@ -167,6 +167,26 @@ describe("ensureWorkspace", () => {
     expect(countOf(database, "SELECT count(*) AS n FROM workspace")).toBe(1);
   });
 
+  it("marks a kept e2e account's new workspace as a fixture and a customer's as not", async () => {
+    const database = openDb();
+    seedUser(database, "user-kept", "e2e+j11@0509.io");
+    seedUser(database, "user-per-run", "e2e+abc123@0509.io");
+    seedUser(database, "user-customer", "ada@example.com");
+    const db = asWorkspaceDb(database);
+
+    for (const [userId, email] of [
+      ["user-kept", "e2e+j11@0509.io"],
+      ["user-per-run", "e2e+abc123@0509.io"],
+      ["user-customer", "ada@example.com"],
+    ] as const) {
+      await ensureWorkspace(db, { userId, email, timezone: "UTC", now: "2026-10-28T12:00:00.000Z" });
+    }
+
+    expect(countOf(database, "SELECT fixture AS n FROM workspace WHERE owner_user_id = 'user-kept'")).toBe(1);
+    expect(countOf(database, "SELECT fixture AS n FROM workspace WHERE owner_user_id = 'user-per-run'")).toBe(1);
+    expect(countOf(database, "SELECT fixture AS n FROM workspace WHERE owner_user_id = 'user-customer'")).toBe(0);
+  });
+
   it("stores UTC when the browser sent no zone, then keeps the first real zone", async () => {
     const database = openDb();
     seedUser(database, "user-1", "ada@example.com");
