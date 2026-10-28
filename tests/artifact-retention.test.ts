@@ -49,6 +49,16 @@ jobs:
           retention-days: seven
 `;
 
+const EMPTY_RETENTION = `on: pull_request
+jobs:
+  preview-assert:
+    steps:
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-empty-retention
+          retention-days:
+`;
+
 interface WorkflowStep {
   name?: string;
   uses?: string;
@@ -150,13 +160,21 @@ describe("artifact uploads declare a bounded retention (0509#7188)", () => {
     expect(retentionDays(upload)).toBeUndefined();
   });
 
+  it("names an upload step whose retention-days is present but empty", () => {
+    const upload = singleUpload(EMPTY_RETENTION);
+    expect(retentionProblem(upload)).toBe("declares an unusable retention-days: null");
+    expect(retentionDays(upload)).toBeUndefined();
+  });
+
   it("finds the artifact uploads the workflows declare", async () => {
     const labels = (await allUploads()).map(label);
     expect(labels).toContain("ci.yml: Keep the trace when it fails");
   });
 
   it("gives every upload step a positive integer retention", async () => {
-    const undeclared = (await allUploads()).flatMap((upload) => {
+    const uploads = await allUploads();
+    expect(uploads.length).toBeGreaterThan(0);
+    const undeclared = uploads.flatMap((upload) => {
       const problem = retentionProblem(upload.step);
       return problem === undefined ? [] : [`${label(upload)} ${problem}`];
     });
