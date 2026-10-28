@@ -1,4 +1,4 @@
-import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
+import { createExecutionContext, createScheduledController, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import worker from "../../workers/support-inbox";
@@ -374,5 +374,22 @@ describe("0509-support-inbox-v2", () => {
     const response = await callFetch(new Request("https://inbox.example/"), env, ctx);
     await waitOnExecutionContext(ctx);
     expect(response.status).toBe(404);
+  });
+
+  it("logs the stored report count in the daily sweep (0509#5699)", async () => {
+    await deliver();
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const ctx = createExecutionContext();
+    worker.scheduled(createScheduledController(), env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toEqual({
+      event: "support_inbox.swept",
+      expiredReports: 0,
+      expiredIssues: 0,
+      reports: 1,
+    });
   });
 });
