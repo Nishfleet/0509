@@ -28,6 +28,14 @@ const LIVE = [
   /site is gated until the audit passes/,
 ] as const;
 
+const HIDDEN_CREDENTIAL_DIRS = ["~/.config/cloudflare", "~/.cloudflare", "~/.wrangler"] as const;
+
+function homePathsIn(text: string): string[] {
+  return [...text.matchAll(/(?:~|\$\{?HOME\}?)\/[^\s`"'<>),;]+/g)].map((match) =>
+    (match[0] ?? "").replace(/^\$\{?HOME\}?/, "~"),
+  );
+}
+
 describe("agent entry docs", () => {
   it.each(ENTRY_DOCS)("%s names only paths that exist", (doc) => {
     const text = readFileSync(new URL(`../${doc}`, import.meta.url), "utf8");
@@ -47,6 +55,14 @@ describe("agent entry docs", () => {
     const text = readFileSync(new URL("../AGENTS.md", import.meta.url), "utf8");
     const missing = LIVE.filter((pattern) => !pattern.test(text)).map((pattern) => pattern.source);
     expect(missing).toEqual([]);
+  });
+
+  it.each(ENTRY_DOCS)("%s names no file inside a credential directory the runner hides", (doc) => {
+    const text = readFileSync(new URL(`../${doc}`, import.meta.url), "utf8");
+    const unreachable = homePathsIn(text).filter((path) =>
+      HIDDEN_CREDENTIAL_DIRS.some((dir) => path.replace(/\/+$/, "").startsWith(`${dir}/`)),
+    );
+    expect(unreachable).toEqual([]);
   });
 });
 
