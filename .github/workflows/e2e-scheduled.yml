@@ -161,6 +161,12 @@ jobs:
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
           FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
       - name: Delete the setup accounts if the run was cut short
+        # The session setup mints a real account and its teardown project
+        # deletes it, but a cancel, a timeout or a killed runner ends the
+        # Playwright process first and the row stays in production (0509#6968).
+        # The teardown reads the state file the setup wrote, so running it again
+        # here deletes what is left; an account already deleted is skipped. The
+        # onboarded setup signs in kept accounts (#7061), so it has no teardown.
         if: always() && steps.e2e.outcome != 'skipped'
         timeout-minutes: 5
         run: npm run e2e -- --project=session-teardown --retries=0 --reporter=github,list
@@ -179,10 +185,13 @@ jobs:
   signin:
     name: signin
     # One sign-in, one real email against the Email Service daily quota
-    # (0509#6033, 0509#6093): no retries, no loop, no other spec.
+    # (0509#6033, 0509#6093): no retries, no loop, no other spec. No trace is
+    # uploaded: the repo is public and a trace can hold the Access cookie
+    # (0509#5999); a failure is read from the job log.
     if: github.event.schedule == '17 4 * * *' || (inputs.journey == 'signin' && inputs.spec == '' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     environment: production-e2e
+    # See the live-ai note on the j12 job.
     concurrency:
       group: live-ai
       cancel-in-progress: false
@@ -225,8 +234,10 @@ jobs:
     # the 6 hour cap, so they are two dispatches; each mode has its own fixture
     # host (the incident email is once per site per day), and they still share the
     # j8 concurrency group so the mail inbox is read by one run at a time. Dispatch only: a
-    # run is hours long and sends real mail. 350 minutes is the most a hosted job may run
-    # under the 6 hour cap.
+    # run is hours long and sends real mail. No trace is uploaded: the repo is
+    # public and a trace can hold the Access cookie (0509#5999); a failure is
+    # read from the job log. 350 minutes is the most a hosted job may run under
+    # the 6 hour cap.
     if: startsWith(inputs.journey, 'j8-') && inputs.spec == '' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production-e2e
@@ -305,10 +316,14 @@ jobs:
     # Service daily quota is spent (0509#6033, 0509#6034), so the full suite no
     # longer starts on every deploy (Nish 2026-09-28: "take the full production
     # e2e off every deploy ... run it on demand and hourly instead"; hourly after
+    # 0509#6034 lands, when a run signs in once). No trace is
+    # uploaded: the repo is public and a trace can hold the Access cookie
+    # (0509#5999); a failure is read from the job log.
     needs: production-sha
     if: github.event.schedule == '40 7 * * 0'
     runs-on: ubuntu-latest
     environment: production-e2e
+    # See the live-ai note on the j12 job.
     concurrency:
       group: live-ai
       cancel-in-progress: false
@@ -348,6 +363,12 @@ jobs:
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
           FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
       - name: Delete the setup accounts if the run was cut short
+        # The session setup mints a real account and its teardown project
+        # deletes it, but a cancel, a timeout or a killed runner ends the
+        # Playwright process first and the row stays in production (0509#6968).
+        # The teardown reads the state file the setup wrote, so running it again
+        # here deletes what is left; an account already deleted is skipped. The
+        # onboarded setup signs in kept accounts (#7061), so it has no teardown.
         if: always() && steps.e2e.outcome != 'skipped'
         timeout-minutes: 5
         run: npm run e2e -- --project=session-teardown --retries=0 --reporter=github,list
