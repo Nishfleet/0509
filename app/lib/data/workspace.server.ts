@@ -370,3 +370,13 @@ export async function readBriefSchedulesForOwner(userId: string): Promise<OwnedS
   const { results } = await env.DB.prepare(SELECT_SCHEDULES_BY_OWNER).bind(userId).all();
   return readBriefScheduleForOwnerRow.array().parse(results).map(ownedScheduleFromRow);
 }
+
+const SELECT_FOREIGN_CHILD_SCHEDULES = `SELECT w.id AS id, w.timezone AS timezone, w.brief_weekday AS brief_weekday, w.brief_hour AS brief_hour, w.brief_paused_at AS brief_paused_at
+FROM workspace w JOIN workspace parent ON parent.id = w.parent_workspace_id
+WHERE parent.owner_user_id = ?1 AND w.owner_user_id != ?1 AND w.fixture = 1
+ORDER BY w.created_at`;
+
+export async function readForeignChildSchedules(userId: string): Promise<OwnedSchedule[]> {
+  const { results } = await env.DB.prepare(SELECT_FOREIGN_CHILD_SCHEDULES).bind(userId).all();
+  return readBriefScheduleForOwnerRow.array().parse(results).map(ownedScheduleFromRow);
+}

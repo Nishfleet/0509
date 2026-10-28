@@ -1,7 +1,17 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { PricingPage } from "../app/components/pricing-page";
 import { PLANS, TRIAL_SUMMARY } from "../app/lib/billing/plans";
 import { pricingMeta, startSource } from "../app/lib/pricing-page";
+
+describe("PricingPage", () => {
+  it("names Dodo Payments as the seller of record and says it applies VAT at checkout", () => {
+    const html = renderToStaticMarkup(createElement(PricingPage, { source: null }));
+    expect(html).toContain("Dodo Payments is the seller of record and applies VAT at checkout.");
+  });
+});
 
 describe("startSource", () => {
   it("accepts the three known sources", () => {
