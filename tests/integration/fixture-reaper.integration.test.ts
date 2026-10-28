@@ -225,7 +225,9 @@ describe("the e2e fixture account reaper", () => {
 
     expect(report).toMatchObject({ selected: 1, workspaces: 2, prefixes: 2, deleted: 1 });
     await introspector.waitForStatus("complete");
-    expect((await env.SNAPSHOTS.list()).objects.map((object) => object.key)).toEqual(["card/ws-u-foreign/1.png"]);
+    expect((await env.SNAPSHOTS.list({ prefix: "card/" })).objects.map((object) => object.key)).toEqual([
+      "card/ws-u-foreign/1.png",
+    ]);
   });
 
   it("deletes at most the ceiling per run, oldest first, and the next run takes the rest", async () => {
