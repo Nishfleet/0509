@@ -24,9 +24,9 @@ const RETRY: WorkflowStepConfig = {
 
 const PROBE_ONCE: WorkflowStepConfig = { retries: { limit: 0, delay: "1 second" } };
 
-async function jevIsReady(): Promise<boolean> {
+async function jevIsReady(workspaceId: string): Promise<boolean> {
   try {
-    await probeJev();
+    await probeJev(workspaceId);
     return true;
   } catch (error) {
     if (!(error instanceof JevUnavailableError)) throw error;
@@ -97,7 +97,7 @@ export class Discovery extends WorkflowEntrypoint<Env, DiscoveryParams> {
       return { workspaceId, shortlisted: 0, queued: 0, promoted: 0, written: 0, judged };
     }
 
-    if (!(await step.do("jev-ready", PROBE_ONCE, jevIsReady))) {
+    if (!(await step.do("jev-ready", PROBE_ONCE, () => jevIsReady(workspaceId)))) {
       throw new NonRetryableError("jev unavailable: discovery stopped before any proposer call");
     }
 
