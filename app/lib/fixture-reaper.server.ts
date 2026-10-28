@@ -85,6 +85,9 @@ export async function reapFixtureAccounts(rawMode: unknown, now: Date, step: Rea
   const report = tally(mode, selection, reaped);
   await step("report", () => {
     console.log(JSON.stringify({ event: "fixture_reaper.run", ...report }));
+    if (report.ceilingHit) {
+      console.warn(JSON.stringify({ event: "fixture_reaper.ceiling_hit", ...report }));
+    }
     return Promise.resolve(report);
   });
   return report;
