@@ -47,3 +47,13 @@ describe("soak-report measures the two DONE lines (0509#7076)", () => {
     expect(readFileSync(path.join(REPO_ROOT, CI), "utf8")).toContain("tests/unit/soak-report.test.ts");
   });
 });
+
+describe("the production D1 reads run where D1 accepts the token (0509#7773)", () => {
+  it("runs jev-failures and soak-report in production without a deployment record", () => {
+    const source = readFileSync(path.join(REPO_ROOT, WORKFLOW), "utf8");
+    const jobs = (parse(source) as { jobs: Record<string, { environment?: unknown }> }).jobs;
+    for (const job of ["jev-failures", "soak-report"]) {
+      expect(jobs[job]?.environment).toEqual({ name: "production", deployment: false });
+    }
+  });
+});
