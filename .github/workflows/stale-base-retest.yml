@@ -1,4 +1,4 @@
-# When a gate file changes on main, re-decide base-fresh (ci.yml) for every open
+# version: 1 — README.md, "Workflows that act on their own": switch it off, delete it. When a gate file changes on main, re-decide base-fresh (ci.yml) for every open
 # pull request, so a head that predates the change goes red before anything arms
 # or queues it (docs/incidents/2026-10-07-stale-base-queue-ejections.md).
 # A pull request with auto-merge armed is skipped: the queue tests its real merge
