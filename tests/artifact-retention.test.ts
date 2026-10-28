@@ -10,15 +10,20 @@ const WORKFLOWS = path.join(REPO_ROOT, ".github/workflows");
 const UPLOAD_ACTION = "actions/upload-artifact";
 const MAX_RETENTION_DAYS = 7;
 
-const FIXTURE = `on: pull_request
+function retentionFixture(retentionDays?: string): string {
+  const retention = retentionDays === undefined ? "" : `          retention-days: ${retentionDays}\n`;
+  return `on: pull_request
 jobs:
   preview-assert:
     steps:
-      - uses: actions/upload-artifact@v4
+      - name: playwright-report-preview
+        uses: actions/upload-artifact@v4
         with:
           name: playwright-report-preview
-          retention-days: 7
-`;
+${retention}`;
+}
+
+const FIXTURE = retentionFixture("7");
 
 interface WorkflowStep {
   name?: string;
@@ -83,13 +88,32 @@ describe("artifact uploads declare a bounded retention (0509#7188)", () => {
     expect(retentionDays(uploads[0])).toBe(7);
   });
 
+  it("pins the absent-key message when the upload step declares no retention-days", () => {
+    const [upload] = uploadsOf(retentionFixture());
+    expect(retentionProblem({ file: "fixture.yml", step: upload })).toBe(
+      "fixture.yml: playwright-report-preview declares no retention-days",
+    );
+  });
+
+  it.each([
+    ["an empty value, which YAML reads as null", "", "null"],
+    ["a non-numeric value", "seven", '"seven"'],
+  ])("pins the unusable-value message when retention-days has %s", (_case, raw, shown) => {
+    const [upload] = uploadsOf(retentionFixture(raw));
+    expect(retentionProblem({ file: "fixture.yml", step: upload })).toBe(
+      `fixture.yml: playwright-report-preview has an unusable retention-days ${shown}`,
+    );
+  });
+
   it("finds the artifact uploads the workflows declare", async () => {
     const labels = (await allUploads()).map(label);
     expect(labels).toContain("ci.yml: Keep the trace when it fails");
   });
 
   it("gives every upload step an explicit retention", async () => {
-    const problems = (await allUploads()).map(retentionProblem).filter(Boolean);
+    const uploads = await allUploads();
+    expect(uploads.length).toBeGreaterThan(0);
+    const problems = uploads.map(retentionProblem).filter(Boolean);
     expect(problems).toEqual([]);
   });
 
