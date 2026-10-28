@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { FIXTURE_ACCOUNTS, isE2eFixtureEmail, isFixtureAccount, isPerRunFixtureEmail } from "../app/lib/fixture-accounts";
+import {
+  FIXTURE_ACCOUNTS,
+  isE2eFixtureEmail,
+  isFixtureAccount,
+  isPerRunFixtureEmail,
+} from "../app/lib/fixture-accounts";
 
 const FIXED = [
   "e2e+j7@0509.io",
