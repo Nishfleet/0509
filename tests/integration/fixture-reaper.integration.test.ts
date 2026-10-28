@@ -21,7 +21,7 @@ interface Seed {
   createdAt?: string;
   fixture?: 0 | 1;
   plan?: boolean;
-  child?: { fixture: 0 | 1; plan?: boolean };
+  child?: { fixture: 0 | 1; plan?: boolean; ownerId?: string };
   watch?: boolean;
   key?: boolean;
 }
@@ -66,7 +66,7 @@ async function seed(options: Seed): Promise<{ workspaceId: string; watchId: stri
     statements.push(
       env.DB.prepare(
         "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at, fixture, parent_workspace_id) VALUES (?1, 'Client', ?2, 'UTC', 1, 8, ?3, ?4, ?5)",
-      ).bind(`wc-${id}`, id, createdAt, child.fixture, workspaceId),
+      ).bind(`wc-${id}`, child.ownerId ?? id, createdAt, child.fixture, workspaceId),
     );
     if (child.plan === true) {
       statements.push(
@@ -210,6 +210,30 @@ describe("the e2e fixture account reaper", () => {
     ]);
   });
 
+  it("live: removes the files of a child workspace that a different user owns", async () => {
+    await seed({ id: "u-foreign", email: "foreign@example.com", createdAt: YOUNG });
+    await seed({
+      id: "u-parent",
+      email: "e2e+parent@0509.io",
+      child: { fixture: 1, ownerId: "u-foreign" },
+    });
+    await env.SNAPSHOTS.put("card/wc-u-parent/1.png", "x");
+    await env.SNAPSHOTS.put("card/ws-u-foreign/1.png", "y");
+    await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, "fixture-reaper-u-parent");
+
+    const report = await reapFixtureAccounts("live", NOW, direct);
+
+    expect(report).toMatchObject({ selected: 1, workspaces: 2, prefixes: 2, deleted: 1 });
+    expect(await userExists("u-foreign")).toBe(true);
+    expect(await count("SELECT COUNT(*) AS n FROM workspace WHERE id = 'ws-u-foreign'")).toBe(1);
+    expect(await count("SELECT COUNT(*) AS n FROM workspace WHERE id = 'ws-u-parent'")).toBe(0);
+    expect(await count("SELECT COUNT(*) AS n FROM workspace WHERE id = 'wc-u-parent'")).toBe(0);
+    await introspector.waitForStatus("complete");
+    expect((await env.SNAPSHOTS.list({ prefix: "card/" })).objects.map((object) => object.key)).toEqual([
+      "card/ws-u-foreign/1.png",
+    ]);
+  });
+
   it("deletes at most the ceiling per run, oldest first, and the next run takes the rest", async () => {
     const total = FIXTURE_REAPER_CEILING + 5;
     const ids = Array.from({ length: total }, (_, index) => `u-bulk-${String(index).padStart(2, "0")}`);
@@ -221,8 +245,11 @@ describe("the e2e fixture account reaper", () => {
       });
     }
 
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const first = await reapFixtureAccounts("live", NOW, direct);
 
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).toContain('"event":"fixture_reaper.ceiling_hit"');
     expect(first).toMatchObject({
       selected: FIXTURE_REAPER_CEILING,
       deleted: FIXTURE_REAPER_CEILING,
@@ -232,6 +259,7 @@ describe("the e2e fixture account reaper", () => {
     expect(left.results.map((row) => row.id)).toEqual(ids.slice(FIXTURE_REAPER_CEILING));
 
     const second = await reapFixtureAccounts("live", NOW, direct);
+    expect(warn).toHaveBeenCalledTimes(1);
     expect(second).toMatchObject({ selected: 5, deleted: 5, ceilingHit: false });
     expect(await count('SELECT COUNT(*) AS n FROM "user"')).toBe(0);
 
