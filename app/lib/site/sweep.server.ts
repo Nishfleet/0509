@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { getDomain } from "tldts";
 
 import { insertIncidentAlertStatement } from "../data/alert.server";
-import { openIncidentStatement } from "../data/incident.server";
+import { openIncidentStatement, readOpenIncidentId } from "../data/incident.server";
 import {
   insertPages,
   readEntitiesWithoutHomePage,
@@ -25,7 +25,7 @@ import { takeBrowserScreenshot } from "./browser-budget.server";
 import { computeBreakageEvidence } from "./breakage-evidence";
 import type { CheckPageResult } from "./check-page.server";
 import { checkPage } from "./check-page.server";
-import { diffPageText } from "./diff";
+import { changedWordCounts, diffPageText } from "./diff";
 import type { JudgedChange, JudgeInput } from "./judge.server";
 import { judgeChange } from "./judge.server";
 import { readPage } from "./read-page.server";
@@ -36,12 +36,6 @@ const SITE_SOURCE_KEY = "site.web";
 export const CHUNK_SIZE = 10;
 
 export type ChangedPage = Extract<CheckPageResult, { outcome: "changed" }>;
-
-const WORDS = new Intl.Segmenter("en", { granularity: "word" });
-
-function wordCount(value: string): number {
-  return Array.from(WORDS.segment(value)).filter((segment) => segment.isWordLike).length;
-}
 
 async function readText(key: string): Promise<string | null> {
   const object = await env.SNAPSHOTS.get(key);
@@ -254,7 +248,7 @@ function changeSignalPayload(
   input: Pick<SiteChangeInput, "target" | "changed" | "diff"> & { diffKey: string },
 ): string {
   const { target, changed, diff, diffKey } = input;
-  const words = diff?.words ?? [];
+  const counts = changedWordCounts(diff);
   return JSON.stringify({
     page: { role: target.pageRole, url: target.url },
     before: {
@@ -269,8 +263,8 @@ function changeSignalPayload(
     },
     diffKey: diff === null ? null : diffKey,
     excerpt: diff === null ? [] : changeExcerpt(diff.hunks.map((hunk) => hunk.lines)),
-    wordsAdded: words.filter((c) => c.added).reduce((n, c) => n + wordCount(c.value), 0),
-    wordsRemoved: words.filter((c) => c.removed).reduce((n, c) => n + wordCount(c.value), 0),
+    wordsAdded: counts.added,
+    wordsRemoved: counts.removed,
     status: changed.status,
     transport: changed.transport,
     ...(changed.viaArchive ? { viaArchive: true } : {}),
@@ -416,9 +410,10 @@ async function openBreakageIncident(change: SiteChangeInput, filing: BreakageFil
       verdictIds: filing.judgment.verdictIds,
     }).run();
   }
-  if (results[1]?.meta.changes === 1 && filing.band === "alert") {
-    await env.SEND_EMAIL.send({ incident_id: ids.incident });
-  }
+  const retried = results[0]?.meta.changes === 0;
+  if (filing.band !== "alert" || (results[1]?.meta.changes !== 1 && !retried)) return;
+  const incidentId = await readOpenIncidentId(change.target.pageId);
+  if (incidentId !== null) await env.SEND_EMAIL.send({ incident_id: incidentId });
 }
 
 async function storeDiff(diffKey: string, diff: ReturnType<typeof diffPageText> | null) {

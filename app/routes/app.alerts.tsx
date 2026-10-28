@@ -97,7 +97,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     <main className={PAGE}>
       <PageHeading title="Alerts" />
       <p data-testid="alerts-contract" className="mt-2 leading-[1.65] text-ink-soft">
-        We only email you right away when your own website breaks. Everything else waits here.
+        We email you right away when your own website breaks or a competitor changes price or plan. Everything else
+        waits here and in your weekly brief.
       </p>
       <NewSince line={loaderData.newSince} />
       {loaderData.failedBrief === null ? null : <BriefSendFailed failed={loaderData.failedBrief} />}

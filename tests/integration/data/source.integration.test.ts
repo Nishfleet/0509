@@ -105,6 +105,7 @@ describe("readSourceTicks", () => {
         watchId: "watch-a",
         fetchedAt: "2026-09-25T00:00:00Z",
         itemCount: 7,
+        canaryCount: null,
       },
       {
         sourceId: "src-1",
@@ -114,6 +115,7 @@ describe("readSourceTicks", () => {
         watchId: "watch-a",
         fetchedAt: "2026-09-24T00:00:00Z",
         itemCount: 5,
+        canaryCount: null,
       },
     ]);
   });

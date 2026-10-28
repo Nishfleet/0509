@@ -1,22 +1,13 @@
 import type { CSSProperties, ReactElement } from "react";
 
-import type { SnapshotCell } from "../lib/competitor-snapshot";
+import { snapshotNotes, type SnapshotCell } from "../lib/competitor-snapshot";
 import { movementLabel } from "../lib/home-standing";
 
 const COLUMNS = 6;
 
-function missingNotes(cells: readonly SnapshotCell[]): { reason: string; labels: string }[] {
-  const byReason = new Map<string, string[]>();
-  for (const cell of cells) {
-    if (cell.value !== null) continue;
-    byReason.set(cell.reason, [...(byReason.get(cell.reason) ?? []), cell.label]);
-  }
-  return [...byReason].map(([reason, labels]) => ({ reason, labels: labels.join(", ") }));
-}
-
 export function CompetitorSnapshot({ cells }: { cells: readonly SnapshotCell[] }): ReactElement {
   const counted = cells.filter((cell) => cell.value !== null);
-  const notes = missingNotes(cells);
+  const notes = snapshotNotes(cells);
   return (
     <section aria-label="This week in six numbers" className="flex min-w-0 flex-col gap-3">
       {counted.length === 0 ? null : (
@@ -45,7 +36,7 @@ export function CompetitorSnapshot({ cells }: { cells: readonly SnapshotCell[] }
       )}
       {notes.map((note) => (
         <p key={note.reason} data-slot="snapshot-missing" className="text-meta text-ink-soft">
-          <span className="font-medium text-ink">{note.labels}:</span> {note.reason}
+          {note.text}
         </p>
       ))}
     </section>

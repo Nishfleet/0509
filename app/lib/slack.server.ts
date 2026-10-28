@@ -1,6 +1,6 @@
 import { fetchOutbound } from "./fetch/outbound.server";
 
-export type SlackPost = "sent" | "retry" | "revoked";
+export type SlackPost = "sent" | "retry" | "revoked" | "unconfirmed";
 
 const REVOKED_STATUSES = new Set([403, 404, 410]);
 
@@ -18,7 +18,7 @@ export async function postToSlackOutcome(webhookUrl: string, text: string): Prom
   } catch (failure) {
     const kind = failure instanceof Error ? failure.constructor.name : "unknown";
     console.error(JSON.stringify({ event: "slack.post_failed", kind }));
-    return "retry";
+    return "unconfirmed";
   }
 }
 

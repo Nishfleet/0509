@@ -5,10 +5,10 @@ const GENERIC = "not updating right now";
 const WORDS: Readonly<Record<string, string>> = Object.fromEntries(
   Object.entries({
     "no fresh data": "no new data yet",
-    "not answering": "not answering right now",
+    "not answering": "could not be checked right now",
     "timed out": "slow to answer",
     [LOST_CHANNEL_REASON]: "finding the channel again",
-    [NO_CHANNEL_REASON]: "no YouTube channel on your profile",
+    [NO_CHANNEL_REASON]: "no YouTube channel found",
   }).map(([key, words]) => [key.trim().toLowerCase(), words]),
 );
 

@@ -38,7 +38,7 @@ export const hnAdapter: MentionsAdapter = async (target, cursor) => {
   const url =
     "https://hn.algolia.com/api/v1/search_by_date?query=" +
     encodeURIComponent(target.query) +
-    "&tags=story&hitsPerPage=50&numericFilters=" +
+    "&tags=story&typoTolerance=false&hitsPerPage=50&numericFilters=" +
     encodeURIComponent("created_at_i>" + String(lowerBound(cursor)));
   const response = await fetchUpstream(url);
   if (!response.ok) {

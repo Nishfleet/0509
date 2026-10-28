@@ -2,7 +2,7 @@ import { captureException } from "@sentry/cloudflare";
 
 import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { isWorkspacePaid } from "../../app/lib/billing/subscription-state";
-import { governingWorkspace } from "../../app/lib/data/active-workspace";
+import { governingWorkspace, liveWorkspace } from "../../app/lib/data/active-workspace";
 import { markDigestSentStatement } from "../../app/lib/data/digest.server";
 import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
 import { claimIncidentNotice, incidentWasAnnounced } from "../../app/lib/data/incident_notice.server";
@@ -98,6 +98,8 @@ export type DeliveryMessage = DigestMessage | IncidentMessage | ChangeMessage | 
 type DeliveryOutcome =
   | "sent"
   | "failed"
+  | "unconfirmed"
+  | "skipped_revoked"
   | "suppressed"
   | "duplicate"
   | "no_target"
@@ -202,9 +204,9 @@ async function noTarget(
   return { outcome: "no_target", attempt_id: null, idempotency_key: null };
 }
 
-async function isUnpaidWorkspace(env: Env, workspaceId: string): Promise<boolean> {
+async function isSuppressedWorkspace(env: Env, workspaceId: string): Promise<boolean> {
   const row = await env.DB.prepare(
-    `SELECT status, current_period_end FROM plan WHERE workspace_id = ${governingWorkspace("?1")}`,
+    `SELECT status, current_period_end FROM plan WHERE workspace_id = ${governingWorkspace("?1")} AND ${liveWorkspace("?1")}`,
   )
     .bind(workspaceId)
     .first<{ status: string; current_period_end: string | null }>();
@@ -291,6 +293,7 @@ async function sendAndResolve(env: Env, input: SendAndResolveInput): Promise<Del
       outcome: result.outcome,
       error: result.error,
     });
+    if (result.outcome === "unconfirmed") reportUnconfirmed(idempotencyKey);
     if (onSent !== undefined && result.outcome === "sent") {
       await onSent();
     }
@@ -312,7 +315,7 @@ async function deliverToOwner(env: Env, message: DigestMessage): Promise<Deliver
   if (!digest) {
     return { outcome: "no_digest", attempt_id: null, idempotency_key: null };
   }
-  if (await isUnpaidWorkspace(env, digest.workspace_id)) {
+  if (await isSuppressedWorkspace(env, digest.workspace_id)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
 
@@ -406,6 +409,24 @@ function slackBriefKey(digestId: string, targetId: string): string {
   return `brief-slack:${digestId}:${targetId}`;
 }
 
+async function postSlack(env: Env, target: { id: string; target_value: string }, text: string): Promise<SendResult> {
+  const posted = await postToSlackOutcome(target.target_value, text);
+  if (posted === "revoked") {
+    await disconnectSlackTarget(env.DB, target.id);
+    return { outcome: "skipped_revoked", error: "slack webhook revoked; target disconnected" };
+  }
+  if (posted === "unconfirmed")
+    return { outcome: "unconfirmed", error: "slack post unconfirmed after a network error" };
+  return posted === "sent"
+    ? { outcome: "sent", error: null }
+    : { outcome: "failed", error: "slack did not accept the post" };
+}
+
+function reportUnconfirmed(idempotencyKey: string): void {
+  console.error(JSON.stringify({ event: "delivery.slack_post_unconfirmed", idempotency_key: idempotencyKey }));
+  captureException(new Error("slack post unconfirmed after a network error"), { tags: { lane: "slack" } });
+}
+
 async function deliverSlackBrief(env: Env, message: SlackBriefMessage): Promise<DeliveryResult> {
   const digest = await readSentWeekly(env, message.digest_id);
   if (digest === null) return { outcome: "no_digest", attempt_id: null, idempotency_key: null };
@@ -427,16 +448,7 @@ async function deliverSlackBrief(env: Env, message: SlackBriefMessage): Promise<
   return sendAndResolve(env, {
     claimId: claim.id,
     idempotencyKey,
-    send: async () => {
-      const posted = await postToSlackOutcome(target.target_value, slackBriefText(briefOf(digest)));
-      if (posted === "revoked") {
-        await disconnectSlackTarget(env.DB, target.id);
-        return { outcome: "sent", error: "slack webhook revoked; target disconnected" };
-      }
-      return posted === "sent"
-        ? { outcome: "sent", error: null }
-        : { outcome: "failed", error: "slack did not accept the post" };
-    },
+    send: () => postSlack(env, target, slackBriefText(briefOf(digest))),
   });
 }
 
@@ -534,7 +546,7 @@ async function incidentBlocked(env: Env, incident: IncidentRow): Promise<Deliver
   if (!(await readEntitlements(incident.workspace_id)).own_site_alerts) {
     return { outcome: "muted", attempt_id: null, idempotency_key: null };
   }
-  if (await isUnpaidWorkspace(env, incident.workspace_id)) {
+  if (await isSuppressedWorkspace(env, incident.workspace_id)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
   return null;
@@ -727,17 +739,7 @@ async function postChangeToSlack(
   return sendAndResolve(env, {
     claimId: claim.id,
     idempotencyKey,
-    send: async () => {
-      const text = slackText(change, payload, await readChangeMark(env, payload.diffKey));
-      const posted = await postToSlackOutcome(target.target_value, text);
-      if (posted === "revoked") {
-        await disconnectSlackTarget(env.DB, target.id);
-        return { outcome: "sent", error: "slack webhook revoked; target disconnected" };
-      }
-      return posted === "sent"
-        ? { outcome: "sent", error: null }
-        : { outcome: "failed", error: "slack did not accept the post" };
-    },
+    send: async () => postSlack(env, target, slackText(change, payload, await readChangeMark(env, payload.diffKey))),
   });
 }
 
@@ -765,7 +767,7 @@ export async function deliverChange(env: Env, message: ChangeMessage): Promise<D
   if (change.change_alerts === 0) {
     return { outcome: "muted", attempt_id: null, idempotency_key: null };
   }
-  if (await isUnpaidWorkspace(env, change.workspace_id)) {
+  if (await isSuppressedWorkspace(env, change.workspace_id)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
   const slack = await postChangeToSlack(env, { change, payload });

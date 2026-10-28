@@ -35,6 +35,12 @@ describe("postToSlack", () => {
     expect(await postToSlackOutcome(HOOK, "hello")).toBe("sent");
   });
 
+  it("calls a thrown network error unconfirmed, because the post may have reached Slack", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("socket closed"));
+    expect(await postToSlackOutcome(HOOK, "hello")).toBe("unconfirmed");
+  });
+
   it("never writes the webhook address to a log when a redirect cannot be followed", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);

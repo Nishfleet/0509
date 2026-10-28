@@ -114,6 +114,15 @@ describe("the brief preview, against real D1", () => {
     expect(quiet.is_quiet_week).toBe(true);
   });
 
+  it("ranks nobody while there is no data to rank them by", async () => {
+    const workspaceId = await seed(2);
+    await env.DB.prepare("DELETE FROM signal WHERE workspace_id = ?1").bind(workspaceId).run();
+    const payload = await previewBrief(workspaceId, SCHEDULE, NOW);
+    expect(payload.brands).toHaveLength(3);
+    expect(payload.brands.every((brand) => brand.rank === null && brand.movement === null)).toBe(true);
+    expect(payload.headline_rank).toBeNull();
+  });
+
   it("leaves out a rival that was paused or deleted this week and still reads every mark", async () => {
     const workspaceId = await seed(4);
     const run = workspaceId.replace("prev-ws-", "");

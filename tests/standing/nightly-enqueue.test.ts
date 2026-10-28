@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { openWeek, previousBriefAt, rolloverInstance, type BriefSchedule } from "../../app/lib/brief-schedule";
 import {
   CATCH_UP_GRACE_MS,
+  CATCH_UP_WINDOW_MS,
   createRollovers,
   loadNightlyPlan,
   planRollovers,
@@ -98,7 +99,15 @@ describe("nightly standing enqueue (0509#5753)", () => {
     expect(catchUpAt).toEqual([]);
   });
 
-  it("does not catch up a week that already has ranks", () => {
+  it("stops catching up a week once the hold window has passed", () => {
+    const week = openWeek(UTC_MONDAY, NOW);
+    const closedWeekStart = previousBriefAt(UTC_MONDAY, week.startsAt).toISOString();
+    const later = new Date(week.startsAt.getTime() + CATCH_UP_WINDOW_MS + 1_000);
+    const { catchUpAt } = planRollovers([workspace(WS)], new Set([unrankedWeekKey(WS, closedWeekStart)]), later);
+    expect(catchUpAt).toEqual([]);
+  });
+
+  it("does not catch up a week that already has a brief", () => {
     const { catchUpAt } = planRollovers([workspace(WS)], new Set(), NOW);
     expect(catchUpAt).toEqual([]);
   });

@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import { liveWorkspace } from "./active-workspace";
+import { STALE_CLAIM_MS } from "./send_attempt.server";
+
 const SELECT_TRIALS_ENDING = `SELECT p.workspace_id,
        p.tier,
        p.current_period_end,
@@ -17,7 +20,8 @@ const SELECT_TRIALS_ENDING = `SELECT p.workspace_id,
      ORDER BY t.created_at ASC
      LIMIT 1
   )
- WHERE p.trialing = 1 AND p.status = 'active' AND p.current_period_end > ?1 AND p.current_period_end <= ?2`;
+ WHERE p.trialing = 1 AND p.status = 'active' AND p.current_period_end > ?1 AND p.current_period_end <= ?2
+   AND ${liveWorkspace("p.workspace_id")}`;
 
 const trialEndingRow = z.object({
   workspace_id: z.string(),
@@ -47,16 +51,13 @@ export async function readTrialsEnding(db: D1Database, now: Date): Promise<Trial
 
 const reminderAttemptRow = z.object({ id: z.string() });
 
+const REMINDER_ATTEMPT = `SELECT id FROM send_attempt
+ WHERE idempotency_key = ?1 AND (status = 'sent' OR (status = 'pending' AND attempted_at >= ?2)) LIMIT 1`;
+
 export async function hasReminderAttempt(db: D1Database, key: string): Promise<boolean> {
+  const staleBefore = new Date(Date.now() - STALE_CLAIM_MS).toISOString();
   return (
-    reminderAttemptRow
-      .nullable()
-      .parse(
-        await db
-          .prepare("SELECT id FROM send_attempt WHERE idempotency_key = ?1 AND status IN ('sent', 'pending') LIMIT 1")
-          .bind(key)
-          .first(),
-      ) !== null
+    reminderAttemptRow.nullable().parse(await db.prepare(REMINDER_ATTEMPT).bind(key, staleBefore).first()) !== null
   );
 }
 

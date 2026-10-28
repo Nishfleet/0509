@@ -75,7 +75,7 @@ async function reconcileOne(sub: Seen, readBeforeDodo: string | null): Promise<v
     { data: sub },
     { type: `subscription.${sub.status}`, timestamp, expectedUpdatedAt: current?.updatedAt },
   );
-  if (outcome === "retry") {
+  if (outcome !== "done") {
     say("billing.reconcile_unmatched", { subscription: sub.subscription_id, status: sub.status });
     return;
   }

@@ -3,14 +3,14 @@ import { z } from "zod";
 
 import type { ScoredSignal } from "../../app/lib/biggest-move";
 import { isFeedKind } from "../../app/lib/developments";
-import { ACT_AT, REJECT_AT, changeActsSql } from "../../app/lib/jev/thresholds";
+import { ABOUT_BRAND_KEEP_AT, ACT_AT, changeActsSql } from "../../app/lib/jev/thresholds";
 import { D3_QUESTION_ID, D6_QUESTION_ID, reliabilitySchema, scoreBucketSchema } from "../../app/lib/standing-score";
 
 const SELECT_SCORED_SIGNALS_BY_ENTITY = `SELECT * FROM (SELECT s.id, s.entity_id, s.kind, s.title, s.summary, s.url, s.observed_at,
   src.platform, src.reliability,
   CASE
     WHEN s.kind = 'mention' AND v.p >= ${String(ACT_AT)} THEN 'mention_matters'
-    WHEN s.kind = 'mention' AND v.p > ${String(REJECT_AT)} THEN 'mention_normal'
+    WHEN s.kind = 'mention' AND v.p >= ${String(ABOUT_BRAND_KEEP_AT)} THEN 'mention_normal'
     WHEN s.kind = 'change' AND ${changeActsSql("s", "v")} THEN 'site_change_noteworthy'
     WHEN s.kind = 'ad' AND s.aspect IS NOT NULL THEN 'ad_copy_change'
     WHEN s.kind = 'ad' AND s.published_at >= ?3 AND s.published_at < ?4 THEN 'ad_new_creative'

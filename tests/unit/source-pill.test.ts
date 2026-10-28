@@ -107,7 +107,7 @@ describe("the source pill", () => {
     };
     const html = pill(reddit, silent);
     expect(html).toContain('data-state="degraded"');
-    expect(html).toContain("not answering");
+    expect(html).toContain("could not be checked right now");
     expect(html).not.toContain("last updated");
     expect(html).not.toContain('data-state="live"');
     expect(sourcePillStatus(reddit, silent, NOW).state).toBe("degraded");

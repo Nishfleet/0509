@@ -2,6 +2,8 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { pageRoleInScope, paidSourceAllowed } from "../billing/entitlements";
+import { NEVER_FOUND_REASON } from "../page-reason";
+import { liveWorkspace } from "./active-workspace";
 import { readWorkspaceEntitlements } from "./plan.server";
 
 export interface NewWatch {
@@ -24,6 +26,9 @@ export interface SiteSweepTarget {
   transportTestedAt: string | null;
 }
 
+export const ALTERNATE_MARKER = (alias: string): string =>
+  `coalesce(CASE WHEN json_valid(${alias}.config_json) THEN json_extract(${alias}.config_json, '$.alternateHome') END, 0) = 1`;
+
 const INSERT_WATCH = `INSERT INTO watch (id, entity_id, source_id, target_key, created_at)
 SELECT ?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
 ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
@@ -31,8 +36,8 @@ ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
 const UNWATCHED_ENTITIES = `SELECT e.id AS id, e.domain AS domain, CASE WHEN json_valid(e.identity_json) THEN json_extract(e.identity_json, '$.url') END AS url,
        json_valid(e.identity_json) AS identity_valid
 FROM entity e
-WHERE e.state = 'on'
-  AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = e.id AND w.source_id = ?1)
+WHERE e.state = 'on' AND ${liveWorkspace("e.workspace_id")}
+  AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = e.id AND w.source_id = ?1 AND NOT (${ALTERNATE_MARKER("w")}))
 ORDER BY e.id`;
 
 const MARK_POLLED = `UPDATE watch SET last_polled_at = ?2 WHERE id = ?1`;
@@ -50,7 +55,7 @@ const SITE_SWEEP_TARGET_JOIN = `SELECT e.workspace_id AS workspace_id,
        p.transport_tested_at AS transport_tested_at
 FROM watch w
 JOIN source src ON src.id = w.source_id AND src.is_enabled = 1 AND src.platform <> 'feed'
-JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
+JOIN entity e ON e.id = w.entity_id AND e.state = 'on' AND ${liveWorkspace("e.workspace_id")}
 JOIN page p ON p.entity_id = e.id AND p.url = w.target_key
 WHERE w.is_active = 1`;
 
@@ -217,17 +222,25 @@ export async function readSiteSweepTarget(watchId: string): Promise<SiteSweepTar
 const ENSURE_WATCHES = `INSERT INTO watch (id, entity_id, source_id, target_key, created_at)
 SELECT lower(hex(randomblob(16))), e.id, s.id, COALESCE(NULLIF(e.name, ''), e.domain), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 FROM entity e JOIN source s ON s.kind = ?1 AND s.is_enabled = 1
-WHERE e.state = 'on'
+WHERE e.state = 'on' AND ${liveWorkspace("e.workspace_id")}
 ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
 
-const SELECT_WATCHES = `SELECT w.id AS watch_id, w.target_key, w.hn_cursor, w.created_at AS watch_created_at, e.id AS entity_id, e.workspace_id, e.role,
+const WATCH_COLUMNS_FROM = `SELECT w.id AS watch_id, w.target_key, w.hn_cursor, w.created_at AS watch_created_at, e.id AS entity_id, e.workspace_id, e.role,
   COALESCE(NULLIF(e.name, ''), e.domain) AS name, e.domain,
   s.id AS source_id, s.plugin_key, s.reliability,
   COALESCE(json_extract(CASE WHEN json_valid(s.config_json) THEN s.config_json ELSE '{}' END, '$.min_interval_seconds'), 0) AS min_interval_seconds
 FROM watch w
-JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
-JOIN source s ON s.id = w.source_id AND s.kind = ?1 AND s.is_enabled = 1
-WHERE w.is_active = 1 AND w.target_key = COALESCE(NULLIF(e.name, ''), e.domain)
+JOIN entity e ON e.id = w.entity_id AND e.state = 'on' AND ${liveWorkspace("e.workspace_id")}
+JOIN source s ON s.id = w.source_id AND s.kind = ?1 AND s.is_enabled = 1`;
+
+const WATCH_ACTIVE = `w.is_active = 1 AND w.target_key = COALESCE(NULLIF(e.name, ''), e.domain)`;
+
+const SELECT_WATCHES = `${WATCH_COLUMNS_FROM}
+WHERE ${WATCH_ACTIVE}
+ORDER BY s.plugin_key, w.target_key, w.id`;
+
+const SELECT_WORKSPACE_WATCHES = `${WATCH_COLUMNS_FROM}
+WHERE e.workspace_id = ?2 AND ${WATCH_ACTIVE}
 ORDER BY s.plugin_key, w.target_key, w.id`;
 
 const watchRow = z.object({
@@ -256,9 +269,14 @@ export async function readActiveWatches(kind: "mentions" | "ads"): Promise<Watch
   return allowedPaidWatches(watchRows.parse(rows.results));
 }
 
+export async function readWorkspaceMentionWatches(workspaceId: string): Promise<WatchRow[]> {
+  const rows = await env.DB.prepare(SELECT_WORKSPACE_WATCHES).bind("mentions", workspaceId).all();
+  return allowedPaidWatches(watchRows.parse(rows.results));
+}
+
 const ENTITIES_WITHOUT_HIRING_WATCH = `SELECT e.id AS id, e.domain AS domain, e.workspace_id AS workspace_id
 FROM entity e
-WHERE e.state = 'on'
+WHERE e.state = 'on' AND ${liveWorkspace("e.workspace_id")}
   AND NOT EXISTS (
     SELECT 1 FROM watch w
     JOIN source src ON src.id = w.source_id AND src.kind = 'hiring' AND src.is_enabled = 1
@@ -270,7 +288,7 @@ const HIRING_TARGETS = `SELECT e.workspace_id AS workspace_id, e.id AS entity_id
        src.plugin_key AS plugin_key, src.platform AS platform, w.id AS watch_id, w.target_key AS board_url
 FROM watch w
 JOIN source src ON src.id = w.source_id AND src.kind = 'hiring' AND src.is_enabled = 1
-JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
+JOIN entity e ON e.id = w.entity_id AND e.state = 'on' AND ${liveWorkspace("e.workspace_id")}
 WHERE w.is_active = 1
 ORDER BY e.workspace_id, e.id, w.id`;
 
@@ -332,12 +350,13 @@ export async function readHiringTargets(): Promise<readonly HiringTarget[]> {
 
 const IN_PILOT = `(json_extract(CASE WHEN json_valid(src.config_json) THEN src.config_json ELSE '{}' END, '$.pilot') IS NULL
   OR e.workspace_id IN (SELECT ws.id FROM workspace ws JOIN user u ON u.id = ws.owner_user_id
-    WHERE u.email = json_extract(CASE WHEN json_valid(src.config_json) THEN src.config_json ELSE '{}' END, '$.pilot')))`;
+    WHERE u.email = json_extract(CASE WHEN json_valid(src.config_json) THEN src.config_json ELSE '{}' END, '$.pilot')
+      AND ${liveWorkspace("ws.id")}))`;
 
 const ENTITIES_WITHOUT_FEED_WATCH = `SELECT e.id AS id, e.domain AS domain, e.workspace_id AS workspace_id
 FROM entity e
 JOIN source src ON src.key = 'feed.rss' AND src.is_enabled = 1
-WHERE e.state = 'on' AND ${IN_PILOT}
+WHERE e.state = 'on' AND ${liveWorkspace("e.workspace_id")} AND ${IN_PILOT}
   AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = e.id AND w.source_id = src.id AND w.is_active = 1)
 ORDER BY e.id`;
 
@@ -345,7 +364,7 @@ const FEED_TARGETS = `SELECT e.workspace_id AS workspace_id, e.id AS entity_id, 
        w.id AS watch_id, w.target_key AS feed_url
 FROM watch w
 JOIN source src ON src.id = w.source_id AND src.key = 'feed.rss' AND src.is_enabled = 1
-JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
+JOIN entity e ON e.id = w.entity_id AND e.state = 'on' AND ${liveWorkspace("e.workspace_id")}
 WHERE w.is_active = 1 AND ${IN_PILOT}
 ORDER BY e.workspace_id, e.id, w.id`;
 
@@ -387,12 +406,9 @@ export async function deactivateWatch(watchId: string): Promise<void> {
   await env.DB.prepare(DEACTIVATE_WATCH).bind(watchId).run();
 }
 
-export const ALTERNATE_MARKER = (alias: string): string =>
-  `coalesce(CASE WHEN json_valid(${alias}.config_json) THEN json_extract(${alias}.config_json, '$.alternateHome') END, 0) = 1`;
-
 const BLOCKED_RIVALS = `SELECT e.id AS entity_id, e.workspace_id AS workspace_id, e.domain AS domain
 FROM entity e
-WHERE e.role = 'competitor' AND e.state = 'on'
+WHERE e.role = 'competitor' AND e.state = 'on' AND ${liveWorkspace("e.workspace_id")}
   AND EXISTS (SELECT 1 FROM page h WHERE h.entity_id = e.id AND h.role = 'home' AND h.deferred_at IS NOT NULL)
   AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = e.id AND w.is_active = 1 AND ${ALTERNATE_MARKER("w")})
 ORDER BY random()
@@ -491,6 +507,9 @@ const SITE_WATCH_SUMMARY = `SELECT COUNT(*) AS pages, MAX(w.last_polled_at) AS l
        (EXISTS (SELECT 1 FROM entity ue WHERE ue.id = ?2 AND ue.workspace_id = ?1)
         AND EXISTS (SELECT 1 FROM page hp WHERE hp.entity_id = ?2 AND hp.role = 'home' AND hp.deferred_at IS NOT NULL)
         AND NOT EXISTS (SELECT 1 FROM watch aw WHERE aw.entity_id = ?2 AND aw.is_active = 1 AND ${ALTERNATE_MARKER("aw")})) AS unreadable,
+       (EXISTS (SELECT 1 FROM entity ne WHERE ne.id = ?2 AND ne.workspace_id = ?1)
+        AND EXISTS (SELECT 1 FROM page np WHERE np.entity_id = ?2 AND np.role = 'home' AND np.transport IS NULL AND np.deferred_at IS NULL AND np.last_failure_reason = '${NEVER_FOUND_REASON}')
+        AND NOT EXISTS (SELECT 1 FROM watch nw WHERE nw.entity_id = ?2 AND nw.is_active = 1 AND ${ALTERNATE_MARKER("nw")})) AS not_found,
        (SELECT cw.target_key FROM watch cw JOIN entity ce ON ce.id = cw.entity_id AND ce.workspace_id = ?1 WHERE cw.entity_id = ?2 AND cw.is_active = 1 AND ${CUSTOMER_MARKER("cw")} LIMIT 1) AS customer_site
 FROM watch w
 JOIN source src ON src.id = w.source_id AND src.kind = 'site' AND src.platform <> 'feed'
@@ -501,6 +520,7 @@ export interface SiteWatchSummary {
   pages: number;
   lastPolledAt: string | null;
   unreadable: boolean;
+  notFound: boolean;
   customerSite: string | null;
 }
 
@@ -508,6 +528,7 @@ const readSiteWatchSummaryRow = z.object({
   pages: z.number(),
   last_polled_at: z.string().nullable(),
   unreadable: z.number(),
+  not_found: z.number(),
   customer_site: z.string().nullable(),
 });
 
@@ -519,6 +540,7 @@ export async function readSiteWatchSummary(workspaceId: string, entityId: string
     pages: row?.pages ?? 0,
     lastPolledAt: row?.last_polled_at ?? null,
     unreadable: row?.unreadable === 1,
+    notFound: row?.not_found === 1,
     customerSite: row?.customer_site ?? null,
   };
 }
@@ -538,10 +560,24 @@ export async function readEntityR2Prefixes(workspaceId: string, entityId: string
     .flatMap((row) => [`snapshot/site/${row.id}/`, `snapshot/hiring/${row.id}/`, `snapshot/feed/${row.id}/`]);
 }
 
-export const RANKED_PRICING_PAGES = `SELECT p.entity_id AS entity_id, p.url AS url,
+const FIXTURE_WATCH_IDS = `SELECT w.id AS id
+FROM watch w
+JOIN entity e ON e.id = w.entity_id
+JOIN workspace ws ON ws.id = e.workspace_id
+WHERE ws.fixture = 1
+ORDER BY w.id`;
+
+const fixtureWatchIdRows = z.array(z.object({ id: z.string() }));
+
+export async function readFixtureWatchIds(): Promise<string[]> {
+  const { results } = await env.DB.prepare(FIXTURE_WATCH_IDS).all();
+  return fixtureWatchIdRows.parse(results).map((row) => row.id);
+}
+
+export const RANKED_PRICING_PAGES = `SELECT p.entity_id AS entity_id, e.workspace_id AS workspace_id, p.url AS url,
        ROW_NUMBER() OVER (PARTITION BY p.entity_id ORDER BY p.rowid) AS position
 FROM page p
-JOIN entity e ON e.id = p.entity_id AND e.state = 'on'
+JOIN entity e ON e.id = p.entity_id AND e.state = 'on' AND ${liveWorkspace("e.workspace_id")}
 WHERE p.role = 'pricing' AND p.role_decided_for_hash IS NOT NULL`;
 
 const WANTED_PRICING_WATCH = `EXISTS (
@@ -551,7 +587,7 @@ const WANTED_PRICING_WATCH = `EXISTS (
 
 const STOP_UNWANTED_PRICING_WATCHES = `UPDATE watch SET is_active = 0
 WHERE source_id = ?1 AND is_active = 1
-  AND entity_id IN (SELECT id FROM entity WHERE state = 'on' AND role = 'competitor')
+  AND entity_id IN (SELECT e.id FROM entity e WHERE e.state = 'on' AND e.role = 'competitor' AND ${liveWorkspace("e.workspace_id")})
   AND EXISTS (
     SELECT 1 FROM page p
     WHERE p.entity_id = watch.entity_id AND p.url = watch.target_key
@@ -562,7 +598,7 @@ WHERE source_id = ?1 AND is_active = 1
 
 const RESUME_WANTED_PRICING_WATCHES = `UPDATE watch SET is_active = 1
 WHERE source_id = ?1 AND is_active = 0
-  AND entity_id IN (SELECT id FROM entity WHERE role = 'competitor')
+  AND entity_id IN (SELECT e.id FROM entity e WHERE e.role = 'competitor' AND ${liveWorkspace("e.workspace_id")})
   AND ${WANTED_PRICING_WATCH}`;
 
 export function stopUnwantedPricingWatchesStatement(sourceId: string, pagesWatched: number): D1PreparedStatement {

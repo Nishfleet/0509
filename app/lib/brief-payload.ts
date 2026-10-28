@@ -53,7 +53,16 @@ const brandLineSchema = z
 const ownSiteSchema = z
   .object({
     status: z.enum(["ok", "broken"]).catch("ok"),
-    incidents: keepValid(z.object({ page_url: loose, kind: loose, observed_at: loose, is_open: flag })),
+    incidents: keepValid(
+      z.object({
+        page_url: loose,
+        kind: loose,
+        observed_at: loose,
+        is_open: flag,
+        opened_at: optionalText.optional(),
+        closed_at: optionalText.optional(),
+      }),
+    ),
   })
   .catch({ status: "ok", incidents: [] });
 

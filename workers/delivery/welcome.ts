@@ -5,6 +5,7 @@ import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server
 import { hasReminderAttempt } from "../../app/lib/data/trial_reminder.server";
 import { readNewTrials, welcomeKey, type NewTrial } from "../../app/lib/data/welcome.server";
 
+import { reportLifecycleFailure } from "./lifecycle-failure";
 import { sendOnce } from "./send-once";
 import { renderWelcome } from "./welcome-template";
 
@@ -53,7 +54,7 @@ export async function sendWelcomes(env: Env, now: Date, isTester: TesterCheck = 
   let sent = 0;
   for (const trial of await readNewTrials(env.DB, now)) {
     const done = await welcome(env, trial, { now, isTester }).catch((error: unknown) => {
-      console.error(JSON.stringify({ event: "delivery.welcome_failed", error: redactEmailShaped(String(error)) }));
+      reportLifecycleFailure("delivery.welcome_failed", error);
       return false;
     });
     if (done) sent += 1;

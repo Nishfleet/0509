@@ -1,5 +1,4 @@
-# Trigger stub. The dispatch logic lives once in Nishfleet/fleet-ops; a
-# workflow only fires on its own repo's events, so the triggers stay here.
+# version: 1 — trigger stub for Nishfleet/fleet-ops' dispatch (README.md, "Workflows that act on their own": switch it off, delete it); its stub- group must not equal the callee's per-run group (deadlock).
 name: agent-dispatch
 on:
   issues:
@@ -17,28 +16,24 @@ on:
         description: 'miss-review to replay a miss on issue, empty for a normal sweep'
         required: false
         type: string
-  # The last five types feed fleet-ops' hold-risky job, which disarms, dequeues
-  # and labels needs-coordinator any risky PR whose head sha has no
-  # coordinator-approval=success status (0509#7092). It only calls the API.
+  # The last five types feed fleet-ops' hold-risky job (0509#7092); it only calls the API.
   pull_request_target:
     types: [dequeued, auto_merge_disabled, closed, auto_merge_enabled, synchronize, labeled, opened, reopened, ready_for_review]
   workflow_run:
     workflows: [CI]
     types: [completed]
   schedule:
-    # Hourly: a walled issue is requeued with GITHUB_TOKEN, which fires no
-    # run, so this sweep is what picks it up again (fleet-ops#8969).
+    # Hourly: picks up walled issues requeued with GITHUB_TOKEN, which fires no run (fleet-ops#8969).
     - cron: '17 * * * *'
+concurrency:
+  group: ${{ github.event_name == 'pull_request_target' && github.event.action != 'closed' && format('agent-dispatch-pr-{0}-{1}-{2}', github.repository, github.event.pull_request.number, github.event.action) || format('agent-dispatch-stub-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request_target' && github.event.action == 'synchronize' }}
+permissions: {contents: read}
 jobs:
   dispatch:
+    if: github.event_name != 'pull_request_target' || github.event.action == 'closed' || github.event.pull_request.head.repo.full_name == github.repository
     uses: Nishfleet/fleet-ops/.github/workflows/agent-dispatch.yml@main # same ref runner group 3 enforces for agent.yml; a SHA pin here drifts from agent.yml@main and strands jobs (0509#5231)
-    permissions:
-      issues: write
-      pull-requests: write
-      contents: write
-      actions: read
-      checks: read
-      statuses: read
+    permissions: {issues: write, pull-requests: write, contents: write, actions: read, checks: read, statuses: read}
     with:
       issue: ${{ inputs.issue }}
       agent_mode: ${{ vars.AGENT_MODE }}

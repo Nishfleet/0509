@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
-import type { OAuthProviderOptions } from "@cloudflare/workers-oauth-provider";
-import { ExternalTokenError, OAuthProvider } from "@cloudflare/workers-oauth-provider";
+import type { OAuthHelpers, OAuthProviderOptions } from "@cloudflare/workers-oauth-provider";
+import { ExternalTokenError, getOAuthApi, OAuthProvider } from "@cloudflare/workers-oauth-provider";
 
 import { clientIp, withinLimit } from "./client-limit.server";
 import { RATE_LIMITED, propsForApiKey } from "./keys.server";
@@ -58,4 +58,10 @@ export function createOAuthProvider<E>(handlers: Handlers<E>): OAuthProvider<E> 
   const wrapped = Object.create(provider) as OAuthProvider<E>;
   wrapped.fetch = (request, workerEnv, ctx) => fetchOAuth({ inner, request, env: workerEnv, ctx });
   return wrapped;
+}
+
+const NO_ROUTE = { fetch: () => Promise.resolve(new Response(null, { status: 404 })) };
+
+export function oauthHelpers(workerEnv: Env): OAuthHelpers {
+  return getOAuthApi<Env>(oauthOptions<Env>({ apiHandler: NO_ROUTE, defaultHandler: NO_ROUTE }), workerEnv);
 }

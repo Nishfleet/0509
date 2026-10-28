@@ -37,6 +37,6 @@ describe("the brief schedule form", () => {
 
   it("names the next brief in the workspace's own zone", () => {
     const at = new Date("2026-09-28T07:00:00.000Z");
-    expect(formatBriefAt(at, "Europe/London")).toBe("Monday 28 September 2026, 08:00 Europe/London");
+    expect(formatBriefAt(at, "Europe/London")).toBe("Monday 28 September 2026, 08:00 BST");
   });
 });

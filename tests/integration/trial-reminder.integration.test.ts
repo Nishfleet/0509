@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sendTrialReminders } from "../../workers/delivery/trial-reminder";
 
@@ -151,7 +151,11 @@ describe("trial ending reminder", () => {
     } as unknown as Env;
     const sent: EmailMessageBuilder[] = [];
 
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
     expect(await sendTrialReminders(failing, NOW, isTester)).toBe(0);
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining("delivery.lifecycle_send_failed"));
+    logged.mockRestore();
     expect(await sendTrialReminders(envWith(sent), new Date("2026-10-14T03:00:00.000Z"), isTester)).toBe(1);
     expect(sent).toHaveLength(1);
   });
@@ -196,5 +200,33 @@ describe("trial ending reminder", () => {
 
     expect(await sendTrialReminders(envWith(sent), NOW, isTester)).toBe(0);
     expect(sent).toHaveLength(0);
+  });
+
+  describe("a reminder that was claimed and never finished", () => {
+    const claim = (attemptedAt: string) =>
+      env.DB.prepare(
+        `INSERT INTO send_attempt (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at)
+         VALUES ('attempt-stuck', ?, 'target-trial', NULL, ?, 'pending', ?)`,
+      )
+        .bind(WS, `trial-ending:${WS}:${IN_36_HOURS}`, attemptedAt)
+        .run();
+
+    it("is resent once the claim is more than an hour old, as the send path itself allows", async () => {
+      await seedPlan({ status: "active", trialing: 1, periodEnd: IN_36_HOURS });
+      await claim(new Date(Date.now() - 3 * 3_600_000).toISOString());
+      const sent: EmailMessageBuilder[] = [];
+
+      expect(await sendTrialReminders(envWith(sent), NOW, isTester)).toBe(1);
+      expect(sent).toHaveLength(1);
+    });
+
+    it("is left alone while the claim is fresh, so a running send is not doubled", async () => {
+      await seedPlan({ status: "active", trialing: 1, periodEnd: IN_36_HOURS });
+      await claim(new Date().toISOString());
+      const sent: EmailMessageBuilder[] = [];
+
+      expect(await sendTrialReminders(envWith(sent), NOW, isTester)).toBe(0);
+      expect(sent).toHaveLength(0);
+    });
   });
 });

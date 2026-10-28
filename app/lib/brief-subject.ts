@@ -55,8 +55,8 @@ export function isFirstRanking(payload: BriefPayload): boolean {
 
 const GENERIC_SUBJECT = "Your weekly brief";
 
-export function briefSubject(payload: BriefPayload, unjudgedLine: string): string {
-  if (payload.is_unjudged) return unjudgedLine;
+export function briefSubject(payload: BriefPayload): string {
+  if (payload.is_unjudged) return GENERIC_SUBJECT;
   const lead = payload.read_this_first[0];
   if (lead !== undefined) return moveSubject(lead, payload.read_this_first.length);
   if (!payload.is_quiet_week) return GENERIC_SUBJECT;

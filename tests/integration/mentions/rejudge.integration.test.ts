@@ -62,7 +62,7 @@ function jevAnswering() {
   return vi.fn((_model: string, input: { state: { item: { title: string } }; questions: Record<string, unknown> }) => {
     const [questionId] = Object.keys(input.questions);
     const title = input.state.item.title;
-    const p = questionId === "mention_is_about_brand" ? (title.includes("winds") ? 0.03 : 0.96) : 0.94;
+    const p = questionId === "mention_is_about_brand" ? (title.includes("winds") ? 0.3 : 0.96) : 0.94;
     return Promise.resolve({ answers: { [questionId ?? ""]: { type: "noul", noul: p } } });
   });
 }
@@ -100,8 +100,8 @@ describe("re-judging unjudged mentions", () => {
     const first = await sweepTarget(await gdeltTargetFor(brand), NIGHT_ONE, null);
     expect(first).toEqual({ items: 2, stored: 0, unjudged: 2, skipped: 0 });
     expect((await signalRows(competitorId)).map((row) => [row.title, row.state, row.is_tombstoned])).toEqual([
-      ["Quill winds expected this weekend", "unjudged", 0],
-      ["Quillon opens a London flagship", "unjudged", 0],
+      ["Quill winds expected this weekend", "unjudged", 1],
+      ["Quillon opens a London flagship", "unjudged", 1],
     ]);
 
     const run = jevAnswering();
@@ -121,7 +121,7 @@ describe("re-judging unjudged mentions", () => {
       .all<{ question_id: string; p: number }>();
     expect(rejectVerdict.results).toHaveLength(1);
     expect(rejectVerdict.results[0]?.question_id).toBe("mention_is_about_brand");
-    expect(rejectVerdict.results[0]?.p).toBeLessThanOrEqual(0.1);
+    expect(rejectVerdict.results[0]?.p).toBe(0.3);
 
     const kept = rows.find((row) => row.title.includes("flagship"));
     const keptVerdicts = await env.DB.prepare(
@@ -152,8 +152,8 @@ describe("re-judging unjudged mentions", () => {
     expect(second).toEqual({ items: 2, stored: 0, unjudged: 0, skipped: 0 });
     expect(stillDown).toHaveBeenCalledTimes(1);
     expect((await signalRows(competitorId)).map((row) => [row.state, row.is_tombstoned])).toEqual([
-      ["unjudged", 0],
-      ["unjudged", 0],
+      ["unjudged", 1],
+      ["unjudged", 1],
     ]);
   });
 });

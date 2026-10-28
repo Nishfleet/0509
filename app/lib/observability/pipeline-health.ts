@@ -11,6 +11,7 @@ export interface SourceTick {
   watchId: string;
   fetchedAt: string;
   itemCount: number;
+  canaryCount: number | null;
 }
 
 export interface BlindSource {
@@ -57,7 +58,7 @@ export function blindSources(
       kept.push(...latest);
     }
     if (!twoTickWatch) continue;
-    if (!kept.every((tick) => tick.itemCount === 0)) continue;
+    if (!kept.every((tick) => tick.itemCount === 0 && tick.canaryCount === 0)) continue;
     blind.push({
       sourceId,
       sourceKey: source.key,

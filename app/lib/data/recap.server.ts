@@ -3,6 +3,7 @@ import { z } from "zod";
 import { TRIAL_DAYS } from "../billing/plans";
 import { baselineLines } from "../rival-baseline";
 
+import { liveWorkspace } from "./active-workspace";
 import { readRivalFacts } from "./rival_baseline.server";
 
 const SELECT_RECAPS = `SELECT p.workspace_id,
@@ -34,7 +35,8 @@ const SELECT_RECAPS = `SELECT p.workspace_id,
      ORDER BY t.created_at ASC
      LIMIT 1
   )
- WHERE p.trialing = 1 AND p.status = 'active' AND p.current_period_end > ?1 AND p.current_period_end <= ?2`;
+ WHERE p.trialing = 1 AND p.status = 'active' AND p.current_period_end > ?1 AND p.current_period_end <= ?2
+   AND ${liveWorkspace("p.workspace_id")}`;
 
 const latestMove = z.object({ rival: z.string(), what: z.string() });
 
