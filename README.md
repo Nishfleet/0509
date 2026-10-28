@@ -129,6 +129,9 @@ Version: 1.
   run gets a read-only `GITHUB_TOKEN` by default, so the job raises it to
   `contents: write` and `pull-requests: write`. The workflow reads no
   repository secret, and it checks out no pull request code.
+- A pull request Dependabot already had open fires no event when this
+  workflow lands, so an open one is not armed until Dependabot pushes to it
+  again. Nothing here backfills the ones that exist.
 - Open question: the Dependabot recipe notes that on a branch which requires a
   merge queue the built-in `GITHUB_TOKEN` cannot add a pull request to the
   queue, and `main` requires one. No run has yet proved the arm either way on
