@@ -5,7 +5,7 @@ import { readPageHashes, upsertJudgedPages, type JudgedPage } from "../data/page
 import { askChoices, type ChoiceQuestion, type ChoiceVerdict } from "../jev/client.server";
 import { sha256Hex } from "../sha256";
 
-const NAV_PAGES_JUDGED = 40;
+export const NAV_PAGES_JUDGED = 40;
 
 const PRICING_LOOKING = /pric|plans?\b|packages?\b|subscri|buy|shop|store|catalog/i;
 
@@ -67,7 +67,7 @@ async function judgeStale(
   workspaceId: string,
   domain: string,
   stale: readonly Target[],
-): Promise<(Target & { verdict: ChoiceVerdict })[]> {
+): Promise<{ judged: (Target & { verdict: ChoiceVerdict })[]; refusal: Error }> {
   const settled = await askChoices(
     workspaceId,
     PAGE_ROLE,
@@ -79,7 +79,8 @@ async function judgeStale(
   });
   const refusal = settled.find((result) => result.status === "rejected");
   if (judged.length === 0 && refusal?.status === "rejected") throw refusal.reason;
-  return judged;
+  const reason: unknown = refusal?.status === "rejected" ? refusal.reason : null;
+  return { judged, refusal: reason instanceof Error ? reason : new Error("page_role left pages unanswered") };
 }
 
 export async function classifyNavPages({
@@ -90,14 +91,12 @@ export async function classifyNavPages({
 }: ClassifyNavPagesInput): Promise<readonly JudgedPage[]> {
   const hashes = await readPageHashes(entity.id);
   const targets = await Promise.all(
-    pricingLookingFirst(pages)
-      .slice(0, NAV_PAGES_JUDGED)
-      .map(async (page) => ({ page, hash: await pageHash(page) })),
+    pricingLookingFirst(pages).map(async (page) => ({ page, hash: await pageHash(page) })),
   );
-  const stale = targets.filter((target) => hashes.get(target.page.url) !== target.hash);
+  const stale = targets.filter((target) => hashes.get(target.page.url) !== target.hash).slice(0, NAV_PAGES_JUDGED);
   if (stale.length === 0) return [];
 
-  const judged = await judgeStale(workspaceId, entity.domain, stale);
+  const { judged, refusal } = await judgeStale(workspaceId, entity.domain, stale);
   const verdicts = judged.map((entry) => entry.verdict);
 
   const rows: JudgedPage[] = judged.map(({ page, hash, verdict }) => ({
@@ -130,5 +129,6 @@ export async function classifyNavPages({
 
   await insertVerdicts(verdictRows);
   await upsertJudgedPages(rows);
+  if (judged.length < stale.length) throw refusal;
   return rows;
 }

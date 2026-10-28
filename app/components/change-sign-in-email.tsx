@@ -1,13 +1,22 @@
-import { Form, useNavigation } from "react-router";
+import { Form, useNavigation, useSearchParams } from "react-router";
+
+import { emailLandingLine } from "../lib/email-change-landing";
 
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
-export function ChangeSignInEmail({ sent, error }: { sent: boolean; error: string | null }) {
+export function ChangeSignInEmail({ email, sent, error }: { email: string; sent: boolean; error: string | null }) {
   const navigation = useNavigation();
+  const [params] = useSearchParams();
+  const landing = emailLandingLine(params, email);
   const sending = navigation.state !== "idle" && navigation.formData?.get("intent") === "change-email";
   return (
     <Form method="post" action="/app/settings" className="mt-4 flex flex-col gap-3">
+      {landing === null ? null : (
+        <p role="status" className="max-w-prose leading-[1.55]">
+          {landing}
+        </p>
+      )}
       <input type="hidden" name="intent" value="change-email" />
       <label htmlFor="new-sign-in-email" className="font-mono text-meta text-ink-soft uppercase">
         Change the email you sign in with

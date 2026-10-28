@@ -27,7 +27,12 @@ export interface ExtractedPageText {
   charCount: number;
 }
 
+export interface ExtractedPage extends ExtractedPageText {
+  lang: string | null;
+}
+
 interface ExtractState {
+  lang: string | null;
   skip: number;
   pending: string;
   parts: string[];
@@ -37,10 +42,16 @@ function collapseWhitespace(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-export async function extractPageText(html: string): Promise<ExtractedPageText> {
-  const state: ExtractState = { skip: 0, pending: "", parts: [] };
+export async function extractPageText(html: string): Promise<ExtractedPage> {
+  const state: ExtractState = { lang: null, skip: 0, pending: "", parts: [] };
 
   const rewritten = new HTMLRewriter()
+    .on("html", {
+      element(element) {
+        const lang = element.getAttribute("lang")?.trim().toLowerCase() ?? "";
+        state.lang = lang === "" ? null : lang;
+      },
+    })
     .on(SKIP_SELECTOR, {
       element(element) {
         if (VOID_ELEMENTS.has(element.tagName.toLowerCase())) return;
@@ -78,7 +89,7 @@ export async function extractPageText(html: string): Promise<ExtractedPageText> 
 
   const text = collapseWhitespace(state.parts.join(" "));
   const hash = await sha256Hex(text);
-  return { text, hash, charCount: text.length };
+  return { text, hash, charCount: text.length, lang: state.lang };
 }
 
 export function hasChanged(prevHash: string, nextHash: string): boolean {

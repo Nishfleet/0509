@@ -1,7 +1,8 @@
 import { type PlanId, PLANS, TRIAL_TERMS } from "../../lib/billing/plans";
 import { type CoverageId, isLive } from "../../lib/coverage";
-import type { StartSource } from "../../lib/pricing-page";
+import { planStartHref, type StartSource } from "../../lib/pricing-page";
 import { cn } from "../../lib/utils";
+import { buttonVariants } from "../ui/button";
 import { eyebrow, Section } from "./section";
 import { StartButton } from "./start-button";
 
@@ -15,6 +16,7 @@ const INCLUDES: Record<PlanId, readonly (string | { line: string; needs: Coverag
     "Read-only API and MCP",
   ],
   starter: [
+    "Everything in Scout, plus",
     "15 competitors watched at once",
     { line: "Every page we find, checked for changes", needs: "site.all" },
     { line: "Alerts the moment your own site breaks", needs: "own.breakage" },
@@ -22,10 +24,9 @@ const INCLUDES: Record<PlanId, readonly (string | { line: string; needs: Coverag
     "A year of before-and-afters and standing",
   ],
   agency: [
+    "Everything in Starter, plus",
     "50 competitors per workspace",
-    { line: "Every page, checked for changes", needs: "site.all" },
-    "As many workspaces as you set up",
-    "Everything in Starter",
+    "Unlimited client brands (fair use 25, more on request)",
   ],
 };
 
@@ -35,24 +36,24 @@ function includes(plan: PlanId): string[] {
   );
 }
 
-export function Price({ source = null }: { source?: StartSource | null }) {
+function PlanName({ page, children }: { page: boolean; children: string }) {
+  const Tag = page ? "h2" : "h3";
+  return <Tag className={`${eyebrow} text-ink-soft`}>{children}</Tag>;
+}
+
+export function Price({ source = null, page = false }: { source?: StartSource | null; page?: boolean }) {
   return (
     <Section
       id="price"
-      kicker="Three plans"
+      page={page}
+      kicker={page ? "Five to Nine pricing" : "Three plans"}
       title="Pick how closely you watch."
       lead="Every plan sends the Monday brief with the proof behind every line. Plans differ in how many competitors you follow, how deep we look, and how far back the proof goes."
     >
       <ul className="grid gap-4 md:grid-cols-3">
         {PLANS.map((plan) => (
-          <li
-            key={plan.id}
-            className={cn(
-              "min-w-0 border-[1.5px] p-6",
-              plan.id === "starter" ? "border-ink bg-card" : "border-line bg-card",
-            )}
-          >
-            <h3 className={`${eyebrow} text-ink-soft`}>{plan.name}</h3>
+          <li key={plan.id} className="min-w-0 border-[1.5px] border-line bg-card p-6">
+            <PlanName page={page}>{plan.name}</PlanName>
             <p className="mt-3 font-display text-[2.4rem] leading-none font-extrabold tracking-[-0.03em]">
               €{String(plan.monthlyPriceEur)}
               <span className="ml-1 font-mono text-meta font-normal tracking-[0.06em] text-ink-soft">/month</span>
@@ -64,6 +65,12 @@ export function Price({ source = null }: { source?: StartSource | null }) {
                 </li>
               ))}
             </ul>
+            <a
+              href={planStartHref(plan.id, source)}
+              className={cn(buttonVariants({ variant: "secondary" }), "mt-5 w-full")}
+            >
+              Start with {plan.name}
+            </a>
           </li>
         ))}
       </ul>

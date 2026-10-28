@@ -5,6 +5,8 @@ import { firstSiteSweepAt } from "./onboarding/arrival-estimate";
 import type { SiteChangeView } from "./site-change";
 import { sourceName } from "./source-name";
 import type { SourceKind } from "./source-kind";
+import { APP_LOCALE } from "./locale";
+import { zoneName } from "./timezone";
 
 export interface HomeEntity {
   id: string;
@@ -126,7 +128,9 @@ export function movementLabel(movement: number | null, isNew: boolean): string {
 }
 
 function localHour(timezone: string, now: Date): number {
-  const hour = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "numeric", hourCycle: "h23" }).format(now);
+  const hour = new Intl.DateTimeFormat(APP_LOCALE, { timeZone: timezone, hour: "numeric", hourCycle: "h23" }).format(
+    now,
+  );
   return Number(hour);
 }
 
@@ -138,7 +142,7 @@ export function greetingFor(timezone: string, now: Date): string {
 }
 
 function hourAndMinute(timezone: string, at: Date): string {
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(APP_LOCALE, {
     timeZone: timezone,
     hour: "2-digit",
     minute: "2-digit",
@@ -147,26 +151,22 @@ function hourAndMinute(timezone: string, at: Date): string {
 }
 
 function dayAndTime(timezone: string, at: Date): string {
-  const day = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, weekday: "long" }).format(at);
+  const day = new Intl.DateTimeFormat(APP_LOCALE, { timeZone: timezone, weekday: "long" }).format(at);
   return `${day} ${hourAndMinute(timezone, at)}`;
 }
 
 export function arrivalAround(timezone: string, at: Date): string {
-  const date = new Intl.DateTimeFormat("en-GB", {
+  const date = new Intl.DateTimeFormat(APP_LOCALE, {
     timeZone: timezone,
     weekday: "long",
     day: "numeric",
     month: "long",
   }).format(at);
-  const zone =
-    new Intl.DateTimeFormat("en-GB", { timeZone: timezone, timeZoneName: "short" })
-      .formatToParts(at)
-      .find((part) => part.type === "timeZoneName")?.value ?? timezone;
-  return `${date.replace(",", "")}, around ${hourAndMinute(timezone, at)} ${zone}`;
+  return `${date.replace(",", "")}, around ${hourAndMinute(timezone, at)} ${zoneName(timezone, at)}`;
 }
 
 function todayEyebrow(timezone: string, now: Date): string {
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(APP_LOCALE, {
     timeZone: timezone,
     weekday: "long",
     day: "numeric",
@@ -195,6 +195,7 @@ function rankedRows({ payload, entities, sources, counts, moves }: RankedRowsInp
     .map((brand) => {
       const entity = byId.get(brand.entity_id);
       const activity = brand.ad_delta + brand.mention_delta + brand.site_change_count + brand.new_roles;
+      const self = entity?.role === "self";
       const pills = sources.map((source) => {
         const count =
           counts.find((entry) => entry.entityId === brand.entity_id && entry.sourceKey === source.key)?.count ?? 0;
@@ -208,11 +209,11 @@ function rankedRows({ payload, entities, sources, counts, moves }: RankedRowsInp
       });
       return {
         entityId: brand.entity_id,
-        position: activity === 0 ? null : brand.rank,
+        position: activity === 0 && !self ? null : brand.rank,
         name: brand.name,
         domain: entity?.domain ?? null,
         movement: movementLabel(brand.movement, brand.is_new),
-        self: entity?.role === "self",
+        self,
         signals: pills.reduce((sum, pill) => sum + pill.count, 0),
         why: brand.biggest_move,
         move: moves.find((move) => move.entityId === brand.entity_id) ?? null,
@@ -223,7 +224,7 @@ function rankedRows({ payload, entities, sources, counts, moves }: RankedRowsInp
 }
 
 function weekLabel(timezone: string, weekStartAt: string): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
+  const parts = new Intl.DateTimeFormat(APP_LOCALE, {
     timeZone: timezone,
     day: "numeric",
     month: "short",

@@ -1,6 +1,6 @@
 import { createElement, Fragment, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MemoryRouter } from "react-router";
+import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { CompetitorFrame, type CompetitorFrameProps, developmentsEmpty } from "../../app/components/competitor-frame";
@@ -15,7 +15,8 @@ import {
 } from "../../app/components/competitor-header";
 
 function render(element: ReactElement): string {
-  return renderToStaticMarkup(createElement(MemoryRouter, null, element));
+  const Stub = createRoutesStub([{ path: "/", Component: () => element }]);
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
 }
 
 const change: SiteChangeItemData = {
@@ -170,6 +171,15 @@ describe("the competitor page frame", () => {
       stateChangedAt: "2026-09-22T12:00:00.000Z",
     });
     expect(off).toContain("Paused 22 Sept");
+  });
+
+  it("reconciles the week's change count with a quiet biggest move", () => {
+    const many = frame({ weekCount: 3, biggestMove: null });
+    expect(many).toContain("We saw 3 page changes in that time; none stood out.");
+    expect(frame({ weekCount: 1, biggestMove: null })).toContain(
+      "We saw 1 page change in that time; it did not stand out.",
+    );
+    expect(frame({ weekCount: 0, biggestMove: null })).not.toContain("We saw");
   });
 
   it("names every snapshot cell with a real value and never says no data", () => {

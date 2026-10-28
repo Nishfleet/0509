@@ -77,22 +77,3 @@ const PAID_SCRAPER_SOURCE_KEYS: ReadonlySet<string> = new Set(["scraper.paid", "
 export function paidSourceAllowed(sourceKey: string, entitled: boolean): boolean {
   return entitled || !PAID_SCRAPER_SOURCE_KEYS.has(sourceKey);
 }
-
-const PAID_STATUSES = new Set(["trialing", "active", "past_due"]);
-
-export function isSubscriptionLive(plan: { status: string; currentPeriodEnd: string | null }, now: Date): boolean {
-  if (PAID_STATUSES.has(plan.status)) return true;
-  const paidThrough = plan.currentPeriodEnd === null ? Number.NaN : Date.parse(plan.currentPeriodEnd);
-  return plan.status === "cancelled" && paidThrough > now.getTime();
-}
-
-export function isWorkspacePaid(plan: { status: string; currentPeriodEnd: string | null } | null, now: Date): boolean {
-  return plan !== null && isSubscriptionLive(plan, now);
-}
-
-export function entitledTier(
-  plan: { tier: string; status: string; currentPeriodEnd: string | null },
-  now: Date,
-): string {
-  return isSubscriptionLive(plan, now) ? plan.tier : "scout";
-}

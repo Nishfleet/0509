@@ -1,8 +1,9 @@
-import type { ReactElement } from "react";
-import { Form, useNavigation } from "react-router";
+import { useEffect, useRef, type ReactElement } from "react";
+import { Form, useFetcher, useNavigation } from "react-router";
 
 import type { PlanId } from "../lib/billing/plans";
 import { BLOCK_HEADING } from "./page-heading";
+import { CapRefusal } from "./cap-refusal";
 import { Monogram } from "./monogram";
 import { PlanGate } from "./plan-gate";
 import { Button } from "./ui/button";
@@ -33,10 +34,12 @@ export function CompetitorMaybes({ maybes }: { maybes: readonly Maybe[] }): Reac
 }
 
 function MaybeRow({ maybe }: { maybe: Maybe }): ReactElement {
-  const navigation = useNavigation();
-  const busy = navigation.state !== "idle" && navigation.formData?.get("suggestionId") === maybe.suggestionId;
-  const watching = busy && navigation.formData?.get("intent") === "accept";
-  const dismissing = busy && navigation.formData?.get("intent") === "dismiss";
+  const fetcher = useFetcher<{ message: string | null; upgradePlanId?: string | null }>({
+    key: `maybe-${maybe.suggestionId}`,
+  });
+  const busy = fetcher.state !== "idle";
+  const watching = busy && fetcher.formData?.get("intent") === "accept";
+  const dismissing = busy && fetcher.formData?.get("intent") === "dismiss";
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line py-4">
       <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -47,7 +50,7 @@ function MaybeRow({ maybe }: { maybe: Maybe }): ReactElement {
           {maybe.reason === null ? null : <p className="mt-1 text-body-sm text-ink-soft">{maybe.reason}</p>}
         </div>
       </div>
-      <Form method="post" className="flex gap-2">
+      <fetcher.Form method="post" className="flex gap-2">
         <input type="hidden" name="suggestionId" value={maybe.suggestionId} />
         <Button
           type="submit"
@@ -70,52 +73,113 @@ function MaybeRow({ maybe }: { maybe: Maybe }): ReactElement {
         >
           {dismissing ? "Dismissing…" : "Dismiss"}
         </Button>
-      </Form>
+      </fetcher.Form>
+      <CapRefusal result={fetcher.data} />
     </li>
+  );
+}
+
+function useClearedAfterAdd(adding: boolean, message: string | null | undefined) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const wasAdding = useRef(false);
+  useEffect(() => {
+    if (adding) wasAdding.current = true;
+    else if (wasAdding.current) {
+      wasAdding.current = false;
+      if (!message) formRef.current?.reset();
+    }
+  }, [adding, message]);
+  return formRef;
+}
+
+function AddNotice({
+  message,
+  added,
+  unreachable,
+  adding,
+}: {
+  message: string | null | undefined;
+  added: boolean;
+  unreachable: boolean;
+  adding: boolean;
+}): ReactElement | null {
+  if (message) {
+    return (
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <p id="add-competitor-error" role="alert" className="text-[0.95rem]">
+          {message}
+        </p>
+        {unreachable ? (
+          <Button type="submit" name="anyway" value="1" variant="tertiary" disabled={adding}>
+            Add it anyway
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
+  if (!added) return null;
+  return (
+    <p role="status" className="mt-3 text-body-sm text-ink-soft">
+      Added. We're reading their site now.
+    </p>
+  );
+}
+
+function AddInput({ invalid }: { invalid: boolean }): ReactElement {
+  return (
+    <Input
+      id="add-competitor"
+      name="competitor"
+      placeholder="their website address"
+      autoComplete="off"
+      autoCapitalize="none"
+      autoCorrect="off"
+      spellCheck={false}
+      enterKeyHint="go"
+      className="sm:flex-1"
+      aria-invalid={invalid ? true : undefined}
+      aria-describedby={invalid ? "add-competitor-error" : undefined}
+    />
   );
 }
 
 export function AddCompetitor({
   message,
   upgradePlanId,
+  returning,
+  added,
+  unreachable,
 }: {
   message: string | null | undefined;
   upgradePlanId?: PlanId | null | undefined;
+  returning?: boolean | undefined;
+  added?: boolean | undefined;
+  unreachable?: boolean | undefined;
 }): ReactElement {
   const navigation = useNavigation();
   const adding = navigation.state !== "idle" && navigation.formData?.get("intent") === "add";
+  const formRef = useClearedAfterAdd(adding, message);
   return (
-    <div className="mt-12">
-      <Form method="post">
+    <div className="mt-8">
+      <Form method="post" ref={formRef}>
         <input type="hidden" name="intent" value="add" />
         <label htmlFor="add-competitor" className={BLOCK_HEADING}>
           Add a competitor we missed
         </label>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-          <Input
-            id="add-competitor"
-            name="competitor"
-            placeholder="their website address"
-            autoComplete="off"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            enterKeyHint="go"
-            className="sm:flex-1"
-            aria-invalid={message ? true : undefined}
-            aria-describedby={message ? "add-competitor-error" : undefined}
-          />
+          <AddInput invalid={Boolean(message)} />
           <Button type="submit" variant="secondary" size="lg" disabled={adding}>
             {adding ? "Adding…" : "Add"}
           </Button>
         </div>
-        {message ? (
-          <p id="add-competitor-error" role="alert" className="mt-3 text-[0.95rem]">
-            {message}
-          </p>
-        ) : null}
+        <AddNotice
+          message={message}
+          added={added === true && !adding}
+          unreachable={unreachable === true}
+          adding={adding}
+        />
       </Form>
-      {upgradePlanId ? <PlanGate planId={upgradePlanId} /> : null}
+      {upgradePlanId ? <PlanGate planId={upgradePlanId} returning={returning === true} /> : null}
     </div>
   );
 }

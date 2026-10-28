@@ -7,17 +7,8 @@ import { describe, expect, it, vi } from "vitest";
 import { PlanSection } from "../../app/components/plan-settings";
 import type { PlanSummary } from "../../app/lib/billing/plans";
 
-// 0509#6741: the only message settings.billing.ts ever returns is the
-// UNAVAILABLE failure, because a successful portal call redirects instead.
-// So the fetcher data this form can hold is exactly this message, and the
-// paragraph that renders it is an error line, not progress. The sibling
-// failure on the same page moved to an alert for the same reason in #6671.
 const PORTAL_UNAVAILABLE = "We couldn't open your billing page. Try again in a few minutes.";
 
-// PlanSection reads its message off useFetcher().data, which a static
-// render never holds: the data only lands once a real submission settles.
-// So the fetcher is swapped for one pinned at the settled state the test
-// names, the way plan-gate.test.ts does it for the sibling form.
 const fetcher = vi.hoisted(() => ({
   value: { state: "idle" as "idle" | "submitting", data: undefined as { message: string } | undefined },
 }));
@@ -38,8 +29,8 @@ vi.mock("react-router", async (importOriginal) => {
   return { ...actual, useFetcher: () => ({ state: fetcher.value.state, data: fetcher.value.data, Form }) };
 });
 
-function render(plan: PlanSummary): string {
-  const Stub = createRoutesStub([{ path: "/", Component: () => createElement(PlanSection, { plan }) }]);
+function render(plan: PlanSummary, countLine: string | null = null): string {
+  const Stub = createRoutesStub([{ path: "/", Component: () => createElement(PlanSection, { plan, countLine }) }]);
   const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
   fetcher.value = { state: "idle", data: undefined };
   return html;
@@ -53,11 +44,14 @@ const BILLED: PlanSummary = {
   billed: true,
 };
 
-// The <p> that renders the text, opening tag through closing tag, so the
-// role assertions pin the region on the element that holds the message
-// rather than on any other paragraph in the markup. The searches quote the
-// unescaped text, but React does not escape the substrings that cross it, so
-// they match the static markup either way.
+const UNBILLED: PlanSummary = {
+  tier: "scout",
+  status: "none",
+  currentPeriodEnd: null,
+  trialing: false,
+  billed: false,
+};
+
 function paragraphWrapping(html: string, text: string): string {
   const start = html.indexOf(text);
   if (start < 0) throw new Error(`no paragraph renders "${text}"`);
@@ -68,16 +62,97 @@ function paragraphWrapping(html: string, text: string): string {
 }
 
 describe("PlanSection", () => {
+  it("shows how many competitors the plan is watching, and nothing when it has no count", () => {
+    const line = "Watching 3 of 15 competitors on your plan.";
+    expect(render(BILLED, line)).toContain(`data-slot="plan-usage"`);
+    expect(render(BILLED, line)).toContain(line);
+    expect(render(BILLED)).not.toContain("plan-usage");
+  });
+
   it("offers the next plan to someone with no payment set up", () => {
-    const html = render({ tier: "scout", status: "none", currentPeriodEnd: null, trialing: false, billed: false });
+    const html = render(UNBILLED);
     expect(html).toContain("Upgrade to Starter");
-    expect(html).toContain("€46/mo");
+    expect(html).toContain("€46/month");
+  });
+
+  it("offers the next plan again, and keeps billing history, once a paid plan has ended", () => {
+    const html = render({
+      tier: "scout",
+      status: "cancelled",
+      currentPeriodEnd: "2026-09-15T00:00:00.000Z",
+      trialing: false,
+      billed: true,
+    });
+    expect(html).toContain("Your paid plan ended on 15 September 2026. You&#x27;re on Scout.");
+    expect(html).toContain("Upgrade to Starter");
+    expect(html).toContain("See billing history");
+    expect(html).not.toContain("Manage or cancel plan");
+  });
+
+  it("offers to update the card, not an upgrade, when a renewal payment is on hold", () => {
+    const html = render({ ...BILLED, status: "on_hold", currentPeriodEnd: "2026-10-20T00:00:00.000Z" });
+    expect(html).toContain("Update payment method");
+    expect(html).toContain("paused");
+    expect(html).not.toContain("Upgrade to");
+    expect(html).not.toContain("Manage or cancel plan");
+  });
+
+  it("offers the next plan again, with billing history, after a first payment failed", () => {
+    const html = render({ ...BILLED, status: "failed" });
+    expect(html).toContain("Upgrade to Agency");
+    expect(html).toContain("See billing history");
+  });
+
+  it("offers the card update and no drop-to-Scout wording when a Scout plan is on hold", () => {
+    const html = render({ ...BILLED, tier: "scout", status: "on_hold", currentPeriodEnd: "2026-10-20T00:00:00.000Z" });
+    expect(html).toContain("Update payment method");
+    expect(html).toContain("paused");
+    expect(html).not.toContain("you&#x27;re on Scout");
+    expect(html).not.toContain("Upgrade to");
+  });
+
+  it("offers Starter again after a failed Scout payment", () => {
+    const html = render({ ...BILLED, tier: "scout", status: "failed" });
+    expect(html).toContain("Upgrade to Starter");
+    expect(html).toContain("See billing history");
+  });
+
+  it("does not offer to cancel a plan that is already cancelled but still paid for", () => {
+    const html = render({ ...BILLED, status: "cancelled", currentPeriodEnd: "2099-10-20T00:00:00.000Z" });
+    expect(html).toContain("then it stops");
+    expect(html).toContain("Manage billing");
+    expect(html).not.toContain("Manage or cancel plan");
   });
 
   it("offers manage or cancel, not an upgrade, to a subscriber", () => {
     const html = render(BILLED);
     expect(html).toContain("Manage or cancel plan");
     expect(html).not.toContain("Upgrade to");
+  });
+
+  it("names Dodo Payments as the seller of record and says where the invoices are", () => {
+    const html = render(BILLED);
+    expect(html).toContain("Dodo Payments is the seller of record.");
+    expect(html).toContain("invoices are in the Dodo portal");
+  });
+
+  it("says nothing about the seller of record to a workspace with no payment method on file", () => {
+    const html = render(UNBILLED);
+    expect(html).not.toContain("Dodo");
+  });
+
+  it("offers a paying Scout customer a switch to Starter that posts to the upgrade action", () => {
+    const html = render({ ...BILLED, tier: "scout" });
+    expect(html).toContain("Switch to Starter");
+    expect(html).toContain('action="/app/upgrade"');
+    expect(html).toContain('name="plan" value="starter"');
+    expect(html).not.toContain("Upgrade to");
+  });
+
+  it("offers no switch on the top plan, during a trial or to someone who does not pay yet", () => {
+    expect(render({ ...BILLED, tier: "agency" })).not.toContain("Switch to");
+    expect(render({ ...BILLED, tier: "scout", trialing: true })).not.toContain("Switch to");
+    expect(render({ ...BILLED, tier: "scout", billed: false })).not.toContain("Switch to");
   });
 
   it("announces the billing-page-unavailable message as an alert, not a polite status", () => {

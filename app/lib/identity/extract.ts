@@ -1,3 +1,4 @@
+import { getDomainWithoutSuffix } from "tldts";
 import { z } from "zod";
 
 import { extractPageText } from "../site/extract-text";
@@ -51,6 +52,8 @@ interface IdentityRewriterState {
   navLinks: string[];
   navPages: { url: string; title: string }[];
   navTitleOpen: boolean;
+  sitePages: { url: string; title: string }[];
+  siteTitleOpen: boolean;
 }
 
 const TITLE_SEPARATORS = [" - ", " | ", " – "];
@@ -158,17 +161,56 @@ function readOrganization(blocks: readonly string[]): {
     try {
       flattenLd(JSON.parse(block) as unknown, nodes);
     } catch (error) {
-      console.log(JSON.stringify({ event: "identity-ld-json-unreadable", error: String(error) }));
+      console.warn(JSON.stringify({ event: "identity-ld-json-unreadable", error: String(error) }));
       continue;
     }
   }
   const organization = nodes.find((node) => typeIncludesOrganization(node["@type"]));
-  if (!organization) return { name: null, logo: null, sameAs: [] };
+  const sameAs = nodes
+    .filter((node) => typeIncludesOrganization(node["@type"]))
+    .flatMap((node) => sameAsField(node.sameAs));
+  if (!organization) return { name: null, logo: null, sameAs };
   return {
     name: stringField(organization.name),
     logo: logoField(organization.logo),
-    sameAs: sameAsField(organization.sameAs),
+    sameAs,
   };
+}
+
+const INLINE_SOCIAL_OBJECT = /\{[^{}]*"classification"\s*:\s*"(?:youtube|facebook|instagram|twitter|tiktok)"[^{}]*\}/g;
+
+function inlineSocialLinks(html: string): string[] {
+  const links: string[] = [];
+  for (const [object] of html.matchAll(INLINE_SOCIAL_OBJECT)) {
+    try {
+      const parsed: unknown = JSON.parse(object);
+      if (isRecord(parsed) && parsed.type === "link" && typeof parsed.url === "string") links.push(parsed.url);
+    } catch {
+      continue;
+    }
+  }
+  return links;
+}
+
+const RAW_YOUTUBE_LINK = /https?:\/\/(?:www\.|m\.)?youtube\.com\/(?:@|c\/|user\/)(\w+(?:[.-]\w+)*)/gi;
+
+function simplified(value: string): string {
+  return value.toLowerCase().replaceAll(/[^a-z0-9]/g, "");
+}
+
+function rawYoutubeLinks(html: string, pageUrl: string, ldBlocks: readonly string[]): string[] {
+  if (platformForUrl(pageUrl) !== null) return [];
+  const label = simplified(getDomainWithoutSuffix(new URL(pageUrl).hostname) ?? "");
+  if (label.length < 3) return [];
+  const text = ldBlocks.reduce((rest, block) => rest.replaceAll(block, ""), html).replaceAll(/\\u002f|\\\//gi, "/");
+  return [...text.matchAll(RAW_YOUTUBE_LINK)]
+    .filter(([, name]) => simplified(name ?? "") === label)
+    .map(([link]) => link);
+}
+
+function withScriptYoutube(socials: SocialLink[], scripted: readonly string[]): SocialLink[] {
+  if (socials.some((social) => social.platform === "youtube")) return socials;
+  return [...socials, ...collectSocials(scripted, [])];
 }
 
 const YOUTUBE_CHANNEL_PATH = /^\/(?:channel\/UC[0-9A-Za-z_-]{22}|@[^/]+)\/?$/;
@@ -286,6 +328,27 @@ function navAnchorHandler(state: IdentityRewriterState, pageUrl: string): HTMLRe
   };
 }
 
+function sitePageHandler(state: IdentityRewriterState, pageUrl: string): HTMLRewriterElementContentHandlers {
+  const pageOrigin = new URL(pageUrl).origin;
+  return {
+    element(element) {
+      state.siteTitleOpen = false;
+      const href = element.getAttribute("href");
+      if (href === null || href.trim().startsWith("#")) return;
+      const url = resolveUrl(href, pageUrl);
+      if (url?.origin !== pageOrigin) return;
+      state.sitePages.push({ url: url.href, title: "" });
+      state.siteTitleOpen = true;
+    },
+    text(chunk) {
+      if (!state.siteTitleOpen) return;
+      const last = state.sitePages[state.sitePages.length - 1];
+      if (last === undefined) return;
+      state.sitePages[state.sitePages.length - 1] = { url: last.url, title: last.title + chunk.text };
+    },
+  };
+}
+
 function emptyRewriterState(): IdentityRewriterState {
   return {
     ogSiteName: null,
@@ -302,6 +365,8 @@ function emptyRewriterState(): IdentityRewriterState {
     navLinks: [],
     navPages: [],
     navTitleOpen: false,
+    sitePages: [],
+    siteTitleOpen: false,
   };
 }
 
@@ -328,6 +393,7 @@ async function runRewriter(html: string, state: IdentityRewriterState, pageUrl: 
     .on("link[rel]", linkRelHandler(state, pageUrl))
     .on("a[href]", anchorHandler(state, pageUrl))
     .on("nav a[href]", navAnchorHandler(state, pageUrl))
+    .on('header a[href], footer a[href], [role="navigation"] a[href]', sitePageHandler(state, pageUrl))
     .transform(new Response(html, { headers: { "content-type": "text/html;charset=utf-8" } }));
 
   await rewritten.arrayBuffer();
@@ -340,7 +406,7 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
   const organization = readOrganization(state.ldBlocks);
   const anchors = [...state.anchors];
   const navLinks = dedupe(state.navLinks);
-  const navPages = uniqueNavPages(state.navPages);
+  const navPages = uniqueNavPages([...state.navPages, ...state.sitePages]);
   const adLibraryHints = dedupe(anchors.filter(isAdLibraryHint));
 
   return identityExtractSchema.parse({
@@ -354,7 +420,10 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
     ldOrganizationLogo: organization.logo,
     appleTouchIcon: state.appleTouchIcon,
     manifestUrl: state.manifestUrl,
-    socials: collectSocials(organization.sameAs, anchors),
+    socials: withScriptYoutube(
+      collectSocials([...organization.sameAs, ...inlineSocialLinks(html)], anchors),
+      rawYoutubeLinks(html, pageUrl, state.ldBlocks),
+    ),
     navLinks,
     navPages,
     adLibraryHints,

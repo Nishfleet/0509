@@ -34,3 +34,10 @@ export async function claimIncidentNotice(db: D1Database, input: IncidentNoticeI
         .first(),
     );
 }
+
+const ANNOUNCED_NOTICE = `SELECT 1 AS announced FROM send_attempt WHERE idempotency_key = ?1 AND status = 'sent'`;
+const announcedRow = z.object({ announced: z.literal(1) }).nullable();
+
+export async function incidentWasAnnounced(db: D1Database, incidentId: string): Promise<boolean> {
+  return announcedRow.parse(await db.prepare(ANNOUNCED_NOTICE).bind(`incident:${incidentId}:open`).first()) !== null;
+}

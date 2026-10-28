@@ -16,6 +16,13 @@ describe("softwareApplicationJsonLd", () => {
     expect(node.offers.map((offer) => offer.price)).toEqual(["10.00", "46.00", "136.00"]);
   });
 
+  it("points each offer at the given page and omits an empty featureList", () => {
+    const node = softwareApplicationJsonLd([], "/pricing");
+    expect(node.offers.map((offer) => offer.url)).toEqual(PLANS.map(() => "https://0509.io/pricing"));
+    expect(node).not.toHaveProperty("featureList");
+    expect(softwareApplicationJsonLd(["a"])).toHaveProperty("featureList", ["a"]);
+  });
+
   it("claims no rating or review", () => {
     const node = softwareApplicationJsonLd([]);
     expect(node).not.toHaveProperty("aggregateRating");

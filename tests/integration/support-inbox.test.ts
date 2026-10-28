@@ -1,23 +1,11 @@
-import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
+import { createExecutionContext, createScheduledController, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import worker from "../../workers/support-inbox";
 
-/**
- * The support-inbox Email Worker (0509#4229 child 2): a delivered mail is
- * stored in support_report, forwarded to Nish, and opened as a GitHub issue
- * whose body carries only the report id, receipt time, 0509.io paths and the
- * mail client's user agent — never a line of the customer's text. Runs in
- * real workerd against real local D1 with migrations/ applied.
- */
 type EmailMessage = Parameters<typeof worker.email>[0];
 type InboxEnv = Parameters<typeof worker.email>[1];
 
-/**
- * The runtime always hands a handler an ExecutionContext. The module's own
- * export type keeps each handler at the parameters it declares, so these
- * aliases carry the third argument the runtime passes and the handler ignores.
- */
 const callFetch = worker.fetch as unknown as (
   request: Request,
   env: InboxEnv,
@@ -103,7 +91,7 @@ describe("0509-support-inbox-v2", () => {
 
     const issue = issueBody(fetchSpy);
     const row = await env.DB.prepare("SELECT id FROM support_report").first<{ id: string }>();
-    expect(issue.title).toBe(`user report ${row?.id ?? "<missing>"}`);
+    expect(issue.title).toBe(`Support: ${row?.id ?? "<missing>"}`);
     expect(issue.labels).toEqual(["user-report", "machine-reported"]);
     expect(issue.body).toContain("/app/pages");
     expect(issue.body).toContain("Thunderbird 128");
@@ -386,5 +374,22 @@ describe("0509-support-inbox-v2", () => {
     const response = await callFetch(new Request("https://inbox.example/"), env, ctx);
     await waitOnExecutionContext(ctx);
     expect(response.status).toBe(404);
+  });
+
+  it("logs the stored report count in the daily sweep (0509#5699)", async () => {
+    await deliver();
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const ctx = createExecutionContext();
+    worker.scheduled(createScheduledController(), env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toEqual({
+      event: "support_inbox.swept",
+      expiredReports: 0,
+      expiredIssues: 0,
+      reports: 1,
+    });
   });
 });

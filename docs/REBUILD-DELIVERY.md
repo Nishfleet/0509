@@ -5,7 +5,7 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Pairs with docs/REBUI
 ## Principles
 
 1. The product is calm. The default is: everything noteworthy lands in Alerts inside the app as it happens, and ONE email a week tells you where you stand. Nothing else interrupts.
-2. Exactly one thing interrupts: your own site looks broken (D3s above the clear band, p > 0.1). That goes out within one Workflow tick, by email, and later by any channel the user adds. At p >= 0.5 the alert on the Alerts page is high; between 0.1 and 0.5 it is normal and marked "check this" — the email itself is the same either way, because a false alarm costs ten seconds and silence on a broken site costs the customer.
+2. Exactly one thing interrupts: your own site looks broken (D3s, p >= 0.5). That goes out within one Workflow tick, by email, and later by any channel the user adds.
 3. An item is delivered once. Across channels, across weeks. Delivery is recorded per item per channel; a re-crawl or a re-run never re-sends.
 4. Per-brand OFF is absolute: an off brand produces no alerts, no brief lines, no counts. Dismissed suggestions never appear anywhere.
 5. Every message says what it is, why it was sent, and how to stop it, in one line at the bottom. One-click unsubscribe per channel. Sentence case, no exclamation marks (DESIGN.md voice).
@@ -18,7 +18,7 @@ Schema requirements (carried by the schema PR): a `delivery` record per item per
 
 | What                                             | In-app Alerts                  | Weekly brief (email)                                  | Immediate (email)        |
 | ------------------------------------------------ | ------------------------------ | ----------------------------------------------------- | ------------------------ |
-| Own-site breakage (D3s p > 0.1)                  | yes, pinned until acknowledged | recap line                                            | **yes, within one tick** |
+| Own-site breakage (D3s p >= 0.5)                 | yes, pinned until acknowledged | recap line                                            | **yes, within one tick** |
 | Competitor site change, noteworthy (D3 p >= 0.9) | yes                            | yes, if it survives D4 or is the brand's biggest move | no                       |
 | Competitor site change, possibly (D3 between)    | yes, low, "possibly"           | no                                                    | no                       |
 | Mention, matters (D6 p >= 0.9)                   | yes                            | counted per brand; the top one quoted if D4 ranks it  | no                       |

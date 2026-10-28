@@ -1,7 +1,17 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { PLANS, TRIAL_TERMS } from "../app/lib/billing/plans";
+import { PricingPage } from "../app/components/pricing-page";
+import { PLANS, TRIAL_SUMMARY } from "../app/lib/billing/plans";
 import { pricingMeta, startSource } from "../app/lib/pricing-page";
+
+describe("PricingPage", () => {
+  it("names Dodo Payments as the seller of record and says it applies VAT at checkout", () => {
+    const html = renderToStaticMarkup(createElement(PricingPage, { source: null }));
+    expect(html).toContain("Dodo Payments is the seller of record and applies VAT at checkout.");
+  });
+});
 
 describe("startSource", () => {
   it("accepts the three known sources", () => {
@@ -36,7 +46,17 @@ describe("pricingMeta", () => {
     for (const plan of PLANS) {
       expect(description).toContain(`${plan.name} €${String(plan.monthlyPriceEur)}/month`);
     }
-    expect(description).toContain(TRIAL_TERMS);
+    expect(description).toContain(TRIAL_SUMMARY);
+    expect(description.length).toBeLessThanOrEqual(160);
+  });
+
+  it("carries a FAQPage and points every offer at the pricing page", () => {
+    const graph = JSON.stringify(meta.find((entry) => "script:ld+json" in entry));
+    expect(graph).toContain('"@type":"FAQPage"');
+    expect(graph).toContain('"@type":"WebSite"');
+    expect(graph).not.toContain('"featureList"');
+    expect(graph).not.toContain('"url":"https://0509.io/"');
+    expect(graph.match(/"url":"https:\/\/0509\.io\/pricing"/g)).toHaveLength(PLANS.length);
   });
 
   it("carries one offer per plan in the json-ld graph", () => {

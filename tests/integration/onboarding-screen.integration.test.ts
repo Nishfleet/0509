@@ -9,7 +9,7 @@ const NOW = "2026-09-24T06:00:00.000Z";
 
 let runs = 0;
 
-async function seedWorkspace(): Promise<{ userId: string; workspaceId: string }> {
+async function seedWorkspace(fixture = false): Promise<{ userId: string; workspaceId: string }> {
   runs += 1;
   const userId = `user-onboarding-screen-${String(runs)}`;
   const workspaceId = `ws-onboarding-screen-${String(runs)}`;
@@ -18,8 +18,8 @@ async function seedWorkspace(): Promise<{ userId: string; workspaceId: string }>
       'INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, ?2, ?2, 1, ?3, ?3)',
     ).bind(userId, `${userId}@example.com`, NOW),
     env.DB.prepare(
-      "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Gymshark', ?2, 'UTC', 1, 8, ?3)",
-    ).bind(workspaceId, userId, NOW),
+      "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at, fixture) VALUES (?1, 'Gymshark', ?2, 'UTC', 1, 8, ?3, ?4)",
+    ).bind(workspaceId, userId, NOW, fixture ? 1 : 0),
   ]);
   return { userId, workspaceId };
 }
@@ -60,6 +60,25 @@ afterEach(() => {
 });
 
 describe("screenOnboardingSubject", () => {
+  it("proceeds a fixture workspace without asking Jev, even when Jev would refuse", async () => {
+    const { userId, workspaceId } = await seedWorkspace(true);
+    const run = stubRun(0.01);
+    const subject = `fixture-${String(runs)}.example`;
+
+    const result = await screenOnboardingSubject({
+      workspaceId,
+      userId,
+      subject: domainSubject(subject),
+      raw: subject,
+      answer: null,
+      now: NOW,
+    });
+
+    expect(result).toEqual({ kind: "proceed" });
+    expect(run).not.toHaveBeenCalled();
+    expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(0);
+  });
+
   it("proceeds a confidently public subject without recording a user decision", async () => {
     const { userId, workspaceId } = await seedWorkspace();
     const run = stubRun(0.95);
@@ -289,7 +308,7 @@ describe("screenOnboardingSubject", () => {
     const { userId, workspaceId } = await seedWorkspace();
     Reflect.set(env, "AI", { run: vi.fn(() => Promise.reject(new Error("2021: Insufficient credits"))) });
     const subject = `credits-${String(runs)}.example`;
-    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const log = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
     try {
       const result = await screenOnboardingSubject({

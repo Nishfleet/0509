@@ -163,6 +163,14 @@ last push 2026-03-12; `GoogleChrome/lighthouse-ci` ships no action of its own.
 The budgets are `docs/REBUILD-DONE.md` §B translated into the vendor's format —
 LCP 1500 ms, TTI 3000 ms, CLS 0.05, script 150 KB, total 500 KB.
 
+**Reversed 2026-10-19 (0509#7656, fleet-ops#9889):** the site went behind the
+Cloudflare Access wall, so an unauthenticated audit measured the login page, failed
+the budgets, and reddened a run whose deploy succeeded. The audit is out of the
+deploy workflow; the budgets still gate every pull request in `ci.yml` through
+`lighthouse-budget.pr.json`, their deterministic subset. The bar in
+`docs/REBUILD-DONE.md` §B stands and the audit returns when 0509#7656 decides how
+the audited URLs are reached.
+
 The load-bearing detail, from §6.3: **the action has no `fail:` input.** It runs
 `lhci assert`, reads `assertion-results.json`, and calls `core.setFailed()` only
 for assertions at `level: "error"`. Budgets default to error. _A budget written
@@ -414,7 +422,7 @@ has already rejected once (ce5fed17d).
 
 So the ban is: mechanical where stock reaches, reviewer-enforced past that
 (§C1), and stated in `CLAUDE.md` as a rule rather than a suggestion. Config
-files and tests are exempt — the trap documentation in `wrangler.jsonc` and
+files are exempt (tests are not: 0509#7469) — the trap documentation in `wrangler.jsonc` and
 `vitest.config.ts` is load-bearing and is not app code.
 
 **Known debt:** `app/**` currently contains explanatory comments written before

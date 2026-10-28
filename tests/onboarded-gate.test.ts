@@ -21,6 +21,17 @@ vi.mock("../app/lib/require-session.server", () => ({
   },
 }));
 
+const seen = vi.hoisted(() => ({ touched: [] as string[], fail: false }));
+
+vi.mock("cloudflare:workers", () => ({ waitUntil: (work: Promise<unknown>) => void work }));
+
+vi.mock("../app/lib/data/workspace.server", () => ({
+  touchWorkspaceSeen: (workspaceId: string) => {
+    seen.touched.push(workspaceId);
+    return seen.fail ? Promise.reject(new Error("d1 down")) : Promise.resolve();
+  },
+}));
+
 const landing = vi.hoisted(() => ({ missing: false, value: null as string | null }));
 
 vi.mock("../app/lib/workspace.server", () => ({
@@ -59,6 +70,29 @@ describe("requireOnboarded", () => {
       requireOnboarded({ request: new Request("https://0509.io/app/alerts"), context }),
     ).resolves.toBeUndefined();
     expect(context.get(onboardedContext)).toEqual({ session: { user: { id: "user-1" } }, workspaceId: "ws-1" });
+  });
+
+  it("records the visit after the gate passes, and a failed write never blocks the page", async () => {
+    landing.missing = false;
+    landing.value = null;
+    seen.touched.length = 0;
+    seen.fail = true;
+    await expect(
+      requireOnboarded({ request: new Request("https://0509.io/app/alerts"), context: new RouterContextProvider() }),
+    ).resolves.toBeUndefined();
+    seen.fail = false;
+    expect(seen.touched).toEqual(["ws-1"]);
+  });
+
+  it("does not record a visit for an unfinished workspace", async () => {
+    landing.missing = false;
+    landing.value = "/onboarding";
+    seen.touched.length = 0;
+    await requireOnboarded({
+      request: new Request("https://0509.io/app/alerts"),
+      context: new RouterContextProvider(),
+    }).catch(() => undefined);
+    expect(seen.touched).toEqual([]);
   });
 
   it("signs the user out to /login when there is no workspace", async () => {
@@ -103,6 +137,8 @@ describe("app layout middleware", () => {
       "app/upgrade",
       "app/tester",
       "app/alerts",
+      "app/changes/feedback",
+      "app/brief-preview",
       "app/brief/:digestId?",
     ]);
   });
@@ -115,7 +151,12 @@ describe("app layout middleware", () => {
   });
 
   it("gates share.png and logos with session-only middleware, not the onboarding gate", () => {
-    expect(childPathsOf("routes/app-session-layout.tsx")).toEqual(["app/share.png", "app/logos/:entityId"]);
+    expect(childPathsOf("routes/app-session-layout.tsx")).toEqual([
+      "app/share.png",
+      "app/logos/:entityId",
+      "app/brands",
+      "app/admin/retention",
+    ]);
     expect(appSessionLayout.middleware).toEqual([sessionMocks.requireSessionMiddleware]);
     expect(appSessionLayout.middleware).not.toContain(requireOnboarded);
   });

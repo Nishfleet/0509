@@ -73,7 +73,7 @@ describe("handleCompetitorIntent intent=add", () => {
     const workspaceId = await seedWorkspace();
     vi.stubGlobal("fetch", NOT_FOUND);
     const result = await handleCompetitorIntent(workspaceId, addForm("gymshark.com"));
-    expect(result).toEqual({ message: null });
+    expect(result).toEqual({ message: null, added: true });
 
     const rows = await env.DB.prepare(
       "SELECT id, workspace_id, role, domain, name, origin, state FROM entity WHERE workspace_id = ? AND role = 'competitor'",
@@ -112,7 +112,7 @@ describe("handleCompetitorIntent intent=add", () => {
       ),
     );
     const result = await handleCompetitorIntent(workspaceId, addForm("gymshark.com"));
-    expect(result).toEqual({ message: null });
+    expect(result).toEqual({ message: null, added: true });
     const row = await env.DB.prepare("SELECT name FROM entity WHERE workspace_id = ? AND domain = 'gymshark.com'")
       .bind(workspaceId)
       .first<{ name: string | null }>();
@@ -124,7 +124,7 @@ describe("handleCompetitorIntent intent=add", () => {
     vi.stubGlobal("fetch", wikidataGymshark);
 
     const result = await handleCompetitorIntent(workspaceId, addForm("Gymshark"));
-    expect(result).toEqual({ message: null });
+    expect(result).toEqual({ message: null, added: true });
 
     const rows = await env.DB.prepare(
       "SELECT id, workspace_id, role, domain, name, origin, state FROM entity WHERE workspace_id = ? AND role = 'competitor'",
@@ -148,6 +148,17 @@ describe("handleCompetitorIntent intent=add", () => {
       origin: "manual",
       state: "on",
     });
+  });
+
+  it("asks for an address when the field is submitted blank, without a fetch or a row", async () => {
+    const workspaceId = await seedWorkspace();
+    const fetched = vi.fn(NOT_FOUND);
+    vi.stubGlobal("fetch", fetched);
+
+    expect(await handleCompetitorIntent(workspaceId, addForm("   "))).toEqual({
+      message: "Enter their website address, like brand.com.",
+    });
+    expect(fetched).not.toHaveBeenCalled();
   });
 
   it("returns the couldn't-find message when resolveDomain cannot find the brand", async () => {
@@ -177,6 +188,94 @@ describe("handleCompetitorIntent intent=add", () => {
     expect(rows?.n).toBe(0);
   });
 
+  it("asks to check the spelling when the address does not answer, and adds nothing", async () => {
+    const workspaceId = await seedWorkspace();
+    const fetched = vi.fn((_input: RequestInfo | URL) => Promise.reject(new TypeError("fetch failed")));
+    vi.stubGlobal("fetch", fetched);
+
+    expect(await handleCompetitorIntent(workspaceId, addForm("gymshrk.com"))).toEqual({
+      message: "We couldn't reach that address. Check the spelling?",
+      unreachable: true,
+    });
+    expect(fetched.mock.calls.map(([input]) => new URL(String(input)).hostname)).toContain("www.gymshrk.com");
+    const rows = await env.DB.prepare("SELECT COUNT(*) AS n FROM entity WHERE workspace_id = ? AND role = 'competitor'")
+      .bind(workspaceId)
+      .first<{ n: number }>();
+    expect(rows?.n).toBe(0);
+  });
+
+  it("sends no request to the typed address once the probe limit is spent", async () => {
+    const workspaceId = await seedWorkspace();
+    const fetched = vi.fn((_input: RequestInfo | URL) => Promise.reject(new TypeError("fetch failed")));
+    vi.stubGlobal("fetch", fetched);
+    const limiter = vi.spyOn(env.PROBE_LIMIT, "limit").mockResolvedValue({ success: false });
+
+    const result = await handleCompetitorIntent(workspaceId, addForm("gymshrk.com"));
+    limiter.mockRestore();
+
+    expect(result.unreachable).toBeUndefined();
+    expect(result.message).toContain("tried a lot of addresses");
+    expect(fetched).not.toHaveBeenCalled();
+  });
+
+  it("tells a workspace at its plan cap about the cap, not the spelling, and sends no request", async () => {
+    const workspaceId = await seedWorkspace();
+    const fetched = vi.fn((_input: RequestInfo | URL) => Promise.reject(new TypeError("fetch failed")));
+    vi.stubGlobal("fetch", fetched);
+    const rivals = ["a", "b", "c", "d", "e"].map((name) =>
+      env.DB.prepare(
+        "INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at) VALUES (?1, ?2, 'competitor', ?3, '{}', 'manual', 'on', ?4)",
+      ).bind(`${workspaceId}-${name}`, workspaceId, `${name}-brand.example`, NOW),
+    );
+    await env.DB.batch(rivals);
+
+    const result = await handleCompetitorIntent(workspaceId, addForm("gymshrk.com"));
+
+    expect(result.unreachable).toBeUndefined();
+    expect(result.message).toContain("Your plan watches up to 5 competitors");
+    expect(fetched).not.toHaveBeenCalled();
+  });
+
+  it("adds an address that does not answer when the customer chooses to add it anyway", async () => {
+    const workspaceId = await seedWorkspace();
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("fetch failed")));
+    const form = addForm("gymshrk.com");
+    form.set("anyway", "1");
+
+    expect(await handleCompetitorIntent(workspaceId, form)).toEqual({ message: null, added: true });
+  });
+
+  it("treats Cloudflare's no-such-origin answer as an address that cannot be found", async () => {
+    const workspaceId = await seedWorkspace();
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response(null, { status: 530 })));
+
+    expect(await handleCompetitorIntent(workspaceId, addForm("gymshrk.com"))).toEqual({
+      message: "We couldn't reach that address. Check the spelling?",
+      unreachable: true,
+    });
+  });
+
+  it("accepts an address whose apex does not answer but whose www does", async () => {
+    const workspaceId = await seedWorkspace();
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) =>
+      new URL(String(input)).hostname === "www.gymshark.com"
+        ? Promise.resolve(new Response(null, { status: 200 }))
+        : Promise.reject(new TypeError("fetch failed")),
+    );
+
+    expect(await handleCompetitorIntent(workspaceId, addForm("gymshark.com"))).toEqual({ message: null, added: true });
+  });
+
+  it("does not block an address on a slow answer, only on one that cannot be found", async () => {
+    const workspaceId = await seedWorkspace();
+    vi.stubGlobal("fetch", () => Promise.reject(new DOMException("timed out", "TimeoutError")));
+
+    expect(await handleCompetitorIntent(workspaceId, addForm("slow-brand.com"))).toEqual({
+      message: null,
+      added: true,
+    });
+  });
+
   it("refuses to add a domain that is already on the takedown list", async () => {
     const workspaceId = await seedWorkspace();
     await env.DB.prepare(
@@ -200,7 +299,7 @@ describe("handleCompetitorIntent intent=add", () => {
     const workspaceId = await seedWorkspace();
     vi.stubGlobal("fetch", wikidataGymshark);
     const result = await handleCompetitorIntent(workspaceId, addForm("Gymshark"));
-    expect(result).toEqual({ message: null });
+    expect(result).toEqual({ message: null, added: true });
     const added = await env.DB.prepare(
       "SELECT id FROM entity WHERE workspace_id = ? AND role = 'competitor' AND domain = 'gymshark.com'",
     )

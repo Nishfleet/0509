@@ -8,7 +8,7 @@ import Page from "../../app/routes/onboarding.competitors";
 const NEVER = () => new Promise(() => undefined);
 
 type RouteProps = Parameters<typeof Page>[0];
-const LOADER_DATA: RouteProps["loaderData"] = { on: [], maybes: [], discovery: "done" };
+const LOADER_DATA: RouteProps["loaderData"] = { on: [], maybes: [], discovery: "done", otherBrands: [] };
 
 function render(submission: { intent: string } | null): string {
   const router = createMemoryRouter(
@@ -16,7 +16,7 @@ function render(submission: { intent: string } | null): string {
       {
         id: "onboarding",
         path: "/onboarding/competitors",
-        // The screen reads the loader's data, as hydration passes it.
+
         Component: () => createElement(Page, { loaderData: LOADER_DATA } as RouteProps),
         action: NEVER,
       },

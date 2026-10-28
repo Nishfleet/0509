@@ -56,9 +56,16 @@ function RowToggle({ row, isOpen }: { row: HomeRow; isOpen: boolean }): ReactEle
 }
 
 function RowPills({ pills }: { pills: readonly HomePill[] }): ReactElement {
+  const quiet = pills.length > 0 && pills.every((pill) => pill.state !== "live");
+  const shown = quiet ? pills.filter((pill) => pill.state === "degraded") : pills;
   return (
     <ul data-slot="row-pills" className="col-span-full flex min-w-0 flex-wrap gap-2">
-      {pills.map((pill) => (
+      {quiet ? (
+        <li data-state="none" className={cn(PILL, "border-dashed text-ink-soft")}>
+          Nothing new this week
+        </li>
+      ) : null}
+      {shown.map((pill) => (
         <li
           key={pill.key}
           data-state={pill.state}
@@ -149,7 +156,7 @@ function RowMove({ move }: { move: SiteChangeView }): ReactElement | null {
 }
 
 function positionLabel(row: HomeRow): React.ReactNode {
-  if (row.signals === 0 || row.position === null) {
+  if ((row.signals === 0 && !row.self) || row.position === null) {
     return (
       <>
         <span aria-hidden="true">—</span>
@@ -162,6 +169,6 @@ function positionLabel(row: HomeRow): React.ReactNode {
 
 function pillText(pill: HomePill): string {
   if (pill.state === "live") return `${pill.label} · ${String(pill.count)}`;
-  if (pill.state === "degraded") return `${pill.label} · not answering`;
+  if (pill.state === "degraded") return `${pill.label} · could not be checked right now`;
   return `${pill.label} · nothing new`;
 }

@@ -10,13 +10,6 @@ import {
   type FetchSweepMessage,
 } from "../../../workers/sources/fetch-sweep-consumer";
 
-/**
- * The fetch-sweep consumer (0509#5261). The identity tail puts one message per
- * seeded watch onto the queue (`enqueueFirstSweep`); this consumer is the thing
- * that collects it, on the lane that never opens a browser, and a message that
- * exhausts its retries lands in fetch-sweep-dlq instead of being deleted.
- */
-
 interface BrowserStub {
   calls: string[];
   closed: number;
@@ -195,16 +188,18 @@ describe("fetch-sweep consumer (0509#5261)", () => {
     browserHolder.current = undefined;
   });
 
-  it("never opens a browser on the fetch lane, even for a thin page that would escalate", async () => {
+  it("never opens a browser on the fetch lane, and acks a thin page the nightly sweep will read with one", async () => {
     vi.stubGlobal("fetch", () =>
       Promise.resolve(new Response('<!doctype html><html><body><div id="app"></div></body></html>', { status: 200 })),
     );
     const stub = browserHolder.current;
     if (stub === undefined) throw new Error("expected the browser stub");
 
-    const results = await handleFetchSweepBatch(batchFor([message()]).batch);
+    const { batch, calls } = batchFor([message()]);
+    const results = await handleFetchSweepBatch(batch);
 
-    expect(results).toEqual(["failed"]);
+    expect(results).toEqual(["deferred"]);
+    expect(calls).toEqual({ acked: [0], retried: [] });
     expect(stub.calls).toEqual([]);
     expect(stub.closed).toBe(0);
     expect(captureException).not.toHaveBeenCalled();
@@ -359,7 +354,6 @@ describe("fetch-sweep consumer (0509#5261)", () => {
     expect(calls.retried).toEqual([]);
     expect(await snapshots()).toHaveLength(1);
 
-    // The email lane's tables stay untouched: nothing was sent, nothing claimed.
     const digests = await env.DB.prepare("SELECT COUNT(*) AS n FROM digest").first<{ n: number }>();
     expect(digests?.n).toBe(0);
     const attempts = await env.DB.prepare("SELECT COUNT(*) AS n FROM send_attempt").first<{ n: number }>();
@@ -375,7 +369,7 @@ describe("fetch-sweep consumer (0509#5261)", () => {
     vi.mocked(sentry.captureException).mockClear();
     const { batch, calls } = batchFor([message(), message()], FETCH_SWEEP_DLQ);
 
-    handleFetchSweepDlqBatch(batch);
+    await handleFetchSweepDlqBatch(batch);
 
     expect(calls.acked).toEqual([0, 1]);
     expect(calls.retried).toEqual([]);
@@ -388,11 +382,13 @@ describe("fetch-sweep consumer (0509#5261)", () => {
         event: "fetch-sweep.dead_lettered",
         queue: FETCH_SWEEP_DLQ,
         message_id: "msg-0",
+        reason: null,
       }),
       JSON.stringify({
         event: "fetch-sweep.dead_lettered",
         queue: FETCH_SWEEP_DLQ,
         message_id: "msg-1",
+        reason: null,
       }),
     ]);
     expect(vi.mocked(sentry.captureException).mock.calls.map(([, hint]) => hint)).toEqual([
@@ -404,5 +400,24 @@ describe("fetch-sweep consumer (0509#5261)", () => {
     expect(serialized).not.toContain(URL);
     expect(serialized).not.toContain(ENTITY);
     expect(serialized).not.toContain("fetch-sweep@0509.io");
+  });
+
+  it("names the stored failure reason on a dead-lettered message, and nothing else about the page", async () => {
+    vi.resetModules();
+    await env.DB.prepare("UPDATE page SET last_failure_reason = 'unreachable' WHERE id = ?").bind(PAGE).run();
+    const [{ handleFetchSweepDlqBatch }, sentry] = await Promise.all([
+      import("../../../workers/sources/fetch-sweep-consumer"),
+      import("@sentry/cloudflare"),
+    ]);
+    vi.mocked(sentry.captureException).mockClear();
+    const { batch } = batchFor([message()], FETCH_SWEEP_DLQ);
+
+    await handleFetchSweepDlqBatch(batch);
+
+    const [[error]] = vi.mocked(sentry.captureException).mock.calls;
+    const text = error instanceof Error ? error.message : String(error);
+    expect(JSON.parse(text)).toMatchObject({ event: "fetch-sweep.dead_lettered", reason: "unreachable" });
+    expect(text).not.toContain(WATCH);
+    expect(text).not.toContain(URL);
   });
 });

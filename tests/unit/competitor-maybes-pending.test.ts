@@ -6,16 +6,16 @@ import { describe, expect, it } from "vitest";
 import { AddCompetitor, CompetitorMaybes } from "../../app/components/competitor-maybes";
 import { RetireQuestions } from "../../app/components/retire-questions";
 
-// Every row here posts to the route with the row's own suggestionId, so the
-// pending state has to be scoped to that id: one row in flight disables its two
-// buttons and leaves every other row live. Two rows render in each test so the
-// scope is what is under test, not the mere presence of a submission.
 const NEVER = () => new Promise(() => undefined);
 
 const MAYBE_A = { suggestionId: "sug-a", name: "Acme", domain: "acme.example", reason: null };
 const MAYBE_B = { suggestionId: "sug-b", name: "Beta", domain: "beta.example", reason: "same buyer" };
 
-function render(element: ReactElement, submission: { suggestionId: string; intent: string } | null): string {
+function render(
+  element: ReactElement,
+  submission: { suggestionId: string; intent: string } | null,
+  fetcherKey: string | null = null,
+): string {
   const router = createMemoryRouter(
     [
       { path: "/", element: createElement("div", null, "home") },
@@ -27,13 +27,15 @@ function render(element: ReactElement, submission: { suggestionId: string; inten
     const formData = new FormData();
     formData.set("suggestionId", submission.suggestionId);
     formData.set("intent", submission.intent);
-    void router.navigate("/app/competitors", { formMethod: "post", formData });
+    const options = { formMethod: "post", formData } as const;
+    if (fetcherKey === null) void router.navigate("/app/competitors", options);
+    else void router.fetch(`${fetcherKey}${submission.suggestionId}`, "1", "/app/competitors", options);
   }
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
 
 function maybes(submission: { suggestionId: string; intent: string } | null): string {
-  return render(createElement(CompetitorMaybes, { maybes: [MAYBE_A, MAYBE_B] }), submission);
+  return render(createElement(CompetitorMaybes, { maybes: [MAYBE_A, MAYBE_B] }), submission, "maybe-");
 }
 
 function questions(submission: { suggestionId: string; intent: string } | null): string {
@@ -58,12 +60,24 @@ function row(html: string, ariaLabel: string): string {
   return found;
 }
 
+describe("the Add a competitor field when the address does not answer", () => {
+  it("offers Add it anyway as a submit button that sends anyway=1, only for an unreachable address", () => {
+    const reached = render(
+      createElement(AddCompetitor, {
+        message: "We couldn't reach that address. Check the spelling?",
+        unreachable: true,
+      }),
+      null,
+    );
+    const button = /<button\b[^>]*name="anyway"[^>]*>[\s\S]*?<\/button>/.exec(reached);
+    expect(button?.[0]).toContain('value="1"');
+    expect(button?.[0]).toContain('type="submit"');
+    expect(button?.[0]).toContain("Add it anyway");
+    expect(addForm("We couldn't read that. Try their main website, like brand.com.")).not.toContain("Add it anyway");
+  });
+});
+
 describe("the Add a competitor field and its error", () => {
-  // Every message handleCompetitorIntent can return for intent=add is an error,
-  // so the field carries the failure and announces it as one. Before this the
-  // same message was a role=status, read politely only when nothing else
-  // happens, and the input said nothing at all. renderToStaticMarkup escapes
-  // the apostrophe, so the message is asserted in its escaped form.
   const ERROR = "We couldn't read that. Try their main website, like brand.com.";
   const ERROR_ESCAPED = "We couldn&#x27;t read that. Try their main website, like brand.com.";
 
@@ -163,5 +177,13 @@ describe("the Still competing? Stop tracking and Keep buttons", () => {
     expect(row(html, "Stop tracking Acme")).toContain(">Stop tracking<");
     expect(row(html, "Keep tracking Acme")).not.toContain('disabled=""');
     expect(row(html, "Keep tracking Acme")).toContain(">Keep<");
+  });
+});
+
+describe("the add form confirms an added competitor", () => {
+  it("says we're reading their site only after an add", () => {
+    const added = render(createElement(AddCompetitor, { message: null, added: true }), null);
+    expect(added).toContain("Added. We&#x27;re reading their site now.");
+    expect(addForm(undefined)).not.toContain("reading their site");
   });
 });

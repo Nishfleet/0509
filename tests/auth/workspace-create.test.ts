@@ -27,9 +27,11 @@ function openDb(): DatabaseSync {
       brief_hour INTEGER NOT NULL DEFAULT 8 CHECK (brief_hour BETWEEN 0 AND 23),
       created_at TEXT NOT NULL,
       fixture INTEGER NOT NULL DEFAULT 0,
+      parent_workspace_id TEXT,
       FOREIGN KEY (owner_user_id) REFERENCES "user"(id)
     );
     CREATE INDEX idx_workspace_owner ON workspace(owner_user_id);
+    CREATE TABLE active_workspace (user_id TEXT PRIMARY KEY NOT NULL, workspace_id TEXT NOT NULL);
     CREATE TABLE channel (id TEXT PRIMARY KEY NOT NULL, key TEXT NOT NULL UNIQUE, is_enabled INTEGER NOT NULL DEFAULT 1, config_json TEXT NOT NULL DEFAULT '{}');
     INSERT INTO channel (id, key) VALUES ('chan-email', 'email');
     CREATE TABLE send_target (
@@ -39,6 +41,7 @@ function openDb(): DatabaseSync {
       target_value TEXT NOT NULL,
       is_verified INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'owner',
       UNIQUE (workspace_id, channel_id, target_value)
     );
     CREATE TABLE entity (
@@ -164,6 +167,26 @@ describe("ensureWorkspace", () => {
     expect(countOf(database, "SELECT count(*) AS n FROM workspace")).toBe(1);
   });
 
+  it("marks a kept e2e account's new workspace as a fixture and a customer's as not", async () => {
+    const database = openDb();
+    seedUser(database, "user-kept", "e2e+j11@0509.io");
+    seedUser(database, "user-per-run", "e2e+abc123@0509.io");
+    seedUser(database, "user-customer", "ada@example.com");
+    const db = asWorkspaceDb(database);
+
+    for (const [userId, email] of [
+      ["user-kept", "e2e+j11@0509.io"],
+      ["user-per-run", "e2e+abc123@0509.io"],
+      ["user-customer", "ada@example.com"],
+    ] as const) {
+      await ensureWorkspace(db, { userId, email, timezone: "UTC", now: "2026-10-28T12:00:00.000Z" });
+    }
+
+    expect(countOf(database, "SELECT fixture AS n FROM workspace WHERE owner_user_id = 'user-kept'")).toBe(1);
+    expect(countOf(database, "SELECT fixture AS n FROM workspace WHERE owner_user_id = 'user-per-run'")).toBe(1);
+    expect(countOf(database, "SELECT fixture AS n FROM workspace WHERE owner_user_id = 'user-customer'")).toBe(0);
+  });
+
   it("stores UTC when the browser sent no zone, then keeps the first real zone", async () => {
     const database = openDb();
     seedUser(database, "user-1", "ada@example.com");
@@ -271,7 +294,7 @@ describe("ensureWorkspace", () => {
     await ensureWorkspace(base, { ...input, timezone: null });
     const racing: WorkspaceDb = {
       prepare(query: string) {
-        if (query.startsWith("SELECT id, name")) {
+        if (query.startsWith("SELECT w.id AS id, w.name")) {
           return {
             bind: () => ({
               first: async <T>() =>

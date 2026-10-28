@@ -1,14 +1,17 @@
 import type { Route } from "./+types/app.settings";
 
+import { ClientBrands } from "../components/client-brands";
 import { DeleteAccount, ExportData } from "../components/account-settings";
 import { DismissedBrands } from "../components/dismissed-brands";
 import { Footer } from "../components/footer";
-import { ChangeAlertsSetting, OwnSiteAlertsSetting } from "../components/own-site-alerts-setting";
+import { ChangeAlertsSetting, OwnSiteAlertsSetting, SlackBriefSetting } from "../components/own-site-alerts-setting";
 import { SlackAlertsSetting } from "../components/slack-alerts-setting";
 import { PlanSection } from "../components/plan-settings";
 import { PageHeading } from "../components/page-heading";
 import { AccountSection, AgentsSection, BriefSection, SettingsJumps } from "../components/settings-sections";
+import { readBrandPanel } from "../lib/client-brands.server";
 import { sessionContext } from "../lib/require-session.server";
+import { readDeviceList } from "../lib/devices.server";
 import { readPasskeys } from "../lib/passkeys.server";
 import { readSettings, runSettingsIntent } from "../lib/settings.server";
 
@@ -18,8 +21,13 @@ export function meta() {
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const session = context.get(sessionContext);
-  const [settings, passkeys] = await Promise.all([readSettings(session.user), readPasskeys(request)]);
-  return { ...settings, passkeys };
+  const [settings, passkeys, devices, brandPanel] = await Promise.all([
+    readSettings(session.user),
+    readPasskeys(request),
+    readDeviceList(session.user.id, session.session.id, new Date()),
+    readBrandPanel(session.user.id),
+  ]);
+  return { ...settings, passkeys, devices, brandPanel };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -38,16 +46,34 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         <SettingsJumps hasBrief={loaderData.schedule !== null} hasPlan={loaderData.plan !== null} />
         <div className="max-w-3xl min-w-0">
           {loaderData.schedule === null ? null : <BriefSection schedule={loaderData.schedule} />}
-          <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
-          <ChangeAlertsSetting on={loaderData.changeAlerts} />
-          <SlackAlertsSetting connected={loaderData.slackConnected} error={actionData?.slackError ?? null} />
+          <div id="settings-alerts">
+            <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
+            <ChangeAlertsSetting on={loaderData.changeAlerts} />
+            <SlackAlertsSetting
+              connected={loaderData.slackConnected}
+              revoked={loaderData.slackRevoked}
+              emailAlerts={loaderData.changeAlerts}
+              error={actionData?.slackError ?? null}
+            />
+            {loaderData.slackConnected ? <SlackBriefSetting on={loaderData.slackBrief} /> : null}
+          </div>
           <DismissedBrands dismissed={loaderData.dismissed} />
+          {loaderData.brandPanel.canAdd || loaderData.brandPanel.full || loaderData.brandPanel.brands.length > 1 ? (
+            <ClientBrands
+              brands={loaderData.brandPanel.brands}
+              canAdd={loaderData.brandPanel.canAdd}
+              full={loaderData.brandPanel.full}
+            />
+          ) : null}
           <AgentsSection />
-          <PlanSection plan={loaderData.plan} />
+          <PlanSection plan={loaderData.plan} countLine={loaderData.countLine} returning={loaderData.returning} />
           <AccountSection
             email={loaderData.email}
             delivery={loaderData.delivery}
+            mail={loaderData.mail}
+            teammates={loaderData.teammates}
             passkeys={loaderData.passkeys}
+            devices={loaderData.devices}
             result={actionData}
           />
           <ExportData />

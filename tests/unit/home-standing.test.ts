@@ -287,6 +287,34 @@ describe("Home standing", () => {
     expect(html).not.toContain("#1");
   });
 
+  it("keeps your own number beside You when the headline names it, even with a quiet week", () => {
+    const quiet = { ad_delta: 0, mention_delta: 0, site_change_count: 0, new_roles: 0 };
+    const p = payload({
+      brands: [
+        brand("ent_kindred", "Kindred", 1, 0, false, { ad_delta: 2 }),
+        brand("ent_self", "Own Brand", 2, 0, false, quiet),
+        brand("ent_casetta", "Casetta", 3, 0, false, quiet),
+      ],
+    });
+    const standing = homeStanding({
+      payload: { ...p, headline_rank: 2, headline_total: 3 },
+      entities: ENTITIES,
+      schedule: SCHEDULE,
+      history: [],
+      sources: SITE_SOURCES,
+      counts: [],
+      moves: [],
+      now: THURSDAY_MORNING,
+    });
+    if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
+    expect(standing.rank).toBe(2);
+    expect(standing.rows.map((row) => [row.name, row.position])).toEqual([
+      ["Kindred", 1],
+      ["Own Brand", 2],
+      ["Casetta", null],
+    ]);
+  });
+
   it("asks for a competitor when fewer than two brands are on (REBUILD-STANDING rules)", () => {
     const html = render({
       payload: payload(),
@@ -527,9 +555,9 @@ describe("Home chips", () => {
 });
 
 describe("four-week chart", () => {
-  it("shows the history weeks ascending, with the London week labelled 21 SEP", () => {
+  it("shows the history weeks ascending, with the London week labelled 21 SEPT", () => {
     const standing = chartStanding(HISTORY);
-    expect(standing.chart.weeks).toEqual(["24 AUG", "31 AUG", "7 SEP", "14 SEP", "21 SEP"]);
+    expect(standing.chart.weeks).toEqual(["24 AUG", "31 AUG", "7 SEPT", "14 SEPT", "21 SEPT"]);
   });
 
   it("keeps a missing week as null, never a zero", () => {
@@ -557,6 +585,6 @@ describe("four-week chart", () => {
     const standing = chartStanding([{ entity_id: "ent_self", week_start_at: "2026-09-20T23:00:00.000Z", rank: 1 }]);
     expect(standing.chart.lines).toHaveLength(1);
     expect(standing.chart.lines[0]?.ranks).toHaveLength(1);
-    expect(standing.chart.weeks).toEqual(["21 SEP"]);
+    expect(standing.chart.weeks).toEqual(["21 SEPT"]);
   });
 });

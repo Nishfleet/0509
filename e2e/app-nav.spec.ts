@@ -1,11 +1,8 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { onboardedStatePath } from "../playwright.config";
-import { consoleFailures, watchConsole } from "./inbox";
+import { consoleFailures, isLocalLane, run, seedPreviewSession, watchConsole } from "./inbox";
 
-// The session comes from the `session` setup project's storageState (one
-// magic-link sign-in per run). The only test here is production-only, so the
-// missing local state file is never read.
 test.use({
   storageState: async ({}, use, testInfo) => {
     await use(
@@ -16,20 +13,36 @@ test.use({
   },
 });
 
-// The signed-in nav walk, production only: its session comes from a magic-link
-// sign-in, which the preview Worker can neither send nor receive, so the guard
-// below skips the spec unless PLAYWRIGHT_TEST_BASE_URL points at a deployed
-// Worker (the `e2e-production` job after deploy). Its storageState is the
-// already-onboarded session that `e2e/onboarded.setup.ts` mints per lane, so
-// Home (`/app`) is a real page: each walk ends on Home, which waits for `/app$`.
-test.skip(
-  !process.env.PLAYWRIGHT_TEST_BASE_URL,
-  "the nav walk needs a real session; the local preview Worker can neither send nor receive email",
-);
+test.beforeEach(async ({ page, baseURL }) => {
+  if (!isLocalLane()) return;
+  const { cookie } = await seedPreviewSession("nav", ({ db, suffix, userId }) => {
+    const stamp = "2026-10-12T00:00:00.000Z";
+    run(
+      db,
+      "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?, ?, ?, 'UTC', 1, 8, ?)",
+      `ws-${suffix}`,
+      "Nav Preview",
+      userId,
+      stamp,
+    );
+    run(
+      db,
+      "INSERT INTO entity (id, workspace_id, role, domain, name, created_at) VALUES (?, ?, 'self', ?, 'Nav Brand', ?)",
+      `ent-self-${suffix}`,
+      `ws-${suffix}`,
+      `nav-${suffix}.example`,
+      stamp,
+    );
+  });
+  await page.context().addCookies(
+    cookie.split("; ").map((pair) => {
+      const [name, ...value] = pair.split("=");
+      return { name, value: value.join("="), url: baseURL ?? "" };
+    }),
+  );
+});
 
 test("a signed-in user reaches the four places by tapping and by Tab+Enter", async ({ page }, testInfo) => {
-  // Production lane: the nav walk overruns the 30 s
-  // default (0509#5681).
   test.setTimeout(120_000);
   const watched = watchConsole(page);
 
@@ -37,11 +50,8 @@ test("a signed-in user reaches the four places by tapping and by Tab+Enter", asy
   const noOverflow = () =>
     page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
-  // Tapping: start at Competitors by URL, then walk the nav by click, and end
-  // on Home.
   await page.goto("/app/competitors");
-  // level 1 only: "Possible competitors" is also a heading and a substring match
-  // fails the walk whenever that block is on the page (0509#6912).
+
   await expect(page.getByRole("heading", { level: 1, name: "Competitors", exact: true })).toBeVisible();
   expect(await noOverflow()).toBe(0);
   await page.screenshot({ path: test.info().outputPath("competitors.png") });
@@ -63,9 +73,6 @@ test("a signed-in user reaches the four places by tapping and by Tab+Enter", asy
   await nav.getByRole("link", { name: "Home" }).click();
   await page.waitForURL(/\/app$/);
 
-  // Keyboard: a fresh page load before tabbing pins the count from the top of
-  // the document — the skip link is first, then the four Places, so
-  // Home = 2 Tabs, Competitors = 3, Alerts = 4, Settings = 5.
   for (const [, path, tabs] of [
     ["Competitors", "/app/competitors", 3],
     ["Alerts", "/app/alerts", 4],
@@ -91,4 +98,20 @@ test("a signed-in user reaches the four places by tapping and by Tab+Enter", asy
   await page.waitForURL(/\/app$/);
 
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
+});
+
+test("the skip link jumps to the page content and back keeps the right place marked", async ({ page }) => {
+  const nav = page.getByRole("navigation", { name: "Primary" });
+  await page.goto("/app/alerts");
+  await page.keyboard.press("Tab");
+  await expect(page.locator(":focus")).toHaveAttribute("href", "#app-content");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#app-content$/);
+
+  await nav.getByRole("link", { name: "Settings" }).click();
+  await page.waitForURL(/\/app\/settings$/);
+  await page.goBack();
+  await page.waitForURL(/\/app\/alerts/);
+  await expect(nav.getByRole("link", { name: "Alerts" })).toHaveAttribute("aria-current", "page");
+  await expect(nav.getByRole("link", { name: "Settings" })).not.toHaveAttribute("aria-current", "page");
 });

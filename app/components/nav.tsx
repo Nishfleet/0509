@@ -12,7 +12,7 @@ export function Nav() {
     <nav
       aria-label="Primary"
       data-slot="nav"
-      className="fixed inset-x-0 bottom-0 z-10 border-t border-ink bg-card pb-[env(safe-area-inset-bottom)] min-[860px]:static min-[860px]:min-h-dvh min-[860px]:w-52 min-[860px]:shrink-0 min-[860px]:border-t-0 min-[860px]:border-r min-[860px]:pb-0"
+      className="fixed inset-x-0 bottom-0 z-10 border-t border-ink bg-card pb-[env(safe-area-inset-bottom)] min-[860px]:sticky min-[860px]:top-0 min-[860px]:h-dvh min-[860px]:w-52 min-[860px]:shrink-0 min-[860px]:self-start min-[860px]:border-t-0 min-[860px]:border-r min-[860px]:pb-0"
     >
       <ul className="grid grid-cols-4 min-[860px]:flex min-[860px]:flex-col min-[860px]:gap-1 min-[860px]:p-4">
         {places.map((place) => (

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { onboardedStatePath } from "../playwright.config";
 import { consoleFailures, isLocalLane, watchConsole } from "./inbox";
@@ -28,6 +28,7 @@ for (const path of SIGNED_IN_PAGES) {
 
     const response = await page.goto(path);
     expect(response?.status()).toBe(200);
+    expect(new URL(page.url()).pathname, `${path} landed on another page`).toBe(path);
     await expect(page.locator("main")).toBeVisible();
 
     expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);

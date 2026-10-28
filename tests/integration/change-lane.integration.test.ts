@@ -1,8 +1,9 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { saveSlackTarget } from "../../app/lib/data/send_target.server";
+import { readSlackDisconnected, readSlackTarget, saveSlackTarget } from "../../app/lib/data/send_target.server";
 import { CHANGE_DAILY_CAP, deliverChange, handleBatch } from "../../workers/delivery/consumer";
+import { handleDlqBatch } from "../../workers/delivery/dlq-consumer";
 
 const USER = "user-change-lane";
 const WS = "ws-change-lane";
@@ -92,7 +93,7 @@ describe("rival change email lane (0509#6375)", () => {
     expect(second.outcome).toBe("duplicate");
     expect(sent).toHaveLength(1);
     expect(sent[0].to).toBe(TARGET);
-    expect(sent[0].subject).toBe("Rival changed its pricing page");
+    expect(sent[0].subject).toBe("Rival changed its pricing page: Pro $12 a month → Pro $15 a month");
     expect(sent[0].text).toContain("Before: Pro $12 a month");
     expect(sent[0].text).toContain("After: Pro $15 a month");
     expect(sent[0].text).toContain("https://0509.io/app/settings");
@@ -100,9 +101,23 @@ describe("rival change email lane (0509#6375)", () => {
       unsubscribe_token: string;
     }>();
     expect(sent[0].headers).toEqual({
-      "List-Unsubscribe": `<https://0509.io/u/${token?.unsubscribe_token ?? ""}>`,
+      "List-Unsubscribe": `<https://0509.io/u/${token?.unsubscribe_token ?? ""}?type=alerts>`,
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
     });
+  });
+
+  it("never emails a rival change to a confirmed teammate, only to the owner", async () => {
+    await env.DB.prepare(
+      `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at, role)
+       VALUES ('mate-change', ?, 'chan-email', 'mate@0509.io', 1, '2026-09-23T00:00:02Z', 'teammate')`,
+    )
+      .bind(WS)
+      .run();
+    const sent: EmailMessageBuilder[] = [];
+
+    await deliverChange(envWith(sent), { signal_id: SIGNAL });
+
+    expect(sent.map((mail) => mail.to)).toEqual([TARGET]);
   });
 
   it("never sends more than the cap when consumers race for the last slots", async () => {
@@ -112,8 +127,8 @@ describe("rival change email lane (0509#6375)", () => {
 
     const results = await Promise.all(ids.map((id) => deliverChange(envWith(sent), { signal_id: id })));
 
-    const changeEmails = sent.filter((message) => message.subject === "Rival changed its pricing page");
-    const notices = sent.filter((message) => message.subject === "More rivals changed price or plan today");
+    const changeEmails = sent.filter((message) => message.subject.startsWith("Rival changed its pricing page"));
+    const notices = sent.filter((message) => message.subject === "More competitors changed price or plan today");
     expect(changeEmails).toHaveLength(CHANGE_DAILY_CAP);
     expect(notices).toHaveLength(1);
     expect(results.filter((result) => result.outcome === "sent")).toHaveLength(CHANGE_DAILY_CAP);
@@ -143,9 +158,9 @@ describe("rival change email lane (0509#6375)", () => {
 
     expect(outcomes).toEqual([...Array<string>(CHANGE_DAILY_CAP).fill("sent"), "capped", "capped"]);
     expect(sent).toHaveLength(CHANGE_DAILY_CAP + 1);
-    expect(sent.at(-1)?.subject).toBe("More rivals changed price or plan today");
+    expect(sent.at(-1)?.subject).toBe("More competitors changed price or plan today");
     expect(
-      sent.slice(0, CHANGE_DAILY_CAP).every((message) => message.subject === "Rival changed its pricing page"),
+      sent.slice(0, CHANGE_DAILY_CAP).every((message) => message.subject.startsWith("Rival changed its pricing page")),
     ).toBe(true);
   });
 
@@ -237,7 +252,7 @@ describe("rival change email lane (0509#6375)", () => {
     });
 
     it("reports a failed post for retry, without sending the email twice", async () => {
-      await connect(404);
+      await connect(500);
       const sent: EmailMessageBuilder[] = [];
 
       expect((await deliverChange(envWith(sent), { signal_id: SIGNAL })).outcome).toBe("failed");
@@ -246,8 +261,25 @@ describe("rival change email lane (0509#6375)", () => {
       expect(sent).toHaveLength(1);
     });
 
+    it("stops posting and disconnects Slack when the webhook is revoked, and still emails", async () => {
+      const posts = await connect(404);
+      const sent: EmailMessageBuilder[] = [];
+
+      expect((await deliverChange(envWith(sent), { signal_id: SIGNAL })).outcome).toBe("sent");
+
+      expect(sent).toHaveLength(1);
+      expect(posts).toHaveLength(1);
+      expect(await readSlackTarget(env.DB, WS)).toBeNull();
+      expect(await readSlackDisconnected(env.DB, WS)).toBe(true);
+      const attempts = await env.DB.prepare(
+        "SELECT status, error FROM send_attempt WHERE idempotency_key LIKE 'change-slack:%'",
+      ).all<{ status: string; error: string | null }>();
+      expect(attempts.results.map((row) => row.status)).toEqual(["skipped_revoked"]);
+      expect(attempts.results[0]?.error).toContain("revoked");
+    });
+
     it("re-posts once when Slack recovers on retry, never repeats the email and then stays quiet", async () => {
-      await connect(404);
+      await connect(500);
       const sent: EmailMessageBuilder[] = [];
       expect((await deliverChange(envWith(sent), { signal_id: SIGNAL })).outcome).toBe("failed");
 
@@ -266,6 +298,28 @@ describe("rival change email lane (0509#6375)", () => {
         "SELECT idempotency_key, status FROM send_attempt WHERE idempotency_key LIKE 'change-slack:%'",
       ).all<{ idempotency_key: string; status: string }>();
       expect(attempts.results.map((row) => row.status)).toEqual(["sent"]);
+    });
+
+    it("tells the customer Slack missed the change, not that the email failed, when only Slack gave up", async () => {
+      await connect(500);
+      const sent: EmailMessageBuilder[] = [];
+      await deliverChange(envWith(sent), { signal_id: SIGNAL });
+      const acked: number[] = [];
+      const batch = {
+        queue: "send-email-dlq",
+        messages: [{ id: "m1", body: { signal_id: SIGNAL }, ack: () => acked.push(1), retry: () => acked.push(-1) }],
+      } as unknown as MessageBatch;
+
+      await handleDlqBatch(env, batch);
+
+      const alerts = await env.DB.prepare("SELECT title, body FROM alert WHERE workspace_id = ?")
+        .bind(WS)
+        .all<{ title: string; body: string }>();
+      expect(sent).toHaveLength(1);
+      expect(alerts.results).toHaveLength(1);
+      expect(alerts.results[0]?.title).toBe("We couldn't post a competitor change to Slack");
+      expect(`${alerts.results[0]?.title} ${alerts.results[0]?.body}`).not.toContain("email you");
+      expect(acked).toEqual([1]);
     });
   });
 });

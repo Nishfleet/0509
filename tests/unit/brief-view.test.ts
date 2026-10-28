@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { BriefView } from "../../app/components/brief-view";
@@ -80,6 +81,7 @@ function payload(): BriefPayload {
           kind: "cart 500s",
           observed_at: "2026-09-18T09:00:00.000Z",
           is_open: true,
+          opened_at: "2026-09-18T09:00:00.000Z",
         },
       ],
     },
@@ -91,12 +93,14 @@ function payload(): BriefPayload {
       degraded_source_keys: [],
       degraded_sources: [],
     },
-    next_brief_at: "2026-09-28T13:00:00.000Z",
+    next_brief_at: "2036-09-29T13:00:00.000Z",
   };
 }
 
 function render(overrides: Partial<BriefPayload> = {}): string {
-  return renderToStaticMarkup(createElement(BriefView, { payload: { ...payload(), ...overrides } }));
+  return renderToStaticMarkup(
+    createElement(MemoryRouter, null, createElement(BriefView, { payload: { ...payload(), ...overrides } })),
+  );
 }
 
 function blocks(html: string): string[] {
@@ -115,9 +119,44 @@ describe("the brief view", () => {
     const html = render();
     expect(html).toContain("You&#x27;re #2 of 6 this week");
     expect(html).toContain("12 mentions · 3 site changes<");
-    expect(html).toContain("cart 500s on https://drylight.example/, still broken");
-    expect(html).toContain("Oaks: #1 Oaks shipped a 2026 pricing page");
+    expect(html).toContain(
+      "We saw a problem on https://drylight.example/ at Friday 18 September 2026, 05:00 GMT-4. It isn&#x27;t fixed yet.",
+    );
+    expect(html).toMatch(
+      /<p>Oaks: #1, holding steady<\/p><p class="text-ink-soft">Oaks shipped a 2026 pricing page<\/p>/,
+    );
     expect(html).toContain("Drylight: unranked");
+  });
+
+  it("names how each brand moved and when the next brief arrives", () => {
+    const html = render({ timezone: "UTC" });
+    expect(html).toContain("Oaks: #1, holding steady");
+    expect(html).toContain("Next brief: Monday 29 September 2036, 13:00 UTC");
+  });
+
+  it("leaves out the next brief line for a past date or an unknown timezone", () => {
+    expect(render({ next_brief_at: "2020-01-06T08:00:00.000Z" })).not.toContain("Next brief");
+    expect(render({ timezone: "Not/AZone" })).not.toContain("Next brief");
+  });
+
+  it("says new for a new brand and keeps the bare rank on a first ranking or no movement", () => {
+    const base = payload();
+    const brands = base.brands.map((brand, index) =>
+      index === 0 ? { ...brand, rank: 4, movement: null, is_new: true } : { ...brand, rank: 2, movement: null },
+    );
+    const html = render({ brands });
+    expect(html).toContain("Oaks: #4, new");
+    expect(html).toContain("Drylight: #2<");
+    const first = render({
+      brands: base.brands.map((brand) => ({ ...brand, movement: null, is_new: false })),
+      headline_movement: null,
+      headline_earlier: null,
+    });
+    expect(first).toContain("Oaks: #1<");
+  });
+
+  it("leaves out the next brief line when none is scheduled", () => {
+    expect(render({ next_brief_at: null })).not.toContain("Next brief");
   });
 
   it("shows the struck before and the no-mark row as a link", () => {
@@ -126,7 +165,9 @@ describe("the brief view", () => {
     expect(html).toContain("3 tiers");
     expect(html).toContain(`href="https://facebook.example/ads/casetta"`);
     expect(html).toContain("Kindred: A competitor dropping a tier before launch week is the move.");
-    expect(render({ read_this_first: [] })).toContain("Nothing this week needed reading first.");
+    expect(render({ read_this_first: [] })).toContain(
+      "Nothing needed your attention this week. We keep watching competitor sites, ads and mentions.",
+    );
     expect(blocks(render({ read_this_first: [], brands: [] }))).toEqual([
       "headline",
       "read-this-first",
@@ -179,5 +220,22 @@ describe("the brief view", () => {
     const read = readBriefPayload(JSON.stringify(payload()));
     expect(read?.why_line).toBe(payload().why_line);
     expect(read?.read_this_first).toHaveLength(2);
+  });
+});
+
+describe("the web brief's rival-you-may-be-missing block", () => {
+  it("shows it with a link to Competitors when the brief names a rival", () => {
+    const html = renderToStaticMarkup(
+      createElement(BriefView, {
+        payload: { ...payload(), new_rival: { name: "Northwind", domain: "northwind.example", reason: null } },
+      }),
+    );
+    expect(html).toContain('data-brief-block="new-rival"');
+    expect(html).toContain("Northwind (northwind.example) may be a competitor you are missing.");
+    expect(html).toContain('href="/app/competitors"');
+  });
+
+  it("leaves it out otherwise", () => {
+    expect(renderToStaticMarkup(createElement(BriefView, { payload: payload() }))).not.toContain("new-rival");
   });
 });

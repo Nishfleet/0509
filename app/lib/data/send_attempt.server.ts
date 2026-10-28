@@ -1,6 +1,12 @@
+import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-const STALE_CLAIM_MS = 60 * 60 * 1000;
+export const STALE_CLAIM_MS = 60 * 60 * 1000;
+const SENT_MARKER_TTL_SECONDS = 8 * 24 * 60 * 60;
+
+const sentMarkerKey = (idempotencyKey: string): string => `send-sent:${idempotencyKey}`;
+
+const MARK_SENT = `UPDATE send_attempt SET status = 'sent', error = NULL WHERE idempotency_key = ? AND status = 'pending'`;
 
 const CLAIM_ATTEMPT = `INSERT INTO send_attempt
   (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at)
@@ -22,7 +28,22 @@ export async function readUnrecordedSend(db: D1Database, idempotencyKey: string)
   return readUnrecordedSendRow.nullable().parse(await db.prepare(SENT_UNRECORDED).bind(idempotencyKey).first());
 }
 
+const SELECT_ATTEMPT = `SELECT 1 AS present FROM send_attempt WHERE idempotency_key = ?`;
+
+const attemptPresentRow = z.object({ present: z.number() });
+
+export async function hasSendAttempt(db: D1Database, idempotencyKey: string): Promise<boolean> {
+  return attemptPresentRow.nullable().parse(await db.prepare(SELECT_ATTEMPT).bind(idempotencyKey).first()) !== null;
+}
+
 const claimSendAttemptRow = z.object({ id: z.string() });
+
+async function healUnrecordedSend(db: D1Database, idempotencyKey: string): Promise<boolean> {
+  const marker = await env.IDENTITY_CACHE.get(sentMarkerKey(idempotencyKey)).catch(() => null);
+  if (marker === null) return false;
+  await db.prepare(MARK_SENT).bind(idempotencyKey).run();
+  return true;
+}
 
 export async function claimSendAttempt(
   db: D1Database,
@@ -33,6 +54,7 @@ export async function claimSendAttempt(
     digestId: string | null;
   },
 ): Promise<{ id: string } | null> {
+  if (await healUnrecordedSend(db, input.idempotencyKey)) return null;
   const now = new Date().toISOString();
   const staleBefore = new Date(Date.now() - STALE_CLAIM_MS).toISOString();
   return claimSendAttemptRow
@@ -55,9 +77,23 @@ export async function claimSendAttempt(
 
 export async function resolveSendAttempt(
   db: D1Database,
-  input: { attemptId: string; outcome: "sent" | "failed"; error: string | null },
+  input: {
+    attemptId: string;
+    idempotencyKey: string;
+    outcome: "sent" | "failed" | "unconfirmed" | "skipped_revoked";
+    error: string | null;
+  },
 ): Promise<void> {
-  await db.prepare(RESOLVE_ATTEMPT).bind(input.outcome, input.error, input.attemptId).run();
+  try {
+    await db.prepare(RESOLVE_ATTEMPT).bind(input.outcome, input.error, input.attemptId).run();
+  } catch (cause) {
+    if (input.outcome === "sent") {
+      await env.IDENTITY_CACHE.put(sentMarkerKey(input.idempotencyKey), "1", {
+        expirationTtl: SENT_MARKER_TTL_SECONDS,
+      }).catch(() => undefined);
+    }
+    throw cause;
+  }
 }
 
 const CLAIM_CHANGE_SLOT = `INSERT INTO send_attempt

@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { readAgentAlerts } from "../../../app/lib/agent/read.server";
 import { readCompetitorPage } from "../../../app/lib/competitor-page.server";
@@ -178,6 +178,21 @@ describe("site changes a customer can see", () => {
     expect(mine?.headline).toBe("Your homepage changed");
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("keeps the change list and says details are unavailable when R2 is down", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.spyOn(env.SNAPSHOTS, "get").mockRejectedValue(new Error("R2 unavailable"));
+
+    const views = await readSiteChangeViews({ workspaceId: "ws-mine", entityId: null, since: SINCE, limit: 30 });
+
+    expect(views.length).toBeGreaterThan(0);
+    expect(views.every((view) => view.mark === null && view.detailsUnavailable === true)).toBe(true);
+    expect(await readChangeShot("ws-mine", "sig-mine", "after")).toBeNull();
+  });
+
   it("keeps a paused brand's history on its own page", async () => {
     const page = await readCompetitorPage("ws-mine", "paused", NOW);
     expect(page?.changes.map((view) => view.id)).toEqual(["sig-paused"]);
@@ -187,6 +202,7 @@ describe("site changes a customer can see", () => {
       pages: 1,
       lastPolledAt: "2026-09-23T02:10:00.000Z",
       unreadable: false,
+      notFound: false,
       customerSite: null,
     });
     expect(page?.rail.verdict).toBeNull();

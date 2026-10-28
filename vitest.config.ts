@@ -47,6 +47,13 @@ export default defineConfig({
       "**/DESIGN.md",
       "**/app/app.css",
       "**/.github/CODEOWNERS",
+      // tests/workflows-documented.test.ts reads these from disk (0509#7728):
+      // the version line in each self-starting workflow and the README section
+      // that documents its switch-off. Neither has an import edge, so without
+      // the triggers a workflow-only or README-only pull request reruns nothing
+      // and the contract is first checked by the merge queue.
+      "**/README.md",
+      "**/.github/workflows/**",
     ],
     coverage: {
       provider: "v8",

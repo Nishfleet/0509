@@ -50,10 +50,12 @@ describe("workspace cascade coverage", () => {
 
   it("cascade from workspace reaches exactly the owned tables", async () => {
     expect(await cascadeClosure()).toEqual([
+      "active_workspace",
       "alert",
       "digest",
       "discovery_backlog",
       "entity",
+      "entity_note",
       "incident",
       "incident_notice",
       "jev_verdict",
@@ -69,6 +71,7 @@ describe("workspace cascade coverage", () => {
       "suggestion",
       "user_decision",
       "watch",
+      "workspace_visit",
     ]);
   });
 

@@ -35,8 +35,9 @@ export const PRIVACY: LegalDocument = {
         "Your account: your email address, and a name if you give one.",
         "Your sign-in: the public half of a passkey, if you set one up. Your fingerprint or face never leaves your device, and we store no passwords.",
         "Your sessions: when you signed in, and the IP address and browser you used, so you stay signed in and we can spot someone else using your account.",
-        "Your workspace: your brand, the competitors you watch, your settings and time zone, and the choices you make, such as dismissing a suggestion or turning a brand off.",
+        "Your workspace: your brand, the competitors you watch, your settings and time zone, and the choices you make, such as dismissing a suggestion or turning a brand off, and any private notes you write about a competitor. Notes are for your workspace only: only people in your workspace can see them, and they are never emailed.",
         "Your agent access: the apps you approved, and a scrambled copy of each key you create, with when it was last used.",
+        "The days you used 0509: which days your workspace was opened, kept for 400 days and used only to count whether our emails bring people back.",
         "Billing: your plan and whether it is paid. Your card details go to Dodo Payments and never reach us.",
         "Emails you send us, so we can answer them.",
         "Error reports with personal details removed, and server logs of each request, so we can keep 0509 fast and working.",
@@ -141,6 +142,7 @@ export const PRIVACY: LegalDocument = {
         "A session cookie that keeps you signed in, and a short-lived copy of your session that saves a database lookup.",
         "A time zone cookie, so the brief arrives on your Monday morning.",
         "A short-lived cookie set while you delete your account, so the sign-in page can show when your files are gone.",
+        "A short-lived cookie that remembers which plan you chose on the pricing page, so the plan step can show it first.",
       ],
       closing: ["We use no advertising or tracking cookies, so there is no cookie banner."],
     },
@@ -151,6 +153,10 @@ export const PRIVACY: LegalDocument = {
         {
           term: "Your account and workspace",
           details: ["While your account is open, and removed when you delete it in Settings."],
+        },
+        {
+          term: "The days you used 0509",
+          details: ["400 days, then deleted. Removed with your workspace when you delete it."],
         },
         {
           term: "Sign-in links",

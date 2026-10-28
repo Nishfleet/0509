@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { Link } from "react-router";
 
 import type { BriefPayload } from "../lib/brief-payload";
 import type { MentionRowModel } from "../lib/mention-feed";
@@ -104,9 +105,9 @@ function DeliveryFailure({ failure }: { failure: DeliveryFailureItem }): ReactEl
       )}
       {failure.digest_id === null ? null : (
         <p className={BODY}>
-          <a className={SUMMARY} href={`/app/brief/${failure.digest_id}`}>
+          <Link className={SUMMARY} to={`/app/brief/${failure.digest_id}`}>
             Open it with your past briefs
-          </a>
+          </Link>
         </p>
       )}
     </article>

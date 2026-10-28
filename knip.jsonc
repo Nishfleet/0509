@@ -34,7 +34,9 @@
   // `tailwindcss` is imported by `@import "tailwindcss"` in app/app.css; knip
   // does not follow CSS imports and says so in its own hint output.
   // `@lhci/cli` runs as `npx lhci` in ci.yml, never imported by app code.
-  "ignoreDependencies": ["cloudflare", "@react-router/node", "tailwindcss", "@lhci/cli"],
+  // `cf` builds the staging Worker from `cloudflare.config.ts`, which lands
+  // separately and is then an entry by name.
+  "ignoreDependencies": ["cloudflare", "@react-router/node", "tailwindcss", "@lhci/cli", "cf"],
 
   "ignore": ["**/+types/**", "docs/design-directions/**"],
 }

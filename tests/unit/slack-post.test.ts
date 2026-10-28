@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { postToSlack } from "../../app/lib/slack.server";
+import { postToSlack, postToSlackOutcome } from "../../app/lib/slack.server";
 
 const HOOK = "https://hooks.slack.com/services/T0SECRET/B0SECRET/xoxSECRETTOKEN";
 
@@ -21,6 +21,24 @@ describe("postToSlack", () => {
   it("answers false when Slack refuses the post", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("no_service", { status: 404 }));
     expect(await postToSlack(HOOK, "hello")).toBe(false);
+  });
+
+  it("tells a revoked webhook from a passing failure", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    for (const status of [403, 404, 410]) {
+      fetchSpy.mockResolvedValue(new Response("gone", { status }));
+      expect(await postToSlackOutcome(HOOK, "hello")).toBe("revoked");
+    }
+    fetchSpy.mockResolvedValue(new Response("busy", { status: 429 }));
+    expect(await postToSlackOutcome(HOOK, "hello")).toBe("retry");
+    fetchSpy.mockResolvedValue(new Response("ok", { status: 200 }));
+    expect(await postToSlackOutcome(HOOK, "hello")).toBe("sent");
+  });
+
+  it("calls a thrown network error unconfirmed, because the post may have reached Slack", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("socket closed"));
+    expect(await postToSlackOutcome(HOOK, "hello")).toBe("unconfirmed");
   });
 
   it("never writes the webhook address to a log when a redirect cannot be followed", async () => {

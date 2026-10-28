@@ -1,13 +1,9 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { type Locator, type Page } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
 import { requireInboxToken, signInWithMagicLink } from "./inbox";
 
-// J12 from docs/REBUILD-DONE.md §A. Production only: the fixed kept account
-// signs in over the real mail path, and the rollovers it reads are the
-// StandingRollover Workflow's own, one per Monday brief. The preview Worker
-// has no inbox and no elapsed weeks. Run weekly by the j12 job in
-// e2e-scheduled.yml (Wednesday, after Monday's rollover has frozen).
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "J12 reads weeks the production Workflow froze; the local preview Worker has none and no inbox",
@@ -76,7 +72,7 @@ async function rotate(page: Page): Promise<string> {
 
 async function briefLinks(page: Page): Promise<string[]> {
   await page.goto("/app/brief");
-  const links = page.getByRole("navigation", { name: "Previous briefs" }).getByRole("link");
+  const links = page.getByRole("navigation", { name: "Your briefs" }).getByRole("link");
   const hrefs = await links.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("href") ?? ""));
   return hrefs.filter((href) => href !== "");
 }

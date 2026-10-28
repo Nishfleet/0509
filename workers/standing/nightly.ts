@@ -1,6 +1,11 @@
-import { rolloverInstance } from "../../app/lib/brief-schedule";
+import { rolloverInstance, type RolloverInstance } from "../../app/lib/brief-schedule";
 import { runPipelineHealth } from "../../app/lib/observability/pipeline-health.server";
 import { createRollovers, loadNightlyPlan } from "./rollover-plan";
+
+export function nightlyCatchUpInstance(workspaceId: string, closesAt: Date, night: Date): RolloverInstance {
+  const base = rolloverInstance(workspaceId, closesAt, "catch-up");
+  return { ...base, id: `${base.id}-${night.toISOString().slice(0, 10).replace(/-/g, "")}` };
+}
 
 export interface NightlyResult {
   workspaces: number;
@@ -17,7 +22,7 @@ export async function runNightlyStanding(env: Env, now: Date): Promise<NightlyRe
     }),
   );
   const { workspaces, scheduled, catchUpAt } = await loadNightlyPlan(env.DB, now);
-  const catchUps = catchUpAt.map((row) => rolloverInstance(row.workspaceId, row.closesAt, "catch-up"));
+  const catchUps = catchUpAt.map((row) => nightlyCatchUpInstance(row.workspaceId, row.closesAt, now));
   const rolloversCreated = await createRollovers(env.STANDING_ROLLOVER, [...scheduled, ...catchUps]);
   const result: NightlyResult = {
     workspaces,

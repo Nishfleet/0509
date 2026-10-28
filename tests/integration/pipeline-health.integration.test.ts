@@ -37,10 +37,10 @@ const degradedReason = async (): Promise<string | null> => {
   return row.degraded_reason;
 };
 
-const insertSnapshot = (id: string, fetchedAt: string, itemCount: number): D1PreparedStatement =>
+const insertSnapshot = (id: string, fetchedAt: string, itemCount: number, canaryCount = 0): D1PreparedStatement =>
   env.DB.prepare(
-    "INSERT INTO snapshot (id, watch_id, fetched_at, payload_hash, item_count) VALUES (?1, ?2, ?3, ?4, ?5)",
-  ).bind(id, WATCH, fetchedAt, `hash-${id}`, itemCount);
+    "INSERT INTO snapshot (id, watch_id, fetched_at, payload_hash, item_count, canary_count) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+  ).bind(id, WATCH, fetchedAt, `hash-${id}`, itemCount, canaryCount);
 
 describe("pipeline health source_blind alerts (0509#5301)", () => {
   beforeEach(async () => {
@@ -97,5 +97,17 @@ describe("pipeline health source_blind alerts (0509#5301)", () => {
     expect(healed.alerts).toBe(0);
     expect(await degradedReason()).toBeNull();
     expect(await blindAlerts()).toHaveLength(1);
+  });
+
+  it("raises nothing for a quiet brand while the source's canary still returns results", async () => {
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM snapshot WHERE watch_id = ?1").bind(WATCH),
+      insertSnapshot("snap-quiet-1", "2026-09-25T01:00:00Z", 0, 5),
+      insertSnapshot("snap-quiet-2", "2026-09-25T02:00:00Z", 0, 5),
+    ]);
+    const result = await runPipelineHealth(NOW);
+    expect(result.blind).toBe(0);
+    expect(await blindAlerts()).toHaveLength(0);
+    expect(await degradedReason()).toBeNull();
   });
 });

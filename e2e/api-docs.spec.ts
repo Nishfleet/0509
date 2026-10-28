@@ -1,10 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { consoleFailures, watchConsole } from "./inbox";
 
-// The end-of-test screenshot is report evidence, not an assertion. Playwright's
-// recorder attaches it and drops a capture that fails instead of failing the
-// test; e2e/reduced-motion.spec.ts has the why.
 test.use({ screenshot: { mode: "on", fullPage: true } });
 
 test("the API reference is generated from the OpenAPI document @smoke", async ({ page, request }, testInfo) => {
@@ -27,6 +24,7 @@ test("the API reference is generated from the OpenAPI document @smoke", async ({
   await expect(main).toContainText("competitorId");
   await expect(main).toContainText("Missing or invalid API key");
   await expect(main).toContainText("Authorization: Bearer");
+  await expect(main).toContainText("curl -H");
   await expect(main).toContainText("/mcp");
   await expect(page.getByRole("link", { name: "Settings" }).first()).toHaveAttribute("href", "/app/settings/agents");
 

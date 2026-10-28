@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { formatBriefAt, hourLabel, parseBriefSchedule } from "../../app/lib/brief-settings";
+import { parseBriefSchedule } from "../../app/lib/brief-schedule-input";
+import { formatBriefAt, hourLabel } from "../../app/lib/brief-settings";
 
 describe("the brief schedule form", () => {
   it("accepts a day, an hour and a real time zone", () => {
@@ -36,6 +37,6 @@ describe("the brief schedule form", () => {
 
   it("names the next brief in the workspace's own zone", () => {
     const at = new Date("2026-09-28T07:00:00.000Z");
-    expect(formatBriefAt(at, "Europe/London")).toBe("Monday 28 September 2026, 08:00 Europe/London");
+    expect(formatBriefAt(at, "Europe/London")).toBe("Monday 28 September 2026, 08:00 BST");
   });
 });

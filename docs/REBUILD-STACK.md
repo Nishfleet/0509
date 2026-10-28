@@ -420,7 +420,7 @@ Pricing (<https://developers.cloudflare.com/queues/platform/pricing/>): "An oper
 Two routes, and the cheap one is not the famous one:
 
 - **Quick Actions** — `/content`, `/screenshot`, `/pdf`, `/markdown`, `/snapshot`, `/accessibilityTree`, `/scrape`, `/json`, `/links`, `/crawl` (REST-only). Reachable from REST **and** from the binding via `.quickAction("screenshot", { url })` with `compatibility_date` ≥ `2026-03-24`, and **without** `nodejs_compat`. <https://developers.cloudflare.com/browser-rendering/rest-api/>
-- **Browser Sessions.** `@cloudflare/puppeteer` `^1.4.0` is installed. `app/lib/ads/transport-browser.ts` imports `connect`, `launch`, and `sessions` from it. `@cloudflare/playwright` is the other session SDK and is not installed. Either one requires `nodejs_compat`.
+- **Browser Sessions.** No session SDK is installed (`@cloudflare/puppeteer` was dropped with the ads transport, 0509#7030; `@cloudflare/playwright` is not installed either). Either one requires `nodejs_compat`.
 
 **The 10-concurrent number is an allotment, not a ceiling.** The limits page gives the Paid hard cap as **200 concurrent browsers per account**; the pricing page gives **10 browsers included (averaged monthly), then $2.00 per additional browser**. Both are real and they answer different questions. Nish's standing rule — cap 10, raising it costs $2/browser/month and needs his recorded yes — is the _pricing_ number, and it is the one we configure.
 
@@ -858,7 +858,7 @@ jobs:
           PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.target_url }}
 ```
 
-This repo's deployments come from `environment: production` in `deploy-production.yml`; the production e2e suite now runs from `e2e-scheduled.yml` and lighthouse runs as a job after the deploy (0509#7013). Official container image: `mcr.microsoft.com/playwright:v1.63.0-noble`.
+This repo's deployments come from `environment: production` in `deploy-production.yml`; the production e2e suite now runs from `e2e-scheduled.yml` and lighthouse ran as a job after the deploy until the site went behind the Cloudflare Access wall (0509#7656, fleet-ops#9889). Official container image: `mcr.microsoft.com/playwright:v1.63.0-noble`.
 
 ### 6.3 Lighthouse CI
 
@@ -877,7 +877,7 @@ This repo's deployments come from `environment: production` in `deploy-productio
 
 **There is no `fail:` input.** The action runs `lhci assert`, reads `assertion-results.json`, and calls `core.setFailed()` for any assertion at `level: "error"`; `"warn"` only annotates. **Failing the build therefore means declaring the assertion at `error` level** — budgets default to `error`. A budget written entirely at `warn` is green and useless.
 
-This is the gate for the rebuild bar Nish set on 2026-09-21: LCP under 1.5 s on 4G, against a prod landing page that measured 4.50 s server time.
+This was the gate for the rebuild bar Nish set on 2026-09-21: LCP under 1.5 s on 4G, against a prod landing page that measured 4.50 s server time. No job asserts those timing rows right now: the audit is out of the deploy workflow while the site is behind the Access wall (0509#7656, fleet-ops#9889), and `ci.yml` asserts only the deterministic subset of the budget on pull requests.
 
 ### 6.4 lychee
 
@@ -1147,7 +1147,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Performance gate                            | `@lhci/cli` (lockfile; starts `wrangler dev` itself)                  | 0.15.1                                   |
 | Link checking                               | `lycheeverse/lychee-action`                                           | v2.9.0                                   |
 | Red-main issue create-or-update             | `JasonEtco/create-an-issue` (update_existing, search_existing: open)  | v2.9.2                                   |
-| MCP server                                  | `createMcpHandler` (`@modelcontextprotocol/server`)                   | 2.1.0                                    |
+| MCP server                                  | `createMcpHandler` (`@modelcontextprotocol/server`)                   | 2.3.0                                    |
 | MCP auth                                    | `@cloudflare/workers-oauth-provider`                                  | 0.10.4                                   |
 | API keys + per-key quota                    | `@better-auth/api-key` (`apikey` table)                               | 1.7.5                                    |
 | Edge abuse shield                           | Cloudflare rate limiting binding (`period` 10 or 60 only)             | platform                                 |

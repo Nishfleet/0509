@@ -2,15 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { lintExisting, lintTextAt } from "./eslint-lint-text";
 
-// DESIGN.md rule 8: the accent is one colour, and nothing else is coloured.
-// A colour class that is not a `@theme` token in app/app.css used to be a
-// review comment; the eslint-plugin-better-tailwindcss block on `app/**` in
-// eslint.config.js makes it a lint failure (0509#5871). These probes boot the
-// real config (same rig as eslint-catch-null-rule.test.ts): each one writes a
-// component under app/, lints it with the project's own ESLint, and removes it.
-// The negative cases are load-bearing — a gate that fires on every class list
-// is a gate someone turns off.
-
 const PROBE = "app/components/share-button.tsx";
 const UI_PROBE = "app/components/ui/button.tsx";
 
@@ -97,11 +88,20 @@ describe("eslint DESIGN.md colour gate (#5871)", () => {
     expect(result.messages.some((m) => m.includes(UNKNOWN))).toBe(false);
   });
 
-  it("allows the stock shadcn and tw-animate tokens inside app/components/ui", { timeout: 60_000 }, async () => {
-    const result = await lintProbe(UI_PROBE, component("bg-muted data-open:animate-in"));
+  it("allows the stock shadcn tokens inside app/components/ui", { timeout: 60_000 }, async () => {
+    const result = await lintProbe(UI_PROBE, component("bg-muted data-starting-style:opacity-0"));
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(UNKNOWN))).toBe(false);
   });
+
+  it(
+    "rejects a tw-animate class inside app/components/ui, because the app never imports that package",
+    { timeout: 60_000 },
+    async () => {
+      const result = await lintProbe(UI_PROBE, component("bg-muted data-open:animate-in"));
+      expect(result.messages.some((m) => m.includes(UNKNOWN))).toBe(true);
+    },
+  );
 
   it("rejects an out-of-order class list", { timeout: 60_000 }, async () => {
     const result = await lintProbe(PROBE, component("text-ink-soft mt-2"));

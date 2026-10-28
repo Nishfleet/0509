@@ -1,7 +1,7 @@
 import { env, type D1Migration } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { isSubscriptionLive } from "../../app/lib/billing/entitlements";
+import { isSubscriptionLive } from "../../app/lib/billing/subscription-state";
 import { readDiscoverableWorkspaces } from "../../app/lib/data/entity.server";
 import { readPlanSummary } from "../../app/lib/data/plan.server";
 import { FIXTURE_ACCOUNTS } from "../../app/lib/fixture-accounts";

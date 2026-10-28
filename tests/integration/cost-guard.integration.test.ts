@@ -4,22 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fixture from "../fixtures/cf-graphql-usage.json";
 import { runCostGuard, runNightlyCostGuard } from "../../app/lib/observability/run-cost-guard.server";
 
-/**
- * cost_alert writer + runCostGuard (0509#4432).
- *
- * The guard reads one day's Cloudflare usage (fetch stubbed: the GraphQL
- * response body is supplied per test), counts ON entities and writes one
- * cost_alert row per line over threshold, UNIQUE (day, line) making a repeat
- * run idempotent. Real local D1 with every migration applied.
- */
-
-const usageBody = (rowsWritten: number, requests: number) => ({
+const usageBody = (rowsWritten: number, requests: number, storedBytes = 0) => ({
   data: {
     viewer: {
       accounts: [
         {
           d1: [{ sum: { rowsWritten } }],
           r2: [{ sum: { requests } }],
+          r2Storage: [{ max: { payloadSize: storedBytes, metadataSize: 0 } }],
         },
       ],
     },
@@ -42,7 +34,6 @@ const countAlerts = async (day: string) => {
 
 const NOW = "2026-09-22T12:00:00.000Z";
 
-/** `entity.workspace_id` has a FK to `workspace`, which has a FK to `user`. */
 async function seedWorkspace(userId: string, email: string): Promise<void> {
   await env.DB.prepare(
     'INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, 1, ?, ?)',
@@ -70,16 +61,6 @@ async function seedEntity(
     .run();
 }
 
-/**
- * Two workspaces, so the divisor has self rows in it that must NOT count
- * (0509#6086): `entity` CHECKs `role = 'competitor' OR state = 'on'`, so
- * every `self` row is always ON. Counting `state = 'on'` alone made
- * `workspaces_self` dilute the per-brand divisor.
- *
- * ws_user-brand-count: 2 ON competitors, 1 off, 1 dismissed, 1 self
- * ws_user-brand-other:  1 ON competitor, 1 self
- * → onBrands must be 3, not 5.
- */
 async function seedBrands(): Promise<void> {
   await seedWorkspace("user-brand-count", "brand-count@example.com");
   await seedEntity("e-self-1", "user-brand-count", "self", "mine.example", "on");
@@ -123,10 +104,10 @@ describe("runCostGuard (0509#4432)", () => {
   });
 
   it("trips on the line over threshold and writes one cost_alert row", async () => {
-    stubUsage(usageBody(5000, 0));
+    stubUsage(usageBody(2_000_000, 0));
     const result = await runCostGuard(env.DB, "t", "2026-09-22");
     expect(result.breaches).toHaveLength(1);
-    expect(result.breaches[0]?.line).toBe("d1_rows_written");
+    expect(result.breaches[0]?.line).toBe("d1_rows_written_account");
     expect(result.alertIds).toHaveLength(1);
     const id = result.alertIds[0];
     console.log("cost_alert id", id);
@@ -139,27 +120,27 @@ describe("runCostGuard (0509#4432)", () => {
     }>();
     expect(row).toMatchObject({
       day: "2026-09-22",
-      line: "d1_rows_written",
-      measured_per_brand: 5000,
-      expected_per_brand: 10,
+      line: "d1_rows_written_account",
+      measured_per_brand: 2_000_000,
+      expected_per_brand: 1_500_000,
       on_brands: 0,
     });
   });
 
-  it("divides by ON competitors only: self rows are always ON and must not dilute the divisor", async () => {
+  it("divides per-brand lines by ON competitors only: self rows are always ON and must not dilute the divisor", async () => {
     await seedBrands();
-    // 91 rows over 3 ON competitors is 30.33/brand, over the factor of three
-    // times the documented 10. Over 5 (2 self + 3 competitors) it would be
-    // 18.2/brand, which is inside the factor and would have alerted nobody.
-    stubUsage(usageBody(91, 0));
+
+    stubUsage(usageBody(0, 91));
     const result = await runCostGuard(env.DB, "t", "2026-09-24");
     expect(result.onBrands).toBe(3);
     expect(result.breaches).toEqual([
       {
         day: "2026-09-24",
-        line: "d1_rows_written",
+        line: "r2_class_a_ops",
+        scope: "per_brand",
         measuredPerBrand: 91 / 3,
         expectedPerBrand: 10,
+        limit: 30,
         onBrands: 3,
       },
     ]);
@@ -167,9 +148,33 @@ describe("runCostGuard (0509#4432)", () => {
     expect(id).toBeDefined();
     expect(await readAlert(id as string)).toMatchObject({
       day: "2026-09-24",
-      line: "d1_rows_written",
+      line: "r2_class_a_ops",
       measured_per_brand: 91 / 3,
       expected_per_brand: 10,
+      on_brands: 3,
+    });
+  });
+
+  it("does not divide the account-wide lines by brands and does not trip on the 2026-10-15 volume", async () => {
+    await seedBrands();
+    stubUsage(usageBody(227_324, 0, 22_000_000_000));
+    const result = await runCostGuard(env.DB, "t", "2026-10-15");
+    expect(result.breaches).toEqual([]);
+    expect(await countAlerts("2026-10-15")).toBe(0);
+  });
+
+  it("alerts on stored bytes over the account limit and records the absolute figures", async () => {
+    await seedBrands();
+    stubUsage(usageBody(0, 0, 31_000_000_000));
+    const result = await runCostGuard(env.DB, "t", "2026-10-16");
+    expect(result.breaches.map((breach) => breach.line)).toEqual(["r2_stored_bytes_account"]);
+    const id = result.alertIds[0];
+    expect(id).toBeDefined();
+    expect(await readAlert(id as string)).toMatchObject({
+      day: "2026-10-16",
+      line: "r2_stored_bytes_account",
+      measured_per_brand: 31_000_000_000,
+      expected_per_brand: 30_000_000_000,
       on_brands: 3,
     });
   });
@@ -194,8 +199,10 @@ describe("runCostGuard (0509#4432)", () => {
       {
         day: "2026-09-26",
         line: "browser_ms_0509",
+        scope: "per_brand",
         measuredPerBrand: 50_000,
         expectedPerBrand: 15_000,
+        limit: 45_000,
         onBrands: 3,
       },
     ]);
@@ -221,7 +228,7 @@ describe("runCostGuard (0509#4432)", () => {
   });
 
   it("is idempotent: a second identical call writes no new row", async () => {
-    stubUsage(usageBody(5000, 0));
+    stubUsage(usageBody(2_000_000, 0));
     const first = await runCostGuard(env.DB, "t", "2026-09-22");
     expect(first.alertIds).toHaveLength(1);
     const again = await runCostGuard(env.DB, "t", "2026-09-22");
@@ -244,6 +251,7 @@ describe("runCostGuard (0509#4432)", () => {
       day: "2026-09-22",
       d1RowsWritten: 4677,
       r2ClassAOps: 13,
+      r2StoredBytes: 11_446_748_720,
       browserMs: 0,
       aiCalls: 0,
     });
@@ -297,7 +305,7 @@ describe("runNightlyCostGuard", () => {
 
   it("without a token ignores a D1 figure that would breach with one", async () => {
     await seedBrands();
-    stubUsage(usageBody(5000, 0));
+    stubUsage(usageBody(2_000_000, 0, 31_000_000_000));
     const result = await runNightlyCostGuard(env.DB, undefined, Date.UTC(2026, 8, 30, 3, 0, 0));
     expect(result.breaches).toEqual([]);
   });

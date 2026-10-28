@@ -1,5 +1,7 @@
 import { env } from "cloudflare:workers";
 
+import { liveWorkspace } from "./active-workspace";
+
 const INSERT_ONBOARDING_RUN = `INSERT INTO onboarding_run (id, workspace_id, user_id, input_raw, started_at)
 SELECT ?1, ?2, ?3, ?4, ?5
 WHERE NOT EXISTS (SELECT 1 FROM onboarding_run WHERE workspace_id = ?2)`;
@@ -10,7 +12,7 @@ const UPDATE_COMPETITORS_READY_AT = `UPDATE onboarding_run SET competitors_ready
 
 const UPDATE_WATCHING_STARTED_AT = `UPDATE onboarding_run SET watching_started_at = ?2 WHERE workspace_id = ?1 AND watching_started_at IS NULL`;
 
-const UPDATE_FIRST_SIGNAL_AT = `UPDATE onboarding_run SET first_signal_at = (SELECT MIN(s.observed_at) FROM signal s WHERE s.workspace_id = onboarding_run.workspace_id AND s.observed_at >= onboarding_run.started_at) WHERE first_signal_at IS NULL AND EXISTS (SELECT 1 FROM signal s WHERE s.workspace_id = onboarding_run.workspace_id AND s.observed_at >= onboarding_run.started_at)`;
+const UPDATE_FIRST_SIGNAL_AT = `UPDATE onboarding_run SET first_signal_at = (SELECT MIN(s.observed_at) FROM signal s WHERE s.workspace_id = onboarding_run.workspace_id AND s.observed_at >= onboarding_run.started_at) WHERE first_signal_at IS NULL AND ${liveWorkspace("onboarding_run.workspace_id")} AND EXISTS (SELECT 1 FROM signal s WHERE s.workspace_id = onboarding_run.workspace_id AND s.observed_at >= onboarding_run.started_at)`;
 
 export async function startOnboardingRun(input: {
   workspaceId: string;

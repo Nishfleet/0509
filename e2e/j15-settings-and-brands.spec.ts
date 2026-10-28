@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { type Locator, type Page } from "@playwright/test";
+import { expect, test } from "./test";
 
 import { onboardedStatePath } from "../playwright.config";
 
@@ -19,6 +20,16 @@ test.describe("J15 a signed-in customer changes settings", () => {
     await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
   }
 
+  async function saveDay(page: Page, day: Locator, value: string): Promise<void> {
+    const posted = page.waitForResponse(
+      (response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/app/settings",
+      { timeout: 30_000 },
+    );
+    await day.selectOption(value);
+    expect((await posted).ok()).toBe(true);
+    await expect(page.getByRole("status").filter({ hasText: "Brief time saved." })).toBeVisible();
+  }
+
   test("J15 the brief day saves at once and is still there after a reload", async ({ page }) => {
     await openSettings(page);
     const day = page.getByRole("combobox", { name: "Day", exact: true });
@@ -26,12 +37,10 @@ test.describe("J15 a signed-in customer changes settings", () => {
     const options = await day.locator("option").evaluateAll((all) => all.map((o) => (o as HTMLOptionElement).value));
     const next = options.find((value) => value !== before);
     expect(next).toBeDefined();
-    await day.selectOption(next ?? before);
-    await expect(page.getByText("Brief time saved")).toBeVisible();
+    await saveDay(page, day, next ?? before);
     await page.reload();
     await expect(page.getByRole("combobox", { name: "Day", exact: true })).toHaveValue(next ?? before);
-    await page.getByRole("combobox", { name: "Day", exact: true }).selectOption(before);
-    await expect(page.getByText("Brief time saved")).toBeVisible();
+    await saveDay(page, page.getByRole("combobox", { name: "Day", exact: true }), before);
   });
 
   test("J15 pausing the brief says so, survives a reload, and resuming undoes it", async ({ page }) => {

@@ -1,10 +1,9 @@
-import { useEffect, useSyncExternalStore, type ReactElement } from "react";
+import { useSyncExternalStore, type ReactElement } from "react";
 import { useFetcher } from "react-router";
 
 import { HOURS, WEEKDAYS, hourLabel } from "../lib/brief-settings";
 import { sameTimezone } from "../lib/timezone";
 import { BriefPauseSetting } from "./brief-pause-setting";
-import { Toaster, toastSaved } from "./toaster";
 import { Button } from "./ui/button";
 
 const SELECT =
@@ -40,10 +39,6 @@ interface ScheduleChange {
 function useScheduleForm(schedule: ScheduleView) {
   const fetcher = useFetcher<{ saved: boolean }>();
 
-  useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data?.saved === true) toastSaved("Brief time saved");
-  }, [fetcher.state, fetcher.data]);
-
   const pending = fetcher.formData;
   const weekday = Number(pending?.get("weekday") ?? schedule.weekday);
   const hour = Number(pending?.get("hour") ?? schedule.hour);
@@ -62,7 +57,7 @@ function useScheduleForm(schedule: ScheduleView) {
     );
   }
 
-  return { saved: fetcher.data?.saved, weekday, hour, timezone, save };
+  return { saved: fetcher.state === "idle" ? fetcher.data?.saved : undefined, weekday, hour, timezone, save };
 }
 
 interface ScheduleSelectProps {
@@ -96,13 +91,27 @@ function ScheduleSelect({ label, value, options, onPick }: ScheduleSelectProps):
 const DAY_OPTIONS = WEEKDAYS.map((text, value) => ({ value, text }));
 const HOUR_OPTIONS = HOURS.map((value) => ({ value, text: hourLabel(value) }));
 
+function ScheduleStatus({ saved }: { saved: boolean | undefined }): ReactElement {
+  return (
+    <>
+      <p role="status" className="mt-2 text-[0.95rem]">
+        {saved === true ? "Brief time saved." : null}
+      </p>
+      {saved === false ? (
+        <p role="alert" className="mt-2 text-[0.95rem]">
+          We couldn&apos;t save that time. Pick it again.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
 export function BriefScheduleSettings({ schedule }: { schedule: ScheduleView }): ReactElement {
   const form = useScheduleForm(schedule);
   const deviceZone = useSyncExternalStore(subscribeToNothing, browserZone, noZoneOnServer);
 
   return (
     <div className="mt-3">
-      <Toaster />
       <div className="flex flex-wrap items-end gap-3">
         <ScheduleSelect
           label="Day"
@@ -137,11 +146,7 @@ export function BriefScheduleSettings({ schedule }: { schedule: ScheduleView }):
           Use this device&apos;s time zone ({deviceZone.replaceAll("_", " ")})
         </Button>
       ) : null}
-      {form.saved === false ? (
-        <p role="alert" className="mt-2 text-[0.95rem]">
-          We couldn&apos;t save that time. Pick it again.
-        </p>
-      ) : null}
+      <ScheduleStatus saved={form.saved} />
       <BriefPauseSetting pausedAt={schedule.pausedAt} timezone={schedule.timezone} />
     </div>
   );

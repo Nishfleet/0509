@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
+import { liveWorkspace } from "./active-workspace";
 import {
   RANKED_PRICING_PAGES,
   resumeWantedPricingWatchesStatement,
@@ -86,14 +87,16 @@ const COMPETITORS_TO_CLASSIFY = `SELECT e.id AS entity_id, e.workspace_id AS wor
        COALESCE(NULLIF(e.name, ''), e.domain) AS name, p.id AS page_id, p.url AS url
 FROM entity e
 JOIN page p ON p.entity_id = e.id AND p.role = 'home'
-WHERE e.role = 'competitor' AND e.state = 'on'
+WHERE e.role = 'competitor' AND e.state = 'on' AND ${liveWorkspace("e.workspace_id")}
   AND (
     NOT EXISTS (SELECT 1 FROM page j WHERE j.entity_id = e.id AND j.role_decided_for_hash IS NOT NULL)
     OR CASE WHEN json_valid(e.identity_json)
          THEN json_extract(e.identity_json, '$.socialsReadAt') IS NULL AND coalesce(json_array_length(e.identity_json, '$.socials'), 0) = 0
          ELSE 0 END
+    OR (p.links_read_at IS NULL AND NOT EXISTS (SELECT 1 FROM page k WHERE k.entity_id = e.id AND k.role = 'pricing' AND k.role_decided_for_hash IS NOT NULL))
   )
   AND (p.deferred_at IS NULL OR p.deferred_at < ?2)
+  AND (p.links_retry_at IS NULL OR p.links_retry_at < ?2)
 ORDER BY random()
 LIMIT ?1`;
 
@@ -143,7 +146,7 @@ export async function syncPricingWatches(sourceId: string): Promise<void> {
 
 const UNWATCHED_PRICING_PAGES = `SELECT r.entity_id AS entity_id, r.url AS url
 FROM (${RANKED_PRICING_PAGES}) r
-WHERE r.position <= ?2
+WHERE r.position <= ?2 AND ${liveWorkspace("r.workspace_id")}
   AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = r.entity_id AND w.source_id = ?1 AND w.target_key = r.url)
 ORDER BY r.entity_id, r.url`;
 
@@ -172,6 +175,10 @@ export async function insertAlternatePage(input: {
 const RECORD_TRANSPORT =
   "UPDATE page SET transport = ?2, transport_reason = ?3, transport_tested_at = ?4, deferred_at = NULL WHERE id = ?1";
 
+const MARK_LINKS_READ = "UPDATE page SET links_read_at = ?2, links_retry_at = NULL WHERE id = ?1";
+
+const MARK_LINKS_RETRY = "UPDATE page SET links_retry_at = ?2 WHERE id = ?1";
+
 const MARK_DEFERRED = "UPDATE page SET deferred_at = ?2 WHERE id = ?1";
 
 export async function recordPageTransport(input: {
@@ -183,8 +190,65 @@ export async function recordPageTransport(input: {
   await env.DB.prepare(RECORD_TRANSPORT).bind(input.pageId, input.transport, input.reason, input.testedAt).run();
 }
 
+export async function markLinksRead(pageId: string, at: string): Promise<void> {
+  await env.DB.prepare(MARK_LINKS_READ).bind(pageId, at).run();
+}
+
+export async function markLinksRetry(pageId: string, at: string): Promise<void> {
+  await env.DB.prepare(MARK_LINKS_RETRY).bind(pageId, at).run();
+}
+
 export async function markPageDeferred(pageId: string, at: string): Promise<void> {
   await env.DB.prepare(MARK_DEFERRED).bind(pageId, at).run();
+}
+
+const RECORD_FAILURE = "UPDATE page SET last_failure_reason = ?2, last_failure_at = ?3 WHERE id = ?1";
+
+const CLEAR_FAILURE =
+  "UPDATE page SET last_failure_reason = NULL, last_failure_at = NULL WHERE id = ?1 AND last_failure_at IS NOT NULL";
+
+export async function recordPageFailure(pageId: string, reason: string, at: string): Promise<void> {
+  await env.DB.prepare(RECORD_FAILURE).bind(pageId, reason, at).run();
+}
+
+export async function clearPageFailure(pageId: string): Promise<void> {
+  await env.DB.prepare(CLEAR_FAILURE).bind(pageId).run();
+}
+
+const FAILURE_REASON_BY_WATCH = `SELECT p.last_failure_reason AS reason
+FROM watch w JOIN page p ON p.entity_id = w.entity_id AND p.url = w.target_key
+WHERE w.id = ?1 LIMIT 1`;
+
+export async function readFailureReasonForWatch(watchId: string): Promise<string | null> {
+  const row = z
+    .object({ reason: z.string().nullable() })
+    .nullable()
+    .parse(await env.DB.prepare(FAILURE_REASON_BY_WATCH).bind(watchId).first());
+  return row?.reason ?? null;
+}
+
+const SILENT_RIVALS = `SELECT e.workspace_id AS workspace_id,
+  COALESCE(
+    (SELECT p.last_failure_reason FROM page p
+     WHERE p.entity_id = e.id AND p.role = 'home' AND p.last_failure_reason IS NOT NULL
+     ORDER BY p.last_failure_at DESC LIMIT 1),
+    CASE WHEN EXISTS (
+      SELECT 1 FROM watch w JOIN source src ON src.id = w.source_id AND src.key = 'site.web' AND src.is_enabled = 1
+      WHERE w.entity_id = e.id AND w.is_active = 1
+    ) THEN 'swept without a recorded result' ELSE 'no active site watch' END
+  ) AS reason
+FROM entity e
+WHERE e.role = 'competitor' AND e.state = 'on' AND ${liveWorkspace("e.workspace_id")}
+  AND EXISTS (SELECT 1 FROM page h WHERE h.entity_id = e.id AND h.role = 'home' AND h.discovered_at < ?1)
+  AND NOT EXISTS (
+    SELECT 1 FROM snapshot s JOIN page sp ON sp.id = s.page_id WHERE sp.entity_id = e.id AND s.fetched_at >= ?1
+  )`;
+
+const silentRivalRows = z.array(z.object({ workspace_id: z.string(), reason: z.string() }));
+
+export async function readSilentRivals(since: string): Promise<{ workspaceId: string; reason: string }[]> {
+  const rows = await env.DB.prepare(SILENT_RIVALS).bind(since).all();
+  return silentRivalRows.parse(rows.results).map((row) => ({ workspaceId: row.workspace_id, reason: row.reason }));
 }
 
 export interface OwnSitePage {
@@ -197,7 +261,7 @@ export interface OwnSitePage {
 const ENTITIES_WITHOUT_HOME = `SELECT e.id AS id, e.domain AS domain, CASE WHEN json_valid(e.identity_json) THEN json_extract(e.identity_json, '$.url') END AS url,
        json_valid(e.identity_json) AS identity_valid
 FROM entity e
-WHERE e.state = 'on'
+WHERE e.state = 'on' AND ${liveWorkspace("e.workspace_id")}
   AND NOT EXISTS (SELECT 1 FROM page p WHERE p.entity_id = e.id AND p.role = 'home')
 ORDER BY e.id`;
 
@@ -207,7 +271,7 @@ const OWN_SITE_PAGES = `SELECT e.workspace_id AS workspace_id,
        p.url AS url
 FROM entity e
 JOIN page p ON p.entity_id = e.id AND p.role = 'home'
-WHERE e.role = 'self' AND e.state = 'on'
+WHERE e.role = 'self' AND e.state = 'on' AND ${liveWorkspace("e.workspace_id")}
 ORDER BY e.workspace_id, p.id`;
 
 const entityRows = z.array(
