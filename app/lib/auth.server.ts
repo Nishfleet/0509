@@ -1,5 +1,5 @@
 import { createCookie } from "react-router";
-import { betterAuth } from "better-auth";
+import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { captcha, magicLink } from "better-auth/plugins";
 import { apiKey } from "@better-auth/api-key";
@@ -14,6 +14,7 @@ import { ensureWorkspaceForSignIn } from "./workspace.server";
 import { accessPrecleared } from "./auth/access-preclearance.server";
 import { changeEmailEmail } from "./auth/change-email-email";
 import { changeEmailAllowed } from "./auth/change-email-limit";
+import { chargeFixtureMagicLink, chargeFixtureSignup } from "./auth/fixture-signup-cap.server";
 import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email";
 import { MAGIC_LINK_PATH } from "./auth/magic-link-path";
 import { redactEmailShaped } from "./auth/redact-email-shaped";
@@ -122,8 +123,37 @@ function authHooks(env: AuthEnv) {
   };
 }
 
+function databaseHooks(env: AuthEnv): BetterAuthOptions["databaseHooks"] {
+  return {
+    user: {
+      create: {
+        before: async (user) => {
+          if (!(await chargeFixtureSignup(user.email))) {
+            throw new APIError("TOO_MANY_REQUESTS", { message: "Too many test accounts today. Try again tomorrow." });
+          }
+        },
+      },
+    },
+    session: {
+      create: {
+        after: async (session, context) => {
+          const request = context?.request ?? null;
+          if (!request) return;
+          await ensureWorkspaceForSignIn(env.DB, {
+            userId: session.userId,
+            request,
+          });
+        },
+      },
+    },
+  };
+}
+
 function sendMagicLinkEmail(env: AuthEnv) {
   return async ({ email, url }: { email: string; url: string }) => {
+    if (!(await chargeFixtureMagicLink(email))) {
+      throw new APIError("TOO_MANY_REQUESTS", { message: "Too many test sign-in links today. Try again tomorrow." });
+    }
     const message = magicLinkEmail({ email, url });
     try {
       await sendOrThrow(env.EMAIL, {
@@ -204,20 +234,7 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
     },
     disabledPaths: DISABLED_AUTH_PATHS,
     hooks: authHooks(env),
-    databaseHooks: {
-      session: {
-        create: {
-          after: async (session, context) => {
-            const request = context?.request ?? null;
-            if (!request) return;
-            await ensureWorkspaceForSignIn(env.DB, {
-              userId: session.userId,
-              request,
-            });
-          },
-        },
-      },
-    },
+    databaseHooks: databaseHooks(env),
     plugins: authPlugins(env, options),
   });
 }

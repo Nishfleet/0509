@@ -421,6 +421,12 @@ let signedInThisWorker: readonly string[] = [];
 
 const MAGIC_LINK_SEND_FAILED = "We couldn't send the link. Try again in a minute.";
 
+const APP_SESSION_COOKIE = /^(?:__Secure-)?better-auth\./;
+
+export async function clearAppSession(page: Page): Promise<void> {
+  await page.context().clearCookies({ name: APP_SESSION_COOKIE });
+}
+
 export async function signInWithMagicLink(
   page: Page,
   email: string,
@@ -450,6 +456,15 @@ export async function signInWithMagicLink(
     `magic-link sign-in email=${email} sentAt=${sentAt} linkReadAt=${linkReadAt} sessionAt=${new Date().toISOString()}`,
   );
   return { link, status: response?.status() ?? 0 };
+}
+
+export async function addCompetitorWhileDiscoveryIsUnavailable(page: Page): Promise<void> {
+  await expect(page.getByText("We couldn't look for competitors just now.")).toBeVisible({ timeout: 60_000 });
+  await page.locator("#add-competitor").fill("nike.com");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("list", { name: "Watching" }).getByRole("listitem").first()).toBeVisible({
+    timeout: 30_000,
+  });
 }
 
 export async function confirmPublicSubject(page: Page, subject?: string): Promise<void> {

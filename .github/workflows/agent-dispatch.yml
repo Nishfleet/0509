@@ -1,4 +1,4 @@
-# Trigger stub for Nishfleet/fleet-ops' dispatch; its stub- group must not equal the callee's per-run group (deadlock).
+# version: 1 — trigger stub for Nishfleet/fleet-ops' dispatch (README.md, "Workflows that act on their own": switch it off, delete it); its stub- group must not equal the callee's per-run group (deadlock).
 name: agent-dispatch
 on:
   issues:
@@ -28,17 +28,12 @@ on:
 concurrency:
   group: ${{ github.event_name == 'pull_request_target' && github.event.action != 'closed' && format('agent-dispatch-pr-{0}-{1}-{2}', github.repository, github.event.pull_request.number, github.event.action) || format('agent-dispatch-stub-{0}', github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request_target' && github.event.action == 'synchronize' }}
+permissions: {contents: read}
 jobs:
   dispatch:
     if: github.event_name != 'pull_request_target' || github.event.action == 'closed' || github.event.pull_request.head.repo.full_name == github.repository
     uses: Nishfleet/fleet-ops/.github/workflows/agent-dispatch.yml@main # same ref runner group 3 enforces for agent.yml; a SHA pin here drifts from agent.yml@main and strands jobs (0509#5231)
-    permissions:
-      issues: write
-      pull-requests: write
-      contents: write
-      actions: read
-      checks: read
-      statuses: read
+    permissions: {issues: write, pull-requests: write, contents: write, actions: read, checks: read, statuses: read}
     with:
       issue: ${{ inputs.issue }}
       agent_mode: ${{ vars.AGENT_MODE }}

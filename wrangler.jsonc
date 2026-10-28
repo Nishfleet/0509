@@ -12,6 +12,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "0509",
+  "workers_dev": false,
   // >= 2026-08-04 turns nodejs_compat on by default; still set it so a
   // Vitest inject cannot hide a missing production flag
   // (https://developers.cloudflare.com/workers/configuration/compatibility-flags/).
@@ -174,8 +175,13 @@
     // itself. Changing the value takes a deploy of this file, with no code change.
     // Off until the site-change eval passes.
     "SHARED_RIVAL_CHECKS": "off",
+    // The reaper for per-run e2e accounts (e2e+...@0509.io, never the kept journey
+    // accounts) older than 24 hours with no plan row and only fixture workspaces.
+    // Only the exact value "live" deletes anything; unset, blank or any other
+    // value selects and logs counts and deletes nothing. At most 25 accounts a run.
+    "FIXTURE_REAPER": "dry-run",
     "ACCESS_TEAM_DOMAIN": "https://nish345.cloudflareaccess.com",
-    "ACCESS_AUD": "b4fa400a1848c913b92c3212dc0714fcdbd1b1b66eb24659e4a7cc01c790575d",
+    "ACCESS_AUD": "5dcfc6477175c13fa2dbdbdbc91242e7458da2ae9028131ab776995cbda2bd7f",
   },
   "secrets": {
     "required": [
@@ -203,9 +209,7 @@
   // same bucket; a second bucket is a different thing). snapshot/site/ holds
   // raw site snapshots, text and screenshot (engine 4), under the one-year
   // snapshot/ rule in docs/REBUILD-GUARDRAILS.md. 0509-snapshots-backup is the
-  // nightly copy target of the snapshot-backup Workflow below and carries the
-  // same five per-prefix lifecycle rules, so a copied object ages out of the
-  // backup a year behind the source.
+  // nightly copy target of the snapshot-backup Workflow below.
   "r2_buckets": [
     { "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots" },
     { "binding": "SNAPSHOTS_BACKUP", "bucket_name": "0509-snapshots-backup" },
@@ -442,6 +446,14 @@
       "name": "identity-tail",
       "binding": "IDENTITY_TAIL",
       "class_name": "IdentityTailWorkflow",
+    },
+    // The nightly reaper for per-run e2e accounts older than a day (FIXTURE_REAPER
+    // under vars). Started from the 03:00 cron, or on demand by creating an
+    // instance of this Workflow through the Cloudflare API.
+    {
+      "name": "fixture-reaper",
+      "binding": "FIXTURE_REAPER_WORKFLOW",
+      "class_name": "FixtureReaperWorkflow",
     },
   ],
 

@@ -17,6 +17,8 @@ import {
 import { effectiveKindSql } from "../source-kind";
 import type { HiringSignalState, HiringSignalUpdate } from "../hiring/role-lifecycle";
 
+import { liveWorkspace } from "./active-workspace";
+
 export interface ChangeSignalRow {
   id: string;
   workspaceId: string;
@@ -415,6 +417,7 @@ FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.state = 'on'
 WHERE s.kind = 'change' AND s.is_tombstoned = 0
   AND (?1 IS NULL OR s.workspace_id = ?1)
+  AND ${liveWorkspace("s.workspace_id")}
   AND s.observed_at >= ?2 AND s.observed_at < ?3
   AND (e.role <> 'self' OR ${CHANGE_HAS_STORED_EVIDENCE})
   AND NOT ${changeJudgedSql({ noteworthy: "?5", breakage: "?6" })}
@@ -823,7 +826,7 @@ export async function readWorkspaceContent(workspaceId: string, since: string, l
 
 const SELECT_CHANGES_WITHOUT_EXCERPT = `SELECT id, json_extract(payload_json, '$.diffKey') AS diff_key
 FROM signal
-WHERE kind = 'change' AND json_valid(payload_json)
+WHERE kind = 'change' AND json_valid(payload_json) AND ${liveWorkspace("signal.workspace_id")}
   AND json_extract(payload_json, '$.excerpt') IS NULL
   AND json_extract(payload_json, '$.diffKey') IS NOT NULL
 ORDER BY observed_at DESC, id DESC

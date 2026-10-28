@@ -5,7 +5,7 @@ import { readPageHashes, upsertJudgedPages, type JudgedPage } from "../data/page
 import { askChoices, type ChoiceQuestion, type ChoiceVerdict } from "../jev/client.server";
 import { sha256Hex } from "../sha256";
 
-const NAV_PAGES_JUDGED = 40;
+export const NAV_PAGES_JUDGED = 40;
 
 const PRICING_LOOKING = /pric|plans?\b|packages?\b|subscri|buy|shop|store|catalog/i;
 
@@ -91,11 +91,9 @@ export async function classifyNavPages({
 }: ClassifyNavPagesInput): Promise<readonly JudgedPage[]> {
   const hashes = await readPageHashes(entity.id);
   const targets = await Promise.all(
-    pricingLookingFirst(pages)
-      .slice(0, NAV_PAGES_JUDGED)
-      .map(async (page) => ({ page, hash: await pageHash(page) })),
+    pricingLookingFirst(pages).map(async (page) => ({ page, hash: await pageHash(page) })),
   );
-  const stale = targets.filter((target) => hashes.get(target.page.url) !== target.hash);
+  const stale = targets.filter((target) => hashes.get(target.page.url) !== target.hash).slice(0, NAV_PAGES_JUDGED);
   if (stale.length === 0) return [];
 
   const { judged, refusal } = await judgeStale(workspaceId, entity.domain, stale);

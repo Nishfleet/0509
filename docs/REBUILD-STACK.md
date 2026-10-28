@@ -1147,7 +1147,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Performance gate                            | `@lhci/cli` (lockfile; starts `wrangler dev` itself)                  | 0.15.1                                   |
 | Link checking                               | `lycheeverse/lychee-action`                                           | v2.9.0                                   |
 | Red-main issue create-or-update             | `JasonEtco/create-an-issue` (update_existing, search_existing: open)  | v2.9.2                                   |
-| MCP server                                  | `createMcpHandler` (`@modelcontextprotocol/server`)                   | 2.1.0                                    |
+| MCP server                                  | `createMcpHandler` (`@modelcontextprotocol/server`)                   | 2.3.0                                    |
 | MCP auth                                    | `@cloudflare/workers-oauth-provider`                                  | 0.10.4                                   |
 | API keys + per-key quota                    | `@better-auth/api-key` (`apikey` table)                               | 1.7.5                                    |
 | Edge abuse shield                           | Cloudflare rate limiting binding (`period` 10 or 60 only)             | platform                                 |
