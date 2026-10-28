@@ -4365,5 +4365,418 @@
       "noteworthy_change": "the same referral bonus with punctuation changed",
       "change_kind": "messaging reworded, no term changed"
     }
+  },
+  {
+    "id": "fb-sephora-tagline-swap",
+    "split": "test",
+    "subject": {
+      "name": "Sephora",
+      "domain": "sephora.com"
+    },
+    "isSelf": false,
+    "pageRole": "home",
+    "pageUrl": "https://www.sephora.com/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -3,3 +3,3 @@",
+          " Beauty and Cosmetics",
+          "-Discover your next favorite",
+          "+Find your next must-have",
+          " Shop All Products"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 31200,
+      "afterChars": 31198,
+      "textHalved": false,
+      "pricesBefore": 8,
+      "pricesAfter": 8,
+      "pricesVanished": false
+    },
+    "history_30d": [
+      {
+        "kind": "home",
+        "at": "2026-10-05T09:00:00.000Z",
+        "change": "Hero tagline changed from 'Explore your beauty' to 'Discover your next favorite'",
+        "customer_said": "not_useful"
+      },
+      {
+        "kind": "home",
+        "at": "2026-10-14T09:00:00.000Z",
+        "change": "Seasonal banner text swapped from 'Fall Glow Up' to 'Autumn Radiance Event'"
+      }
+    ],
+    "labels": {
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "noteworthy_change": "the hero tagline swapped two synonym phrases in the same position the customer already dismissed as not worth knowing, a routine A/B copy rotation",
+      "change_kind": "a single tagline phrase was replaced with a near-synonym; no product, price or structural change occurred"
+    }
+  },
+  {
+    "id": "fb-uber-button-label",
+    "split": "test",
+    "subject": {
+      "name": "Uber",
+      "domain": "uber.com"
+    },
+    "isSelf": false,
+    "pageRole": "home",
+    "pageUrl": "https://www.uber.com/us/en/",
+    "hunks": [
+      {
+        "lines": ["@@ -5,2 +5,2 @@", "-Get a ride", "+Request a ride", " Deliver food"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18400,
+      "afterChars": 18406,
+      "textHalved": false,
+      "pricesBefore": 0,
+      "pricesAfter": 0,
+      "pricesVanished": false
+    },
+    "history_30d": [
+      {
+        "kind": "home",
+        "at": "2026-10-02T09:00:00.000Z",
+        "change": "Primary CTA changed from 'Get a ride' to 'Book a ride'",
+        "customer_said": "not_useful"
+      },
+      {
+        "kind": "home",
+        "at": "2026-10-12T09:00:00.000Z",
+        "change": "Footer copyright year updated to 2026"
+      },
+      {
+        "kind": "home",
+        "at": "2026-10-20T09:00:00.000Z",
+        "change": "CTA changed back from 'Book a ride' to 'Get a ride'"
+      }
+    ],
+    "labels": {
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "noteworthy_change": "the CTA verb was swapped again after the customer said the previous swap was not worth knowing, and the history shows it oscillating — this is UI microcopy churn",
+      "change_kind": "a button label changed from one two-word phrase to another; no service, pricing or availability changed"
+    }
+  },
+  {
+    "id": "fb-airbnb-hero-heading",
+    "split": "test",
+    "subject": {
+      "name": "Airbnb",
+      "domain": "airbnb.com"
+    },
+    "isSelf": false,
+    "pageRole": "home",
+    "pageUrl": "https://www.airbnb.com/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -2,3 +2,3 @@",
+          " Search destinations",
+          "-Find unique stays",
+          "+Explore one-of-a-kind stays",
+          " Experiences"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 24700,
+      "afterChars": 24712,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [
+      {
+        "kind": "home",
+        "at": "2026-10-01T09:00:00.000Z",
+        "change": "Hero heading changed from 'Book unique homes' to 'Find unique stays'",
+        "customer_said": "not_useful"
+      },
+      {
+        "kind": "home",
+        "at": "2026-10-18T09:00:00.000Z",
+        "change": "Search placeholder text changed from 'Where to?' to 'Search destinations'"
+      }
+    ],
+    "labels": {
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "noteworthy_change": "the hero heading rephrased 'unique stays' again after the customer flagged the identical type of change as not useful two weeks earlier; no inventory or search behavior changed",
+      "change_kind": "a heading was reworded with a synonym; no functional or commercial change on the page"
+    }
+  },
+  {
+    "id": "fb-tesla-nav-rename",
+    "split": "test",
+    "subject": {
+      "name": "Tesla",
+      "domain": "tesla.com"
+    },
+    "isSelf": false,
+    "pageRole": "home",
+    "pageUrl": "https://www.tesla.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,3 +1,3 @@", "-Charging", "+Charging Network", " Solar Roof", " Accessories"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 19800,
+      "afterChars": 19808,
+      "textHalved": false,
+      "pricesBefore": 4,
+      "pricesAfter": 4,
+      "pricesVanished": false
+    },
+    "history_30d": [
+      {
+        "kind": "home",
+        "at": "2026-10-08T09:00:00.000Z",
+        "change": "Nav item 'Charging' renamed to 'Supercharging'",
+        "customer_said": "not_useful"
+      },
+      {
+        "kind": "home",
+        "at": "2026-10-19T09:00:00.000Z",
+        "change": "Nav item 'Supercharging' renamed back to 'Charging'"
+      }
+    ],
+    "labels": {
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "noteworthy_change": "the nav label for the charging page was expanded by one word after the customer said the previous rename of the same item was not worth hearing; the destination page and all prices are unchanged",
+      "change_kind": "a navigation label gained a modifier word; no new product, price or feature is involved"
+    }
+  },
+  {
+    "id": "fb-allbirds-price-drop",
+    "split": "test",
+    "subject": {
+      "name": "Allbirds",
+      "domain": "allbirds.com"
+    },
+    "isSelf": false,
+    "pageRole": "product",
+    "pageUrl": "https://www.allbirds.com/products/mens-wool-runners",
+    "hunks": [
+      {
+        "lines": ["@@ -4,4 +4,4 @@", " Wool Runners – Natural Black", "-$110", "+$98", " Free shipping and returns"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 15200,
+      "afterChars": 15199,
+      "textHalved": false,
+      "pricesBefore": 3,
+      "pricesAfter": 3,
+      "pricesVanished": false
+    },
+    "history_30d": [
+      {
+        "kind": "product",
+        "at": "2026-10-03T09:00:00.000Z",
+        "change": "Wool Runners price dropped from $120 to $110",
+        "customer_said": "useful"
+      },
+      {
+        "kind": "product",
+        "at": "2026-10-16T09:00:00.000Z",
+        "change": "Wool Runners added a new colorway 'Fog Grey'"
+      }
+    ],
+    "labels": {
+      "noteworthy_change": true,
+      "change_kind": "pricing"
+    },
+    "why": {
+      "noteworthy_change": "the exact product the customer tracks dropped another $12, the same kind of price cut they called useful two weeks ago; this is the second consecutive reduction",
+      "change_kind": "the listed price fell from $110 to $98 on the product detail page"
+    }
+  },
+  {
+    "id": "fb-peloton-new-bike",
+    "split": "test",
+    "subject": {
+      "name": "Peloton",
+      "domain": "onepeloton.com"
+    },
+    "isSelf": false,
+    "pageRole": "product",
+    "pageUrl": "https://www.onepeloton.com/bikes",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -8,3 +8,5 @@",
+          " Peloton Bike+",
+          "+Peloton Bike+",
+          "+  Now with 32\" rotating HD touchscreen",
+          "+  $2,195 | Finance from $62/mo",
+          " Free delivery"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 22100,
+      "afterChars": 22260,
+      "textHalved": false,
+      "pricesBefore": 5,
+      "pricesAfter": 7,
+      "pricesVanished": false
+    },
+    "history_30d": [
+      {
+        "kind": "product",
+        "at": "2026-10-06T09:00:00.000Z",
+        "change": "New Bike+ model with 28\" screen listed at $1,995",
+        "customer_said": "useful"
+      },
+      {
+        "kind": "product",
+        "at": "2026-10-15T09:00:00.000Z",
+        "change": "Tread product page copy updated with new safety disclaimer"
+      }
+    ],
+    "labels": {
+      "noteworthy_change": true,
+      "change_kind": "launch"
+    },
+    "why": {
+      "noteworthy_change": "a new Bike+ variant appeared with a larger screen and a $200 price increase over the previous model — the customer called the earlier new-model listing useful, and this is the same kind of product launch",
+      "change_kind": "a new hardware SKU with a distinct spec and price was added to the bikes listing page"
+    }
+  },
+  {
+    "id": "fb-warby-plan-removed",
+    "split": "test",
+    "subject": {
+      "name": "Warby Parker",
+      "domain": "warbyparker.com"
+    },
+    "isSelf": false,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.warbyparker.com/eyeglasses",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -12,4 +12,2 @@",
+          " Single-vision $95",
+          " Progressive $295",
+          "-Home Try-On (5 frames, free)",
+          "-Virtual Try-On",
+          " Eye exam from $79"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 17600,
+      "afterChars": 17520,
+      "textHalved": false,
+      "pricesBefore": 9,
+      "pricesAfter": 8,
+      "pricesVanished": false
+    },
+    "history_30d": [
+      {
+        "kind": "pricing",
+        "at": "2026-10-04T09:00:00.000Z",
+        "change": "Home Try-On badge removed from the glasses category page",
+        "customer_said": "useful"
+      },
+      {
+        "kind": "pricing",
+        "at": "2026-10-21T09:00:00.000Z",
+        "change": "Progressive lens description reworded for clarity"
+      }
+    ],
+    "labels": {
+      "noteworthy_change": true,
+      "change_kind": "removal"
+    },
+    "why": {
+      "noteworthy_change": "the Home Try-On and Virtual Try-On lines were deleted from the category page, completing a removal the customer flagged as useful when the badge first disappeared; the program is now fully gone from the page",
+      "change_kind": "two service-feature lines were removed from the pricing/category page, indicating the try-on program is being discontinued from this surface"
+    }
+  },
+  {
+    "id": "fb-samsung-tradein-bump",
+    "split": "test",
+    "subject": {
+      "name": "Samsung",
+      "domain": "samsung.com"
+    },
+    "isSelf": false,
+    "pageRole": "product",
+    "pageUrl": "https://www.samsung.com/us/smartphones/galaxy-s25-ultra/buy/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -6,3 +6,3 @@",
+          " Trade-in value up to",
+          "-$800",
+          "+$900",
+          " when you trade any Galaxy S23 or newer"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 20300,
+      "afterChars": 20300,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [
+      {
+        "kind": "product",
+        "at": "2026-10-07T09:00:00.000Z",
+        "change": "Trade-in max raised from $700 to $800 for Galaxy S23 and newer",
+        "customer_said": "useful"
+      },
+      {
+        "kind": "product",
+        "at": "2026-10-17T09:00:00.000Z",
+        "change": "Product page hero image updated with a new angle shot"
+      }
+    ],
+    "labels": {
+      "noteworthy_change": true,
+      "change_kind": "offer"
+    },
+    "why": {
+      "noteworthy_change": "the trade-in credit was raised another $100 on the same eligibility tier the customer found useful last time; this directly changes the effective price a buyer pays",
+      "change_kind": "the promotional trade-in value increased from $800 to $900, a richer offer on the same product page"
+    }
   }
 ]
