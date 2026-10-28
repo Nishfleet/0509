@@ -16,11 +16,19 @@ interface SoakStep {
 }
 
 function soakStep(): SoakStep {
-  const source = readFileSync(path.join(REPO_ROOT, WORKFLOW), "utf8");
-  const jobs = (parse(source) as { jobs: Record<string, { steps?: SoakStep[] }> }).jobs;
-  const step = jobs["soak-report"]?.steps?.find((entry) => (entry.run ?? "").includes("Soak report for the 24 hours"));
+  const step = e2eJobs()["soak-report"]?.steps?.find((entry) => (entry.run ?? "").includes("Soak report for the 24 hours"));
   if (step === undefined) throw new Error("soak-report has no comment-posting run step");
   return step;
+}
+
+interface JobWithEnvironment {
+  environment?: unknown;
+  steps?: SoakStep[];
+}
+
+function e2eJobs(): Record<string, JobWithEnvironment> {
+  const source = readFileSync(path.join(REPO_ROOT, WORKFLOW), "utf8");
+  return (parse(source) as { jobs: Record<string, JobWithEnvironment> }).jobs;
 }
 
 describe("soak-report measures the two DONE lines (0509#7076)", () => {
@@ -48,12 +56,25 @@ describe("soak-report measures the two DONE lines (0509#7076)", () => {
   });
 });
 
-describe("the production D1 reads run where D1 accepts the token (0509#7773)", () => {
-  it("runs jev-failures and soak-report in production without a deployment record", () => {
-    const source = readFileSync(path.join(REPO_ROOT, WORKFLOW), "utf8");
-    const jobs = (parse(source) as { jobs: Record<string, { environment?: unknown }> }).jobs;
-    for (const job of ["jev-failures", "soak-report"]) {
-      expect(jobs[job]?.environment).toEqual({ name: "production", deployment: false });
+describe("a production D1 read runs where D1 accepts the token (0509#7773)", () => {
+  function d1ReaderJobs(): [string, { environment?: unknown; steps?: SoakStep[] }][] {
+    return Object.entries(e2eJobs()).filter(([, job]) =>
+      (job.steps ?? []).some((step) => (step.run ?? "").includes("wrangler d1 execute 0509 --remote")),
+    );
+  }
+
+  it("runs every job that reads production D1 in production, with no deployment record", () => {
+    const readers = d1ReaderJobs();
+    expect(readers.map(([name]) => name)).toEqual(["jev-failures", "soak-report"]);
+    for (const [, job] of readers) {
+      expect(job.environment).toEqual({ name: "production", deployment: false });
+    }
+  });
+
+  it("runs no dependency install script beside the production token", () => {
+    for (const [, job] of d1ReaderJobs()) {
+      const install = (job.steps ?? []).map((step) => step.run ?? "").filter((run) => run.startsWith("npm ci"));
+      expect(install).toEqual(["npm ci --ignore-scripts"]);
     }
   });
 });
