@@ -7,7 +7,7 @@ import { parse } from "yaml";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const WORKFLOWS = path.join(REPO_ROOT, ".github/workflows");
-const REQUIRED = ["Gitleaks", "codex-node-checks", "vitest-shard", "semgrep", "preview-assert", "base-fresh"];
+const REQUIRED = ["Gitleaks", "codex-node-checks", "vitest-shard", "semgrep", "preview-assert", "base-fresh", "deploy-freeze"];
 
 interface WorkflowStep {
   if?: unknown;
