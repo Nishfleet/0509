@@ -11,8 +11,10 @@
 # job may carry a job-level `if:` that can skip it;
 # tests/required-checks-never-skip.test.ts pins it.
 #
-# Lighthouse against production runs in deploy-production.yml after the deploy
-# job, so this workflow has no deployment_status trigger (0509#7013).
+# No deployment_status trigger (0509#7013): no job here reads a deployment, the
+# production e2e suite runs from e2e-scheduled.yml, and the post-deploy audit is
+# out of deploy-production.yml while the site is behind the Cloudflare Access
+# wall (0509#7656, fleet-ops#9889).
 name: CI
 
 on:
@@ -235,9 +237,9 @@ jobs:
 
       - name: Collect Lighthouse against the built Worker
         if: steps.scope.outputs.skip != 'true'
-        # Same budgets as the production lighthouse audit, on the PR, so a
-        # regression is red before merge (poteto 03:24: a trace per change, not
-        # per deploy; #4224). lhci starts wrangler dev itself: start-server-command
+        # The deterministic subset of the fleet budget (asserted below), on the
+        # PR, so a regression is red before merge (poteto 03:24: a trace per
+        # change, not per deploy; #4224). lhci starts wrangler dev itself: start-server-command
         # and the ready pattern are stock lhci flags. No loop, no script.
         # A per-process port, like playwright.config.ts: the fleet-ci runners share
         # this host with worker checkouts that run wrangler dev too (merge-group runs
