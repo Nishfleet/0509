@@ -9,6 +9,8 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const WORKFLOWS = path.join(REPO_ROOT, ".github/workflows");
 const UPLOAD_ACTION = "actions/upload-artifact";
 const MAX_RETENTION_DAYS = 7;
+const BACKUP_ARTIFACT_PREFIX = "d1-backup-";
+const MAX_BACKUP_RETENTION_DAYS = 90;
 
 function retentionFixture(retentionDays?: string): string {
   const retention = retentionDays === undefined ? "" : `          retention-days: ${retentionDays}\n`;
@@ -51,6 +53,11 @@ function retentionDays(step: WorkflowStep): number | undefined {
   const declared = step.with?.["retention-days"];
   const days = typeof declared === "string" ? Number(declared) : declared;
   return typeof days === "number" && Number.isInteger(days) && days > 0 ? days : undefined;
+}
+
+function retentionCeiling(step: WorkflowStep): number {
+  const name = step.with?.name;
+  return typeof name === "string" && name.startsWith(BACKUP_ARTIFACT_PREFIX) ? MAX_BACKUP_RETENTION_DAYS : MAX_RETENTION_DAYS;
 }
 
 function retentionProblem(upload: Upload): string | undefined {
@@ -119,8 +126,20 @@ describe("artifact uploads declare a bounded retention (0509#7188)", () => {
 
   it("keeps every retention inside the week the preview report needs", async () => {
     const long = (await allUploads())
-      .filter((upload) => (retentionDays(upload.step) ?? 0) > MAX_RETENTION_DAYS)
+      .filter((upload) => (retentionDays(upload.step) ?? 0) > retentionCeiling(upload.step))
       .map((upload) => `${label(upload)} keeps ${String(upload.step.with?.["retention-days"])} days`);
     expect(long).toEqual([]);
+  });
+
+  it("lets a d1-backup artifact keep 90 days and no more", () => {
+    const backup = (raw: string) => uploadsOf(retentionFixture(raw).replaceAll("playwright-report-preview", `${BACKUP_ARTIFACT_PREFIX}0509`))[0];
+    expect(retentionCeiling(backup("90"))).toBe(MAX_BACKUP_RETENTION_DAYS);
+    expect(retentionDays(backup("90"))).toBe(MAX_BACKUP_RETENTION_DAYS);
+    expect(retentionDays(backup("91"))).toBeGreaterThan(retentionCeiling(backup("91")));
+  });
+
+  it("keeps the week cap on an artifact whose name only contains a backup name", () => {
+    const [upload] = uploadsOf(retentionFixture("90").replaceAll("playwright-report-preview", `report-of-${BACKUP_ARTIFACT_PREFIX}0509`));
+    expect(retentionCeiling(upload)).toBe(MAX_RETENTION_DAYS);
   });
 });
