@@ -190,6 +190,22 @@ describe("deploy-staging deploys staging with cf on its own workflow", () => {
     expect(others).not.toContain("DODO_TEST_API_KEY");
   });
 
+  it("requires a staging value for every secret binding the staging config declares, before it deploys", () => {
+    const deploy = stagingStep("cf deploy");
+    for (const name of [
+      "BETTER_AUTH_SECRET",
+      "TURNSTILE_SITE_KEY",
+      "TURNSTILE_SECRET_KEY",
+      "DODO_WEBHOOK_SECRET",
+      "SLACK_TARGET_SECRET",
+    ]) {
+      expect(deploy.env?.[name], name).toBe(`\${{ secrets.STAGING_${name} }}`);
+    }
+    const run = runsOf(deploy);
+    expect(run).toContain("::error::staging needs its own value for:");
+    expect(run.indexOf("::error::")).toBeLessThan(run.indexOf("cf deploy"));
+  });
+
   it("keeps the staging token in the steps that call cf, never in install-script reach", () => {
     expect(JSON.stringify(staging())).not.toMatch(/NPM_CONFIG_IGNORE_SCRIPTS/);
     for (const candidate of staging().steps.filter((step) => runsOf(step).includes("npx cf"))) {

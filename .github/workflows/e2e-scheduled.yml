@@ -79,7 +79,7 @@ jobs:
     # every workflow in the repo. One run waits per group; a newer waiting run
     # replaces an older one (actionlint 1.7.12 rejects `queue: max`).
     # Left out, with reasons: j8 (hours long, would block every other live-AI job),
-    # backup-proof, soak-report and jev-failures (read only, no AI), production-sha and
+    # backup-proof, soak-report and jev-failures (read only, no AI), staging-sha and
     # suite (no AI). Not in this file: preview-assert and lighthouse in ci.yml run on
     # every PR and deploy, so grouping them would serialize all PRs.
     concurrency:
@@ -286,11 +286,11 @@ jobs:
           shopt -s globstar nullglob
           files=(test-results/**/error-context.md)
           if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
-  production-sha:
-    name: production-sha
-    # The suite runs the code of the deploy that is live, not main's head; no
-    # deployment, or one that is not yet successful, fails this job and the
-    # shards never start.
+  staging-sha:
+    name: staging-sha
+    # The suite runs against staging, so it runs the code of the staging deploy
+    # that is live, not main's head; no staging deployment, or one that is not
+    # yet successful, fails this job and the shards never start.
     if: github.event.schedule == '40 7 * * 0'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -299,12 +299,12 @@ jobs:
     outputs:
       sha: ${{ steps.deploy.outputs.sha }}
     steps:
-      - name: Newest production deployment
+      - name: Newest staging deployment
         id: deploy
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          deploy=$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=production&per_page=1" --jq '.[0] // empty')
+          deploy=$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=staging&per_page=1" --jq '.[0] // empty')
           test -n "$deploy"
           sha=$(jq -r .sha <<<"$deploy")
           test "${#sha}" = 40
@@ -320,7 +320,7 @@ jobs:
     # 0509#6034 lands, when a run signs in once). No trace is
     # uploaded: the repo is public and a trace can hold the Access cookie
     # (0509#5999); a failure is read from the job log.
-    needs: production-sha
+    needs: staging-sha
     if: github.event.schedule == '40 7 * * 0'
     runs-on: ubuntu-latest
     environment: staging
@@ -343,7 +343,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.production-sha.outputs.sha }}
+          ref: ${{ needs.staging-sha.outputs.sha }}
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -383,7 +383,7 @@ jobs:
           if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
   suite:
     name: e2e-production
-    needs: [production-sha, suite-shard]
+    needs: [staging-sha, suite-shard]
     if: always() && github.event.schedule == '40 7 * * 0'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -404,7 +404,7 @@ jobs:
         uses: JasonEtco/create-an-issue@1b14a70e4d8dc185e5cc76d3bec9eab20257b2c5 # v2.9.2
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          SHA: ${{ needs.production-sha.outputs.sha }}
+          SHA: ${{ needs.staging-sha.outputs.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           filename: .github/red-main/e2e-production.md
