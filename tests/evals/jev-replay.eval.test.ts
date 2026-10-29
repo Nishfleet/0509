@@ -1,3 +1,6 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
 import { describe, expect, it, vi } from "vitest";
 
 import type { DiscoveryContext } from "../../app/lib/data/entity.server";
@@ -185,11 +188,11 @@ interface Stats {
 
 const ROW_SQL = [
   "SELECT id, workspace_id, question_id, input_hash, entity_id, p, choice, decided_at",
-  "FROM jev_verdict WHERE decided_at < ? ORDER BY decided_at",
+  `FROM jev_verdict WHERE decided_at < '${CUTOFF}' ORDER BY decided_at`,
 ].join(" ");
 
 async function verdictRows(): Promise<Verdict[]> {
-  const rows = await d1Rows(ROW_SQL, [CUTOFF]);
+  const rows = await d1Rows(ROW_SQL);
   return rows.map((row) => ({
     workspace: str(row, "workspace_id"),
     question: str(row, "question_id"),
@@ -346,11 +349,19 @@ async function cardOf(subject: Subject, index: Index): Promise<Card | null> {
 }
 
 async function readCard(key: string): Promise<Card | null> {
-  const response = await kvResponse(key);
-  if (response.status === 404) return null;
-  if (!response.ok) throw new Error(`kv read failed with ${response.status}`);
-  return asCard(await response.json());
+  if (!kvViaCli) {
+    const response = await kvResponse(key);
+    if (response.ok) return asCard(await response.json());
+    if (response.status === 404) return null;
+    kvViaCli = true;
+    console.log(`the kv read answered ${response.status}; reading kv through wrangler instead`);
+  }
+  const value = await kvValue(key);
+  return value === null || value === "" ? null : asCard(JSON.parse(value));
 }
+
+let kvViaCli = false;
+let d1ViaCli = false;
 
 async function buildIndex(): Promise<Index> {
   const [rawRows, entityRows, suggestionRows, pageRows] = await Promise.all([
@@ -591,16 +602,27 @@ function mapLimit<T, R>(items: readonly T[], limit: number, run: (item: T) => Pr
   return Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker)).then(() => results);
 }
 
-async function d1Rows(
-  sql: string,
-  params: readonly (string | number | null)[] = [],
-): Promise<Record<string, unknown>[]> {
+async function d1Rows(sql: string): Promise<Record<string, unknown>[]> {
+  if (!d1ViaCli) {
+    try {
+      return await d1ViaRest(sql);
+    } catch (error) {
+      d1ViaCli = true;
+      console.log(`${String(error)}; reading d1 through wrangler instead`);
+    }
+  }
+  const stdout = await wrangler(["d1", "execute", "0509", "--remote", "--json", "--command", sql], 120_000);
+  const parsed = JSON.parse(stdout.slice(stdout.indexOf("["))) as { results?: Record<string, unknown>[] }[];
+  return parsed[0]?.results ?? [];
+}
+
+async function d1ViaRest(sql: string): Promise<Record<string, unknown>[]> {
   const response = await fetch(
     `https://api.cloudflare.com/client/v4/accounts/${accountId()}/d1/database/${DATABASE_ID}/query`,
     {
       method: "POST",
       headers: { authorization: `Bearer ${apiToken()}`, "content-type": "application/json" },
-      body: JSON.stringify({ sql, params }),
+      body: JSON.stringify({ sql, params: [] }),
       signal: AbortSignal.timeout(60_000),
     },
   );
@@ -613,6 +635,25 @@ async function d1Rows(
     throw new Error(`the d1 query failed with ${response.status}: ${payload.errors?.[0]?.message ?? ""}`);
   }
   return payload.result?.[0]?.results ?? [];
+}
+
+async function wrangler(args: readonly string[], timeout: number): Promise<string> {
+  const { stdout } = await promisify(execFile)("npx", ["--no-install", "wrangler", ...args], {
+    maxBuffer: 64 * 1024 * 1024,
+    timeout,
+  });
+  return stdout;
+}
+
+async function kvValue(key: string): Promise<string | null> {
+  try {
+    return (
+      await wrangler(["kv", "key", "get", key, "--namespace-id", KV_NAMESPACE_ID, "--remote", "--text"], 60_000)
+    ).trim();
+  } catch (error) {
+    if (/not found|10009/i.test(String(error instanceof Error ? error.message : error))) return null;
+    throw error;
+  }
 }
 
 function kvResponse(key: string): Promise<Response> {
