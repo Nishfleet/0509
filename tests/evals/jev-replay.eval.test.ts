@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { join } from "node:path";
 import { promisify } from "node:util";
 
 import { describe, expect, it, vi } from "vitest";
@@ -612,8 +613,10 @@ async function d1Rows(sql: string): Promise<Record<string, unknown>[]> {
     }
   }
   const stdout = await wrangler(["d1", "execute", "0509", "--remote", "--json", "--command", sql], 120_000);
-  const parsed = JSON.parse(stdout.slice(stdout.indexOf("["))) as { results?: Record<string, unknown>[] }[];
-  return parsed[0]?.results ?? [];
+  const parsed = JSON.parse(stdout.slice(Math.max(stdout.search(/[[{]/), 0))) as unknown;
+  if (!Array.isArray(parsed)) throw new Error(`wrangler d1 printed ${stdout.trim().slice(0, 300)}`);
+  const first = parsed[0] as { results?: Record<string, unknown>[] } | undefined;
+  return first?.results ?? [];
 }
 
 async function d1ViaRest(sql: string): Promise<Record<string, unknown>[]> {
@@ -637,12 +640,25 @@ async function d1ViaRest(sql: string): Promise<Record<string, unknown>[]> {
   return payload.result?.[0]?.results ?? [];
 }
 
+const WRANGLER = [join(process.cwd(), "node_modules", "wrangler", "bin", "wrangler.js")];
+
 async function wrangler(args: readonly string[], timeout: number): Promise<string> {
-  const { stdout } = await promisify(execFile)("npx", ["--no-install", "wrangler", ...args], {
-    maxBuffer: 64 * 1024 * 1024,
-    timeout,
-  });
-  return stdout;
+  try {
+    const { stdout } = await promisify(execFile)(process.execPath, [...WRANGLER, ...args], {
+      maxBuffer: 64 * 1024 * 1024,
+      timeout,
+    });
+    return stdout;
+  } catch (error) {
+    const failed = error as { stdout?: string; stderr?: string; message?: string; code?: string };
+    const detail = [(failed.stderr ?? "").trim(), (failed.stdout ?? "").trim(), failed.message ?? ""].find(
+      (part) => part !== "",
+    );
+    throw new Error(
+      `wrangler ${args.slice(0, 3).join(" ")} failed with ${failed.code ?? "no code"}: ${(detail ?? "").slice(0, 400)}`,
+      { cause: error },
+    );
+  }
 }
 
 async function kvValue(key: string): Promise<string | null> {
