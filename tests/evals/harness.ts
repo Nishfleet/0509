@@ -39,7 +39,7 @@ const WRANGLER_CONFIG = path.join(HERE, "..", "..", "wrangler.jsonc");
 
 let platform: Promise<PlatformProxy<{ AI: Ai }>> | undefined;
 
-async function aiBinding(): Promise<Ai> {
+export async function aiBinding(): Promise<Ai> {
   platform ??= getPlatformProxy<{ AI: Ai }>({ configPath: WRANGLER_CONFIG, persist: false });
   return (await platform).env.AI;
 }
