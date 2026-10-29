@@ -1,20 +1,13 @@
-# The main-merge-queue ruleset (id 21391031) requires one check: `ci-ok`.
-# `ci-ok` aggregates the gate jobs below:
-#   Gitleaks   codex-node-checks   vitest-shard   semgrep   preview-assert   base-fresh
-# Bypass actors on that ruleset is empty, so a renamed or dropped `ci-ok` is not
-# a cosmetic change — a required check that never reports fails closed and
-# nothing can merge, including the PR that renamed it.
-#
-# Every gate job runs on pull_request and merge_group: the queue evaluates
-# checks on the merge ref, so a job that skips there gives the queue no verdict,
-# and on GitHub a skipped required check counts as passing (#4664): no gate
-# job may carry a job-level `if:` that can skip it;
-# tests/required-checks-never-skip.test.ts pins it.
-#
-# No deployment_status trigger (0509#7013): no job here reads a deployment, the
-# production e2e suite runs from e2e-scheduled.yml, and the post-deploy audit is
-# out of deploy-production.yml while the site is behind the Cloudflare Access
-# wall (0509#7656, fleet-ops#9889).
+# The main-merge-queue ruleset (id 21391031) requires one check: `ci-ok`, which aggregates the
+# gate jobs below. Bypass actors are empty, so a renamed or dropped `ci-ok` fails closed and
+# nothing merges, including the PR that renamed it.
+#   Gitleaks   codex-node-checks   vitest-shard   semgrep   preview-assert   base-fresh   deploy-freeze
+# Every gate job runs on pull_request and merge_group (the queue evaluates checks on the merge
+# ref), and a skipped required check counts as passing (#4664), so no gate job carries a
+# job-level `if:` that can skip it; tests/required-checks-never-skip.test.ts pins it.
+# No deployment_status trigger (#7013); the production e2e runs from e2e-scheduled.yml, the
+# post-deploy audit stays out of deploy-production.yml (#7656), and deploy-freeze reads a
+# deploy run's conclusion over the API, never a deployment event.
 name: CI
 
 on:
@@ -31,32 +24,28 @@ permissions:
 jobs:
   codex-node-checks:
     name: codex-node-checks
-    # Hosted for every event. Public repo: minutes are free and the hosted pool
-    # is wider than the 3 owned runners (fleet-ops#5935 reversed 2026-09-22).
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # Two commits so HEAD^1 (the base side of the PR merge ref) exists
-          # for `vitest --changed` below.
           fetch-depth: 2
+          # HEAD^1 is present so vitest can diff against it for `--changed`.
+          # Credentials stay off the runner, so the token is not left behind.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - name: Typecheck
-        # cf-typegen and react-router typegen generate worker-configuration.d.ts
-        # and the route types, so `tsc -b` cannot run before them.
+        # cf-typegen and react-router typegen generate worker-configuration.d.ts and the route types, so `tsc -b` cannot run before them.
         run: npm run typecheck
       - name: Lint
-        # Rung 2 of the correction ladder (docs/REBUILD-TRUST.md B): every
-        # mistake worth correcting twice becomes a rule here rather than a
-        # sentence in a doc. `npm run lint` is `eslint . && knip` — the rules
-        # and the dead-code finder in one gate. It runs after typecheck because
-        # typed lint rules need the generated route types that typecheck emits.
+        # Rung 2 of the correction ladder (docs/REBUILD-TRUST.md B): a mistake worth correcting
+        # twice becomes a rule here, not a sentence in a doc. `npm run lint` is `eslint . && knip`,
+        # the rules and the dead-code finder in one gate. It runs after typecheck because typed
+        # lint rules need the generated route types that typecheck emits.
         run: npm run lint
       - name: Lint the workflows (actionlint)
         # Stock linter for workflow syntax, expressions and the shell inside
@@ -145,8 +134,6 @@ jobs:
 
   Gitleaks:
     name: Gitleaks
-    # Hosted for every event. Public repo: minutes are free and the hosted pool
-    # is wider than the 3 owned runners (fleet-ops#5935 reversed 2026-09-22).
     # Stays on a hosted runner: the docker:// step below runs as root and leaves
     # root-owned files in a persistent fleet-ci workspace, which broke every later
     # checkout on that runner (three merge_group failures, 2026-09-22 01:33-01:47 IST).
@@ -186,11 +173,8 @@ jobs:
 
   preview-assert:
     name: preview-assert
-    # A PR whose lint, typecheck or unit tests are red cannot merge, so it must not hold
-    # a hosted slot for the browser suites; the free plan allows 20 org-wide (#5381).
+    # A red lint, typecheck or unit test cannot merge, so this holds no hosted slot for the browser suites (#5381).
     needs: [codex-node-checks, vitest-shard]
-    # Hosted for every event. Public repo: minutes are free and the hosted pool
-    # is wider than the 3 owned runners (fleet-ops#5935 reversed 2026-09-22).
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -301,12 +285,28 @@ jobs:
           gate=$(git log -1 --first-parent --format=%H origin/main -- eslint.config.js eslint-suppressions.json knip.jsonc .jscpd.json .prettierrc.json .prettierignore package.json package-lock.json 'tsconfig*.json' 'vitest*.config.ts' vite.config.ts react-router.config.ts wrangler.jsonc .dev.vars.example .semgrep .github/workflows/ci.yml)
           git merge-base --is-ancestor "$gate" "$HEAD_SHA" || { echo "::error::main changed a gate in $gate after this head branched; merge main into the branch"; exit 1; }
 
+  deploy-freeze:
+    # Freeze the merge queue while main's last deploy is red (0509#7696): production is broken,
+    # so a change landing on top inherits the break. It lifts on the first green deploy run, not
+    # on attention, and a `deploy-fix` label exempts the one pull request that repairs the deploy.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {actions: read, pull-requests: read}
+    steps:
+      # Step-level merge_group, not a job-level if:: a skipped gate job passes ci-ok.
+      - if: github.event_name == 'merge_group'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          n=${GITHUB_REF##*/pr-}
+          gh api "repos/$GITHUB_REPOSITORY/pulls/${n%%-*}" --jq '.labels[].name' 2>/dev/null | grep -qx deploy-fix && { echo "deploy-freeze: the deploy-fix label exempts this pull request"; exit 0; }
+          c=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-production.yml/runs?branch=main&status=completed&per_page=10" --jq '[.workflow_runs[] | select(.conclusion == "success" or .conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "startup_failure") | .conclusion][0]') || { echo "::error::the deploy-production runs on main could not be read"; exit 1; }
+          [ "$c" = success ] || { echo "::error::main's last deploy run is ${c:-none}; merge is frozen until the deploy is green. Label this pull request deploy-fix to land the repair."; exit 1; }
+
   ci-ok:
     name: ci-ok
-    # One verdict over every gate job, so the ruleset can require this check
-    # alone and a gate job may skip or shard without passing by skipping
-    # (0509#7013). always() makes it report even when a needed job fails.
-    needs: [codex-node-checks, vitest-shard, Gitleaks, semgrep, preview-assert, base-fresh]
+    # One verdict over every gate job, so the ruleset can require this check alone and a gate job may skip or shard without passing by skipping (0509#7013).
+    needs: [codex-node-checks, vitest-shard, Gitleaks, semgrep, preview-assert, base-fresh, deploy-freeze]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2

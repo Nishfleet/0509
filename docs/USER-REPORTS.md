@@ -12,6 +12,14 @@ report arrives, the agent reads the feature map and drives the app) and 34:41
   `fleet-signup@0509.io` and the catch-all to a Worker named
   `0509-support-inbox`, last modified 2026-07-03. It is the old app's bundle and
   is not in this repository. Nobody reads what it stores.
+
+Corrected on 2026-10-28 (#5699). The live rules bind `support@`, `brief@`,
+`hello@`, `dmarc@`, `alerts@` and `fleet-signup@` to `0509-support-inbox-v2`;
+the 2026-10-29 dispatch is run 40885520114. wrangler's catch-all update accepts
+only a `forward` action, so the settings job writes that one rule through the
+Cloudflare REST API that wrangler wraps, and the catch-all follows on its next
+dispatch. Nothing routes to `0509-support-inbox` once that run has happened.
+
 - Sentry is designed (`docs/REBUILD-TRUST.md` §A5) and parked on an org that
   only Nish can own (#4099).
 - Every repository is public by decision (2026-09-17). A user's words cannot be
@@ -63,9 +71,13 @@ and a support mail about the same failure can be linked by hand.
    `email()` handler: parse, store, open the issue via the GitHub REST API with
    a fine-grained token scoped to issues on this repo, stored as a Worker
    secret. No reply is sent to the user; replies stay with Nish.
-2. **Routing**: only the `support@0509.io` rule moves to the new Worker. The
-   alerts, fleet-signup and catch-all rules stay where they are until their
-   consumers are decided.
+2. **Routing**: the rules for `support@`, `brief@`, `hello@`, `dmarc@`,
+   `alerts@`, `fleet-signup@` and the catch-all are written by the main-only
+   `cloudflare-settings` job (`.github/workflows/cloudflare-settings.yml`,
+   dispatched by hand), which updates a rule when it exists and creates it when
+   it does not, so re-running it is safe. The catch-all is the one rule that
+   wrangler cannot write, because its update accepts only a `forward` action,
+   so the job writes it through the Cloudflare REST API that wrangler wraps.
 3. **Admission**: `machine-reported` is never `agent-ready` on arrival. The 0509
    intake asks Jev `repro_worthy` with the issue body; p >= 0.9 adds
    `agent-ready`, p <= 0.1 closes with `not-actionable`, in between parks
@@ -75,8 +87,21 @@ and a support mail about the same failure can be linked by hand.
    helpers with the Access service token, and end with either a failing spec
    under `e2e/` or a no-repro proof citing what was tried. Nothing from the raw
    text goes into the PR.
-5. **Proof of the program**: one real report, sent by Nish or Fable to
-   `support@0509.io`, cited by issue number, D1 row id and PR.
+5. **Proof of the program, run by hand**: send one real mail to
+   `support@0509.io` and collect four receipts.
+   1. Send the mail. Put `Probe <UTC date>` in the subject, for example `Probe
+2026-11-04`. The body can say anything.
+   2. A GitHub issue appears in `Nishfleet/0509`, titled `Support: <report
+id>` and labelled `user-report` and `machine-reported`. The title carries
+      the report id and nothing the sender wrote, because the repository is
+      public.
+   3. The mail arrives at `nishant345@gmail.com`, forwarded by the Worker.
+   4. The row exists. Run one read against remote D1:
+      `npx wrangler d1 execute 0509 --remote --command "SELECT id,
+received_at, from_domain, subject_sha256 FROM support_report ORDER BY id
+DESC LIMIT 3"`. The newest row is the probe.
+      The stored count rises by one, and the daily sweep at 03:17 UTC logs that
+      count, so the same fact is observable without running a command.
 
 ## Rejected
 
