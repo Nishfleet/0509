@@ -164,6 +164,12 @@
     // which only the offline local e2e lane sets (playwright.config.ts): workerd
     // there has no DNS, so every typed address would read as unreachable.
     "RIVAL_REACH_CHECK": "on",
+    // 0509#7291: the Cloudflare Turnstile check in front of the magic link. "off"
+    // skips the server-side siteverify call, which only the offline local e2e lane
+    // sets (playwright.config.ts): workerd there has no DNS, so better-auth's
+    // verify aborts after its 10 s timeout and every sign-in answers 503. Any
+    // value other than "off", unset and blank included, keeps the check on.
+    "CAPTCHA": "on",
     // 0509#7191, and the operations follow-up on #7079: the named AI Gateway
     // that carries the product's Jev traffic. Creating it is a dashboard step, so
     // the id stays "default" until it exists and both model call sites read it
