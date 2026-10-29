@@ -174,7 +174,14 @@ the live app works.
 The self-hosted runner unit hides `~/.config/cloudflare` from every job it runs, and the first step of every agent job fails the run if that directory becomes readable (fleet-ops#9983, 2026-10-22). So no agent session on this host — a worker or an orchestrator hand-off — can read a Cloudflare token, mint one, or run `wrangler` against a remote database.
 
 - A Cloudflare credential an agent session needs goes in the seat-config directory, the one credential directory both the runner unit and the worker jail leave visible. Its exact path is not written here because this repo is public and the repo's own private-detail rule keeps that path out of it; the fleet-ops dispatch workflow that writes the seat env files is the source of truth. A worker that needs one parks the issue `blocked-on: orchestrator` with the `needs-orchestrator` label, rather than guessing a home path.
-- This repo's production D1 read token is an Actions secret. It is read-only and read by a workflow in this repo. A worker session on the VPS cannot read it, because the worker App token carries no permission to read Actions secrets.
+- The scheduled D1 readers in `e2e-scheduled.yml` (`soak-report`, `jev-failures`) run under
+  `production-e2e` (main only) and install with `npm ci --ignore-scripts`, so no install script
+  runs beside a Cloudflare token. Their `wrangler d1 execute 0509 --remote` reads are red since
+  2026-10-16 because the rotated repo-level `CLOUDFLARE_API_TOKEN` no longer carries D1 read
+  (D1 error 7403); restoring D1 read — per #7072's corrected fix, a token scoped to D1 read in a
+  main-only environment — is an owner action, and until it lands those reads fail (0509#7773).
+  A worker session on the VPS cannot read an Actions secret, because the worker App token
+  carries no permission to read them.
 - The Cloudflare Access service token for driving production is not in this repo and sits on no path an agent can read. Driving production from a worker is forbidden anyway; the production suite runs on its own schedule from `main`.
 
 ## Architecture

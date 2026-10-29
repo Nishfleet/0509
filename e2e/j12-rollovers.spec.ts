@@ -94,9 +94,12 @@ async function readBrief(page: Page, href: string): Promise<BriefRead> {
   const lines = await view.locator('[data-brief-block="brands"] p').allInnerTexts();
   const ranks = new Map<string, number | null>();
   for (const line of lines) {
-    const match = /^(.+) — (?:#(\d+)|unranked)/.exec(line);
-    if (match?.[1] === undefined) throw new Error(`unreadable brand line in the brief: ${line}`);
-    ranks.set(match[1], match[2] === undefined ? null : Number(match[2]));
+    const match = /^(.+?): (?:#(\d+)|unranked)(?:, .+)?$/.exec(line);
+    if (match !== null) {
+      ranks.set(match[1], match[2] === undefined ? null : Number(match[2]));
+      continue;
+    }
+    if (/ — (?:#\d+|unranked)/.test(line)) throw new Error(`unreadable brand line in the brief: ${line}`);
   }
   return { headline: { rank: Number(parsed[1]), total: Number(parsed[2]) }, whyLine, ranks };
 }
