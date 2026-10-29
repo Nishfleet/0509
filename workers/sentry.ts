@@ -18,11 +18,23 @@ function releaseFrom(env: SentryEnv): Pick<CloudflareOptions, "release" | "envir
 export const sentryOptions = (env: SentryEnv): CloudflareOptions => ({
   dsn: env.SENTRY_DSN,
   ...releaseFrom(env),
-  sendDefaultPii: false,
+  dataCollection: {
+    userInfo: false,
+    cookies: false,
+    httpHeaders: {
+      request: { deny: ["forwarded", "-ip", "remote-", "via", "-user"] },
+      response: { deny: ["forwarded", "-ip", "remote-", "via", "-user"] },
+    },
+    httpBodies: [],
+    urlQueryParams: { deny: ["forwarded", "-ip", "remote-", "via", "-user"] },
+    genAI: { inputs: false, outputs: false },
+    databaseQueryData: false,
+    queues: false,
+    graphQL: { document: false, variables: false },
+  },
   beforeBreadcrumb: () => null,
   beforeSend: scrubEvent,
   beforeSendTransaction: scrubEvent,
-  enableLogs: true,
   integrations: [consoleLoggingIntegration({ levels: ["warn", "error"] })],
   beforeSendLog: scrubLog,
 });
