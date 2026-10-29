@@ -1,28 +1,16 @@
 name: cloudflare-settings
 
-# Cloudflare settings that live outside wrangler.jsonc, applied with stock
-# wrangler commands, on demand and from main only (Nish 2026-10-03). Never runs
-# on push or schedule. R2: the backup bucket carries the same per-prefix
-# retention as 0509-snapshots (0509#5950). Email Routing: support@, brief@,
-# hello@, alerts@ and fleet-signup@ reach the support-inbox Worker (0509#5699);
-# the catch-all stays on the old Worker because wrangler's catch-all update
-# rejects a worker action. Safe to re-run: the lifecycle `set` replaces the rule
-# list, and each address is updated if its rule exists and created if it does
-# not. It holds its own Cloudflare token (CLOUDFLARE_SETTINGS_TOKEN), so it
-# installs with `npm ci` and install scripts off, and `npx wrangler` uses the lockfile.
+# Cloudflare settings outside wrangler.jsonc, stock wrangler only, on demand
+# and from main only (Nish 2026-10-03). Safe to re-run (0509#5699, fleet-ops#10577).
 on:
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: { contents: read }
 
-concurrency:
-  group: cloudflare-settings
-  cancel-in-progress: false
+concurrency: { group: cloudflare-settings, cancel-in-progress: false }
 
 jobs:
   apply:
-    name: apply
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -32,11 +20,9 @@ jobs:
       NPM_CONFIG_IGNORE_SCRIPTS: "true"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: { persist-credentials: false }
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
+        with: { node-version: 22 }
       - run: npm ci
       - name: Backup bucket lifecycle rules, before
         run: npx wrangler r2 bucket lifecycle list 0509-snapshots-backup
@@ -44,15 +30,21 @@ jobs:
         run: npx wrangler r2 bucket lifecycle set 0509-snapshots-backup --file .github/cloudflare/r2-backup-lifecycle.json --force
       - name: Backup bucket lifecycle rules, after
         run: npx wrangler r2 bucket lifecycle list 0509-snapshots-backup
-      - name: Route support@, brief@, hello@, alerts@ and fleet-signup@ to the support-inbox Worker
+      - name: Route support@, brief@, hello@, dmarc@, alerts@ and fleet-signup@ to the support-inbox Worker
         run: |
           set -o pipefail
-          for name in support brief hello alerts fleet-signup; do
+          for name in support brief hello dmarc alerts fleet-signup; do
             id=$(npx wrangler email routing rules list 0509.io | awk -v m="Matchers: to:$name@0509.io" '/^Rule:/ {id=$2} $0 ~ m"$" {print id}')
             if [ -n "$id" ]; then verb=(update 0509.io "$id"); else verb=(create 0509.io); fi
-            npx wrangler email routing rules "${verb[@]}" --name "$name" \
-              --match-type literal --match-field to --match-value "$name@0509.io" \
-              --action-type worker --action-value 0509-support-inbox-v2
+            npx wrangler email routing rules "${verb[@]}" --name "$name" --match-type literal --match-field to \
+              --match-value "$name@0509.io" --action-type worker --action-value 0509-support-inbox-v2
           done
+      - name: Point the catch-all at the support-inbox Worker
+        run: |
+          set -o pipefail; umask 077; cfg="$RUNNER_TEMP/cf-auth"; trap 'rm -f "$cfg"' EXIT
+          jq -rn '"header = \"Authorization: Bearer " + env.CLOUDFLARE_API_TOKEN + "\""' > "$cfg"
+          z=$(curl -sS --fail-with-body --retry 3 --retry-connrefused --config "$cfg" "https://api.cloudflare.com/client/v4/zones?name=0509.io" | jq -er '.result[0].id')
+          jq -nc '{name:"catch-all",enabled:true,matchers:[{type:"all"}],actions:[{type:"worker",value:["0509-support-inbox-v2"]}]}' \
+            | curl -sS --fail-with-body --retry 3 --retry-connrefused --config "$cfg" -X PUT "https://api.cloudflare.com/client/v4/zones/$z/email/routing/rules/catch_all" --json @- | jq 'if .success then (.result | {name, enabled, matchers, actions}) else error("catch-all failed: \(.errors)") end'
       - name: Email Routing rules, after
         run: npx wrangler email routing rules list 0509.io
