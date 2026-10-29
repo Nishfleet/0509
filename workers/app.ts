@@ -1,10 +1,11 @@
-import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+import type { OAuthHelpers, OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import { instrumentWorkflowWithSentry, setTag, withMonitor, withSentry } from "@sentry/cloudflare";
 import { createRequestHandler } from "react-router";
 
 import { NIGHTLY_CRON, OWN_SITE_CHECK_CRON, WEEKLY_REFRESH_CRON } from "../app/lib/cadence";
 import { requestContext } from "../app/lib/agent/context.server";
-import { createOAuthProvider } from "../app/lib/agent/oauth.server";
+import { createOAuthProvider, type OAuthHandlers } from "../app/lib/agent/oauth.server";
+import { MCP_PATH } from "../app/lib/agent/paths";
 import { runNightlySlackBackfill } from "../app/lib/data/send_target.server";
 import { stampFirstSignals } from "../app/lib/data/onboarding_run.server";
 import { startBillingReconcile } from "../app/lib/billing/reconcile.server";
@@ -49,14 +50,18 @@ type OAuthEnv = WorkerEnv & { OAUTH_PROVIDER?: OAuthHelpers };
 
 const requestHandler = createRequestHandler(() => import("virtual:react-router/server-build"), import.meta.env.MODE);
 
-const oauth = createOAuthProvider<OAuthEnv>({
+const oauthHandlers: OAuthHandlers<OAuthEnv> = {
   apiHandler: {
     fetch: (request, env, ctx) => requestHandler(request, requestContext(env.OAUTH_PROVIDER, ctx, ctx.props)),
   },
   defaultHandler: {
     fetch: (request, env, ctx) => requestHandler(request, requestContext(env.OAUTH_PROVIDER, ctx)),
   },
-});
+};
+
+function oauth(request: Request): OAuthProvider<OAuthEnv> {
+  return createOAuthProvider<OAuthEnv>(oauthHandlers, `${new URL(request.url).origin}${MCP_PATH}`);
+}
 
 const handler = {
   async fetch(request, env, ctx) {
@@ -66,7 +71,7 @@ const handler = {
       if (error instanceof WorkerEnvError) return workerEnvFailureResponse(error);
       throw error;
     }
-    return withTransportSecurityHeaders(await oauth.fetch(request, env, ctx));
+    return withTransportSecurityHeaders(await oauth(request).fetch(request, env, ctx));
   },
 
   async scheduled(controller, env, ctx) {

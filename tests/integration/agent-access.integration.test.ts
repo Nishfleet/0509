@@ -185,10 +185,13 @@ async function rpcResult<T>(response: Response): Promise<T> {
 
 type OAuthTestEnv = typeof env & { OAUTH_PROVIDER?: OAuthHelpers };
 
-const oauthProvider = createOAuthProvider<OAuthTestEnv>({
-  apiHandler: { fetch: (_request, _env, ctx) => Response.json(ctx.props) },
-  defaultHandler: { fetch: () => new Response("default") },
-});
+const oauthProvider = createOAuthProvider<OAuthTestEnv>(
+  {
+    apiHandler: { fetch: (_request, _env, ctx) => Response.json(ctx.props) },
+    defaultHandler: { fetch: () => new Response("default") },
+  },
+  "http://localhost/mcp",
+);
 
 function oauthBearerMcp(request: Request): Promise<Response> {
   return oauthProvider.fetch(request, { ...env }, createExecutionContext());

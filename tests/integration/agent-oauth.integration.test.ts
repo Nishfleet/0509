@@ -15,15 +15,18 @@ type TestEnv = typeof env & { OAUTH_PROVIDER?: OAuthHelpers };
 
 const captured: { helpers?: OAuthHelpers } = {};
 
-const provider = createOAuthProvider<TestEnv>({
-  apiHandler: { fetch: (_request, _env, ctx) => Response.json(ctx.props) },
-  defaultHandler: {
-    fetch: (_request, handlerEnv) => {
-      captured.helpers = handlerEnv.OAUTH_PROVIDER;
-      return new Response("default");
+const provider = createOAuthProvider<TestEnv>(
+  {
+    apiHandler: { fetch: (_request, _env, ctx) => Response.json(ctx.props) },
+    defaultHandler: {
+      fetch: (_request, handlerEnv) => {
+        captured.helpers = handlerEnv.OAUTH_PROVIDER;
+        return new Response("default");
+      },
     },
   },
-});
+  `${ORIGIN}/mcp`,
+);
 
 function send(request: Request): Promise<Response> {
   return provider.fetch(request, { ...env }, createExecutionContext());
@@ -392,5 +395,43 @@ describe("an AI app signing in to 0509", () => {
     } finally {
       globalThis.fetch = previous;
     }
+  });
+
+  it("refuses a token bound to a resource this server does not serve", async () => {
+    const elsewhere = new URL(authorizeUrl);
+    elsewhere.searchParams.set("resource", `${ORIGIN}/other`);
+    const response = await decideConsent(helpers, new Request(elsewhere, { method: "POST" }), {
+      userId: "u_oauth",
+      allow: true,
+    });
+    expect(response).toBeInstanceOf(Response);
+    const location = new URL((response as Response).headers.get("location") ?? "");
+    expect(location.searchParams.get("error")).toBe("invalid_target");
+    expect(location.searchParams.has("code")).toBe(false);
+  });
+
+  it("refuses a code exchanged at a return address other than the one it was issued for", async () => {
+    const allowed = await decideConsent(helpers, new Request(authorizeUrl, { method: "POST" }), {
+      userId: "u_oauth",
+      allow: true,
+    });
+    const code = new URL((allowed as Response).headers.get("location") ?? "").searchParams.get("code") ?? "";
+    const token = await send(
+      new Request(`${ORIGIN}/oauth/token`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          code,
+          redirect_uri: "https://app.example/other",
+          client_id: clientId,
+          code_verifier: VERIFIER,
+          resource: `${ORIGIN}/mcp`,
+        }),
+      }),
+    );
+    expect(token.status).toBe(400);
+    const body: { error: string } = await token.json();
+    expect(body.error).toBe("invalid_grant");
   });
 });

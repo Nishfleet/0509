@@ -990,7 +990,7 @@ Options on `createMcpHandler`: `route` (default `/mcp`), `corsOptions`, `allowed
 
 ### 7.2 MCP auth — OAuth 2.1 and RFC 9728 are a MUST
 
-**Installed and shipped** (2026-09-24): `@cloudflare/workers-oauth-provider` **0.10.4**, configured once in `app/lib/agent/oauth.server.ts` and wrapped around the Worker in `workers/app.ts`. `OAUTH_KV` is namespace `0509-oauth`, pinned by id. The provider protects `/mcp` and hands its helpers and the verified `props` to React Router as a `RouterContextProvider` (`app/lib/agent/context.server.ts`), so the consent page and Settings read them with `context.get(...)` rather than a second `getOAuthApi` instance. API keys reach `/mcp` through its `resolveExternalToken` hook. The consent dialog is `app/routes/oauth.authorize.tsx`.
+**Installed and shipped** (2026-09-24): `@cloudflare/workers-oauth-provider` **1.2.4** (0.10.4 until 2026-10-16), configured once in `app/lib/agent/oauth.server.ts` and wrapped around the Worker in `workers/app.ts`. 1.0 makes the canonical resource mandatory, so the provider is built per request with `resourceMetadata.resource` set to the request origin plus `/mcp`: production, a preview deploy and `wrangler dev` each bind tokens to their own origin, which is the value 0.x derived and stored in existing grants. 1.2 moves the scopes from `resourceMetadata.scopes_supported` to the top-level `requiredScopes`, which is published at the same wire field. `OAUTH_KV` is namespace `0509-oauth`, pinned by id. The provider protects `/mcp` and hands its helpers and the verified `props` to React Router as a `RouterContextProvider` (`app/lib/agent/context.server.ts`), so the consent page and Settings read them with `context.get(...)` rather than a second `getOAuthApi` instance. API keys reach `/mcp` through its `resolveExternalToken` hook. The consent dialog is `app/routes/oauth.authorize.tsx`.
 
 **`@cloudflare/workers-oauth-provider` 0.10.3** (2026-08-10, zero dependencies). It needs one KV binding:
 
@@ -1148,7 +1148,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Link checking                               | `lycheeverse/lychee-action`                                           | v2.9.0                                   |
 | Red-main issue create-or-update             | `JasonEtco/create-an-issue` (update_existing, search_existing: open)  | v2.9.2                                   |
 | MCP server                                  | `createMcpHandler` (`@modelcontextprotocol/server`)                   | 2.3.0                                    |
-| MCP auth                                    | `@cloudflare/workers-oauth-provider`                                  | 0.10.4                                   |
+| MCP auth                                    | `@cloudflare/workers-oauth-provider`                                  | 1.2.4                                    |
 | API keys + per-key quota                    | `@better-auth/api-key` (`apikey` table)                               | 1.7.5                                    |
 | Edge abuse shield                           | Cloudflare rate limiting binding (`period` 10 or 60 only)             | platform                                 |
 | OpenAPI document                            | `zod-openapi` (samchungy)                                             | 6.0.2                                    |
