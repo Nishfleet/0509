@@ -7,6 +7,7 @@ import { parse } from "yaml";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const WORKFLOW = ".github/workflows/deploy-production.yml";
+const STAGING_WORKFLOW = ".github/workflows/deploy-staging.yml";
 
 const QUEUE_CHECKS = ["npm run typecheck", "npm test", "npx vitest", "npx tsc", "tsc -b"];
 
@@ -33,10 +34,12 @@ interface DeployJob {
 
 interface DeployWorkflow {
   jobs: Record<string, DeployJob> & { deploy: DeployJob; staging: DeployJob };
+  on?: Record<string, unknown>;
 }
 
 let job: DeployJob;
 let workflow: DeployWorkflow;
+let stagingWorkflow: DeployWorkflow;
 
 function runsOf(step: Step | undefined): string {
   return step?.run ?? "";
@@ -54,6 +57,7 @@ function indexOf(needle: string): number {
 
 beforeAll(async () => {
   workflow = parse(await readFile(path.join(REPO_ROOT, WORKFLOW), "utf8")) as DeployWorkflow;
+  stagingWorkflow = parse(await readFile(path.join(REPO_ROOT, STAGING_WORKFLOW), "utf8")) as DeployWorkflow;
   job = workflow.jobs.deploy;
 });
 
@@ -125,8 +129,8 @@ describe("deploy-production rolls back on smoke failure (0509#7004)", () => {
   });
 });
 
-describe("deploy-production deploys staging with cf and never blocks production", () => {
-  const staging = () => workflow.jobs.staging;
+describe("deploy-staging deploys staging with cf on its own workflow", () => {
+  const staging = () => stagingWorkflow.jobs.staging;
   const stagingStep = (needle: string): Step => {
     const found = staging().steps.find((candidate) => runsOf(candidate).includes(needle));
     if (!found) throw new Error(`the staging job has no step running \`${needle}\``);
@@ -134,21 +138,24 @@ describe("deploy-production deploys staging with cf and never blocks production"
   };
   const stagingIndex = (needle: string): number => staging().steps.indexOf(stagingStep(needle));
 
-  it("runs from main in the staging environment under its own concurrency group", () => {
+  it("runs from main in the staging environment under its own concurrency group, outside the production workflow", () => {
     expect(staging().if).toContain("github.ref == 'refs/heads/main'");
     expect(staging().environment?.name).toBe("staging");
     expect(staging().concurrency?.group).toBe("deploy-staging");
     expect(staging().concurrency?.group).not.toBe(job.concurrency?.group);
     expect(staging()["timeout-minutes"]).toBeLessThanOrEqual(15);
+    expect(Object.keys(workflow.jobs)).toEqual(["deploy"]);
+    expect(Object.keys(stagingWorkflow.jobs)).toEqual(["staging"]);
+    expect(stagingWorkflow.on?.push).toEqual({ branches: ["main"] });
   });
 
-  it("is not needed by, and does not need, the production deploy", () => {
+  it("is not needed by anything, and needs nothing", () => {
     expect(staging().needs).toBeUndefined();
-    expect(job.needs).toBeUndefined();
-    const dependents = Object.entries(workflow.jobs)
+    const dependents = Object.entries(stagingWorkflow.jobs)
       .filter(([, other]) => [other.needs ?? []].flat().includes("staging"))
       .map(([key]) => key);
     expect(dependents).toEqual([]);
+    expect(job.needs).toBeUndefined();
   });
 
   it("builds in staging mode, migrates, deploys prebuilt in staging mode, then smokes the staging origin", () => {

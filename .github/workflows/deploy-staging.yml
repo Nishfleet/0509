@@ -1,0 +1,70 @@
+name: Deploy staging
+
+# Staging is its own sandbox: a separate Worker, D1, R2, KV and queues, built
+# from `cloudflare.config.ts` in staging mode (AGENTS.md). The hosted e2e lanes
+# run against it, so it needs the same build the production deploy ships.
+#
+# Its own workflow, not a job in deploy-production.yml, because the fleet's
+# deploy-failed alert reads that workflow's run conclusion as "Production is
+# running main" (0509#7656, fleet-ops#9889): a sandbox failure must never
+# redden it.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  staging:
+    name: staging
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Job-level, so a queued staging deploy waits for the running one instead
+    # of cancelling it and leaves half an environment behind.
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    environment:
+      name: staging
+      url: https://staging.0509.io
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: CLOUDFLARE_VITE_FORCE_BUILD_OUTPUT=true npx react-router build --mode staging
+      - name: Apply D1 migrations
+        run: npx cf d1 migrations apply "$(jq -r .env.DB.id .cloudflare/output/v0/workers/default/worker.config.json)"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Deploy the staging Worker
+        run: |
+          [ -n "$DODO_TEST_API_KEY" ] || { echo "::error::DODO_TEST_API_KEY is empty"; exit 1; }
+          secrets=$(mktemp)
+          trap 'rm -f "$secrets"' EXIT
+          jq -n '{DODO_PAYMENTS_API_KEY: env.DODO_TEST_API_KEY}' > "$secrets"
+          npx cf deploy --prebuilt --mode staging --secrets-file "$secrets"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DODO_TEST_API_KEY: ${{ secrets.DODO_TEST_API_KEY }}
+      - name: Smoke staging
+        timeout-minutes: 3
+        run: |
+          for _ in $(seq 1 20); do
+            body=$(curl -fsS https://staging.0509.io/api/health || true)
+            if echo "$body" | grep -q '"status":"ok"' && echo "$body" | grep -q "\"commit\":\"$GITHUB_SHA\""; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "/api/health never answered ok with commit $GITHUB_SHA; last body: $body"
+          exit 1

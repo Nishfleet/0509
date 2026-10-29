@@ -13,9 +13,9 @@ name: e2e-scheduled
 # https://staging.0509.io (the workflow-level env) and declares `environment:
 # staging`, except `signin`, `backup-proof` and `jev-failures`, which stay on
 # production and `production-e2e`. Both environments allow `main` only; the D1
-# readers (jev-failures, soak-report) install with `npm ci --ignore-scripts`
-# (0509#7773), and their D1 reads wait on the D1-read token of #7072 (the
-# repo-level token is refused by D1).
+# readers (jev-failures on production, soak-report on staging) install with
+# `npm ci --ignore-scripts` (0509#7773), and their D1 reads wait on the D1-read
+# token of #7072 (the repo-level token is refused by D1).
 # The weekly `j12` job also runs J11, whose kept account needs a 6-day gap.
 # `signin` is the one real sign-in smoke a day (0509#6093): the only production
 # run that sends a real email, once, at 04:17 UTC.

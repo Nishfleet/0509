@@ -41,8 +41,9 @@
   // separately and is then an entry by name.
   "ignoreDependencies": ["cloudflare", "@react-router/node", "tailwindcss", "@lhci/cli", "cf"],
 
-  // `jq` is the runner's own binary, called from deploy-production.yml steps;
-  // knip reads workflow `run:` lines and finds no package that provides it.
+  // `jq` is the runner's own binary, called from deploy-production.yml and
+  // deploy-staging.yml steps; knip reads workflow `run:` lines and finds no
+  // package that provides it.
   "ignoreBinaries": ["jq"],
 
   "ignore": ["**/+types/**", "docs/design-directions/**"],

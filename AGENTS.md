@@ -130,7 +130,7 @@ PR. With it set, there is no local server and the suite runs against that URL â€
 that is what the `e2e-scheduled.yml` jobs run against a hosted Worker. Same
 assertions both times.
 
-**The hosted e2e target is `https://staging.0509.io`**, the `0509-staging` Worker on its own D1, R2, KV and queues, deployed with `cf` from `cloudflare.config.ts` (`CLOUDFLARE_VITE_FORCE_BUILD_OUTPUT=true npx react-router build --mode staging`, then `npx cf deploy --prebuilt --mode staging`). Production keeps only the daily sign-in check and the public-page smoke, and still deploys with wrangler until #6085.
+**The hosted e2e target is `https://staging.0509.io`**, the `0509-staging` Worker on its own D1, R2, KV and queues, deployed by `.github/workflows/deploy-staging.yml` with `cf` from `cloudflare.config.ts` (`CLOUDFLARE_VITE_FORCE_BUILD_OUTPUT=true npx react-router build --mode staging`, then `npx cf deploy --prebuilt --mode staging`). That workflow is separate from `deploy-production.yml` because the fleet's deploy-failed alert reads a `deploy-production` run conclusion as production's, so a staging failure must not redden it. Production keeps only the daily sign-in check and the public-page smoke, and still deploys with wrangler until #6085.
 
 **Run it before the PR opens.** A diff that touches only `docs/` or `.agents/` runs `npx prettier --check` on the changed files and nothing else. A change under `app/`, `workers/` or `e2e/`
 runs the specs that cover it locally first, in preview mode, by file:

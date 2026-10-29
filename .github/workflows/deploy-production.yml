@@ -1,3 +1,8 @@
+# Push to main deploys. The migration step runs before the Worker goes out, so
+# schema and code land in one ordered step — and note what that means for this
+# rebuild: the first run of this workflow applies 0001_rebuild.sql, whose DROP
+# prologue wipes the pre-rebuild schema from production D1. Nish approved that
+# wipe on 2026-09-20; there are 0 users.
 name: Deploy production
 
 on:
@@ -22,9 +27,15 @@ jobs:
     concurrency:
       group: deploy-production
       cancel-in-progress: false
+    # The production environment records each deploy as a GitHub Deployment.
     environment:
       name: production
       url: https://0509.io
+    # 0509#7004: 20 minutes bought a full `npm test` repeat this job does not
+    # run, and a run that spent it in `npm test` (37179881263) had no verdict
+    # to show for it. The workflow now builds, migrates, deploys and smokes.
+    # 15, not 10: the job timeout cancels the job, so the headroom keeps a slow
+    # build or rollout from cancelling it before the smoke verdict and rollback.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,6 +46,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # 0509#7004: typecheck and the full test suite ran here and in the merge
+      # queue, which passed on this same tree before main accepted it
+      # (ruleset 21391031 has no bypass actor and no other merge path). A
+      # second identical verdict bought 12 minutes of deploy time and could
+      # time out. `npm run build` stays: it produces the bundle `npm run
+      # deploy` uploads.
       - run: npm run build
 
       - name: Record the D1 Time Travel bookmark taken just before migrating
@@ -46,12 +63,17 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Apply D1 migrations
+        # Read this step's output before calling a deploy good: this is where
+        # the production database is reset.
         run: npx wrangler d1 migrations apply 0509 --remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Record the serving Worker version before this deploy replaces it
+        # 0509#7004: `wrangler rollback` with no version-id picks the previous
+        # stable entry, which the deploy below changes. Fails the job when no
+        # version at 100% traffic can be read: no way back, no deploy.
         id: previous
         run: |
           target=$(npx wrangler deployments status --json | jq -r '[.versions[] | select(.percentage == 100) | .version_id][0]')
@@ -67,6 +89,9 @@ jobs:
 
       - name: Deploy the Worker
         id: deploy
+        # GIT_SHA is the commit /api/health names (#7187). `--var KEY:VALUE`
+        # overrides the empty default in wrangler.jsonc's vars:
+        # https://developers.cloudflare.com/workers/wrangler/commands/#deploy
         run: npm run deploy -- --var "GIT_SHA:$GITHUB_SHA"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -74,7 +99,13 @@ jobs:
 
       - name: Smoke the deployed Worker
         id: smoke
+        # 0509#7004: a step timeout fails the step so the rollback still runs;
+        # the job timeout would cancel the job and skip it.
         timeout-minutes: 3
+        # A deploy that reports success while the site 500s is not a success.
+        # The body must also name this run's commit (#7187): a deploy that
+        # answers ok from the previous version is not this deploy. The loop
+        # waits out the edge rollout, at most 20 tries 5 s apart.
         run: |
           for _ in $(seq 1 20); do
             body=$(curl -fsS https://0509.io/api/health || true)
@@ -98,6 +129,11 @@ jobs:
         # The Worker version is rolled back, the schema is not: migrations are
         # additive, and the D1 Time Travel bookmark above is the path for tables.
         if: always() && steps.deploy.outcome == 'success' && steps.smoke.outcome != 'success'
+        # --yes is declared by wrangler 4.144.0's rollback command; the prompts
+        # themselves take their fallback (yes) because GitHub Actions sets CI=true.
+        # A Durable Object migration in wrangler.jsonc (new_sqlite_classes) can
+        # make this rollback impossible or unsafe: Cloudflare cannot roll back
+        # across it, so such a deploy needs a manual recovery.
         run: npx wrangler rollback "$ROLLBACK_TARGET" --yes --message "smoke failed $GITHUB_SHA"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -126,6 +162,10 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy the e2e inbox Worker
+        # The J1 mail sink (0509#3927): a separate Worker with its own name
+        # and route, same fixture shape as J8's fixture.0509.in. Runs AFTER the
+        # app smoke so test-infra can never stand between a good app deploy and
+        # its verification.
         run: npx wrangler deploy --config workers/e2e-inbox.wrangler.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -144,56 +184,6 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-  staging:
-    name: staging
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    concurrency:
-      group: deploy-staging
-      cancel-in-progress: false
-    environment:
-      name: staging
-      url: https://staging.0509.io
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: CLOUDFLARE_VITE_FORCE_BUILD_OUTPUT=true npx react-router build --mode staging
-      - name: Apply D1 migrations
-        run: npx cf d1 migrations apply "$(jq -r .env.DB.id .cloudflare/output/v0/workers/default/worker.config.json)"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      - name: Deploy the staging Worker
-        run: |
-          [ -n "$DODO_TEST_API_KEY" ] || { echo "::error::DODO_TEST_API_KEY is empty"; exit 1; }
-          secrets=$(mktemp)
-          trap 'rm -f "$secrets"' EXIT
-          jq -n '{DODO_PAYMENTS_API_KEY: env.DODO_TEST_API_KEY}' > "$secrets"
-          npx cf deploy --prebuilt --mode staging --secrets-file "$secrets"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          DODO_TEST_API_KEY: ${{ secrets.DODO_TEST_API_KEY }}
-      - name: Smoke staging
-        timeout-minutes: 3
-        run: |
-          for _ in $(seq 1 20); do
-            body=$(curl -fsS https://staging.0509.io/api/health || true)
-            if echo "$body" | grep -q '"status":"ok"' && echo "$body" | grep -q "\"commit\":\"$GITHUB_SHA\""; then
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "/api/health never answered ok with commit $GITHUB_SHA; last body: $body"
-          exit 1
 
   # No post-deploy audit in this workflow. 0509.io sits behind the team-only
   # Cloudflare Access wall (0509#7656), so an unauthenticated Lighthouse run is

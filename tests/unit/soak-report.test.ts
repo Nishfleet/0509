@@ -62,6 +62,7 @@ describe("soak-report measures the two DONE lines (0509#7076)", () => {
     expect(run).toContain('--workflow-name "$1-staging"');
     expect(run).toContain("workflows/$1-staging/instances");
     expect(run).toContain("gh issue comment 4730");
+    expect(e2eJobs()["soak-report"]?.environment).toBe("staging");
   });
 
   it("is named in the pull_request disk-reading detector list", () => {
@@ -70,36 +71,37 @@ describe("soak-report measures the two DONE lines (0509#7076)", () => {
 });
 
 describe("a production D1 read declares its environment and runs only on main (0509#7773, #7072)", () => {
-  function d1ReaderJobs(): [string, JobWithEnvironment][] {
-    return Object.entries(e2eJobs()).filter(([, job]) =>
-      (job.steps ?? []).some((step) => (step.run ?? "").includes("wrangler d1 execute 0509 --remote")),
-    );
+  function jobsWhere(matches: (step: SoakStep) => boolean): [string, JobWithEnvironment][] {
+    return Object.entries(e2eJobs()).filter(([, job]) => (job.steps ?? []).some(matches));
   }
+
+  const readsProductionD1 = (step: SoakStep): boolean => (step.run ?? "").includes("wrangler d1 execute 0509 --remote");
+  const readsD1 = (step: SoakStep): boolean => readsProductionD1(step) || (step.run ?? "").includes("cf d1 query");
 
   it("derives the D1 reader census", () => {
     expect(
-      d1ReaderJobs()
+      jobsWhere(readsProductionD1)
         .map(([name]) => name)
         .sort(),
-    ).toEqual(["jev-failures", "soak-report"].sort());
+    ).toEqual(["jev-failures"]);
   });
 
   it("runs in production-e2e, the environment the D1-read token of #7072 lands in", () => {
-    for (const [, job] of d1ReaderJobs()) {
+    for (const [, job] of jobsWhere(readsProductionD1)) {
       expect(job.environment).toBe("production-e2e");
     }
   });
 
   it("runs only on main", () => {
-    for (const [, job] of d1ReaderJobs()) {
+    for (const [, job] of jobsWhere(readsProductionD1)) {
       expect(job.if).toContain("github.ref == 'refs/heads/main'");
     }
   });
 
   it("runs no dependency install script beside the Cloudflare token", () => {
-    for (const [, job] of d1ReaderJobs()) {
+    for (const [name, job] of jobsWhere(readsD1)) {
       const install = (job.steps ?? []).map((step) => step.run ?? "").filter((run) => run.startsWith("npm ci"));
-      expect(install).toEqual(["npm ci --ignore-scripts"]);
+      expect(install, name).toEqual(["npm ci --ignore-scripts"]);
     }
   });
 });

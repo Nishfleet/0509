@@ -78,7 +78,7 @@ export default defineConfig(({ mode }) => {
         ACCESS_AUD: bindings.text(
           staging ? STAGING_ACCESS_AUD : "5dcfc6477175c13fa2dbdbdbc91242e7458da2ae9028131ab776995cbda2bd7f", // gitleaks:allow
         ),
-        FIXTURE_REAPER: bindings.text("dry-run"),
+        FIXTURE_REAPER: bindings.text(staging ? "dry-run" : "live"),
         ...(staging ? { AI_DAILY_CAP_SCALE: bindings.text("0.05") } : {}),
         BETTER_AUTH_SECRET: bindings.secret(),
         TURNSTILE_SECRET_KEY: bindings.secret(),
