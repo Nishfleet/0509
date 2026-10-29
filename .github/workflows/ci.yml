@@ -243,16 +243,12 @@ jobs:
         run: npx lhci assert --budgets-file=lighthouse-budget.pr.json
 
       - name: Keep the screenshots when it passes
-        # A green pull request showed nothing visual, so it could not be reviewed
-        # from a phone (0509#7290). playwright.config.ts's use.screenshot: "on"
-        # writes one PNG per test on the pass path too, so a passing run has
-        # pictures to carry. Screenshots only: a trace holds the Access cookie
-        # and the whole test-results tree holds more than a picture needs. The
-        # skip flag keeps the job green when the pull request touched only docs
-        # and tests, so the suite never ran and no picture exists.
+        # A green run showed nothing visual, so a pull request could not be read
+        # from a phone (0509#7290). The failure step below still carries the
+        # trace, which holds the Access cookie; this one carries the PNGs only.
         if: success() && steps.scope.outputs.skip != 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with: { name: playwright-screenshots-preview, path: "test-results/**/*.png", retention-days: 7 }
+        with: { name: playwright-screenshots-preview, path: "test-results/**/*.png", retention-days: 7, overwrite: true, if-no-files-found: error }
 
       - name: Keep the trace when it fails
         if: failure() || cancelled()
