@@ -1,0 +1,128 @@
+# Every pull request gets a running copy of itself, behind the app's own
+# Cloudflare Access login.
+#
+# 0509#7336: the owner reviews PRs from a phone, so the review had to start from
+# a screenshot or a local rebuild. This workflow uploads the PR head as a
+# *version* of the `0509-preview` Worker (never a deploy of it) and points one
+# GitHub Deployment at that version's preview URL, which the pull request then
+# shows as a tappable link.
+#
+# Why a separate Worker and not the production one: Nish ruled on 2026-09-04
+# that uploading previews to the serving Worker "evicted real deploys from
+# version history". The `0509-preview` Worker keeps its own versions, secrets
+# and deployments, so a preview can never touch production.
+#
+# Why the Access login survives: Cloudflare Access app a089edc5 covers
+# `*-0509-preview.nishant345.workers.dev`, which is the shape of every preview
+# URL (`<alias>-<worker>.<subdomain>.workers.dev`). A request with no Access
+# identity is answered 302 to the Access login, and the Worker never sees it.
+#
+# Why `wrangler versions upload` and not `wrangler deploy`: a deploy is the one
+# thing a preview must never do, because it would put the build in front of the
+# Worker's own hostname. `env.preview` in wrangler.jsonc therefore sets
+# `workers_dev: false` and no routes, so even a stray deploy of this environment
+# has nowhere to publish.
+name: PR preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  # The GitHub Deployments API is the stock way to put a link on a pull request
+  # (#7336 accepts either that or one bot comment edited in place). Writing a
+  # deployment status needs this and nothing else.
+  deployments: write
+
+concurrency:
+  # One preview per pull request. A second push cancels the first upload rather
+  # than queueing behind it, so the link on the PR tracks the newest head.
+  group: pr-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    name: preview
+    runs-on: ubuntu-latest
+    # npm ci and the Vite build are the whole job. The production deploy job
+    # bought 20 minutes and lost a deploy to a repeat test run (0509#7004);
+    # this one has no test step and needs half of that.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Build the preview environment
+        # The Cloudflare Vite plugin reads `env.preview` from wrangler.jsonc and
+        # writes build/server/wrangler.json from it, which is what names the
+        # Worker `0509-preview` and binds the preview D1, KV, R2 and queue.
+        run: CLOUDFLARE_ENV=preview npm run build
+
+      - name: Upload the pull request as a preview version
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PREVIEW_ALIAS: pr-${{ github.event.pull_request.number }}
+          PREVIEW_URL: https://pr-${{ github.event.pull_request.number }}-0509-preview.nishant345.workers.dev
+        run: |
+          set -euo pipefail
+          # A pull request from a fork carries no repository secrets, so the
+          # upload below would fail with an opaque wrangler error. Name the
+          # cause instead: every PR this repo merges comes from a branch in it.
+          if [ -z "${CLOUDFLARE_API_TOKEN}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID}" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is unset. A pull request from a fork carries no repository secrets, so no preview can be uploaded for it." >&2
+            exit 1
+          fi
+          # Turnstile's always-pass test pair (Cloudflare publishes it). The
+          # preview never sends a sign-in mail, so no real Turnstile secret is
+          # needed and none is reachable from a workflow. The file is written
+          # here rather than committed because `--secrets-file` is how a
+          # version carries its secrets, and this one is public.
+          cat > "${RUNNER_TEMP:-/tmp}/preview-secrets.json" <<'EOF'
+          {
+            "TURNSTILE_SECRET_KEY": "1x0000000000000000000000000000000AA",
+            "TURNSTILE_SITE_KEY": "1x00000000000000000000AA"
+          }
+          EOF
+          # The alias is the pull request number, so the URL is stable across
+          # pushes: the second upload moves the same link to the new version
+          # instead of minting a new one. BETTER_AUTH_URL is passed per upload
+          # because the preview must build its own magic-link URLs; the value
+          # in wrangler.jsonc is production and is only a fallback.
+          npx wrangler versions upload \
+            --preview-alias "${PREVIEW_ALIAS}" \
+            --var "BETTER_AUTH_URL:${PREVIEW_URL}" \
+            --secrets-file "${RUNNER_TEMP:-/tmp}/preview-secrets.json"
+          rm -f "${RUNNER_TEMP:-/tmp}/preview-secrets.json"
+
+      - name: Publish the preview link on the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PREVIEW_URL: https://pr-${{ github.event.pull_request.number }}-0509-preview.nishant345.workers.dev
+          # The pull request's head branch. One deployment per branch, so a
+          # second push re-reads it and posts a new status against the same
+          # environment instead of leaving a second link behind.
+          DEPLOY_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          existing=$(gh api "repos/${GH_REPO}/deployments?environment=preview&ref=${DEPLOY_REF}" \
+            --jq '.[0].id // empty')
+          if [ -n "${existing}" ]; then
+            deployment="${existing}"
+          else
+            deployment=$(jq -nc \
+              --arg ref "${DEPLOY_REF}" \
+              '{ref: $ref, environment: "preview", auto_merge: false, required_contexts: []}' |
+              gh api -X POST "repos/${GH_REPO}/deployments" --input - --jq '.id')
+          fi
+          jq -nc --arg url "${PREVIEW_URL}" \
+            '{state: "success", environment_url: $url, description: "Preview of this pull request, behind the app Cloudflare Access login"}' |
+            gh api -X POST "repos/${GH_REPO}/deployments/${deployment}/statuses" --input -

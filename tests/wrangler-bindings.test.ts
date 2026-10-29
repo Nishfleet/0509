@@ -39,7 +39,7 @@ interface DeployedConfig {
   workflows?: WorkflowBinding[];
   d1_databases?: D1Database[];
   r2_buckets?: R2Bucket[];
-  queues?: { consumers?: QueueConsumer[] };
+  queues?: { consumers?: QueueConsumer[]; producers?: { queue: string; binding: string }[] };
   triggers?: { crons?: string[] };
   vars?: Record<string, string>;
   limits?: { cpu_ms?: number; subrequests?: number };
@@ -51,6 +51,35 @@ interface DeployedConfig {
     logs?: { head_sampling_rate?: number; invocation_logs?: boolean; persist?: boolean };
   };
   compatibility_flags?: string[];
+  ratelimits?: { name: string; namespace_id?: string }[];
+  env?: Record<string, PreviewEnvironment>;
+}
+
+// 0509#7336: `env.preview` is what `CLOUDFLARE_ENV=preview npm run build`
+// writes into build/server/wrangler.json, and what pr-preview.yml uploads as a
+// version of the `0509-preview` Worker. Every field here is either a twin of a
+// production resource or an empty override: a preview must not read or write a
+// production resource, must not run a production Workflow, and must not publish
+// to a route.
+interface PreviewEnvironment {
+  routes?: unknown[];
+  triggers?: { crons?: string[] };
+  workers_dev?: boolean;
+  preview_urls?: boolean;
+  migrations?: unknown[];
+  durable_objects?: { bindings?: unknown[] };
+  secrets?: { required?: string[] };
+  d1_databases?: D1Database[];
+  kv_namespaces?: KvNamespace[];
+  r2_buckets?: R2Bucket[];
+  queues?: { consumers?: unknown[]; producers?: { queue: string; binding: string }[] };
+  workflows?: unknown[];
+  analytics_engine_datasets?: unknown[];
+  ratelimits?: { name: string; namespace_id?: string }[];
+  send_email?: { name: string }[];
+  browser?: { binding: string };
+  ai?: { binding: string };
+  version_metadata?: unknown;
 }
 
 const readConfig = (config: string): { rawConfig: DeployedConfig } =>
@@ -183,5 +212,132 @@ describe("deployed wrangler configs", () => {
     const fallthrough = "send-email";
     expect(consumers).toContain(fallthrough);
     expect(consumers.filter((queue) => queue !== fallthrough).sort()).toEqual([...branched].sort());
+  });
+});
+
+// 0509#7336. `env.preview` is the environment pr-preview.yml builds and uploads
+// as a version of the `0509-preview` Worker. Every assertion below has a failure
+// mode that a reviewer would only see from a phone: a preview bound to a
+// production resource reads or writes production rows, a preview that runs a
+// production Workflow starts a production instance, and a preview with a route
+// publishes to a hostname the Cloudflare Access app does not cover.
+//
+// The environment is compared against the top-level config rather than against
+// hardcoded production ids, so it stays isolated when a production id changes.
+describe("the preview environment binds preview resources only (0509#7336)", () => {
+  const { rawConfig } = readConfig("wrangler.jsonc");
+  const preview = rawConfig.env?.preview;
+
+  it("exists, because the upload builds this environment", () => {
+    expect(preview, "wrangler.jsonc no longer declares env.preview").toBeDefined();
+  });
+
+  it("binds a D1 database that is not the production one", () => {
+    const production = (rawConfig.d1_databases ?? []).find((database) => database.binding === "DB");
+    const db = (preview?.d1_databases ?? []).find((database) => database.binding === "DB");
+    expect(db?.database_id).toBe("d6643a38-0666-470e-8e08-1953918dfd8a");
+    expect(db?.database_id).not.toBe(production?.database_id);
+  });
+
+  it("binds KV namespaces that are not the production ones", () => {
+    const production = new Map((rawConfig.kv_namespaces ?? []).map((ns) => [ns.binding, ns.id]));
+    const namespaces = preview?.kv_namespaces ?? [];
+    expect(namespaces.map((ns) => ns.binding).sort()).toEqual(["IDENTITY_CACHE", "OAUTH_KV"]);
+    for (const namespace of namespaces) {
+      expect(namespace.id, `${namespace.binding} shares the production namespace`).not.toBe(
+        production.get(namespace.binding),
+      );
+    }
+    // #4631: a KV binding without an id sends wrangler to deploy-time
+    // provisioning, and the token in CI cannot reach that endpoint.
+    expect(namespaces.filter((ns) => !ns.id)).toEqual([]);
+  });
+
+  it("binds an R2 bucket that is not the production one", () => {
+    const production = (rawConfig.r2_buckets ?? []).find((bucket) => bucket.binding === "SNAPSHOTS");
+    const bucket = (preview?.r2_buckets ?? []).find((candidate) => candidate.binding === "SNAPSHOTS");
+    expect(bucket?.bucket_name).toBe("0509-preview-snapshots");
+    expect(bucket?.bucket_name).not.toBe(production?.bucket_name);
+  });
+
+  it("produces mail onto the preview queue and consumes nothing", () => {
+    // A consumer is set by a deploy, and a preview is never deployed: mail that
+    // reaches the preview queue waits there, which is the intended stop for a
+    // sign-in link nobody should act on.
+    expect(preview?.queues?.producers).toEqual([{ queue: "send-email-preview", binding: "SEND_EMAIL" }]);
+    expect(preview?.queues?.consumers).toBeUndefined();
+  });
+
+  it("binds no Workflow and writes no analytics rows", () => {
+    // Cloudflare binds a preview to a Workflow that already exists, and the
+    // binding calls that Workflow's deployed code and instances: binding the
+    // production ones here would run production sweeps from a preview. The
+    // analytics dataset is where the cost guard reads from.
+    expect(preview?.workflows).toEqual([]);
+    expect(preview?.analytics_engine_datasets).toEqual([]);
+  });
+
+  it("publishes to no route and to no hostname", () => {
+    // The Access app covers `*-0509-preview.<subdomain>.workers.dev`, which is
+    // the shape of a preview URL. `workers_dev: false` means even a stray
+    // `wrangler deploy --env preview` has nowhere to publish; `preview_urls` is
+    // what serves the alias URL pr-preview.yml uploads to.
+    expect(preview?.routes).toEqual([]);
+    expect(preview?.workers_dev).toBe(false);
+    expect(preview?.preview_urls).toBe(true);
+    expect(preview?.triggers?.crons).toEqual([]);
+  });
+
+  it("declares no Durable Object migration", () => {
+    // Cloudflare rejects `wrangler versions upload` for a Worker with a pending
+    // Durable Object migration, and applying one needs a `wrangler deploy`. A
+    // preview is never deployed, so the binding is left unbound: the paths that
+    // take an AI budget call are sign-in-only, and a preview cannot sign in
+    // (its mail queue has no consumer).
+    expect(preview?.migrations).toEqual([]);
+    expect(preview?.durable_objects?.bindings ?? []).toEqual([]);
+  });
+
+  it("requires only the three secrets the preview Worker holds", () => {
+    // Requiring a billing or Slack secret here would demand a preview key for a
+    // provider a preview never calls.
+    expect(preview?.secrets?.required).toEqual(["BETTER_AUTH_SECRET", "TURNSTILE_SECRET_KEY", "TURNSTILE_SITE_KEY"]);
+  });
+
+  it("declares the bindings the Vite plugin does not inherit", () => {
+    // `CLOUDFLARE_ENV=preview npm run build` writes build/server/wrangler.json
+    // from this environment alone: it does not carry send_email, browser, ai or
+    // version_metadata down from the top level. A preview built without them
+    // answered /login with `misconfigured: EMAIL (magic links and briefs cannot
+    // send); BROWSER (bot-gated page reads cannot escalate)` and a 503.
+    expect(preview?.send_email).toEqual([{ name: "EMAIL" }]);
+    expect(preview?.browser).toEqual({ binding: "BROWSER" });
+    expect(preview?.ai).toEqual({ binding: "AI" });
+    expect(preview?.version_metadata).toEqual({ binding: "CF_VERSION_METADATA" });
+  });
+
+  it("gives every rate limit its own namespace, distinct from production", () => {
+    const production = new Map((rawConfig.ratelimits ?? []).map((limit) => [limit.name, limit.namespace_id]));
+    const limits = preview?.ratelimits ?? [];
+    expect(limits.map((limit) => limit.name).sort()).toEqual([...production.keys()].sort());
+    const ids = limits.map((limit) => limit.namespace_id);
+    // The API rejects a namespace_id that is not a number ("binding AGENT_LIMIT
+    // of type ratelimit must have valid namespace_id", code 10021), so a
+    // `-preview` suffix is not a way to isolate one.
+    for (const id of ids) {
+      expect(id, `rate limit namespace ${id} must be numeric`).toMatch(/^[0-9]+$/);
+    }
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const limit of limits) {
+      expect(limit.namespace_id).not.toBe(production.get(limit.name));
+    }
+  });
+
+  it("declares no vars, so a preview fails closed instead of pointing at production", () => {
+    // BETTER_AUTH_URL is the one the preview needs, and pr-preview.yml passes it
+    // per upload because the URL carries the pull request number. Everything
+    // else fails closed unset: AI_SPEND stops spend, and the Access audience
+    // check refuses a token it cannot verify.
+    expect(preview && "vars" in preview).toBe(false);
   });
 });
