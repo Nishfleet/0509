@@ -59,6 +59,26 @@ describe("soak-report measures the two DONE lines (0509#7076)", () => {
   });
 });
 
+describe("soak-report's wrangler reads name themselves on failure (fleet-ops#10755)", () => {
+  it("prints the exit code and the body to stderr when wrangler exits nonzero", () => {
+    const run = soakStep().run ?? "";
+    expect(run).toContain('local out; out=$(npx wrangler d1 execute 0509 --remote --json --command "$1") || {');
+    expect(run).toContain(`printf 'wrangler d1 execute exited %s\\n%s\\n' "$?" "$out" >&2`);
+  });
+
+  it("names the body when wrangler exits zero without a results array", () => {
+    const run = soakStep().run ?? "";
+    expect(run).toContain('if type == "array" then .[0].results else error("wrangler printed: \\(.)") end');
+  });
+
+  it("runs the sends and sweeps reads through that helper, leaving no bare wrangler pipe into jq", () => {
+    const run = soakStep().run ?? "";
+    expect(run).toContain("sends=$(d1 ");
+    expect(run).toContain("sweeps=$(d1 ");
+    expect(run).not.toMatch(/wrangler d1 execute[^\n]*\| jq/);
+  });
+});
+
 describe("a production D1 read declares its environment and runs only on main (0509#7773, #7072)", () => {
   function d1ReaderJobs(): [string, JobWithEnvironment][] {
     return Object.entries(e2eJobs()).filter(([, job]) =>
@@ -91,28 +111,5 @@ describe("a production D1 read declares its environment and runs only on main (0
       const install = (job.steps ?? []).map((step) => step.run ?? "").filter((run) => run.startsWith("npm ci"));
       expect(install).toEqual(["npm ci --ignore-scripts"]);
     }
-  });
-});
-
-describe("soak-report's wrangler reads name themselves on failure (0509#10755)", () => {
-  it("captures wrangler's output and prints the exit code and the body before failing", () => {
-    const run = soakStep().run ?? "";
-    expect(run).toContain('out=$(npx wrangler d1 execute 0509 --remote --json --command "$1" 2>"$errf")');
-    expect(run).toContain('echo "wrangler d1 execute exited $?"');
-    expect(run).toContain('echo "$out"');
-  });
-
-  it("keeps wrangler's stderr out of the JSON jq parses, so noise cannot re-hide the cause", () => {
-    const run = soakStep().run ?? "";
-    expect(run).toContain('2>"$errf"');
-    expect(run).not.toContain('2>&1');
-    expect(run).toContain('cat "$errf"');
-  });
-
-  it("runs the sends and sweeps reads through that helper, leaving no bare wrangler pipe into jq", () => {
-    const run = soakStep().run ?? "";
-    expect(run).toContain("sends=$(d1 ");
-    expect(run).toContain("sweeps=$(d1 ");
-    expect(run).not.toMatch(/wrangler d1 execute[^\n]*\| jq/);
   });
 });
