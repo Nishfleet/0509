@@ -55,7 +55,7 @@ describe("the order the sweep reads the plan in", () => {
     expect(order.map((target) => target.query)).toEqual(["gdelt.doc 0", "hn.algolia 2", "gdelt.doc 1", "gdelt.doc 3"]);
   });
 
-  it("reaches the news source in the first round, so a slow source ahead of it cannot take the run", () => {
+  it("gives the news source a turn in the first round, so no source takes two targets before it takes one", () => {
     const order = bySourceRoundRobin(plan("slow.one", "slow.one", "slow.one", "gdelt.doc"));
     expect(order[1]?.pluginKey).toBe("gdelt.doc");
   });

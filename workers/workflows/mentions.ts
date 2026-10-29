@@ -59,7 +59,7 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
     for (const entry of budget.deferred()) {
       console.warn(JSON.stringify({ event: "mentions.targets_skipped", ...entry }));
     }
-    await this.markCut(step, targets, budget);
+    await this.markCut(step, targets, settled);
     for (const entry of sustainedSkips({ targets, outcomes: settled, run, budget })) {
       const message = JSON.stringify({ event: "mentions.sustained_skips", ...entry });
       console.error(message);
@@ -82,17 +82,21 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
     return result;
   }
 
-  private async markCut(step: WorkflowStep, targets: readonly MentionTarget[], budget: SweepBudget): Promise<void> {
-    const cut = budget.deferred();
-    if (cut.length === 0) return;
+  private async markCut(
+    step: WorkflowStep,
+    targets: readonly MentionTarget[],
+    settled: readonly (TargetOutcome | null)[],
+  ): Promise<void> {
+    const lost = lostSources(targets, settled);
+    if (lost.length === 0) return;
     const sourceOf = new Map(targets.map((target) => [target.pluginKey, target.sourceId]));
     try {
       await step.do("mark the sources the run did not finish", RETRY, async () => {
-        for (const entry of cut) {
-          const sourceId = sourceOf.get(entry.source);
+        for (const pluginKey of lost) {
+          const sourceId = sourceOf.get(pluginKey);
           if (sourceId !== undefined) await markSourceDegraded(sourceId, NOT_READ_REASON);
         }
-        return cut.length;
+        return lost.length;
       });
     } catch (error) {
       console.error(JSON.stringify({ event: "mentions.mark_cut_failed", message: String(error) }));
@@ -138,8 +142,8 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
     const streaks: Streaks = new Map();
     for (const [index, target] of targets.entries()) {
       const spent = budget.spent();
-      if (spent) budget.defer(target.pluginKey);
       if (spent || tripped(streaks, target)) {
+        budget.defer(target.pluginKey);
         outcomes.push(deferred(target));
         continue;
       }
