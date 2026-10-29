@@ -1,7 +1,12 @@
 import { expect, test } from "./test";
 
 import { onboardedStatePath } from "../playwright.config";
-import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink } from "./inbox";
+import {
+  addCompetitorWhileDiscoveryIsUnavailable,
+  deleteCreatedAccount,
+  requireInboxToken,
+  signInWithMagicLink,
+} from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -58,11 +63,7 @@ for (const { width, height } of [
     });
     expect(cardConfirmedMs).toBeLessThan(30_000);
 
-    const listed = page
-      .getByRole("list", { name: "Watching" })
-      .getByRole("listitem")
-      .or(page.getByRole("list", { name: "Possible competitors" }).getByRole("listitem"));
-    await expect(listed.first()).toBeVisible({ timeout: 60_000 });
+    await addCompetitorWhileDiscoveryIsUnavailable(page);
     const competitorsMs = Date.now() - started;
     test.info().annotations.push({
       type: "input-to-competitors-ms",
@@ -70,20 +71,6 @@ for (const { width, height } of [
     });
     expect(competitorsMs).toBeLessThan(60_000);
 
-    const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
-    await expect(
-      watching
-        .first()
-        .or(page.getByRole("button", { name: /^Watch / }).first())
-        .first(),
-    ).toBeVisible({ timeout: 60_000 });
-    if ((await watching.count()) === 0) {
-      await page
-        .getByRole("button", { name: /^Watch / })
-        .first()
-        .click();
-      await expect(watching.first()).toBeVisible();
-    }
     await page.getByRole("button", { name: "Start watching" }).click();
     await expect(page).toHaveURL(/\/onboarding\/plan$/, { timeout: 30_000 });
     await expect(page.getByRole("heading", { name: "Start your trial" })).toBeVisible();

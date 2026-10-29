@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { JEV_CALLS_PER_DAY, takeAiCall, takeJevWorkspaceShare } from "../ai/daily-cap.server";
 import { aiGatewayId } from "../ai/gateway.server";
-import { AiSpendOffError, refuseWhenAiSpendOff } from "../ai/spend.server";
+import { AiSpendOffError, refuseWhenAiSpendOff, refuseWhenFixtureWorkspace } from "../ai/spend.server";
 import { insertJevFailure } from "../data/jev_failure.server";
 import { readCachedChoice, readCachedNoul, readSharedChoice, readSharedNoul } from "../data/jev_verdict.server";
 import { sha256Hex } from "../sha256";
@@ -237,6 +237,7 @@ function choiceHash(workspaceId: string | null, question: ChoiceQuestion, state:
 async function takeShare(workspaceId: string, questionIds: string): Promise<void> {
   try {
     refuseWhenAiSpendOff();
+    await refuseWhenFixtureWorkspace(workspaceId);
     await takeJevWorkspaceShare(workspaceId);
   } catch (error) {
     throw failedCall(questionIds, error);
@@ -276,7 +277,12 @@ const PROBE_QUESTION: NoulQuestion = {
   whenFalse: "The item is not the number five.",
 };
 
-export async function probeJev(): Promise<void> {
+export async function probeJev(workspaceId: string): Promise<void> {
+  try {
+    await refuseWhenFixtureWorkspace(workspaceId);
+  } catch (error) {
+    throw failedCall(PROBE_QUESTION.id, error);
+  }
   await run(PROBE_QUESTION, { item: 5 });
 }
 

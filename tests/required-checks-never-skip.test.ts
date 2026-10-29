@@ -7,7 +7,15 @@ import { parse } from "yaml";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const WORKFLOWS = path.join(REPO_ROOT, ".github/workflows");
-const REQUIRED = ["Gitleaks", "codex-node-checks", "vitest-shard", "semgrep", "preview-assert", "base-fresh"];
+const REQUIRED = [
+  "Gitleaks",
+  "codex-node-checks",
+  "vitest-shard",
+  "semgrep",
+  "preview-assert",
+  "base-fresh",
+  "deploy-freeze",
+];
 
 interface WorkflowStep {
   if?: unknown;
@@ -105,14 +113,71 @@ describe("a stale base is caught on the pull request, not in the queue (2026-10-
   });
 });
 
-describe("lighthouse runs after the deploy, not on deployment_status (0509#7013)", () => {
-  it("keeps ci.yml off deployment_status and chains lighthouse to the deploy job", async () => {
+describe("deploy-freeze freezes the queue on a red deploy (0509#7696)", () => {
+  const ci = async (): Promise<string> => readFile(path.join(WORKFLOWS, "ci.yml"), "utf8");
+
+  const gate = async (): Promise<WorkflowJob> => {
+    const jobs = readJobs("ci.yml", await ci());
+    const found = jobs.find(({ key }) => key === "deploy-freeze");
+    if (!found) throw new Error("ci.yml has no deploy-freeze job");
+    return found.job;
+  };
+
+  const run = async (): Promise<string> => {
+    const steps = (await gate()).steps ?? [];
+    const text = steps.map((step) => step.run ?? "").join("\n");
+    if (!text.trim()) throw new Error("the deploy-freeze job has no run: step");
+    return text;
+  };
+
+  it("reads the deploy runs on main, never another branch or a deployment event", async () => {
+    expect(await run()).toContain("workflows/deploy-production.yml/runs?branch=main&status=completed");
+  });
+
+  it("blocks on anything that is not a green deploy, including a timeout and a startup failure", async () => {
+    const text = await run();
+    expect(text).toContain('select(.conclusion == "success"');
+    for (const verdict of ["failure", "timed_out", "startup_failure"]) {
+      expect(text).toContain(`.conclusion == "${verdict}"`);
+    }
+    expect(text).toContain('[ "$c" = success ]');
+  });
+
+  it("ignores a run that produced no verdict, so a cancelled or skipped deploy cannot freeze a healthy production", async () => {
+    expect(await run()).not.toContain(".workflow_runs[0].conclusion");
+  });
+
+  it("opens the freeze for the repair, or the PR that fixes a red deploy could never merge", async () => {
+    expect(await run()).toContain("grep -qx deploy-fix");
+  });
+
+  it("keeps the merge_group condition on the step, so the job reports on a pull request too", async () => {
+    expect((await gate()).if).toBeUndefined();
+    const steps = (await gate()).steps ?? [];
+    expect(steps.map((step) => step.if)).toEqual(["github.event_name == 'merge_group'"]);
+  });
+});
+
+describe("deploy-production.yml holds only the deploy job (0509#7656, fleet-ops#9889)", () => {
+  it("keeps ci.yml off deployment_status", async () => {
     const ci = parse(await readFile(path.join(WORKFLOWS, "ci.yml"), "utf8")) as { on: Record<string, unknown> };
     expect(Object.keys(ci.on)).not.toContain("deployment_status");
+  });
+
+  it("runs no post-deploy job, so a run conclusion is the deploy's conclusion", async () => {
     const deploy = readJobs(
       "deploy-production.yml",
       await readFile(path.join(WORKFLOWS, "deploy-production.yml"), "utf8"),
     );
-    expect(deploy.find(({ key }) => key === "lighthouse")?.job.needs).toEqual(["deploy"]);
+    expect(deploy.map(({ key }) => key)).toEqual(["deploy"]);
+  });
+
+  it("still gates the Lighthouse budgets on the pull request", async () => {
+    const ci = parse(await readFile(path.join(WORKFLOWS, "ci.yml"), "utf8")) as { jobs: Record<string, WorkflowJob> };
+    const runs = Object.values(ci.jobs)
+      .flatMap((job) => job.steps ?? [])
+      .map((step) => step.run ?? "");
+    expect(runs.some((run) => run.includes("npx lhci collect"))).toBe(true);
+    expect(runs.some((run) => run.includes("npx lhci assert --budgets-file=lighthouse-budget.pr.json"))).toBe(true);
   });
 });

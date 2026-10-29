@@ -15,10 +15,21 @@ interface SoakStep {
   run?: string;
 }
 
-function soakStep(): SoakStep {
+interface JobWithEnvironment {
+  environment?: unknown;
+  if?: string;
+  steps?: SoakStep[];
+}
+
+function e2eJobs(): Record<string, JobWithEnvironment> {
   const source = readFileSync(path.join(REPO_ROOT, WORKFLOW), "utf8");
-  const jobs = (parse(source) as { jobs: Record<string, { steps?: SoakStep[] }> }).jobs;
-  const step = jobs["soak-report"]?.steps?.find((entry) => (entry.run ?? "").includes("Soak report for the 24 hours"));
+  return (parse(source) as { jobs: Record<string, JobWithEnvironment> }).jobs;
+}
+
+function soakStep(): SoakStep {
+  const step = e2eJobs()["soak-report"]?.steps?.find((entry) =>
+    (entry.run ?? "").includes("Soak report for the 24 hours"),
+  );
   if (step === undefined) throw new Error("soak-report has no comment-posting run step");
   return step;
 }
@@ -45,5 +56,40 @@ describe("soak-report measures the two DONE lines (0509#7076)", () => {
 
   it("is named in the pull_request disk-reading detector list", () => {
     expect(readFileSync(path.join(REPO_ROOT, CI), "utf8")).toContain("tests/unit/soak-report.test.ts");
+  });
+});
+
+describe("a production D1 read declares its environment and runs only on main (0509#7773, #7072)", () => {
+  function d1ReaderJobs(): [string, JobWithEnvironment][] {
+    return Object.entries(e2eJobs()).filter(([, job]) =>
+      (job.steps ?? []).some((step) => (step.run ?? "").includes("wrangler d1 execute 0509 --remote")),
+    );
+  }
+
+  it("derives the D1 reader census", () => {
+    expect(
+      d1ReaderJobs()
+        .map(([name]) => name)
+        .sort(),
+    ).toEqual(["jev-failures", "soak-report"].sort());
+  });
+
+  it("runs in production-e2e, the environment the D1-read token of #7072 lands in", () => {
+    for (const [, job] of d1ReaderJobs()) {
+      expect(job.environment).toBe("production-e2e");
+    }
+  });
+
+  it("runs only on main", () => {
+    for (const [, job] of d1ReaderJobs()) {
+      expect(job.if).toContain("github.ref == 'refs/heads/main'");
+    }
+  });
+
+  it("runs no dependency install script beside the Cloudflare token", () => {
+    for (const [, job] of d1ReaderJobs()) {
+      const install = (job.steps ?? []).map((step) => step.run ?? "").filter((run) => run.startsWith("npm ci"));
+      expect(install).toEqual(["npm ci --ignore-scripts"]);
+    }
   });
 });
