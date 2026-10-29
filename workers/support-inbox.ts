@@ -4,7 +4,11 @@ import {
   deleteExpiredIssues,
   releaseIssueSlot,
 } from "../app/lib/data/support_issue.server";
-import { deleteExpiredSupportReports, insertSupportReport } from "../app/lib/data/support_report.server";
+import {
+  countSupportReports,
+  deleteExpiredSupportReports,
+  insertSupportReport,
+} from "../app/lib/data/support_report.server";
 import { fetchOutbound } from "../app/lib/fetch/outbound.server";
 import { sha256Hex } from "../app/lib/sha256";
 
@@ -65,7 +69,7 @@ async function openIssue(token: string, report: ReportMail): Promise<Response> {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      title: `user report ${report.id}`,
+      title: `Support: ${report.id}`,
       body: issueBody(report),
       labels: ["user-report", "machine-reported"],
     }),
@@ -87,8 +91,10 @@ async function createIssue(db: D1Database, token: string, report: ReportMail): P
 }
 
 async function sweep(db: D1Database, now: Date): Promise<void> {
-  await deleteExpiredSupportReports(db, now);
-  await deleteExpiredIssues(db, now);
+  const expiredReports = await deleteExpiredSupportReports(db, now);
+  const expiredIssues = await deleteExpiredIssues(db, now);
+  const reports = await countSupportReports(db);
+  console.log(JSON.stringify({ event: "support_inbox.swept", expiredReports, expiredIssues, reports }));
 }
 
 export default {

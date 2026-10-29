@@ -12,6 +12,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "0509",
+  "workers_dev": false,
   // >= 2026-08-04 turns nodejs_compat on by default; still set it so a
   // Vitest inject cannot hide a missing production flag
   // (https://developers.cloudflare.com/workers/configuration/compatibility-flags/).
@@ -178,7 +179,7 @@
     // accounts) older than 24 hours with no plan row and only fixture workspaces.
     // Only the exact value "live" deletes anything; unset, blank or any other
     // value selects and logs counts and deletes nothing. At most 25 accounts a run.
-    "FIXTURE_REAPER": "dry-run",
+    "FIXTURE_REAPER": "live",
     "ACCESS_TEAM_DOMAIN": "https://nish345.cloudflareaccess.com",
     "ACCESS_AUD": "5dcfc6477175c13fa2dbdbdbc91242e7458da2ae9028131ab776995cbda2bd7f",
   },

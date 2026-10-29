@@ -1,6 +1,7 @@
 import { captureException } from "@sentry/cloudflare";
 import { env } from "cloudflare:workers";
 
+import { readWorkspaceFixture } from "../data/workspace.server";
 import { blankEnvString } from "../env.server";
 
 export const AI_SPEND_VAR = "AI_SPEND";
@@ -24,4 +25,16 @@ export function refuseWhenAiSpendOff(): void {
   const refusal = new AiSpendOffError(blankEnvString(env[AI_SPEND_VAR]));
   captureException(refusal, { level: "error", fingerprint: ["ai-spend-off"] });
   throw refusal;
+}
+
+class AiFixtureWorkspaceError extends AiSpendOffError {
+  constructor() {
+    super(null);
+    this.name = "AiFixtureWorkspaceError";
+    this.message = "ai spend is refused for a fixture workspace (per-run e2e account)";
+  }
+}
+
+export async function refuseWhenFixtureWorkspace(workspaceId: string): Promise<void> {
+  if (await readWorkspaceFixture(workspaceId)) throw new AiFixtureWorkspaceError();
 }

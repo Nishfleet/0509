@@ -1,5 +1,6 @@
 import { isLoginWall, type Subject } from "./identity/normalise";
 import { readSubjectDecision, insertSubjectDecision } from "./data/user_decision.server";
+import { readWorkspaceFixture } from "./data/workspace.server";
 import { JevUnavailableError } from "./jev/client.server";
 import { screenPublicSubject } from "./jev/public-subject.server";
 
@@ -66,6 +67,7 @@ async function settle(input: ScreenInput, outcome: "proceed" | "ask" | "refuse")
 }
 
 export async function screenOnboardingSubject(input: ScreenInput): Promise<ScreenResult> {
+  if (await readWorkspaceFixture(input.workspaceId)) return { kind: "proceed" };
   const decided = await readSubjectDecision(input.workspaceId, input.subject.registrable);
   if (decided === "public_subject:confirmed") return { kind: "proceed" };
   if (decided === "public_subject:refused") return { kind: "refuse", message: REFUSAL };

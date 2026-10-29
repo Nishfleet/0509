@@ -2,7 +2,7 @@
 
 ## What customers saw
 
-Possibly nothing: J8 soft (#7337) saw no "looks broken" email after the 21:00Z sweep on 2026-10-10. Whether this gap caused that miss is not yet proven.
+Nothing from this gap. J8 soft (#7337) saw no "looks broken" email after the 2026-10-10 sweep, but this gap did not cause that miss: the verdict and the incident both landed inside the sweep, so the sweep took the `openBreakageIncident` path. That miss has a different cause, written up in `2026-10-10-j8-soft-break-check-band-no-email.md`.
 
 ## Start and end (UTC)
 
@@ -10,7 +10,7 @@ The gap existed from the day site sweeps started judging own-site changes throug
 
 ## Root cause
 
-Not yet proven for 2026-10-10. Proven in code: when the breakage judgment for an own-site change was deferred or failed during the sweep (Jev unavailable, rate limited, per-brand daily budget), `publishSiteChange` filed a plain change signal and sent nothing. The end-of-sweep `rejudgeUnjudgedChanges` later got a real `alert` or `check` verdict for that signal and only linked the verdict rows. It never opened the incident or sent the email, so a real break judged late never alerted. The prod rows that would show whether this happened on 10-10 (`signal` aspect, `jev_verdict`, `incident`) are queued for a session with Cloudflare access.
+Not yet proven for 2026-10-10, and now resolved: the verdict was recorded at 21:11:16Z and the incident opened at 21:11:17Z, both inside the sweep, so the sweep took the `openBreakageIncident` path and this gap was not on the 10-10 path at all. Proven in code: when the breakage judgment for an own-site change was deferred or failed during the sweep (Jev unavailable, rate limited, per-brand daily budget), `publishSiteChange` filed a plain change signal and sent nothing. The end-of-sweep `rejudgeUnjudgedChanges` later got a real `alert` or `check` verdict for that signal and only linked the verdict rows. It never opened the incident or sent the email, so a real break judged late never alerted.
 
 ## How it was detected
 

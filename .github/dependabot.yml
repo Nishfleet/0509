@@ -13,7 +13,7 @@ updates:
       timezone: Asia/Kolkata
     open-pull-requests-limit: 5
     cooldown:
-      default-days: 7
+      default-days: 3
     groups:
       # Majors need their own group (0509#7074). In runs 36721784366
       # (2026-09-30T13:27Z) and 36727409669 (14:12Z), while the
@@ -55,7 +55,7 @@ updates:
       time: "09:00"
       timezone: Asia/Kolkata
     cooldown:
-      default-days: 7
+      default-days: 3
     groups:
       actions-minor-patch:
         update-types: [minor, patch]

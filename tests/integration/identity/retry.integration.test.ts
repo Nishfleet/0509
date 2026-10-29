@@ -48,15 +48,17 @@ function subject() {
   return normalised.subject;
 }
 
-async function seed(): Promise<void> {
+async function seed(fixture = false): Promise<void> {
   const now = "2026-09-25T08:00:00Z";
   await env.DB.prepare(
     `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, 'Owner', ?2, 0, ?3, ?3)`,
   )
     .bind(userId, `${userId}@0509.io`, now)
     .run();
-  await env.DB.prepare(`INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`)
-    .bind(workspaceId, userId, now)
+  await env.DB.prepare(
+    `INSERT INTO workspace (id, name, owner_user_id, created_at, fixture) VALUES (?1, 'Owner', ?2, ?3, ?4)`,
+  )
+    .bind(workspaceId, userId, now, fixture ? 1 : 0)
     .run();
   await env.DB.prepare(
     `INSERT INTO source (id, key, kind, platform, plugin_key, reliability, is_enabled, config_json)
@@ -128,6 +130,8 @@ beforeEach(() => {
 
 afterEach(async () => {
   vi.unstubAllGlobals();
+  Reflect.deleteProperty(env, "AI");
+  Reflect.deleteProperty(env, "BROWSER");
   await env.IDENTITY_CACHE.delete(probeKey(subject(), "homepage"));
   await env.DB.prepare('DELETE FROM "user" WHERE id = ?1').bind(userId).run();
   await env.DB.prepare("DELETE FROM source WHERE id = 'src_ads_meta_tail'").run();
@@ -189,5 +193,25 @@ describe("IdentityTailWorkflow site-fill retry", () => {
 
     expect(output.siteFill).toBeNull();
     expect(await storedIdentity(entityId)).not.toHaveProperty("siteFill");
+  });
+
+  it("never starts the hourly retry loop, or touches the model or a browser, for a fixture workspace", async () => {
+    const run = vi.fn(() => Promise.resolve({ answers: {} }));
+    Reflect.set(env, "AI", { run });
+    const quickAction = vi.fn();
+    Object.defineProperty(env, "BROWSER", { configurable: true, value: { quickAction } });
+    await seed(true);
+    await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    const entityId = await confirmRefusedCard();
+
+    const [instance] = await introspector.get();
+    if (instance === undefined) throw new Error("tail instance was not started");
+    await instance.waitForStatus("complete");
+    const output = outcomeSchema.parse(await instance.getOutput());
+
+    expect(output.siteFill).toBeNull();
+    expect(await storedIdentity(entityId)).not.toHaveProperty("siteFill");
+    expect(run).not.toHaveBeenCalled();
+    expect(quickAction).not.toHaveBeenCalled();
   });
 });

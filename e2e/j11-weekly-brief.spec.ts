@@ -38,6 +38,16 @@ function header(raw: string, pattern: RegExp): string | null {
   return pattern.exec(raw)?.[1]?.trim() ?? null;
 }
 
+const AUTH_RESULTS = /^authentication-results:[ \t]*([^\r\n]*(?:\r?\n[ \t]+[^\r\n]*)*)/gim;
+
+function authenticationResults(raw: string): string[] {
+  return [...raw.matchAll(AUTH_RESULTS)].map((match) => match[1].replace(/\r?\n[ \t]+/g, " ").trim());
+}
+
+function verdict(block: string, check: "spf" | "dkim" | "dmarc"): string | null {
+  return new RegExp(`\\b${check}=([^;\\s]+)`, "i").exec(block)?.[1] ?? null;
+}
+
 const SELF_NAME = "J11 Weekly";
 const DEFAULT_WEEKDAY = 1;
 const DEFAULT_HOUR = 8;
@@ -219,6 +229,13 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   expect(sentUtc, "the brief carries a Date").toBeTruthy();
   expect(unsubHeader, "List-Unsubscribe").toMatch(/^<https:\/\/0509\.io\/u\/[^>]+>$/);
   expect(unsubPost).toBe("List-Unsubscribe=One-Click");
+  const authResults = authenticationResults(raw);
+  const receiver = authResults.find(
+    (block) =>
+      verdict(block, "spf") === "pass" && verdict(block, "dkim") === "pass" && verdict(block, "dmarc") === "pass",
+  );
+  expect(authResults.length, "the received brief carries Authentication-Results verdicts").toBeGreaterThan(0);
+  expect(receiver, "spf=pass, dkim=pass and dmarc=pass on the received brief").toBeTruthy();
   if (!messageId || !sentUtc || !unsubHeader) throw new Error("brief headers were incomplete");
 
   const html = htmlBodyFrom(raw);
@@ -226,11 +243,13 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   await page.setViewportSize({ width: 600, height: 900 });
   await page.setContent(html);
   const text = (await page.locator("body").textContent()) ?? "";
-  const variant = text.includes("Quiet week:") ? "quiet" : "blind-source";
+  const isQuiet = text.includes("Quiet week:");
+  const variant = isQuiet ? "quiet" : "blind-source";
+  const headline = isQuiet ? "Quiet week:" : "so we can't say this was a quiet week.";
   expect(
-    text.includes("Quiet week:") || text.includes("so we cannot say this was a quiet week"),
+    text,
     "nothing noteworthy still sends, either as a quiet week or naming a source that has not answered",
-  ).toBe(true);
+  ).toContain(headline);
   expect(text, "no D4 picks, so the read-this-first block is the one block a quiet week drops").not.toContain(
     "Read this first",
   );
@@ -260,13 +279,15 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
 
   const sentIso = new Date(sentUtc).toISOString();
   const blocks = markers.join(">");
+  const authserv = (receiver ?? "").split(";")[0].trim() || "none";
   console.log(
-    `j11 variant=${variant} message-id=${messageId} sent-utc=${sentIso} scheduled-at=${scheduledAt} blocks=${blocks} read-this-first=absent off=${OFF}`,
+    `j11 variant=${variant} message-id=${messageId} sent-utc=${sentIso} scheduled-at=${scheduledAt} blocks=${blocks} read-this-first=absent off=${OFF} auth-results=spf=pass,dkim=pass,dmarc=pass authserv=${authserv}`,
   );
   testInfo.annotations.push(
     { type: "message-id", description: messageId },
     { type: "sent-utc", description: sentIso },
     { type: "variant", description: variant },
+    { type: "auth-results", description: `authserv=${authserv} spf=pass dkim=pass dmarc=pass` },
   );
 
   const unsubscribeUrl = unsubHeader.slice(1, -1);

@@ -54,9 +54,13 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+export function takeCount(name: string, limit: number): Promise<boolean> {
+  return env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName(name)).take(limit);
+}
+
 async function take(cap: Cap): Promise<boolean> {
   try {
-    return await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName(cap.name)).take(cap.limit);
+    return await takeCount(cap.name, cap.limit);
   } catch (error) {
     reportCounterDown(error, cap);
     throw new AiDailyCapError(cap.line, "could not be checked, so the call was refused");

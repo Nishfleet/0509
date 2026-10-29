@@ -12,7 +12,10 @@ name: e2e-scheduled
 # local lane (PLAYWRIGHT_TEST_BASE_URL unset, AGENTS.md). Every job runs against
 # https://staging.0509.io (the workflow-level env) and declares `environment:
 # staging`, except `signin`, `backup-proof` and `jev-failures`, which stay on
-# production and `production-e2e`. Both environments allow `main` only.
+# production and `production-e2e`. Both environments allow `main` only; the D1
+# readers (jev-failures, soak-report) install with `npm ci --ignore-scripts`
+# (0509#7773), and their D1 reads wait on the D1-read token of #7072 (the
+# repo-level token is refused by D1).
 # The weekly `j12` job also runs J11, whose kept account needs a 6-day gap.
 # `signin` is the one real sign-in smoke a day (0509#6093): the only production
 # run that sends a real email, once, at 04:17 UTC.
@@ -469,7 +472,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - name: Read the judge failures
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -503,7 +506,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - name: Post the day's soak numbers on the issue
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
