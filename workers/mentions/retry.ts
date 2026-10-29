@@ -42,19 +42,16 @@ async function retryOne(step: WorkflowStep, pass: SweepPass, index: number): Pro
   if (target === undefined) return null;
   try {
     const outcome = await step.do(`retry ${target.pluginKey} ${target.query}`, RETRY, () => pass.run(target));
-    pass.budget.spend(target.pluginKey, outcome.ms ?? 0);
+    pass.budget.spend(outcome.ms ?? 0);
     return outcome;
   } catch {
-    pass.budget.spend(target.pluginKey, FAILED_TARGET_MS);
+    pass.budget.spend(FAILED_TARGET_MS);
     return pass.outcomes[index] ?? null;
   }
 }
 
 function retryable(pass: SweepPass, current: readonly (TargetOutcome | null)[]): number[] {
-  return skippedIndexes({ ...pass, outcomes: current }).filter((index) => {
-    const target = pass.targets[index];
-    return target !== undefined && pass.budget.reason(target.pluginKey) === null;
-  });
+  return skippedIndexes({ ...pass, outcomes: current }).filter((index) => pass.targets[index] !== undefined);
 }
 
 async function retryRound(
@@ -67,13 +64,13 @@ async function retryRound(
   const next = [...current];
   for (const index of retryable(pass, current)) {
     const target = pass.targets[index];
-    if (target === undefined || tripped(streaks, target) || pass.budget.reason(target.pluginKey) !== null) continue;
+    if (target === undefined || tripped(streaks, target) || pass.budget.spent()) continue;
     const outcome = await retryOne(step, { ...pass, outcomes: current }, index);
     next[index] = outcome;
     if (outcome !== null) track(streaks, target, outcome);
     if (target.minIntervalSeconds > 0) {
       await step.sleep(`pace retry ${String(round)} ${String(index)}`, target.minIntervalSeconds * 1000);
-      pass.budget.spend(target.pluginKey, target.minIntervalSeconds * 1000);
+      pass.budget.spend(target.minIntervalSeconds * 1000);
     }
   }
   return next;
@@ -82,10 +79,10 @@ async function retryRound(
 export async function retrySkipped(step: WorkflowStep, pass: SweepPass): Promise<(TargetOutcome | null)[]> {
   let current = [...pass.outcomes];
   for (let round = 0; round < ROUNDS; round += 1) {
-    if (retryable(pass, current).length === 0) break;
+    if (pass.budget.spent() || retryable(pass, current).length === 0) break;
     const pauseMs = PAUSE_MS * 2 ** round;
     await step.sleep(`pause before retry round ${String(round)}`, pauseMs);
-    pass.budget.spend(null, pauseMs);
+    pass.budget.spend(pauseMs);
     current = await retryRound(step, pass, { round, current });
   }
   return current;

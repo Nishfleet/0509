@@ -1,35 +1,33 @@
 import { describe, expect, it } from "vitest";
 
-import { RUN_BUDGET_MS, SOURCE_BUDGET_MS, SweepBudget, timed } from "../../workers/mentions/budget";
+import { bySourceRoundRobin, RUN_BUDGET_MS, SweepBudget, timed } from "../../workers/mentions/budget";
+
+const plan = (...pluginKeys: string[]): { pluginKey: string; query: string }[] =>
+  pluginKeys.map((pluginKey, index) => ({ pluginKey, query: `${pluginKey} ${String(index)}` }));
 
 describe("sweep budget", () => {
-  it("lets a fresh run sweep every source", () => {
-    expect(new SweepBudget().reason("gdelt.doc")).toBeNull();
-  });
-
-  it("stops one slow source without stopping the others", () => {
+  it("lets the slowest source spend most of the run instead of a flat slice", () => {
     const budget = new SweepBudget();
-    budget.spend("gdelt.doc", SOURCE_BUDGET_MS);
-    expect(budget.reason("gdelt.doc")).toBe("source_budget");
-    expect(budget.reason("hn.algolia")).toBeNull();
+    budget.spend(24 * 60_000);
+    expect(budget.spent()).toBe(false);
   });
 
   it("stops every source once the whole run is out of time", () => {
     const budget = new SweepBudget();
-    budget.spend("hn.algolia", RUN_BUDGET_MS - 1);
-    expect(budget.reason("youtube.channel_rss")).toBeNull();
-    budget.spend(null, 1);
-    expect(budget.reason("youtube.channel_rss")).toBe("run_budget");
+    budget.spend(RUN_BUDGET_MS - 1);
+    expect(budget.spent()).toBe(false);
+    budget.spend(1);
+    expect(budget.spent()).toBe(true);
   });
 
-  it("names and counts what it cut, per source and reason", () => {
+  it("names and counts what it cut, per source", () => {
     const budget = new SweepBudget();
-    budget.defer("gdelt.doc", "source_budget");
-    budget.defer("gdelt.doc", "source_budget");
-    budget.defer("hn.algolia", "run_budget");
+    budget.defer("gdelt.doc");
+    budget.defer("gdelt.doc");
+    budget.defer("hn.algolia");
     expect(budget.deferred()).toEqual([
-      { source: "gdelt.doc", reason: "source_budget", targets: 2 },
-      { source: "hn.algolia", reason: "run_budget", targets: 1 },
+      { source: "gdelt.doc", targets: 2 },
+      { source: "hn.algolia", targets: 1 },
     ]);
   });
 
@@ -37,5 +35,32 @@ describe("sweep budget", () => {
     const outcome = await timed(() => Promise.resolve({ items: 1, stored: 1, unjudged: 0, skipped: 0 }));
     expect(outcome.ms).toBeGreaterThanOrEqual(0);
     expect(outcome.stored).toBe(1);
+  });
+});
+
+describe("the order the sweep reads the plan in", () => {
+  it("gives every source a turn before any source gets a second one", () => {
+    const order = bySourceRoundRobin(plan("gdelt.doc", "gdelt.doc", "gdelt.doc", "hn.algolia", "hn.algolia"));
+    expect(order.map((target) => target.pluginKey)).toEqual([
+      "gdelt.doc",
+      "hn.algolia",
+      "gdelt.doc",
+      "hn.algolia",
+      "gdelt.doc",
+    ]);
+  });
+
+  it("keeps the plan's own order inside one source", () => {
+    const order = bySourceRoundRobin(plan("gdelt.doc", "gdelt.doc", "hn.algolia", "gdelt.doc"));
+    expect(order.map((target) => target.query)).toEqual(["gdelt.doc 0", "hn.algolia 2", "gdelt.doc 1", "gdelt.doc 3"]);
+  });
+
+  it("reaches the news source in the first round, so a slow source ahead of it cannot take the run", () => {
+    const order = bySourceRoundRobin(plan("slow.one", "slow.one", "slow.one", "gdelt.doc"));
+    expect(order[1]?.pluginKey).toBe("gdelt.doc");
+  });
+
+  it("leaves a single-source plan alone", () => {
+    expect(bySourceRoundRobin(plan("gdelt.doc", "gdelt.doc"))).toEqual(plan("gdelt.doc", "gdelt.doc"));
   });
 });
