@@ -179,9 +179,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 2
+        with: { persist-credentials: false, fetch-depth: 2 }
       - name: Skip the browser suites when the pull request touches only docs and unit tests
         # A required check from a path-filtered workflow stays Pending and blocks the PR,
         # so the filter lives here and the job still reports (#5381). merge_group always runs.
@@ -190,9 +188,7 @@ jobs:
         run: if git diff --quiet HEAD^1 HEAD -- . ':(exclude)docs' ':(exclude)tests' ':(exclude).agents' ':(exclude)*.md'; then echo skip=true >> "$GITHUB_OUTPUT"; fi
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.scope.outputs.skip != 'true'
-        with:
-          node-version: 22
-          cache: npm
+        with: { node-version: 22, cache: npm }
       - run: npm ci
         if: steps.scope.outputs.skip != 'true'
       - name: Build the Worker as the deploy would
@@ -245,6 +241,14 @@ jobs:
         # docs/REBUILD-DONE.md B stands and the audit returns when 0509#7656 decides
         # how the audited URLs are reached.
         run: npx lhci assert --budgets-file=lighthouse-budget.pr.json
+
+      - name: Keep the screenshots when it passes
+        # A green run showed nothing visual, so a pull request could not be read
+        # from a phone (0509#7290). The failure step below still carries the
+        # trace, which holds the Access cookie; this one carries the PNGs only.
+        if: success() && steps.scope.outputs.skip != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with: { name: playwright-screenshots-preview, path: "test-results/**/*.png", retention-days: 7, overwrite: true, if-no-files-found: error }
 
       - name: Keep the trace when it fails
         if: failure() || cancelled()

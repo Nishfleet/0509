@@ -13,11 +13,12 @@ report arrives, the agent reads the feature map and drives the app) and 34:41
   `0509-support-inbox`, last modified 2026-07-03. It is the old app's bundle and
   is not in this repository. Nobody reads what it stores.
 
-Corrected on 2026-10-28 (#5699). The live rules now bind `support@`, `brief@`,
-`hello@` and `dmarc@` to `0509-support-inbox-v2`, and #5699 adds `alerts@` and
-`fleet-signup@`. The catch-all is the one rule that cannot follow: wrangler's
-catch-all update rejects a `worker` action, so unrouted mail still lands in the
-dead bundle until it is moved through the Cloudflare REST API.
+Corrected on 2026-10-28 (#5699). The live rules bind `support@`, `brief@`,
+`hello@`, `dmarc@`, `alerts@` and `fleet-signup@` to `0509-support-inbox-v2`;
+the 2026-10-29 dispatch is run 40885520114. wrangler's catch-all update accepts
+only a `forward` action, so the settings job writes that one rule through the
+Cloudflare REST API that wrangler wraps, and the catch-all follows on its next
+dispatch. Nothing routes to `0509-support-inbox` once that run has happened.
 
 - Sentry is designed (`docs/REBUILD-TRUST.md` §A5) and parked on an org that
   only Nish can own (#4099).
@@ -71,14 +72,12 @@ and a support mail about the same failure can be linked by hand.
    a fine-grained token scoped to issues on this repo, stored as a Worker
    secret. No reply is sent to the user; replies stay with Nish.
 2. **Routing**: the rules for `support@`, `brief@`, `hello@`, `dmarc@`,
-   `alerts@` and `fleet-signup@` bind to `0509-support-inbox-v2`. They are
-   written by the main-only `cloudflare-settings` job
-   (`.github/workflows/cloudflare-settings.yml`, dispatched by hand), which
-   updates a rule when it exists and creates it when it does not, so re-running
-   it is safe. The catch-all is the exception: `wrangler email routing rules
-update <zone> catch-all` rejects a `worker` action, so unrouted mail still
-   lands in the dead bundle until someone moves it through the Cloudflare REST
-   API.
+   `alerts@`, `fleet-signup@` and the catch-all are written by the main-only
+   `cloudflare-settings` job (`.github/workflows/cloudflare-settings.yml`,
+   dispatched by hand), which updates a rule when it exists and creates it when
+   it does not, so re-running it is safe. The catch-all is the one rule that
+   wrangler cannot write, because its update accepts only a `forward` action,
+   so the job writes it through the Cloudflare REST API that wrangler wraps.
 3. **Admission**: `machine-reported` is never `agent-ready` on arrival. The 0509
    intake asks Jev `repro_worthy` with the issue body; p >= 0.9 adds
    `agent-ready`, p <= 0.1 closes with `not-actionable`, in between parks
