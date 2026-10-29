@@ -13,11 +13,12 @@ report arrives, the agent reads the feature map and drives the app) and 34:41
   `0509-support-inbox`, last modified 2026-07-03. It is the old app's bundle and
   is not in this repository. Nobody reads what it stores.
 
-Corrected on 2026-10-28 (#5699) and applied on 2026-10-29 (fleet-ops#10577). The
-live rules now bind `support@`, `brief@`, `hello@`, `dmarc@`, `alerts@`,
-`fleet-signup@` and the catch-all to `0509-support-inbox-v2`. wrangler's
-catch-all update accepts only a `forward` action, so the settings job writes that
-one rule through the Cloudflare REST API that wrangler wraps.
+Corrected on 2026-10-28 (#5699). The live rules bind `support@`, `brief@`,
+`hello@`, `dmarc@`, `alerts@` and `fleet-signup@` to `0509-support-inbox-v2`;
+the 2026-10-29 dispatch is run 40885520114. wrangler's catch-all update accepts
+only a `forward` action, so the settings job writes that one rule through the
+Cloudflare REST API that wrangler wraps, and the catch-all follows on its next
+dispatch. Nothing routes to `0509-support-inbox` once that run has happened.
 
 - Sentry is designed (`docs/REBUILD-TRUST.md` §A5) and parked on an org that
   only Nish can own (#4099).
@@ -71,8 +72,7 @@ and a support mail about the same failure can be linked by hand.
    a fine-grained token scoped to issues on this repo, stored as a Worker
    secret. No reply is sent to the user; replies stay with Nish.
 2. **Routing**: the rules for `support@`, `brief@`, `hello@`, `dmarc@`,
-   `alerts@`, `fleet-signup@` and the catch-all bind to
-   `0509-support-inbox-v2`. They are written by the main-only
+   `alerts@`, `fleet-signup@` and the catch-all are written by the main-only
    `cloudflare-settings` job (`.github/workflows/cloudflare-settings.yml`,
    dispatched by hand), which updates a rule when it exists and creates it when
    it does not, so re-running it is safe. The catch-all is the one rule that

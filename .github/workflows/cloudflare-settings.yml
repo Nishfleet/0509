@@ -30,6 +30,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_SETTINGS_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       NPM_CONFIG_IGNORE_SCRIPTS: "true"
+      SUPPORT_INBOX_WORKER: 0509-support-inbox-v2
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -52,23 +53,26 @@ jobs:
             if [ -n "$id" ]; then verb=(update 0509.io "$id"); else verb=(create 0509.io); fi
             npx wrangler email routing rules "${verb[@]}" --name "$name" \
               --match-type literal --match-field to --match-value "$name@0509.io" \
-              --action-type worker --action-value 0509-support-inbox-v2
+              --action-type worker --action-value "$SUPPORT_INBOX_WORKER"
           done
       - name: Point the catch-all at the support-inbox Worker
         # `wrangler email routing rules update <zone> catch-all` accepts only a
         # forward action, so this one rule is written through the REST API that
-        # wrangler wraps. The token reaches curl through a config file, never
-        # argv, so it never shows in the process table.
+        # wrangler wraps. The token reaches curl through a mode-600 config file
+        # that the EXIT trap removes, never through argv.
         run: |
           set -o pipefail
+          umask 077
           config="$RUNNER_TEMP/cloudflare-auth"
+          trap 'rm -f "$config"' EXIT
           jq -rn '"header = \"Authorization: Bearer " + env.CLOUDFLARE_API_TOKEN + "\""' > "$config"
-          zone=$(curl -sS --fail-with-body --config "$config" \
-            "https://api.cloudflare.com/client/v4/zones?name=0509.io" | jq -r '.result[0].id')
-          curl -sS --fail-with-body --config "$config" -X PUT \
-            "https://api.cloudflare.com/client/v4/zones/$zone/email/routing/rules/catch_all" \
-            -H 'content-type: application/json' \
-            --data '{"name":"catch-all","enabled":true,"matchers":[{"type":"all"}],"actions":[{"type":"worker","value":["0509-support-inbox-v2"]}]}' \
-            | jq '{success, errors, result: (.result | {name, enabled, matchers, actions})}'
+          zone=$(curl -sS --fail-with-body --retry 3 --retry-connrefused --config "$config" \
+            "https://api.cloudflare.com/client/v4/zones?name=0509.io" | jq -er '.result[0].id')
+          jq -nc --arg worker "$SUPPORT_INBOX_WORKER" \
+            '{name: "catch-all", enabled: true, matchers: [{type: "all"}], actions: [{type: "worker", value: [$worker]}]}' \
+            | curl -sS --fail-with-body --retry 3 --retry-connrefused --config "$config" -X PUT \
+                "https://api.cloudflare.com/client/v4/zones/$zone/email/routing/rules/catch_all" \
+                -H 'content-type: application/json' --data @- \
+            | jq 'if .success then (.result | {name, enabled, matchers, actions}) else error("catch-all update failed: \(.errors)") end'
       - name: Email Routing rules, after
         run: npx wrangler email routing rules list 0509.io
