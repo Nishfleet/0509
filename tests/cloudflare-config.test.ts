@@ -402,7 +402,7 @@ describe("cloudflare.config.ts staging mode", () => {
   it("points sign-in and Access at staging", () => {
     expect(staging.env.BETTER_AUTH_URL?.value).toBe("https://staging.0509.io");
     expect(staging.env.ACCESS_TEAM_DOMAIN?.value).toBe(prod.env.ACCESS_TEAM_DOMAIN?.value);
-    expect(staging.env.ACCESS_AUD?.value).toBe("4d713d09a17fe8acfcbee861f29b743a0158892737e95ec52c0b659f7362dd7f");
+    expect(staging.env.ACCESS_AUD?.value).toBe("4d713d09a17fe8acfcbee861f29b743a0158892737e95ec52c0b659f7362dd7f"); // gitleaks:allow
     expect(staging.env.ACCESS_AUD?.value).not.toBe(prod.env.ACCESS_AUD?.value);
     expect(staging.env.LANDING_WORKSPACE_ID?.value).toBe("");
   });

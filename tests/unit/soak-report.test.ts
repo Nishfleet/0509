@@ -139,7 +139,7 @@ describe("a production D1 read declares its environment and runs only on main (0
       '  printf \'%s\\n\' \'[{"results":[{"ok":1}],"success":true}]\'',
       "}",
     ].join("\n");
-    const script = ["set -euo pipefail", stub, soakHelper(), `d1 "${sql}"`].join("\n");
+    const script = ["set -euo pipefail", stub, "db=0509-staging", soakHelper(), `d1 "${sql}"`].join("\n");
     const result = spawnSync("bash", ["-c", script], { encoding: "utf8" });
     return { status: result.status, stdout: result.stdout, stderr: result.stderr };
   }
@@ -148,7 +148,7 @@ describe("a production D1 read declares its environment and runs only on main (0
     const failed = runD1("SELECT * FROM FAIL");
     expect(failed.status).toBe(1);
     expect(failed.stdout).toBe("");
-    expect(failed.stderr).toContain("wrangler d1 execute exited 1");
+    expect(failed.stderr).toContain("cf d1 query exited 1");
     expect(failed.stderr).toContain("Authentication error [code: 10000]");
 
     const read = runD1("SELECT 1 AS ok");

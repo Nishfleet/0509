@@ -45,12 +45,3 @@ keywords = ["account"]
 [[allowlists]]
 description = "This file names the patterns it looks for"
 paths = ['''(^|/)gitleaks-private-detail\.toml$''']
-
-# A Cloudflare Access application AUD tag names which Access application a
-# JWT is for; it is not a credential, and code needs it in the clear to state
-# its own audience. Allow the distinctive text, wherever the line sits, so a
-# historical commit in a pull request range is covered too.
-[[allowlists]]
-description = "Cloudflare Access application AUD tags are tenant identifiers, not secrets"
-regexTarget = "line"
-regexes = ['''(?i)access[_-]?aud\b''']

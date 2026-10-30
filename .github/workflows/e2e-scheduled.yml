@@ -2,7 +2,7 @@ name: e2e-scheduled
 
 # Journeys that need calendar time or break the fixture for hours run here on
 # their own clock, never per deploy (0509#4124, 0509#4128). The full suite
-# (the `e2e-production` job below) runs everything except @scheduled, and
+# (the `e2e-staging` job below) runs everything except @scheduled, and
 # its sign-ins send real emails against the daily quota (0509#6033, 0509#6034).
 # It runs once a week on the Sunday cron (07:40 UTC, clear of the 04:17 signin
 # and 06:30 soak, and not on the Wednesday j12 run, so no other job holds the
@@ -123,7 +123,7 @@ jobs:
     name: spec
     # No trace is uploaded: the repo is public and a trace can hold the Access
     # cookie (0509#5999); a failure is read from the job log.
-    if: inputs.spec != '' && github.ref == 'refs/heads/main'
+    if: inputs.spec != ''
     runs-on: ubuntu-latest
     environment: staging
     # See the live-ai note on the j12 job.
@@ -292,7 +292,7 @@ jobs:
           test "$state" = success
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
   suite-shard:
-    name: e2e-production shard ${{ matrix.shard }}
+    name: e2e-staging shard ${{ matrix.shard }}
     # Every sign-in in the suite sends a real email and the Cloudflare Email
     # Service daily quota is spent (0509#6033, 0509#6034), so the full suite no
     # longer starts on every deploy (Nish 2026-09-28: "take the full production
@@ -357,7 +357,7 @@ jobs:
           files=(test-results/**/error-context.md)
           if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
   suite:
-    name: e2e-production
+    name: e2e-staging
     needs: [staging-sha, suite-shard]
     if: always() && github.event.schedule == '40 7 * * 0'
     runs-on: ubuntu-latest
@@ -378,7 +378,7 @@ jobs:
           SHA: ${{ needs.staging-sha.outputs.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
-          filename: .github/red-main/e2e-production.md
+          filename: .github/red-main/e2e-staging.md
           update_existing: true
           search_existing: open
       - name: Hand the issue to a worker
@@ -392,7 +392,7 @@ jobs:
         env:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search '"e2e-production red on main" in:title' --json number --jq '.[0].number // empty')
+          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search '"e2e-staging red on main" in:title' --json number --jq '.[0].number // empty')
           [ -z "$N" ] || gh issue close "$N" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Green again on $RUN_URL."
       - name: Red unless every shard passed
         run: test "$SHARDS" = success
@@ -555,6 +555,7 @@ jobs:
           [ "$hc_up" -gt 0 ] && [ "$hc_bad" -eq 0 ] || failed=1
           {
             echo "Soak report for the 24 hours before $(date -u +%Y-%m-%dT%H:%MZ) (send counts: $label)."
+            echo "- this report reads the staging database (0509-staging) and the *-staging Workflow instances, never production."
             echo
             echo "- cron-started Workflow instances in the last 24 h (newest 100 each): ${crons%, }$([ -z "$missed" ] || echo " (FAIL, none or unreadable for: ${missed% })")"
             echo "- site-sweep Workflow instances: $(instances site-sweep)"

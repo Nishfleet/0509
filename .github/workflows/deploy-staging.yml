@@ -50,6 +50,8 @@ jobs:
             [ -n "${!name}" ] || missing="$missing $name"
           done
           [ -z "$missing" ] || { echo "::error::staging needs its own value for:$missing"; exit 1; }
+          worker=$(jq -r .name .cloudflare/output/v0/workers/default/worker.config.json)
+          [ "$worker" = "0509-staging" ] || { echo "::error::refusing to deploy non-staging worker: $worker"; exit 1; }
           secrets=$(mktemp)
           trap 'rm -f "$secrets"' EXIT
           jq -n '{DODO_PAYMENTS_API_KEY: env.DODO_TEST_API_KEY, BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET, TURNSTILE_SITE_KEY: env.TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY: env.TURNSTILE_SECRET_KEY, DODO_WEBHOOK_SECRET: env.DODO_WEBHOOK_SECRET, SLACK_TARGET_SECRET: env.SLACK_TARGET_SECRET}' > "$secrets"
