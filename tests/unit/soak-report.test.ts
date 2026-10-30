@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -100,6 +101,74 @@ describe("a production D1 read declares its environment and runs only on main (0
         .map(([name]) => name)
         .sort(),
     ).toEqual(["jev-failures", "soak-report"].sort());
+  });
+
+  function readerRun(name: string): string {
+    const step = (e2eJobs()[name]?.steps ?? []).find((entry) =>
+      (entry.run ?? "").includes("wrangler d1 execute 0509 --remote"),
+    );
+    if (step === undefined) throw new Error(`${name} has no D1 read step`);
+    return step.run ?? "";
+  }
+
+  function soakHelper(): string {
+    const lines = (soakStep().run ?? "").split("\n");
+    const start = lines.findIndex((line) => line === "d1() {");
+    const end = lines.findIndex((line, index) => index > start && line === "}");
+    if (start === -1 || end === -1) throw new Error("soak-report has no d1 helper");
+    return lines.slice(start, end + 1).join("\n");
+  }
+
+  function runD1(sql: string): { status: number | null; stdout: string; stderr: string } {
+    const stub = [
+      "npx() {",
+      '  case "$*" in',
+      '    *FAIL*) printf \'%s\\n\' \'{"error":{"text":"Authentication error [code: 10000]"}}\'; return 1 ;;',
+      "  esac",
+      '  printf \'%s\\n\' \'[{"results":[{"ok":1}],"success":true}]\'',
+      "}",
+    ].join("\n");
+    const script = ["set -euo pipefail", stub, soakHelper(), `d1 "${sql}"`].join("\n");
+    const result = spawnSync("bash", ["-c", script], { encoding: "utf8" });
+    return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+  }
+
+  it("prints a failed D1 read's cause to stderr, where no $() capture eats it (0509#4730)", () => {
+    const failed = runD1("SELECT * FROM FAIL");
+    expect(failed.status).toBe(1);
+    expect(failed.stdout).toBe("");
+    expect(failed.stderr).toContain("wrangler d1 execute exited 1");
+    expect(failed.stderr).toContain("Authentication error [code: 10000]");
+
+    const read = runD1("SELECT 1 AS ok");
+    expect(read.status).toBe(0);
+    expect(read.stderr).toBe("");
+    expect(JSON.parse(read.stdout)).toEqual([{ ok: 1 }]);
+  });
+
+  function runJevRead(mode: "ok" | "fail"): { status: number | null; stdout: string; stderr: string } {
+    const stub =
+      mode === "fail"
+        ? `npx() { printf '%s\\n' '{"error":{"text":"Authentication error [code: 10000]"}}'; exit 1; }`
+        : `npx() { printf '%s\\n' '[{"results":[{"kind":"judge","code":"0001","n":2}],"success":true}]'; }`;
+    const script = ["set -euo pipefail", stub, readerRun("jev-failures")].join("\n");
+    const result = spawnSync("bash", ["-c", script], { encoding: "utf8" });
+    return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+  }
+
+  it("halts a jev-failures D1 read whose body is an error object and prints the cause (0509#4730)", () => {
+    const failed = runJevRead("fail");
+    expect(failed.status).toBe(1);
+    expect(failed.stderr).toContain("Authentication error [code: 10000]");
+
+    const read = runJevRead("ok");
+    expect(read.status).toBe(0);
+    const rows = read.stdout
+      .split("\n")
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line));
+    expect(rows).toHaveLength(2);
+    for (const row of rows) expect(row).toEqual({ kind: "judge", code: "0001", n: 2 });
   });
 
   it("runs in production-e2e, the environment the D1-read token of #7072 lands in", () => {

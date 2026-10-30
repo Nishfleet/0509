@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { insertWatches, readFeedTargets, readWatchConfigJson } from "../../../app/lib/data/watch.server";
 import { readFeed } from "../../../app/lib/feeds/read-feed.server";
-import { resetFeedFixtures, rssFeed, seedEntity } from "./seed";
+import { resetFeedFixtures, RECENT_POST_DATE, rssFeed, seedEntity } from "./seed";
 
 const USER = "user-feed-read";
 const WS = "ws-feed-read";
@@ -177,7 +177,7 @@ describe("readFeed", () => {
       title: "Third post",
       summary: "About Third post",
       url: "https://rival.com/blog/p3",
-      published_at: "2026-09-30T10:00:00.000Z",
+      published_at: RECENT_POST_DATE.toISOString(),
     });
     expect(filed[0]?.dedup_key.startsWith(`${WATCH_ID}:`)).toBe(true);
 

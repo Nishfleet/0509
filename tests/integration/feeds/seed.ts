@@ -2,6 +2,9 @@ import { env } from "cloudflare:test";
 
 export const NOW = "2026-10-02T02:00:00Z";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+export const RECENT_POST_DATE = new Date(Math.floor((Date.now() - DAY_MS) / 1000) * 1000);
+
 export async function resetFeedFixtures(ids: { user: string; workspace: string; email: string }): Promise<void> {
   await env.DB.exec("DELETE FROM signal");
   await env.DB.exec("DELETE FROM snapshot");
@@ -48,7 +51,7 @@ export function rssFeed(items: readonly { id: string; title: string; date?: stri
   const body = items
     .map(
       (item) =>
-        `<item><title>${item.title}</title><link>https://rival.com/blog/${item.id}</link><guid>${item.id}</guid><pubDate>${new Date(item.date ?? "2026-09-30T10:00:00Z").toUTCString()}</pubDate><description>About ${item.title}</description></item>`,
+        `<item><title>${item.title}</title><link>https://rival.com/blog/${item.id}</link><guid>${item.id}</guid><pubDate>${new Date(item.date ?? RECENT_POST_DATE.toUTCString()).toUTCString()}</pubDate><description>About ${item.title}</description></item>`,
     )
     .join("");
   return `<?xml version="1.0"?><rss version="2.0"><channel><title>Rival</title>${body}</channel></rss>`;
