@@ -123,7 +123,7 @@ jobs:
     name: spec
     # No trace is uploaded: the repo is public and a trace can hold the Access
     # cookie (0509#5999); a failure is read from the job log.
-    if: inputs.spec != ''
+    if: inputs.spec != '' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: staging
     # See the live-ai note on the j12 job.

@@ -27,7 +27,8 @@ const NIGHT_ONE = [
   { id: "p1", title: "First post" },
   { id: "p2", title: "Second post" },
 ];
-const NIGHT_TWO = [...NIGHT_ONE, { id: "p3", title: "Third post" }];
+const THIRD_POST_DATE = new Date(Math.floor((Date.now() - 86_400_000) / 1000) * 1000).toISOString();
+const NIGHT_TWO = [...NIGHT_ONE, { id: "p3", title: "Third post", date: THIRD_POST_DATE }];
 
 const target = async () => {
   const found = (await readFeedTargets()).find((row) => row.watchId === WATCH_ID);
@@ -177,7 +178,7 @@ describe("readFeed", () => {
       title: "Third post",
       summary: "About Third post",
       url: "https://rival.com/blog/p3",
-      published_at: "2026-09-30T10:00:00.000Z",
+      published_at: THIRD_POST_DATE,
     });
     expect(filed[0]?.dedup_key.startsWith(`${WATCH_ID}:`)).toBe(true);
 

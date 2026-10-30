@@ -30,7 +30,16 @@ jobs:
       - run: npm ci
       - run: CLOUDFLARE_VITE_FORCE_BUILD_OUTPUT=true npx react-router build --mode staging
       - name: Apply D1 migrations
-        run: npx cf d1 migrations apply "$(jq -r .env.DB.id .cloudflare/output/v0/workers/default/worker.config.json)"
+        # The id comes out of the build's own worker.config.json, so a misbuilt
+        # tree cannot point the migration at another database: refuse anything
+        # that is not the staging database (627cffe8, cloudflare.config.ts).
+        run: |
+          id=$(jq -r .env.DB.id .cloudflare/output/v0/workers/default/worker.config.json)
+          case "$id" in
+            627cffe8-*) ;;
+            *) echo "::error::refusing to migrate non-staging database: $id"; exit 1 ;;
+          esac
+          npx cf d1 migrations apply "$id"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

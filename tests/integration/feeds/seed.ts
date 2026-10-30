@@ -48,7 +48,7 @@ export function rssFeed(items: readonly { id: string; title: string; date?: stri
   const body = items
     .map(
       (item) =>
-        `<item><title>${item.title}</title><link>https://rival.com/blog/${item.id}</link><guid>${item.id}</guid><pubDate>${new Date(item.date ?? "2026-09-30T10:00:00Z").toUTCString()}</pubDate><description>About ${item.title}</description></item>`,
+        `<item><title>${item.title}</title><link>https://rival.com/blog/${item.id}</link><guid>${item.id}</guid><pubDate>${new Date(item.date ?? new Date().toISOString()).toUTCString()}</pubDate><description>About ${item.title}</description></item>`,
     )
     .join("");
   return `<?xml version="1.0"?><rss version="2.0"><channel><title>Rival</title>${body}</channel></rss>`;
