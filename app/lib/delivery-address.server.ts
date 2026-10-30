@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 
-import { sendMessage } from "../../workers/delivery/send";
+import { sendAccountMail } from "../../workers/delivery/account-mail";
 import { redactEmailShaped } from "./auth/redact-email-shaped";
 import { looksLikeEmailAddress, normalizeEmailAddress } from "./email-address";
 import { clearSuppression, isAddressSuppressed, readMailKinds, writeMailKinds } from "./data/email_suppression.server";
@@ -45,13 +45,20 @@ async function sendVerifyConfirmation(email: SendEmail, workspaceId: string, add
   const expiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_MS).toISOString();
   await writeVerifyToken(env.DB, { workspaceId, token, expiresAt });
   const message = verifyAddressEmail({ email: address, url: `https://0509.io/v/${token}` });
-  const outcome = await sendMessage(email, {
-    to: address,
-    from: { email: "hello@0509.io", name: "Five to Nine" },
-    subject: message.subject,
-    text: message.text,
-    html: message.html,
-  });
+  const outcome = await sendAccountMail(
+    { DB: env.DB, EMAIL: email },
+    {
+      kind: "address_verify",
+      workspaceId,
+      message: {
+        to: address,
+        from: { email: "hello@0509.io", name: "Five to Nine" },
+        subject: message.subject,
+        text: message.text,
+        html: message.html,
+      },
+    },
+  );
   if (outcome.outcome === "failed") {
     console.error(
       JSON.stringify({
@@ -84,13 +91,20 @@ export async function sendTeammateInvite(input: {
     url: `https://0509.io/v/${token}`,
     addedBy: input.addedBy,
   });
-  const outcome = await sendMessage(input.email, {
-    to: input.address,
-    from: { email: "hello@0509.io", name: "Five to Nine" },
-    subject: message.subject,
-    text: message.text,
-    html: message.html,
-  });
+  const outcome = await sendAccountMail(
+    { DB: env.DB, EMAIL: input.email },
+    {
+      kind: "teammate_invite",
+      workspaceId: input.workspaceId,
+      message: {
+        to: input.address,
+        from: { email: "hello@0509.io", name: "Five to Nine" },
+        subject: message.subject,
+        text: message.text,
+        html: message.html,
+      },
+    },
+  );
   if (outcome.outcome === "sent") return null;
   console.error(
     JSON.stringify({ event: "delivery.teammate_invite_failed", error: redactEmailShaped(outcome.error ?? "") }),
