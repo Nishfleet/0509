@@ -69,7 +69,7 @@ test("Home does not say it is still reading a site we cannot read", async ({ pag
 
   await page.goto("/app");
   await expect(page.getByText("We couldn't read their website. We keep trying.")).toBeVisible();
-  await expect(page.getByText("Reading its site now")).toHaveCount(0);
+  await expect(page.getByText("First read tonight")).toHaveCount(0);
 });
 
 test("Alerts says how to reach a person", async ({ page }) => {

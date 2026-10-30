@@ -9,13 +9,20 @@ import { ledgerFooter } from "../lib/work-ledger";
 import { ReadThisFirst } from "./read-this-first";
 import type { BriefPayload } from "../lib/brief-payload";
 import { newRivalLines, rankTrendLine, sinceStartedLine } from "../lib/brief-since";
+import { firstRunHeadline } from "../lib/quiet-week";
 
 const SECTION = "mt-5 border-t border-line pt-4";
 const HEAD = "font-mono text-eyebrow text-ink-soft uppercase";
 const BODY = "mt-2 text-[0.95rem] leading-[1.6]";
 const LINE = "mt-2 text-[0.92rem] leading-[1.6]";
 
-export function BriefView({ payload }: { payload: BriefPayload }) {
+export interface FirstRun {
+  arrivesAt: string;
+  names: readonly string[];
+}
+
+export function BriefView({ payload, firstRun }: { payload: BriefPayload; firstRun?: FirstRun }) {
+  if (firstRun !== undefined) return firstRunView(payload, firstRun);
   return (
     <article data-brief="view" className="min-w-0 border border-line p-4 break-words">
       {headlineBlock(payload)}
@@ -24,6 +31,27 @@ export function BriefView({ payload }: { payload: BriefPayload }) {
       {ownSiteBlock(payload)}
       {newRivalBlock(payload)}
       {checkedBlock(payload)}
+    </article>
+  );
+}
+
+function firstRunView(payload: BriefPayload, firstRun: FirstRun): ReactElement {
+  return (
+    <article data-brief="view" className="min-w-0 border border-line p-4 break-words">
+      <section data-brief-block="headline">
+        <h2 className="font-display text-[1.5rem] leading-[1.2] text-ink">
+          {firstRunHeadline(firstRun.arrivesAt, firstRun.names.length)}
+        </h2>
+      </section>
+      <section data-brief-block="brands" className={SECTION}>
+        <h3 className={HEAD}>Your tracked brands</h3>
+        {firstRun.names.map((name) => (
+          <p key={name} className={LINE}>
+            {name}
+          </p>
+        ))}
+      </section>
+      {newRivalBlock(payload)}
     </article>
   );
 }

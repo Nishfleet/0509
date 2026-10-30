@@ -20,7 +20,13 @@ describe("onboarding plan page", () => {
   it("offers the three plans to someone who has not paid", () => {
     const html = render({});
     expect(html).toContain("Start your trial");
-    expect(html).toContain("Upgrade to Starter");
+    expect(html).toContain("Start 7-day Starter trial");
+    expect(html).not.toContain("Upgrade to");
+  });
+
+  it("says the trial and card terms once, not under every plan", () => {
+    const html = render({});
+    expect(html.match(/charged on day 8/g)).toHaveLength(1);
   });
 
   it("shows only the confirmation, no plan buttons, while the payment provider has not answered yet", () => {

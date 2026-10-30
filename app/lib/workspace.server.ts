@@ -132,16 +132,25 @@ interface RunRow {
   watching_started_at: string | null;
 }
 
-function resumePoint(hasSelf: boolean, run: RunRow | null): string | null {
-  if (!hasSelf) return run === null ? "/onboarding" : (subjectRedirect(run.input_raw) ?? "/onboarding");
-  if (run?.watching_started_at !== null) return null;
-  return ONBOARDING_COMPETITORS;
+interface PlanColumns {
+  plan_status: string | null;
+  plan_current_period_end: string | null;
 }
 
-function paidLanding(row: { plan_status: string | null; plan_current_period_end: string | null }): string | null {
+function isPaid(row: PlanColumns): boolean {
   const plan =
     row.plan_status === null ? null : { status: row.plan_status, currentPeriodEnd: row.plan_current_period_end };
-  return isWorkspacePaid(plan, new Date()) ? null : ONBOARDING_PLAN;
+  return isWorkspacePaid(plan, new Date());
+}
+
+function resumePoint(hasSelf: boolean, run: RunRow | null, paid: boolean): string | null {
+  if (!hasSelf) return run === null ? "/onboarding" : (subjectRedirect(run.input_raw) ?? "/onboarding");
+  if (run === null) return paid ? null : ONBOARDING_COMPETITORS;
+  return run.watching_started_at === null ? ONBOARDING_COMPETITORS : null;
+}
+
+function paidLanding(row: PlanColumns): string | null {
+  return isPaid(row) ? null : ONBOARDING_PLAN;
 }
 
 export async function workspaceLanding(
@@ -156,7 +165,7 @@ export async function workspaceLanding(
   }
   const run =
     row.input_raw === null ? null : { input_raw: row.input_raw, watching_started_at: row.watching_started_at };
-  const landing = resumePoint(row.self_id !== null, run) ?? paidLanding(row);
+  const landing = resumePoint(row.self_id !== null, run, isPaid(row)) ?? paidLanding(row);
   return { workspaceId: row.id, landing };
 }
 

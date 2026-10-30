@@ -77,7 +77,7 @@ function Choices({ loaderData }: { loaderData: Route.ComponentProps["loaderData"
           </p>
         )}
         {inPickedOrder(loaderData.picked).map((plan) => (
-          <PlanGate key={plan.id} planId={plan.id} action={loaderData.checkoutPath} />
+          <PlanGate key={plan.id} planId={plan.id} action={loaderData.checkoutPath} first />
         ))}
       </div>
     </>

@@ -108,6 +108,7 @@ export function Hero({ nouns }: { nouns: string }) {
               required
               maxLength={200}
               submitLabel={<StartWatchingLabel />}
+              pendingLabel="Starting…"
             />
           </div>
           <p className="mt-4 max-w-[38rem] font-mono text-meta text-ink-soft">

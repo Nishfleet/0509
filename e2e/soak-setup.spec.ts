@@ -20,7 +20,7 @@ async function onboardSelf(page: Page): Promise<void> {
   await input.press("Enter");
   await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 45_000 });
   await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
-  await page.getByRole("button", { name: "That's me" }).click();
+  await page.getByRole("button", { name: "Looks right" }).click();
   await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
   await page.getByRole("button", { name: "Start watching" }).click();
   await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });

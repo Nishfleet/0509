@@ -81,7 +81,7 @@ export function quietWeekSentence(
   const list =
     checked.length === 0 ? "its website" : new Intl.ListFormat("en", { type: "conjunction" }).format(checked);
   if (lastChecked === null) {
-    return `Nothing worth scoring for this competitor in the last 7 days. We watch ${list}; our first read is tonight at ${sweepClock}.`;
+    return `Nothing worth scoring for this competitor in the last 7 days. We watch ${list}; our first read is tonight ${sweepClock}.`;
   }
   return `Nothing worth scoring for this competitor in the last 7 days. We checked ${list}, last at ${lastChecked}.`;
 }

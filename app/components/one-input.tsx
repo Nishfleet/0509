@@ -12,6 +12,7 @@ interface OneInputProps {
   method?: "get" | "post";
   message?: string | undefined;
   submitLabel: ReactNode;
+  pendingLabel?: ReactNode;
   required?: boolean;
   maxLength?: number;
 }
@@ -24,12 +25,13 @@ export function OneInput({
   method = "post",
   message,
   submitLabel,
+  pendingLabel,
   required = false,
   maxLength,
 }: OneInputProps) {
   const inputId = useId();
   const navigation = useNavigation();
-  const sending = navigation.state === "submitting" && navigation.formAction === action;
+  const sending = navigation.state !== "idle" && navigation.formAction === action;
   return (
     <Form method={method} action={action} className="mt-8" aria-busy={sending}>
       <label htmlFor={inputId} className="block font-mono text-eyebrow font-medium text-ink-soft uppercase">
@@ -53,7 +55,7 @@ export function OneInput({
           className="sm:flex-1"
         />
         <Button type="submit" size="lg" disabled={sending}>
-          {submitLabel}
+          {sending && pendingLabel !== undefined ? pendingLabel : submitLabel}
         </Button>
       </div>
       {message ? (

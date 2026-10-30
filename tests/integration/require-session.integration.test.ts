@@ -45,4 +45,23 @@ describe("requireSession and requireFreshSession", () => {
     );
     expect((bare as Response).headers.get("location")).toBe("/login");
   });
+
+  it("keeps a dead-link error when an old emailed link lands on /app", async () => {
+    getSession.mockResolvedValue(null);
+    const location = async (path: string, cookie?: string): Promise<string | null> => {
+      const thrown: unknown = await requireSession(
+        new Request(`https://0509.io${path}`, cookie === undefined ? undefined : { headers: { cookie } }),
+      ).then(
+        () => null,
+        (caught: unknown) => caught,
+      );
+      return (thrown as Response).headers.get("location");
+    };
+    expect(await location("/app?error=INVALID_TOKEN")).toBe("/login?error=INVALID_TOKEN");
+    expect(await location("/app?error=EXPIRED_TOKEN")).toBe("/login?error=EXPIRED_TOKEN");
+    expect(await location("/app?error=INVALID_TOKEN", "better-auth.session_token=x")).toBe(
+      "/login?error=INVALID_TOKEN&ended=1",
+    );
+    expect(await location("/app?error=%3Cb%3Ex%3C%2Fb%3E")).toBe("/login");
+  });
 });

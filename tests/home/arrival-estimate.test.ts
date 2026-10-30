@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { FirstFilePanel } from "../../app/components/first-file-panel";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
 import { firstSiteSweepAt } from "../../app/lib/onboarding/arrival-estimate";
-import { arrivalAround } from "../../app/lib/home-standing";
+import { arrivalWindow } from "../../app/lib/home-standing";
 import type { HomeEntity, HomeSource } from "../../app/lib/home-standing";
 import { homeView } from "../../app/lib/home-standing";
 
@@ -42,17 +42,19 @@ describe("firstSiteSweepAt", () => {
   });
 });
 
-describe("arrivalAround", () => {
-  it("names the weekday, date and the UTC label", () => {
-    expect(arrivalAround("UTC", new Date("2026-10-03T06:00:00Z"))).toBe("Saturday 3 October, around 06:00 UTC");
+describe("arrivalWindow", () => {
+  it("names the weekday, date and the window in the UTC label", () => {
+    expect(arrivalWindow("UTC", new Date("2026-10-03T21:00:00Z"))).toBe(
+      "Saturday 3 October, between 21:00 and 23:00 UTC",
+    );
   });
 
   it("renders in a non-UTC workspace timezone with its own label and date", () => {
-    expect(arrivalAround("Europe/London", new Date("2026-10-03T06:00:00Z"))).toBe(
-      "Saturday 3 October, around 07:00 BST",
+    expect(arrivalWindow("Europe/London", new Date("2026-10-03T21:00:00Z"))).toBe(
+      "Saturday 3 October, between 22:00 and 00:00 BST",
     );
-    expect(arrivalAround("America/New_York", new Date("2026-10-03T03:00:00Z"))).toBe(
-      "Friday 2 October, around 23:00 GMT-4",
+    expect(arrivalWindow("America/New_York", new Date("2026-10-03T21:00:00Z"))).toBe(
+      "Saturday 3 October, between 17:00 and 19:00 GMT-4",
     );
   });
 });
@@ -71,7 +73,7 @@ describe("homeView gathering standing", () => {
     });
     expect(view.standing.kind).toBe("gathering");
     if (view.standing.kind !== "gathering") return;
-    expect(view.standing.firstSweepAt).toBe("Friday 25 September, around 00:00 BST");
+    expect(view.standing.firstSweepAt).toBe("Thursday 24 September, between 22:00 and 00:00 BST");
     expect(view.standing.briefAt).toBe("Monday 08:00");
   });
 });
@@ -81,11 +83,11 @@ describe("FirstFilePanel", () => {
     const html = renderToStaticMarkup(
       createElement(FirstFilePanel, {
         brands: 2,
-        firstSweepAt: "Saturday 3 October, around 06:00 UTC",
+        firstSweepAt: "Saturday 3 October, between 21:00 and 23:00 UTC",
         briefAt: "Monday 08:00",
       }),
     );
-    expect(html).toContain("Your first site snapshots arrive on Saturday 3 October, around 06:00 UTC.");
+    expect(html).toContain("Your first site snapshots arrive on Saturday 3 October, between 21:00 and 23:00 UTC.");
   });
 
   it("says what is being gathered and never says soon when no sweep is scheduled", () => {

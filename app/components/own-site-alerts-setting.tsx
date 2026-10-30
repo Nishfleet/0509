@@ -42,7 +42,15 @@ function AlertSwitch({ on, intent, label, note, testId }: AlertSwitchProps): Rea
   );
 }
 
-export function OwnSiteAlertsSetting({ on }: { on: boolean }): ReactElement {
+export function OwnSiteAlertsSetting({ on, included = true }: { on: boolean; included?: boolean }): ReactElement {
+  if (!included) {
+    return (
+      <section className={ROW} data-testid="own-site-alerts-setting">
+        <p className="leading-[1.55]">Immediate alerts for your own site</p>
+        <p className={NOTE}>Starter and Agency plans email you the moment your own site looks broken.</p>
+      </section>
+    );
+  }
   return (
     <AlertSwitch
       on={on}
