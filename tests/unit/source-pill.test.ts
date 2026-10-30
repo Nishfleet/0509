@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { SourcePill } from "../../app/components/source-pill";
 import { sourcePillStatus, type SourceRow, type SourceSnapshot } from "../../app/lib/source-pill-status";
+import { NOT_READ_REASON } from "../../app/lib/source-status-words";
 
 const NOW = Date.parse("2026-09-22T12:00:00.000Z");
 
@@ -97,6 +98,15 @@ describe("the source pill", () => {
     expect(html).toContain("last updated 2026-09-19 06:02 UTC");
     expect(html).not.toContain("var(--green");
     expect(sourcePillStatus(source, null, NOW).state).toBe("degraded");
+  });
+
+  it("dims a source the run could not finish to degraded, in words a customer reads", () => {
+    const source: SourceRow = { ...reddit, degraded_reason: NOT_READ_REASON };
+    const html = pill(source, liveSnapshot);
+    expect(html).toContain('data-state="degraded"');
+    expect(html).toContain("not all of it was checked today");
+    expect(html).not.toContain(NOT_READ_REASON);
+    expect(sourcePillStatus(source, liveSnapshot, NOW).state).toBe("degraded");
   });
 
   it("marks a zero-canary snapshot as degraded even when items still arrive", () => {

@@ -4,11 +4,14 @@ import { RouterContextProvider } from "react-router";
 
 import { loader as landingLoader } from "../../../app/routes/landing";
 import {
+  markSourceDegraded,
   readEntitySources,
   readRegistrySources,
   readWorkspaceMentionSources,
+  recordSourceCanary,
 } from "../../../app/lib/data/source.server";
 import { sourcePillStatus } from "../../../app/lib/source-pill-status";
+import { NOT_READ_REASON, plainSourceReason } from "../../../app/lib/source-status-words";
 import { NO_CHANNEL_REASON } from "../../../app/lib/mentions/youtube-channel";
 
 const WS = "ws-mention-sources";
@@ -367,6 +370,38 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
         lastGoodAt: null,
       });
     } finally {
+      await clearOwner(USER, WS, COMP);
+    }
+  });
+
+  it("records a source the sweep did not finish as degraded, and the next canary clears it (#7685)", async () => {
+    await seedOwner(USER, WS, COMP);
+    await seedWatch(`watch-${COMP}-gdelt`, COMP, GDELT_SRC, 1);
+
+    try {
+      await markSourceDegraded(GDELT_SRC, NOT_READ_REASON);
+
+      const cut = (await readWorkspaceMentionSources(WS))[0];
+      if (!cut) throw new Error("the watched mentions source must be read");
+      expect(cut.source.degraded_reason).toBe(NOT_READ_REASON);
+      expect(sourcePillStatus(cut.source, cut.snapshot, NOW_MS)).toMatchObject({
+        state: "degraded",
+        reason: NOT_READ_REASON,
+      });
+      expect(plainSourceReason(NOT_READ_REASON)).toBe("not all of it was checked today");
+
+      await recordSourceCanary(GDELT_SRC, 3, NOW);
+
+      const cleared = (await readWorkspaceMentionSources(WS))[0];
+      if (!cleared) throw new Error("the watched mentions source must still be read");
+      expect(cleared.source.degraded_reason).toBeNull();
+      expect(cleared.source.last_good_at).toBe(NOW);
+    } finally {
+      await env.DB.prepare(
+        "UPDATE source SET degraded_reason = NULL, last_good_at = NULL, canary_strikes = NULL WHERE id = ?",
+      )
+        .bind(GDELT_SRC)
+        .run();
       await clearOwner(USER, WS, COMP);
     }
   });
