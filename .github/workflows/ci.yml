@@ -96,7 +96,8 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4]
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    # 20, not 12: a vite.config or package-lock change reruns every test
+    timeout-minutes: 20
     env:
       SHARD: ${{ matrix.shard }}/4
     steps:

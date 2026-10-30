@@ -70,29 +70,28 @@ describe("soak-report measures the two DONE lines (0509#7076)", () => {
   });
 });
 
-describe("soak-report's wrangler reads name themselves on failure (fleet-ops#10755)", () => {
-  const helperLine = () =>
-    (soakStep().run ?? "").split("\n").find((line) => line.includes("npx wrangler d1 execute")) ?? "";
+describe("soak-report's cf D1 reads name themselves on failure (fleet-ops#10755)", () => {
+  const helperLine = () => (soakStep().run ?? "").split("\n").find((line) => line.includes("npx cf d1 query")) ?? "";
 
   it("keeps pipefail, without which the jq downstream of a failed read exits 0 on no input", () => {
     expect((soakStep().run ?? "").trimStart().split("\n")[0]).toBe("set -euo pipefail");
   });
 
-  it("captures wrangler's stdout, then prints the exit code and the body to stderr", () => {
-    expect(helperLine()).toMatch(/local out; out=\$\(npx wrangler d1 execute 0509 --remote --json --command "\$1"\)/);
-    expect(helperLine()).toContain(`printf 'wrangler d1 execute exited %s\\n%s\\n' "$?"`);
+  it("captures cf's stdout, then prints the exit code and the body to stderr", () => {
+    expect(helperLine()).toMatch(/local out; out=\$\(npx cf d1 query "\$db" --sql "\$1"\)/);
+    expect(helperLine()).toContain(`printf 'cf d1 query exited %s\\n%s\\n' "$?"`);
     expect(helperLine()).toMatch(/>&2; return 1;/);
   });
 
   it("rejects a payload with no results array, so a failed query cannot read as an empty one", () => {
-    expect(helperLine()).toContain(`(if type == "array" then .[0].results else null end) // error("wrangler printed:`);
+    expect(helperLine()).toContain(`(if type == "array" then .[0].results else null end) // error("cf printed:`);
     expect(helperLine()).toContain(`[ -n "$out" ] ||`);
   });
 
-  it("defines the helper once, above the reads that use it, and leaves no bare wrangler pipe into jq", () => {
+  it("defines the helper once, above the reads that use it, and leaves no bare cf pipe into jq", () => {
     const run = soakStep().run ?? "";
     expect(run.match(/^d1\(\) \{$/gm) ?? []).toHaveLength(1);
-    expect(run.match(/npx wrangler d1 execute/g) ?? []).toHaveLength(1);
+    expect(run.match(/npx cf d1 query/g) ?? []).toHaveLength(1);
     expect(run.indexOf("d1() {")).toBeLessThan(run.indexOf("sends=$(d1 "));
     expect(run).toContain("sweeps=$(d1 ");
   });
