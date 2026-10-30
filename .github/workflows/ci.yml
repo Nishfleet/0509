@@ -18,8 +18,7 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
+permissions: {contents: read}
 
 jobs:
   codex-node-checks:
@@ -28,15 +27,11 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 2
+        with: {persist-credentials: false, fetch-depth: 2}
           # HEAD^1 is present so vitest can diff against it for `--changed`.
           # Credentials stay off the runner, so the token is not left behind.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci
       - name: Typecheck
         # cf-typegen and react-router typegen generate worker-configuration.d.ts and the route types, so `tsc -b` cannot run before them.
@@ -51,16 +46,14 @@ jobs:
         # Stock linter for workflow syntax, expressions and the shell inside
         # run: blocks (shellcheck ships in the image). Pinned like gitleaks.
         uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
-        with:
-          args: -color
+        with: {args: -color}
       - name: Audit the workflows (zizmor)
         # Stock security audit for workflows: dangerous triggers, template
         # injection, persisted credentials, unpinned actions, over-broad app
         # tokens. Offline: a required gate must not hang on API rate limits, and
         # the step needs no token. Policy and its exceptions: .github/zizmor.yml.
         uses: docker://ghcr.io/zizmorcore/zizmor:1.30.1@sha256:a2eb396d886c053073405c7a980f2139ba2248ec172243cfa3841e57196e8101
-        with:
-          args: --offline --format plain .github/workflows
+        with: {args: --offline --format plain .github/workflows}
 
       - name: Detectors that read repo files from disk
         # `vitest --changed` selects tests through the import graph. These
@@ -108,15 +101,11 @@ jobs:
       SHARD: ${{ matrix.shard }}/4
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false, fetch-depth: 2}
           # Two commits so HEAD^1 (the base side of the PR merge ref) exists
           # for `vitest --changed` below.
-          fetch-depth: 2
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci
       - name: Test only what the pull request can affect
         # vitest's own --changed: the test files that import a changed file,
@@ -142,15 +131,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
+        with: {persist-credentials: false, fetch-depth: 0}
       # The gitleaks BINARY is MIT and free; gitleaks-action@v2 is the part
       # that demands an organisation licence and aborts without one. Run the
       # official image directly — no wrapper action, no script.
       - uses: docker://ghcr.io/gitleaks/gitleaks:v8.29.0@sha256:71d3ee5990f2176f763b438298453fc37e87b119122045e176ca9d44ff00b08b
-        with:
-          args: detect --source . --redact --exit-code 1
+        with: {args: detect --source . --redact --exit-code 1}
 
   semgrep:
     name: semgrep
@@ -163,8 +149,7 @@ jobs:
       image: semgrep/semgrep:1.170.0@sha256:c98f8829eea377274ee4b10656458b078b88232469b2ff913f091c2317347c9d
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       # `semgrep ci` is the hosted mode and needs SEMGREP_APP_TOKEN, exiting 2
       # without one. `semgrep scan` is the local mode and needs nothing.
       - run: semgrep scan --config p/typescript --config p/security-audit --config .semgrep/rollover-catch-up.yml --config https://raw.githubusercontent.com/Nishfleet/fleet-ops/59f43b2bdc2a07ae1a5909117c4bad17a3666abe/.semgrep/no-glue.yml --error
@@ -279,10 +264,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: github.event_name == 'pull_request'
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-          filter: blob:none
+        with: {persist-credentials: false, fetch-depth: 0, filter: blob:none}
       - name: Fail when the head lacks the newest gate change on main
         if: github.event_name == 'pull_request'
         run: |
@@ -341,13 +323,10 @@ jobs:
     # the repository variable PRIVATE_DETAIL_SCAN=off (see README.md).
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: read
+    permissions: {contents: read}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
+        with: {persist-credentials: false, fetch-depth: 0}
       - name: Install pinned gitleaks binary
         # Pinned by version and SHA-256. The binary is MIT
         # licensed; only the gitleaks-action wrapper needs an organisation key.

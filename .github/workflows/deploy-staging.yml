@@ -8,13 +8,9 @@ name: Deploy staging
 # deploy-failed alert reads that workflow's run conclusion as "Production is
 # running main" (0509#7656, fleet-ops#9889): a sandbox failure must never
 # redden it.
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+on: {push: {branches: [main]}, workflow_dispatch: {}}
 
-permissions:
-  contents: read
+permissions: {contents: read}
 
 jobs:
   staging:
@@ -23,21 +19,14 @@ jobs:
     runs-on: ubuntu-latest
     # Job-level, so a queued staging deploy waits for the running one instead
     # of cancelling it and leaves half an environment behind.
-    concurrency:
-      group: deploy-staging
-      cancel-in-progress: false
-    environment:
-      name: staging
-      url: https://staging.0509.io
+    concurrency: {group: deploy-staging, cancel-in-progress: false}
+    environment: {name: staging, url: https://staging.0509.io}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci
       - run: CLOUDFLARE_VITE_FORCE_BUILD_OUTPUT=true npx react-router build --mode staging
       - name: Apply D1 migrations

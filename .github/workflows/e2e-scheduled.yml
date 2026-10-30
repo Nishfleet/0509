@@ -40,8 +40,7 @@ on:
         type: string
         default: ''
 
-permissions:
-  contents: read
+permissions: {contents: read}
 
 env:
   PLAYWRIGHT_TEST_BASE_URL: https://staging.0509.io
@@ -82,18 +81,13 @@ jobs:
     # backup-proof, soak-report and jev-failures (read only, no AI), staging-sha and
     # suite (no AI). Not in this file: preview-assert and lighthouse in ci.yml run on
     # every PR and deploy, so grouping them would serialize all PRs.
-    concurrency:
-      group: live-ai
-      cancel-in-progress: false
+    concurrency: {group: live-ai, cancel-in-progress: false}
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Run J12 and J11 against staging
@@ -133,9 +127,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging
     # See the live-ai note on the j12 job.
-    concurrency:
-      group: live-ai
-      cancel-in-progress: false
+    concurrency: {group: live-ai, cancel-in-progress: false}
     timeout-minutes: 30
     steps:
       - name: Accept one spec file and no flags
@@ -146,12 +138,9 @@ jobs:
         run: |
           [[ "$SPEC" =~ ^e2e/[A-Za-z0-9._-]+\.spec\.ts$ ]] || { echo "::error::spec must be one file, e2e/<name>.spec.ts, with no flags"; exit 1; }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Run the spec against staging
@@ -195,18 +184,13 @@ jobs:
     runs-on: ubuntu-latest
     environment: production-e2e
     # See the live-ai note on the j12 job.
-    concurrency:
-      group: live-ai
-      cancel-in-progress: false
+    concurrency: {group: live-ai, cancel-in-progress: false}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Exchange the Access service token for its cookie
@@ -247,12 +231,9 @@ jobs:
     timeout-minutes: 350
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Exchange the Access service token for its cookie
@@ -294,8 +275,7 @@ jobs:
     if: github.event.schedule == '40 7 * * 0'
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions:
-      deployments: read
+    permissions: {deployments: read}
     outputs:
       sha: ${{ steps.deploy.outputs.sha }}
     steps:
@@ -325,9 +305,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging
     # See the live-ai note on the j12 job.
-    concurrency:
-      group: live-ai
-      cancel-in-progress: false
+    concurrency: {group: live-ai, cancel-in-progress: false}
     timeout-minutes: 35
     strategy:
       fail-fast: false
@@ -338,17 +316,14 @@ jobs:
       max-parallel: 1
       matrix:
         shard: [1, 2, 3, 4]
-    permissions:
-      contents: read
+    permissions: {contents: read}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.staging-sha.outputs.sha }}
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Run this shard of the suite against staging
@@ -387,17 +362,13 @@ jobs:
     if: always() && github.event.schedule == '40 7 * * 0'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: read
-      issues: write
-      actions: write
+    permissions: {contents: read, issues: write, actions: write}
     env:
       GH_TOKEN: ${{ github.token }}
       SHARDS: ${{ needs.suite-shard.result }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - name: Open or update the issue that dispatches the fix
         if: env.SHARDS == 'failure'
         id: red
@@ -435,12 +406,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci
       - name: Describe the cron-started snapshot-backup instances
         env:
@@ -466,12 +434,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci --ignore-scripts
       - name: Read the judge failures
         env:
@@ -495,17 +460,12 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 10
-    permissions:
-      contents: read
-      issues: write
+    permissions: {contents: read, issues: write}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci --ignore-scripts
       - name: Post the day's soak numbers on the issue
         env:
