@@ -256,6 +256,14 @@ AI grader: CI is the gate, and a PR that touches `.github/`, `migrations/`,
 `app/lib/auth*` or `app/lib/data/` is labelled `needs-coordinator` and the
 coordinator reviews it before it merges.
 
+`coordinator-approval / coordinator-approval` (0509#7802) is the fleet's
+risky-change gate, and it is not yet a required check on this ruleset.
+`.github/workflows/coordinator-approval.yml` runs on `merge_group` and calls
+`Nishfleet/fleet-ops/.github/workflows/coordinator-approval.yml@main`; in the
+queue it rejects a risky pull request whose head carries no coordinator
+approval. The technical lead adds the context to `main-merge-queue` after
+that caller merges.
+
 The production Lighthouse audit is out of `deploy-production.yml` while the site is behind the
 Cloudflare Access wall (0509#7656): it measured the login page and reddened a good deploy, which the
 fleet's deploy-failed alert read as an outage (fleet-ops#9889). The budgets still gate every pull
