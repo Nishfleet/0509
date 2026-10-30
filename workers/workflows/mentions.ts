@@ -3,9 +3,10 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 import { captureException } from "@sentry/cloudflare";
 
 import { MENTIONS_SWEEP_CRON, sweepMonitor } from "../../app/lib/cadence";
-import { readCanarySources } from "../../app/lib/data/source.server";
+import { markSourceDegraded, readCanarySources } from "../../app/lib/data/source.server";
 import { recordSweepRun } from "../../app/lib/data/sweep_run.server";
-import { FAILED_TARGET_MS, SweepBudget, timed } from "../mentions/budget";
+import { NOT_READ_REASON } from "../../app/lib/source-status-words";
+import { bySourceRoundRobin, FAILED_TARGET_MS, SweepBudget, timed } from "../mentions/budget";
 import { runCanary } from "../mentions/canary";
 import { lostSources, mentionsHealth, skippedTargets } from "../mentions/health";
 import type { Streaks } from "../mentions/retry";
@@ -48,7 +49,8 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
 
   private async runMentions(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<MentionsOutcome> {
     const now = event.timestamp.toISOString();
-    const targets = await step.do("plan", RETRY, () => planTargets());
+    const planned = await step.do("plan", RETRY, () => planTargets());
+    const targets = bySourceRoundRobin(planned);
     const counts = await this.canaries(step, now);
     const run = (target: MentionTarget) => timed(() => sweepTarget(target, now, counts.get(target.sourceId) ?? null));
     const budget = new SweepBudget();
@@ -57,6 +59,7 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
     for (const entry of budget.deferred()) {
       console.warn(JSON.stringify({ event: "mentions.targets_skipped", ...entry }));
     }
+    await this.markCut(step, targets, settled);
     for (const entry of sustainedSkips({ targets, outcomes: settled, run, budget })) {
       const message = JSON.stringify({ event: "mentions.sustained_skips", ...entry });
       console.error(message);
@@ -77,6 +80,27 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
     console.warn(JSON.stringify({ event: "mentions.sweep", ...result, deferred: deferredTargets }));
     await this.record(step, event, result);
     return result;
+  }
+
+  private async markCut(
+    step: WorkflowStep,
+    targets: readonly MentionTarget[],
+    settled: readonly (TargetOutcome | null)[],
+  ): Promise<void> {
+    const lost = lostSources(targets, settled);
+    if (lost.length === 0) return;
+    const sourceOf = new Map(targets.map((target) => [target.pluginKey, target.sourceId]));
+    try {
+      await step.do("mark the sources the run did not finish", RETRY, async () => {
+        for (const pluginKey of lost) {
+          const sourceId = sourceOf.get(pluginKey);
+          if (sourceId !== undefined) await markSourceDegraded(sourceId, NOT_READ_REASON);
+        }
+        return lost.length;
+      });
+    } catch (error) {
+      console.error(JSON.stringify({ event: "mentions.mark_cut_failed", message: String(error) }));
+    }
   }
 
   private async record(step: WorkflowStep, event: WorkflowEvent<unknown>, result: MentionsOutcome): Promise<void> {
@@ -117,19 +141,19 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
     const outcomes: (TargetOutcome | null)[] = [];
     const streaks: Streaks = new Map();
     for (const [index, target] of targets.entries()) {
-      const over = budget.reason(target.pluginKey);
-      if (over !== null) budget.defer(target.pluginKey, over);
-      if (over !== null || tripped(streaks, target)) {
+      const spent = budget.spent();
+      if (spent || tripped(streaks, target)) {
+        budget.defer(target.pluginKey);
         outcomes.push(deferred(target));
         continue;
       }
       try {
         const outcome = await step.do(`sweep ${target.pluginKey} ${target.query}`, RETRY, () => run(target));
-        budget.spend(target.pluginKey, outcome.ms ?? 0);
+        budget.spend(outcome.ms ?? 0);
         track(streaks, target, outcome);
         outcomes.push(outcome);
       } catch (error) {
-        budget.spend(target.pluginKey, FAILED_TARGET_MS);
+        budget.spend(FAILED_TARGET_MS);
         console.error(
           JSON.stringify({ event: "mentions.target_failed", source: target.pluginKey, message: String(error) }),
         );
@@ -137,7 +161,7 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
       }
       if (target.minIntervalSeconds > 0 && index < targets.length - 1) {
         await step.sleep(`pace ${String(index)}`, target.minIntervalSeconds * 1000);
-        budget.spend(target.pluginKey, target.minIntervalSeconds * 1000);
+        budget.spend(target.minIntervalSeconds * 1000);
       }
     }
     return outcomes;

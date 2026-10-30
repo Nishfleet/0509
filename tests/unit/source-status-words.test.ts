@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { BLIND_REASON } from "../../app/lib/observability/pipeline-health";
 import { LOST_CHANNEL_REASON, NO_CHANNEL_REASON } from "../../app/lib/mentions/youtube-channel";
 import { sourceName } from "../../app/lib/source-name";
-import { plainSourceReason } from "../../app/lib/source-status-words";
+import { plainSourceReason, NOT_READ_REASON } from "../../app/lib/source-status-words";
 
 const RAW_REASONS = [
   "blocked: HTTP 429",
@@ -15,6 +15,7 @@ const RAW_REASONS = [
   "no reason recorded",
   "watch config is unreadable",
   BLIND_REASON,
+  NOT_READ_REASON,
   LOST_CHANNEL_REASON,
   NO_CHANNEL_REASON,
   "HTTP 500 from api.gdeltproject.org",

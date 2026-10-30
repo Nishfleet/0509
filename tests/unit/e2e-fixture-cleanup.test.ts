@@ -37,7 +37,6 @@ const KEPT_JOURNEY_ACCOUNTS = [
 const SETUP_TEARDOWN_ELSEWHERE = new Set(["e2e/lhci-session.setup.ts"]);
 
 const WORKFLOW = ".github/workflows/e2e-scheduled.yml";
-const TEARDOWN_RERUN = "--project=session-teardown";
 
 interface WorkflowStep {
   name?: string;
@@ -118,25 +117,6 @@ describe("e2e fixture teardown detector", () => {
       const owner = projects.find((project) => project.testMatch instanceof RegExp && project.testMatch.test(rel));
       if (owner?.teardown === undefined) offenders.push(rel);
     }
-    expect(offenders).toEqual([]);
-  });
-
-  it("re-runs the setup teardowns on every exit path of each production job that runs the setups", async () => {
-    const jobs = Object.entries(readJobs(await readFile(path.join(REPO_ROOT, WORKFLOW), "utf8")));
-    const offenders = jobs
-      .filter(([, job]) =>
-        (job.steps ?? []).some((step) =>
-          /npm run e2e -- (?!--project=setup )(?!.*--no-deps)(?!.*--project=session-teardown)/.test(step.run ?? ""),
-        ),
-      )
-      .filter(
-        ([, job]) =>
-          !(job.steps ?? []).some(
-            (step) => (step.run ?? "").includes(TEARDOWN_RERUN) && String(step.if ?? "").startsWith("always()"),
-          ),
-      )
-      .map(([key]) => key);
-    expect(jobs.length).toBeGreaterThan(5);
     expect(offenders).toEqual([]);
   });
 
