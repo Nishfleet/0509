@@ -40,7 +40,7 @@ jobs:
             627cffe8-*) ;;
             *) echo "::error::refusing to migrate non-staging database: $id"; exit 1 ;;
           esac
-          npx cf d1 migrations apply "$id"
+          npx cf d1 migrations apply "$id" --mode staging
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
