@@ -27,10 +27,10 @@ npm run build
 export PLAYWRIGHT_LOCAL_PORT="${PLAYWRIGHT_LOCAL_PORT:-$((8000 + $$ % 1000))}"
 npx wrangler d1 migrations apply 0509 --local </dev/null
 npx wrangler dev --env-file .dev.vars.example --local --port "$PLAYWRIGHT_LOCAL_PORT" \
-  --var "BETTER_AUTH_URL:http://127.0.0.1:${PLAYWRIGHT_LOCAL_PORT}" --var "DODO_PRODUCT_STARTER:pdt_preview_starter" --var "AI_SPEND:off"
+  --var "BETTER_AUTH_URL:http://127.0.0.1:${PLAYWRIGHT_LOCAL_PORT}" --var "DODO_PRODUCT_STARTER:pdt_preview_starter" --var "AI_SPEND:off" --var "CAPTCHA:off"
 ```
 
-The three `--var` overrides are the ones `playwright.config.ts` gives its webServer. `AI_SPEND:off` matters because `wrangler dev --local` does not simulate the AI binding: without it a model call reaches the real Workers AI and bills neurons. `BETTER_AUTH_URL` is load-bearing for Sign in below: without it the emailed magic link carries the production origin and the local Worker cannot verify it.
+The four `--var` overrides are the ones `playwright.config.ts` gives its webServer. `AI_SPEND:off` matters because `wrangler dev --local` does not simulate the AI binding: without it a model call reaches the real Workers AI and bills neurons. `BETTER_AUTH_URL` is load-bearing for Sign in below: without it the emailed magic link carries the production origin and the local Worker cannot verify it. `CAPTCHA:off` matters because `wrangler dev --local` has no DNS either: without it better-auth's Turnstile siteverify call aborts after its 10 s timeout and every sign-in answers 503.
 
 Wait until `curl -fsS "http://127.0.0.1:${PLAYWRIGHT_LOCAL_PORT}/api/health"` returns. Then open the page:
 
