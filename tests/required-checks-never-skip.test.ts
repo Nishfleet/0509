@@ -181,3 +181,43 @@ describe("deploy-production.yml holds only the deploy job (0509#7656, fleet-ops#
     expect(runs.some((run) => run.includes("npx lhci assert --budgets-file=lighthouse-budget.pr.json"))).toBe(true);
   });
 });
+
+describe("the pull request gate asks nothing the pull request cannot fix (0509#7285)", () => {
+  const ADVISORY_FEED = /\bnpm (audit|outdated)\b/;
+
+  it("keeps the registry's advisory state out of every package.json script", async () => {
+    const pkg = JSON.parse(await readFile(path.join(REPO_ROOT, "package.json"), "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+    const offenders = Object.entries(pkg.scripts ?? {})
+      .filter(([, command]) => ADVISORY_FEED.test(command))
+      .map(([name]) => `scripts.${name}`);
+    expect(
+      offenders,
+      "an advisory feed is outside state, not a defect in the commit, so it belongs in no script",
+    ).toEqual([]);
+  });
+
+  it("keeps the advisory state out of every workflow step, not only ci.yml", async () => {
+    const offenders = (await allJobs())
+      .filter(({ job }) => (job.steps ?? []).some((step) => ADVISORY_FEED.test(step.run ?? "")))
+      .map(({ file, key }) => `${file}: jobs.${key}`);
+    expect(offenders, "an advisory reddens a head whose diff did not change, on a schedule and a deploy too").toEqual(
+      [],
+    );
+  });
+
+  it("reads the advisory command when one is there", () => {
+    const yaml = [
+      "on: pull_request",
+      "jobs:",
+      "  lint:",
+      "    runs-on: ubuntu-latest",
+      "    steps:",
+      "      - run: npm audit --audit-level=high",
+    ].join("\n");
+    const [job] = readJobs("fixture.yml", yaml);
+    const runs = (job?.job.steps ?? []).map((step) => step.run ?? "").filter((run) => ADVISORY_FEED.test(run));
+    expect(runs).toEqual(["npm audit --audit-level=high"]);
+  });
+});

@@ -6,6 +6,7 @@ import { sentryOptions } from "../workers/sentry";
 type BeforeSend = NonNullable<ReturnType<typeof sentryOptions>["beforeSend"]>;
 type SentryEvent = Parameters<BeforeSend>[0];
 type SentryEnvArg = Parameters<typeof sentryOptions>[0];
+const DENIED_KEYS = ["forwarded", "-ip", "remote-", "via", "-user"];
 
 const options = sentryOptions({} as SentryEnvArg);
 
@@ -37,6 +38,28 @@ describe("Sentry release and environment", () => {
     } as SentryEnvArg);
     expect(preview.release).toBe("version-abc");
     expect(preview.environment).toBe("preview");
+  });
+});
+
+describe("Sentry data collection", () => {
+  it("holds the v10 PII-off baseline, so the v11 defaults cannot widen what is sent", () => {
+    const collection = options.dataCollection;
+
+    expect(collection?.userInfo).toBe(false);
+    expect(collection?.cookies).toBe(false);
+    expect(collection?.httpBodies).toEqual([]);
+    expect(collection?.databaseQueryData).toBe(false);
+    expect(collection?.queues).toBe(false);
+    expect(collection?.genAI).toEqual({ inputs: false, outputs: false });
+    expect(collection?.graphQL).toEqual({ document: false, variables: false });
+  });
+
+  it("still filters the key-value categories that v10 sent PII-scrubbed", () => {
+    expect(options.dataCollection?.httpHeaders).toEqual({
+      request: { deny: DENIED_KEYS },
+      response: { deny: DENIED_KEYS },
+    });
+    expect(options.dataCollection?.urlQueryParams).toEqual({ deny: DENIED_KEYS });
   });
 });
 
@@ -186,8 +209,7 @@ describe("Sentry beforeSend", () => {
     expect(result?.request?.url).toBe("https://0509.io/v/[redacted]");
   });
 
-  it("turns Logs on for console warnings and errors only", async () => {
-    expect(options.enableLogs).toBe(true);
+  it("sends console warnings and errors as logs, and nothing else", async () => {
     const sent: string[] = [];
     const integrations = options.integrations;
     const asArray = typeof integrations === "function" ? integrations([]) : (integrations ?? []);

@@ -20,6 +20,8 @@ LOGS' 20:57Z read, relayed by the coordinator. The 10-14 run was 26.5 minutes.
 
 The sweep carries a time budget (`workers/mentions/budget.ts`): 45 minutes for the whole run and 15 minutes for any one source, counted from the time each step took plus the pace and retry pauses, so a replayed Workflow reaches the same decisions. A target past its budget is not started; it is counted as skipped and logged once per source as `mentions.targets_skipped` with the reason (`run_budget` or `source_budget`), and the run ends normally. The final `mentions.sweep` line carries a `deferred` count. Retry rounds skip any source or run that is out of budget. A rate-limited GDELT request now waits 8 s, then 16 s (two more asks, not five), so one target costs at most about 30 seconds of waiting plus its own request time.
 
+The 15-minute per-source limit was removed by #7685: it cut the news source at 42 of its 61 brand targets, and the run budget alone bounds the run. #7685 also reads the plan round-robin across sources and records a source the run could not finish as degraded.
+
 ## What stops a repeat
 
 `tests/mentions/budget.test.ts` and `tests/integration/mentions/retry.integration.test.ts` pin the budgets and that retries stop when one is spent; `tests/mentions/gdelt.test.ts` pins the doubling wait and the three asks. A sweep that overruns now shows as `mentions.targets_skipped` lines instead of a run that never ends. FIVE-TO-NINE-1D (`mentions.sustained_skips`) stays the alert that a source is mostly skipped.

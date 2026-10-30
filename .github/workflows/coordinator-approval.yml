@@ -1,0 +1,12 @@
+# Calls fleet-ops' coordinator-approval gate from fleet-ops main (0509#7802, part 2 of
+# fleet-ops#10292). In the merge queue it rejects a risky pull request whose head carries no
+# coordinator approval. The token is this repo's, so the caller grants contents, pull-requests
+# and statuses read, because a narrower grant fails every entry with a read error. The
+# technical lead adds `coordinator-approval / coordinator-approval` to the main-merge-queue
+# ruleset after this merges. That ruleset change is not part of this PR.
+name: Coordinator approval
+on: [merge_group]
+permissions: {contents: read, pull-requests: read, statuses: read}
+jobs:
+  coordinator-approval:
+    uses: Nishfleet/fleet-ops/.github/workflows/coordinator-approval.yml@main

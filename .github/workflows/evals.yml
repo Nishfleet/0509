@@ -15,33 +15,24 @@ on:
         type: string
         default: ""
 
-permissions:
-  contents: read
-  issues: write
+permissions: {contents: read, issues: write}
 
 # Dispatches queue, they do not stack (0509#7249). A run already in progress is never
 # cancelled: its neurons are spent, so cancelling saves nothing and loses the report.
-concurrency:
-  group: evals
-  cancel-in-progress: false
+concurrency: {group: evals, cancel-in-progress: false}
 
 jobs:
   evals:
     name: evals
     runs-on: ubuntu-latest
     # One live-AI job at a time: they share the account's Clef call rate with customers (2003 failed two sign-ups on 2026-10-04).
-    concurrency:
-      group: live-ai
-      cancel-in-progress: false
+    concurrency: {group: live-ai, cancel-in-progress: false}
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci
       - name: Score the Jev questions
         shell: bash

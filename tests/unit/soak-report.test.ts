@@ -60,6 +60,34 @@ describe("soak-report measures the two DONE lines (0509#7076)", () => {
   });
 });
 
+describe("soak-report's wrangler reads name themselves on failure (fleet-ops#10755)", () => {
+  const helperLine = () =>
+    (soakStep().run ?? "").split("\n").find((line) => line.includes("npx wrangler d1 execute")) ?? "";
+
+  it("keeps pipefail, without which the jq downstream of a failed read exits 0 on no input", () => {
+    expect((soakStep().run ?? "").trimStart().split("\n")[0]).toBe("set -euo pipefail");
+  });
+
+  it("captures wrangler's stdout, then prints the exit code and the body to stderr", () => {
+    expect(helperLine()).toMatch(/local out; out=\$\(npx wrangler d1 execute 0509 --remote --json --command "\$1"\)/);
+    expect(helperLine()).toContain(`printf 'wrangler d1 execute exited %s\\n%s\\n' "$?"`);
+    expect(helperLine()).toMatch(/>&2; return 1;/);
+  });
+
+  it("rejects a payload with no results array, so a failed query cannot read as an empty one", () => {
+    expect(helperLine()).toContain(`(if type == "array" then .[0].results else null end) // error("wrangler printed:`);
+    expect(helperLine()).toContain(`[ -n "$out" ] ||`);
+  });
+
+  it("defines the helper once, above the reads that use it, and leaves no bare wrangler pipe into jq", () => {
+    const run = soakStep().run ?? "";
+    expect(run.match(/^d1\(\) \{$/gm) ?? []).toHaveLength(1);
+    expect(run.match(/npx wrangler d1 execute/g) ?? []).toHaveLength(1);
+    expect(run.indexOf("d1() {")).toBeLessThan(run.indexOf("sends=$(d1 "));
+    expect(run).toContain("sweeps=$(d1 ");
+  });
+});
+
 describe("a production D1 read declares its environment and runs only on main (0509#7773, #7072)", () => {
   function d1ReaderJobs(): [string, JobWithEnvironment][] {
     return Object.entries(e2eJobs()).filter(([, job]) =>
@@ -109,7 +137,7 @@ describe("a production D1 read declares its environment and runs only on main (0
     const failed = runD1("SELECT * FROM FAIL");
     expect(failed.status).toBe(1);
     expect(failed.stdout).toBe("");
-    expect(failed.stderr).toContain("wrangler exit 1");
+    expect(failed.stderr).toContain("wrangler d1 execute exited 1");
     expect(failed.stderr).toContain("Authentication error [code: 10000]");
 
     const read = runD1("SELECT 1 AS ok");
@@ -119,8 +147,8 @@ describe("a production D1 read declares its environment and runs only on main (0
   });
 
   it("halts a D1 read that returned an error object even when wrangler exits 0 (0509#4730)", () => {
-    expect(readerRun("soak-report")).toContain("halt_error(1)");
-    expect(readerRun("jev-failures")).toContain("halt_error(1)");
+    expect(readerRun("jev-failures")).toContain('if type == "object" then halt_error(1)');
+    expect(soakHelper()).toContain(`(if type == "array" then .[0].results else null end) // error("wrangler printed:`);
   });
 
   it("runs in production-e2e, the environment the D1-read token of #7072 lands in", () => {
