@@ -23,6 +23,13 @@
   // zone's own origin.
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "main": "./workers/app.ts",
+  // wrangler dev rewrites request.url to the first route host (0509.io) with
+  // the local http scheme, and the OAuth provider builds its canonical
+  // resource from that origin, which accepts http only on a loopback host —
+  // so every local request 500s (0509#7797). dev.host is the documented
+  // default of --local-upstream, the flag that sets the origin local mode
+  // presents.
+  "dev": { "host": "127.0.0.1" },
   "placement": { "mode": "smart" },
   "observability": {
     // p95 request duration per route comes from here, which is how

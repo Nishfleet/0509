@@ -55,6 +55,13 @@ export default defineConfig({
   use: {
     baseURL,
     trace: "on-first-retry",
+    // One picture per test, at the point it finished, so a green pull request
+    // carries what the run rendered and can be read from a phone (0509#7290).
+    // Stock Playwright. preview-assert uploads the PNGs only: the trace belongs
+    // to the failure step, because one of a signed-in test holds the Access
+    // cookie.
+    // https://playwright.dev/docs/test-use-options#test-configuration-options
+    screenshot: "on",
   },
   // Production sits behind Cloudflare Access; only /, /privacy, /terms and /api/health are
   // public. The setup project presents the agents' service token once and

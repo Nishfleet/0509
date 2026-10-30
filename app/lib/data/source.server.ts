@@ -164,9 +164,11 @@ export async function recordSourceCanary(sourceId: string, canaryCount: number, 
 }
 
 export async function markSourceBlocked(sourceId: string, status: number): Promise<void> {
-  await env.DB.prepare(MARK_SOURCE_BLOCKED)
-    .bind(sourceId, `blocked: HTTP ${String(status)}`)
-    .run();
+  await markSourceDegraded(sourceId, `blocked: HTTP ${String(status)}`);
+}
+
+export async function markSourceDegraded(sourceId: string, reason: string): Promise<void> {
+  await env.DB.prepare(MARK_SOURCE_BLOCKED).bind(sourceId, reason).run();
 }
 
 const SELECT_WORKSPACES_WATCHING_SOURCE = `SELECT DISTINCT e.workspace_id AS workspace_id FROM watch w JOIN entity e ON e.id = w.entity_id WHERE w.source_id = ?1 AND w.is_active = 1 AND ${liveWorkspace("e.workspace_id")} ORDER BY e.workspace_id`;
@@ -217,7 +219,7 @@ export async function clearSourceBlind(blindIds: readonly string[]): Promise<voi
 }
 
 export async function markSourceTimedOut(sourceId: string): Promise<void> {
-  await env.DB.prepare(MARK_SOURCE_BLOCKED).bind(sourceId, "timed out").run();
+  await markSourceDegraded(sourceId, "timed out");
 }
 
 export async function readEntitySources(workspaceId: string, entityId: string): Promise<readonly EntitySource[]> {

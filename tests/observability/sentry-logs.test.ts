@@ -98,9 +98,8 @@ afterAll(() => {
 });
 
 describe("Sentry Logs (#6604)", () => {
-  it("sentryOptions enables Logs and registers consoleLoggingIntegration", () => {
+  it("sentryOptions registers consoleLoggingIntegration, which is what turns Logs on in v11", () => {
     const opts = sentryOptions({} as unknown as Env);
-    expect(opts.enableLogs).toBe(true);
     const integrations = opts.integrations as { name: string }[];
     expect(integrations.some((integration) => integration.name === "ConsoleLogs")).toBe(true);
   });

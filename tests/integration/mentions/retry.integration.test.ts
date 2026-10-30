@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { RUN_BUDGET_MS, SOURCE_BUDGET_MS, SweepBudget } from "../../../workers/mentions/budget";
+import { RUN_BUDGET_MS, SweepBudget } from "../../../workers/mentions/budget";
 import type { SweepPass } from "../../../workers/mentions/retry";
 import { deferred, retrySkipped, sustainedSkips, track, tripped } from "../../../workers/mentions/retry";
 import type { MentionTarget, TargetOutcome } from "../../../workers/mentions/sweep";
@@ -71,28 +71,27 @@ describe("mentions retry of skipped targets", () => {
 
   it("retries nothing once the run budget is spent, and says nothing about sleeping first", async () => {
     const budget = new SweepBudget();
-    budget.spend(null, RUN_BUDGET_MS);
+    budget.spend(RUN_BUDGET_MS);
     const { step, sweepPass, calls, sleeps } = pass([lost, lost], [], budget);
     const result = await retrySkipped(step as never, sweepPass);
     expect([calls, sleeps]).toEqual([[], []]);
     expect(result.map((outcome) => outcome?.skipped)).toEqual([1, 1]);
   });
 
-  it("retries nothing for a source whose own budget is spent", async () => {
+  it("still retries a source that spent its own fifteen minutes, because only the run is capped", async () => {
     const budget = new SweepBudget();
-    budget.spend("gdelt.doc", SOURCE_BUDGET_MS);
+    budget.spend(15 * 60_000);
     const { step, sweepPass, calls } = pass([lost], [], budget);
     await retrySkipped(step as never, sweepPass);
-    expect(calls).toEqual([]);
+    expect(calls).toEqual(["q0"]);
   });
 
-  it("charges each retry's time and pace sleep to the budget", async () => {
+  it("charges the retry pause and the retry's own time to the budget", async () => {
     const budget = new SweepBudget();
+    budget.spend(RUN_BUDGET_MS - 130_000);
     const { step, sweepPass } = pass([lost], [], budget);
     await retrySkipped(step as never, { ...sweepPass, run: () => Promise.resolve({ ...ok, ms: 90_000 }) });
-    expect(budget.reason("gdelt.doc")).toBeNull();
-    budget.spend("gdelt.doc", SOURCE_BUDGET_MS - 90_000 - 6_000);
-    expect(budget.reason("gdelt.doc")).toBe("source_budget");
+    expect(budget.spent()).toBe(true);
   });
 
   it("counts a deferred target's watches as skipped", () => {
