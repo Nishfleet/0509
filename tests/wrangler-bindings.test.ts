@@ -52,6 +52,7 @@ interface DeployedConfig {
     logs?: { head_sampling_rate?: number; invocation_logs?: boolean; persist?: boolean };
   };
   compatibility_flags?: string[];
+  dev?: { host?: string };
 }
 
 const readConfig = (config: string): { rawConfig: DeployedConfig } =>
@@ -116,6 +117,14 @@ describe("deployed wrangler configs", () => {
       SITE_URL,
     );
     expect(readFileSync("app/lib/env.server.ts", "utf8")).toContain('import { SITE_URL } from "./site-url"');
+  });
+
+  it("keeps local dev's request origin on the loopback host so the OAuth provider's canonical resource accepts it (0509#7797)", () => {
+    const { rawConfig } = readConfig("wrangler.jsonc");
+    expect(
+      rawConfig.dev?.host,
+      "without dev.host, wrangler dev presents the first route host over http, which the OAuth provider's canonical resource refuses and every local request 500s",
+    ).toBe("127.0.0.1");
   });
 
   it("caps CPU and subrequests below the paid defaults (0509#5758)", () => {

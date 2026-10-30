@@ -10,9 +10,9 @@ import { AUTHORIZE_PATH, MCP_PATH, READ_SCOPE, REGISTER_PATH } from "./paths";
 const HOUR = 60 * 60;
 const DAY = 24 * HOUR;
 
-type Handlers<E> = Pick<OAuthProviderOptions<E>, "apiHandler" | "defaultHandler">;
+export type OAuthHandlers<E> = Pick<OAuthProviderOptions<E>, "apiHandler" | "defaultHandler">;
 
-function oauthOptions<E>(handlers: Handlers<E>): OAuthProviderOptions<E> {
+function oauthOptions<E>(handlers: OAuthHandlers<E>, resource: string): OAuthProviderOptions<E> {
   return {
     ...handlers,
     apiRoute: MCP_PATH,
@@ -21,8 +21,9 @@ function oauthOptions<E>(handlers: Handlers<E>): OAuthProviderOptions<E> {
     clientRegistrationEndpoint: REGISTER_PATH,
     clientIdMetadataDocumentEnabled: true,
     scopesSupported: [READ_SCOPE],
+    requiredScopes: [READ_SCOPE],
     resourceMetadata: {
-      scopes_supported: [READ_SCOPE],
+      resource,
       bearer_methods_supported: ["header"],
       resource_name: "Five to Nine",
     },
@@ -52,8 +53,8 @@ function oauthOptions<E>(handlers: Handlers<E>): OAuthProviderOptions<E> {
   };
 }
 
-export function createOAuthProvider<E>(handlers: Handlers<E>): OAuthProvider<E> {
-  const provider = new OAuthProvider<E>(oauthOptions(handlers));
+export function createOAuthProvider<E>(handlers: OAuthHandlers<E>, resource: string): OAuthProvider<E> {
+  const provider = new OAuthProvider<E>(oauthOptions(handlers, resource));
   const inner = provider.fetch.bind(provider);
   const wrapped = Object.create(provider) as OAuthProvider<E>;
   wrapped.fetch = (request, workerEnv, ctx) => fetchOAuth({ inner, request, env: workerEnv, ctx });
@@ -63,5 +64,6 @@ export function createOAuthProvider<E>(handlers: Handlers<E>): OAuthProvider<E> 
 const NO_ROUTE = { fetch: () => Promise.resolve(new Response(null, { status: 404 })) };
 
 export function oauthHelpers(workerEnv: Env): OAuthHelpers {
-  return getOAuthApi<Env>(oauthOptions<Env>({ apiHandler: NO_ROUTE, defaultHandler: NO_ROUTE }), workerEnv);
+  const resource = `${new URL(workerEnv.BETTER_AUTH_URL).origin}${MCP_PATH}`;
+  return getOAuthApi<Env>(oauthOptions<Env>({ apiHandler: NO_ROUTE, defaultHandler: NO_ROUTE }, resource), workerEnv);
 }
