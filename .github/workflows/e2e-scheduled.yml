@@ -1,20 +1,24 @@
 name: e2e-scheduled
 
 # Journeys that need calendar time or break the fixture for hours run here on
-# their own clock, never per deploy (0509#4124, 0509#4128). The full production
-# suite (the `e2e-production` job below) runs everything except @scheduled, and
+# their own clock, never per deploy (0509#4124, 0509#4128). The full suite
+# (the `e2e-staging` job below) runs everything except @scheduled, and
 # its sign-ins send real emails against the daily quota (0509#6033, 0509#6034).
 # It runs once a week on the Sunday cron (07:40 UTC, clear of the 04:17 signin
 # and 06:30 soak, and not on the Wednesday j12 run, so no other job holds the
 # live-ai group and replaces a waiting shard), from main: a predictable cost
 # (about 75 emails a week) instead of on-demand runs, which cost 152 emails in
 # one day on 2026-10-09. `suite` is not a dispatch choice: agents verify on the
-# local lane (PLAYWRIGHT_TEST_BASE_URL unset, AGENTS.md). Every job that reaches
-# production declares `environment: production-e2e`, whose deployment branch
-# policy is `main` only; the D1 readers (jev-failures, soak-report) install with `npm ci --ignore-scripts` (0509#7773), and their D1 reads wait on the D1-read token of #7072 (the repo-level token is refused by D1).
+# local lane (PLAYWRIGHT_TEST_BASE_URL unset, AGENTS.md). Every job runs against
+# https://staging.0509.io (the workflow-level env) and declares `environment:
+# staging`, except `signin`, `backup-proof` and `jev-failures`, which stay on
+# production and `production-e2e`. Both environments allow `main` only; the D1
+# readers (jev-failures on production, soak-report on staging) install with
+# `npm ci --ignore-scripts` (0509#7773), and their D1 reads wait on the D1-read
+# token of #7072 (the repo-level token is refused by D1).
 # The weekly `j12` job also runs J11, whose kept account needs a 6-day gap.
 # `signin` is the one real sign-in smoke a day (0509#6093): the only production
-# run that sends a real email besides the suite, once, at 04:17 UTC.
+# run that sends a real email, once, at 04:17 UTC.
 # `soak-report` posts one comment a day on #4730 while the 7-day soak runs
 # (0509#4730), at 06:30 UTC, after the 02:00 site sweep and 03:00 rollover.
 # Not a required check.
@@ -32,12 +36,14 @@ on:
         options: [none, j12, signin, j8-hard, j8-soft, soak-report, backup-proof, jev-failures]
         default: none
       spec:
-        description: 'One spec file to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts, no flags (0509 sign-up verdict, 2026-09-28; 0509#7186)'
+        description: 'One spec file to run now against https://staging.0509.io, e.g. e2e/j3-onboard-domain.spec.ts, no flags (0509 sign-up verdict, 2026-09-28; 0509#7186)'
         type: string
         default: ''
 
-permissions:
-  contents: read
+permissions: {contents: read}
+
+env:
+  PLAYWRIGHT_TEST_BASE_URL: https://staging.0509.io
 
 concurrency:
   group: e2e-scheduled-${{ inputs.spec && 'spec' || github.event.schedule == '30 6 * * *' && 'soak' || inputs.journey == 'soak-report' && 'soak' || github.event.schedule == '40 7 * * 0' && 'suite' || github.event.schedule == '17 4 * * *' && 'signin' || inputs.journey == 'signin' && 'signin' || startsWith(inputs.journey, 'j8-') && 'j8' || inputs.journey == 'backup-proof' && 'backup' || inputs.journey == 'jev-failures' && 'jev-failures' || 'j12' }}
@@ -65,38 +71,32 @@ jobs:
     name: j12
     if: github.event.schedule == '5 10 * * 3' || (inputs.journey == 'j12' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    environment: production-e2e
+    environment: staging
     # One live-AI job at a time: they share the account's Clef call rate (about 60
     # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
     # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
     # every workflow in the repo. One run waits per group; a newer waiting run
     # replaces an older one (actionlint 1.7.12 rejects `queue: max`).
     # Left out, with reasons: j8 (hours long, would block every other live-AI job),
-    # backup-proof, soak-report and jev-failures (read only, no AI), production-sha and
+    # backup-proof, soak-report and jev-failures (read only, no AI), staging-sha and
     # suite (no AI). Not in this file: preview-assert and lighthouse in ci.yml run on
     # every PR and deploy, so grouping them would serialize all PRs.
-    concurrency:
-      group: live-ai
-      cancel-in-progress: false
+    concurrency: {group: live-ai, cancel-in-progress: false}
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Run J12 and J11 against production
+      - name: Run J12 and J11 against staging
         # J11 rides the weekly clock too (#7061): its kept account gets a
         # catch-up brief only when the last one is 6 or more days old.
         id: e2e
         timeout-minutes: 65
         run: npm run e2e -- e2e/j12-rollovers.spec.ts e2e/j11-weekly-brief.spec.ts --project=desktop-1440 --retries=0 --reporter=github,list
         env:
-          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
@@ -111,7 +111,6 @@ jobs:
         timeout-minutes: 5
         run: npm run e2e -- --project=session-teardown --retries=0 --reporter=github,list
         env:
-          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
       - name: Print what the page showed when it failed
@@ -126,11 +125,9 @@ jobs:
     # cookie (0509#5999); a failure is read from the job log.
     if: inputs.spec != ''
     runs-on: ubuntu-latest
-    environment: production-e2e
+    environment: staging
     # See the live-ai note on the j12 job.
-    concurrency:
-      group: live-ai
-      cancel-in-progress: false
+    concurrency: {group: live-ai, cancel-in-progress: false}
     timeout-minutes: 30
     steps:
       - name: Accept one spec file and no flags
@@ -141,21 +138,17 @@ jobs:
         run: |
           [[ "$SPEC" =~ ^e2e/[A-Za-z0-9._-]+\.spec\.ts$ ]] || { echo "::error::spec must be one file, e2e/<name>.spec.ts, with no flags"; exit 1; }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Run the spec against production
+      - name: Run the spec against staging
         id: e2e
         timeout-minutes: 22
         run: npm run e2e -- "$SPEC" --project=public-1440 --project=desktop-1440 --retries=0 --reporter=github,list
         env:
           SPEC: ${{ inputs.spec }}
-          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
@@ -171,7 +164,6 @@ jobs:
         timeout-minutes: 5
         run: npm run e2e -- --project=session-teardown --retries=0 --reporter=github,list
         env:
-          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
       - name: Print what the page showed when it failed
@@ -192,18 +184,13 @@ jobs:
     runs-on: ubuntu-latest
     environment: production-e2e
     # See the live-ai note on the j12 job.
-    concurrency:
-      group: live-ai
-      cancel-in-progress: false
+    concurrency: {group: live-ai, cancel-in-progress: false}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Exchange the Access service token for its cookie
@@ -240,29 +227,24 @@ jobs:
     # the 6 hour cap.
     if: startsWith(inputs.journey, 'j8-') && inputs.spec == '' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: production-e2e
+    environment: staging
     timeout-minutes: 350
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Exchange the Access service token for its cookie
         run: npm run e2e -- --project=setup --retries=0 --reporter=github,list
         env:
-          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-      - name: Run J8 against production
+      - name: Run J8 against staging
         run: npm run e2e -- e2e/j8-own-site-break.spec.ts --grep "J8 your own site breaks ${MODE}:" --project=desktop-1440 --no-deps --retries=0 --workers=1 --reporter=github,list
         env:
           MODE: ${{ inputs.journey == 'j8-hard' && 'hard' || 'soft' }}
-          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
@@ -285,25 +267,24 @@ jobs:
           shopt -s globstar nullglob
           files=(test-results/**/error-context.md)
           if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
-  production-sha:
-    name: production-sha
-    # The suite runs the code of the deploy that is live, not main's head; no
-    # deployment, or one that is not yet successful, fails this job and the
-    # shards never start.
+  staging-sha:
+    name: staging-sha
+    # The suite runs against staging, so it runs the code of the staging deploy
+    # that is live, not main's head; no staging deployment, or one that is not
+    # yet successful, fails this job and the shards never start.
     if: github.event.schedule == '40 7 * * 0'
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions:
-      deployments: read
+    permissions: {deployments: read}
     outputs:
       sha: ${{ steps.deploy.outputs.sha }}
     steps:
-      - name: Newest production deployment
+      - name: Newest staging deployment
         id: deploy
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          deploy=$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=production&per_page=1" --jq '.[0] // empty')
+          deploy=$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=staging&per_page=1" --jq '.[0] // empty')
           test -n "$deploy"
           sha=$(jq -r .sha <<<"$deploy")
           test "${#sha}" = 40
@@ -311,7 +292,7 @@ jobs:
           test "$state" = success
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
   suite-shard:
-    name: e2e-production shard ${{ matrix.shard }}
+    name: e2e-staging shard ${{ matrix.shard }}
     # Every sign-in in the suite sends a real email and the Cloudflare Email
     # Service daily quota is spent (0509#6033, 0509#6034), so the full suite no
     # longer starts on every deploy (Nish 2026-09-28: "take the full production
@@ -319,14 +300,12 @@ jobs:
     # 0509#6034 lands, when a run signs in once). No trace is
     # uploaded: the repo is public and a trace can hold the Access cookie
     # (0509#5999); a failure is read from the job log.
-    needs: production-sha
+    needs: staging-sha
     if: github.event.schedule == '40 7 * * 0'
     runs-on: ubuntu-latest
-    environment: production-e2e
+    environment: staging
     # See the live-ai note on the j12 job.
-    concurrency:
-      group: live-ai
-      cancel-in-progress: false
+    concurrency: {group: live-ai, cancel-in-progress: false}
     timeout-minutes: 35
     strategy:
       fail-fast: false
@@ -337,27 +316,23 @@ jobs:
       max-parallel: 1
       matrix:
         shard: [1, 2, 3, 4]
-    permissions:
-      contents: read
+    permissions: {contents: read}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.production-sha.outputs.sha }}
+          ref: ${{ needs.staging-sha.outputs.sha }}
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Run this shard of the suite against production
+      - name: Run this shard of the suite against staging
         id: e2e
         # @scheduled journeys run on their own clock above: J12 now, J8 with its spec (0509#4124, 0509#4128).
         # https://playwright.dev/docs/test-sharding
         timeout-minutes: 25
         run: npm run e2e -- --shard=${{ matrix.shard }}/4 --reporter=github,list --grep-invert @scheduled --retries=0
         env:
-          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
@@ -373,7 +348,6 @@ jobs:
         timeout-minutes: 5
         run: npm run e2e -- --project=session-teardown --retries=0 --reporter=github,list
         env:
-          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
       - name: Print what the page showed when it failed
@@ -383,32 +357,28 @@ jobs:
           files=(test-results/**/error-context.md)
           if [ "${#files[@]}" -eq 0 ]; then echo "Playwright wrote no error-context.md"; else tail -n +1 "${files[@]}"; fi
   suite:
-    name: e2e-production
-    needs: [production-sha, suite-shard]
+    name: e2e-staging
+    needs: [staging-sha, suite-shard]
     if: always() && github.event.schedule == '40 7 * * 0'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: read
-      issues: write
-      actions: write
+    permissions: {contents: read, issues: write, actions: write}
     env:
       GH_TOKEN: ${{ github.token }}
       SHARDS: ${{ needs.suite-shard.result }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - name: Open or update the issue that dispatches the fix
         if: env.SHARDS == 'failure'
         id: red
         uses: JasonEtco/create-an-issue@1b14a70e4d8dc185e5cc76d3bec9eab20257b2c5 # v2.9.2
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          SHA: ${{ needs.production-sha.outputs.sha }}
+          SHA: ${{ needs.staging-sha.outputs.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
-          filename: .github/red-main/e2e-production.md
+          filename: .github/red-main/e2e-staging.md
           update_existing: true
           search_existing: open
       - name: Hand the issue to a worker
@@ -422,7 +392,7 @@ jobs:
         env:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search '"e2e-production red on main" in:title' --json number --jq '.[0].number // empty')
+          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search '"e2e-staging red on main" in:title' --json number --jq '.[0].number // empty')
           [ -z "$N" ] || gh issue close "$N" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Green again on $RUN_URL."
       - name: Red unless every shard passed
         run: test "$SHARDS" = success
@@ -436,12 +406,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci
       - name: Describe the cron-started snapshot-backup instances
         env:
@@ -467,12 +434,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci --ignore-scripts
       - name: Read the judge failures
         env:
@@ -494,19 +458,14 @@ jobs:
     # with the read-only HEALTHCHECKS_API_KEY repository secret.
     if: github.event.schedule == '30 6 * * *' || (inputs.journey == 'soak-report' && inputs.spec == '' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    environment: production-e2e
+    environment: staging
     timeout-minutes: 10
-    permissions:
-      contents: read
-      issues: write
+    permissions: {contents: read, issues: write}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
+        with: {node-version: 22, cache: npm}
       - run: npm ci --ignore-scripts
       - name: Post the day's soak numbers on the issue
         env:
@@ -518,10 +477,12 @@ jobs:
         run: |
           set -euo pipefail
           since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          db=$(npx cf d1 list --name 0509-staging | jq -r '.[] | select(.name == "0509-staging") | .uuid')
+          test -n "$db"
           scope=" AND workspace_id IN (SELECT id FROM workspace WHERE owner_user_id IN (SELECT id FROM user WHERE email = 'e2e+soak@0509.io'))"
           label="soak workspace"
           d1() {
-            local out; out=$(npx wrangler d1 execute 0509 --remote --json --command "$1") || { printf 'wrangler d1 execute exited %s\n%s\n' "$?" "${out:-<no stdout>}" >&2; return 1; }; [ -n "$out" ] || { echo 'wrangler d1 execute printed nothing' >&2; return 1; }; printf '%s' "$out" | jq -c '(if type == "array" then .[0].results else null end) // error("wrangler printed: \(.)")'
+            local out; out=$(npx cf d1 query "$db" --sql "$1") || { printf 'cf d1 query exited %s\n%s\n' "$?" "${out:-<no stdout>}" >&2; return 1; }; [ -n "$out" ] || { echo 'cf d1 query printed nothing' >&2; return 1; }; printf '%s' "$out" | jq -c '(if type == "array" then .[0].results else null end) // error("cf printed: \(.)")'
           }
           sends=$(d1 "SELECT CASE WHEN digest_id IS NULL THEN 'other (no digest)' ELSE 'brief' END AS kind, status, COUNT(*) AS n FROM send_attempt WHERE attempted_at >= '$since'$scope GROUP BY 1, 2 ORDER BY 1, 2" | jq -r 'if length == 0 then "none" else map("\(.kind) \(.status): \(.n)") | join(", ") end')
           sweeps=$(d1 "SELECT COUNT(*) AS runs, COALESCE(SUM(pages), 0) AS pages, COALESCE(SUM(failed), 0) AS failed FROM sweep_run WHERE finished_at >= '$since'" | jq -r '.[0] | "\(.runs) finished, \(.pages) pages, \(.failed) failed pages"')
@@ -530,7 +491,7 @@ jobs:
             rows=""
             while [ "$page" -le 50 ]; do
               batch=$(curl -sS --fail-with-body -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-                "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workflows/$1/instances?per_page=100&page=$page&date_start=$since" \
+                "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workflows/$1-staging/instances?per_page=100&page=$page&date_start=$since" \
                 | jq -c '.result')
               rows="$rows$batch"$'\n'
               [ "$(jq 'length' <<< "$batch")" -eq 100 ] || break
@@ -541,7 +502,7 @@ jobs:
           failed=0
           missed=""
           cron_instances() {
-            npx wrangler workflows instances list "$1" --date-start "$since" --per-page 100 --json | jq -s -r --arg prefix "$1-" '(add // []) | map(select(.id | startswith($prefix))) | length'
+            npx cf workflows instances list --workflow-name "$1-staging" --start "$since" --per-page 100 | jq -s -r --arg prefix "$1-" '(add // []) | map(select(.id | startswith($prefix))) | length'
           }
           crons=""
           for name in mentions-sweep site-sweep hiring-sweep feed-sweep snapshot-backup; do
@@ -594,6 +555,7 @@ jobs:
           [ "$hc_up" -gt 0 ] && [ "$hc_bad" -eq 0 ] || failed=1
           {
             echo "Soak report for the 24 hours before $(date -u +%Y-%m-%dT%H:%MZ) (send counts: $label)."
+            echo "- this report reads the staging database (0509-staging) and the *-staging Workflow instances, never production."
             echo
             echo "- cron-started Workflow instances in the last 24 h (newest 100 each): ${crons%, }$([ -z "$missed" ] || echo " (FAIL, none or unreadable for: ${missed% })")"
             echo "- site-sweep Workflow instances: $(instances site-sweep)"

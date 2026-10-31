@@ -278,7 +278,7 @@ describe("e2e-scheduled dispatch rules (0509#7186)", () => {
   it("dispatches every journey from main only, and fails a branch dispatch out loud", async () => {
     const jobs = await scheduledJobs();
     for (const key of MAIN_ONLY_JOBS) expect(jobs[key]?.if, key).toContain("github.ref == 'refs/heads/main'");
-    for (const key of ["production-sha", "suite-shard", "suite"]) {
+    for (const key of ["staging-sha", "suite-shard", "suite"]) {
       expect(jobs[key]?.if, key).toContain("github.event.schedule == '40 7 * * 0'");
       expect(jobs[key]?.if, key).not.toContain("inputs.");
     }

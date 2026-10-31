@@ -1,6 +1,8 @@
 import { captureException } from "@sentry/cloudflare";
 import { env } from "cloudflare:workers";
 
+import { blankEnvString } from "../env.server";
+
 export const JEV_CALLS_PER_DAY = 20_000;
 
 const JEV_CALLS_PER_WORKSPACE_PER_DAY = 4_000;
@@ -38,6 +40,14 @@ function reportCounterDown(error: unknown, cap: Cap): void {
     level: "error",
     fingerprint: ["ai-daily-cap-counter-down", cap.line, cap.scope],
   });
+}
+
+function scaledLimit(limit: number): number {
+  const raw = blankEnvString(Reflect.get(env, "AI_DAILY_CAP_SCALE"));
+  if (raw === null) return limit;
+  const scale = Number(raw);
+  if (!(scale > 0 && scale <= 1)) return 0;
+  return Math.max(1, Math.floor(limit * scale));
 }
 
 function today(): string {
@@ -79,13 +89,13 @@ async function takeCap(cap: Cap): Promise<void> {
 }
 
 export function takeAiCall(line: CappedLine, limit: number): Promise<void> {
-  return takeCap({ name: `ai-calls:${line}:${today()}`, limit, line, scope: "all" });
+  return takeCap({ name: `ai-calls:${line}:${today()}`, limit: scaledLimit(limit), line, scope: "all" });
 }
 
 export function takeJevWorkspaceShare(workspaceId: string, limit = JEV_CALLS_PER_WORKSPACE_PER_DAY): Promise<void> {
   return takeCap({
     name: `ai-calls:jev:${workspaceId}:${today()}`,
-    limit,
+    limit: scaledLimit(limit),
     line: "jev",
     scope: "workspace",
   });

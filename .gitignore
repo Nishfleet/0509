@@ -97,3 +97,5 @@ e2e/.auth/
 
 # @lhci/cli collect/assert working dir (lighthouse audits)
 /.lighthouseci/
+
+/.cloudflare/
