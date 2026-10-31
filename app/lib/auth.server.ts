@@ -12,6 +12,7 @@ import { readOwnedWorkspaces } from "./data/workspace.server";
 import { withEmailLanding } from "./email-change-landing";
 import { ensureWorkspaceForSignIn } from "./workspace.server";
 import { accessPrecleared } from "./auth/access-preclearance.server";
+import { captchaApplies } from "./auth-captcha";
 import { changeEmailEmail } from "./auth/change-email-email";
 import { changeEmailAllowed } from "./auth/change-email-limit";
 import { chargeFixtureMagicLink, chargeFixtureSignup } from "./auth/fixture-signup-cap.server";
@@ -31,6 +32,7 @@ interface AuthEnv {
   ACCESS_AUD?: string;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
+  CAPTCHA?: string;
 }
 
 const CLIENT_IP_HEADER = "cf-connecting-ip";
@@ -176,7 +178,7 @@ function sendMagicLinkEmail(env: AuthEnv) {
 function authPlugins(env: AuthEnv, options?: { captcha?: boolean }) {
   const origin = env.BETTER_AUTH_URL === undefined ? undefined : new URL(env.BETTER_AUTH_URL).origin;
   return [
-    ...(options?.captcha === false
+    ...(options?.captcha === false || !captchaApplies(env.CAPTCHA)
       ? []
       : [
           captcha({
