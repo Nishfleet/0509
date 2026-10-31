@@ -197,7 +197,7 @@ describe("e2e fixture teardown detector", () => {
 
 const PRINT_STEP = "Print what the page showed when it failed";
 const SPEC_STEP = "Accept one spec file and no flags";
-const MAIN_ONLY_JOBS = ["j12", "signin", "j8", "backup-proof", "jev-failures", "soak-report"];
+const MAIN_ONLY_JOBS = ["j12", "signin", "j8", "backup-proof", "jev-failures", "soak-report", "spec"];
 const CLOUDFLARE_TOKEN = /CLOUDFLARE_(API|SETTINGS)_TOKEN/;
 
 function runStep(script: string, cwd: string, env: Record<string, string> = {}): { code: number; out: string } {
@@ -272,13 +272,13 @@ describe("e2e-scheduled dispatch rules (0509#7186)", () => {
     ]) {
       expect(accepted(bad), JSON.stringify(bad)).toBe(false);
     }
-    expect(spec.if).not.toContain("refs/heads/main");
+    expect(spec.if).toContain("github.ref == 'refs/heads/main'");
   });
 
   it("dispatches every journey from main only, and fails a branch dispatch out loud", async () => {
     const jobs = await scheduledJobs();
     for (const key of MAIN_ONLY_JOBS) expect(jobs[key]?.if, key).toContain("github.ref == 'refs/heads/main'");
-    for (const key of ["production-sha", "suite-shard", "suite"]) {
+    for (const key of ["staging-sha", "suite-shard", "suite"]) {
       expect(jobs[key]?.if, key).toContain("github.event.schedule == '40 7 * * 0'");
       expect(jobs[key]?.if, key).not.toContain("inputs.");
     }
@@ -287,11 +287,22 @@ describe("e2e-scheduled dispatch rules (0509#7186)", () => {
     expect(jobs["soak-report"].if).toMatch(/^github\.event\.schedule == '30 6 \* \* \*' \|\| \(/);
     const guard = jobs["main-only"];
     expect(guard.if).toBe(
-      "github.event_name == 'workflow_dispatch' && inputs.journey != 'none' && github.ref != 'refs/heads/main'",
+      "github.event_name == 'workflow_dispatch' && (inputs.journey != 'none' || inputs.spec != '') && github.ref != 'refs/heads/main'",
     );
-    const refused = runStep(guard.steps?.[0]?.run ?? "", tmpdir(), { JOURNEY: "suite", REF: "refs/heads/x" });
+    const refused = runStep(guard.steps?.[0]?.run ?? "", tmpdir(), {
+      JOURNEY: "suite",
+      SPEC: "",
+      REF: "refs/heads/x",
+    });
     expect(refused.code).toBe(1);
-    expect(refused.out).toContain("journey=suite dispatches from main only, not refs/heads/x");
+    expect(refused.out).toContain("journey=suite spec= dispatches from main only, not refs/heads/x");
+    const refusedSpec = runStep(guard.steps?.[0]?.run ?? "", tmpdir(), {
+      JOURNEY: "none",
+      SPEC: "e2e/x.spec.ts",
+      REF: "refs/heads/x",
+    });
+    expect(refusedSpec.code).toBe(1);
+    expect(refusedSpec.out).toContain("spec=e2e/x.spec.ts dispatches from main only");
   });
 
   it("installs with scripts off in every job whose job-level env holds a Cloudflare token", async () => {

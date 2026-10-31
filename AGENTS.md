@@ -127,8 +127,10 @@ Signing in locally needs the `--var` overrides in `.agents/skills/verify/SKILL.m
 `PLAYWRIGHT_TEST_BASE_URL` unset, `playwright.config.ts` starts `wrangler dev`
 itself and tests the built Worker — that is what `preview-assert` runs on every
 PR. With it set, there is no local server and the suite runs against that URL —
-that is what the `e2e-scheduled.yml` jobs run against production. Same
+that is what the `e2e-scheduled.yml` jobs run against a hosted Worker. Same
 assertions both times.
+
+**The hosted e2e target is `https://staging.0509.io`**, the `0509-staging` Worker on its own D1, R2, KV and queues, deployed by `.github/workflows/deploy-staging.yml` with `cf` from `cloudflare.config.ts` (`CLOUDFLARE_VITE_FORCE_BUILD_OUTPUT=true npx react-router build --mode staging`, then `npx cf deploy --prebuilt --mode staging`). That workflow is separate from `deploy-production.yml` because the fleet's deploy-failed alert reads a `deploy-production` run conclusion as production's, so a staging failure must not redden it. Production keeps only the daily sign-in check and the public-page smoke, and still deploys with wrangler until #6085.
 
 **Run it before the PR opens.** A diff that touches only `docs/` or `.agents/` runs `npx prettier --check` on the changed files and nothing else. A change under `app/`, `workers/` or `e2e/`
 runs the specs that cover it locally first, in preview mode, by file:
@@ -174,12 +176,14 @@ the live app works.
 The self-hosted runner unit hides `~/.config/cloudflare` from every job it runs, and the first step of every agent job fails the run if that directory becomes readable (fleet-ops#9983, 2026-10-22). So no agent session on this host — a worker or an orchestrator hand-off — can read a Cloudflare token, mint one, or run `wrangler` against a remote database.
 
 - A Cloudflare credential an agent session needs goes in the seat-config directory, the one credential directory both the runner unit and the worker jail leave visible. Its exact path is not written here because this repo is public and the repo's own private-detail rule keeps that path out of it; the fleet-ops dispatch workflow that writes the seat env files is the source of truth. A worker that needs one parks the issue `blocked-on: orchestrator` with the `needs-orchestrator` label, rather than guessing a home path.
-- The scheduled D1 readers in `e2e-scheduled.yml` (`soak-report`, `jev-failures`) run under
-  `production-e2e` (main only) and install with `npm ci --ignore-scripts`, so no install script
-  runs beside a Cloudflare token. Their `wrangler d1 execute 0509 --remote` reads are red since
+- The scheduled D1 readers in `e2e-scheduled.yml` (`soak-report` on the staging database,
+  `jev-failures` on production) install with `npm ci --ignore-scripts`, so no install script
+  runs beside a Cloudflare token. `jev-failures` runs under `production-e2e` and reads with
+  `wrangler d1 execute 0509 --remote`; that read is red since
   2026-10-16 because the rotated repo-level `CLOUDFLARE_API_TOKEN` no longer carries D1 read
   (D1 error 7403); restoring D1 read — per #7072's corrected fix, a token scoped to D1 read in a
   main-only environment — is an owner action, and until it lands those reads fail (0509#7773).
+  `soak-report` runs under `staging` and reads the staging database with `cf d1 query`.
   A worker session on the VPS cannot read an Actions secret, because the worker App token
   carries no permission to read them.
 - The Cloudflare Access service token for driving production is not in this repo and sits on no path an agent can read. Driving production from a worker is forbidden anyway; the production suite runs on its own schedule from `main`.
@@ -269,8 +273,8 @@ Cloudflare Access wall (0509#7656): it measured the login page and reddened a go
 fleet's deploy-failed alert read as an outage (fleet-ops#9889). The budgets still gate every pull
 request in `ci.yml` (resource sizes and CLS, against the built Worker). Verify a fix on the local lane:
 `PLAYWRIGHT_TEST_BASE_URL` unset, so `npm run e2e -- e2e/<name>.spec.ts` starts `wrangler dev --local` with simulated
-email, a local D1 and `AI_SPEND` off. Do not dispatch `e2e-scheduled.yml` to verify a fix, and do not point a run at
-https://0509.io: each production sign-in sends a real email, the specs delete and recreate production D1 rows, and the
+email, a local D1 and `AI_SPEND` off. Do not dispatch the weekly `e2e-scheduled.yml` suite to verify a fix; the workflow accepts a dispatch (journey or `inputs.spec`) from `main` only, so a branch sends nothing at staging. Never dispatch or re-point a job at
+https://0509.io (hosted e2e belongs on https://staging.0509.io): each production sign-in sends a real email, the specs delete and recreate production D1 rows, and the
 live-AI journeys spend Workers AI neurons. Production e2e runs only on its schedule from `main`, and every job that
 reaches production declares the `production-e2e` environment, whose deployment branch policy allows `main` only.
 The production e2e is **not required**, deliberately: it cannot run on a pull request, and a required

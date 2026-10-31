@@ -7,6 +7,7 @@ import { parse } from "yaml";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const WORKFLOW = ".github/workflows/deploy-production.yml";
+const STAGING_WORKFLOW = ".github/workflows/deploy-staging.yml";
 
 const QUEUE_CHECKS = ["npm run typecheck", "npm test", "npx vitest", "npx tsc", "tsc -b"];
 
@@ -24,15 +25,21 @@ interface Step {
 
 interface DeployJob {
   if?: string;
+  needs?: string | string[];
+  concurrency?: { group: string };
+  environment?: { name: string; url?: string };
   "timeout-minutes"?: number;
   steps: Step[];
 }
 
 interface DeployWorkflow {
-  jobs: { deploy: DeployJob };
+  jobs: Record<string, DeployJob> & { deploy: DeployJob; staging: DeployJob };
+  on?: Record<string, unknown>;
 }
 
 let job: DeployJob;
+let workflow: DeployWorkflow;
+let stagingWorkflow: DeployWorkflow;
 
 function runsOf(step: Step | undefined): string {
   return step?.run ?? "";
@@ -49,7 +56,8 @@ function indexOf(needle: string): number {
 }
 
 beforeAll(async () => {
-  const workflow = parse(await readFile(path.join(REPO_ROOT, WORKFLOW), "utf8")) as DeployWorkflow;
+  workflow = parse(await readFile(path.join(REPO_ROOT, WORKFLOW), "utf8")) as DeployWorkflow;
+  stagingWorkflow = parse(await readFile(path.join(REPO_ROOT, STAGING_WORKFLOW), "utf8")) as DeployWorkflow;
   job = workflow.jobs.deploy;
 });
 
@@ -118,5 +126,91 @@ describe("deploy-production rolls back on smoke failure (0509#7004)", () => {
     const fixtureAt = indexOf("workers/fixture-site.wrangler.jsonc");
     expect(rollbackAt).toBeGreaterThan(smokeAt);
     expect(rollbackAt).toBeLessThan(fixtureAt);
+  });
+});
+
+describe("deploy-staging deploys staging with cf on its own workflow", () => {
+  const staging = () => stagingWorkflow.jobs.staging;
+  const stagingStep = (needle: string): Step => {
+    const found = staging().steps.find((candidate) => runsOf(candidate).includes(needle));
+    if (!found) throw new Error(`the staging job has no step running \`${needle}\``);
+    return found;
+  };
+  const stagingIndex = (needle: string): number => staging().steps.indexOf(stagingStep(needle));
+
+  it("runs from main in the staging environment under its own concurrency group, outside the production workflow", () => {
+    expect(staging().if).toContain("github.ref == 'refs/heads/main'");
+    expect(staging().environment?.name).toBe("staging");
+    expect(staging().concurrency?.group).toBe("deploy-staging");
+    expect(staging().concurrency?.group).not.toBe(job.concurrency?.group);
+    expect(staging()["timeout-minutes"]).toBeLessThanOrEqual(15);
+    expect(Object.keys(workflow.jobs)).toEqual(["deploy"]);
+    expect(Object.keys(stagingWorkflow.jobs)).toEqual(["staging"]);
+    expect(stagingWorkflow.on?.push).toEqual({ branches: ["main"] });
+  });
+
+  it("is not needed by anything, and needs nothing", () => {
+    expect(staging().needs).toBeUndefined();
+    const dependents = Object.entries(stagingWorkflow.jobs)
+      .filter(([, other]) => [other.needs ?? []].flat().includes("staging"))
+      .map(([key]) => key);
+    expect(dependents).toEqual([]);
+    expect(job.needs).toBeUndefined();
+  });
+
+  it("builds in staging mode, migrates, deploys prebuilt in staging mode, then smokes the staging origin", () => {
+    expect(runsOf(stagingStep("react-router build"))).toBe(
+      "CLOUDFLARE_VITE_FORCE_BUILD_OUTPUT=true npx react-router build --mode staging",
+    );
+    expect(runsOf(stagingStep("cf deploy"))).toContain("npx cf deploy --prebuilt --mode staging");
+    expect(runsOf(stagingStep("cf d1 migrations apply"))).toContain("jq -r .env.DB.id");
+    expect(stagingIndex("react-router build")).toBeLessThan(stagingIndex("cf d1 migrations apply"));
+    expect(stagingIndex("cf d1 migrations apply")).toBeLessThan(stagingIndex("cf deploy"));
+    expect(stagingIndex("cf deploy")).toBeLessThan(stagingIndex("https://staging.0509.io/api/health"));
+    const smoke = stagingStep("/api/health");
+    expect(runsOf(smoke)).toContain('"commit\\":\\"$GITHUB_SHA\\"');
+    expect(smoke["timeout-minutes"]).toBe(3);
+  });
+
+  it("uses cf only, never wrangler", () => {
+    expect(JSON.stringify(staging())).not.toMatch(/wrangler/i);
+  });
+
+  it("hands the Dodo test key from the GitHub secret to the Worker through a private temp file", () => {
+    const deploy = stagingStep("cf deploy");
+    const run = runsOf(deploy);
+    expect(deploy.env?.DODO_TEST_API_KEY).toBe("${{ secrets.DODO_TEST_API_KEY }}");
+    expect(run).toContain("DODO_PAYMENTS_API_KEY");
+    expect(run).toContain("mktemp");
+    expect(run).toContain("rm -f");
+    expect(run).toContain('--secrets-file "$secrets"');
+    expect(run).not.toMatch(/echo[^\n]*\$\{?DODO|printf[^\n]*\$\{?DODO|set -x|--text|--body/);
+    expect(run).not.toContain("${{");
+    const others = JSON.stringify(staging().steps.filter((candidate) => candidate !== deploy));
+    expect(others).not.toContain("DODO_TEST_API_KEY");
+  });
+
+  it("requires a staging value for every secret binding the staging config declares, before it deploys", () => {
+    const deploy = stagingStep("cf deploy");
+    for (const name of [
+      "BETTER_AUTH_SECRET",
+      "TURNSTILE_SITE_KEY",
+      "TURNSTILE_SECRET_KEY",
+      "DODO_WEBHOOK_SECRET",
+      "SLACK_TARGET_SECRET",
+    ]) {
+      expect(deploy.env?.[name], name).toBe(`\${{ secrets.STAGING_${name} }}`);
+    }
+    const run = runsOf(deploy);
+    expect(run).toContain("::error::staging needs its own value for:");
+    expect(run.indexOf("::error::")).toBeLessThan(run.indexOf("cf deploy"));
+  });
+
+  it("keeps the staging token in the steps that call cf, never in install-script reach", () => {
+    expect(JSON.stringify(staging())).not.toMatch(/NPM_CONFIG_IGNORE_SCRIPTS/);
+    for (const candidate of staging().steps.filter((step) => runsOf(step).includes("npx cf"))) {
+      expect(candidate.env?.CLOUDFLARE_API_TOKEN).toBe(CLOUDFLARE_TOKEN);
+      expect(candidate.env?.CLOUDFLARE_ACCOUNT_ID).toBe(CLOUDFLARE_ACCOUNT);
+    }
   });
 });

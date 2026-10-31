@@ -3,11 +3,11 @@ import { expect, test } from "./test";
 
 import { previousBriefAt } from "../app/lib/brief-schedule";
 import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
-import { decodedBodies, laneOrigin, readRawMessage, requireInboxToken, signInWithMagicLink } from "./inbox";
+import { decodedBodies, readRawMessage, requireInboxToken, signInWithMagicLink } from "./inbox";
 
 test.skip(
-  !process.env.PLAYWRIGHT_TEST_BASE_URL || laneOrigin() !== "https://0509.io",
-  "J11 proves the production mail path: the brief is sent by the send-email queue consumer on the production Worker. The local Worker cannot mail, and a merge-queue Preview cannot consume queues (https://developers.cloudflare.com/workers/previews/resources/#queue-consumers)",
+  !process.env.PLAYWRIGHT_TEST_BASE_URL,
+  "J11 proves the hosted mail path: the brief is sent by the send-email queue consumer on a deployed Worker. The local Worker cannot mail, and a merge-queue Preview cannot consume queues (https://developers.cloudflare.com/workers/previews/resources/#queue-consumers)",
 );
 
 const ON = ["linear.app", "notion.so", "figma.com"] as const;
