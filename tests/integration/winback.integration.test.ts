@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { expectSendRecord, PROVIDER_ID } from "./send-record";
 import { sendWinbacks } from "../../workers/delivery/winback";
 
 const lookup = { tester: false as boolean | null };
@@ -18,7 +19,7 @@ const envWith = (sent: EmailMessageBuilder[]): Env =>
     EMAIL: {
       send(message: EmailMessageBuilder) {
         sent.push(message);
-        return Promise.resolve({} as EmailSendResult);
+        return Promise.resolve({ messageId: PROVIDER_ID });
       },
     },
   }) as Env;
@@ -98,7 +99,8 @@ describe("win-back email", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]?.to).toBe(TARGET);
     expect(sent[0]?.text).toContain("caught 2 changes");
-    expect(sent[0]?.text).toContain("Most recent: Acme, Homepage headline changed");
+    expect(sent[0]?.text).toContain("Most recent: Acme: Homepage headline changed");
+    await expectSendRecord("winback", sent[0]?.subject);
   });
 
   it("writes again only after a new absence", async () => {

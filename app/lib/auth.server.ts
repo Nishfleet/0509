@@ -20,7 +20,8 @@ import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email"
 import { MAGIC_LINK_PATH } from "./auth/magic-link-path";
 import { redactEmailShaped } from "./auth/redact-email-shaped";
 import { signInLinkAllowed } from "./auth/sign-in-limit.server";
-import { errorText, sendOrThrow } from "../../workers/delivery/send";
+import { sendAccountMail } from "../../workers/delivery/account-mail";
+import { errorText } from "../../workers/delivery/send";
 
 interface AuthEnv {
   DB: D1Database;
@@ -58,8 +59,8 @@ export async function hasSessionCookie(request: Request) {
   return parsed.some((value) => value !== null);
 }
 
-function sendChangeEmailMessage(
-  email: SendEmail,
+async function sendChangeEmailMessage(
+  bindings: { DB: D1Database; EMAIL: SendEmail },
   input: { kind: "approve" | "confirm"; to: string; named: string; url: string },
 ): Promise<void> {
   const message = changeEmailEmail({
@@ -67,13 +68,18 @@ function sendChangeEmailMessage(
     email: input.named,
     url: withEmailLanding(input.url, input.kind),
   });
-  return sendOrThrow(email, {
-    to: input.to,
-    from: { email: "hello@0509.io", name: "Five to Nine" },
-    subject: message.subject,
-    text: message.text,
-    html: message.html,
+  const result = await sendAccountMail(bindings, {
+    kind: input.kind === "approve" ? "change_email_approve" : "change_email_confirm",
+    workspaceId: null,
+    message: {
+      to: input.to,
+      from: { email: "hello@0509.io", name: "Five to Nine" },
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+    },
   });
+  if (result.outcome === "failed") throw new Error(result.error ?? "send failed");
 }
 
 const DISABLED_AUTH_PATHS = [
@@ -158,13 +164,18 @@ function sendMagicLinkEmail(env: AuthEnv) {
     }
     const message = magicLinkEmail({ email, url });
     try {
-      await sendOrThrow(env.EMAIL, {
-        to: email,
-        from: { email: "hello@0509.io", name: "Five to Nine" },
-        subject: message.subject,
-        text: message.text,
-        html: message.html,
+      const result = await sendAccountMail(env, {
+        kind: "sign_in",
+        workspaceId: null,
+        message: {
+          to: email,
+          from: { email: "hello@0509.io", name: "Five to Nine" },
+          subject: message.subject,
+          text: message.text,
+          html: message.html,
+        },
       });
+      if (result.outcome === "failed") throw new Error(result.error ?? "send failed");
     } catch (failed) {
       const detail = redactEmailShaped(errorText(failed)).slice(0, 200);
       console.error(JSON.stringify({ event: "login.magic_link_send_failed", error: detail }));
@@ -226,13 +237,13 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
         enabled: true,
         updateEmailWithoutVerification: false,
         sendChangeEmailConfirmation: ({ user, newEmail, url }) =>
-          sendChangeEmailMessage(env.EMAIL, { kind: "approve", to: user.email, named: newEmail, url }),
+          sendChangeEmailMessage(env, { kind: "approve", to: user.email, named: newEmail, url }),
       },
     },
     emailVerification: {
       expiresIn: EMAIL_CHANGE_TTL_SECONDS,
       sendVerificationEmail: ({ user, url }) =>
-        sendChangeEmailMessage(env.EMAIL, { kind: "confirm", to: user.email, named: user.email, url }),
+        sendChangeEmailMessage(env, { kind: "confirm", to: user.email, named: user.email, url }),
     },
     disabledPaths: DISABLED_AUTH_PATHS,
     hooks: authHooks(env),

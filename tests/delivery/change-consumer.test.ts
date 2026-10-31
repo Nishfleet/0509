@@ -245,6 +245,8 @@ describe("deliverChange", () => {
       idempotencyKey: "change:sig-1:tgt-1",
       outcome: "failed",
       error: "smtp down",
+      subject: expect.any(String) as string,
+      providerId: null,
     });
   });
 });
