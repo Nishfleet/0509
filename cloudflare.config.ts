@@ -72,6 +72,7 @@ export default defineConfig(({ mode }) => {
         TESTER_EMAIL_HASHES: bindings.text(""),
         AI_SPEND: bindings.text("on"),
         RIVAL_REACH_CHECK: bindings.text("on"),
+        CAPTCHA: bindings.text("on"),
         AI_GATEWAY_ID: bindings.text("default"),
         SHARED_RIVAL_CHECKS: bindings.text("off"),
         ACCESS_TEAM_DOMAIN: bindings.text("https://nish345.cloudflareaccess.com"),
