@@ -273,7 +273,7 @@ Cloudflare Access wall (0509#7656): it measured the login page and reddened a go
 fleet's deploy-failed alert read as an outage (fleet-ops#9889). The budgets still gate every pull
 request in `ci.yml` (resource sizes and CLS, against the built Worker). Verify a fix on the local lane:
 `PLAYWRIGHT_TEST_BASE_URL` unset, so `npm run e2e -- e2e/<name>.spec.ts` starts `wrangler dev --local` with simulated
-email, a local D1 and `AI_SPEND` off. Do not dispatch the weekly `e2e-scheduled.yml` suite to verify a fix; the one exception is a single-spec dispatch (`inputs.spec`), which runs against staging from any branch. Never dispatch or re-point a job at
+email, a local D1 and `AI_SPEND` off. Do not dispatch the weekly `e2e-scheduled.yml` suite to verify a fix; the workflow accepts a dispatch (journey or `inputs.spec`) from `main` only, so a branch sends nothing at staging. Never dispatch or re-point a job at
 https://0509.io (hosted e2e belongs on https://staging.0509.io): each production sign-in sends a real email, the specs delete and recreate production D1 rows, and the
 live-AI journeys spend Workers AI neurons. Production e2e runs only on its schedule from `main`, and every job that
 reaches production declares the `production-e2e` environment, whose deployment branch policy allows `main` only.

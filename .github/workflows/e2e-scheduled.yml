@@ -16,10 +16,10 @@ name: e2e-scheduled
 # `staging`, so the only `staging` deployments are the ones deploy-staging.yml
 # records and `staging-sha` below reads the staging Worker's deploy, never an
 # e2e run's (0509#7836). `production-e2e` allows `main` only (GitHub
-# settings); on the staging side a full journey dispatches from main only (the
-# `main-only` job below makes the skip red) and the one exception is the
-# single-spec dispatch from any branch (AGENTS.md merge-gates), so
-# `staging-e2e` admits any branch. The D1
+# settings); on the staging side every dispatch, the single-spec one included,
+# runs from main only (the `main-only` job below makes the skip red), so no
+# branch's code ever runs inside a job that reads the staging secrets
+# (0509#7837). The D1
 # readers (jev-failures on production, soak-report on staging) install with
 # `npm ci --ignore-scripts` (0509#7773), and their D1 reads wait on the D1-read
 # token of #7072 (the repo-level token is refused by D1).
@@ -43,7 +43,7 @@ on:
         options: [none, j12, signin, j8-hard, j8-soft, soak-report, backup-proof, jev-failures]
         default: none
       spec:
-        description: 'One spec file to run now against https://staging.0509.io, e.g. e2e/j3-onboard-domain.spec.ts, no flags (0509 sign-up verdict, 2026-09-28; 0509#7186)'
+        description: 'One spec file to run now from main against https://staging.0509.io, e.g. e2e/j3-onboard-domain.spec.ts, no flags (0509 sign-up verdict, 2026-09-28; 0509#7186)'
         type: string
         default: ''
 
@@ -62,18 +62,19 @@ jobs:
     # Every journey mints accounts, sends real mail or reads production with a
     # Cloudflare token, so a dispatch runs one only from main; the jobs below
     # skip on any other ref and this job makes that skip red, not a quiet
-    # green (0509#7186). The spec input stays open to any branch.
-    if: github.event_name == 'workflow_dispatch' && inputs.journey != 'none' && github.ref != 'refs/heads/main'
+    # green (0509#7186). The single-spec dispatch runs from main too: its job
+    # reads the staging secrets, and a branch's own code must never run beside
+    # them (0509#7837).
+    if: github.event_name == 'workflow_dispatch' && (inputs.journey != 'none' || inputs.spec != '') && github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Refuse a journey dispatched from a branch
         env:
           JOURNEY: ${{ inputs.journey }}
+          SPEC: ${{ inputs.spec }}
           REF: ${{ github.ref }}
-        run: |
-          echo "::error::journey=$JOURNEY dispatches from main only, not $REF"
-          exit 1
+        run: echo "::error::journey=$JOURNEY spec=$SPEC dispatches from main only, not $REF"; exit 1
   j12:
     name: j12
     if: github.event.schedule == '5 10 * * 3' || (inputs.journey == 'j12' && github.ref == 'refs/heads/main')
@@ -129,8 +130,10 @@ jobs:
   spec:
     name: spec
     # No trace is uploaded: the repo is public and a trace can hold the Access
-    # cookie (0509#5999); a failure is read from the job log.
-    if: inputs.spec != ''
+    # cookie (0509#5999); a failure is read from the job log. From main only:
+    # the job reads the staging secrets, so the checked-out code is always
+    # main's, never a branch's (0509#7837).
+    if: inputs.spec != '' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: staging-e2e
     # See the live-ai note on the j12 job.
@@ -138,8 +141,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Accept one spec file and no flags
-        # The spec input is the one dispatch allowed from any branch, so it runs
-        # one named file and nothing Playwright would read as an option (0509#7186).
+        # The spec input runs one named file and nothing Playwright would read
+        # as an option (0509#7186).
         env:
           SPEC: ${{ inputs.spec }}
         run: |
