@@ -63,7 +63,7 @@ describe("soak-report measures the two DONE lines (0509#7076)", () => {
     expect(run).toContain('--workflow-name "$1-staging"');
     expect(run).toContain("workflows/$1-staging/instances");
     expect(run).toContain("gh issue comment 4730");
-    expect(e2eJobs()["soak-report"]?.environment).toBe("staging");
+    expect(e2eJobs()["soak-report"]?.environment).toBe("staging-e2e");
   });
 
   it("is named in the pull_request disk-reading detector list", () => {

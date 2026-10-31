@@ -58,9 +58,9 @@ describe("e2e-scheduled targets staging, and only signin targets production", ()
     expect(offenders).toEqual([]);
   });
 
-  it("holds the kept-account and live-sweep jobs in the staging environment, signin in production-e2e", () => {
+  it("holds the kept-account and live-sweep jobs in the staging-e2e environment, signin in production-e2e", () => {
     for (const key of ["j12", "spec", "j8", "suite-shard", "soak-report"]) {
-      expect(workflow.jobs[key]?.environment, key).toBe("staging");
+      expect(workflow.jobs[key]?.environment, key).toBe("staging-e2e");
     }
     for (const key of PRODUCTION_JOBS) expect(workflow.jobs[key]?.environment, key).toBe("production-e2e");
   });

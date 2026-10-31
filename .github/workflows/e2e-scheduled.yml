@@ -11,8 +11,15 @@ name: e2e-scheduled
 # one day on 2026-10-09. `suite` is not a dispatch choice: agents verify on the
 # local lane (PLAYWRIGHT_TEST_BASE_URL unset, AGENTS.md). Every job runs against
 # https://staging.0509.io (the workflow-level env) and declares `environment:
-# staging`, except `signin`, `backup-proof` and `jev-failures`, which stay on
-# production and `production-e2e`. Both environments allow `main` only; the D1
+# staging-e2e`, except `signin`, `backup-proof` and `jev-failures`, which stay
+# on production and `production-e2e`. The e2e jobs hold `staging-e2e`, not
+# `staging`, so the only `staging` deployments are the ones deploy-staging.yml
+# records and `staging-sha` below reads the staging Worker's deploy, never an
+# e2e run's (0509#7836). `production-e2e` allows `main` only (GitHub
+# settings); on the staging side a full journey dispatches from main only (the
+# `main-only` job below makes the skip red) and the one exception is the
+# single-spec dispatch from any branch (AGENTS.md merge-gates), so
+# `staging-e2e` admits any branch. The D1
 # readers (jev-failures on production, soak-report on staging) install with
 # `npm ci --ignore-scripts` (0509#7773), and their D1 reads wait on the D1-read
 # token of #7072 (the repo-level token is refused by D1).
@@ -71,7 +78,7 @@ jobs:
     name: j12
     if: github.event.schedule == '5 10 * * 3' || (inputs.journey == 'j12' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    environment: staging
+    environment: staging-e2e
     # One live-AI job at a time: they share the account's Clef call rate (about 60
     # a minute) with customers, and 2003 "Rate limited" failed two sign-ups at
     # 03:33Z on 2026-10-04 (docs/incidents). Groups share one namespace across
@@ -125,7 +132,7 @@ jobs:
     # cookie (0509#5999); a failure is read from the job log.
     if: inputs.spec != ''
     runs-on: ubuntu-latest
-    environment: staging
+    environment: staging-e2e
     # See the live-ai note on the j12 job.
     concurrency: {group: live-ai, cancel-in-progress: false}
     timeout-minutes: 30
@@ -227,7 +234,7 @@ jobs:
     # the 6 hour cap.
     if: startsWith(inputs.journey, 'j8-') && inputs.spec == '' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: staging
+    environment: staging-e2e
     timeout-minutes: 350
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -303,7 +310,7 @@ jobs:
     needs: staging-sha
     if: github.event.schedule == '40 7 * * 0'
     runs-on: ubuntu-latest
-    environment: staging
+    environment: staging-e2e
     # See the live-ai note on the j12 job.
     concurrency: {group: live-ai, cancel-in-progress: false}
     timeout-minutes: 35
@@ -458,7 +465,7 @@ jobs:
     # with the read-only HEALTHCHECKS_API_KEY repository secret.
     if: github.event.schedule == '30 6 * * *' || (inputs.journey == 'soak-report' && inputs.spec == '' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    environment: staging
+    environment: staging-e2e
     timeout-minutes: 10
     permissions: {contents: read, issues: write}
     steps:
