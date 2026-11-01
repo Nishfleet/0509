@@ -1,13 +1,10 @@
+# Every merge to main deploys staging: the 0509-staging Worker on its own D1, R2, KV and queues,
+# built with cf from cloudflare.config.ts. Its own workflow, so a staging failure never reddens the
+# production deploy run the fleet's deploy-failed alert reads (0509#7656, fleet-ops#9889).
+# Secrets stay on the Worker: a deploy keeps every secret it does not upload
+# (https://developers.cloudflare.com/workers/configuration/secrets/).
 name: Deploy staging
 
-# Staging is its own sandbox: a separate Worker, D1, R2, KV and queues, built
-# from `cloudflare.config.ts` in staging mode (AGENTS.md). The hosted e2e lanes
-# run against it, so it needs the same build the production deploy ships.
-#
-# Its own workflow, not a job in deploy-production.yml, because the fleet's
-# deploy-failed alert reads that workflow's run conclusion as "Production is
-# running main" (0509#7656, fleet-ops#9889): a sandbox failure must never
-# redden it.
 on: {push: {branches: [main]}, workflow_dispatch: {}}
 
 permissions: {contents: read}
@@ -17,8 +14,6 @@ jobs:
     name: staging
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    # Job-level, so a queued staging deploy waits for the running one instead
-    # of cancelling it and leaves half an environment behind.
     concurrency: {group: deploy-staging, cancel-in-progress: false}
     environment: {name: staging, url: https://staging.0509.io}
     timeout-minutes: 15
@@ -30,10 +25,7 @@ jobs:
         with: {node-version: 22, cache: npm}
       - run: npm ci
       - run: CLOUDFLARE_VITE_FORCE_BUILD_OUTPUT=true npx react-router build --mode staging
-      - name: Apply D1 migrations
-        # The id comes out of the build's own worker.config.json, so a misbuilt
-        # tree cannot point the migration at another database: refuse anything
-        # that is not the staging database (627cffe8, cloudflare.config.ts).
+      - name: Apply D1 migrations to the staging database only (627cffe8, cloudflare.config.ts)
         run: |
           id=$(jq -r .env.DB.id .cloudflare/output/v0/workers/default/worker.config.json)
           case "$id" in
@@ -41,30 +33,15 @@ jobs:
             *) echo "::error::refusing to migrate non-staging database: $id"; exit 1 ;;
           esac
           npx cf d1 migrations apply "$id" --mode staging
-        env:
+        env: &cloudflare
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - name: Deploy the staging Worker
         run: |
-          missing=""
-          for name in DODO_TEST_API_KEY BETTER_AUTH_SECRET TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY DODO_WEBHOOK_SECRET SLACK_TARGET_SECRET; do
-            [ -n "${!name}" ] || missing="$missing $name"
-          done
-          [ -z "$missing" ] || { echo "::error::staging needs its own value for:$missing"; exit 1; }
           worker=$(jq -r .name .cloudflare/output/v0/workers/default/worker.config.json)
           [ "$worker" = "0509-staging" ] || { echo "::error::refusing to deploy non-staging worker: $worker"; exit 1; }
-          secrets=$(mktemp); trap 'rm -f "$secrets"' EXIT
-          jq -n '{DODO_PAYMENTS_API_KEY: env.DODO_TEST_API_KEY, BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET, TURNSTILE_SITE_KEY: env.TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY: env.TURNSTILE_SECRET_KEY, DODO_WEBHOOK_SECRET: env.DODO_WEBHOOK_SECRET, SLACK_TARGET_SECRET: env.SLACK_TARGET_SECRET}' > "$secrets"
-          npx cf deploy --prebuilt --mode staging --secrets-file "$secrets"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          DODO_TEST_API_KEY: ${{ secrets.DODO_TEST_API_KEY }}
-          BETTER_AUTH_SECRET: ${{ secrets.STAGING_BETTER_AUTH_SECRET }}
-          TURNSTILE_SITE_KEY: ${{ secrets.STAGING_TURNSTILE_SITE_KEY }}
-          TURNSTILE_SECRET_KEY: ${{ secrets.STAGING_TURNSTILE_SECRET_KEY }}
-          DODO_WEBHOOK_SECRET: ${{ secrets.STAGING_DODO_WEBHOOK_SECRET }}
-          SLACK_TARGET_SECRET: ${{ secrets.STAGING_SLACK_TARGET_SECRET }}
+          npx cf deploy --prebuilt --mode staging
+        env: *cloudflare
       - name: Smoke staging
         timeout-minutes: 3
         run: |
