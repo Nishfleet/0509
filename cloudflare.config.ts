@@ -26,6 +26,7 @@ export default defineConfig(({ mode }) => {
       },
       assets: { runWorkerFirst: ["/mcp"] },
       domains: staging ? ["staging.0509.io"] : ["0509.io", "www.0509.io", "api.0509.io"],
+      previewUrls: staging,
       triggers: [
         triggers.scheduled({ schedule: "*/5 * * * *" }),
         triggers.scheduled({ schedule: "0 * * * *" }),
