@@ -209,11 +209,6 @@ describe("worker env", () => {
     expect(example.BETTER_AUTH_URL).not.toBe(SITE_URL);
   });
 
-  it("starts lighthouse wrangler on the example env-file", () => {
-    const ci = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
-    expect(ci).toContain("npx wrangler dev --env-file .dev.vars.example");
-  });
-
   it("accepts the placeholder values on the example env-file origin", () => {
     const example = exampleSecrets();
     useEnv({

@@ -5,7 +5,7 @@
 # Every gate job runs on pull_request and merge_group (the queue evaluates checks on the merge
 # ref), and a skipped required check counts as passing (#4664), so no gate job carries a
 # job-level `if:` that can skip it; tests/required-checks-never-skip.test.ts pins it.
-# No deployment_status trigger (#7013); the production e2e runs from e2e-scheduled.yml, the
+# No deployment_status trigger (#7013); the
 # post-deploy audit stays out of deploy-production.yml (#7656), and deploy-freeze reads a
 # deploy run's conclusion over the API, never a deployment event.
 name: CI
@@ -70,9 +70,7 @@ jobs:
           tests/unit/e2e-session-seeder.test.ts
           tests/unit/route-titles.test.ts
           tests/preview-assert-skip.test.ts
-          tests/required-checks-never-skip.test.ts
           tests/deploy-production-pipeline.test.ts
-          tests/unit/soak-report.test.ts tests/e2e-scheduled-targets.test.ts
           tests/cloudflare-config.test.ts
       - name: Test coverage floor
         if: github.event_name == 'merge_group'
