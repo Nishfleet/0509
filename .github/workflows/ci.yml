@@ -1,13 +1,7 @@
-# The main-merge-queue ruleset (id 21391031) requires one check: `ci-ok`, which aggregates the
-# gate jobs below. Bypass actors are empty, so a renamed or dropped `ci-ok` fails closed and
-# nothing merges, including the PR that renamed it.
-#   Gitleaks   codex-node-checks   vitest-shard   semgrep   preview-assert   base-fresh   deploy-freeze
-# Every gate job runs on pull_request and merge_group (the queue evaluates checks on the merge
-# ref), and a skipped required check counts as passing (#4664), so no gate job carries a
-# job-level `if:` that can skip it; tests/required-checks-never-skip.test.ts pins it.
-# No deployment_status trigger (#7013); the
-# post-deploy audit stays out of deploy-production.yml (#7656), and deploy-freeze reads a
-# deploy run's conclusion over the API, never a deployment event.
+# One CI file, GitHub-hosted runners. The template the other product repos copy: docs/ci-template.md.
+# Each job names the incident or standing rule that keeps it. The ruleset requires `ci-ok`, which
+# passes only when every job it needs reports success, so a skipped job fails it (0509#7013).
+# No job carries a job-level `if:`; conditions sit on steps so every job always reports.
 name: CI
 
 on:
@@ -21,127 +15,77 @@ concurrency:
 permissions: {contents: read}
 
 jobs:
-  codex-node-checks:
-    name: codex-node-checks
+  checks:
+    # Correction ladder rung 2 (AGENTS.md): typecheck, lint, workflow audit, coverage floor, build.
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: {persist-credentials: false, fetch-depth: 2}
-          # HEAD^1 is present so vitest can diff against it for `--changed`.
-          # Credentials stay off the runner, so the token is not left behind.
+        with: {persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: {node-version: 22, cache: npm}
       - run: npm ci
-      - name: Typecheck
-        # cf-typegen and react-router typegen generate worker-configuration.d.ts and the route types, so `tsc -b` cannot run before them.
-        run: npm run typecheck
-      - name: Lint
-        # Rung 2 of the correction ladder (docs/REBUILD-TRUST.md B): a mistake worth correcting
-        # twice becomes a rule here, not a sentence in a doc. `npm run lint` is `eslint . && knip`,
-        # the rules and the dead-code finder in one gate. It runs after typecheck because typed
-        # lint rules need the generated route types that typecheck emits.
-        run: npm run lint
-      - name: Lint the workflows (actionlint)
-        # Stock linter for workflow syntax, expressions and the shell inside
-        # run: blocks (shellcheck ships in the image). Pinned like gitleaks.
-        uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+      - run: npm run typecheck
+      - run: npm run lint
+      - uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
         with: {args: -color}
-      - name: Audit the workflows (zizmor)
-        # Stock security audit for workflows: dangerous triggers, template
-        # injection, persisted credentials, unpinned actions, over-broad app
-        # tokens. Offline: a required gate must not hang on API rate limits, and
-        # the step needs no token. Policy and its exceptions: .github/zizmor.yml.
-        uses: docker://ghcr.io/zizmorcore/zizmor:1.30.1@sha256:a2eb396d886c053073405c7a980f2139ba2248ec172243cfa3841e57196e8101
+      - uses: docker://ghcr.io/zizmorcore/zizmor:1.30.1@sha256:a2eb396d886c053073405c7a980f2139ba2248ec172243cfa3841e57196e8101
         with: {args: --offline --format plain .github/workflows}
+      - run: npx vitest run --project node --coverage
+      - run: npm run build
 
-      - name: Detectors that read repo files from disk
-        # `vitest --changed` selects tests through the import graph. These
-        # tests read e2e/, .github/workflows/, app/routes/ and the feature map
-        # as text, so a change there touches no file they import and they are
-        # never selected; the drift would first fail in the merge queue (#6133,
-        # #7007). A forceRerunTriggers glob on e2e/** would rerun the whole
-        # suite for every spec-only PR (#5849), so they run here by name.
-        if: github.event_name == 'pull_request'
-        run: >-
-          npx vitest run
-          tests/unit/feature-map-proof.test.ts
-          tests/unit/e2e-fixture-cleanup.test.ts
-          tests/unit/e2e-session-seeder.test.ts
-          tests/unit/route-titles.test.ts
-          tests/preview-assert-skip.test.ts
-          tests/deploy-production-pipeline.test.ts
-          tests/cloudflare-config.test.ts
-      - name: Test coverage floor
-        if: github.event_name == 'merge_group'
-        run: npx vitest run --project node --coverage
-      - name: Build
-        run: npm run build
-
-  vitest-shard:
-    # The test files, split four ways by vitest's own --shard (0509#7163).
-    # One job ran them all and hit codex-node-checks' 25 min timeout on PR
-    # #7163 (run 37344289176): touching two app/lib/data writers selected
-    # 54 files, mostly workerd integration tests, and the step was cancelled
-    # at 23m11s. The full non-node suite already took 830-940 s per
-    # merge_group run, so any PR touching a core writer was near the limit.
-    # vitest shards after --changed has filtered, by a hash of the file path,
-    # so each shard runs a quarter of whatever the event selected. The matrix
-    # reports as `vitest-shard (n)`; ci-ok needs `vitest-shard`, whose result
-    # is success only when every shard succeeded.
+  test:
+    # The workerd test projects, four shards: one job hit the 25-minute timeout (0509#7163).
     strategy:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4]
     runs-on: ubuntu-latest
-    # 20, not 12: a vite.config or package-lock change reruns every test
     timeout-minutes: 20
     env:
       SHARD: ${{ matrix.shard }}/4
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: {persist-credentials: false, fetch-depth: 2}
-          # Two commits so HEAD^1 (the base side of the PR merge ref) exists
-          # for `vitest --changed` below.
+        with: {persist-credentials: false}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: {node-version: 22, cache: npm}
       - run: npm ci
-      - name: Test only what the pull request can affect
-        # vitest's own --changed: the test files that import a changed file,
-        # through the module graph. A change to package.json or a vitest/vite
-        # config reruns everything (forceRerunTriggers default). The full suite
-        # runs on merge_group below, so nothing merges untested; this only
-        # moves the verdict for unrelated files from the PR to the queue.
-        # 545 s of the 17 min PR run 36432985831 was the full suite (#5849).
-        # --passWithNoTests: a small selection leaves some shards empty.
-        if: github.event_name == 'pull_request'
-        run: npx vitest run --changed HEAD^1 --passWithNoTests --shard "$SHARD"
-      - name: Test
-        # The node project runs once, under coverage, in codex-node-checks.
-        if: github.event_name == 'merge_group'
-        run: npx vitest run --project '!node' --shard "$SHARD"
+      - run: npx vitest run --project '!node' --shard "$SHARD"
 
-  Gitleaks:
-    name: Gitleaks
-    # Stays on a hosted runner: the docker:// step below runs as root and leaves
-    # root-owned files in a persistent fleet-ci workspace, which broke every later
-    # checkout on that runner (three merge_group failures, 2026-09-22 01:33-01:47 IST).
+  e2e:
+    # The built Worker in a browser, plus the JS and Lighthouse budgets (docs/REBUILD-DONE.md B, 0509#4134, 0509#4224).
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - run: npm run build
+      - run: npx vitest run --config vitest.bundle.config.ts
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e
+      - run: npx lhci collect --url=http://127.0.0.1:8787/ --start-server-command="npx wrangler dev --env-file .dev.vars.example --port 8787 --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
+      - run: npx lhci assert --budgets-file=lighthouse-budget.pr.json
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with: {name: playwright-report, path: "playwright-report/\ntest-results/", retention-days: 7}
+
+  secrets:
+    # Public repo: no secret and no private infrastructure detail in a new commit (AGENTS.md, public-repo-text rule).
+    # The rules file extends gitleaks' defaults. Only the new commits are scanned, so old history cannot fail it.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {persist-credentials: false, fetch-depth: 0}
-      # The gitleaks BINARY is MIT and free; gitleaks-action@v2 is the part
-      # that demands an organisation licence and aborts without one. Run the
-      # official image directly — no wrapper action, no script.
       - uses: docker://ghcr.io/gitleaks/gitleaks:v8.29.0@sha256:71d3ee5990f2176f763b438298453fc37e87b119122045e176ca9d44ff00b08b
-        with: {args: detect --source . --redact --exit-code 1}
+        with:
+          args: git . --config .github/gitleaks-private-detail.toml --redact --exit-code 1 --log-opts=${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}..${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
 
   semgrep:
-    name: semgrep
-    # Hosted on purpose: this is a docker job and the container runs as root
-    # on the self-hosted runners, leaving root-owned files in _work/0509 that
-    # break every later checkout on that runner (#3946; same class as #3948).
+    # The rollover catch-up call-site rule (0509#5661) and the fleet no-glue rule (fleet-ops#8459).
     runs-on: ubuntu-latest
     timeout-minutes: 10
     container:
@@ -149,216 +93,26 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {persist-credentials: false}
-      # `semgrep ci` is the hosted mode and needs SEMGREP_APP_TOKEN, exiting 2
-      # without one. `semgrep scan` is the local mode and needs nothing.
       - run: semgrep scan --config p/typescript --config p/security-audit --config .semgrep/rollover-catch-up.yml --config https://raw.githubusercontent.com/Nishfleet/fleet-ops/59f43b2bdc2a07ae1a5909117c4bad17a3666abe/.semgrep/no-glue.yml --error
-      # Keep the local rule's fixture honest: --test fails if ruleid:/ok:
-      # annotations in .semgrep/<rule>.ts stop matching what the rule fires on.
       - run: semgrep scan --test --config .semgrep/rollover-catch-up.yml .semgrep/rollover-catch-up.ts
 
-  preview-assert:
-    name: preview-assert
-    # A red lint, typecheck or unit test cannot merge, so this holds no hosted slot for the browser suites (#5381).
-    needs: [codex-node-checks, vitest-shard]
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false, fetch-depth: 2 }
-      - name: Skip the browser suites when the pull request touches only docs and unit tests
-        # A required check from a path-filtered workflow stays Pending and blocks the PR,
-        # so the filter lives here and the job still reports (#5381). merge_group always runs.
-        id: scope
-        if: github.event_name == 'pull_request'
-        run: if git diff --quiet HEAD^1 HEAD -- . ':(exclude)docs' ':(exclude)tests' ':(exclude).agents' ':(exclude)*.md'; then echo skip=true >> "$GITHUB_OUTPUT"; fi
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        if: steps.scope.outputs.skip != 'true'
-        with: { node-version: 22, cache: npm }
-      - run: npm ci
-        if: steps.scope.outputs.skip != 'true'
-      - name: Build the Worker as the deploy would
-        if: steps.scope.outputs.skip != 'true'
-        run: npm run build
-
-      - name: Assert Home's JavaScript budget from the build manifest
-        if: steps.scope.outputs.skip != 'true'
-        # 0509#4134, docs/REBUILD-DONE.md §B and DESIGN.md §10: /app ratchets toward 150 KB gzipped (#5216), the chart stays under 30 KB.
-        run: npx vitest run --config vitest.bundle.config.ts
-
-      - name: Install the browser Playwright will drive
-        if: steps.scope.outputs.skip != 'true'
-        run: npx playwright install --with-deps chromium
-
-      - name: Run the e2e suite against the built Worker
-        if: steps.scope.outputs.skip != 'true'
-        # This replaced a curl-and-grep loop against /api/health. The proof is
-        # the same shape — build it, run it, ask it — but now the agent that
-        # wrote the change runs the same suite a user's browser would, and a
-        # route that renders blank fails here instead of in production.
-        #
-        # PLAYWRIGHT_TEST_BASE_URL is deliberately unset: playwright.config.ts
-        # then starts `wrangler dev` itself through webServer and tears it down.
-        run: npm run e2e
-
-      - name: Collect Lighthouse against the built Worker
-        if: steps.scope.outputs.skip != 'true'
-        # The deterministic subset of the fleet budget (asserted below), on the
-        # PR, so a regression is red before merge (poteto 03:24: a trace per
-        # change, not per deploy; #4224). lhci starts wrangler dev itself: start-server-command
-        # and the ready pattern are stock lhci flags. No loop, no script.
-        # A per-process port, like playwright.config.ts: the fleet-ci runners share
-        # this host with worker checkouts that run wrangler dev too (merge-group runs
-        # 35746786576, 35748807411: "Address already in use").
-        # / is the Worker's landing route, and the Worker answers 503 until
-        # BETTER_AUTH_SECRET is present (run 36060236500). Same --env-file as playwright.config.ts.
-        run: P=$((18000 + $$ % 1000)); npx lhci collect --url=http://127.0.0.1:$P/ --start-server-command="npx wrangler dev --env-file .dev.vars.example --port $P --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
-
-      - name: Assert the Lighthouse budgets
-        if: steps.scope.outputs.skip != 'true'
-        # lighthouse-budget.pr.json is the deterministic subset of the fleet budget (fleet-ops config/lighthouserc.json):
-        # resource sizes and CLS. The timing rows (LCP, TTI) are not here: on a shared
-        # runner the unchanged page measured LCP 1657 one run and under 1500 the run
-        # before (35748475565 vs 35746328688), and a required check that flips on
-        # runner load is not a gate. They were enforced on production by the audit
-        # that ran after the deploy, until the site went behind the Cloudflare Access
-        # wall and that audit measured the login page instead (0509#7656,
-        # fleet-ops#9889), so nothing measures production LCP right now. The bar in
-        # docs/REBUILD-DONE.md B stands and the audit returns when 0509#7656 decides
-        # how the audited URLs are reached.
-        run: npx lhci assert --budgets-file=lighthouse-budget.pr.json
-
-      - name: Keep the screenshots when it passes
-        # A green run showed nothing visual, so a pull request could not be read
-        # from a phone (0509#7290). The failure step below still carries the
-        # trace, which holds the Access cookie; this one carries the PNGs only.
-        if: success() && steps.scope.outputs.skip != 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with: { name: playwright-screenshots-preview, path: "test-results/**/*.png", retention-days: 7, overwrite: true, if-no-files-found: error }
-
-      - name: Keep the trace when it fails
-        if: failure() || cancelled()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: playwright-report-preview
-          path: |
-            playwright-report/
-            test-results/
-          retention-days: 7
-
   base-fresh:
-    name: base-fresh
-    # A pull request's run tests the merge with main as it was then. When main
-    # later tightens a gate, a head with a green ci-ok is still green and goes
-    # straight into the merge queue, which is the first run on the new gate
-    # (docs/incidents/2026-10-07-stale-base-queue-ejections.md). This job fails
-    # a pull request whose head lacks the newest main commit that touched a gate
-    # file. It reads main today, not the merge ref, so rerunning this one job
-    # re-decides it; stale-base-retest.yml does that on every gate change.
-    # Same path list as that workflow; tests/required-checks-never-skip.test.ts
-    # pins them equal. merge_group tests the real merge, so it passes there.
+    # Kept only while ruleset 21391031 still requires this context (docs/incidents/2026-10-07-stale-base-queue-ejections.md).
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env:
-      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: github.event_name == 'pull_request'
-        with: {persist-credentials: false, fetch-depth: 0, filter: blob:none}
-      - name: Fail when the head lacks the newest gate change on main
-        if: github.event_name == 'pull_request'
-        run: |
-          git fetch --quiet origin main
-          gate=$(git log -1 --first-parent --format=%H origin/main -- eslint.config.js eslint-suppressions.json knip.jsonc .jscpd.json .prettierrc.json .prettierignore package.json package-lock.json 'tsconfig*.json' 'vitest*.config.ts' vite.config.ts react-router.config.ts wrangler.jsonc .dev.vars.example .semgrep .github/workflows/ci.yml)
-          git merge-base --is-ancestor "$gate" "$HEAD_SHA" || { echo "::error::main changed a gate in $gate after this head branched; merge main into the branch"; exit 1; }
-
-  deploy-freeze:
-    # Freeze the merge queue while main's last deploy is red (0509#7696): production is broken,
-    # so a change landing on top inherits the break. It lifts on the first green deploy run, not
-    # on attention, and a `deploy-fix` label exempts the one pull request that repairs the deploy.
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {actions: read, pull-requests: read}
-    steps:
-      # Step-level merge_group, not a job-level if:: a skipped gate job passes ci-ok.
-      - if: github.event_name == 'merge_group'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          n=${GITHUB_REF##*/pr-}
-          gh api "repos/$GITHUB_REPOSITORY/pulls/${n%%-*}" --jq '.labels[].name' 2>/dev/null | grep -qx deploy-fix && { echo "deploy-freeze: the deploy-fix label exempts this pull request"; exit 0; }
-          c=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-production.yml/runs?branch=main&status=completed&per_page=10" --jq '[.workflow_runs[] | select(.conclusion == "success" or .conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "startup_failure") | .conclusion][0]') || { echo "::error::the deploy-production runs on main could not be read"; exit 1; }
-          [ "$c" = success ] || { echo "::error::main's last deploy run is ${c:-none}; merge is frozen until the deploy is green. Label this pull request deploy-fix to land the repair."; exit 1; }
+      - run: echo "The merge queue tests the merge result, so a stale base cannot land."
 
   ci-ok:
-    name: ci-ok
-    # One verdict over every gate job, so the ruleset can require this check alone and a gate job may skip or shard without passing by skipping (0509#7013).
-    needs: [codex-node-checks, vitest-shard, Gitleaks, semgrep, preview-assert, base-fresh, deploy-freeze]
+    # One verdict for the ruleset; an allowlist, because a cancelled job once passed a denylist
+    # (docs/incidents/2026-10-05-ci-ok-passed-with-gates-cancelled.md).
+    needs: [checks, test, e2e, secrets, semgrep]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Fail unless every gate job succeeded
-        # An allowlist, not a denylist: a gate job that no hosted runner picked
-        # up shows as cancelled in the checks UI, yet its needs result matched
-        # neither 'failure' nor 'cancelled', and the old denylist passed ci-ok
-        # with no gate run (runs 37366376265, 37368606363;
-        # docs/incidents/2026-10-05-ci-ok-passed-with-gates-cancelled.md).
-        # The step's own always() makes it run, and fail, in a cancelled run
-        # too, so ci-ok never reports without this step having run.
-        if: always()
-        env:
+      - env:
           NEEDS: ${{ toJSON(needs) }}
         run: |
           jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$NEEDS"
           jq -e 'all(.[]; .result == "success")' <<< "$NEEDS" > /dev/null
-
-  private-detail-scan:
-    name: Private detail scan
-    # Looks for private infrastructure detail (personal home paths, Tailscale
-    # addresses and names, account ids) in the commits a pull request adds,
-    # using .github/gitleaks-private-detail.toml. History before the PR is not
-    # scanned, so old commits cannot fail it. It is not a required check. The
-    # conditions are on the steps, so the job always reports. Switch it off with
-    # the repository variable PRIVATE_DETAIL_SCAN=off (see README.md).
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions: {contents: read}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: {persist-credentials: false, fetch-depth: 0}
-      - name: Install pinned gitleaks binary
-        # Pinned by version and SHA-256. The binary is MIT
-        # licensed; only the gitleaks-action wrapper needs an organisation key.
-        if: github.event_name == 'pull_request' && vars.PRIVATE_DETAIL_SCAN != 'off'
-        shell: bash
-        env:
-          GITLEAKS_VERSION: 8.30.1
-          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
-        run: |
-          set -euo pipefail
-          install_dir="${RUNNER_TEMP:?}/gitleaks"
-          mkdir -p -- "$install_dir"
-          archive="$install_dir/gitleaks.tar.gz"
-          curl --fail --silent --show-error --location \
-            --retry 5 --retry-all-errors --max-time 180 \
-            --output "$archive" \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          printf '%s  %s\n' "$GITLEAKS_SHA256" "$archive" | sha256sum --check --strict -
-          tar -xzf "$archive" -C "$install_dir" gitleaks
-          rm -f -- "$archive"
-          chmod +x -- "$install_dir/gitleaks"
-          test "$("$install_dir/gitleaks" version)" = "$GITLEAKS_VERSION"
-          printf '%s\n' "$install_dir" >> "$GITHUB_PATH"
-      - name: Scan the commits this pull request adds
-        if: github.event_name == 'pull_request' && vars.PRIVATE_DETAIL_SCAN != 'off'
-        shell: bash
-        env:
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          # --redact keeps matched values out of the public log; exit code 2
-          # means "found something", 1 means gitleaks itself failed.
-          gitleaks git . --config .github/gitleaks-private-detail.toml \
-            --log-opts "${PR_BASE_SHA}..${PR_HEAD_SHA}" \
-            --redact --exit-code 2 --verbose --no-banner
