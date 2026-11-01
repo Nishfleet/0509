@@ -110,7 +110,7 @@ npm run lint       # eslint . && knip && jscpd && prettier --check .
 npm run format     # prettier --write .
 npm test           # vitest run
 npm run e2e        # playwright test
-npm run eval       # vitest run --config vitest.evals.config.ts; live Workers AI, EVAL_MAX_NEURONS caps one run (evals.yml sets it from the EVAL_MAX_NEURONS repository variable, default 2000; unset or 0 means no cap; any other non-integer value aborts the run)
+npm run eval       # vitest run --config vitest.evals.config.ts; live Workers AI, EVAL_MAX_NEURONS caps one run (unset or 0 means no cap; any other non-integer value aborts the run). No workflow runs it since 2026-11-01
 npm run deploy     # wrangler deploy
 npm run verify:start # chrome-devtools start, headless, Playwright's Chromium, --no-sandbox
 npm run verify:stop  # chrome-devtools stop
@@ -126,11 +126,10 @@ Signing in locally needs the `--var` overrides in `.agents/skills/verify/SKILL.m
 **`npm run e2e` has two modes and the environment picks.** With
 `PLAYWRIGHT_TEST_BASE_URL` unset, `playwright.config.ts` starts `wrangler dev`
 itself and tests the built Worker — that is what `preview-assert` runs on every
-PR. With it set, there is no local server and the suite runs against that URL —
-that is what the `e2e-scheduled.yml` jobs run against a hosted Worker. Same
-assertions both times.
+PR. With it set, there is no local server and the suite runs against that URL.
+No scheduled job runs the hosted lane since 2026-11-01 (fleet-ops#10935).
 
-**The hosted e2e target is `https://staging.0509.io`**, the `0509-staging` Worker on its own D1, R2, KV and queues, deployed by `.github/workflows/deploy-staging.yml` with `cf` from `cloudflare.config.ts` (`CLOUDFLARE_VITE_FORCE_BUILD_OUTPUT=true npx react-router build --mode staging`, then `npx cf deploy --prebuilt --mode staging`). That workflow is separate from `deploy-production.yml` because the fleet's deploy-failed alert reads a `deploy-production` run conclusion as production's, so a staging failure must not redden it. Production keeps only the daily sign-in check and the public-page smoke, and still deploys with wrangler until #6085.
+**Staging is `https://staging.0509.io`**, the `0509-staging` Worker on its own D1, R2, KV and queues, deployed by `.github/workflows/deploy-staging.yml` with `cf` from `cloudflare.config.ts` (`CLOUDFLARE_VITE_FORCE_BUILD_OUTPUT=true npx react-router build --mode staging`, then `npx cf deploy --prebuilt --mode staging`). That workflow is separate from `deploy-production.yml` because the fleet's deploy-failed alert reads a `deploy-production` run conclusion as production's, so a staging failure must not redden it. Production still deploys with wrangler until #6085.
 
 **Run it before the PR opens.** A diff that touches only `docs/` or `.agents/` runs `npx prettier --check` on the changed files and nothing else. A change under `app/`, `workers/` or `e2e/`
 runs the specs that cover it locally first, in preview mode, by file:
@@ -176,17 +175,9 @@ the live app works.
 The self-hosted runner unit hides `~/.config/cloudflare` from every job it runs, and the first step of every agent job fails the run if that directory becomes readable (fleet-ops#9983, 2026-10-22). So no agent session on this host — a worker or an orchestrator hand-off — can read a Cloudflare token, mint one, or run `wrangler` against a remote database.
 
 - A Cloudflare credential an agent session needs goes in the seat-config directory, the one credential directory both the runner unit and the worker jail leave visible. Its exact path is not written here because this repo is public and the repo's own private-detail rule keeps that path out of it; the fleet-ops dispatch workflow that writes the seat env files is the source of truth. A worker that needs one parks the issue `blocked-on: orchestrator` with the `needs-orchestrator` label, rather than guessing a home path.
-- The scheduled D1 readers in `e2e-scheduled.yml` (`soak-report` on the staging database,
-  `jev-failures` on production) install with `npm ci --ignore-scripts`, so no install script
-  runs beside a Cloudflare token. `jev-failures` runs under `production-e2e` and reads with
-  `wrangler d1 execute 0509 --remote`; that read is red since
-  2026-10-16 because the rotated repo-level `CLOUDFLARE_API_TOKEN` no longer carries D1 read
-  (D1 error 7403); restoring D1 read — per #7072's corrected fix, a token scoped to D1 read in a
-  main-only environment — is an owner action, and until it lands those reads fail (0509#7773).
-  `soak-report` runs under `staging` and reads the staging database with `cf d1 query`.
-  A worker session on the VPS cannot read an Actions secret, because the worker App token
+- A worker session on the VPS cannot read an Actions secret, because the worker App token
   carries no permission to read them.
-- The Cloudflare Access service token for driving production is not in this repo and sits on no path an agent can read. Driving production from a worker is forbidden anyway; the production suite runs on its own schedule from `main`.
+- The Cloudflare Access service token for driving production is not in this repo and sits on no path an agent can read. Driving production from a worker is forbidden.
 
 ## Architecture
 
@@ -245,7 +236,7 @@ never for a list of bad results: a job no runner picked up matched neither
 `failure` nor `cancelled` and passed it once (2026-10-05). `vitest-shard` is a
 four-way matrix (`vitest-shard (1)` … `(4)`, vitest's own `--shard`); its
 result in `needs` is `success` only when every shard succeeded (0509#7163).
-`base-fresh` fails a PR whose head lacks the newest `main` commit that touched a gate file, and `stale-base-retest.yml` reruns it on every open PR when one lands (`docs/incidents/2026-10-07-stale-base-queue-ejections.md`).
+`base-fresh` fails a PR whose head lacks the newest `main` commit that touched a gate file (`docs/incidents/2026-10-07-stale-base-queue-ejections.md`).
 
 `ratchet / ratchet` (2026-10-12) is the fleet's no-glue gate: a PR's net added lines under `.github/workflows`, `.github/actions`, `scripts` and `bin` must be 0 or fewer. `.github/workflows/ratchet.yml` only calls `Nishfleet/fleet-ops/.github/workflows/ratchet.yml@main` (a SHA pin would queue forever on the runner group), so the rule is fleet-ops' main copy and a PR cannot loosen it; a PR that edits the caller's `ratchet` job fails. Ruleset before: required `ci-ok`, `base-fresh`; after: those plus `ratchet / ratchet`; nothing else changed. Bypass list: `gh api repos/Nishfleet/0509/rulesets/21391031 --jq '.bypass_actors, .current_user_can_bypass'` prints `[]` and `"never"`; it was already empty (admin `always` existed 2026-09-21 17:07 to 17:08 IST, one direct push by nish3451 in that window, none since), and no workflow or script here merges through the REST API. Undo (Nish only): `gh api repos/Nishfleet/0509/rulesets/21391031 | jq '{name,target,enforcement,bypass_actors,conditions,rules:(.rules|map(if .type=="required_status_checks" then .parameters.required_status_checks|=map(select(.context!="ratchet / ratchet")) else . end))}' | gh api -X PUT repos/Nishfleet/0509/rulesets/21391031 --input -`.
 
@@ -253,27 +244,19 @@ Renaming `ci-ok` is not cosmetic. A required check that never reports fails
 closed and nothing can merge again, including the PR that renamed it. A
 _skipped_ job counts as passing, so no gate job carries a job-level `if:` that
 can skip it: they report on every event, and on an event with nothing to do
-they pass through one explicit step. `tests/required-checks-never-skip.test.ts`
-pins the gate list, the `if:` rule and `ci-ok`'s `needs`. The merge queue tests
+they pass through one explicit step. `ci-ok` accepts only `success`, so a
+skipped gate job fails it. The merge queue tests
 the merge result, so a PR that would redden `main` never lands. There is no
 AI grader: CI is the gate, and a PR that touches `.github/`, `migrations/`,
 `app/lib/auth*` or `app/lib/data/` is labelled `needs-coordinator` and the
 coordinator reviews it before it merges.
-
-`coordinator-approval / coordinator-approval` (0509#7802) is the fleet's
-risky-change gate, and it is not yet a required check on this ruleset.
-`.github/workflows/coordinator-approval.yml` runs on `merge_group` and calls
-`Nishfleet/fleet-ops/.github/workflows/coordinator-approval.yml@main`; in the
-queue it rejects a risky pull request whose head carries no coordinator
-approval. The technical lead adds the context to `main-merge-queue` after
-that caller merges.
 
 The production Lighthouse audit is out of `deploy-production.yml` while the site is behind the
 Cloudflare Access wall (0509#7656): it measured the login page and reddened a good deploy, which the
 fleet's deploy-failed alert read as an outage (fleet-ops#9889). The budgets still gate every pull
 request in `ci.yml` (resource sizes and CLS, against the built Worker). Verify a fix on the local lane:
 `PLAYWRIGHT_TEST_BASE_URL` unset, so `npm run e2e -- e2e/<name>.spec.ts` starts `wrangler dev --local` with simulated
-email, a local D1 and `AI_SPEND` off. Do not dispatch the weekly `e2e-scheduled.yml` suite to verify a fix; the workflow accepts a dispatch (journey or `inputs.spec`) from `main` only, so a branch sends nothing at staging. Never dispatch or re-point a job at
+email, a local D1 and `AI_SPEND` off. Never dispatch or re-point a job at
 https://0509.io (hosted e2e belongs on https://staging.0509.io): each production sign-in sends a real email, the specs delete and recreate production D1 rows, and the
 live-AI journeys spend Workers AI neurons. Production e2e runs only on its schedule from `main`, and every job that
 reaches production declares the `production-e2e` environment, whose deployment branch policy allows `main` only.
