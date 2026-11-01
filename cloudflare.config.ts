@@ -13,6 +13,23 @@ export default defineConfig(({ mode }) => {
   const rateLimit = (namespace: number, limit: number) =>
     bindings.rateLimit({ namespace: String(namespace + (staging ? 1000 : 0)), simple: { limit, period: 60 } });
 
+  const workerExports = {
+    BillingReconcileWorkflow: exports.workflow({ name: own("billing-reconcile") }),
+    StandingRolloverWorkflow: exports.workflow({ name: own("standing-rollover") }),
+    DiscoveryWorkflow: exports.workflow({ name: own("competitor-discovery") }),
+    SiteSweepWorkflow: exports.workflow({ name: own("site-sweep") }),
+    HiringSweepWorkflow: exports.workflow({ name: own("hiring-sweep") }),
+    FeedSweepWorkflow: exports.workflow({ name: own("feed-sweep") }),
+    SnapshotBackupWorkflow: exports.workflow({ name: own("snapshot-backup") }),
+    AccountDeleteWorkflow: exports.workflow({ name: own("account-delete") }),
+    OwnSiteCheckWorkflow: exports.workflow({ name: own("own-site-check") }),
+    MentionsWorkflow: exports.workflow({ name: own("mentions-sweep") }),
+    IdentityTailWorkflow: exports.workflow({ name: own("identity-tail") }),
+    FixtureReaperWorkflow: exports.workflow({ name: own("fixture-reaper") }),
+    BrowserBudget: exports.durableObject({ storage: "sqlite" }),
+    SelectionEnrichmentLease: exports.durableObject({ state: "deleted" }),
+  };
+
   return {
     worker: {
       name,
@@ -140,24 +157,7 @@ export default defineConfig(({ mode }) => {
         PROBE_LIMIT: rateLimit(5095, 10),
         CHANGE_EMAIL_LIMIT: rateLimit(5096, 3),
       },
-      exports: preview
-        ? {}
-        : {
-            BillingReconcileWorkflow: exports.workflow({ name: own("billing-reconcile") }),
-            StandingRolloverWorkflow: exports.workflow({ name: own("standing-rollover") }),
-            DiscoveryWorkflow: exports.workflow({ name: own("competitor-discovery") }),
-            SiteSweepWorkflow: exports.workflow({ name: own("site-sweep") }),
-            HiringSweepWorkflow: exports.workflow({ name: own("hiring-sweep") }),
-            FeedSweepWorkflow: exports.workflow({ name: own("feed-sweep") }),
-            SnapshotBackupWorkflow: exports.workflow({ name: own("snapshot-backup") }),
-            AccountDeleteWorkflow: exports.workflow({ name: own("account-delete") }),
-            OwnSiteCheckWorkflow: exports.workflow({ name: own("own-site-check") }),
-            MentionsWorkflow: exports.workflow({ name: own("mentions-sweep") }),
-            IdentityTailWorkflow: exports.workflow({ name: own("identity-tail") }),
-            FixtureReaperWorkflow: exports.workflow({ name: own("fixture-reaper") }),
-            BrowserBudget: exports.durableObject({ storage: "sqlite" }),
-            SelectionEnrichmentLease: exports.durableObject({ state: "deleted" }),
-          },
+      exports: preview ? {} : workerExports,
     },
   };
 });
