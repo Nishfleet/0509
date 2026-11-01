@@ -125,7 +125,7 @@ Signing in locally needs the `--var` overrides in `.agents/skills/verify/SKILL.m
 
 **`npm run e2e` has two modes and the environment picks.** With
 `PLAYWRIGHT_TEST_BASE_URL` unset, `playwright.config.ts` starts `wrangler dev`
-itself and tests the built Worker — that is what `preview-assert` runs on every
+itself and tests the built Worker — that is what the `e2e` CI job runs on every
 PR. With it set, there is no local server and the suite runs against that URL.
 No scheduled job runs the hosted lane since 2026-11-01 (fleet-ops#10935).
 
@@ -134,7 +134,7 @@ No scheduled job runs the hosted lane since 2026-11-01 (fleet-ops#10935).
 **Run it before the PR opens.** A diff that touches only `docs/` or `.agents/` runs `npx prettier --check` on the changed files and nothing else. A change under `app/`, `workers/` or `e2e/`
 runs the specs that cover it locally first, in preview mode, by file:
 `npm run e2e -- e2e/<name>.spec.ts` (Playwright's own file filter). Nothing
-is pasted into the PR body: `preview-assert` runs the whole suite at the PR
+is pasted into the PR body: the `e2e` CI job runs the whole suite at the PR
 head and is the proof. Do not run the full suite, `npm run build` or
 `npm run typecheck` locally as well: CI runs all three, and on a fleet
 worker (25% of a core, 55-minute wall) the full local set is what timed
@@ -224,46 +224,33 @@ rejection**, not a review comment. The row format is asserted by
 
 ## What gates a merge
 
-Three required checks on the `main-merge-queue` ruleset (id 21391031), **empty
-bypass list**: `ci-ok`, `base-fresh` and `ratchet / ratchet`. `ci-ok` is a job in `ci.yml` that needs the six gate jobs
-
-```
-codex-node-checks   vitest-shard   Gitleaks   semgrep   preview-assert   base-fresh
-```
-
-and fails unless every one succeeded (0509#7013). It checks for `success`,
-never for a list of bad results: a job no runner picked up matched neither
-`failure` nor `cancelled` and passed it once (2026-10-05). `vitest-shard` is a
-four-way matrix (`vitest-shard (1)` … `(4)`, vitest's own `--shard`); its
-result in `needs` is `success` only when every shard succeeded (0509#7163).
-`base-fresh` fails a PR whose head lacks the newest `main` commit that touched a gate file (`docs/incidents/2026-10-07-stale-base-queue-ejections.md`).
-
-`ratchet / ratchet` (2026-10-12) is the fleet's no-glue gate: a PR's net added lines under `.github/workflows`, `.github/actions`, `scripts` and `bin` must be 0 or fewer. `.github/workflows/ratchet.yml` only calls `Nishfleet/fleet-ops/.github/workflows/ratchet.yml@main` (a SHA pin would queue forever on the runner group), so the rule is fleet-ops' main copy and a PR cannot loosen it; a PR that edits the caller's `ratchet` job fails. Ruleset before: required `ci-ok`, `base-fresh`; after: those plus `ratchet / ratchet`; nothing else changed. Bypass list: `gh api repos/Nishfleet/0509/rulesets/21391031 --jq '.bypass_actors, .current_user_can_bypass'` prints `[]` and `"never"`; it was already empty (admin `always` existed 2026-09-21 17:07 to 17:08 IST, one direct push by nish3451 in that window, none since), and no workflow or script here merges through the REST API. Undo (Nish only): `gh api repos/Nishfleet/0509/rulesets/21391031 | jq '{name,target,enforcement,bypass_actors,conditions,rules:(.rules|map(if .type=="required_status_checks" then .parameters.required_status_checks|=map(select(.context!="ratchet / ratchet")) else . end))}' | gh api -X PUT repos/Nishfleet/0509/rulesets/21391031 --input -`.
+GitHub's own gate only: ruleset `main-merge-queue` (id 21391031, empty bypass
+list), the merge queue, and required checks. `.github/workflows/ci.yml` runs on
+GitHub-hosted runners and each job there names the incident or rule behind it.
+The ruleset requires `ci-ok`, which needs every job in `ci.yml` and accepts only
+`success`, so a skipped or cancelled job fails it
+(`docs/incidents/2026-10-05-ci-ok-passed-with-gates-cancelled.md`). No job
+carries a job-level `if:`; conditions sit on steps. The merge queue tests the
+merge result, so a PR that would redden `main` never lands.
 
 Renaming `ci-ok` is not cosmetic. A required check that never reports fails
-closed and nothing can merge again, including the PR that renamed it. A
-_skipped_ job counts as passing, so no gate job carries a job-level `if:` that
-can skip it: they report on every event, and on an event with nothing to do
-they pass through one explicit step. `ci-ok` accepts only `success`, so a
-skipped gate job fails it. The merge queue tests
-the merge result, so a PR that would redden `main` never lands. There is no
-AI grader: CI is the gate, and a PR that touches `.github/`, `migrations/`,
-`app/lib/auth*` or `app/lib/data/` is labelled `needs-coordinator` and the
-coordinator reviews it before it merges.
+closed and nothing can merge again, including the PR that renamed it. The
+ruleset also still requires `base-fresh` (now a pass-through job) and
+`ratchet / ratchet` until the owner drops them (fleet-ops#10935).
 
-The production Lighthouse audit is out of `deploy-production.yml` while the site is behind the
-Cloudflare Access wall (0509#7656): it measured the login page and reddened a good deploy, which the
-fleet's deploy-failed alert read as an outage (fleet-ops#9889). The budgets still gate every pull
-request in `ci.yml` (resource sizes and CLS, against the built Worker). Verify a fix on the local lane:
-`PLAYWRIGHT_TEST_BASE_URL` unset, so `npm run e2e -- e2e/<name>.spec.ts` starts `wrangler dev --local` with simulated
-email, a local D1 and `AI_SPEND` off. Never dispatch or re-point a job at
-https://0509.io (hosted e2e belongs on https://staging.0509.io): each production sign-in sends a real email, the specs delete and recreate production D1 rows, and the
-live-AI journeys spend Workers AI neurons. Production e2e runs only on its schedule from `main`, and every job that
-reaches production declares the `production-e2e` environment, whose deployment branch policy allows `main` only.
-The production e2e is **not required**, deliberately: it cannot run on a pull request, and a required
-check that cannot report blocks the queue forever. The suite is off the
-deploy path because every sign-in in it sends a real email against the Email
-Service daily quota (Nish 2026-09-28).
+**The preview link.** The `preview` job uploads each same-repo pull request as a
+version of the `0509-staging` Worker with the alias `pr-<number>`, never
+deployed, so staging keeps serving `main` and no production data is reachable.
+The link is the "View deployment" button on the PR (environment `preview`).
+Dependabot, fork and merge-queue runs pass the job without an upload.
+
+Verify a fix on the local lane: `PLAYWRIGHT_TEST_BASE_URL` unset, so
+`npm run e2e -- e2e/<name>.spec.ts` starts `wrangler dev --local` with simulated
+email, a local D1 and `AI_SPEND` off. Never point a job at https://0509.io: each
+production sign-in sends a real email, the specs delete and recreate D1 rows,
+and the live-AI journeys spend Workers AI neurons. The production Lighthouse
+audit stays out of `deploy-production.yml` while the site is behind the
+Cloudflare Access wall (0509#7656). The budgets gate every PR in the `e2e` job.
 
 ## Rules that are not about code
 
