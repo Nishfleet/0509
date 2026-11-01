@@ -42,7 +42,7 @@ test.beforeEach(async ({ page, baseURL }) => {
   );
 });
 
-test("a signed-in user reaches the four places by tapping and by Tab+Enter", async ({ page }, testInfo) => {
+test("a signed-in user reaches the five places by tapping and by Tab+Enter", async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   const watched = watchConsole(page);
 
@@ -68,6 +68,12 @@ test("a signed-in user reaches the four places by tapping and by Tab+Enter", asy
     await page.screenshot({ path: test.info().outputPath(`${place.toLowerCase()}.png`) });
   }
 
+  await nav.getByRole("link", { name: "Brief" }).click();
+  await page.waitForURL(/\/app\/brief$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Your weekly brief", exact: true })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Brief" })).toHaveAttribute("aria-current", "page");
+  expect(await noOverflow()).toBe(0);
+
   await nav.getByRole("link", { name: "Competitors" }).click();
   await page.waitForURL(/\/app\/competitors$/);
   await nav.getByRole("link", { name: "Home" }).click();
@@ -75,8 +81,9 @@ test("a signed-in user reaches the four places by tapping and by Tab+Enter", asy
 
   for (const [, path, tabs] of [
     ["Competitors", "/app/competitors", 3],
-    ["Alerts", "/app/alerts", 4],
-    ["Settings", "/app/settings", 5],
+    ["Brief", "/app/brief", 4],
+    ["Alerts", "/app/alerts", 5],
+    ["Settings", "/app/settings", 6],
   ] as const) {
     await page.goto("/app/alerts");
     for (let index = 0; index < tabs; index += 1) {

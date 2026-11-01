@@ -43,7 +43,9 @@ describe("SignInSent names the recipient and the expiry (0509#6886)", () => {
 
     expect(html).toContain(`<strong class="font-semibold text-ink">${EMAIL}</strong>`);
     expect(html).toContain(`expires in ${minutes} minutes`);
-    expect(html).toContain("can sign in, a link is on its way");
+    expect(html).toContain("We sent a sign-in link to ");
+    expect(html).toContain("Check spam if you don&#x27;t see it within a minute.");
+    expect(html).not.toContain("can sign in");
   });
 
   it("keeps the resend button disabled on the first render and counts down from 30", () => {
@@ -59,6 +61,12 @@ describe("SignInSent names the recipient and the expiry (0509#6886)", () => {
 
     expect(status).toContain('role="status"');
     expect(status).toContain("You can send it again in 30 seconds.");
+  });
+
+  it("shows the resend countdown once on screen", () => {
+    const visible = render().replace(/<p role="status" class="sr-only">[\s\S]*?<\/p>/, "");
+
+    expect(visible.match(/again in/g)).toHaveLength(1);
   });
 
   it("offers one click to the inbox for a Gmail address and none for a work address", () => {

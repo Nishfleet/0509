@@ -35,7 +35,7 @@ async function onboard(page: Page): Promise<void> {
     await input.press("Enter");
     await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
-    await page.getByRole("button", { name: "That's me" }).click();
+    await page.getByRole("button", { name: "Looks right" }).click();
     await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
   }
   const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
@@ -93,11 +93,11 @@ test("the per-brand switch is operable with a keyboard alone @own-signin", async
 
   await page.reload();
   const order: string[] = [];
-  for (let i = 0; i < 5; i += 1) {
+  for (let i = 0; i < 6; i += 1) {
     await page.keyboard.press("Tab");
     order.push(await page.evaluate(() => document.activeElement?.textContent?.trim() ?? ""));
   }
-  expect(order).toEqual(["Skip to content", "Home", "Competitors", "Alerts", "Settings"]);
+  expect(order).toEqual(["Skip to content", "Home", "Competitors", "Brief", "Alerts", "Settings"]);
   const viewport = page.viewportSize();
   if (viewport === null) throw new Error("page.viewportSize() returned null");
   const width = viewport.width;

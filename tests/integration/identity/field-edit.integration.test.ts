@@ -270,7 +270,7 @@ describe("confirmCard field edits", () => {
     await settledTail();
   });
 
-  it("records no rows for a repeated confirm the entity writer discarded", async () => {
+  it("records the field edits of a repeated confirm against the cached probe", async () => {
     await seed();
     await cachedHomepage("Gymshark Ltd", "Gym clothes");
     stubWeb(HOMEPAGE_HTML);
@@ -286,9 +286,13 @@ describe("confirmCard field edits", () => {
       ),
     ).toBe(true);
 
-    expect(await fieldEditRows(await confirmedEntityId())).toEqual([
-      { field: "name", from: "Gymshark Ltd", to: "Gymshark" },
-    ]);
+    expect(await fieldEditRows(await confirmedEntityId())).toEqual(
+      expect.arrayContaining([
+        { field: "name", from: "Gymshark Ltd", to: "Gymshark" },
+        { field: "name", from: "Gymshark Ltd", to: "Second" },
+        { field: "description", from: "Gym clothes", to: "Second description" },
+      ]),
+    );
     await settledTail();
   });
 });

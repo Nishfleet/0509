@@ -259,6 +259,25 @@ export async function insertSelfEntity(input: {
   return result.meta.changes > 0;
 }
 
+const UPDATE_SELF =
+  "UPDATE entity SET name = ?2, identity_json = json_set(identity_json, '$.description', ?3, '$.logoUrl', ?4, '$.socials', json(?5)) WHERE workspace_id = ?1 AND role = 'self'";
+
+export async function updateSelfEntity(input: {
+  workspaceId: string;
+  name: string;
+  description: string | null;
+  logoUrl: string | null;
+  socialsJson: string;
+}): Promise<void> {
+  await tryWhile(
+    () =>
+      env.DB.prepare(UPDATE_SELF)
+        .bind(input.workspaceId, input.name, input.description, input.logoUrl, input.socialsJson)
+        .run(),
+    shouldRetryD1,
+  );
+}
+
 const SELECT_WORKSPACE_SELF_ID = "SELECT id FROM entity WHERE workspace_id = ?1 AND role = 'self'";
 
 const SELECT_SELF_BY_ID = "SELECT id FROM entity WHERE id = ?1 AND workspace_id = ?2 AND role = 'self'";

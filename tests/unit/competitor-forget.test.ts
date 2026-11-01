@@ -51,6 +51,10 @@ describe("CompetitorForget", () => {
     navigation.intent = null;
   });
 
+  it("says plainly that the name and website are kept so it is not suggested again", () => {
+    expect(render()).toContain("We only keep its name and website, so we don&#x27;t suggest it again.");
+  });
+
   it("keeps the idle label and styling", () => {
     const button = submitButton(render());
     expect(button).toContain("Remove and forget Northwind");

@@ -42,6 +42,16 @@ test("an onboarded workspace with no plan row lands on the plan step, not Home",
         `self-${suffix}.example`,
         stamp,
       );
+      run(
+        db,
+        "INSERT INTO onboarding_run (id, workspace_id, user_id, input_raw, started_at, watching_started_at) VALUES (?, ?, ?, ?, ?, ?)",
+        `run-${suffix}`,
+        `ws-${suffix}`,
+        userId,
+        `self-${suffix}.example`,
+        stamp,
+        stamp,
+      );
     },
     { livePlan: false },
   );
@@ -70,9 +80,9 @@ test("an onboarded user with no plan row cannot reach Home @own-signin", async (
   await input.fill("gymshark.com");
   await input.press("Enter");
 
-  await expect(page.getByRole("button", { name: "That's me" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: "Looks right" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
-  await page.getByRole("button", { name: "That's me" }).click();
+  await page.getByRole("button", { name: "Looks right" }).click();
   await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
 
   const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");

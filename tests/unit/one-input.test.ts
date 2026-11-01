@@ -57,6 +57,54 @@ describe("OneInput", () => {
     expect(markup()).not.toMatch(/<button\b[^>]*\sdisabled(?:=|\s|>)/);
   });
 
+  it("swaps to the pending label and disables repeat taps while a GET to its action is loading", () => {
+    harness.state = "loading";
+    harness.formAction = "/login";
+    const html = inRouter(
+      createElement(OneInput, {
+        label: "your website address or social username (like @yourbrand)",
+        placeholder: "yoursite.com or @yourbrand",
+        name: "subject",
+        action: "/login",
+        method: "get",
+        submitLabel: "Start watching",
+        pendingLabel: "Starting…",
+      }),
+    );
+    expect(html).toMatch(/<button\b[^>]*\sdisabled(?:=|\s|>)/);
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain("Starting…");
+    expect(html).not.toContain("Start watching");
+  });
+
+  it("keeps its own label and stays live while a GET to another action is loading", () => {
+    harness.state = "loading";
+    harness.formAction = "/pricing";
+    const html = inRouter(
+      createElement(OneInput, {
+        label: "your website address or social username (like @yourbrand)",
+        placeholder: "yoursite.com or @yourbrand",
+        name: "subject",
+        action: "/login",
+        method: "get",
+        submitLabel: "Start watching",
+        pendingLabel: "Starting…",
+      }),
+    );
+    expect(html).not.toMatch(/<button\b[^>]*\sdisabled(?:=|\s|>)/);
+    expect(html).not.toContain('aria-busy="true"');
+    expect(html).toContain("Start watching");
+    expect(html).not.toContain("Starting…");
+  });
+
+  it("keeps the submit label while busy when no pending label is given", () => {
+    harness.state = "submitting";
+    harness.formAction = "/onboarding";
+    const html = markup();
+    expect(html).toMatch(/<button\b[^>]*\sdisabled(?:=|\s|>)/);
+    expect(html).toContain("Continue");
+  });
+
   it("posts to the given action and carries the given input attributes", () => {
     const html = markup();
     expect(html).toContain('method="post"');

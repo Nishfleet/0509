@@ -1,12 +1,5 @@
-import { SITE_SWEEP_ALLOWANCE_HOURS, SITE_SWEEP_UTC_HOUR } from "../cadence";
+import { nextSiteSweepAt, siteSweepWindowEnd } from "../cadence";
 import type { HomeSource } from "../home-standing";
-
-export function nextSiteSweepAt(now: Date): Date {
-  const sweep = new Date(now.getTime());
-  sweep.setUTCHours(SITE_SWEEP_UTC_HOUR, 0, 0, 0);
-  if (sweep.getTime() <= now.getTime()) sweep.setUTCDate(sweep.getUTCDate() + 1);
-  return sweep;
-}
 
 export interface FirstSweepInput {
   now: Date;
@@ -14,9 +7,18 @@ export interface FirstSweepInput {
   brandsOn: number;
 }
 
-export function firstSiteSweepAt(input: FirstSweepInput): Date | null {
+export interface FirstSweepWindow {
+  startsAt: Date;
+  endsAt: Date;
+}
+
+export function firstSiteSweepWindow(input: FirstSweepInput): FirstSweepWindow | null {
   const sweepScheduled = input.brandsOn > 0 || input.sources.some((source) => source.kind === "site");
   if (!sweepScheduled) return null;
-  const start = nextSiteSweepAt(input.now);
-  return new Date(start.getTime() + SITE_SWEEP_ALLOWANCE_HOURS * 3_600_000);
+  const startsAt = nextSiteSweepAt(input.now);
+  return { startsAt, endsAt: siteSweepWindowEnd(startsAt) };
+}
+
+export function firstSiteSweepAt(input: FirstSweepInput): Date | null {
+  return firstSiteSweepWindow(input)?.endsAt ?? null;
 }

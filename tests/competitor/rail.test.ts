@@ -73,6 +73,23 @@ function peerRow(html: string, entityId: string): string {
   return match?.[0] ?? "";
 }
 
+describe("the competitor rail while it waits for a first read", () => {
+  it("drops the sections that would only say nothing yet and keeps what we watch", () => {
+    const html = render({ awaiting: true, peers: [], facts: [], verdict: null, lastChecked: null });
+    expect(html).not.toContain("How you rank");
+    expect(html).not.toContain("Last 30 days");
+    expect(html).not.toContain("Still a competitor?");
+    expect(html).toContain("What we watch here");
+  });
+
+  it("keeps a section that has something to say", () => {
+    const html = render({ awaiting: true });
+    expect(html).toContain("How you rank");
+    expect(html).toContain("Last 30 days");
+    expect(html).toContain("Still a competitor?");
+  });
+});
+
 describe("the competitor rail", () => {
   it("draws peers, facts, sources and the still-a-competitor answer in order", () => {
     const html = render();
@@ -171,12 +188,19 @@ describe("the competitor rail", () => {
     expect(empty).toContain("No ranking yet. It arrives with your first weekly brief.");
     expect(empty).toContain("Nothing new from them in the last 30 days.");
     expect(empty).toContain("We check this every week. The first answer arrives after a week of watching.");
-    expect(empty).toContain("First read tonight at 21:00 UTC.");
+    expect(empty).toContain("First read tonight between 21:00 and 23:00 UTC.");
     expect(
       text(
-        render({ peers: [], facts: [], sources: [], verdict: null, lastChecked: null, sweepClock: "07:30 GMT+5:30" }),
+        render({
+          peers: [],
+          facts: [],
+          sources: [],
+          verdict: null,
+          lastChecked: null,
+          sweepClock: "between 07:30 and 09:30 GMT+5:30",
+        }),
       ),
-    ).toContain("First read tonight at 07:30 GMT+5:30.");
+    ).toContain("First read tonight between 07:30 and 09:30 GMT+5:30.");
   });
 
   it("says the homepage could not be read instead of promising a first read, when the site blocks us", () => {
