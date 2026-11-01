@@ -238,12 +238,6 @@ closed and nothing can merge again, including the PR that renamed it. The
 ruleset also still requires `base-fresh` (now a pass-through job) and
 `ratchet / ratchet` until the owner drops them (fleet-ops#10935).
 
-**The preview link.** The `preview` job uploads each same-repo pull request as a
-version of the `0509-staging` Worker with the alias `pr-<number>`, never
-deployed, so staging keeps serving `main` and no production data is reachable.
-The link is the "View deployment" button on the PR (environment `preview`).
-Dependabot, fork and merge-queue runs pass the job without an upload.
-
 Verify a fix on the local lane: `PLAYWRIGHT_TEST_BASE_URL` unset, so
 `npm run e2e -- e2e/<name>.spec.ts` starts `wrangler dev --local` with simulated
 email, a local D1 and `AI_SPEND` off. Never point a job at https://0509.io: each
