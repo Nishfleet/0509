@@ -3,11 +3,13 @@ import { bindings, defineConfig, exports, triggers } from "cf/config";
 const STAGING_ACCESS_AUD = "4d713d09a17fe8acfcbee861f29b743a0158892737e95ec52c0b659f7362dd7f"; // gitleaks:allow
 
 export default defineConfig(({ mode }) => {
-  const staging = mode === "staging";
-  const name = staging ? "0509-staging" : "0509";
+  const preview = mode === "preview";
+  const staging = mode === "staging" || preview;
+  const host = staging ? "0509-staging" : "0509";
+  const name = preview ? "0509-preview" : host;
   const own = (resource: string) => (staging ? `${resource}-staging` : resource);
   const workflow = (workflowName: string, exportName: string) =>
-    bindings.workflow({ name: own(workflowName), worker: name, exportName });
+    bindings.workflow({ name: own(workflowName), worker: host, exportName });
   const rateLimit = (namespace: number, limit: number) =>
     bindings.rateLimit({ namespace: String(namespace + (staging ? 1000 : 0)), simple: { limit, period: 60 } });
 
@@ -25,41 +27,45 @@ export default defineConfig(({ mode }) => {
         logs: { headSamplingRate: 1, invocationLogs: true, persist: true },
       },
       assets: { runWorkerFirst: ["/mcp"] },
-      domains: staging ? ["staging.0509.io"] : ["0509.io", "www.0509.io", "api.0509.io"],
-      previewUrls: staging,
-      triggers: [
-        triggers.scheduled({ schedule: "*/5 * * * *" }),
-        triggers.scheduled({ schedule: "0 * * * *" }),
-        triggers.scheduled({ schedule: "0 19 * * *" }),
-        triggers.scheduled({ schedule: "0 21 * * *" }),
-        triggers.scheduled({ schedule: "30 23 * * *" }),
-        triggers.scheduled({ schedule: "0 1 * * *" }),
-        triggers.scheduled({ schedule: "0 3 * * *" }),
-        triggers.scheduled({ schedule: "0 4 * * MON" }),
-        triggers.scheduled({ schedule: "0 5 * * *" }),
-        triggers.queue({
-          deadLetterQueue: own("send-email-dlq"),
-          maxBatchSize: 1,
-          maxBatchTimeout: 30,
-          maxConcurrency: 2,
-          maxRetries: 5,
-          name: own("send-email"),
-          retryDelay: 60,
-        }),
-        triggers.queue({ maxBatchSize: 1, maxBatchTimeout: 30, maxRetries: 3, name: own("send-email-dlq") }),
-        triggers.queue({
-          deadLetterQueue: own("fetch-sweep-dlq"),
-          maxBatchSize: 5,
-          maxBatchTimeout: 30,
-          maxConcurrency: 20,
-          maxRetries: 3,
-          name: own("fetch-sweep"),
-          retryDelay: 60,
-        }),
-        triggers.queue({ maxBatchSize: 5, maxBatchTimeout: 30, maxRetries: 3, name: own("fetch-sweep-dlq") }),
-      ],
+      domains: preview ? [] : staging ? ["staging.0509.io"] : ["0509.io", "www.0509.io", "api.0509.io"],
+      previewUrls: preview,
+      triggers: preview
+        ? []
+        : [
+            triggers.scheduled({ schedule: "*/5 * * * *" }),
+            triggers.scheduled({ schedule: "0 * * * *" }),
+            triggers.scheduled({ schedule: "0 19 * * *" }),
+            triggers.scheduled({ schedule: "0 21 * * *" }),
+            triggers.scheduled({ schedule: "30 23 * * *" }),
+            triggers.scheduled({ schedule: "0 1 * * *" }),
+            triggers.scheduled({ schedule: "0 3 * * *" }),
+            triggers.scheduled({ schedule: "0 4 * * MON" }),
+            triggers.scheduled({ schedule: "0 5 * * *" }),
+            triggers.queue({
+              deadLetterQueue: own("send-email-dlq"),
+              maxBatchSize: 1,
+              maxBatchTimeout: 30,
+              maxConcurrency: 2,
+              maxRetries: 5,
+              name: own("send-email"),
+              retryDelay: 60,
+            }),
+            triggers.queue({ maxBatchSize: 1, maxBatchTimeout: 30, maxRetries: 3, name: own("send-email-dlq") }),
+            triggers.queue({
+              deadLetterQueue: own("fetch-sweep-dlq"),
+              maxBatchSize: 5,
+              maxBatchTimeout: 30,
+              maxConcurrency: 20,
+              maxRetries: 3,
+              name: own("fetch-sweep"),
+              retryDelay: 60,
+            }),
+            triggers.queue({ maxBatchSize: 5, maxBatchTimeout: 30, maxRetries: 3, name: own("fetch-sweep-dlq") }),
+          ],
       env: {
-        BETTER_AUTH_URL: bindings.text(staging ? "https://staging.0509.io" : "https://0509.io"),
+        BETTER_AUTH_URL: bindings.text(
+          preview ? (process.env.PREVIEW_ORIGIN ?? "") : staging ? "https://staging.0509.io" : "https://0509.io",
+        ),
         LANDING_WORKSPACE_ID: bindings.text(""),
         GIT_SHA: bindings.text(staging ? (process.env.GITHUB_SHA ?? "") : ""),
         DODO_ENVIRONMENT: bindings.text(staging ? "test_mode" : "live_mode"),
@@ -107,7 +113,7 @@ export default defineConfig(({ mode }) => {
         EMAIL: bindings.sendEmail({}),
         SEND_EMAIL: bindings.queue({ name: own("send-email") }),
         FETCH_SWEEP: bindings.queue({ name: own("fetch-sweep") }),
-        BROWSER_BUDGET: bindings.durableObject({ worker: name, exportName: "BrowserBudget" }),
+        BROWSER_BUDGET: bindings.durableObject({ worker: host, exportName: "BrowserBudget" }),
         BILLING_RECONCILE: workflow("billing-reconcile", "BillingReconcileWorkflow"),
         STANDING_ROLLOVER: workflow("standing-rollover", "StandingRolloverWorkflow"),
         DISCOVERY: workflow("competitor-discovery", "DiscoveryWorkflow"),
@@ -130,22 +136,24 @@ export default defineConfig(({ mode }) => {
         PROBE_LIMIT: rateLimit(5095, 10),
         CHANGE_EMAIL_LIMIT: rateLimit(5096, 3),
       },
-      exports: {
-        BillingReconcileWorkflow: exports.workflow({ name: own("billing-reconcile") }),
-        StandingRolloverWorkflow: exports.workflow({ name: own("standing-rollover") }),
-        DiscoveryWorkflow: exports.workflow({ name: own("competitor-discovery") }),
-        SiteSweepWorkflow: exports.workflow({ name: own("site-sweep") }),
-        HiringSweepWorkflow: exports.workflow({ name: own("hiring-sweep") }),
-        FeedSweepWorkflow: exports.workflow({ name: own("feed-sweep") }),
-        SnapshotBackupWorkflow: exports.workflow({ name: own("snapshot-backup") }),
-        AccountDeleteWorkflow: exports.workflow({ name: own("account-delete") }),
-        OwnSiteCheckWorkflow: exports.workflow({ name: own("own-site-check") }),
-        MentionsWorkflow: exports.workflow({ name: own("mentions-sweep") }),
-        IdentityTailWorkflow: exports.workflow({ name: own("identity-tail") }),
-        FixtureReaperWorkflow: exports.workflow({ name: own("fixture-reaper") }),
-        BrowserBudget: exports.durableObject({ storage: "sqlite" }),
-        SelectionEnrichmentLease: exports.durableObject({ state: "deleted" }),
-      },
+      exports: preview
+        ? {}
+        : {
+            BillingReconcileWorkflow: exports.workflow({ name: own("billing-reconcile") }),
+            StandingRolloverWorkflow: exports.workflow({ name: own("standing-rollover") }),
+            DiscoveryWorkflow: exports.workflow({ name: own("competitor-discovery") }),
+            SiteSweepWorkflow: exports.workflow({ name: own("site-sweep") }),
+            HiringSweepWorkflow: exports.workflow({ name: own("hiring-sweep") }),
+            FeedSweepWorkflow: exports.workflow({ name: own("feed-sweep") }),
+            SnapshotBackupWorkflow: exports.workflow({ name: own("snapshot-backup") }),
+            AccountDeleteWorkflow: exports.workflow({ name: own("account-delete") }),
+            OwnSiteCheckWorkflow: exports.workflow({ name: own("own-site-check") }),
+            MentionsWorkflow: exports.workflow({ name: own("mentions-sweep") }),
+            IdentityTailWorkflow: exports.workflow({ name: own("identity-tail") }),
+            FixtureReaperWorkflow: exports.workflow({ name: own("fixture-reaper") }),
+            BrowserBudget: exports.durableObject({ storage: "sqlite" }),
+            SelectionEnrichmentLease: exports.durableObject({ state: "deleted" }),
+          },
     },
   };
 });

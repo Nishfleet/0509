@@ -96,6 +96,54 @@ jobs:
       - run: semgrep scan --config p/typescript --config p/security-audit --config .semgrep/rollover-catch-up.yml --config https://raw.githubusercontent.com/Nishfleet/fleet-ops/59f43b2bdc2a07ae1a5909117c4bad17a3666abe/.semgrep/no-glue.yml --error
       - run: semgrep scan --test --config .semgrep/rollover-catch-up.yml .semgrep/rollover-catch-up.ts
 
+  preview-build:
+    # Owner acceptance (fleet-ops#10935): every pull request gets a preview link on staging data.
+    # PR code builds here with no secret; the upload job below holds the token and runs no PR code.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - run: npx react-router build --mode preview
+        env:
+          CLOUDFLARE_VITE_FORCE_BUILD_OUTPUT: "true"
+          PREVIEW_ORIGIN: https://pr-${{ github.event.pull_request.number }}-0509-preview.${{ vars.WORKERS_SUBDOMAIN }}.workers.dev
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with: {name: preview-build, path: .cloudflare/output, include-hidden-files: true, retention-days: 3}
+
+  preview:
+    # Uploads the build as a never-deployed version of 0509-preview with a pr-<number> alias, on
+    # staging's D1, R2, KV and queues. Cloudflare gives no preview URL to a Worker that implements a
+    # Durable Object, so this Worker exports none and binds staging's (cloudflare.config.ts, preview mode).
+    # Dependabot, fork and merge-queue runs get no secret and report success without an upload.
+    needs: preview-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: {name: preview, url: "${{ steps.upload.outputs.url }}"}
+    env:
+      UPLOAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: {name: preview-build, path: .cloudflare/output}
+      - id: upload
+        if: env.UPLOAD == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          EXPECTED: https://pr-${{ github.event.pull_request.number }}-0509-preview.${{ vars.WORKERS_SUBDOMAIN }}.workers.dev
+        run: |
+          set -o pipefail
+          npx --yes cf@1.0.0-beta.17 workers versions create --prebuilt --mode preview --preview-alias "pr-$PR" --message "PR #$PR" | tee upload.log
+          url=$(grep -oE "https://pr-$PR-[a-z0-9.-]+\.workers\.dev" upload.log | head -1)
+          [ "$url" = "$EXPECTED" ] || { echo "::error::preview URL '$url' is not the sign-in origin '$EXPECTED'"; exit 1; }
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Preview: $url" >> "$GITHUB_STEP_SUMMARY"
+      - if: env.UPLOAD != 'true'
+        run: echo "No upload on $GITHUB_EVENT_NAME; the preview needs a same-repo, non-Dependabot pull request."
+
   base-fresh:
     # Kept only while ruleset 21391031 still requires this context (docs/incidents/2026-10-07-stale-base-queue-ejections.md).
     runs-on: ubuntu-latest
@@ -106,7 +154,7 @@ jobs:
   ci-ok:
     # One verdict for the ruleset; an allowlist, because a cancelled job once passed a denylist
     # (docs/incidents/2026-10-05-ci-ok-passed-with-gates-cancelled.md).
-    needs: [checks, test, e2e, secrets, semgrep]
+    needs: [checks, test, e2e, secrets, semgrep, preview-build, preview]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
