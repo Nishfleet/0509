@@ -238,6 +238,17 @@ closed and nothing can merge again, including the PR that renamed it. The
 ruleset also still requires `base-fresh` (now a pass-through job) and
 `ratchet / ratchet` until the owner drops them (fleet-ops#10935).
 
+**The preview link.** Every same-repo pull request gets
+`https://pr-<number>-0509-preview.<subdomain>.workers.dev`, behind Cloudflare
+Access. The `preview` job uploads the PR's `--mode preview` build
+(`cloudflare.config.ts`) as a never-deployed version of the `0509-preview`
+Worker. It runs on staging's D1, R2, KV and queues, and exports no Durable
+Object or Workflow, because Cloudflare gives no preview URL to a Worker that
+implements a Durable Object
+(https://developers.cloudflare.com/workers/configuration/previews/). So queue
+messages, Workflows and crons a preview starts run staging's `main` code, not
+the PR's. Dependabot, fork and merge-queue runs pass without an upload.
+
 Verify a fix on the local lane: `PLAYWRIGHT_TEST_BASE_URL` unset, so
 `npm run e2e -- e2e/<name>.spec.ts` starts `wrangler dev --local` with simulated
 email, a local D1 and `AI_SPEND` off. Never point a job at https://0509.io: each
