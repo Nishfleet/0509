@@ -91,9 +91,13 @@ export default defineConfig(({ mode }) => {
         BETTER_AUTH_SECRET: bindings.secret(),
         TURNSTILE_SECRET_KEY: bindings.secret(),
         TURNSTILE_SITE_KEY: bindings.secret(),
-        DODO_PAYMENTS_API_KEY: bindings.secret(),
-        DODO_WEBHOOK_SECRET: bindings.secret(),
-        SLACK_TARGET_SECRET: bindings.secret(),
+        ...(preview
+          ? {}
+          : {
+              DODO_PAYMENTS_API_KEY: bindings.secret(),
+              DODO_WEBHOOK_SECRET: bindings.secret(),
+              SLACK_TARGET_SECRET: bindings.secret(),
+            }),
         MENTIONS_SOURCES: bindings.analyticsEngineDataset({
           name: staging ? "mentions_sources_staging" : "mentions_sources",
         }),
