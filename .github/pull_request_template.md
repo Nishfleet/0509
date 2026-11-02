@@ -13,3 +13,17 @@ Preview: https://pr-NUMBER-0509-preview.SUBDOMAIN.workers.dev (also the "View de
 stock:
 
 net lines:
+
+## Competitor check
+
+Best rival: <!-- name and link to their version of this -->
+Screenshots, side by side: <!-- ours | theirs -->
+
+- Where ours is better:
+- Where ours is worse:
+- What we do about it:
+
+## Robust tech
+
+- Vendor default used: <!-- the platform or library feature this change relies on -->
+- Hand-rolled script: none <!-- if one was unavoidable, the one-line reason the vendor cannot do it -->
