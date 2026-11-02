@@ -235,8 +235,8 @@ merge result, so a PR that would redden `main` never lands.
 
 Renaming `ci-ok` is not cosmetic. A required check that never reports fails
 closed and nothing can merge again, including the PR that renamed it. The
-ruleset also still requires `base-fresh` (now a pass-through job) and
-`ratchet / ratchet` until the owner drops them (fleet-ops#10935).
+ruleset also still requires `base-fresh` (now a pass-through job) until the
+owner drops it (fleet-ops#10935).
 
 **The preview link.** Every same-repo pull request gets
 `https://pr-<number>-0509-preview.<subdomain>.workers.dev`, behind Cloudflare
