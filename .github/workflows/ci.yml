@@ -1,7 +1,7 @@
 # One CI file, GitHub-hosted runners. The template the other product repos copy: docs/ci-template.md.
 # Each job names the incident or standing rule that keeps it. The ruleset requires `ci-ok`, which
 # passes only when every job it needs reports success, so a skipped job fails it (0509#7013).
-# No job carries a job-level `if:`; conditions sit on steps so every job always reports.
+# No job that ci-ok needs carries a job-level `if:`; conditions sit on steps so every such job always reports.
 name: CI
 
 on:
@@ -150,6 +150,18 @@ jobs:
     timeout-minutes: 5
     steps:
       - run: echo "The merge queue tests the merge result, so a stale base cannot land."
+
+  dependency-review:
+    # GitHub's own check: fails a PR that adds a dependency with a known vulnerability.
+    # Outside ci-ok by design: it has nothing to compare on merge_group, so it skips there.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {contents: read}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
 
   ci-ok:
     # One verdict for the ruleset; an allowlist, because a cancelled job once passed a denylist
