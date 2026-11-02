@@ -272,22 +272,9 @@ Cloudflare Access wall (0509#7656). The budgets gate every PR in the `e2e` job.
   explicit authorization. Merging a reviewed green PR is ordinary work.
 - Migrations (Nish 2026-09-24: "this is allowed too, use your best
   judgement"): a merge to `main` applies them to production D1, so
-  `/migrations/` is code-owned, and the gate is not a code-owner review.
-  `gh api repos/Nishfleet/0509/rulesets/21391031` reports
-  `require_code_owner_review:false` and `required_approving_review_count:0`,
-  and #5787 closed the ruleset change with the reason a lock here can never
-  work: every PR the fleet opens is authored by nish3451, and GitHub never
-  lets an author approve their own PR. What actually stands in front of a
-  migration: a worker PR that touches `migrations/` sits outside the fleet-ops
-  `agent.yml` arm allowlist, so it gets the `needs-coordinator` label and is
-  never auto-armed. An orchestrator PR (author nish3451) carries no second
-  review either way; the orchestrator-path decision is tracked at
-  fleet-ops#9231. Every merge, worker or orchestrator, rides the merge queue's
-  one required check, `ci-ok`, which needs every gate job to succeed. The
-  reviewer checks the SQL, re-checks `main` for the next free number, and
-  relies on D1 Time Travel to undo a drop or delete.
-  Data left from the old app may be dropped outright ("meh, delete, the old
-  app had no users").
+  `/migrations/` is code-owned and the ruleset requires a code-owner
+  review: a PR that touches a migration waits for Nish (fleet-ops#10935).
+  Recovery is D1 Time Travel.
 - Deploys go through CI. Every push to `main` deploys via
   `.github/workflows/deploy-production.yml`. Local `npm run deploy` is
   break-glass only.
