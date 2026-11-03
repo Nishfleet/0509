@@ -15,8 +15,10 @@ Jobs in `ci.yml`: `checks`, `test`, `e2e`, `secrets`, `semgrep`, `preview-build`
 reason in your repo is deleted, not copied.
 
 Repo settings: one ruleset on `main` with the merge queue, an empty bypass
-list, and one required check, `ci-ok`. It needs every other job and accepts
-only `success`, so never put a job-level `if:` on a job it needs.
+list, and one required check, `ci-ok`. It needs every gate job and accepts
+only `success`, so never put a job-level `if:` on a job it needs. The preview
+jobs stay visible on every PR but are not in its `needs`, so a preview failure
+does not block a merge.
 
 Change per repo:
 

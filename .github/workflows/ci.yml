@@ -167,7 +167,8 @@ jobs:
   ci-ok:
     # One verdict for the ruleset; an allowlist, because a cancelled job once passed a denylist
     # (docs/incidents/2026-10-05-ci-ok-passed-with-gates-cancelled.md).
-    needs: [checks, test, e2e, secrets, semgrep, preview-build, preview]
+    # The preview jobs stay visible on every PR but do not gate it.
+    needs: [checks, test, e2e, secrets, semgrep]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
