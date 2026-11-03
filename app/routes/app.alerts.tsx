@@ -11,6 +11,7 @@ import { SourcePill } from "../components/source-pill";
 import { acknowledgeOwnSiteIncident, loadAlertsPage } from "../lib/alerts-page.server";
 import { newSinceBriefLine } from "../lib/alerts-new";
 import { listWorkspaceBriefs } from "../lib/data/digest.server";
+import { withoutNoDataYet } from "../lib/source-status-words";
 import { onboardedContext } from "../lib/require-onboarded.server";
 import { requireFreshSession } from "../lib/require-session.server";
 
@@ -93,6 +94,7 @@ function OwnSiteIncident({ incident }: { incident: Route.ComponentProps["loaderD
 }
 
 export default function Page({ loaderData }: Route.ComponentProps) {
+  const sources = withoutNoDataYet(loaderData.sources, loaderData.now);
   return (
     <main className={PAGE}>
       <PageHeading title="Alerts" />
@@ -103,9 +105,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <NewSince line={loaderData.newSince} />
       {loaderData.failedBrief === null ? null : <BriefSendFailed failed={loaderData.failedBrief} />}
       <IncidentSlot incident={loaderData.openIncident} />
-      {loaderData.sources.length > 0 ? (
+      {sources.length > 0 ? (
         <p data-testid="alerts-sources" className="mt-4 flex flex-wrap gap-2">
-          {loaderData.sources.map((entry) => (
+          {sources.map((entry) => (
             <SourcePill
               key={entry.source.key}
               source={{ ...entry.source, kind: entry.kind }}

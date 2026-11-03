@@ -10,7 +10,7 @@ const LINKS = [
   { href: "#faq", label: "Questions" },
 ] as const;
 
-export function Header() {
+export function Header({ signedIn = false }: { signedIn?: boolean }) {
   return (
     <header className="border-b border-line">
       <div className={`${pageWidth} flex min-h-16 items-center justify-between gap-6`}>
@@ -31,9 +31,9 @@ export function Header() {
         </nav>
         <a
           className={`${eyebrow} flex min-h-11 items-center text-ink underline decoration-1 underline-offset-4`}
-          href="/login"
+          href={signedIn ? "/app" : "/login"}
         >
-          Sign in
+          {signedIn ? "Open app" : "Sign in"}
         </a>
       </div>
     </header>

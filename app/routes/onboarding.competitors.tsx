@@ -4,15 +4,17 @@ import { useEffect, useState } from "react";
 import { data, Form, redirect, useNavigation, useRevalidator } from "react-router";
 import { z } from "zod";
 
-import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
+import { AddCompetitor, CompetitorMaybes, ONBOARDING_FULL_NOTICE } from "../components/competitor-maybes";
 import { DiscoverySkeleton } from "../components/discovery-skeleton";
 import { Monogram } from "../components/monogram";
 import { OnboardingFrame } from "../components/onboarding-frame";
 import { Button } from "../components/ui/button";
 import { readOtherBrands } from "../lib/client-brands.server";
 import { handleCompetitorIntent } from "../lib/competitors.server";
+import { readEntitlements } from "../lib/data/plan.server";
 import { markCompetitorsReady, markWatchingStarted } from "../lib/data/onboarding_run.server";
 import { readOnboardingScreen } from "../lib/discovery/start.server";
+import { ensureOnboardingRun } from "../lib/onboarding-start.server";
 import { TRIAL_DAYS } from "../lib/billing/plans";
 import { discoveryNotice, type DiscoveryState } from "../lib/discovery/state";
 import { requireFreshSession, requireSession, signOutToLogin } from "../lib/require-session.server";
@@ -43,21 +45,30 @@ export function headers() {
 export async function loader({ request }: Route.LoaderArgs) {
   const timings = createTimings();
   const { workspaceId, userId } = await timings.measure("workspace", workspaceFor(request));
-  const [screen, otherBrands] = await timings.measure(
+  const [screen, otherBrands, entitlements] = await timings.measure(
     "reads",
-    Promise.all([readOnboardingScreen(workspaceId, new Date()), readOtherBrands(userId)]),
+    Promise.all([
+      readOnboardingScreen(workspaceId, new Date()),
+      readOtherBrands(userId),
+      readEntitlements(workspaceId),
+    ]),
   );
   if (screen.on.length + screen.maybes.length > 0) {
     await timings.measure("ready", markCompetitorsReady(workspaceId, new Date().toISOString()));
   }
-  return data({ ...screen, otherBrands }, { headers: timings.header() });
+  return data(
+    { ...screen, otherBrands, planFull: screen.on.length >= entitlements.competitors },
+    { headers: timings.header() },
+  );
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  const { workspaceId } = await workspaceFor(request, true);
+  const { workspaceId, userId } = await workspaceFor(request, true);
   const form = await request.formData();
   if (startWatchingForm.safeParse(Object.fromEntries(form)).success) {
-    await markWatchingStarted(workspaceId, new Date().toISOString());
+    const now = new Date().toISOString();
+    await ensureOnboardingRun({ workspaceId, userId, now });
+    await markWatchingStarted(workspaceId, now);
     throw redirect("/onboarding/plan");
   }
   return handleCompetitorIntent(workspaceId, form);
@@ -85,7 +96,7 @@ function useDiscoveryPolling(discovery: DiscoveryState): DiscoveryState {
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
-  const { on, maybes, discovery, otherBrands } = loaderData;
+  const { on, maybes, discovery, otherBrands, planFull } = loaderData;
   const navigation = useNavigation();
   const starting = navigation.state !== "idle" && navigation.formData?.get("intent") === "start";
   const state = useDiscoveryPolling(discovery);
@@ -115,8 +126,13 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           ))}
         </ul>
       )}
-      <CompetitorMaybes maybes={maybes} />
-      <AddCompetitor message={actionData?.message} unreachable={actionData?.unreachable} />
+      <CompetitorMaybes maybes={maybes} planFull={planFull} fullNotice={ONBOARDING_FULL_NOTICE} />
+      <AddCompetitor
+        message={actionData?.message}
+        unreachable={actionData?.unreachable}
+        planFull={planFull}
+        fullNotice={ONBOARDING_FULL_NOTICE}
+      />
       <Form method="post" className="mt-12 border-t border-line pt-8">
         <input type="hidden" name="intent" value="start" />
         <Button type="submit" size="lg" disabled={starting}>

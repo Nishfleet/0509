@@ -8,6 +8,7 @@ import {
   MENTIONS_SWEEP_CRON,
   NIGHTLY_CRON,
   OWN_SITE_CHECK_CRON,
+  SITE_SWEEP_ALLOWANCE_HOURS,
   SITE_SWEEP_CRON,
   SITE_SWEEP_UTC_HOUR,
   SNAPSHOT_BACKUP_CRON,
@@ -17,6 +18,10 @@ import {
   WEEKLY_REFRESH_CRON,
   sweepMonitor,
 } from "../app/lib/cadence";
+import { developmentsEmpty } from "../app/components/competitor-frame";
+import { quietWeekSentence } from "../app/lib/biggest-move";
+import { homeView, type HomeEntity } from "../app/lib/home-standing";
+import { firstSiteSweepWindow } from "../app/lib/onboarding/arrival-estimate";
 
 const MINUTES_IN_DAY = 24 * 60;
 
@@ -64,14 +69,53 @@ describe("cadence", () => {
 
   it("pins the site-sweep cron and label to the UTC hour the sweep runs at", () => {
     expect(SITE_SWEEP_CRON).toBe(`0 ${String(SITE_SWEEP_UTC_HOUR).padStart(2, "0")} * * *`);
-    expect(SITE_SWEEP_UTC_LABEL).toBe(`${String(SITE_SWEEP_UTC_HOUR).padStart(2, "0")}:00 UTC`);
+    expect(SITE_SWEEP_UTC_LABEL).toBe(
+      `between ${String(SITE_SWEEP_UTC_HOUR).padStart(2, "0")}:00 and ${String((SITE_SWEEP_UTC_HOUR + SITE_SWEEP_ALLOWANCE_HOURS) % 24).padStart(2, "0")}:00 UTC`,
+    );
   });
 
   it("names the sweep clock in the workspace zone, not as a UTC-only label", () => {
     const now = new Date("2026-10-05T12:00:00.000Z");
     expect(siteSweepLabel("UTC", now)).toBe(SITE_SWEEP_UTC_LABEL);
-    expect(siteSweepLabel("Asia/Kolkata", now)).toMatch(/^02:30 /);
+    expect(siteSweepLabel("Asia/Kolkata", now)).toMatch(/^between 02:30 and 04:30 /);
     expect(siteSweepLabel("Asia/Kolkata", now)).not.toContain("UTC");
+  });
+});
+
+describe("one window for the first competitor read", () => {
+  const zone = "Asia/Kolkata";
+  const now = new Date("2026-10-21T06:30:00.000Z");
+  const entities: readonly HomeEntity[] = [
+    { id: "self", role: "self", domain: "own.example", name: "Own", state: "on" },
+    { id: "a", role: "competitor", domain: "a.example", name: "Acme", state: "on" },
+  ];
+
+  it("prints the same window on Home, the competitor page and the arrival estimate", () => {
+    const window = siteSweepLabel(zone, now);
+    expect(window).toBe("between 02:30 and 04:30 GMT+5:30");
+    const view = homeView({
+      payload: null,
+      entities,
+      schedule: { timezone: zone, weekday: 1, hour: 8 },
+      history: [],
+      sources: [],
+      counts: [],
+      moves: [],
+      now,
+    });
+    if (view.standing.kind !== "gathering") throw new Error("expected the gathering standing");
+    expect(view.standing.firstSweepAt).toBe(`Thursday 22 October, ${window}`);
+    expect(quietWeekSentence([], null, window)).toContain(`tonight ${window}.`);
+    expect(developmentsEmpty(null, window)).toContain(`every night ${window},`);
+    const estimate = firstSiteSweepWindow({ now, sources: [], brandsOn: 2 });
+    expect(estimate?.startsAt).toEqual(new Date("2026-10-21T21:00:00.000Z"));
+    expect(estimate?.endsAt.getTime() ?? 0).toBe(
+      (estimate?.startsAt.getTime() ?? 0) + SITE_SWEEP_ALLOWANCE_HOURS * 3_600_000,
+    );
+  });
+
+  it("rolls to the next sweep once the day's has started", () => {
+    expect(siteSweepLabel("UTC", new Date("2026-10-21T22:00:00.000Z"))).toBe(SITE_SWEEP_UTC_LABEL);
   });
 });
 

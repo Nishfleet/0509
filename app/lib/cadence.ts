@@ -5,22 +5,39 @@ export const MENTIONS_SWEEP_CRON = "0 19 * * *";
 export const SITE_SWEEP_UTC_HOUR = 21;
 export const SITE_SWEEP_ALLOWANCE_HOURS = 2;
 export const SITE_SWEEP_CRON = `0 ${String(SITE_SWEEP_UTC_HOUR).padStart(2, "0")} * * *`;
-export const SITE_SWEEP_UTC_LABEL = `${String(SITE_SWEEP_UTC_HOUR).padStart(2, "0")}:00 UTC`;
 
-function siteSweepAt(now: Date): Date {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), SITE_SWEEP_UTC_HOUR, 0, 0));
+const HOUR_MS = 3_600_000;
+
+export function nextSiteSweepAt(now: Date): Date {
+  const sweep = new Date(now.getTime());
+  sweep.setUTCHours(SITE_SWEEP_UTC_HOUR, 0, 0, 0);
+  if (sweep.getTime() <= now.getTime()) sweep.setUTCDate(sweep.getUTCDate() + 1);
+  return sweep;
 }
 
-export function siteSweepLabel(timeZone: string, now: Date): string {
-  const at = siteSweepAt(now);
-  const clock = new Intl.DateTimeFormat(APP_LOCALE, {
+export function siteSweepWindowEnd(startsAt: Date): Date {
+  return new Date(startsAt.getTime() + SITE_SWEEP_ALLOWANCE_HOURS * HOUR_MS);
+}
+
+function clockAt(timeZone: string, at: Date): string {
+  return new Intl.DateTimeFormat(APP_LOCALE, {
     timeZone,
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
   }).format(at);
-  return `${clock} ${zoneName(timeZone, at)}`;
 }
+
+export function sweepWindowLabel(timeZone: string, startsAt: Date): string {
+  const endsAt = siteSweepWindowEnd(startsAt);
+  return `between ${clockAt(timeZone, startsAt)} and ${clockAt(timeZone, endsAt)} ${zoneName(timeZone, startsAt)}`;
+}
+
+export function siteSweepLabel(timeZone: string, now: Date): string {
+  return sweepWindowLabel(timeZone, nextSiteSweepAt(now));
+}
+
+export const SITE_SWEEP_UTC_LABEL = siteSweepLabel("UTC", new Date(Date.UTC(2000, 0, 1)));
 
 export const OWN_SITE_CHECK_CRON = "0 * * * *";
 export const NIGHTLY_CRON = "0 3 * * *";

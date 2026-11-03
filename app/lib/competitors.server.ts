@@ -16,6 +16,7 @@ import {
 } from "./data/suggestion.server";
 import { isTakenDown } from "./data/takedown.server";
 import { resolveDomain } from "./discovery/resolve-domain.server";
+import { BRAND_NAME_SHAPE } from "./identity/brand-name";
 import { normaliseSubject } from "./identity/normalise";
 import { tryFirstLook } from "./site/first-look.server";
 import { domainAnswers } from "./competitor/reach.server";
@@ -78,6 +79,7 @@ async function targetOf(raw: string, normalised: ReturnType<typeof normaliseSubj
     const { registrable } = normalised.subject;
     return { domain: registrable, name: (await readCompetitorName(registrable)) ?? nameFromDomain(registrable) };
   }
+  if (!BRAND_NAME_SHAPE.test(raw.trim())) return UNRESOLVED;
   const resolution = await resolveDomain(raw.trim());
   return resolution.domain === null ? UNRESOLVED : { domain: resolution.domain, name: raw.trim() };
 }

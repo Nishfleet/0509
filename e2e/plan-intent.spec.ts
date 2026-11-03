@@ -71,5 +71,5 @@ test("a plan picked on the pricing page comes first on the plan step", async ({ 
 
   await page.goto("/onboarding/plan");
   await expect(page.locator("[data-slot='picked-plan']")).toContainText("You picked Agency");
-  await expect(page.getByRole("button", { name: /^Upgrade to/ }).first()).toContainText("Agency");
+  await expect(page.getByRole("button", { name: /^Start 7-day \w+ trial/ }).first()).toContainText("Agency");
 });

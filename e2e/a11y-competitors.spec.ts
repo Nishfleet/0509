@@ -45,11 +45,11 @@ test("the Competitors page is landmarked, ordered and keyboard-operable at 1440 
 
       await page.reload();
       const order: string[] = [];
-      for (let i = 0; i < 5; i += 1) {
+      for (let i = 0; i < 6; i += 1) {
         await page.keyboard.press("Tab");
         order.push(await page.evaluate(() => document.activeElement?.textContent?.trim() ?? ""));
       }
-      expect(order).toEqual(["Skip to content", "Home", "Competitors", "Alerts", "Settings"]);
+      expect(order).toEqual(["Skip to content", "Home", "Competitors", "Brief", "Alerts", "Settings"]);
       await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Settings" })).toHaveCSS(
         "outline-style",
         "solid",

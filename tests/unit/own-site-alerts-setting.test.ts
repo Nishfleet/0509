@@ -60,6 +60,14 @@ beforeEach(() => {
   harness.formData = undefined;
 });
 
+describe("the own-site alerts setting on a plan without it", () => {
+  it("shows no switch and says which plans have it", () => {
+    const html = stubbed(createElement(OwnSiteAlertsSetting, { on: true, included: false }));
+    expect(html).not.toContain('role="switch"');
+    expect(html).toContain("Starter and Agency plans email you the moment your own site looks broken.");
+  });
+});
+
 describe("the own-site alerts setting", () => {
   it("ties the note to the switch in both states", () => {
     for (const on of [true, false]) {

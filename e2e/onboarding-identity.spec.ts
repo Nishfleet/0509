@@ -1,6 +1,16 @@
 import { expect, test } from "./test";
 
-import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+import {
+  consoleFailures,
+  deleteCreatedAccount,
+  isLocalLane,
+  requireInboxToken,
+  run,
+  seedPreviewSession,
+  signInWithMagicLink,
+  watchConsole,
+} from "./inbox";
+import { seedBareWorkspace, signIn } from "./quality";
 
 let createdEmail = "";
 
@@ -53,7 +63,7 @@ test.describe("signed in", () => {
     const name = page.getByRole("textbox", { name: "name" });
     await name.fill("Gymshark");
     await name.press("Escape");
-    await page.getByRole("button", { name: "That's me" }).click();
+    await page.getByRole("button", { name: "Looks right" }).click();
 
     await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
     await page.goto("/onboarding");
@@ -115,4 +125,51 @@ test.describe("signed in", () => {
       expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
     });
   }
+});
+
+test.describe("hero path on the local lane", () => {
+  test.skip(!isLocalLane(), "seeds the local preview database directly");
+
+  test("confirming the card lands on competitors, stays there, and only then reaches the plan @own-signin", async ({
+    page,
+    baseURL,
+  }) => {
+    const subject = "hero-identity.example.com";
+    const { cookie } = await seedPreviewSession(
+      "hero-identity",
+      ({ db, suffix, userId }) => {
+        const workspaceId = seedBareWorkspace(db, suffix, userId);
+        run(
+          db,
+          "INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at) VALUES (?, ?, ?, NULL, NULL, 'public_subject:confirmed', 'example.com', ?)",
+          `ud-${suffix}`,
+          workspaceId,
+          userId,
+          "2026-10-12T00:00:00.000Z",
+        );
+      },
+      { livePlan: false },
+    );
+    await signIn(page, baseURL, cookie);
+
+    await page.goto(`/onboarding/identity?subject=${subject}`);
+    await expect(page.getByRole("button", { name: "Looks right" })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("Edit", { exact: true }).first()).toBeVisible();
+
+    await page.getByRole("button", { name: "edit name" }).click();
+    const name = page.getByRole("textbox", { name: "name" });
+    await name.fill("Hero Identity");
+    await name.press("Escape");
+    await page.getByRole("button", { name: "Looks right" }).click();
+
+    await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Your competitors" })).toBeVisible();
+
+    await page.goto("/onboarding/competitors");
+    await expect(page).toHaveURL(/\/onboarding\/competitors$/);
+    await expect(page.getByRole("button", { name: "Start watching" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Start watching" }).click();
+    await expect(page).toHaveURL(/\/onboarding\/plan$/, { timeout: 30_000 });
+  });
 });

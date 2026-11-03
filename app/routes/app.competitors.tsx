@@ -17,6 +17,7 @@ import { RetireQuestions } from "../components/retire-questions";
 import { isPlanId } from "../lib/billing/plans";
 import { reconcileCheckoutReturn } from "../lib/billing/reconcile.server";
 import { handleCompetitorIntent } from "../lib/competitors.server";
+import { isAiOnlyLine } from "../lib/discovery/evidence-line";
 import type { CompetitorRow } from "../lib/data/entity.server";
 import { readCompetitors } from "../lib/data/entity.server";
 import { readEntitlements, readPlanTier } from "../lib/data/plan.server";
@@ -46,6 +47,9 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const watching = competitors.competitors.filter((competitor) => competitor.state === "on").length;
   return {
     ...competitors,
+    competitors: competitors.competitors.map((competitor) =>
+      isAiOnlyLine(competitor.reason) ? { ...competitor, reason: null } : competitor,
+    ),
     tier,
     countLine: competitorCountLine(watching, entitlements.competitors),
     planFull: watching >= entitlements.competitors,
@@ -69,27 +73,34 @@ function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
       <div
         data-slot="brand-switch-field"
         data-state={state}
-        className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2"
+        className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 sm:grid-cols-[fit-content(45%)_minmax(0,1fr)_auto]"
       >
-        <div className="flex min-w-0 flex-[1_1_16rem] items-center gap-3">
-          <BrandChip name={competitor.name} href={`/app/competitors/${competitor.entityId}`} off={off} />
-          <div className="min-w-0">
-            <p className="truncate text-body-sm text-ink-soft">{competitor.domain}</p>
-            {competitor.reason === null ? null : <p className="mt-1 text-body-sm text-ink-soft">{competitor.reason}</p>}
-          </div>
+        <div className="col-start-1 row-start-1 flex max-w-full min-w-0 justify-self-start">
+          <BrandChip name={competitor.name} href={`/app/competitors/${competitor.entityId}`} off={off} wrap />
         </div>
-        <BrandSwitch
-          state={state}
-          brandName={competitor.name}
-          describedBy={noteId}
-          onCheckedChange={(checked) => {
-            void fetcher.submit({ intent: checked ? "on" : "off", entityId: competitor.entityId }, { method: "post" });
-          }}
-        />
-        <p id={noteId} className={cn("basis-full text-meta text-ink-soft", state === "on" && "sr-only")}>
+        <div className="col-span-2 row-start-2 min-w-0 sm:col-span-1 sm:col-start-2 sm:row-start-1">
+          <p className="truncate text-body-sm text-ink-soft">{competitor.domain}</p>
+          {competitor.reason === null ? null : <p className="mt-1 text-body-sm text-ink-soft">{competitor.reason}</p>}
+        </div>
+        <div className="col-start-2 row-start-1 justify-self-end sm:col-start-3">
+          <BrandSwitch
+            state={state}
+            brandName={competitor.name}
+            describedBy={noteId}
+            onCheckedChange={(checked) => {
+              void fetcher.submit(
+                { intent: checked ? "on" : "off", entityId: competitor.entityId },
+                { method: "post" },
+              );
+            }}
+          />
+        </div>
+        <p id={noteId} className={cn("col-span-full text-meta text-ink-soft", state === "on" && "sr-only")}>
           {brandSwitchNote(state, competitor.stateChangedAt === null ? null : new Date(competitor.stateChangedAt))}
         </p>
-        <CapRefusal result={fetcher.data} />
+        <div className="col-span-full empty:hidden">
+          <CapRefusal result={fetcher.data} />
+        </div>
       </div>
     </li>
   );
@@ -107,6 +118,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       {removed ? <CompetitorRemoved /> : null}
       <UpgradeStatus tier={tier} wanted={wanted} />
       <AddCompetitor
+        planFull={planFull}
         message={actionData?.message}
         upgradePlanId={actionData?.upgradePlanId}
         returning={actionData?.returning}
@@ -125,7 +137,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         </ul>
       )}
       <RetireQuestions questions={questions} />
-      <CompetitorMaybes maybes={maybes} />
+      <CompetitorMaybes maybes={maybes} planFull={planFull} />
     </main>
   );
 }
