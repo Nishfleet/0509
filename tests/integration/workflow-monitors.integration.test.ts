@@ -88,7 +88,9 @@ describe("an instance started by a Workflow's own registered schedule", () => {
   });
 
   it("starts the own-site-check hour for itself and does no other work", async () => {
-    const createBatch = vi.fn((batch: { id: string }[]) => Promise.resolve([...batch]));
+    const createBatch = vi.fn(({ instances }: { instances: { id: string }[] }) =>
+      Promise.resolve({ created: [...instances], errors: [] }),
+    );
     const workflow = makeWorkflow(ownSiteCheck);
     Object.assign(workflow, { env: { OWN_SITE_CHECK: { createBatch } } });
     const hourly = {
@@ -97,7 +99,7 @@ describe("an instance started by a Workflow's own registered schedule", () => {
       schedule: { cron: "0 * * * *", scheduledTime: Date.UTC(2026, 9, 2, 6, 0, 0) },
     } as unknown as WorkflowEvent<unknown>;
     expect(await workflow.run(hourly, immediateStep)).toBeNull();
-    expect(createBatch).toHaveBeenCalledExactlyOnceWith([{ id: "own-site-check-2026-10-02T06" }]);
+    expect(createBatch).toHaveBeenCalledExactlyOnceWith({ instances: [{ id: "own-site-check-2026-10-02T06" }] });
     expect(checkInMock).not.toHaveBeenCalled();
   });
 });

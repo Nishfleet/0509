@@ -21,7 +21,9 @@ type Lookup = (id: string) => Promise<{ terminate: () => Promise<void> }>;
 function fakeWorkflow(lookup: Lookup) {
   return {
     get: vi.fn(lookup),
-    createBatch: vi.fn((batch: RolloverInstance[]) => Promise.resolve(batch)),
+    createBatch: vi.fn(({ instances }: { instances: RolloverInstance[] }) =>
+      Promise.resolve({ created: instances, errors: [] }),
+    ),
   };
 }
 
@@ -37,7 +39,7 @@ describe("rescheduling the standing rollover (0509#5156)", () => {
 
     expect(workflow.get).toHaveBeenCalledWith(STALE.id);
     expect(terminate).toHaveBeenCalledTimes(1);
-    expect(workflow.createBatch).toHaveBeenCalledWith([FRESH]);
+    expect(workflow.createBatch).toHaveBeenCalledWith({ instances: [FRESH] });
     expect(result).toEqual({ cancelledId: STALE.id, createdId: FRESH.id });
   });
 
@@ -47,7 +49,7 @@ describe("rescheduling the standing rollover (0509#5156)", () => {
     const result = await reschedule(workflow, PREVIOUS, NEXT);
 
     expect(workflow.get).toHaveBeenCalledWith(STALE.id);
-    expect(workflow.createBatch).toHaveBeenCalledWith([FRESH]);
+    expect(workflow.createBatch).toHaveBeenCalledWith({ instances: [FRESH] });
     expect(result).toEqual({ cancelledId: null, createdId: FRESH.id });
   });
 
@@ -58,7 +60,7 @@ describe("rescheduling the standing rollover (0509#5156)", () => {
     const result = await reschedule(workflow, PREVIOUS, NEXT);
 
     expect(terminate).toHaveBeenCalledTimes(1);
-    expect(workflow.createBatch).toHaveBeenCalledWith([FRESH]);
+    expect(workflow.createBatch).toHaveBeenCalledWith({ instances: [FRESH] });
     expect(result).toEqual({ cancelledId: null, createdId: FRESH.id });
   });
 
@@ -77,7 +79,7 @@ describe("rescheduling the standing rollover (0509#5156)", () => {
 
     await reschedule(workflow, PREVIOUS, NEXT);
 
-    const [batch] = workflow.createBatch.mock.calls[0];
+    const [{ instances: batch }] = workflow.createBatch.mock.calls[0];
     expect(batch).toEqual([FRESH]);
     expect(batch[0].params.closesAt).toBe(nextBriefAt(NEXT, NOW).toISOString());
     expect(batch[0].params.closesAt).toBe("2026-09-23T09:00:00.000Z");
@@ -101,7 +103,7 @@ describe("rescheduling the standing rollover (0509#5156)", () => {
 
     expect(workflow.get).toHaveBeenCalledWith(stale.id);
     expect(workflow.createBatch).toHaveBeenCalledTimes(1);
-    expect(workflow.createBatch).toHaveBeenCalledWith([fresh, catchUp]);
+    expect(workflow.createBatch).toHaveBeenCalledWith({ instances: [fresh, catchUp] });
     expect(catchUp.params.closesAt).toBe("2026-09-25T09:00:00.000Z");
     expect(result).toEqual({ cancelledId: stale.id, createdId: fresh.id });
   });
@@ -142,7 +144,7 @@ describe("rescheduling the standing rollover (0509#5156)", () => {
     });
 
     expect(workflow.createBatch).toHaveBeenCalledTimes(1);
-    expect(workflow.createBatch).toHaveBeenCalledWith([fresh]);
+    expect(workflow.createBatch).toHaveBeenCalledWith({ instances: [fresh] });
     expect(result).toEqual({ cancelledId: stale.id, createdId: fresh.id });
   });
 
@@ -157,7 +159,7 @@ describe("rescheduling the standing rollover (0509#5156)", () => {
         now: new Date(input.now),
         lastBriefPeriodEnd: input.last === null ? null : new Date(input.last),
       });
-      const [batch] = workflow.createBatch.mock.calls[0];
+      const [{ instances: batch }] = workflow.createBatch.mock.calls[0];
       return batch.map((instance: RolloverInstance) => instance.params.closesAt);
     };
 
@@ -213,7 +215,7 @@ describe("rescheduling the standing rollover (0509#5156)", () => {
         now: new Date(now),
         lastBriefPeriodEnd: null,
       });
-      const [batch] = workflow.createBatch.mock.calls[0];
+      const [{ instances: batch }] = workflow.createBatch.mock.calls[0];
       return batch.map((instance: RolloverInstance) => instance.params.closesAt);
     };
 
@@ -238,7 +240,7 @@ describe("rescheduling the standing rollover (0509#5156)", () => {
         now: new Date(input.now),
         lastBriefPeriodEnd: input.last === null ? null : new Date(input.last),
       });
-      const [batch] = workflow.createBatch.mock.calls[0];
+      const [{ instances: batch }] = workflow.createBatch.mock.calls[0];
       return batch.map((instance: RolloverInstance) => instance.params.closesAt);
     };
 
@@ -342,9 +344,9 @@ describe("retiring a deleted workspace's standing rollovers (0509#7191)", () => 
       get: vi.fn((id: string) =>
         created.includes(id) ? Promise.resolve({ terminate }) : Promise.reject(new Error("instance.not_found")),
       ),
-      createBatch: vi.fn((batch: RolloverInstance[]) => {
-        created.push(...batch.map((instance) => instance.id));
-        return Promise.resolve(batch);
+      createBatch: vi.fn(({ instances }: { instances: RolloverInstance[] }) => {
+        created.push(...instances.map((instance) => instance.id));
+        return Promise.resolve({ created: instances, errors: [] });
       }),
     };
     const result = await rescheduleRollover(workflow, {

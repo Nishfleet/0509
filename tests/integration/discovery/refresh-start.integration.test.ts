@@ -46,14 +46,14 @@ describe("startWeeklyRefresh", () => {
     await seedSelfWorkspace("gymshark.com");
     await seedSelfWorkspace("nike.com");
     const workspaceIds = (await readDiscoverableWorkspaces()).map((workspace) => workspace.workspaceId);
-    const createBatch = vi.fn((_batch: BatchItem[]) => Promise.resolve([]));
+    const createBatch = vi.fn((_options: { instances: BatchItem[] }) => Promise.resolve({ created: [], errors: [] }));
     Reflect.set(env, "DISCOVERY", { createBatch });
 
     const started = await startWeeklyRefresh(new Date(NOW));
 
     expect(started).toBe(workspaceIds.length);
     expect(createBatch).toHaveBeenCalledTimes(1);
-    expect(createBatch.mock.calls[0][0]).toEqual(
+    expect(createBatch.mock.calls[0][0].instances).toEqual(
       workspaceIds.map((workspaceId) => ({
         id: `refresh-${workspaceId}-${DATE}`,
         params: { workspaceId, mode: "refresh" },
@@ -63,13 +63,13 @@ describe("startWeeklyRefresh", () => {
 
   it("keeps the create instance id and mode for startDiscovery", async () => {
     const workspaceId = await seedSelfWorkspace("gymshark.com");
-    const createBatch = vi.fn((_batch: BatchItem[]) => Promise.resolve([]));
+    const createBatch = vi.fn((_options: { instances: BatchItem[] }) => Promise.resolve({ created: [], errors: [] }));
     Reflect.set(env, "DISCOVERY", { createBatch });
 
     await startDiscovery(workspaceId, new Date(NOW));
 
     expect(createBatch).toHaveBeenCalledTimes(1);
-    expect(createBatch.mock.calls[0][0]).toEqual([
+    expect(createBatch.mock.calls[0][0].instances).toEqual([
       { id: `discovery-${workspaceId}-${DATE}`, params: { workspaceId, mode: "create" } },
     ]);
   });

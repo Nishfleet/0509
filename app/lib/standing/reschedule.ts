@@ -3,7 +3,7 @@ import { nextBriefAt, previousBriefAt, rolloverInstance } from "../brief-schedul
 
 interface RolloverWorkflow {
   get(id: string): Promise<{ terminate(): Promise<void> }>;
-  createBatch(batch: RolloverInstance[]): Promise<unknown>;
+  createBatch(options: { instances: RolloverInstance[] }): Promise<unknown>;
 }
 
 export interface RescheduleResult {
@@ -95,6 +95,6 @@ export async function rescheduleRollover(
   });
   const due = catchUpDue(input, staleAt);
   const catchUp = due === null ? null : rolloverInstance(input.workspaceId, due, "catch-up");
-  await workflow.createBatch(catchUp === null ? [fresh] : [fresh, catchUp]);
+  await workflow.createBatch({ instances: catchUp === null ? [fresh] : [fresh, catchUp] });
   return { cancelledId, createdId: fresh.id };
 }

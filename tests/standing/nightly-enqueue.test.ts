@@ -65,7 +65,7 @@ describe("nightly standing enqueue (0509#5753)", () => {
     const count = 50;
     const rows = Array.from({ length: count }, (_, index) => scheduleRow(`ws_${String(index)}`));
     const { prepares, db } = fakeDb(rows, []);
-    const createBatch = vi.fn(async (batch: unknown[]) => batch);
+    const createBatch = vi.fn(async ({ instances }: { instances: unknown[] }) => ({ created: instances, errors: [] }));
     const plan = await loadNightlyPlan(db, NOW);
     const created = await createRollovers({ createBatch } as never, plan.scheduled);
 

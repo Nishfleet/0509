@@ -134,6 +134,6 @@ export async function createRollovers(
   const chunks = Array.from({ length: Math.ceil(instances.length / CREATE_BATCH_LIMIT) }, (_, index) =>
     instances.slice(index * CREATE_BATCH_LIMIT, (index + 1) * CREATE_BATCH_LIMIT),
   );
-  const created = await Promise.all(chunks.map((chunk) => workflow.createBatch([...chunk])));
-  return created.reduce((total, batch) => total + batch.length, 0);
+  const created = await Promise.all(chunks.map((chunk) => workflow.createBatch({ instances: [...chunk] })));
+  return created.reduce((total, batch) => total + batch.created.length, 0);
 }

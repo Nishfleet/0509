@@ -98,6 +98,6 @@ export async function reapFixtureAccounts(rawMode: unknown, now: Date, step: Rea
 
 export async function startFixtureReaper(now: Date): Promise<string> {
   const id = `fixture-reaper-${now.toISOString().slice(0, 10)}`;
-  await env.FIXTURE_REAPER_WORKFLOW.createBatch([{ id }]);
+  await env.FIXTURE_REAPER_WORKFLOW.createBatch({ instances: [{ id }] });
   return id;
 }

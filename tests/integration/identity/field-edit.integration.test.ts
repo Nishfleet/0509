@@ -42,7 +42,7 @@ beforeEach(async () => {
   entityId = `entity-field-edit-${suffix}`;
   userId = `user-field-edit-${suffix}`;
   workspaceId = `ws-field-edit-${suffix}`;
-  Reflect.set(env, "DISCOVERY", { createBatch: vi.fn(() => Promise.resolve([])) });
+  Reflect.set(env, "DISCOVERY", { createBatch: vi.fn(() => Promise.resolve({ created: [], errors: [] })) });
 });
 
 afterEach(async () => {

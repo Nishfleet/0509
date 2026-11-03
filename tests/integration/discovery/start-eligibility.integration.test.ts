@@ -50,10 +50,10 @@ async function seed(input: Seed): Promise<string> {
 }
 
 async function startedBy(start: (now: Date) => Promise<number>, at: string): Promise<string[]> {
-  const createBatch = vi.fn((_batch: BatchItem[]) => Promise.resolve([]));
+  const createBatch = vi.fn((_options: { instances: BatchItem[] }) => Promise.resolve({ created: [], errors: [] }));
   Reflect.set(env, "DISCOVERY", { createBatch });
   await start(new Date(at));
-  return createBatch.mock.calls.flatMap(([batch]) => batch.map((item) => item.params.workspaceId)).sort();
+  return createBatch.mock.calls.flatMap(([options]) => options.instances.map((item) => item.params.workspaceId)).sort();
 }
 
 afterEach(async () => {

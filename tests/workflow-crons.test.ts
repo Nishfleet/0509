@@ -25,11 +25,16 @@ import {
 vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn(), captureMessage: vi.fn() }));
 
 function fakeEnv(existing = new Set<string>()) {
-  const createBatch = vi.fn((batch: { id: string }[]) => {
-    const id = batch[0]?.id ?? "";
-    if (existing.has(id)) return Promise.resolve([]);
+  const createBatch = vi.fn(({ instances }: { instances: { id: string }[] }) => {
+    const id = instances[0]?.id ?? "";
+    if (existing.has(id)) {
+      return Promise.resolve({
+        created: [],
+        errors: [{ index: 0, id, code: 10405, message: "instance.already_exists" }],
+      });
+    }
     existing.add(id);
-    return Promise.resolve([...batch]);
+    return Promise.resolve({ created: [...instances], errors: [] });
   });
   const bindings = {
     MENTIONS: { createBatch },
@@ -47,7 +52,7 @@ describe("startScheduledWorkflow", () => {
     const { createBatch, env } = fakeEnv();
     const id = await startScheduledWorkflow(env, "0 5 * * *", Date.UTC(2026, 8, 30, 5, 0, 0));
     expect(id).toBe("snapshot-backup-2026-09-30T05");
-    expect(createBatch).toHaveBeenCalledExactlyOnceWith([{ id }]);
+    expect(createBatch).toHaveBeenCalledExactlyOnceWith({ instances: [{ id }] });
   });
 
   it("gives a moved schedule a new id on the day it moves, so the old slot cannot swallow the new one (10-08 sweeps)", async () => {
@@ -88,7 +93,7 @@ describe("startScheduledWorkflow", () => {
     const { createBatch, env } = fakeEnv();
     const id = await startScheduledWorkflow(env, "0 * * * *", Date.UTC(2026, 9, 1, 13, 0, 0));
     expect(id).toBe("own-site-check-2026-10-01T13");
-    expect(createBatch).toHaveBeenCalledExactlyOnceWith([{ id }]);
+    expect(createBatch).toHaveBeenCalledExactlyOnceWith({ instances: [{ id }] });
   });
 
   it("starts a daily job a missed tick left out, and none that is not due yet", async () => {
@@ -96,7 +101,7 @@ describe("startScheduledWorkflow", () => {
     const results = await startMissedDailyWorkflows(env, Date.UTC(2026, 9, 2, 2, 10, 0));
     expect(results.every((result) => result.status === "fulfilled")).toBe(true);
 
-    expect(createBatch.mock.calls.flat().flat()).toEqual([
+    expect(createBatch.mock.calls.flatMap(([options]) => options.instances)).toEqual([
       { id: "mentions-sweep-2026-10-01T19" },
       { id: "site-sweep-2026-10-01T21" },
       { id: "hiring-sweep-2026-10-01T23" },
@@ -108,7 +113,7 @@ describe("startScheduledWorkflow", () => {
   it("leaves a daily slot that equals the current tick to its own cron trigger, so the catch-up never starts it first", async () => {
     const { createBatch, env } = fakeEnv();
     await startMissedDailyWorkflows(env, Date.UTC(2026, 9, 2, 1, 0, 0));
-    expect(createBatch.mock.calls.flat().flat()).toEqual([
+    expect(createBatch.mock.calls.flatMap(([options]) => options.instances)).toEqual([
       { id: "mentions-sweep-2026-10-01T19" },
       { id: "site-sweep-2026-10-01T21" },
       { id: "hiring-sweep-2026-10-01T23" },
@@ -119,26 +124,22 @@ describe("startScheduledWorkflow", () => {
   it("leaves a daily slot less than five minutes old to its own cron trigger, so a late tick cannot report it as missed", async () => {
     const { createBatch, env } = fakeEnv();
     await startMissedDailyWorkflows(env, Date.UTC(2026, 9, 10, 1, 0, 59));
-    expect(createBatch.mock.calls.flat().flat()).not.toContainEqual({ id: "feed-sweep-2026-10-10T01" });
+    expect(createBatch.mock.calls.flatMap(([options]) => options.instances)).not.toContainEqual({
+      id: "feed-sweep-2026-10-10T01",
+    });
   });
 
   it("never starts a sweep whose refresh has already gone out, so a late catch-up cannot become the overrun", async () => {
     const { createBatch, env } = fakeEnv();
     await startMissedDailyWorkflows(env, Date.UTC(2026, 9, 2, 3, 5, 0));
-    const ids = createBatch.mock.calls
-      .flat()
-      .flat()
-      .map((entry) => entry.id);
+    const ids = createBatch.mock.calls.flatMap(([options]) => options.instances).map((entry) => entry.id);
     expect(ids).toEqual([]);
 
     const { createBatch: after, env: envAfter } = fakeEnv();
     await startMissedDailyWorkflows(envAfter, Date.UTC(2026, 9, 2, 2, 55, 0));
-    expect(
-      after.mock.calls
-        .flat()
-        .flat()
-        .map((entry) => entry.id),
-    ).toContain("site-sweep-2026-10-01T21");
+    expect(after.mock.calls.flatMap(([options]) => options.instances).map((entry) => entry.id)).toContain(
+      "site-sweep-2026-10-01T21",
+    );
     expect(NIGHTLY_CRON).toBe("0 3 * * *");
   });
 
@@ -157,7 +158,7 @@ describe("startScheduledWorkflow", () => {
     expect(tick).toBe("mentions-sweep-2026-10-01T19");
     const catchUp = Date.UTC(2026, 9, 1, 21, 0, 0);
     await startMissedDailyWorkflows(env, catchUp);
-    const ids = createBatch.mock.calls.flat().flat();
+    const ids = createBatch.mock.calls.flatMap(([options]) => options.instances);
     expect(ids.filter((entry) => entry.id.startsWith("mentions-sweep"))).toEqual([{ id: tick }, { id: tick }]);
   });
 

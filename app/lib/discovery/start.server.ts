@@ -37,14 +37,14 @@ async function startAll(now: Date, mode: "create" | "refresh"): Promise<number> 
   const chunks = Array.from({ length: Math.ceil(all.length / BATCH_LIMIT) }, (_, index) =>
     all.slice(index * BATCH_LIMIT, (index + 1) * BATCH_LIMIT),
   );
-  for (const chunk of chunks) await env.DISCOVERY.createBatch(chunk);
+  for (const chunk of chunks) await env.DISCOVERY.createBatch({ instances: chunk });
   return all.length;
 }
 
 export async function startDiscovery(workspaceId: string, now: Date): Promise<string> {
   const [instance] = instances([workspaceId], now, "create");
   if (instance === undefined) throw new Error("discovery instance was not addressed");
-  await env.DISCOVERY.createBatch([instance]);
+  await env.DISCOVERY.createBatch({ instances: [instance] });
   return instance.id;
 }
 

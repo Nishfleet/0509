@@ -46,7 +46,7 @@ export async function readAccountFootprint(
 async function startAccountDelete(prefixes: string[], instanceId: string | undefined): Promise<string> {
   const params = { prefixes } satisfies AccountDeleteParams;
   if (instanceId === undefined) return (await env.ACCOUNT_DELETE.create({ params })).id;
-  await env.ACCOUNT_DELETE.createBatch([{ id: instanceId, params }]);
+  await env.ACCOUNT_DELETE.createBatch({ instances: [{ id: instanceId, params }] });
   return instanceId;
 }
 

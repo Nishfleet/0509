@@ -43,8 +43,8 @@ function instanceId(cron: WorkflowCron, scheduledTime: number) {
 }
 
 async function createOnce(workflow: Pick<Env["OWN_SITE_CHECK"], "createBatch">, id: string) {
-  const started = await workflow.createBatch([{ id }]);
-  return { id, created: started.length > 0 };
+  const { created } = await workflow.createBatch({ instances: [{ id }] });
+  return { id, created: created.length > 0 };
 }
 
 function startInstance(env: CronEnv, cron: WorkflowCron, scheduledTime: number) {

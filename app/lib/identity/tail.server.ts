@@ -45,7 +45,7 @@ interface AdTarget {
 
 export async function startIdentityTail(params: IdentityTailParams): Promise<string> {
   const id = identityTailInstanceId(params.entityId);
-  await env.IDENTITY_TAIL.createBatch([{ id, params }]);
+  await env.IDENTITY_TAIL.createBatch({ instances: [{ id, params }] });
   return id;
 }
 

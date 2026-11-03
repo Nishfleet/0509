@@ -143,6 +143,6 @@ export async function reconcileCheckoutReturn(workspaceId: string, email: string
 
 export async function startBillingReconcile(now: Date): Promise<string> {
   const id = `billing-reconcile-${now.toISOString().slice(0, 10)}`;
-  await env.BILLING_RECONCILE.createBatch([{ id, params: { at: now.toISOString() } }]);
+  await env.BILLING_RECONCILE.createBatch({ instances: [{ id, params: { at: now.toISOString() } }] });
   return id;
 }
