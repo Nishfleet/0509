@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { liveWorkspace } from "./active-workspace";
 import { parseLatest } from "./recap.server";
+import { SENDABLE_SIGNALS } from "../customer-ready";
 
 const SELECT_WINBACKS = `SELECT w.id AS workspace_id,
        p.provider_subscription_id AS subscription_id,
@@ -8,14 +9,14 @@ const SELECT_WINBACKS = `SELECT w.id AS workspace_id,
        st.target_value,
        st.unsubscribe_token,
        w.last_seen_at,
-       (SELECT count(*) FROM signal s
+       (SELECT count(*) FROM ${SENDABLE_SIGNALS} s
           JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.role = 'competitor' AND e.state = 'on'
          WHERE s.workspace_id = w.id AND s.kind = 'change' AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL
            AND s.observed_at > w.last_seen_at) AS change_count,
        (SELECT json_object(
                  'rival', COALESCE(NULLIF(e.name, ''), e.domain),
                  'what', COALESCE(NULLIF(s.title, ''), NULLIF(s.summary, '')))
-          FROM signal s
+          FROM ${SENDABLE_SIGNALS} s
           JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.role = 'competitor' AND e.state = 'on'
          WHERE s.workspace_id = w.id AND s.kind = 'change' AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL
            AND COALESCE(NULLIF(s.title, ''), NULLIF(s.summary, '')) IS NOT NULL
