@@ -64,7 +64,16 @@ export async function feedLinksFromHtml(html: string, base: string): Promise<str
   const rewritten = new HTMLRewriter()
     .on('link[rel~="alternate"][type]', alternateLinkHandler(state, base))
     .transform(new Response(html, { headers: { "content-type": "text/html;charset=utf-8" } }));
-  await rewritten.arrayBuffer();
+  try {
+    await rewritten.arrayBuffer();
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        event: "feed.declared_links_unreadable",
+        error: error instanceof Error ? error.name : "unknown",
+      }),
+    );
+  }
   return state.found;
 }
 
