@@ -292,6 +292,8 @@ async function sendAndResolve(env: Env, input: SendAndResolveInput): Promise<Del
       idempotencyKey,
       outcome: result.outcome,
       error: result.error,
+      subject: result.subject ?? null,
+      providerId: result.provider_id ?? null,
     });
     if (result.outcome === "unconfirmed") reportUnconfirmed(idempotencyKey);
     if (onSent !== undefined && result.outcome === "sent") {

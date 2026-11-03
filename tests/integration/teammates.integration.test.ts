@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { expectSendRecord } from "./send-record";
 import { isTeammateUnsubscribeToken, suppressByUnsubscribeToken } from "../../app/lib/data/email_suppression.server";
 import { takeRecipientSlot } from "../../app/lib/recipient-cap.server";
 import { clearRecipientCap } from "./clear-recipient-cap";
@@ -78,6 +79,7 @@ describe("teammates on the brief", () => {
 
     expect(await readConfirmRole(token)).toBeNull();
     expect(await readTeammates(workspaceId)).toMatchObject([{ address: "mate@0509.io", confirmed: true }]);
+    await expectSendRecord("teammate_invite", sentMail[0].subject, "test-message");
   });
 
   it("stops a removed teammate's invitation link working at once", async () => {

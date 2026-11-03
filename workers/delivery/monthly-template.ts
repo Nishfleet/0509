@@ -18,7 +18,7 @@ function lines(ctx: MonthlyContext): string[] {
   const noun = ctx.change_count === 1 ? "change" : "changes";
   const counted = `In ${ctx.month} we caught ${String(ctx.change_count)} ${noun} across your competitors.`;
   if (ctx.moves.length === 0) return [counted];
-  return [counted, "Most recent:", ...ctx.moves.map((move) => `${move.rival}, ${move.what}`)];
+  return [counted, "Most recent:", ...ctx.moves.map((move) => `${move.rival}: ${move.what}`)];
 }
 
 export function renderMonthly(ctx: MonthlyContext): RenderedBrief {

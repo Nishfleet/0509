@@ -172,7 +172,7 @@ describe("the first week and a half of one customer, day by day", () => {
     const byDay = (index: number) => sent.find((mail) => mail.day === index)?.text ?? "";
     expect(byDay(0)).toContain("Acme");
     expect(byDay(4)).toContain("caught 1 change");
-    expect(byDay(4)).toContain("Most recent: Acme, Pricing page now lists a free tier");
+    expect(byDay(4)).toContain("Most recent: Acme: Pricing page now lists a free tier");
     expect(byDay(5)).toContain("12 October");
     expect(byDay(9)).toContain("Before: Pro $29 a month");
     expect(byDay(9)).toContain("After: Pro $39 a month");
