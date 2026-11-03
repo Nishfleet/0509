@@ -20,7 +20,6 @@ import { readRegistrySources } from "../lib/data/source.server";
 import { FAQ } from "../lib/faq";
 import { landingSources } from "../lib/landing-sources";
 import { daysBefore, readLandingMarks } from "../lib/site-changes.server";
-import { NavigationPending } from "../components/navigation-pending";
 import { MAIN_CONTENT_ID, SkipLink } from "../components/skip-link";
 import {
   SITE_URL,
@@ -85,7 +84,6 @@ export default function Landing({ loaderData }: Route.ComponentProps) {
   const signedIn = useRouteLoaderData<{ signedIn?: boolean }>("root")?.signedIn === true;
   return (
     <div className="bg-bone text-ink">
-      <NavigationPending />
       <SkipLink />
       <Ticker items={loaderData.ticker} />
       <Header signedIn={signedIn} />
