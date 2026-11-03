@@ -197,18 +197,6 @@ describe("Sentry beforeSend", () => {
     expect(result.contexts).toEqual({ runtime: { name: "workerd" }, os: { name: "linux" } });
   });
 
-  it("scrubs a transaction event the same way", async () => {
-    const send = options.beforeSendTransaction;
-    if (send === undefined) throw new Error("the Sentry options have no beforeSendTransaction");
-    const result = await send(
-      { type: "transaction", event_id: "e1", transaction: "GET /v/abc", request: { url: "https://0509.io/v/abc?x=1" } },
-      {},
-    );
-
-    expect(result?.transaction).toBe("GET /v/[redacted]");
-    expect(result?.request?.url).toBe("https://0509.io/v/[redacted]");
-  });
-
   it("sends console warnings and errors as logs, and nothing else", async () => {
     const sent: string[] = [];
     const integrations = options.integrations;

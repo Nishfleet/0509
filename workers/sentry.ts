@@ -1,7 +1,6 @@
 import { consoleLoggingIntegration, type CloudflareOptions, type ErrorEvent } from "@sentry/cloudflare";
 
 type SentryLog = Parameters<NonNullable<CloudflareOptions["beforeSendLog"]>>[0];
-type TransactionEvent = Parameters<NonNullable<CloudflareOptions["beforeSendTransaction"]>>[0];
 type SentryEnv = Env & { SENTRY_DSN?: string };
 
 const TOKEN_PATH_PREFIXES = ["/u/", "/v/"] as const;
@@ -34,7 +33,6 @@ export const sentryOptions = (env: SentryEnv): CloudflareOptions => ({
   },
   beforeBreadcrumb: () => null,
   beforeSend: scrubEvent,
-  beforeSendTransaction: scrubEvent,
   integrations: [consoleLoggingIntegration({ levels: ["warn", "error"] })],
   beforeSendLog: scrubLog,
 });
@@ -96,7 +94,7 @@ const URL_PATTERN = /https?:\/\/[^\s"'<>)]+/g;
 const EMAIL_PATTERN = /[^\s@"'<>]+@[^\s@"'<>]+/g;
 const KEPT_CONTEXTS = ["runtime", "os"] as const;
 
-function scrubEvent<T extends ErrorEvent | TransactionEvent>(event: T): T {
+function scrubEvent(event: ErrorEvent): ErrorEvent {
   const route = typeof event.tags?.route === "string" ? event.tags.route : undefined;
   const transaction = route ?? (event.transaction === undefined ? undefined : scrubTokenPath(event.transaction));
   return {
