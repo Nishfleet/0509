@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { LOST_CHANNEL_REASON, NO_CHANNEL_REASON } from "../app/lib/mentions/channel-reasons";
-import type { SourceRow, SourceSnapshot } from "../app/lib/source-pill-status";
-import { plainSourceReason, withoutNoDataYet } from "../app/lib/source-status-words";
+import { withoutNoDataYet, type SourceRow, type SourceSnapshot } from "../app/lib/source-pill-status";
+import { plainSourceReason } from "../app/lib/source-status-words";
 
 describe("plainSourceReason", () => {
   it("maps each known reason to its plain words", () => {

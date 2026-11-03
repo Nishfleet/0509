@@ -42,7 +42,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   return data(
     {
       view: homeView({ ...inputs, moves, now, firstRun }),
-      hasBrief: payload !== null,
+      briefLink: homeBriefLink(payload !== null),
       open: openId,
       evidence,
       firstLook: withFirstReadWindow(firstLook, siteSweepLabel(inputs.schedule.timezone, now)),
@@ -88,8 +88,7 @@ function SetUpLine({ line }: { line: string }) {
   );
 }
 
-function HomeFooter({ line, hasBrief }: { line: string; hasBrief: boolean }) {
-  const brief = homeBriefLink(hasBrief);
+function HomeFooter({ line, brief }: { line: string; brief: { to: string; label: string } }) {
   return (
     <>
       <p className="font-mono text-eyebrow text-ink-soft">{line}</p>
@@ -107,7 +106,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   return (
     <HomePageFrame
       eyebrow={loaderData.view.eyebrow}
-      footer={<HomeFooter line={loaderData.view.footer} hasBrief={loaderData.hasBrief} />}
+      footer={<HomeFooter line={loaderData.view.footer} brief={loaderData.briefLink} />}
     >
       <HomeStanding
         view={loaderData.view}

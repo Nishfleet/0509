@@ -11,7 +11,7 @@ import { SourcePill } from "../components/source-pill";
 import { acknowledgeOwnSiteIncident, loadAlertsPage } from "../lib/alerts-page.server";
 import { newSinceBriefLine } from "../lib/alerts-new";
 import { listWorkspaceBriefs } from "../lib/data/digest.server";
-import { withoutNoDataYet } from "../lib/source-status-words";
+import { withoutNoDataYet } from "../lib/source-pill-status";
 import { onboardedContext } from "../lib/require-onboarded.server";
 import { requireFreshSession } from "../lib/require-session.server";
 
