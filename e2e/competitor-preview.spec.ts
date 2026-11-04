@@ -40,7 +40,7 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
   return entityId;
 }
 
-test("a watched competitor page leads with its biggest move slab and a switch that turns off without a dialog", async ({
+test("a competitor not read yet shows the first-read note instead of a biggest move slab, and a switch that turns off without a dialog", async ({
   page,
   baseURL,
 }, testInfo) => {
@@ -54,11 +54,8 @@ test("a watched competitor page leads with its biggest move slab and a switch th
   );
 
   await page.goto(`/app/competitors/${seeded}`);
-  const slab = page.locator("[data-section='biggest-move']");
-  await expect(slab).toBeVisible();
-  await expect(slab.getByText(/^Nothing worth scoring for this competitor in the last 7 days\./)).toBeVisible();
-  const box = await slab.boundingBox();
-  expect(box?.y ?? Infinity).toBeLessThan(900);
+  await expect(page.locator("[data-section='developments']").getByText(/^Watching from today\./)).toBeVisible();
+  await expect(page.locator("[data-section='biggest-move']")).toHaveCount(0);
 
   await expect(page.getByText("Turn off to stop watching and alerts.", { exact: false })).toBeVisible();
   const toggle = page.getByRole("switch", { name: / tracking (ON|OFF)$/ });
