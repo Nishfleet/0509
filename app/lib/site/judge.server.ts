@@ -241,18 +241,19 @@ async function usedBudget(entityId: string, now: Date, questionIds: readonly str
 }
 
 export async function breakageRepaired(
-  page: { workspaceId: string; url: string },
+  page: { workspaceId: string; url: string; role: string },
   beforeKey: string | null,
 ): Promise<boolean> {
   const fresh = await readFreshEvidence(page.url, beforeKey);
   const subject = normaliseSubject(page.url);
-  if (fresh === null || fresh.httpError || !subject.ok || subject.subject.kind !== "domain") return false;
+  if (fresh === null || fresh === "unreachable" || fresh.httpError || !subject.ok || subject.subject.kind !== "domain")
+    return false;
   const state = changeState(
     {
       isSelf: true,
       subject: { name: null, domain: subject.subject.registrable },
       pageUrl: page.url,
-      pageRole: "home",
+      pageRole: page.role,
       hunks: [],
       evidence: fresh,
     },

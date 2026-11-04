@@ -256,6 +256,7 @@ export interface OwnSitePage {
   entityId: string;
   pageId: string;
   url: string;
+  role: string;
 }
 
 const ENTITIES_WITHOUT_HOME = `SELECT e.id AS id, e.domain AS domain, CASE WHEN json_valid(e.identity_json) THEN json_extract(e.identity_json, '$.url') END AS url,
@@ -268,7 +269,8 @@ ORDER BY e.id`;
 const OWN_SITE_PAGES = `SELECT e.workspace_id AS workspace_id,
        e.id AS entity_id,
        p.id AS page_id,
-       p.url AS url
+       p.url AS url,
+       p.role AS role
 FROM entity e
 JOIN page p ON p.entity_id = e.id AND p.role = 'home'
 WHERE e.role = 'self' AND e.state = 'on' AND ${liveWorkspace("e.workspace_id")}
@@ -291,6 +293,7 @@ const ownSiteRows = z.array(
     entity_id: z.string(),
     page_id: z.string(),
     url: z.string(),
+    role: z.string(),
   }),
 );
 
@@ -306,5 +309,6 @@ export async function readOwnSitePages(): Promise<OwnSitePage[]> {
     entityId: row.entity_id,
     pageId: row.page_id,
     url: row.url,
+    role: row.role,
   }));
 }
