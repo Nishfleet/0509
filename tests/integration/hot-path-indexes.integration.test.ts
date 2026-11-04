@@ -20,8 +20,8 @@ const HOT_STATEMENTS: readonly HotStatement[] = [
     source: "app/lib/workspace.server.ts SELECT_RUN",
     sql: SELECT_RUN,
     binds: ["ws_onboarding"],
-    index: "idx_onboarding_run_workspace",
-    columns: ["workspace_id", "started_at"],
+    index: "onboarding_run_one_per_workspace",
+    columns: ["workspace_id"],
   },
   {
     source: "app/lib/data/signal.server.ts SELECT_HIRING_SIGNAL_STATES",
