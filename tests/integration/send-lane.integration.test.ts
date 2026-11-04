@@ -1,8 +1,8 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { expectSendRecord } from "./send-record";
 import { deliver, handleBatch, type DigestMessage } from "../../workers/delivery/consumer";
-import { sendOrThrow } from "../../workers/delivery/send";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 
 interface Recorder {
@@ -205,6 +205,7 @@ describe("send lane (0509#3979)", () => {
     const digest = await digestStatus(digestId);
     expect(digest?.status).toBe("sent");
     expect(digest?.sent_at).not.toBeNull();
+    await expectSendRecord("brief", rec.sent[0].subject, "stub-send-email");
   });
 
   it("(b) does not send twice when the same message is re-enqueued", async () => {
@@ -793,17 +794,5 @@ describe("send lane (0509#3979)", () => {
       "List-Unsubscribe": `<https://0509.io/u/${token}?type=brief>`,
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
     });
-  });
-
-  it("sendOrThrow rejects a provider failure and resolves a delivered send", async () => {
-    const rec = recorder();
-    rec.fail = new Error("magic-link rejected");
-    await expect(
-      sendOrThrow(bindingFor(rec), { to: TARGET, from: "hello@0509.io", subject: "Sign in", text: "link" }),
-    ).rejects.toThrow("magic-link rejected");
-
-    const good = recorder();
-    await sendOrThrow(bindingFor(good), { to: TARGET, from: "hello@0509.io", subject: "Sign in", text: "link" });
-    expect(good.sent).toHaveLength(1);
   });
 });

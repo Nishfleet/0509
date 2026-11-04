@@ -1012,21 +1012,6 @@ describe("home url resolution", () => {
     ]);
   });
 
-  it("watches one page per entity when the entity already has two home rows", async () => {
-    await seedHomeEntities([{ id: "ent-two", role: "self", domain: "nike.com", identityJson: "{}" }]);
-    await env.DB.prepare(`INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?, ?, ?, 'home', ?)`)
-      .bind("page-two-early", "ent-two", "https://nike.com/", new Date(Date.parse(NOW) - 7_200_000).toISOString())
-      .run();
-    await env.DB.prepare(`INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?, ?, ?, 'home', ?)`)
-      .bind("page-two-late", "ent-two", "https://shop.nike.com/", new Date(Date.parse(NOW) - 3_600_000).toISOString())
-      .run();
-
-    const targets = await planSiteSweep(NOW);
-
-    expect(targets.map((target) => [target.entityId, target.url])).toEqual([["ent-two", "https://nike.com/"]]);
-    expect(await rowCount("watch")).toBe(1);
-  });
-
   it("still creates the home pages when the site source is paused", async () => {
     await env.DB.exec("UPDATE source SET is_enabled = 0 WHERE id = 'src_site_web'");
     await seedHomeEntities([

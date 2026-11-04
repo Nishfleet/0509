@@ -27,10 +27,16 @@ async function recordBrowserMs(res: Response): Promise<void> {
   }
 }
 
+function logRefusal(workspaceId: string): void {
+  console.warn(JSON.stringify({ event: "browser.escalation_refused", workspaceId }));
+}
+
 export async function takeBrowserEscalation(workspaceId: string, entityId: string, day: string): Promise<boolean> {
   if (await readWorkspaceFixture(workspaceId)) return false;
   const id = env.BROWSER_BUDGET.idFromName(`${workspaceId}:${entityId}:${day}`);
-  return env.BROWSER_BUDGET.get(id).take(ESCALATIONS_PER_BRAND_PER_DAY);
+  const taken = await env.BROWSER_BUDGET.get(id).take(ESCALATIONS_PER_BRAND_PER_DAY);
+  if (!taken) logRefusal(workspaceId);
+  return taken;
 }
 
 export async function takeBrowserScreenshot(workspaceId: string, entityId: string, day: string): Promise<boolean> {
