@@ -279,6 +279,30 @@ describe("an AI app signing in to 0509", () => {
     expect(response.status).toBe(413);
   });
 
+  it("refuses a streamed registration body over 1 MiB that declares no length", async () => {
+    const chunk = new TextEncoder().encode("x".repeat(65_536));
+    let sent = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (sent > REGISTER_OVERSIZE) {
+          controller.close();
+          return;
+        }
+        sent += chunk.byteLength;
+        controller.enqueue(chunk);
+      },
+    });
+    const response = await send(
+      new Request(`${ORIGIN}/oauth/register`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "cf-connecting-ip": "198.51.100.84" },
+        body,
+      }),
+    );
+    expect(response.status).toBe(413);
+    expect(sent).toBeLessThanOrEqual(REGISTER_OVERSIZE + 2 * chunk.byteLength);
+  });
+
   it("treats GET /MCP as /mcp so a missing token is 401", async () => {
     const response = await send(new Request(`${ORIGIN}/MCP`));
     expect(response.status).toBe(401);
