@@ -1,0 +1,16 @@
+rules:
+  - id: latest-row-tie-break
+    languages: [generic]
+    severity: ERROR
+    message: >-
+      0509#7863: a "latest row" read orders by one column and takes LIMIT 1. Two
+      rows with the same value (same timestamp) make the answer change between
+      runs. Add a unique second key, for example `ORDER BY v.decided_at DESC,
+      v.id DESC LIMIT 1`.
+    # One ORDER BY key, an optional direction, then LIMIT 1, across line breaks.
+    # CI runs this rule with --baseline-commit, so only new sites fail.
+    pattern-regex: (?i)ORDER\s+BY\s+[a-z_.]+(\s+(ASC|DESC))?\s+LIMIT\s+1\b
+    paths:
+      include:
+        - /app/**/*.ts
+        - /workers/**/*.ts
