@@ -72,10 +72,13 @@ you.
 - **Comments are banned in app code.** Not style — agents use a comment to
   justify a workaround instead of fixing the thing, and the next agent copies
   the pattern. Decided by Nish, 2026-09-21, from the talk at 23:02.
-  `no-comments/disallowComments` rejects every comment in `app/`, `workers/`,
-  `tests/` and `e2e/` except tool directives (`eslint-disable`, `@ts-`,
-  `@vite-ignore`). Put the reason in the commit message, where it is read at
-  the moment it matters. Config files are exempt.
+  `no-comments/disallowComments` rejects every comment except those that start
+  with an allowed prefix, and the two lists differ. In `app/` and `workers/`
+  only `eslint` and `global` are allowed, so `@ts-` and `@vite-ignore` are
+  errors there. In `tests/` and `e2e/` the list is `eslint-disable`,
+  `eslint-enable`, `eslint-env`, `global `, `@ts-`, `@vite-ignore` and
+  `/// <reference`. Put the reason in the commit message, where it is
+  read at the moment it matters. Config files are exempt.
 - **No user data in logs or Sentry.** `no-restricted-syntax` (NO_USER_DATA_IN_LOGS). Source: 0509#5776.
 - **Copy has a bar.** `tests/user-copy-bar.test.ts` scans every string people read (routes, components, `app/lib`, all of `workers/`) for the phrases in `tests/user-copy-phrases.ts`, for Title Case button labels and for "rival" in screen text. To ban a phrase, add a line to that file; to exempt a path, add it there with the reason. Source: coordinator ask under Nish's polish goal, 2026-10-15.
 - **Tests never skip, focus or sleep.** A vitest test is never focused or disabled
