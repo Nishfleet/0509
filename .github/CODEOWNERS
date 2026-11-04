@@ -48,6 +48,8 @@
 /app/routes/api.webhooks.dodo.ts @nish3451
 /app/lib/data/dodo_webhook_event.server.ts @nish3451
 /app/lib/pricing-page.ts    @nish3451
+/app/routes/pricing.tsx     @nish3451
+/workers/workflows/billing-reconcile.ts @nish3451
 # Sign-in (Better Auth, magic links, passkeys, sessions, OAuth).
 /app/lib/auth/              @nish3451
 /app/lib/auth.server.ts     @nish3451
@@ -63,6 +65,8 @@
 /app/routes/oauth.authorize.tsx @nish3451
 /app/lib/agent/oauth.server.ts @nish3451
 /app/lib/agent/oauth-fetch.server.ts @nish3451
+/app/lib/agent/consent.server.ts @nish3451
+/app/lib/agent/access.server.ts @nish3451
 # Data deletion and privacy promises.
 /app/lib/account-delete.server.ts @nish3451
 /workers/workflows/account-delete.ts @nish3451
