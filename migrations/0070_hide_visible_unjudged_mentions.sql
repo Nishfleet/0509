@@ -4,6 +4,8 @@
 -- were stored visible and unjudged. This hides every mention still visible and
 -- unjudged, and records them in mention_hidden_0067 so its undo recipe covers them.
 -- The re-judge un-hides the ones it judges about the brand.
+-- 0067's undo recipe skips state = 'unjudged' rows, so it does not undo this file.
+-- That is intended: as with 0067, the re-judge owns unjudged rows and un-hides the good ones.
 
 INSERT OR IGNORE INTO mention_hidden_0067 (signal_id, state, about_brand_p)
 SELECT s.id, s.state,
