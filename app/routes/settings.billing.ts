@@ -7,9 +7,7 @@ import { readPlanCustomerId } from "../lib/data/plan.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { sessionContext } from "../lib/require-session.server";
 
-const UNAVAILABLE = {
-  message: "We couldn't open your billing page. Try again in a few minutes, or email support@0509.io.",
-};
+const UNAVAILABLE = { message: "We couldn't open your billing page. Try again in a few minutes." };
 
 export async function action({ context }: Route.ActionArgs) {
   const session = context.get(sessionContext);

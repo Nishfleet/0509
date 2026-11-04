@@ -5,8 +5,8 @@ import { nameFromDomain } from "./competitor/domain-name";
 import { readCompetitorName } from "./competitor/site-name.server";
 import { addManualCompetitor, countOtherOnCompetitors, readCompetitor, setCompetitorState } from "./data/entity.server";
 import { nextPlan, type PlanId } from "./billing/plans";
-import { isReturningCustomer, returningForGate } from "./billing/returning.server";
-import { readEntitlements, readPlanSubscription, readPlanSummary, readPlanTier } from "./data/plan.server";
+import { isReturningCustomer } from "./billing/returning.server";
+import { readEntitlements, readPlanSubscription, readPlanTier } from "./data/plan.server";
 import { withinProbeLimit } from "./identity/card.server";
 import {
   acceptSuggestion,
@@ -61,13 +61,6 @@ const competitorIntentForm = z.object({
 async function upgradePlanIdFor(workspaceId: string): Promise<PlanId | null> {
   const next = nextPlan(await readPlanTier(workspaceId));
   return next === null ? null : next.id;
-}
-
-export async function fullPlanOffer(
-  workspaceId: string,
-): Promise<{ upgradePlanId: PlanId | null; returning: boolean }> {
-  const plan = await readPlanSummary(workspaceId);
-  return { upgradePlanId: nextPlan(plan.tier)?.id ?? null, returning: await returningForGate(workspaceId, plan) };
 }
 
 async function capRefusal(workspaceId: string, cap: number, turningOn = false): Promise<CompetitorActionResult> {

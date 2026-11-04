@@ -16,44 +16,7 @@ export interface Maybe {
   reason: string | null;
 }
 
-const PLAN_FULL_NOTICE = "Switch one off to add another.";
-export const ONBOARDING_FULL_NOTICE =
-  "That's the most we can start with. After you pick a plan, switch competitors on or off in Competitors.";
-const MUTED = "opacity-60 hover:bg-transparent";
-
-function holdSubmit(event: { preventDefault: () => void }): void {
-  event.preventDefault();
-}
-
-interface PlanFullProps {
-  "aria-disabled"?: true;
-  "aria-describedby"?: string;
-  className?: string;
-  onClick?: typeof holdSubmit;
-}
-
-function planFullProps(planFull: boolean, noticeId: string): PlanFullProps {
-  if (!planFull) return {};
-  return { "aria-disabled": true, "aria-describedby": noticeId, className: MUTED, onClick: holdSubmit };
-}
-
-function PlanFullNotice({ id, text }: { id: string; text: string }): ReactElement {
-  return (
-    <p id={id} data-slot="plan-full-notice" className="mt-1 text-body-sm text-ink-soft">
-      {text}
-    </p>
-  );
-}
-
-export function CompetitorMaybes({
-  maybes,
-  planFull = false,
-  fullNotice = PLAN_FULL_NOTICE,
-}: {
-  maybes: readonly Maybe[];
-  planFull?: boolean | undefined;
-  fullNotice?: string;
-}): ReactElement | null {
+export function CompetitorMaybes({ maybes }: { maybes: readonly Maybe[] }): ReactElement | null {
   if (maybes.length === 0) return null;
   return (
     <section aria-labelledby="maybes-heading" className="mt-12">
@@ -61,17 +24,16 @@ export function CompetitorMaybes({
         Possible competitors
       </h2>
       <p className="mt-1 text-body-sm text-ink-soft">We weren't sure these compete with you. Watch the ones that do.</p>
-      {planFull ? <PlanFullNotice id="maybes-plan-full" text={fullNotice} /> : null}
       <ul aria-label="Possible competitors" className="mt-3 border-b border-line">
         {maybes.map((maybe) => (
-          <MaybeRow key={maybe.suggestionId} maybe={maybe} planFull={planFull} />
+          <MaybeRow key={maybe.suggestionId} maybe={maybe} />
         ))}
       </ul>
     </section>
   );
 }
 
-function MaybeRow({ maybe, planFull }: { maybe: Maybe; planFull: boolean }): ReactElement {
+function MaybeRow({ maybe }: { maybe: Maybe }): ReactElement {
   const fetcher = useFetcher<{ message: string | null; upgradePlanId?: string | null }>({
     key: `maybe-${maybe.suggestionId}`,
   });
@@ -97,7 +59,6 @@ function MaybeRow({ maybe, planFull }: { maybe: Maybe; planFull: boolean }): Rea
           value="accept"
           aria-label={`Watch ${maybe.name}`}
           disabled={busy}
-          {...planFullProps(planFull, "maybes-plan-full")}
         >
           {watching ? "Watching…" : "Watch"}
         </Button>
@@ -182,39 +143,18 @@ function AddInput({ invalid }: { invalid: boolean }): ReactElement {
   );
 }
 
-function AddRow({ invalid, adding, planFull }: { invalid: boolean; adding: boolean; planFull: boolean }): ReactElement {
-  return (
-    <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-      <AddInput invalid={invalid} />
-      <Button
-        type="submit"
-        variant="secondary"
-        size="lg"
-        disabled={adding}
-        {...planFullProps(planFull, "add-plan-full")}
-      >
-        {adding ? "Adding…" : "Add"}
-      </Button>
-    </div>
-  );
-}
-
 export function AddCompetitor({
   message,
   upgradePlanId,
   returning,
   added,
   unreachable,
-  planFull = false,
-  fullNotice = PLAN_FULL_NOTICE,
 }: {
   message: string | null | undefined;
   upgradePlanId?: PlanId | null | undefined;
   returning?: boolean | undefined;
   added?: boolean | undefined;
   unreachable?: boolean | undefined;
-  planFull?: boolean | undefined;
-  fullNotice?: string;
 }): ReactElement {
   const navigation = useNavigation();
   const adding = navigation.state !== "idle" && navigation.formData?.get("intent") === "add";
@@ -226,8 +166,12 @@ export function AddCompetitor({
         <label htmlFor="add-competitor" className={BLOCK_HEADING}>
           Add a competitor we missed
         </label>
-        {planFull ? <PlanFullNotice id="add-plan-full" text={fullNotice} /> : null}
-        <AddRow invalid={Boolean(message)} adding={adding} planFull={planFull} />
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+          <AddInput invalid={Boolean(message)} />
+          <Button type="submit" variant="secondary" size="lg" disabled={adding}>
+            {adding ? "Adding…" : "Add"}
+          </Button>
+        </div>
         <AddNotice
           message={message}
           added={added === true && !adding}
