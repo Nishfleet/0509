@@ -5,7 +5,7 @@ description: Start the real 0509 app and drive it with Google's chrome-devtools 
 
 # Verify
 
-Drive the running app over the Chrome DevTools protocol and collect proof. The CLI is `chrome-devtools` from `chrome-devtools-mcp@1.9.0`. Page ids are positional (`list_pages` prints `2: https://…`). There is no `--pageId` flag. Uids come from the latest `take_snapshot` and go stale after a navigation.
+Drive the running app over the Chrome DevTools protocol and collect proof. The CLI is `chrome-devtools` from `chrome-devtools-mcp@1.12.0`. Page ids are positional (`list_pages` prints `2: https://…`). There is no `--pageId` flag. Uids come from the latest `take_snapshot` and go stale after a navigation.
 
 ## Start the app
 
@@ -16,7 +16,7 @@ npm run verify:start
 npm run verify:stop
 ```
 
-`verify:start` runs `chrome-devtools start --headless --chromeArg=--no-sandbox` with `--executablePath` set to `node -p "require('@playwright/test').chromium.executablePath()"`. It resolves the browser through `@playwright/test`, the one declared dependency, because `playwright-core` is only a transitive package and an undeclared require stops resolving after the next lockfile trim. `verify:stop` runs `chrome-devtools stop`. `chrome-devtools status` should report version `1.9.0`.
+`verify:start` runs `chrome-devtools start --headless --chromeArg=--no-sandbox` with `--executablePath` set to `node -p "require('@playwright/test').chromium.executablePath()"`. It resolves the browser through `@playwright/test`, the one declared dependency, because `playwright-core` is only a transitive package and an undeclared require stops resolving after the next lockfile trim. `verify:stop` runs `chrome-devtools stop`. `chrome-devtools status` should report version `1.12.0`.
 
 ### Local
 
@@ -84,6 +84,24 @@ npx chrome-devtools press_key <pageId> "<key>"
 ```
 
 Take a new snapshot after every navigation. The feature map names each control by role and accessible name, so match the snapshot line (for example `textbox "Email"` or `button "Send me a link"`) instead of guessing a uid.
+
+## Read state: Local Explorer
+
+The local dev server ships Cloudflare's Local Explorer: no extra tool. It needs wrangler 4.118.0 or the Vite plugin 1.50.0 or later (https://developers.cloudflare.com/workers/development-testing/local-explorer/). The UI is `/cdn-cgi/local/explorer`. The API is `/cdn-cgi/local/explorer/api`, and `GET` on it returns the OpenAPI spec. Use it to prove what a page does to D1, Workflows and logs, beside the browser proof.
+
+```bash
+E="http://127.0.0.1:${PLAYWRIGHT_LOCAL_PORT}/cdn-cgi/local/explorer/api"
+DB=$(curl -s "$E/d1/database" | node -p 'JSON.parse(require("fs").readFileSync(0)).result[0].uuid')
+curl -s -X POST "$E/d1/database/$DB/raw" -H 'content-type: application/json' -d '{"sql":"SELECT count(*) FROM watch"}'
+curl -s "$E/workflows/site-sweep/instances"
+curl -s -X POST "$E/local/observability/query" -H 'content-type: application/json' \
+  -d '{"sql":"SELECT level, message FROM logs WHERE level = ? ORDER BY ts_ms DESC, seq DESC LIMIT 5","params":["error"]}'
+```
+
+- D1: `POST /d1/database/<uuid>/raw` runs one statement on the local database. Read with it. Change rows through the app, never with SQL.
+- Workflows: `GET /workflows` lists them, `GET /workflows/<name>/instances` gives each instance and its status.
+- Logs and traces: `POST /local/observability/query` takes one read-only `sql` over the `logs` and `spans` tables, with `params` for `?`. A 500 names its cause here, for example `D1_ERROR: no such table: source` when migrations were not applied.
+- Sent email: `GET /local/email/sending`.
 
 ## Proof per change type
 
