@@ -110,6 +110,33 @@ describe("hnGenerator", () => {
     );
   });
 
+  it("asks once more when the search did not answer, and reads the second answer", async () => {
+    const unanswered: FetchedText = { ok: false, status: 0, url: "", contentType: null, body: "" };
+    const answered = fetchTextWith(FIXTURE);
+    const fetchText = vi.fn<(url: string) => Promise<FetchedText>>().mockResolvedValueOnce(unanswered);
+    fetchText.mockImplementation(answered);
+
+    const candidates = await hnGenerator(SUBJECT, fetchText);
+
+    expect(fetchText).toHaveBeenCalledTimes(2);
+    expect(candidates.length).toBeGreaterThan(0);
+  });
+
+  it("throws with status 0 when the search did not answer twice, and asks only twice", async () => {
+    const unanswered: FetchedText = { ok: false, status: 0, url: "", contentType: null, body: "" };
+    const fetchText = vi.fn<(url: string) => Promise<FetchedText>>().mockResolvedValue(unanswered);
+
+    await expect(hnGenerator(SUBJECT, fetchText)).rejects.toThrow("hn generator fetch failed with status 0");
+    expect(fetchText).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not ask again when the search answered with an error status", async () => {
+    const fetchText = vi.fn(fetchTextWith("", false));
+
+    await expect(hnGenerator(SUBJECT, fetchText)).rejects.toThrow("hn generator fetch failed with status 503");
+    expect(fetchText).toHaveBeenCalledTimes(1);
+  });
+
   it("returns nothing when the body is not JSON", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     expect(await hnGenerator(SUBJECT, fetchTextWith("not json"))).toEqual([]);

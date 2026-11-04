@@ -8,6 +8,7 @@ import {
   logIfEmpty,
   type Candidate,
   type Evidence,
+  type FetchedText,
   type FetchText,
   type Generator,
   type Subject,
@@ -96,9 +97,14 @@ async function collect(hits: readonly Hit[], brand: string): Promise<{ merged: M
   return { merged, texts };
 }
 
+async function search(fetchFn: FetchText, url: string): Promise<FetchedText> {
+  const first = await fetchFn(url);
+  return first.status === 0 ? await fetchFn(url) : first;
+}
+
 export const hnGenerator: Generator = async (subject: Subject, fetchText?: FetchText) => {
   const fetchFn = fetchText ?? defaultFetchText("discovery.hn_fetch_failed", FETCH_TIMEOUT_MS);
-  const page = await fetchFn(SEARCH_URL + encodeURIComponent(subject.name) + SEARCH_PARAMS);
+  const page = await search(fetchFn, SEARCH_URL + encodeURIComponent(subject.name) + SEARCH_PARAMS);
   assertFetched("hn", page);
 
   const hits = parseHits(page.body);
