@@ -1,9 +1,9 @@
-# The owner reviews every change by default: the product, CI workflows, this file,
-# the Dependabot config, tests, the dependency manifests, and the tool configs that
-# set the quality gates. GitHub's Actions security hardening guide says to put
-# workflow files under code owners, and its code owners docs say to own this file.
-# Last match wins.
-*                           @nish3451
+# Either the owner or the approver bot reviews a change by default. The bot approves only
+# after the one non-Claude review passes, CI is green and a run-proof is present (decisions
+# ledger 2026-11-04). The owner-only block at the end keeps the gate, the checks and the
+# reserved classes his: GitHub's Actions hardening guide says to code-own workflow files,
+# and its code owners docs say to own this file. Last match wins.
+*                           @nish3451 @nishfleet-approver
 
 # No owner, so these merge on the required checks alone: docs, lockfiles and pure
 # formatting config. Dependabot's npm patch and minor updates touch only lockfiles
@@ -21,3 +21,53 @@
 # Agent rules stay the owner's, even where they sit among unowned docs.
 **/AGENTS.md                @nish3451
 /CLAUDE.md                  @nish3451
+
+# The owner alone (decisions ledger 2026-11-04, approver bot): the review gate, the
+# checks, the schema, money, sign-in, data deletion and privacy promises.
+/.github/                   @nish3451
+# Lint, type and test configs, and package.json, which holds the commands CI runs.
+/eslint.config.js           @nish3451
+/eslint-suppressions.json   @nish3451
+/knip.jsonc                 @nish3451
+/tsconfig.json              @nish3451
+/tsconfig.cloudflare.json   @nish3451
+/tsconfig.node.json         @nish3451
+/tsconfig.test.json         @nish3451
+/vitest.config.ts           @nish3451
+/vitest.bundle.config.ts    @nish3451
+/vitest.evals.config.ts     @nish3451
+/playwright.config.ts       @nish3451
+/lighthouse-budget.pr.json  @nish3451
+/.semgrep/                  @nish3451
+/package.json               @nish3451
+# Database migrations.
+/migrations/                @nish3451
+# Payments and billing (Dodo checkout, webhooks, plans, prices).
+/app/lib/billing/           @nish3451
+/app/routes/settings.billing.ts @nish3451
+/app/routes/api.webhooks.dodo.ts @nish3451
+/app/lib/data/dodo_webhook_event.server.ts @nish3451
+/app/lib/pricing-page.ts    @nish3451
+# Sign-in (Better Auth, magic links, passkeys, sessions, OAuth).
+/app/lib/auth/              @nish3451
+/app/lib/auth.server.ts     @nish3451
+/app/lib/auth-client.ts     @nish3451
+/app/lib/auth-captcha.ts    @nish3451
+/app/lib/passkeys.server.ts @nish3451
+/app/lib/use-passkey-sign-in.ts @nish3451
+/app/lib/require-session.server.ts @nish3451
+/app/lib/data/session.server.ts @nish3451
+/app/lib/data/auth_expiry.server.ts @nish3451
+/app/routes/api.auth.$.ts   @nish3451
+/app/routes/login.tsx       @nish3451
+/app/routes/oauth.authorize.tsx @nish3451
+/app/lib/agent/oauth.server.ts @nish3451
+/app/lib/agent/oauth-fetch.server.ts @nish3451
+# Data deletion and privacy promises.
+/app/lib/account-delete.server.ts @nish3451
+/workers/workflows/account-delete.ts @nish3451
+/app/lib/fixture-reaper.server.ts @nish3451
+/workers/workflows/fixture-reaper.ts @nish3451
+/app/lib/legal/             @nish3451
+/app/routes/privacy.tsx     @nish3451
+/app/routes/terms.tsx       @nish3451
