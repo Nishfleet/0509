@@ -28,9 +28,7 @@ import { createPortalUrl } from "../../app/lib/billing/portal.server";
 import { sessionContext } from "../../app/lib/require-session.server";
 import { action } from "../../app/routes/settings.billing";
 
-const UNAVAILABLE = {
-  message: "We couldn't open your billing page. Try again in a few minutes, or email support@0509.io.",
-};
+const UNAVAILABLE = { message: "We couldn't open your billing page. Try again in a few minutes." };
 
 function runAction() {
   const context = new RouterContextProvider();
