@@ -171,7 +171,7 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
     `jev-medium-${suffix}`,
     `sig-medium-${suffix}`,
     onId,
-    0.62,
+    0.42,
     "A roundup mention, not a move of its own.",
     "2026-09-25T07:00:00.000Z",
   );
@@ -232,14 +232,27 @@ test("a workspace shows the three mention treatments", async ({ page }, testInfo
     contentType: "image/png",
   });
 
-  await expect(page.getByTestId("mentions-show-all")).toHaveCount(0);
-  await expect(page.getByText("Zephyrwear ticker line")).toHaveCount(0);
+  await page.getByTestId("mentions-show-all").focus();
+  await page.keyboard.press("Enter");
+  await expect(held).toHaveCount(1);
+  await expect(held).toContainText("Zephyrwear ticker line");
 
-  const trigger = possibly.getByRole("button", { name: "Why we flagged this" });
+  const reveal = page.getByTestId("mentions-show-all");
+  await expect(reveal).toBeVisible();
+  await expect(reveal).toBeFocused();
+  await expect(reveal).toHaveAttribute("aria-expanded", "true");
+  await expect(reveal).toHaveText(/Hide the \d+ we think (?:do|does)n(?:'|’)t matter/);
+
+  await page.keyboard.press("Enter");
+  await expect(held).toHaveCount(0);
+  await expect(reveal).toHaveAttribute("aria-expanded", "false");
+  await expect(reveal).toHaveText(/Show all, including \d+ we think (?:do|does)n(?:'|’)t matter/);
+
+  await page.keyboard.press("Enter");
+  await expect(held).toHaveCount(1);
+  const trigger = held.getByRole("button", { name: "Why we flagged this" });
   await trigger.click();
-  await expect(page.getByTestId("why-flagged-reason")).toHaveText(
-    "Our read: A roundup mention, not a move of its own.",
-  );
+  await expect(page.getByTestId("why-flagged-reason")).toHaveText("Our read: A ticker line, not a move.");
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("why-flagged")).toHaveCount(0);
   await expect(trigger).toBeFocused();

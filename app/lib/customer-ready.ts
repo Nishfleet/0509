@@ -1,10 +1,16 @@
 import { ACT_AT, ABOUT_BRAND_KEEP_AT, changeActsSql } from "./jev/thresholds";
+import { ABOUT_BRAND } from "./mentions/questions";
 import { changeJudgedSql } from "./site-change";
 import { D3_QUESTION_ID, D3S_QUESTION_ID, D6_QUESTION_ID } from "./standing-score";
 
 export const PIPELINE_SIGNALS = "signal";
 
-const MENTION_VERDICT = `(SELECT mv.p FROM jev_verdict mv WHERE mv.signal_id = s.id AND mv.question_id = '${D6_QUESTION_ID}' ORDER BY mv.decided_at DESC LIMIT 1)`;
+const latestVerdict = (questionId: string) =>
+  `(SELECT mv.p FROM jev_verdict mv WHERE mv.signal_id = s.id AND mv.question_id = '${questionId}' ORDER BY mv.decided_at DESC, mv.id DESC LIMIT 1)`;
+
+const ABOUT_BRAND_VERDICT = latestVerdict(ABOUT_BRAND.id);
+
+const MENTION_VERDICT = latestVerdict(D6_QUESTION_ID);
 
 const CHANGE_JUDGED = changeJudgedSql({ noteworthy: `'${D3_QUESTION_ID}'`, breakage: `'${D3S_QUESTION_ID}'` });
 
@@ -14,7 +20,7 @@ const CHANGE_CAPTURED = `(CASE WHEN json_valid(s.payload_json)
   ELSE 0 END)`;
 
 const KIND_READY = `CASE s.kind
-  WHEN 'mention' THEN s.state IS NOT 'unjudged' AND s.title IS NOT NULL AND s.canonical_url IS NOT NULL AND ${MENTION_VERDICT} >= ${String(ABOUT_BRAND_KEEP_AT)}
+  WHEN 'mention' THEN s.state IS NOT 'unjudged' AND s.title IS NOT NULL AND s.canonical_url IS NOT NULL AND COALESCE(${ABOUT_BRAND_VERDICT} >= ${String(ABOUT_BRAND_KEEP_AT)}, 1)
   WHEN 'change' THEN ${CHANGE_CAPTURED} AND ${CHANGE_JUDGED}
   WHEN 'hiring' THEN s.title IS NOT NULL AND s.url IS NOT NULL
   WHEN 'content' THEN s.title IS NOT NULL AND s.url IS NOT NULL

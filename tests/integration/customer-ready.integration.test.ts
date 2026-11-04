@@ -107,16 +107,19 @@ beforeEach(async () => {
 });
 
 describe("mentions", () => {
-  it("shows only a mention judged about the brand, and sends only a confident one", async () => {
+  it("hides an unjudged mention or one judged not about the brand, and sends only one that matters", async () => {
     await seedSignal("m-unjudged", { kind: "mention", state: "unjudged" });
     await seedSignal("m-no-verdict", { kind: "mention" });
-    await seedSignal("m-low", { kind: "mention" });
-    await seedVerdict("m-low", "mention_matters", 0.34);
-    await seedSignal("m-keep", { kind: "mention" });
-    await seedVerdict("m-keep", "mention_matters", 0.6);
+    await seedSignal("m-off-brand", { kind: "mention" });
+    await seedVerdict("m-off-brand", "mention_is_about_brand", 0.3);
+    await seedVerdict("m-off-brand", "mention_matters", 0.95);
+    await seedSignal("m-held", { kind: "mention" });
+    await seedVerdict("m-held", "mention_is_about_brand", 0.9);
+    await seedVerdict("m-held", "mention_matters", 0.34);
     await seedSignal("m-act", { kind: "mention" });
+    await seedVerdict("m-act", "mention_is_about_brand", 0.9);
     await seedVerdict("m-act", "mention_matters", 0.95);
-    expect(await ids(SHOWN_SIGNALS)).toEqual(["m-act", "m-keep"]);
+    expect(await ids(SHOWN_SIGNALS)).toEqual(["m-act", "m-held", "m-no-verdict"]);
     expect(await ids(SENDABLE_SIGNALS)).toEqual(["m-act"]);
   });
 
@@ -134,10 +137,11 @@ describe("mentions", () => {
     expect(await ids(SHOWN_SIGNALS)).toEqual(["m-ok"]);
   });
 
-  it("uses the newest verdict when a mention was judged twice", async () => {
+  it("uses the newest about-brand verdict, and the higher id when two share a time", async () => {
     await seedSignal("m-rejudged", { kind: "mention" });
+    await seedSignal("m-tied", { kind: "mention" });
     await env.DB.prepare(
-      `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at) VALUES ('old', ?1, 'mention_matters', 'h-old', 'm-rejudged', 0.95, '2026-10-14T00:00:00.000Z'), ('new', ?1, 'mention_matters', 'h-new', 'm-rejudged', 0.2, '2026-10-15T00:00:00.000Z')`,
+      `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at) VALUES ('old', ?1, 'mention_is_about_brand', 'h-old', 'm-rejudged', 0.95, '2026-10-14T00:00:00.000Z'), ('new', ?1, 'mention_is_about_brand', 'h-new', 'm-rejudged', 0.2, '2026-10-15T00:00:00.000Z'), ('tie-a', ?1, 'mention_is_about_brand', 'h-tie-a', 'm-tied', 0.95, '2026-10-15T00:00:00.000Z'), ('tie-b', ?1, 'mention_is_about_brand', 'h-tie-b', 'm-tied', 0.2, '2026-10-15T00:00:00.000Z')`,
     )
       .bind(WS)
       .run();
