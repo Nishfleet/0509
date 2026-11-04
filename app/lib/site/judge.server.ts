@@ -8,6 +8,7 @@ import {
   type VerdictRow,
 } from "../data/jev_verdict.server";
 import { readRecentChangeDiffs, readUnjudgedChanges, type UnjudgedChange } from "../data/signal.server";
+import { ownerMeantChange } from "../data/user_decision.server";
 import {
   askMixed,
   askNoul,
@@ -28,6 +29,7 @@ import {
 } from "../jev/thresholds";
 import { markFromHunks, parseDiffHunks, parseSiteChangePayload, type SiteChangePayload } from "../site-change";
 import { daysBefore } from "../site-changes.server";
+import { sha256Hex } from "../sha256";
 import { computeBreakageEvidence, type BreakageEvidence } from "./breakage-evidence";
 import { openLateBreakage } from "./late-breakage.server";
 
@@ -330,7 +332,25 @@ async function judgeNoteworthyStage(
   return { deferred: false, selfBreakage, noteworthy: judged.noteworthy, verdictIds };
 }
 
+export async function changeFingerprint(hunks: readonly { lines: readonly string[] }[]): Promise<string | null> {
+  if (hunks.length === 0) return null;
+  return sha256Hex(JSON.stringify(hunks.map((hunk) => hunk.lines)));
+}
+
+export async function storedChangeFingerprint(payloadJson: string): Promise<string | null> {
+  const payload = parseSiteChangePayload(payloadJson);
+  return changeFingerprint(await readStoredHunks(payload?.diffKey ?? null));
+}
+
+async function ownerMeantIt(input: JudgeInput): Promise<boolean> {
+  if (!input.isSelf) return false;
+  const fingerprint = await changeFingerprint(input.hunks);
+  if (fingerprint === null) return false;
+  return ownerMeantChange({ workspaceId: input.workspaceId, entityId: input.entityId, fingerprint });
+}
+
 export async function judgeChange(input: JudgeInput): Promise<JudgedChange> {
+  if (await ownerMeantIt(input)) return { deferred: false, selfBreakage: null, noteworthy: null, verdictIds: [] };
   const now = new Date();
   if (await breakageBudgetUsed(input, now)) return deferredResult(null);
 
