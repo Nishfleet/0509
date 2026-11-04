@@ -8,7 +8,13 @@ import Page from "../../app/routes/onboarding.competitors";
 const NEVER = () => new Promise(() => undefined);
 
 type RouteProps = Parameters<typeof Page>[0];
-const LOADER_DATA: RouteProps["loaderData"] = { on: [], maybes: [], discovery: "done", otherBrands: [] };
+const LOADER_DATA: RouteProps["loaderData"] = {
+  on: [],
+  maybes: [],
+  discovery: "done",
+  otherBrands: [],
+  planFull: false,
+};
 
 function render(submission: { intent: string } | null): string {
   const router = createMemoryRouter(
