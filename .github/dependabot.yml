@@ -46,6 +46,12 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@vitest/coverage-v8"
         update-types: ["version-update:semver-major"]
+      # @vitest/eslint-plugin 1.6.28 raised its typescript peer to
+      # >=6.0.0 in a patch, so group PR #7743 failed npm ci with
+      # ERESOLVE against typescript 5.9.3. Drop this with the
+      # typescript 6 move.
+      - dependency-name: "@vitest/eslint-plugin"
+        versions: [">=1.6.28"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
