@@ -5,8 +5,8 @@ import { data, redirect, useActionData, useLoaderData, useNavigation, useSearchP
 import { z } from "zod";
 
 import { AccountDeleteNotice } from "../components/account-delete-notice";
-import { SignInEmailForm, SignInError } from "../components/sign-in-email-form";
-import { SIGN_IN_LEDE, SIGN_IN_SHELL, SIGN_IN_TITLE, SignInSent } from "../components/sign-in-sent";
+import { CAPTCHA_PENDING_MESSAGE, SignInEmailForm, SignInError } from "../components/sign-in-email-form";
+import { SIGN_IN_SHELL, SignInHeading, SignInSent, subjectLabel } from "../components/sign-in-sent";
 import { PasskeyOption } from "../components/passkey-option";
 import { Wordmark } from "../components/wordmark";
 import { Footer } from "../components/footer";
@@ -74,7 +74,7 @@ export async function action({ request }: Route.ActionArgs) {
   const detail = await response.text();
   if (response.status === 429) return { error: "Too many sign-in links. Wait a minute and try again." };
   if (detail.includes("Missing CAPTCHA response") || detail.includes("Captcha verification failed")) {
-    return { error: "Confirm you're a person, then we'll send the link." };
+    return { error: CAPTCHA_PENDING_MESSAGE };
   }
   if (response.status === 400) return { error: "Enter an email address we can send the link to." };
   console.error(JSON.stringify({ event: "login.magic_link_send_failed", status: response.status }));
@@ -91,6 +91,7 @@ export default function Login() {
   useTimezoneCookie();
 
   const error = actionData?.error ?? deleted.linkError ?? "";
+  const subject = subjectLabel(searchParams.get("subject"));
 
   const sent = actionData?.sent;
   if (sent && sent.at !== dismissedAt) {
@@ -113,10 +114,7 @@ export default function Login() {
         <Wordmark />
       </header>
       <main id={MAIN_CONTENT_ID} tabIndex={-1} className="flex flex-col">
-        <h1 className={SIGN_IN_TITLE}>Sign in</h1>
-        <p className={SIGN_IN_LEDE}>
-          New or returning, we email you a link. Tap it and you're in. There is no password.
-        </p>
+        <SignInHeading subject={subject} />
         {deleted.progress === null || deleted.id === null ? null : (
           <AccountDeleteNotice id={deleted.id} progress={deleted.progress} />
         )}

@@ -350,7 +350,7 @@ describe("login form action access pre-clearance", () => {
     const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) } as Parameters<
       typeof loginAction
     >[0]);
-    expect(result).toEqual({ error: "Confirm you're a person, then we'll send the link." });
+    expect(result).toEqual({ error: "Still checking you're a person. Give it a few seconds, then tap again." });
     expect(sent).toHaveLength(0);
   });
 
@@ -383,7 +383,7 @@ describe("login form action access pre-clearance", () => {
     const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) } as Parameters<
       typeof loginAction
     >[0]);
-    expect(result).toEqual({ error: "Confirm you're a person, then we'll send the link." });
+    expect(result).toEqual({ error: "Still checking you're a person. Give it a few seconds, then tap again." });
     expect(sent).toHaveLength(0);
   });
 });

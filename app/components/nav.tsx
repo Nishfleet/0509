@@ -3,6 +3,7 @@ import { NavLink } from "react-router";
 const places = [
   { to: "/app", label: "Home", end: true },
   { to: "/app/competitors", label: "Competitors", end: false },
+  { to: "/app/brief", label: "Brief", end: false },
   { to: "/app/alerts", label: "Alerts", end: false },
   { to: "/app/settings", label: "Settings", end: false },
 ] as const;
@@ -14,14 +15,14 @@ export function Nav() {
       data-slot="nav"
       className="fixed inset-x-0 bottom-0 z-10 border-t border-ink bg-card pb-[env(safe-area-inset-bottom)] min-[860px]:sticky min-[860px]:top-0 min-[860px]:h-dvh min-[860px]:w-52 min-[860px]:shrink-0 min-[860px]:self-start min-[860px]:border-t-0 min-[860px]:border-r min-[860px]:pb-0"
     >
-      <ul className="grid grid-cols-4 min-[860px]:flex min-[860px]:flex-col min-[860px]:gap-1 min-[860px]:p-4">
+      <ul className="grid grid-cols-5 min-[860px]:flex min-[860px]:flex-col min-[860px]:gap-1 min-[860px]:p-4">
         {places.map((place) => (
           <li key={place.to} className="min-w-0">
             <NavLink
               to={place.to}
               prefetch="intent"
               end={place.end}
-              className="group flex min-h-11 flex-col items-center justify-center gap-1 font-mono text-[0.68rem] tracking-[0.08em] text-ink-soft uppercase outline-offset-[-2px] focus-visible:outline-2 focus-visible:outline-ink aria-[current=page]:text-ink min-[860px]:flex-row min-[860px]:justify-start min-[860px]:gap-2 min-[860px]:px-3"
+              className="group flex min-h-11 flex-col items-center justify-center gap-1 font-mono text-[0.62rem] tracking-[0.02em] text-ink-soft uppercase outline-offset-[-2px] focus-visible:outline-2 focus-visible:outline-ink aria-[current=page]:text-ink min-[860px]:flex-row min-[860px]:justify-start min-[860px]:gap-2 min-[860px]:px-3 min-[860px]:text-[0.68rem] min-[860px]:tracking-[0.08em]"
             >
               <span
                 aria-hidden="true"

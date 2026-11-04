@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { LOST_CHANNEL_REASON, NO_CHANNEL_REASON } from "../app/lib/mentions/channel-reasons";
+import { withoutNoDataYet, type SourceRow, type SourceSnapshot } from "../app/lib/source-pill-status";
 import { plainSourceReason } from "../app/lib/source-status-words";
 
 describe("plainSourceReason", () => {
@@ -28,5 +29,30 @@ describe("plainSourceReason", () => {
     expect(plainSourceReason(null)).toBe("not updating right now");
     expect(plainSourceReason("")).toBe("not updating right now");
     expect(plainSourceReason("watch config is unreadable")).toBe("not updating right now");
+  });
+});
+
+describe("withoutNoDataYet", () => {
+  const NOW = Date.parse("2026-10-21T12:00:00.000Z");
+  const live: SourceSnapshot = { item_count: 3, fetched_at: "2026-10-21T06:00:00.000Z", canary_count: 3 };
+
+  function entry(key: string, overrides: Partial<SourceRow> = {}, snapshot: SourceSnapshot | null = null) {
+    return { source: { key, platform: key, is_enabled: 1, ...overrides }, snapshot };
+  }
+
+  it("drops a source that has no data yet from the alerts list", () => {
+    const kept = withoutNoDataYet([entry("news"), entry("hn"), entry("reddit", {}, live)], NOW);
+    expect(kept.map((item) => item.source.key)).toEqual(["reddit"]);
+  });
+
+  it("keeps a source that is really failing, with its own reason", () => {
+    const failing = entry("youtube", { degraded_reason: "timed out" });
+    const quiet = entry("hn", {}, { ...live, item_count: 0 });
+    expect(withoutNoDataYet([failing, quiet], NOW).map((item) => item.source.key)).toEqual(["youtube", "hn"]);
+  });
+
+  it("never leaves the words no new data yet in what it keeps", () => {
+    const kept = withoutNoDataYet([entry("news"), entry("hn", { degraded_reason: "not answering" })], NOW);
+    expect(kept.map((item) => item.source.key)).toEqual(["hn"]);
   });
 });

@@ -65,7 +65,7 @@ async function confirmCard(page: Page): Promise<void> {
 
   await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
-  await page.getByRole("button", { name: "That's me" }).click();
+  await page.getByRole("button", { name: "Looks right" }).click();
   await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
 }
 

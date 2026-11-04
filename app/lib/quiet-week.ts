@@ -19,3 +19,8 @@ export function firstBriefLine(rivals: number): string {
   const who = rivals === 1 ? "your competitor stands" : `your ${String(rivals)} competitors stand`;
   return `This is your starting point: where ${who} today, before anything changes. When one moves, your next brief says so.`;
 }
+
+export function firstRunHeadline(arrivesAt: string, rivals: number): string {
+  const noun = rivals === 1 ? "competitor" : "competitors";
+  return `Your first brief arrives ${arrivesAt}. Watching ${String(rivals)} ${noun} from tonight.`;
+}

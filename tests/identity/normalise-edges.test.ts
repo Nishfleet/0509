@@ -1,6 +1,21 @@
 import { describe, expect, it } from "vitest";
 
+import { BRAND_NAME_SHAPE } from "../../app/lib/identity/brand-name";
 import { isLoginWall, normaliseSubject } from "../../app/lib/identity/normalise";
+
+describe("BRAND_NAME_SHAPE", () => {
+  it("accepts brand names people really type", () => {
+    for (const name of ["Harbor & Pine", "Coca-Cola", "O'Neill", "Müller", "Zzqx Nonbrand 0509"]) {
+      expect(BRAND_NAME_SHAPE.test(name), name).toBe(true);
+    }
+  });
+
+  it("rejects junk that is neither a website nor a brand name", () => {
+    for (const junk of ["' OR 1=1; --", "<script>alert(1)</script>", "a;b", "😀😀", "x".repeat(61)]) {
+      expect(BRAND_NAME_SHAPE.test(junk), junk).toBe(false);
+    }
+  });
+});
 
 describe("normaliseSubject edges", () => {
   it("keeps the case of a /channel/ id, unlike /user/ and /c/", () => {

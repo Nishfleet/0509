@@ -166,7 +166,7 @@ describe("the brief view", () => {
     expect(html).toContain(`href="https://facebook.example/ads/casetta"`);
     expect(html).toContain("Kindred: A competitor dropping a tier before launch week is the move.");
     expect(render({ read_this_first: [] })).toContain(
-      "Nothing needed your attention this week. We keep watching competitor sites, ads and mentions.",
+      "Nothing needed your attention this week. We keep watching competitor sites and mentions.",
     );
     expect(blocks(render({ read_this_first: [], brands: [] }))).toEqual([
       "headline",

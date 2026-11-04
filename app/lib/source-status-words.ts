@@ -1,12 +1,13 @@
 import { LOST_CHANNEL_REASON, NO_CHANNEL_REASON } from "./mentions/channel-reasons";
 
 const GENERIC = "not updating right now";
+export const NO_DATA_YET = "no new data yet";
 
 export const NOT_READ_REASON = "not every brand read";
 
 const WORDS: Readonly<Record<string, string>> = Object.fromEntries(
   Object.entries({
-    "no fresh data": "no new data yet",
+    "no fresh data": NO_DATA_YET,
     "not answering": "could not be checked right now",
     "timed out": "slow to answer",
     [NOT_READ_REASON]: "not all of it was checked today",

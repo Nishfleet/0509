@@ -62,7 +62,7 @@ async function trackFixture(page: Page): Promise<void> {
   await input.press("Enter");
   await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
-  await page.getByRole("button", { name: "That's me" }).click();
+  await page.getByRole("button", { name: "Looks right" }).click();
   await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
   await page.getByLabel("Add a competitor we missed").fill("fixture.0509.in");
   await page.getByRole("button", { name: "Add", exact: true }).click();
