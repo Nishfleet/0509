@@ -25,15 +25,16 @@ export interface CompetitorFrameProps {
   pausedOn: string | null;
   unreadable: boolean;
   notFound?: boolean;
-  rail: Omit<CompetitorRailProps, "lastChecked">;
+  rail: Omit<CompetitorRailProps, "lastChecked" | "awaiting">;
   sweepClock?: string;
+  awaiting?: boolean;
 }
 
 export function developmentsEmpty(lastChecked: string | null, sweepClock: string = SITE_SWEEP_UTC_LABEL): string {
   if (lastChecked === null) {
-    return `Watching from today. We read the homepage every night at ${sweepClock}, and the first change shows here after the second read.`;
+    return `Watching from today. We read the homepage every night ${sweepClock}, and the first change shows here after the second read.`;
   }
-  return `No changes to the homepage since we started watching. We read it again every night at ${sweepClock}.`;
+  return `No changes to the homepage since we started watching. We read it again every night ${sweepClock}.`;
 }
 
 function Cell({ label, value }: { label: string; value: string }): ReactElement {
@@ -47,7 +48,10 @@ function Cell({ label, value }: { label: string; value: string }): ReactElement 
 
 type SnapshotProps = Pick<CompetitorFrameProps, "weekCount" | "pages" | "lastChecked">;
 
-function SnapshotSection({ weekCount, pages, lastChecked }: SnapshotProps): ReactElement {
+function SnapshotSection({ weekCount, pages, lastChecked }: SnapshotProps): ReactElement | null {
+  const showPages = pages > 0 || lastChecked !== null;
+  const cols = (weekCount > 0 ? 1 : 0) + (showPages ? 1 : 0) + (lastChecked === null ? 0 : 1);
+  if (cols === 0) return null;
   return (
     <section data-section="snapshot" aria-labelledby="competitor-snapshot" className="min-w-0">
       <h2 id="competitor-snapshot" className={HEADING}>
@@ -55,10 +59,10 @@ function SnapshotSection({ weekCount, pages, lastChecked }: SnapshotProps): Reac
       </h2>
       <dl
         className="grid grid-cols-1 border border-line min-[480px]:[grid-template-columns:repeat(var(--cols),minmax(0,1fr))]"
-        style={{ "--cols": (weekCount > 0 ? 1 : 0) + 1 + (lastChecked === null ? 0 : 1) } as CSSProperties}
+        style={{ "--cols": cols } as CSSProperties}
       >
         {weekCount > 0 ? <Cell label="Site changes" value={String(weekCount)} /> : null}
-        <Cell label="Pages watched" value={String(pages)} />
+        {showPages ? <Cell label="Pages watched" value={String(pages)} /> : null}
         {lastChecked === null ? null : <Cell label="Last checked" value={lastChecked} />}
       </dl>
     </section>
@@ -141,12 +145,15 @@ export function CompetitorFrame({
   notFound = false,
   rail,
   sweepClock = SITE_SWEEP_UTC_LABEL,
+  awaiting = false,
 }: CompetitorFrameProps): ReactElement {
   return (
     <div data-slot="competitor-frame" className="grid min-w-0 gap-10 min-[1080px]:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="flex min-w-0 flex-col gap-10">
         <SnapshotSection weekCount={weekCount} pages={pages} lastChecked={lastChecked} />
-        <BiggestMoveSection biggestMove={biggestMove} quiet={quiet} changes={changes} weekCount={weekCount} />
+        {awaiting ? null : (
+          <BiggestMoveSection biggestMove={biggestMove} quiet={quiet} changes={changes} weekCount={weekCount} />
+        )}
         <PricingTimeline steps={pricingTimeline(changes)} />
         <DevelopmentsSection
           changes={changes}
@@ -164,6 +171,7 @@ export function CompetitorFrame({
         sweepClock={sweepClock}
         unreadable={unreadable}
         notFound={notFound}
+        awaiting={awaiting}
       />
     </div>
   );

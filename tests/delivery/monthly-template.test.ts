@@ -19,8 +19,8 @@ describe("monthly note", () => {
     const { subject, text } = renderMonthly(CTX);
     expect(subject).toBe("Your month in competitors");
     expect(text).toContain("In September we caught 4 changes");
-    expect(text).toContain("Acme, Homepage headline changed");
-    expect(text).toContain("Beta, New careers page");
+    expect(text).toContain("Acme: Homepage headline changed");
+    expect(text).toContain("Beta: New careers page");
     expect(text).toContain("https://0509.io/app/alerts");
   });
 

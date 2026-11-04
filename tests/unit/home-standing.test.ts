@@ -18,7 +18,7 @@ import {
   type HomeEntity,
   type HomeHistoryRow,
 } from "../../app/lib/home-standing";
-import { nextSiteSweepAt } from "../../app/lib/onboarding/arrival-estimate";
+import { nextSiteSweepAt } from "../../app/lib/cadence";
 
 const SCHEDULE: BriefSchedule = { timezone: "Europe/London", weekday: 1, hour: 8 };
 const THURSDAY_MORNING = new Date("2026-09-24T06:30:00.000Z");
@@ -333,7 +333,7 @@ describe("Home standing", () => {
   it("says when the first standing comes while the first week is still open", () => {
     const html = render({ payload: null });
     expect(html).toContain(
-      `We&#x27;re collecting your first week of data: ${WATCHED_NOUNS} for 3 brands. Your first site snapshots arrive on Friday 25 September, around 00:00 BST. Your first ranking arrives with your brief on Monday 08:00.`,
+      `We&#x27;re collecting your first week of data: ${WATCHED_NOUNS} for 3 brands. Your first site snapshots arrive on Thursday 24 September, between 22:00 and 00:00 BST. Your first ranking arrives with your brief on Monday 08:00.`,
     );
     expect(html).toContain('data-home="first-file"');
     expect(html).toContain("Good morning.</h1>");
@@ -399,7 +399,7 @@ describe("Home standing", () => {
     for (const sources of [[], MENTION_SOURCES]) {
       const standing = homeStanding({ ...GATHERING_INPUT, sources });
       if (standing.kind !== "gathering") throw new Error("expected a gathering standing");
-      expect(standing.firstSweepAt).toBe("Friday 25 September, around 00:00 BST");
+      expect(standing.firstSweepAt).toBe("Thursday 24 September, between 22:00 and 00:00 BST");
     }
   });
 
@@ -409,7 +409,7 @@ describe("Home standing", () => {
     );
     const standing = homeStanding(GATHERING_INPUT);
     if (standing.kind !== "gathering") throw new Error("expected a gathering standing");
-    expect(standing.firstSweepAt).toBe("Friday 25 September, around 00:00 BST");
+    expect(standing.firstSweepAt).toBe("Thursday 24 September, between 22:00 and 00:00 BST");
     expect(homeView(GATHERING_INPUT).standing).toEqual(standing);
   });
 
@@ -459,7 +459,7 @@ describe("Home standing", () => {
       now,
     });
     expect(four.footer).toBe(
-      "Checked 4 brands this week · next brief Monday 08:00 · your site is checked again at 13:00",
+      "Checked 4 brands this week · next brief Monday 08:00 · your own site is re-checked every hour",
     );
 
     const one = homeView({
@@ -473,7 +473,7 @@ describe("Home standing", () => {
       now,
     });
     expect(one.footer).toBe(
-      "Checked 1 brand this week · next brief Monday 08:00 · your site is checked again at 13:00",
+      "Checked 1 brand this week · next brief Monday 08:00 · your own site is re-checked every hour",
     );
   });
 });

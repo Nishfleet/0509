@@ -80,7 +80,18 @@ async function seedSignal(
     observedAt: string;
   },
 ): Promise<void> {
-  const columns: string[] = ["id", "workspace_id", "entity_id", "source_id", "kind", "dedup_key", "observed_at"];
+  const columns: string[] = [
+    "id",
+    "workspace_id",
+    "entity_id",
+    "source_id",
+    "kind",
+    "dedup_key",
+    "observed_at",
+    "title",
+    "url",
+    "payload_json",
+  ];
   const values: (string | number | null)[] = [
     id,
     ws,
@@ -89,6 +100,9 @@ async function seedSignal(
     fields.kind,
     `dedup-${id}`,
     fields.observedAt,
+    `title ${id}`,
+    `https://${entityId}.example/${id}`,
+    fields.kind === "change" ? JSON.stringify({ before: { textKey: "b.txt" }, after: { textKey: "a.txt" } }) : "{}",
   ];
   if (fields.canonicalUrl !== undefined) {
     columns.push("canonical_url", "url_hash");

@@ -87,3 +87,16 @@ What stops a repeat: any test that starts the tail Workflow without observing it
 
 1. Code and config (this fix, partial): the shorter limit and the start lines. When the next shard stalls, the last `[file-queued]` line with no matching finished line is the hung file; add its name and cause here. Still open: why that file stalls.
 2. Not covered: a run that stalls before any file finishes.
+
+## 2026-11-04: the same leak in `fixture-reaper`, shard 4 on 2026-11-01
+
+Merge-queue run 41308739603 (#7841), `vitest-shard (4)`, cancelled at 20 minutes. The watchdog printed `[stalled]` at 13:04:04Z with no unfinished file and one surviving `workerd`, 441 s old, so it started about 12:56:43Z. `tests/integration/fixture-reaper.integration.test.ts` was queued at 12:56:44Z.
+
+That file started real Workflow instances it never observed:
+
+- The bulk and idempotent tests run the reaper live, which starts one `ACCOUNT_DELETE` instance per reaped user (`fixture-reaper-<user id>`), 30 in the bulk test alone.
+- The last test calls `startFixtureReaper`, which starts the nightly `FIXTURE_REAPER_WORKFLOW` instance.
+
+On 12 of 12 local runs of the unchanged file, that nightly instance printed its `fixture_reaper.run` line after the file's last test had finished. So a Workflow was still running while the pool disposed the file's Miniflare, the mechanism proven on 2026-10-12. None of the 12 runs hung locally, so the hang itself was not reproduced here.
+
+Fix: each of those tests holds an introspector (`introspectWorkflow(env.ACCOUNT_DELETE)`, `introspectWorkflowInstance(env.FIXTURE_REAPER_WORKFLOW, …)`) and waits for every instance it started to complete before it ends. This is the cleanup the Workers Vitest docs prescribe (https://developers.cloudflare.com/workers/testing/vitest-integration/test-apis/). After the fix, 12 of 12 local runs passed with nothing printed after the last test.

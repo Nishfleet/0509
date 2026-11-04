@@ -35,7 +35,7 @@ async function onboardSelf(page: Page): Promise<void> {
   const name = page.getByRole("textbox", { name: "name" });
   await name.fill(SELF_NAME);
   await name.press("Escape");
-  await page.getByRole("button", { name: "That's me" }).click();
+  await page.getByRole("button", { name: "Looks right" }).click();
   await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
   await page.getByRole("button", { name: "Start watching" }).click();
   await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });

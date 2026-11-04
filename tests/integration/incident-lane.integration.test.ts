@@ -201,7 +201,7 @@ describe("incident lane (0509#4364)", () => {
     expect(rec.sent[0].to).toBe(TARGET);
     expect(rec.sent[0].from).toEqual({ email: "brief@0509.io", name: "Five to Nine" });
     expect(rec.sent[0].subject).toBe(`${PAGE_HOST} looks broken: ${KIND}`);
-    expect(rec.sent[0].text).toContain("What changed: Checkout was 500ing");
+    expect(rec.sent[0].text).toContain("What we saw: Checkout was 500ing");
     expect(rec.sent[0].html).toContain("https://0509.io/app/alerts");
     expect(rec.sent[0].headers?.["List-Unsubscribe-Post"]).toBe("List-Unsubscribe=One-Click");
     expect(rec.sent[0].headers?.["List-Unsubscribe"]).toMatch(/^<https:\/\/0509\.io\/u\/[0-9a-f]{64}\?type=alerts>$/);

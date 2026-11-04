@@ -1,7 +1,14 @@
 import { Suspense, useId, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Await, Form, useFetcher, useNavigation } from "react-router";
 
-import type { CardDraft, CreatorRows, DraftField, SiteFields } from "../lib/identity/card-fields";
+import {
+  ABOUT_MAX,
+  NAME_MAX,
+  type CardDraft,
+  type CreatorRows,
+  type DraftField,
+  type SiteFields,
+} from "../lib/identity/card-fields";
 import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -61,6 +68,7 @@ interface EditRowProps {
   empty?: boolean;
   emptyLine: string;
   multiline?: boolean;
+  maxLength: number;
   edited: boolean;
   reverted: boolean;
   onRevert: () => void;
@@ -71,17 +79,19 @@ interface EditorProps {
   label: string;
   value: string;
   multiline: boolean;
+  maxLength: number;
   onValue: (value: string) => void;
   onKeyDown: (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
 }
 
-function Editor({ label, value, multiline, onValue, onKeyDown }: EditorProps) {
+function Editor({ label, value, multiline, maxLength, onValue, onKeyDown }: EditorProps) {
   if (multiline) {
     return (
       <textarea
         aria-label={label}
         autoFocus
         value={value}
+        maxLength={maxLength}
         rows={2}
         className={`${FIELD} resize-none`}
         onChange={(event) => {
@@ -96,6 +106,7 @@ function Editor({ label, value, multiline, onValue, onKeyDown }: EditorProps) {
       aria-label={label}
       autoFocus
       value={value}
+      maxLength={maxLength}
       onChange={(event) => {
         onValue(event.currentTarget.value);
       }}
@@ -129,8 +140,16 @@ function EditStatus({ edited, reverted, onRevert }: Pick<EditRowProps, "edited" 
   return null;
 }
 
+function EditCue() {
+  return (
+    <span aria-hidden="true" className="ml-2 inline-block font-mono text-[0.7rem] text-ink-soft uppercase no-underline">
+      Edit
+    </span>
+  );
+}
+
 function EditRow(props: EditRowProps) {
-  const { label, name, initial, placeholder, check, empty, emptyLine, multiline, onSave } = props;
+  const { label, name, initial, placeholder, check, empty, emptyLine, multiline, maxLength, onSave } = props;
   const [value, setValue] = useState(initial);
   const [open, setOpen] = useState(false);
   const checkId = useId();
@@ -151,17 +170,19 @@ function EditRow(props: EditRowProps) {
         }}
       >
         <PopoverTrigger
-          className={`${FIELD} min-h-11 text-left`}
+          className={`${FIELD} min-h-11 text-left break-words underline decoration-dotted underline-offset-4`}
           aria-describedby={check === true ? checkId : undefined}
         >
           <span className="sr-only">{`edit ${label}: `}</span>
           {value === "" ? <span className="text-ink-soft">{placeholder}</span> : value}
+          <EditCue />
         </PopoverTrigger>
         <PopoverContent>
           <Editor
             label={label}
             value={value}
             multiline={multiline === true}
+            maxLength={maxLength}
             onValue={setValue}
             onKeyDown={saveOnEnter}
           />
@@ -196,8 +217,8 @@ const EMPTY_LINE = "we'll fill this in after our first look at your site";
 const UNREAD_LINE = "we'll fill this in within the hour";
 
 const DRAFT_META = {
-  name: { label: "name", placeholder: "your brand's name", multiline: false },
-  description: { label: "about", placeholder: "one line on what you do", multiline: true },
+  name: { label: "name", placeholder: "your brand's name", multiline: false, maxLength: NAME_MAX },
+  description: { label: "about", placeholder: "one line on what you do", multiline: true, maxLength: ABOUT_MAX },
 } as const;
 
 interface DraftActions {
@@ -244,6 +265,7 @@ function DraftRow({ field, site, draft, emptyLine, actions }: DraftRowProps) {
       empty={site.review[field] === "empty"}
       emptyLine={emptyLine}
       multiline={meta.multiline}
+      maxLength={meta.maxLength}
       edited={draft[field] !== undefined}
       reverted={actions.reverted === field}
       onRevert={() => {
@@ -256,42 +278,52 @@ function DraftRow({ field, site, draft, emptyLine, actions }: DraftRowProps) {
   );
 }
 
+function SocialsNote() {
+  return <p className="pb-1 text-[0.88rem] text-ink-soft">You can't edit these links here.</p>;
+}
+
 function SocialsBody({ site, emptyLine }: { site: SiteFields; emptyLine: string }) {
   if (site.review.socials === "empty") {
     return <span className="text-[0.88rem] text-ink-soft">{emptyLine}</span>;
   }
   if (site.review.socials === "check") {
     return (
-      <ul className="min-w-0 flex-1 text-[0.95rem]">
-        {site.socials.map((social) => (
-          <li key={social.platform} className="min-w-0">
-            <label className="flex min-h-11 min-w-0 items-center gap-3">
-              <input
-                type="checkbox"
-                defaultChecked
-                className="size-5 shrink-0 accent-green"
-                name={`social.${social.platform}`}
-                value={social.url}
-              />
-              <span className="truncate">{social.url}</span>
-            </label>
-          </li>
-        ))}
-      </ul>
+      <div className="min-w-0 flex-1">
+        <ul className="text-[0.95rem]">
+          {site.socials.map((social) => (
+            <li key={social.platform} className="min-w-0">
+              <label className="flex min-h-11 min-w-0 items-center gap-3">
+                <input
+                  type="checkbox"
+                  defaultChecked
+                  className="size-5 shrink-0 accent-green"
+                  name={`social.${social.platform}`}
+                  value={social.url}
+                />
+                <span className="truncate">{social.url}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+        <SocialsNote />
+      </div>
     );
   }
   if (site.socials.length === 0) {
     return <span className="text-[0.95rem] text-ink-soft">none found on the site</span>;
   }
   return (
-    <ul className="min-w-0 flex-1 text-[0.95rem]">
-      {site.socials.map((social) => (
-        <li key={social.platform} className="truncate">
-          {social.url}
-          <input type="hidden" name={`social.${social.platform}`} value={social.url} />
-        </li>
-      ))}
-    </ul>
+    <div className="min-w-0 flex-1">
+      <ul className="text-[0.95rem]">
+        {site.socials.map((social) => (
+          <li key={social.platform} className="truncate">
+            {social.url}
+            <input type="hidden" name={`social.${social.platform}`} value={social.url} />
+          </li>
+        ))}
+      </ul>
+      <SocialsNote />
+    </div>
   );
 }
 
@@ -445,7 +477,7 @@ export function IdentityCard({
 function ConfirmButton({ confirming }: { confirming: boolean }) {
   return (
     <Button type="submit" size="lg" className="my-5" disabled={confirming}>
-      {confirming ? "Saving…" : "That's me"}
+      {confirming ? "Saving…" : "Looks right"}
     </Button>
   );
 }

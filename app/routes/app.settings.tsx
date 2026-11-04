@@ -47,7 +47,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         <div className="max-w-3xl min-w-0">
           {loaderData.schedule === null ? null : <BriefSection schedule={loaderData.schedule} />}
           <div id="settings-alerts">
-            <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
+            <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} included={loaderData.ownSiteAlertsIncluded} />
             <ChangeAlertsSetting on={loaderData.changeAlerts} />
             <SlackAlertsSetting
               connected={loaderData.slackConnected}

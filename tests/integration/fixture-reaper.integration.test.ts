@@ -1,4 +1,4 @@
-import { env, introspectWorkflowInstance } from "cloudflare:test";
+import { env, introspectWorkflow, introspectWorkflowInstance } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -96,6 +96,12 @@ async function instanceMissing(id: string): Promise<boolean> {
   } catch (error) {
     return error instanceof Error && error.message.includes("instance.not_found");
   }
+}
+
+async function finishAll(workflow: Awaited<ReturnType<typeof introspectWorkflow>>): Promise<number> {
+  const instances = await workflow.get();
+  for (const instance of instances) await instance.waitForStatus("complete");
+  return instances.length;
 }
 
 describe("the e2e fixture account reaper", () => {
@@ -245,6 +251,7 @@ describe("the e2e fixture account reaper", () => {
       });
     }
 
+    await using fileCleanups = await introspectWorkflow(env.ACCOUNT_DELETE);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const first = await reapFixtureAccounts("live", NOW, direct);
 
@@ -264,11 +271,13 @@ describe("the e2e fixture account reaper", () => {
     expect(await count('SELECT COUNT(*) AS n FROM "user"')).toBe(0);
 
     expect(await reapFixtureAccounts("live", NOW, direct)).toMatchObject({ selected: 0, deleted: 0 });
+    expect(await finishAll(fileCleanups)).toBe(total);
   });
 
   it("is idempotent: a second live run is a no-op, and a run that failed midway is finished by the next", async () => {
     await seed({ id: "u-twice", email: "e2e+twice@0509.io", watch: true, key: true });
     await seed({ id: "u-half", email: "e2e+half@0509.io", watch: true, key: true });
+    await using fileCleanups = await introspectWorkflow(env.ACCOUNT_DELETE);
 
     const firstRun = await reapFixtureAccounts("live", NOW, direct);
     const secondRun = await reapFixtureAccounts("live", NOW, direct);
@@ -286,6 +295,7 @@ describe("the e2e fixture account reaper", () => {
     expect(resumed).toMatchObject({ selected: 1, deleted: 1 });
     expect(await userExists("u-late")).toBe(false);
     expect(await count("SELECT COUNT(*) AS n FROM apikey")).toBe(0);
+    expect(await finishAll(fileCleanups)).toBe(3);
   });
 
   it("runs as a Workflow instance created on demand, dry-run by default, and the nightly start is once a day", async () => {
@@ -299,7 +309,9 @@ describe("the e2e fixture account reaper", () => {
     expect(await introspector.getOutput()).toMatchObject({ mode: "dry-run", selected: 1, deleted: 0 });
     expect(await userExists("u-flow")).toBe(true);
 
+    await using nightly = await introspectWorkflowInstance(env.FIXTURE_REAPER_WORKFLOW, "fixture-reaper-2026-10-21");
     expect(await startFixtureReaper(NOW)).toBe("fixture-reaper-2026-10-21");
     expect(await startFixtureReaper(NOW)).toBe("fixture-reaper-2026-10-21");
+    await nightly.waitForStatus("complete");
   });
 });

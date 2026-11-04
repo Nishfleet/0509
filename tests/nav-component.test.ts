@@ -8,6 +8,7 @@ import { Nav } from "../app/components/nav";
 const PLACES = [
   { href: "/app", label: "Home" },
   { href: "/app/competitors", label: "Competitors" },
+  { href: "/app/brief", label: "Brief" },
   { href: "/app/alerts", label: "Alerts" },
   { href: "/app/settings", label: "Settings" },
 ] as const;
@@ -35,9 +36,9 @@ describe("Nav", () => {
     expect(html.slice(html.indexOf("<nav"), html.indexOf("</nav>"))).toContain('aria-label="Primary"');
   });
 
-  it("links the four places in order, each with its label", () => {
+  it("links the five places in order, each with its label", () => {
     const anchors = links(nav("/app"));
-    expect(anchors).toHaveLength(4);
+    expect(anchors).toHaveLength(5);
     expect(anchors.map((link) => attribute(link, "href"))).toEqual(PLACES.map((place) => place.href));
     expect(anchors.map(label)).toEqual(PLACES.map((place) => place.label));
   });
@@ -45,7 +46,7 @@ describe("Nav", () => {
   it("marks only the place the reader is on as the current page", () => {
     const anchors = links(nav("/app/alerts"));
     expect(anchors.map((link) => attribute(link, "href"))).toEqual(PLACES.map((place) => place.href));
-    expect(anchors.map((link) => attribute(link, "aria-current"))).toEqual(["", "", "page", ""]);
+    expect(anchors.map((link) => attribute(link, "aria-current"))).toEqual(["", "", "", "page", ""]);
   });
 
   it("keeps Home out of the current page on a nested competitor route, because Home matches /app alone", () => {
@@ -56,9 +57,20 @@ describe("Nav", () => {
     expect(attribute(anchors[1], "aria-current")).toBe("page");
   });
 
+  it("puts Brief in the menu and marks it current on the brief page", () => {
+    const anchors = links(nav("/app/brief"));
+    expect(anchors.map(label)).toContain("Brief");
+    expect(anchors.map((link) => attribute(link, "aria-current"))).toEqual(["", "", "page", "", ""]);
+  });
+
+  it("splits the menu into five equal columns on a phone", () => {
+    expect(nav("/app")).toContain("grid-cols-5");
+    expect(nav("/app")).not.toContain("grid-cols-4");
+  });
+
   it("marks Home itself current on /app", () => {
     const anchors = links(nav("/app"));
-    expect(anchors.map((link) => attribute(link, "aria-current"))).toEqual(["page", "", "", ""]);
+    expect(anchors.map((link) => attribute(link, "aria-current"))).toEqual(["page", "", "", "", ""]);
   });
 
   it("gives every place a 44px tap target", () => {

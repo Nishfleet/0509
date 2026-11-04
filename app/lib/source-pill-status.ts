@@ -1,4 +1,5 @@
 import { readWatchConfig } from "./mentions/watch-config";
+import { NO_DATA_YET, plainSourceReason } from "./source-status-words";
 
 export interface SourceRow {
   key: string;
@@ -129,4 +130,14 @@ function sourceConfig(raw: string | null | undefined): Record<string, unknown> {
 function configString(config: Record<string, unknown>, key: string): string | null {
   const value = config[key];
   return typeof value === "string" ? blankToNull(value) : null;
+}
+
+export function withoutNoDataYet<T extends { source: SourceRow; snapshot: SourceSnapshot | null }>(
+  entries: readonly T[],
+  now: number,
+): T[] {
+  return entries.filter((entry) => {
+    const status = sourcePillStatus(entry.source, entry.snapshot, now);
+    return status.state !== "degraded" || plainSourceReason(status.reason) !== NO_DATA_YET;
+  });
 }

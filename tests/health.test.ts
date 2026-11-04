@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { d1Reachable, healthResponse } from "../app/lib/observability/health.server";
+import { D1_PING_TIMEOUT_MS, d1Reachable, healthResponse } from "../app/lib/observability/health.server";
 
 const COMMIT = "0123456789abcdef0123456789abcdef01234567";
 
@@ -19,6 +19,19 @@ function dbRejecting(error: Error): D1Database {
 function dbHanging(): D1Database {
   return {
     prepare: () => ({ first: () => new Promise(() => undefined) }),
+  } as unknown as D1Database;
+}
+
+function dbAnsweringAfter(ms: number): D1Database {
+  return {
+    prepare: () => ({
+      first: () =>
+        new Promise((resolve) => {
+          setTimeout(() => {
+            resolve({ ok: 1 });
+          }, ms);
+        }),
+    }),
   } as unknown as D1Database;
 }
 
@@ -56,10 +69,18 @@ describe("/api/health", () => {
   it("answers 503 when D1 does not return in time", async () => {
     vi.useFakeTimers();
     const pending = healthResponse(dbHanging(), COMMIT);
-    await vi.advanceTimersByTimeAsync(2_000);
+    await vi.advanceTimersByTimeAsync(D1_PING_TIMEOUT_MS);
     const response = await pending;
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({ status: "error", app: "0509", d1: "error", commit: COMMIT });
+  });
+
+  it("answers ok when D1 answers after 3 s, the slow round trip production saw twice in October", async () => {
+    vi.useFakeTimers();
+    const pending = healthResponse(dbAnsweringAfter(3_000), COMMIT);
+    await vi.advanceTimersByTimeAsync(3_000);
+    const response = await pending;
+    expect(response.status).toBe(200);
   });
 
   it("names an empty commit when the version carries no tag", async () => {

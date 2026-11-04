@@ -67,8 +67,8 @@ async function signal(input: {
   state?: string;
 }): Promise<void> {
   await env.DB.prepare(
-    `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, dedup_key, observed_at, published_at, canonical_url, url_hash, state)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?1, ?7, ?7, 'https://x.example/' || ?1, ?1, ?8)`,
+    `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, dedup_key, observed_at, published_at, url, canonical_url, url_hash, state)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?1, ?7, ?7, 'https://x.example/' || ?1, 'https://x.example/' || ?1, ?1, ?8)`,
   )
     .bind(input.id, input.ws, input.entity, `src-${input.ws}`, input.kind, input.title, input.at, input.state ?? null)
     .run();
@@ -85,7 +85,17 @@ async function compose(ws: string, marks = false) {
 
 describe("a rival's starting point in the brief", () => {
   beforeEach(async () => {
-    for (const table of ["signal", "snapshot", "page", "watch", "standing", "entity", "source", "workspace"]) {
+    for (const table of [
+      "jev_verdict",
+      "signal",
+      "snapshot",
+      "page",
+      "watch",
+      "standing",
+      "entity",
+      "source",
+      "workspace",
+    ]) {
       await env.DB.exec(`DELETE FROM ${table}`);
     }
     await env.DB.exec('DELETE FROM "user"');
@@ -131,8 +141,12 @@ describe("a rival's starting point in the brief", () => {
       `INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('pg-price', 'rv-a', 'https://r.example/pricing', 'pricing', '2026-09-01T00:00:00.000Z')`,
     ).run();
     await env.DB.prepare(
-      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, dedup_key, observed_at, aspect)
-       VALUES ('chg', 'ws-a', 'rv-a', 'src-ws-a', 'change', 'Pricing page', 'chg', '2026-09-17T09:00:00.000Z', 'copy')`,
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, dedup_key, observed_at, aspect, payload_json)
+       VALUES ('chg', 'ws-a', 'rv-a', 'src-ws-a', 'change', 'Pricing page', 'chg', '2026-09-17T09:00:00.000Z', 'copy', '{"before":{"textKey":"b.txt"},"after":{"textKey":"a.txt"}}')`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at)
+       VALUES ('v-chg', 'ws-a', 'noteworthy_change', 'h-chg', 'chg', 'rv-a', 0.95, '2026-09-17T09:00:00.000Z')`,
     ).run();
     await env.SNAPSHOTS.put(
       "feed/rv-a.json",

@@ -22,14 +22,16 @@ import { decodeHtmlEntities } from "../html";
 import { normaliseSubject } from "../identity/normalise";
 import { changeExcerpt } from "../site-change-excerpt";
 import { takeBrowserScreenshot } from "./browser-budget.server";
-import { computeBreakageEvidence } from "./breakage-evidence";
+import { breakageProof, computeBreakageEvidence } from "./breakage-evidence";
 import type { CheckPageResult } from "./check-page.server";
 import { checkPage } from "./check-page.server";
+import { breakageConfirmed } from "./breakage-recheck.server";
 import { changedWordCounts, diffPageText } from "./diff";
 import type { JudgedChange, JudgeInput } from "./judge.server";
 import { judgeChange } from "./judge.server";
 import { readPage } from "./read-page.server";
 import { rememberRivalDescription } from "./rival-profile.server";
+import { PIPELINE_SIGNALS } from "../customer-ready";
 
 const SITE_SOURCE_KEY = "site.web";
 
@@ -333,7 +335,7 @@ async function fileChangeSignal(
     observedAt: new Date().toISOString(),
   });
   await insert.run();
-  const filed = await env.DB.prepare("SELECT id FROM signal WHERE source_id = ?1 AND dedup_key = ?2")
+  const filed = await env.DB.prepare(`SELECT id FROM ${PIPELINE_SIGNALS} WHERE source_id = ?1 AND dedup_key = ?2`)
     .bind(target.sourceId, changed.snapshotId)
     .first<{ id: string }>();
   if (filed === null) {
@@ -393,8 +395,8 @@ function breakageStatements(
       signalId: ids.signal,
       incidentId: ids.incident,
       severity: filing.band === "alert" ? "high" : "normal",
-      title: `${subject.domain} looks broken: breakage`,
-      body: null,
+      title: `${subject.domain} looks broken`,
+      body: breakageProof(change.evidence),
       createdAt: now,
     }),
   ];
@@ -453,6 +455,16 @@ async function fileUnlessDiscarded(change: SiteChangeInput, payloadJson: string,
   }
 }
 
+async function confirmedBreakageBand(
+  change: SiteChangeInput,
+  judgment: JudgedChange | null,
+  beforeKey: string,
+): Promise<"alert" | "check" | null> {
+  const band = judgment?.selfBreakage?.band;
+  if (band !== "alert" && band !== "check") return null;
+  return (await breakageConfirmed(change.evidence, change.target.url, beforeKey)) ? band : null;
+}
+
 export async function publishSiteChange(target: SiteSweepTarget, changed: ChangedPage): Promise<string> {
   const [before, after] = await Promise.all([
     readVisibleText(changed.previousTextKey),
@@ -483,8 +495,8 @@ export async function publishSiteChange(target: SiteSweepTarget, changed: Change
 
   const payloadJson = changeSignalPayload({ target, changed, diff, diffKey });
   const selfJudgment = await judgeSelfChange(change);
-  const band = selfJudgment?.selfBreakage?.band;
-  if (selfJudgment !== null && (band === "alert" || band === "check")) {
+  const band = await confirmedBreakageBand(change, selfJudgment, changed.previousTextKey);
+  if (selfJudgment !== null && band !== null) {
     await openBreakageIncident(change, { payloadJson, judgment: selfJudgment, band });
   } else {
     await fileUnlessDiscarded(change, payloadJson, selfJudgment);

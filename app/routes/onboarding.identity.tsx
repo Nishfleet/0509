@@ -16,8 +16,7 @@ import { applyDraftIntent, readDraft } from "../lib/identity/card-draft.server";
 import { warmDiscovery } from "../lib/discovery/warm.server";
 import { startCard, withinProbeLimit } from "../lib/identity/card.server";
 import { confirmCardLater } from "../lib/identity/confirm.server";
-import { normaliseSubject } from "../lib/identity/normalise";
-import { screenOnboardingSubject } from "../lib/onboarding-screen.server";
+import { confirmFailureMessage, screenIdentitySubject, startIdentityRun } from "../lib/onboarding-start.server";
 import { timeCard } from "../lib/onboarding/card-timing.server";
 import { requireFreshSession } from "../lib/require-session.server";
 import { createTimings } from "../lib/server-timing.server";
@@ -76,36 +75,17 @@ export async function action({ request, context }: Route.ActionArgs) {
   if (await applyDraftIntent(workspaceId, form)) return null;
   const parsedSubject = identityActionForm.safeParse(Object.fromEntries(form));
   const rawSubject = parsedSubject.success ? parsedSubject.data.subject : undefined;
-  if (rawSubject !== undefined) {
-    const normalised = normaliseSubject(rawSubject);
-    if (normalised.ok) {
-      if (!(await timings.measure("limit", withinProbeLimit(session.user.id)))) {
-        return { message: "You've tried a lot of addresses in the last minute. Wait a minute, then try again." };
-      }
-      const screened = await timings.measure(
-        "screen",
-        screenOnboardingSubject({
-          workspaceId,
-          userId: session.user.id,
-          subject: normalised.subject,
-          raw: rawSubject,
-          answer: null,
-          now: new Date().toISOString(),
-        }),
-      );
-      if (screened.kind !== "proceed") throw redirect("/onboarding");
-    }
-  }
+  const refusal = await screenIdentitySubject(timings, { workspaceId, userId: session.user.id, rawSubject });
+  if (refusal !== null) return refusal;
   const startTail = await timings.measure("confirm", confirmCardLater(workspaceId, session.user.id, form));
-  if (startTail !== null) {
-    context.get(executionContext).waitUntil(
-      startTail().catch((error: unknown) => {
-        captureException(error, { tags: { step: "identity-tail-start" } });
-      }),
-    );
-    throw redirect("/onboarding/competitors", { headers: timings.header() });
-  }
-  return { message: "Add your brand's name, then tap That's me." };
+  if (startTail === null) return { message: confirmFailureMessage(form) };
+  await timings.measure("run", startIdentityRun({ workspaceId, userId: session.user.id, rawSubject }));
+  context.get(executionContext).waitUntil(
+    startTail().catch((error: unknown) => {
+      captureException(error, { tags: { step: "identity-tail-start" } });
+    }),
+  );
+  throw redirect("/onboarding/competitors", { headers: timings.header() });
 }
 
 export function shouldRevalidate({ formData, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {

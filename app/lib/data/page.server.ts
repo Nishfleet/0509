@@ -25,12 +25,16 @@ export interface JudgedPage {
   discoveredAt: string;
 }
 
+const oneHome = (role: string) =>
+  `CASE WHEN ${role} = 'home' AND EXISTS (SELECT 1 FROM page h WHERE h.entity_id = ?2 AND h.role = 'home' AND h.url <> ?3)
+  THEN 'other' ELSE ${role} END`;
+
 const INSERT_PAGE = `INSERT INTO page (id, entity_id, url, role, discovered_at)
-SELECT ?1, ?2, ?3, ?4, ?5 WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
+SELECT ?1, ?2, ?3, ${oneHome("?4")}, ?5 WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
 ON CONFLICT (entity_id, url) DO NOTHING`;
 
 const UPSERT_JUDGED_PAGE = `INSERT INTO page (id, entity_id, url, title, role, role_decided_for_hash, discovered_at)
-SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
+SELECT ?1, ?2, ?3, ?4, ${oneHome("?5")}, ?6, ?7 WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
 ON CONFLICT (entity_id, url) DO UPDATE SET
   title = excluded.title,
   role = excluded.role,
@@ -202,7 +206,12 @@ export async function markPageDeferred(pageId: string, at: string): Promise<void
   await env.DB.prepare(MARK_DEFERRED).bind(pageId, at).run();
 }
 
-const RECORD_FAILURE = "UPDATE page SET last_failure_reason = ?2, last_failure_at = ?3 WHERE id = ?1";
+const RECORD_FAILURE = `UPDATE page SET
+  last_failure_reason = CASE
+    WHEN ?2 LIKE 'deferred:%' AND last_failure_at = ?3 AND last_failure_reason NOT LIKE 'deferred:%' THEN last_failure_reason
+    ELSE ?2 END,
+  last_failure_at = ?3
+WHERE id = ?1`;
 
 const CLEAR_FAILURE =
   "UPDATE page SET last_failure_reason = NULL, last_failure_at = NULL WHERE id = ?1 AND last_failure_at IS NOT NULL";
@@ -256,6 +265,7 @@ export interface OwnSitePage {
   entityId: string;
   pageId: string;
   url: string;
+  role: string;
 }
 
 const ENTITIES_WITHOUT_HOME = `SELECT e.id AS id, e.domain AS domain, CASE WHEN json_valid(e.identity_json) THEN json_extract(e.identity_json, '$.url') END AS url,
@@ -268,7 +278,8 @@ ORDER BY e.id`;
 const OWN_SITE_PAGES = `SELECT e.workspace_id AS workspace_id,
        e.id AS entity_id,
        p.id AS page_id,
-       p.url AS url
+       p.url AS url,
+       p.role AS role
 FROM entity e
 JOIN page p ON p.entity_id = e.id AND p.role = 'home'
 WHERE e.role = 'self' AND e.state = 'on' AND ${liveWorkspace("e.workspace_id")}
@@ -291,6 +302,7 @@ const ownSiteRows = z.array(
     entity_id: z.string(),
     page_id: z.string(),
     url: z.string(),
+    role: z.string(),
   }),
 );
 
@@ -306,5 +318,6 @@ export async function readOwnSitePages(): Promise<OwnSitePage[]> {
     entityId: row.entity_id,
     pageId: row.page_id,
     url: row.url,
+    role: row.role,
   }));
 }

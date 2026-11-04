@@ -743,7 +743,9 @@ describe("nightly site sweep", () => {
       expect(filed.signals).toEqual([{ aspect: "breakage", summary: null }]);
       expect(filed.incidents).toEqual([{ id: expect.any(String), kind: "breakage", closed_at: null }]);
       const incidentId = filed.incidents[0]?.id;
-      expect(filed.alerts).toEqual([{ incident_id: incidentId, severity: "high", body: null }]);
+      expect(filed.alerts).toEqual([
+        { incident_id: incidentId, severity: "high", body: expect.stringContaining("status 200") },
+      ]);
       expect(send).toHaveBeenCalledTimes(1);
       expect(send).toHaveBeenCalledWith({ incident_id: incidentId });
       const unlinked = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE signal_id IS NULL").first<{
@@ -797,7 +799,9 @@ describe("nightly site sweep", () => {
 
       const filed = await rows();
       expect(filed.incidents).toHaveLength(1);
-      expect(filed.alerts).toEqual([{ incident_id: filed.incidents[0]?.id, severity: "normal", body: null }]);
+      expect(filed.alerts).toEqual([
+        { incident_id: filed.incidents[0]?.id, severity: "normal", body: expect.stringContaining("status 200") },
+      ]);
       expect(send).not.toHaveBeenCalled();
     });
 
@@ -1010,21 +1014,6 @@ describe("home url resolution", () => {
     expect(targets.map((target) => [target.entityId, target.url, target.pageRole])).toEqual([
       ["ent-taken", "https://fixture.0509.in/", "product"],
     ]);
-  });
-
-  it("watches one page per entity when the entity already has two home rows", async () => {
-    await seedHomeEntities([{ id: "ent-two", role: "self", domain: "nike.com", identityJson: "{}" }]);
-    await env.DB.prepare(`INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?, ?, ?, 'home', ?)`)
-      .bind("page-two-early", "ent-two", "https://nike.com/", new Date(Date.parse(NOW) - 7_200_000).toISOString())
-      .run();
-    await env.DB.prepare(`INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?, ?, ?, 'home', ?)`)
-      .bind("page-two-late", "ent-two", "https://shop.nike.com/", new Date(Date.parse(NOW) - 3_600_000).toISOString())
-      .run();
-
-    const targets = await planSiteSweep(NOW);
-
-    expect(targets.map((target) => [target.entityId, target.url])).toEqual([["ent-two", "https://nike.com/"]]);
-    expect(await rowCount("watch")).toBe(1);
   });
 
   it("still creates the home pages when the site source is paused", async () => {
