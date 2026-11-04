@@ -1,7 +1,7 @@
 import { captureException } from "@sentry/cloudflare";
 import { env } from "cloudflare:workers";
 
-const D1_PING_TIMEOUT_MS = 2_000;
+export const D1_PING_TIMEOUT_MS = 5_000;
 
 function firstOrTimeout<T>(promise: Promise<T>): Promise<T> {
   return new Promise((resolve, reject) => {
