@@ -397,6 +397,13 @@ const EMPTY_WORKERS_ENV_MOCK = {
     "The node project already aliases cloudflare:workers to tests/workers-env-empty-stub.ts. An empty vi.mock({ env: {} }) is dead duplication; a test that needs values still mocks real bindings. Evals keep the throwing Proxy in tests/evals/workers-env-stub.ts. Source: 0509#7026.",
 };
 
+const INTROSPECTOR_NOT_DISPOSED = {
+  selector:
+    "CallExpression[callee.name=/^introspectWorkflow(Instance)?$/]:not(VariableDeclaration[kind='await using'] > VariableDeclarator > AwaitExpression > CallExpression)",
+  message:
+    "Hold a Workflow introspector with `await using x = await introspectWorkflow(...)`, so it is disposed when the test ends. An undisposed one leaks the instance into the next test (developers.cloudflare.com/workers/testing/vitest-integration/test-apis/). Source: 0509#7886, docs/incidents/2026-10-09-vitest-shard-2-stall.md.",
+};
+
 const ESLINT_DISK_PROBE_BAN = {
   selector:
     "CallExpression[callee.name=/^(writeFile|mkdir)(Sync)?$/], CallExpression[callee.property.name=/^(writeFile|mkdir)(Sync)?$/]",
@@ -1736,7 +1743,7 @@ export default tseslint.config(
       // `assert` stays from the stock default.
       "vitest/expect-expect": ["error", { assertFunctionNames: ["expect", "expectNoHtmlInjection", "assert"] }],
       "vitest/valid-expect": ["error", { maxArgs: 2 }],
-      "no-restricted-syntax": ["error", EMPTY_WORKERS_ENV_MOCK],
+      "no-restricted-syntax": ["error", EMPTY_WORKERS_ENV_MOCK, INTROSPECTOR_NOT_DISPOSED],
     },
   },
 
@@ -1769,7 +1776,7 @@ export default tseslint.config(
     files: ["tests/unit/**/*.ts"],
     ignores: ["tests/unit/feature-map-proof.test.ts", "tests/unit/theme.test.ts"],
     rules: {
-      "no-restricted-syntax": ["error", DOC_READING_TEST_BAN, EMPTY_WORKERS_ENV_MOCK],
+      "no-restricted-syntax": ["error", DOC_READING_TEST_BAN, EMPTY_WORKERS_ENV_MOCK, INTROSPECTOR_NOT_DISPOSED],
     },
   },
 
