@@ -4,8 +4,8 @@ import { PIPELINE_SIGNALS } from "../customer-ready";
 import { liveWorkspace } from "./active-workspace";
 
 const INSERT_ONBOARDING_RUN = `INSERT INTO onboarding_run (id, workspace_id, user_id, input_raw, started_at)
-SELECT ?1, ?2, ?3, ?4, ?5
-WHERE NOT EXISTS (SELECT 1 FROM onboarding_run WHERE workspace_id = ?2)`;
+VALUES (?1, ?2, ?3, ?4, ?5)
+ON CONFLICT (workspace_id) DO NOTHING`;
 
 const UPDATE_CARD_READY_AT = `UPDATE onboarding_run SET card_ready_at = ?2 WHERE workspace_id = ?1 AND card_ready_at IS NULL`;
 

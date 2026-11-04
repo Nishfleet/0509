@@ -54,9 +54,7 @@ FROM workspace w
 LEFT JOIN entity e ON e.id = (
   SELECT id FROM entity WHERE workspace_id = w.id AND role = 'self' LIMIT 1
 )
-LEFT JOIN onboarding_run r ON r.id = (
-  SELECT id FROM onboarding_run WHERE workspace_id = w.id ORDER BY started_at ASC LIMIT 1
-)
+LEFT JOIN onboarding_run r ON r.workspace_id = w.id
 LEFT JOIN plan p ON p.workspace_id = ${governingWorkspace("w.id")}
 WHERE w.owner_user_id = ?1
 ORDER BY ${activeFirstOrder("?1", "w.id", "w.created_at")}

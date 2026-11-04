@@ -124,8 +124,7 @@ export async function ensureWorkspaceForSignIn(
 export const ONBOARDING_COMPETITORS = "/onboarding/competitors";
 export const ONBOARDING_PLAN = "/onboarding/plan";
 
-export const SELECT_RUN =
-  "SELECT input_raw, watching_started_at FROM onboarding_run WHERE workspace_id = ? ORDER BY started_at ASC LIMIT 1";
+export const SELECT_RUN = "SELECT input_raw, watching_started_at FROM onboarding_run WHERE workspace_id = ?";
 
 interface RunRow {
   input_raw: string;
