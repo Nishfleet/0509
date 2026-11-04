@@ -31,6 +31,7 @@ import type { JudgedChange, JudgeInput } from "./judge.server";
 import { judgeChange } from "./judge.server";
 import { readPage } from "./read-page.server";
 import { rememberRivalDescription } from "./rival-profile.server";
+import { PIPELINE_SIGNALS } from "../customer-ready";
 
 const SITE_SOURCE_KEY = "site.web";
 
@@ -334,7 +335,7 @@ async function fileChangeSignal(
     observedAt: new Date().toISOString(),
   });
   await insert.run();
-  const filed = await env.DB.prepare("SELECT id FROM signal WHERE source_id = ?1 AND dedup_key = ?2")
+  const filed = await env.DB.prepare(`SELECT id FROM ${PIPELINE_SIGNALS} WHERE source_id = ?1 AND dedup_key = ?2`)
     .bind(target.sourceId, changed.snapshotId)
     .first<{ id: string }>();
   if (filed === null) {
