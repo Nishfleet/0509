@@ -25,15 +25,16 @@ export interface JudgedPage {
   discoveredAt: string;
 }
 
+const oneHome = (role: string) =>
+  `CASE WHEN ${role} = 'home' AND EXISTS (SELECT 1 FROM page h WHERE h.entity_id = ?2 AND h.role = 'home' AND h.url <> ?3)
+  THEN 'other' ELSE ${role} END`;
+
 const INSERT_PAGE = `INSERT INTO page (id, entity_id, url, role, discovered_at)
-SELECT ?1, ?2, ?3, ?4, ?5 WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
+SELECT ?1, ?2, ?3, ${oneHome("?4")}, ?5 WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
 ON CONFLICT (entity_id, url) DO NOTHING`;
 
-const JUDGED_ROLE = `CASE WHEN ?5 = 'home' AND EXISTS (SELECT 1 FROM page h WHERE h.entity_id = ?2 AND h.role = 'home' AND h.url <> ?3)
-  THEN 'other' ELSE ?5 END`;
-
 const UPSERT_JUDGED_PAGE = `INSERT INTO page (id, entity_id, url, title, role, role_decided_for_hash, discovered_at)
-SELECT ?1, ?2, ?3, ?4, ${JUDGED_ROLE}, ?6, ?7 WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
+SELECT ?1, ?2, ?3, ?4, ${oneHome("?5")}, ?6, ?7 WHERE EXISTS (SELECT 1 FROM entity WHERE id = ?2)
 ON CONFLICT (entity_id, url) DO UPDATE SET
   title = excluded.title,
   role = excluded.role,

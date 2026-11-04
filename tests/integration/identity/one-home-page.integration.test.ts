@@ -1,9 +1,9 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { upsertJudgedPages, type JudgedPage } from "../../../app/lib/data/page.server";
+import { insertPages, upsertJudgedPages, type JudgedPage } from "../../../app/lib/data/page.server";
 import { storeTailHome } from "../../../app/lib/identity/tail.server";
-import migration from "../../../migrations/0070_one_home_per_rival.sql?raw";
+import migration from "../../../migrations/0071_one_home_per_rival.sql?raw";
 
 const NOW = "2026-10-17T04:00:00.000Z";
 const ENTITY = "e-one-home";
@@ -73,6 +73,25 @@ describe("one home page per entity", () => {
     });
   });
 
+  it("stores the sweep's root as other when the judge already chose a home", async () => {
+    await upsertJudgedPages([judged("https://linear.app/homepage", "home")]);
+    await insertPages([
+      { id: "p-root", entityId: ENTITY, url: "https://linear.app/", role: "home", discoveredAt: NOW },
+    ]);
+    expect(await roles()).toEqual({ "https://linear.app/": "other", "https://linear.app/homepage": "home" });
+  });
+
+  it("rejects a second home written past the writer", async () => {
+    await upsertJudgedPages([judged("https://linear.app/", "home")]);
+    await expect(
+      env.DB.prepare(
+        "INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('x', ?1, 'https://linear.app/x', 'home', ?2)",
+      )
+        .bind(ENTITY, NOW)
+        .run(),
+    ).rejects.toThrow(/UNIQUE/);
+  });
+
   it("lets the judge re-decide the one home page", async () => {
     await upsertJudgedPages([judged("https://linear.app/", "home")]);
     await upsertJudgedPages([judged("https://linear.app/", "home")]);
@@ -81,6 +100,7 @@ describe("one home page per entity", () => {
 
   it("migration keeps the home the judge never touched over a stray judged root", async () => {
     await env.DB.batch([
+      env.DB.prepare("DROP INDEX page_one_home"),
       env.DB.prepare(
         "INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('w1', ?1, 'https://brand.example/en-gb/', 'home', ?2)",
       ).bind(ENTITY, NOW),
@@ -94,6 +114,7 @@ describe("one home page per entity", () => {
 
   it("migration keeps a watched home over an unjudged site root", async () => {
     await env.DB.batch([
+      env.DB.prepare("DROP INDEX page_one_home"),
       env.DB.prepare(
         "INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('v1', ?1, 'https://brand.example/', 'home', ?2), ('v2', ?1, 'https://brand.example/en-gb/', 'home', ?2)",
       ).bind(ENTITY, NOW),
@@ -107,6 +128,7 @@ describe("one home page per entity", () => {
 
   it("migration demotes stray homes already stored and keeps the site root", async () => {
     await env.DB.batch([
+      env.DB.prepare("DROP INDEX page_one_home"),
       env.DB.prepare(
         "INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('a', ?1, 'https://linear.app/now', 'home', ?2), ('b', ?1, 'https://www.linear.app/', 'home', ?2), ('c', ?1, 'https://linear.app/homepage', 'home', ?2)",
       ).bind(ENTITY, NOW),
