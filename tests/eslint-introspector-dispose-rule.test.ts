@@ -31,6 +31,35 @@ it("cleans up", async () => {
 });
 `;
 
+const DISPOSE_CALLED = `import { env, introspectWorkflowInstance } from "cloudflare:test";
+import { it } from "vitest";
+
+it("cleans up", async () => {
+  const instance = await introspectWorkflowInstance(env.SITE_SWEEP, "id");
+  try {
+    await instance.waitForStatus("complete");
+  } finally {
+    await instance.dispose();
+  }
+});
+`;
+
+const DISPOSE_IN_OTHER_TEST = `import { env, introspectWorkflow } from "cloudflare:test";
+import { describe, it } from "vitest";
+
+describe("sweep", () => {
+  it("leaks", async () => {
+    const introspector = await introspectWorkflow(env.ACCOUNT_DELETE);
+    await introspector.get();
+  });
+
+  it("cleans up", async () => {
+    const other = await introspectWorkflow(env.ACCOUNT_DELETE);
+    await other.dispose();
+  });
+});
+`;
+
 const AT = "tests/integration/fixture-reaper.integration.test.ts";
 
 describe("eslint Workflow introspector disposal (0509#7886)", () => {
@@ -52,6 +81,16 @@ describe("eslint Workflow introspector disposal (0509#7886)", () => {
   it("allows await using", { timeout: 60_000 }, async () => {
     const result = await lintTextAt(AT, DISPOSED);
     expect(result.messages.some((m) => m.includes(MESSAGE))).toBe(false);
+  });
+
+  it("allows an explicit dispose() call", { timeout: 60_000 }, async () => {
+    const result = await lintTextAt(AT, DISPOSE_CALLED);
+    expect(result.messages.some((m) => m.includes(MESSAGE))).toBe(false);
+  });
+
+  it("rejects a test whose dispose() sits in another test", { timeout: 60_000 }, async () => {
+    const result = await lintTextAt(AT, DISPOSE_IN_OTHER_TEST);
+    expect(result.messages.filter((m) => m.includes(MESSAGE))).toHaveLength(1);
   });
 
   it("keeps every current introspector disposed", { timeout: 60_000 }, async () => {

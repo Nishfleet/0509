@@ -399,9 +399,9 @@ const EMPTY_WORKERS_ENV_MOCK = {
 
 const INTROSPECTOR_NOT_DISPOSED = {
   selector:
-    "CallExpression[callee.name=/^introspectWorkflow(Instance)?$/]:not(VariableDeclaration[kind='await using'] > VariableDeclarator > AwaitExpression > CallExpression)",
+    "CallExpression[callee.name=/^introspectWorkflow(Instance)?$/]:not(VariableDeclaration[kind='await using'] > VariableDeclarator > AwaitExpression > CallExpression):not(:function:has(CallExpression[callee.object.type='Identifier'][callee.property.name='dispose']) > BlockStatement > VariableDeclaration > VariableDeclarator > AwaitExpression > CallExpression)",
   message:
-    "Hold a Workflow introspector with `await using x = await introspectWorkflow(...)`, so it is disposed when the test ends. An undisposed one leaks the instance into the next test (developers.cloudflare.com/workers/testing/vitest-integration/test-apis/). Source: 0509#7886, docs/incidents/2026-10-09-vitest-shard-2-stall.md.",
+    "Hold a Workflow introspector with `await using x = await introspectWorkflow(...)`, or call `await x.dispose()` in the same test, so it is disposed when the test ends. An undisposed one leaks the instance into the next test (developers.cloudflare.com/workers/testing/vitest-integration/test-apis/). Source: 0509#7886, docs/incidents/2026-10-09-vitest-shard-2-stall.md.",
 };
 
 const ESLINT_DISK_PROBE_BAN = {
