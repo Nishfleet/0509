@@ -1,0 +1,777 @@
+{
+ "__type": {
+  "fields": [
+   {
+    "name": "MagicWANConnectorMetricsAdaptiveGroups"
+   },
+   {
+    "name": "accessLoginRequestsAdaptiveGroups"
+   },
+   {
+    "name": "accountTag"
+   },
+   {
+    "name": "advancedDnsProtectionNetworkAnalyticsAdaptiveGroups"
+   },
+   {
+    "name": "advancedTcpProtectionNetworkAnalyticsAdaptiveGroups"
+   },
+   {
+    "name": "aegisIpUtilizationAdaptiveGroups"
+   },
+   {
+    "name": "agentMemoryOperationsAdaptiveGroups"
+   },
+   {
+    "name": "agentModelInvocationsAdaptiveGroups"
+   },
+   {
+    "name": "aiGatewayCacheAdaptiveGroups"
+   },
+   {
+    "name": "aiGatewayConversationAnalysesAdaptive"
+   },
+   {
+    "name": "aiGatewayConversationAnalysesAdaptiveGroups"
+   },
+   {
+    "name": "aiGatewayConversationAnalysesStagingAdaptive"
+   },
+   {
+    "name": "aiGatewayConversationAnalysesStagingAdaptiveGroups"
+   },
+   {
+    "name": "aiGatewayErrorsAdaptiveGroups"
+   },
+   {
+    "name": "aiGatewayRequestsAdaptiveGroups"
+   },
+   {
+    "name": "aiGatewaySizeAdaptiveGroups"
+   },
+   {
+    "name": "aiGatewaySpendSessionsAdaptiveGroups"
+   },
+   {
+    "name": "aiGatewaySpendUserDailyAdaptiveGroups"
+   },
+   {
+    "name": "aiInferenceAdaptive"
+   },
+   {
+    "name": "aiInferenceAdaptiveGroups"
+   },
+   {
+    "name": "aiSearchAPIAdaptiveGroups"
+   },
+   {
+    "name": "aiSearchFulltextQueriesAdaptiveGroups"
+   },
+   {
+    "name": "aiSearchImageProcessingTokensAdaptiveGroups"
+   },
+   {
+    "name": "aiSearchIngestedItemsAdaptiveGroups"
+   },
+   {
+    "name": "aiSearchIngestionTokensAdaptiveGroups"
+   },
+   {
+    "name": "aiSearchMediaSecondsAdaptiveGroups"
+   },
+   {
+    "name": "aiSearchPublicEventsAdaptiveGroups"
+   },
+   {
+    "name": "aiSearchSemanticQueriesAdaptiveGroups"
+   },
+   {
+    "name": "aiSearchStorageAdaptiveGroups"
+   },
+   {
+    "name": "artifactsEventsAdaptiveGroups"
+   },
+   {
+    "name": "artifactsStorageAdaptiveGroups"
+   },
+   {
+    "name": "auditLogsGroups"
+   },
+   {
+    "name": "autoRAGConfigAPIAdaptiveGroups"
+   },
+   {
+    "name": "autoRAGEngineAdaptiveGroups"
+   },
+   {
+    "name": "browserIsolationSessionsAdaptiveGroups"
+   },
+   {
+    "name": "browserIsolationUserActionsAdaptiveGroups"
+   },
+   {
+    "name": "browserRenderingApiAdaptive"
+   },
+   {
+    "name": "browserRenderingApiAdaptiveGroups"
+   },
+   {
+    "name": "browserRenderingBindingSessionsAdaptiveGroups"
+   },
+   {
+    "name": "browserRenderingBrowserTimeUsageAdaptiveGroups"
+   },
+   {
+    "name": "browserRenderingEventsAdaptive"
+   },
+   {
+    "name": "browserRenderingEventsAdaptiveGroups"
+   },
+   {
+    "name": "callsStatusAdaptive"
+   },
+   {
+    "name": "callsTurnUsageAdaptiveGroups"
+   },
+   {
+    "name": "callsUsageAdaptiveGroups"
+   },
+   {
+    "name": "cdnNetworkAnalyticsAdaptiveGroups"
+   },
+   {
+    "name": "cf1AccessLogins1dGroups"
+   },
+   {
+    "name": "cf1AccessLogins1hGroups"
+   },
+   {
+    "name": "cf1AccessLoginsRawGroups"
+   },
+   {
+    "name": "cf1GatewayDns1dGroups"
+   },
+   {
+    "name": "cf1GatewayDns1hGroups"
+   },
+   {
+    "name": "cf1GatewayDnsRawGroups"
+   },
+   {
+    "name": "cf1GatewayHttp1dGroups"
+   },
+   {
+    "name": "cf1GatewayHttp1hGroups"
+   },
+   {
+    "name": "cf1GatewayHttpRawGroups"
+   },
+   {
+    "name": "cf1GatewayNetwork1dGroups"
+   },
+   {
+    "name": "cf1GatewayNetwork1hGroups"
+   },
+   {
+    "name": "cf1GatewayNetworkRawGroups"
+   },
+   {
+    "name": "cf1GatewayNetworkSession1dGroups"
+   },
+   {
+    "name": "cf1GatewayNetworkSession1hGroups"
+   },
+   {
+    "name": "cf1GatewayNetworkSessionRawGroups"
+   },
+   {
+    "name": "cf1McpHost1dGroups"
+   },
+   {
+    "name": "cloudchamberMetricsAdaptiveGroups"
+   },
+   {
+    "name": "cloudflareTunnelsAnalyticsAdaptiveGroups"
+   },
+   {
+    "name": "cloudforceOneDetectionsAdaptiveGroups"
+   },
+   {
+    "name": "cloudforceOneDetectionsStagingAdaptiveGroups"
+   },
+   {
+    "name": "containersMetricsAdaptiveGroups"
+   },
+   {
+    "name": "containersUsageAdaptiveGroups"
+   },
+   {
+    "name": "d1AnalyticsAdaptiveGroups"
+   },
+   {
+    "name": "d1QueriesAdaptiveGroups"
+   },
+   {
+    "name": "d1StorageAdaptiveGroups"
+   },
+   {
+    "name": "dnsAnalyticsAdaptive"
+   },
+   {
+    "name": "dnsAnalyticsAdaptiveGroups"
+   },
+   {
+    "name": "dnsFirewallAnalyticsAdaptive"
+   },
+   {
+    "name": "dnsFirewallAnalyticsAdaptiveGroups"
+   },
+   {
+    "name": "dosdAttackAnalyticsGroups"
+   },
+   {
+    "name": "dosdNetworkAnalyticsAdaptiveGroups"
+   },
+   {
+    "name": "durableObjectsInvocationsAdaptiveGroups"
+   },
+   {
+    "name": "durableObjectsPeriodicGroups"
+   },
+   {
+    "name": "durableObjectsSqlStorageGroups"
+   },
+   {
+    "name": "durableObjectsStorageGroups"
+   },
+   {
+    "name": "durableObjectsSubrequestsAdaptiveGroups"
+   },
+   {
+    "name": "emailComplaintsAdaptiveGroups"
+   },
+   {
+    "name": "emailSendingAdaptive"
+   },
+   {
+    "name": "emailSendingAdaptiveGroups"
+   },
+   {
+    "name": "fbmAttackAnalyticsGroups"
+   },
+   {
+    "name": "firewallEventsAdaptive"
+   },
+   {
+    "name": "firewallEventsAdaptiveGroups"
+   },
+   {
+    "name": "flagshipFlagEvaluationsAdaptive"
+   },
+   {
+    "name": "flagshipFlagEvaluationsAdaptiveGroups"
+   },
+   {
+    "name": "flowtrackdNetworkAnalyticsAdaptiveGroups"
+   },
+   {
+    "name": "gatewayL4DownstreamSessionsAdaptiveGroups"
+   },
+   {
+    "name": "gatewayL4SessionsAdaptiveGroups"
+   },
+   {
+    "name": "gatewayL4UpstreamSessionsAdaptiveGroups"
+   },
+   {
+    "name": "gatewayL7RequestsAdaptiveGroups"
+   },
+   {
+    "name": "gatewayResolverByCategoryAdaptiveGroups"
+   },
+   {
+    "name": "gatewayResolverByCustomResolverGroups"
+   },
+   {
+    "name": "gatewayResolverByRuleExecutionPerformanceAdaptiveGroups"
+   },
+   {
+    "name": "gatewayResolverQueriesAdaptiveGroups"
+   },
+   {
+    "name": "httpRequests1dGroups"
+   },
+   {
+    "name": "httpRequests1hGroups"
+   },
+   {
+    "name": "httpRequests1mGroups"
+   },
+   {
+    "name": "httpRequestsAdaptive"
+   },
+   {
+    "name": "httpRequestsAdaptiveGroups"
+   },
+   {
+    "name": "httpRequestsOverviewAdaptiveGroups"
+   },
+   {
+    "name": "hyperdrivePoolSizesAdaptiveGroups"
+   },
+   {
+    "name": "hyperdriveQueriesAdaptiveGroups"
+   },
+   {
+    "name": "imagesHostedRequestsAdaptiveGroups"
+   },
+   {
+    "name": "imagesHostedRequestsStagingAdaptiveGroups"
+   },
+   {
+    "name": "imagesRequestsAdaptiveGroups"
+   },
+   {
+    "name": "imagesTransformationsAdaptiveGroups"
+   },
+   {
+    "name": "imagesUniqueGroups"
+   },
+   {
+    "name": "imagesUniqueTransformations"
+   },
+   {
+    "name": "imagesUniqueTransformationsAccumulatedSinceStartOfMonth"
+   },
+   {
+    "name": "k2ConsumeAdaptiveGroups"
+   },
+   {
+    "name": "k2ConsumeStagingAdaptiveGroups"
+   },
+   {
+    "name": "k2ProduceAdaptiveGroups"
+   },
+   {
+    "name": "k2ProduceStagingAdaptiveGroups"
+   },
+   {
+    "name": "k2StorageAdaptiveGroups"
+   },
+   {
+    "name": "k2StorageStagingAdaptiveGroups"
+   },
+   {
+    "name": "k2SubscriptionLagAdaptiveGroups"
+   },
+   {
+    "name": "k2SubscriptionLagStagingAdaptiveGroups"
+   },
+   {
+    "name": "kvOperationsAdaptiveGroups"
+   },
+   {
+    "name": "kvStorageAdaptiveGroups"
+   },
+   {
+    "name": "lbHealthEntitiesGroups"
+   },
+   {
+    "name": "lbHealthEvents"
+   },
+   {
+    "name": "liveInputEventsAdaptive"
+   },
+   {
+    "name": "liveInputEventsAdaptiveGroups"
+   },
+   {
+    "name": "logExplorerIngestionAdaptiveGroups"
+   },
+   {
+    "name": "logpushHealthAdaptiveGroups"
+   },
+   {
+    "name": "logpushTransformersAdaptiveGroups"
+   },
+   {
+    "name": "logpushTransformersSuccessfulUsageAdaptiveGroups"
+   },
+   {
+    "name": "logpushUsageAdaptiveGroups"
+   },
+   {
+    "name": "magicEndpointHealthCheckAdaptiveGroups"
+   },
+   {
+    "name": "magicFirewallNetworkAnalyticsAdaptiveGroups"
+   },
+   {
+    "name": "magicFirewallRateLimitNetworkAnalyticsAdaptiveGroups"
+   },
+   {
+    "name": "magicFirewallSamplesAdaptiveGroups"
+   },
+   {
+    "name": "magicIDPSNetworkAnalyticsAdaptiveGroups"
+   },
+   {
+    "name": "magicTransitFragNeededErrorsAdaptiveGroups"
+   },
+   {
+    "name": "magicTransitNetworkAnalyticsAdaptiveGroups"
+   },
+   {
+    "name": "magicTransitTunnelHealthCheckSLOsAdaptiveGroups"
+   },
+   {
+    "name": "magicTransitTunnelHealthChecksAdaptiveGroups"
+   },
+   {
+    "name": "magicTransitTunnelTrafficAdaptiveGroups"
+   },
+   {
+    "name": "markdownForAgentsAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetryEventsAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetryEventsStagingAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetrySnapshotDhcpLeasesAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetrySnapshotDhcpLeasesStagingAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetrySnapshotDisksAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetrySnapshotDisksStagingAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetrySnapshotInterfaceAddressesAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetrySnapshotInterfaceAddressesStagingAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetrySnapshotInterfacesAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetrySnapshotInterfacesStagingAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetrySnapshotMountsAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetrySnapshotMountsStagingAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetrySnapshotNetdevsAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetrySnapshotNetdevsStagingAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetrySnapshotThermalsAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetrySnapshotThermalsStagingAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetrySnapshotTunnelsAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetrySnapshotTunnelsStagingAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetrySnapshotsAdaptiveGroups"
+   },
+   {
+    "name": "mconnTelemetrySnapshotsStagingAdaptiveGroups"
+   },
+   {
+    "name": "mediaUniqueTransformations"
+   },
+   {
+    "name": "mediaUniqueTransformationsAccumulatedSinceStartOfMonth"
+   },
+   {
+    "name": "mnmAWSVPCFlowDataAdaptiveGroups"
+   },
+   {
+    "name": "mnmFlowDataAdaptiveGroups"
+   },
+   {
+    "name": "monetizationGatewayAdaptiveGroups"
+   },
+   {
+    "name": "nelReportsAdaptiveGroups"
+   },
+   {
+    "name": "networkQualityUsageAdaptiveGroups"
+   },
+   {
+    "name": "ohttpMetricsAdaptive"
+   },
+   {
+    "name": "ohttpMetricsAdaptiveGroups"
+   },
+   {
+    "name": "ohttpRelayEgressConnMetricsAdaptiveGroups"
+   },
+   {
+    "name": "ohttpRelayIngressConnMetricsAdaptiveGroups"
+   },
+   {
+    "name": "ohttpRelayRequestMetricsAdaptiveGroups"
+   },
+   {
+    "name": "pageShieldReportsAdaptiveGroups"
+   },
+   {
+    "name": "pagesFunctionsInvocationsAdaptiveGroups"
+   },
+   {
+    "name": "pipelinesDeliveryAdaptiveGroups"
+   },
+   {
+    "name": "pipelinesIngestionAdaptiveGroups"
+   },
+   {
+    "name": "pipelinesOperatorAdaptiveGroups"
+   },
+   {
+    "name": "pipelinesOperatorStagingAdaptiveGroups"
+   },
+   {
+    "name": "pipelinesSinkAdaptiveGroups"
+   },
+   {
+    "name": "pipelinesSinkStagingAdaptiveGroups"
+   },
+   {
+    "name": "pipelinesUserErrorsAdaptive"
+   },
+   {
+    "name": "pipelinesUserErrorsAdaptiveGroups"
+   },
+   {
+    "name": "pipelinesUserErrorsStagingAdaptive"
+   },
+   {
+    "name": "pipelinesUserErrorsStagingAdaptiveGroups"
+   },
+   {
+    "name": "precursorEventsAdaptiveGroups"
+   },
+   {
+    "name": "precursorSessionsAdaptiveGroups"
+   },
+   {
+    "name": "privacyProxyAuthMetricsAdaptiveGroups"
+   },
+   {
+    "name": "privacyProxyEgressConnMetricsAdaptiveGroups"
+   },
+   {
+    "name": "privacyProxyIngressConnMetricsAdaptiveGroups"
+   },
+   {
+    "name": "privacyProxyRequestMetricsAdaptiveGroups"
+   },
+   {
+    "name": "programmableFlowProtectionNetworkAnalyticsAdaptiveGroups"
+   },
+   {
+    "name": "queueBacklogAdaptiveGroups"
+   },
+   {
+    "name": "queueConsumerMetricsAdaptiveGroups"
+   },
+   {
+    "name": "queueDelayedBacklogAdaptiveGroups"
+   },
+   {
+    "name": "queueMessageOperationsAdaptiveGroups"
+   },
+   {
+    "name": "r2BandwidthUsageAdaptiveGroups"
+   },
+   {
+    "name": "r2CatalogDataOperationsAdaptiveGroups"
+   },
+   {
+    "name": "r2CatalogTableMaintenanceAdaptiveGroups"
+   },
+   {
+    "name": "r2OperationsAdaptiveGroups"
+   },
+   {
+    "name": "r2StorageAdaptiveGroups"
+   },
+   {
+    "name": "r2sqlOperationsAdaptiveGroups"
+   },
+   {
+    "name": "realtimeKitUsageAdaptiveGroups"
+   },
+   {
+    "name": "rumPageloadEventsAdaptiveGroups"
+   },
+   {
+    "name": "rumPerformanceEventsAdaptiveGroups"
+   },
+   {
+    "name": "rumWebVitalsEventsAdaptive"
+   },
+   {
+    "name": "rumWebVitalsEventsAdaptiveGroups"
+   },
+   {
+    "name": "settings"
+   },
+   {
+    "name": "shadowIt1hGroups"
+   },
+   {
+    "name": "sinkholeRequestLogsAdaptive"
+   },
+   {
+    "name": "sinkholeRequestLogsAdaptiveGroups"
+   },
+   {
+    "name": "sippyOperationsAdaptiveGroups"
+   },
+   {
+    "name": "spectrumNetworkAnalyticsAdaptiveGroups"
+   },
+   {
+    "name": "storageTraces"
+   },
+   {
+    "name": "streamCMCDAdaptiveGroups"
+   },
+   {
+    "name": "streamMinutesViewedAdaptiveGroups"
+   },
+   {
+    "name": "streamWHEPPlaybackMetricsAdaptiveGroups"
+   },
+   {
+    "name": "streamWHIPBroadcastMetricsAdaptive"
+   },
+   {
+    "name": "streamWHIPBroadcastMetricsAdaptiveGroups"
+   },
+   {
+    "name": "toMarkdownConversionAdaptive"
+   },
+   {
+    "name": "toMarkdownConversionAdaptiveGroups"
+   },
+   {
+    "name": "turnstileAdaptiveGroups"
+   },
+   {
+    "name": "vectorizeQueriesAdaptiveGroups"
+   },
+   {
+    "name": "vectorizeStorageAdaptiveGroups"
+   },
+   {
+    "name": "vectorizeV2OperationsAdaptiveGroups"
+   },
+   {
+    "name": "vectorizeV2QueriesAdaptiveGroups"
+   },
+   {
+    "name": "vectorizeV2StorageAdaptiveGroups"
+   },
+   {
+    "name": "vectorizeV2WritesAdaptiveGroups"
+   },
+   {
+    "name": "videoBufferEventsAdaptiveGroups"
+   },
+   {
+    "name": "videoPlaybackEventsAdaptiveGroups"
+   },
+   {
+    "name": "videoQualityEventsAdaptiveGroups"
+   },
+   {
+    "name": "warpDeviceAdaptiveGroups"
+   },
+   {
+    "name": "webSearchRequestsAdaptiveGroups"
+   },
+   {
+    "name": "workerPlacementAdaptiveGroups"
+   },
+   {
+    "name": "workersAnalyticsEngineAdaptiveGroups"
+   },
+   {
+    "name": "workersAssetsRequestsAdaptiveGroups"
+   },
+   {
+    "name": "workersBuildsBuildMinutesAdaptiveGroups"
+   },
+   {
+    "name": "workersCacheRequestsAdaptiveGroups"
+   },
+   {
+    "name": "workersInvocationsAdaptive"
+   },
+   {
+    "name": "workersInvocationsByOwnerAndScriptGroups"
+   },
+   {
+    "name": "workersInvocationsScheduled"
+   },
+   {
+    "name": "workersOverviewDataAdaptiveGroups"
+   },
+   {
+    "name": "workersOverviewRequestsAdaptiveGroups"
+   },
+   {
+    "name": "workersSubrequestsAdaptiveGroups"
+   },
+   {
+    "name": "workersVpcConnectionAdaptiveGroups"
+   },
+   {
+    "name": "workflowsAdaptive"
+   },
+   {
+    "name": "workflowsAdaptiveGroups"
+   },
+   {
+    "name": "workflowsBlockedReasonAdaptiveGroups"
+   },
+   {
+    "name": "workflowsQueueDepthAdaptiveGroups"
+   },
+   {
+    "name": "workflowsQueueWaitAdaptiveGroups"
+   },
+   {
+    "name": "zarazTrackAdaptiveGroups"
+   },
+   {
+    "name": "zarazTriggersAdaptiveGroups"
+   },
+   {
+    "name": "zeroTrustPrivateNetworkDiscoveryGroups"
+   },
+   {
+    "name": "zones"
+   }
+  ]
+ }
+}
