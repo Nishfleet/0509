@@ -67,6 +67,5 @@ jobs:
         run: npx wrangler rollback "$ROLLBACK_TARGET" --yes --message "smoke failed $GITHUB_SHA"
         env: *cloudflare
       - name: Deploy the support inbox Worker (docs/USER-REPORTS.md, 0509#4229)
-        continue-on-error: true
         run: npx wrangler deploy --config workers/support-inbox.wrangler.jsonc
         env: *cloudflare
