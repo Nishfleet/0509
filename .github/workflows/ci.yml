@@ -150,13 +150,6 @@ jobs:
       - if: env.UPLOAD != 'true'
         run: echo "No upload on $GITHUB_EVENT_NAME; the preview needs a same-repo, non-Dependabot pull request."
 
-  base-fresh:
-    # Kept only while ruleset 21391031 still requires this context (docs/incidents/2026-10-07-stale-base-queue-ejections.md).
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - run: echo "The merge queue tests the merge result, so a stale base cannot land."
-
   dependency-review:
     # GitHub's own check: fails a PR that adds a dependency with a known vulnerability.
     # Outside ci-ok by design: it has nothing to compare on merge_group, so it skips there.

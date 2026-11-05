@@ -234,9 +234,7 @@ carries a job-level `if:`; conditions sit on steps. The merge queue tests the
 merge result, so a PR that would redden `main` never lands.
 
 Renaming `ci-ok` is not cosmetic. A required check that never reports fails
-closed and nothing can merge again, including the PR that renamed it. The
-ruleset also still requires `base-fresh` (now a pass-through job) until the
-owner drops it (fleet-ops#10935).
+closed and nothing can merge again, including the PR that renamed it.
 
 **The preview link.** Every same-repo pull request gets
 `https://pr-<number>-0509-preview.<subdomain>.workers.dev`, behind Cloudflare
