@@ -1,11 +1,11 @@
 import type { Route } from "./+types/app.home";
 
+import { lazy, Suspense } from "react";
 import { data, Link, redirect } from "react-router";
 
 import { FreshnessLine } from "../components/freshness-line";
 import { HomePageFrame, HomeStanding } from "../components/home-standing";
 import { RivalNudge } from "../components/rival-nudge";
-import { ShareButton } from "../components/share-button";
 import { formatPausedSince } from "../lib/brief-settings";
 import { readBriefScheduleForOwner } from "../lib/data/workspace.server";
 import { siteSweepLabel } from "../lib/cadence";
@@ -17,6 +17,8 @@ import { freshnessEntries } from "../lib/freshness.server";
 import { onboardedContext } from "../lib/require-onboarded.server";
 import { createTimings } from "../lib/server-timing.server";
 import { useRevalidateOnVisible } from "../lib/use-revalidate-on-visible";
+
+const ShareButton = lazy(() => import("../components/share-button").then((m) => ({ default: m.ShareButton })));
 
 export function meta() {
   return [{ title: "Home · Five to Nine" }];
@@ -123,7 +125,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       {loaderData.pausedSince === null ? null : <BriefPausedLine since={loaderData.pausedSince} />}
       {loaderData.fewRivals === null ? null : <RivalNudge rivals={loaderData.fewRivals} />}
       <FreshnessLine entries={loaderData.freshness} />
-      {loaderData.view.standing.kind === "ranked" ? <ShareButton /> : null}
+      {loaderData.view.standing.kind === "ranked" ? (
+        <Suspense fallback={null}>
+          <ShareButton />
+        </Suspense>
+      ) : null}
     </HomePageFrame>
   );
 }

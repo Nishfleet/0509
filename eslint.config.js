@@ -87,6 +87,12 @@ const ROW_EVIDENCE_STATIC_IMPORT = {
     'Load row-evidence with React.lazy(() => import("./row-evidence")), never a static import: a static import puts @base-ui/react/tabs in the /app entry (docs/REBUILD-DONE.md §B, 150 KB). Source: 0509#7014.',
 };
 
+const SHARE_BUTTON_STATIC_IMPORT = {
+  group: ["**/components/share-button"],
+  message:
+    'Load share-button with React.lazy(() => import("../components/share-button")), never a static import: the button and @base-ui/button are about 5 KB gzipped and a static import puts them back in the /app entry, which is what took it over its 150 KB budget on #7864 (docs/REBUILD-DONE.md §B, tests/bundle/home-bundle.test.ts). Source: 0509#7872.',
+};
+
 const CHART_IMPORTS = [UPLOT_IMPORT, UPLOT_REACT_IMPORT, FOUR_WEEK_PLOT_STATIC_IMPORT];
 
 const FAST_XML_PARSER_IMPORT = {
@@ -1496,7 +1502,7 @@ export default tseslint.config(
         "error",
         {
           paths: ONE_PAVED_PATH_IMPORTS,
-          patterns: [...PAVED_PATH_PATTERNS, ...UNSCOPED_WRITER_PATTERNS],
+          patterns: [...PAVED_PATH_PATTERNS, ...UNSCOPED_WRITER_PATTERNS, SHARE_BUTTON_STATIC_IMPORT],
         },
       ],
     },
