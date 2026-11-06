@@ -397,6 +397,58 @@ const EMPTY_WORKERS_ENV_MOCK = {
     "The node project already aliases cloudflare:workers to tests/workers-env-empty-stub.ts. An empty vi.mock({ env: {} }) is dead duplication; a test that needs values still mocks real bindings. Evals keep the throwing Proxy in tests/evals/workers-env-stub.ts. Source: 0509#7026.",
 };
 
+// A selector cannot name a binding, so it cannot tell `x.dispose()` from
+// `y.dispose()`. This rule uses ESLint scope analysis instead: the variable an
+// introspector is bound to must have a `.dispose()` call among its references,
+// wherever in scope that call sits (a loop body, a nested callback).
+// eslint.org/docs/latest/extend/scope-manager-interface
+const INTROSPECTOR_DISPOSED = {
+  meta: {
+    type: "problem",
+    schema: [],
+    messages: {
+      notDisposed:
+        "Hold a Workflow introspector with `await using x = await introspectWorkflow(...)`, or call `x.dispose()` on that same variable, so it is disposed when the test ends. An undisposed one leaks the instance into the next test (developers.cloudflare.com/workers/testing/vitest-integration/test-apis/). Source: 0509#7886, 0509#7891, docs/incidents/2026-10-09-vitest-shard-2-stall.md.",
+    },
+  },
+  create(context) {
+    function isDisposeCall(reference) {
+      const member = reference.identifier.parent;
+      return (
+        member.type === "MemberExpression" &&
+        member.object === reference.identifier &&
+        !member.computed &&
+        member.property.name === "dispose" &&
+        member.parent.type === "CallExpression" &&
+        member.parent.callee === member
+      );
+    }
+
+    return {
+      "CallExpression[callee.name=/^introspectWorkflow(Instance)?$/]"(node) {
+        const held = node.parent.type === "AwaitExpression" ? node.parent : node;
+        const declarator = held.parent;
+        if (declarator.type === "VariableDeclarator" && declarator.init === held) {
+          if (declarator.parent.kind === "await using") return;
+          const disposed = context.sourceCode
+            .getDeclaredVariables(declarator)
+            .some((variable) => variable.references.some((reference) => isDisposeCall(reference)));
+          if (disposed) return;
+        }
+        context.report({ node, messageId: "notDisposed" });
+      },
+    };
+  },
+};
+
+const TEST_RULES_PLUGIN = {
+  "test-rules": {
+    rules: {
+      "introspector-disposed": INTROSPECTOR_DISPOSED,
+    },
+  },
+};
+
 const ESLINT_DISK_PROBE_BAN = {
   selector:
     "CallExpression[callee.name=/^(writeFile|mkdir)(Sync)?$/], CallExpression[callee.property.name=/^(writeFile|mkdir)(Sync)?$/]",
@@ -1724,8 +1776,9 @@ export default tseslint.config(
   // argument.
   {
     files: ["tests/**/*.ts"],
-    plugins: { vitest },
+    plugins: { vitest, ...TEST_RULES_PLUGIN },
     rules: {
+      "test-rules/introspector-disposed": "error",
       "vitest/no-focused-tests": "error",
       "vitest/no-disabled-tests": "error",
       "vitest/no-identical-title": "error",
