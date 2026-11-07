@@ -37,7 +37,7 @@ const CHALLENGE_PAGE =
 function fakeBrowser(
   response:
     | { ok: true; html: string; status?: number; browserMs?: string }
-    | { ok: false; throwOnCall?: boolean; status?: number },
+    | { ok: false; throwOnCall?: boolean; status?: number; body?: string },
 ): BrowserStub & { calls: string[]; closed: number } {
   const calls: string[] = [];
   const state = { closed: 0 };
@@ -52,7 +52,7 @@ function fakeBrowser(
         throw new Error("browser run unavailable");
       }
       if (!response.ok) {
-        return new Response("browser error", { status: response.status ?? 500 });
+        return new Response(response.body ?? "browser error", { status: response.status ?? 500 });
       }
       const headers = new Headers({ "content-type": "application/json" });
       if (response.browserMs !== undefined) {
@@ -416,6 +416,52 @@ describe("readUrl", () => {
       expect(result.reason).toBe("escalation-failed");
       expect(result.detail).toContain("browser answered 429");
       expect(browser.calls).toHaveLength(1);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("carries Cloudflare's error code and message when the browser answers 422", async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const browser = fakeBrowser({
+      ok: false,
+      status: 422,
+      body: JSON.stringify({
+        success: false,
+        errors: [{ code: 1006, message: "The page took too long to render." }],
+      }),
+    });
+    try {
+      install(browser);
+      const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("escalation-failed");
+      expect(result.detail).toContain("browser answered 422: 1006 The page took too long to render.");
+      expect(browser.calls).toHaveLength(1);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("cuts a long browser error message to 200 characters", async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const browser = fakeBrowser({
+      ok: false,
+      status: 422,
+      body: JSON.stringify({ success: false, errors: [{ code: 1001, message: "x".repeat(500) }] }),
+    });
+    try {
+      install(browser);
+      const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.detail).toContain(`browser answered 422: 1001 ${"x".repeat(200)}`);
+      expect(result.detail).not.toContain("x".repeat(201));
     } finally {
       stub.restore();
     }
