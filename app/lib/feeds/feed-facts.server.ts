@@ -9,7 +9,7 @@ export const SELECT_FEED_SNAPSHOTS = `SELECT w.entity_id AS entity_id, sn.item_c
 FROM watch w
 JOIN source src ON src.id = w.source_id AND src.key = 'feed.rss'
 JOIN entity e ON e.id = w.entity_id AND e.workspace_id = ?1 AND e.role = 'competitor' AND e.state = 'on'
-JOIN snapshot sn ON sn.id = (SELECT x.id FROM snapshot x WHERE x.watch_id = w.id ORDER BY x.fetched_at DESC LIMIT 1)
+JOIN snapshot sn ON sn.id = (SELECT x.id FROM snapshot x WHERE x.watch_id = w.id ORDER BY x.fetched_at DESC, x.id DESC LIMIT 1)
 WHERE w.is_active = 1
 LIMIT ${String(MAX_FEEDS)}`;
 
