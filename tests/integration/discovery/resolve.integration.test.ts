@@ -61,7 +61,7 @@ describe("resolveDomain", () => {
         if (url.includes("wbsearchentities")) {
           return Promise.resolve(Response.json({ search: [] }));
         }
-        if (url.includes("alphaleteathletics.com")) {
+        if (new URL(url).hostname === "alphaleteathletics.com") {
           return Promise.resolve(
             new Response('<meta property="og:site_name" content="Alphalete Athletics">', {
               status: 200,
@@ -87,7 +87,7 @@ describe("resolveDomain", () => {
         if (url.includes("wbsearchentities")) {
           return Promise.resolve(Response.json({ search: [] }));
         }
-        if (url.includes("sneakerbarn0509.com")) {
+        if (new URL(url).hostname === "sneakerbarn0509.com") {
           return Promise.resolve(
             new Response('<meta property="og:site_name" content="Domain For Sale">', {
               status: 200,
@@ -113,7 +113,7 @@ describe("resolveDomain", () => {
         if (url.includes("wbsearchentities")) {
           return Promise.resolve(Response.json({ search: [] }));
         }
-        if (url.includes("zzqxnonbrand0509.com")) {
+        if (new URL(url).hostname === "zzqxnonbrand0509.com") {
           return Promise.reject(new Error("network"));
         }
         return NOT_FOUND();
