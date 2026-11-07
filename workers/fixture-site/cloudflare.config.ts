@@ -1,0 +1,46 @@
+import { bindings, defineConfig, exports } from "cf/config";
+
+// Config for the J8 fixture-site Worker (0509#4046). It is a separate Worker
+// with its own name and custom domains, same shape as the J1 mail sink in
+// workers/e2e-inbox. It lives on fixture.0509.in and NEVER on
+// 0509.in: 0509.in is a live production 308 redirect to 0509.io (a zone-level
+// Redirect Rule on the 0509.in zone), and a deliberate break there would break
+// production. docs/REBUILD-DONE.md J8 says this outright, and
+// docs/engines/delivery.md P7.5 requires the incident round-trip to run against
+// this fixture and no other host.
+//
+// The break and price state live in one SQLite Durable Object (0509#4305).
+// Workers KV could serve a stale break-mode for up to 60s at a POP, so a flip
+// could read healthy to the round-trip that just made it. Tag v1 creates the
+// class; cf applies it on deploy. There is no KV binding.
+//
+// The break state has no expiry and the deploy job never resets it, so it survives
+// deploys: a round-trip that forgets to repair leaves the fixture broken while
+// every later deploy still reports success. End every round-trip with
+// `POST /__break?mode=off`.
+//
+// State is per hostname (0509#4124), so J8 hard on j8-hard.fixture.0509.in and
+// J8 soft on j8-soft.fixture.0509.in never disturb each other or J7 on
+// fixture.0509.in. Each has its own host because an own-site incident email is
+// once per site per day: one shared host let one mode spend the other's email.
+// J5 has j5.fixture.0509.in because the identity probe cache is per hostname for
+// 24 h, so a host another journey read successfully would hide J5's bot wall.
+//
+// The Worker also needs the `FIXTURE_SITE_TOKEN` Worker secret. Without it every
+// flip answers 503 and the fixture stays healthy forever, which is why the
+// Worker fails loudly rather than reading healthy by default.
+export default defineConfig({
+  worker: {
+    name: "0509-fixture-site",
+    compatibilityDate: "2026-09-16",
+    entrypoint: "./index.ts",
+    observability: { enabled: true },
+    domains: ["fixture.0509.in", "j5.fixture.0509.in", "j8-hard.fixture.0509.in", "j8-soft.fixture.0509.in"],
+    env: {
+      STATE: bindings.durableObject({ worker: "0509-fixture-site", exportName: "FixtureState" }),
+    },
+    exports: {
+      FixtureState: exports.durableObject({ storage: "sqlite" }),
+    },
+  },
+});
