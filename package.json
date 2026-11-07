@@ -16,7 +16,7 @@
     "verify:stop": "chrome-devtools stop"
   },
   "dependencies": {
-    "@base-ui/react": "1.8.0",
+    "@base-ui/react": "1.9.0",
     "@better-auth/api-key": "^1.7.14",
     "@better-auth/passkey": "^1.7.14",
     "@cloudflare/workers-oauth-provider": "^1.2.4",
