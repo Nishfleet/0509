@@ -24,7 +24,7 @@ WHERE s.workspace_id = ?1 AND s.entity_id = ?2
 
 const SELECT_COMPETITOR_STANDING = `SELECT rank, movement FROM standing
 WHERE workspace_id = ?1 AND entity_id = ?2 AND rank IS NOT NULL
-ORDER BY week_start_at DESC LIMIT 1`;
+ORDER BY week_start_at DESC, id DESC LIMIT 1`;
 
 const SELECT_COMPETITOR_COVERAGE = `SELECT src.key AS key, ${effectiveKindSql("src")} AS kind, src.platform AS platform,
   MAX(CASE WHEN sn.fetched_at >= ?3 AND sn.fetched_at < ?4 THEN 1 ELSE 0 END) AS answered

@@ -14,7 +14,7 @@ const SELECT_HISTORY = `SELECT entity_id, week_start_at, rank FROM standing WHER
 
 const SELECT_HOME_SOURCES = `SELECT key, ${effectiveKindSql("source")} AS kind, platform FROM source WHERE is_enabled = 1 AND id IN (SELECT w.source_id FROM watch w JOIN entity e ON e.id = w.entity_id WHERE e.workspace_id = ?1) ORDER BY kind ASC, key ASC`;
 
-const SELECT_HOME_COUNTS = `SELECT s.entity_id, src.key AS source_key, COUNT(*) AS n FROM ${SHOWN_SIGNALS} s JOIN source src ON src.id = s.source_id WHERE s.workspace_id = ?1 AND s.is_tombstoned = 0 AND s.observed_at >= (SELECT json_extract(payload_json, '$.period_start') FROM digest WHERE workspace_id = ?1 AND kind = 'weekly' ORDER BY period_end DESC LIMIT 1) GROUP BY s.entity_id, src.key`;
+const SELECT_HOME_COUNTS = `SELECT s.entity_id, src.key AS source_key, COUNT(*) AS n FROM ${SHOWN_SIGNALS} s JOIN source src ON src.id = s.source_id WHERE s.workspace_id = ?1 AND s.is_tombstoned = 0 AND s.observed_at >= (SELECT json_extract(payload_json, '$.period_start') FROM digest WHERE workspace_id = ?1 AND kind = 'weekly' ORDER BY period_end DESC, id DESC LIMIT 1) GROUP BY s.entity_id, src.key`;
 
 export const SELECT_HOME_STANDING = `SELECT
   w.id AS workspace_id,
@@ -30,7 +30,7 @@ export const SELECT_HOME_STANDING = `SELECT
     SELECT d.payload_json
     FROM digest d
     WHERE d.workspace_id = w.id AND d.kind = 'weekly'
-    ORDER BY d.period_end DESC
+    ORDER BY d.period_end DESC, d.id DESC
     LIMIT 1
   ) AS payload_json
 FROM workspace w
