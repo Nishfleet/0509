@@ -53,8 +53,8 @@ describe("open incident email", () => {
   });
 
   it("carries the before-and-after mark only when there is one", () => {
-    expect(renderIncidentOpen(OPEN).text).toContain("What changed: Pricing heading present → absent");
-    expect(renderIncidentOpen({ ...OPEN, mark: null }).text).not.toContain("What changed");
+    expect(renderIncidentOpen(OPEN).text).toContain("What we saw: Pricing heading present → absent");
+    expect(renderIncidentOpen({ ...OPEN, mark: null }).text).not.toContain("What we saw");
   });
 
   it("escapes the mark in html too, not only the site", () => {

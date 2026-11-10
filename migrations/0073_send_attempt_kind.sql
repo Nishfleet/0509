@@ -1,4 +1,4 @@
--- 0072_send_attempt_kind.sql — every email kind leaves one send_attempt row
+-- 0073_send_attempt_kind.sql — every email kind leaves one send_attempt row
 -- that says what it was, what subject went out and which provider id the
 -- send returned. Sign-in and change-email mail has no workspace yet, so
 -- workspace_id becomes nullable; those rows hold no address at all.

@@ -48,7 +48,9 @@ function button(html: string, marker: string): string {
 function accessibleName(html: string, marker: string): string {
   const tag = html.split("<button ").find((part) => part.includes(marker));
   if (tag === undefined) return "";
-  const inner = tag.slice(tag.indexOf(">") + 1, tag.indexOf("</button>"));
+  const inner = tag
+    .slice(tag.indexOf(">") + 1, tag.indexOf("</button>"))
+    .replace(/<span aria-hidden="true"[^>]*>[\s\S]*?<\/span>/g, "");
   return inner
     .split("<")
     .map((part, index) => (index === 0 ? part : part.slice(part.indexOf(">") + 1)))
@@ -75,6 +77,31 @@ describe("the identity card fields", () => {
     expect(button(html, "edit about: ")).toContain("min-h-11");
   });
 
+  it("shows a visible Edit cue on name and about without changing their accessible names", () => {
+    const html = render(site({ name: "fill", description: "fill", socials: "fill" }));
+
+    const cues = html.match(/<span aria-hidden="true"[^>]*>Edit<\/span>/g) ?? [];
+    expect(cues).toHaveLength(2);
+    expect(button(html, "edit name: ")).toContain("underline");
+    expect(button(html, "edit about: ")).toContain("underline");
+    expect(accessibleName(html, "edit name: ")).toBe("edit name: Gymshark");
+  });
+
+  it("wraps a long unbroken name inside its row", () => {
+    const html = render(site({ name: "fill", description: "fill", socials: "fill" }, { name: "A".repeat(3000) }));
+
+    expect(button(html, "edit name: ")).toContain("break-words");
+    expect(button(html, "edit name: ")).toContain("min-w-0");
+  });
+
+  it("says plainly that social links cannot be edited here", () => {
+    const sure = render(site({ name: "fill", description: "fill", socials: "fill" })).replaceAll("&#x27;", "'");
+    const unsure = render(site({ name: "fill", description: "fill", socials: "check" })).replaceAll("&#x27;", "'");
+
+    expect(sure).toContain("You can't edit these links here.");
+    expect(unsure).toContain("You can't edit these links here.");
+  });
+
   it("ties the check-this marker to the edit button it qualifies", () => {
     const html = render(site({ name: "check", description: "fill", socials: "fill" }));
 
@@ -94,7 +121,7 @@ describe("the identity card fields", () => {
     expect(label).toContain(`>${INSTAGRAM}</span>`);
   });
 
-  it("submits a name Jev was unsure about as the value, so That's me works without typing", () => {
+  it("submits a name Jev was unsure about as the value, so Looks right works without typing", () => {
     const html = render(site({ name: "check", description: "fill", socials: "fill" }));
 
     expect(input(html, 'name="name"')).toContain('value="Gymshark"');

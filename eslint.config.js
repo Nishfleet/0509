@@ -27,7 +27,29 @@ const FULL_ZOD_IMPORT = {
     'app/components/ ships to the browser; full zod costs about 13 KB gzipped per object schema there. Import from "zod/mini" instead (docs/REBUILD-STACK.md, zod). Source: 0509#4134.',
 };
 
+const PIPELINE_SIGNALS_IMPORT = {
+  group: ["**/customer-ready"],
+  importNames: ["PIPELINE_SIGNALS"],
+  message:
+    "PIPELINE_SIGNALS is the unfiltered signal table, for pipeline code that must see every row. A page, API, feed or email reads SHOWN_SIGNALS or SENDABLE_SIGNALS. A file that really needs every row is added to PIPELINE_SIGNALS_IMPORTERS in eslint.config.js with its reason in the commit. Source: 0509#7660 review, replacing a hand-rolled test that read source files with a regex.",
+};
+
+const PIPELINE_SIGNALS_IMPORTERS = [
+  "app/lib/data/signal.server.ts",
+  "app/lib/data/signal_delivery.server.ts",
+  "app/lib/data/jev_verdict.server.ts",
+  "app/lib/data/user_decision.server.ts",
+  "app/lib/data/onboarding_run.server.ts",
+  "app/lib/data/incident.server.ts",
+  "app/lib/data/work_ledger.server.ts",
+  "app/lib/data-export.server.ts",
+  "app/lib/standing-score.server.ts",
+  "app/lib/site/sweep.server.ts",
+  "workers/delivery/dlq-consumer.ts",
+];
+
 const PAVED_PATH_PATTERNS = [
+  PIPELINE_SIGNALS_IMPORT,
   {
     group: ["better-auth/*", "@better-auth/passkey/*", "@better-auth/api-key/*"],
     message:
@@ -63,6 +85,12 @@ const ROW_EVIDENCE_STATIC_IMPORT = {
   name: "./row-evidence",
   message:
     'Load row-evidence with React.lazy(() => import("./row-evidence")), never a static import: a static import puts @base-ui/react/tabs in the /app entry (docs/REBUILD-DONE.md §B, 150 KB). Source: 0509#7014.',
+};
+
+const SHARE_BUTTON_STATIC_IMPORT = {
+  group: ["**/components/share-button"],
+  message:
+    'Load share-button with React.lazy(() => import("../components/share-button")), never a static import: the button and @base-ui/button are about 5 KB gzipped and a static import puts them back in the /app entry, which is what took it over its 150 KB budget on #7864 (docs/REBUILD-DONE.md §B, tests/bundle/home-bundle.test.ts). Source: 0509#7872.',
 };
 
 const CHART_IMPORTS = [UPLOT_IMPORT, UPLOT_REACT_IMPORT, FOUR_WEEK_PLOT_STATIC_IMPORT];
@@ -426,7 +454,14 @@ const PRICE_SUFFIX_COPY = {
     "A price reads '€10/month', from monthlyPrice() in app/lib/billing/plans.ts. '/mo' and 'a month' were three spellings of one price until 0509#7540. The trial email is billing copy and is worded by Nish.",
 };
 
+const RAW_SIGNAL_READ = {
+  selector: "Literal[value=/\\b(FROM|JOIN)\\s+signal\\b/i], TemplateElement[value.raw=/\\b(FROM|JOIN)\\s+signal\\b/i]",
+  message:
+    "A customer-facing read of the signal table must go through the gate in app/lib/customer-ready.ts: `FROM ${SHOWN_SIGNALS} s` for a page, API, feed or export, `FROM ${SENDABLE_SIGNALS} s` for an email, Slack post or brief. The gate drops items nobody judged, duplicates, withdrawn rows and changes with no captured evidence, so none of them can reach a customer by a query that forgot a filter. Pipeline code that must see every row imports PIPELINE_SIGNALS from the same module, and a reviewer sees that import. Source: Nish 2026-10-15, after an unconfirmed 'looks broken' email, a brief sent before its week was judged, and unjudged mentions on a competitor page.",
+};
+
 const BANNED_SYNTAX = [
+  RAW_SIGNAL_READ,
   APP_LOCALE_ONLY,
   RIVAL_COPY,
   WEEKLY_REPORT_COPY,
@@ -1114,8 +1149,8 @@ export default tseslint.config(
     // The writer rule fires on the DML statement text, not a call shape: this
     // repo keeps its SQL in module constants (0509#4313), so matching only a
     // prepare(<literal>) argument would stay green while a second writer
-    // exists. app/lib/data/** is the paved path. workers/e2e-inbox.ts and
-    // workers/fixture-site.ts write their own Durable Object sqlite via
+    // exists. app/lib/data/** is the paved path. workers/e2e-inbox/index.ts and
+    // workers/fixture-site/index.ts write their own Durable Object sqlite via
     // ctx.storage.sql — never env.DB — so they sit outside this rule's scope by
     // kind, not by exemption. The
     // selector covers INSERT OR <conflict> INTO, REPLACE INTO and WITH-led
@@ -1125,7 +1160,7 @@ export default tseslint.config(
     // array — which is why this array restates BANNED_SYNTAX instead of
     // appending.
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
-    ignores: ["app/lib/data/**", "workers/e2e-inbox.ts", "workers/fixture-site.ts"],
+    ignores: ["app/lib/data/**", "workers/e2e-inbox/index.ts", "workers/fixture-site/index.ts"],
     plugins: FORM_RULES_PLUGIN,
     rules: {
       "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, RAW_DML_WRITER, FEED_STATE_LITERAL],
@@ -1210,7 +1245,7 @@ export default tseslint.config(
       "app/lib/hiring/discover-board.server.ts",
       "app/lib/site/own-site.server.ts",
       "app/lib/agent/redirect-uri.ts",
-      "workers/support-inbox.ts",
+      "workers/support-inbox/index.ts",
     ],
     rules: {
       "no-restricted-syntax": [
@@ -1369,6 +1404,19 @@ export default tseslint.config(
     },
   },
 
+  {
+    files: PIPELINE_SIGNALS_IMPORTERS,
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: ONE_PAVED_PATH_IMPORTS,
+          patterns: PAVED_PATH_PATTERNS.filter((pattern) => pattern !== PIPELINE_SIGNALS_IMPORT),
+        },
+      ],
+    },
+  },
+
   // Flat config replaces a rule's options wholesale, so this restates
   // ONE_PAVED_PATH_IMPORTS and PAVED_PATH_PATTERNS. Source: 0509#7001.
   {
@@ -1454,7 +1502,7 @@ export default tseslint.config(
         "error",
         {
           paths: ONE_PAVED_PATH_IMPORTS,
-          patterns: [...PAVED_PATH_PATTERNS, ...UNSCOPED_WRITER_PATTERNS],
+          patterns: [...PAVED_PATH_PATTERNS, ...UNSCOPED_WRITER_PATTERNS, SHARE_BUTTON_STATIC_IMPORT],
         },
       ],
     },
@@ -1642,9 +1690,9 @@ export default tseslint.config(
       "**/*.config.{ts,js,mjs,cjs}",
       "eslint.config.js",
       "workers/app.ts",
-      "workers/fixture-site.ts",
-      "workers/e2e-inbox.ts",
-      "workers/support-inbox.ts",
+      "workers/fixture-site/index.ts",
+      "workers/e2e-inbox/index.ts",
+      "workers/support-inbox/index.ts",
     ],
     rules: { "import-x/no-default-export": "off" },
   },
@@ -1832,12 +1880,15 @@ export default tseslint.config(
 
   // 0509#7073 / #7233: type-aware lint is on for e2e, tests and *.config.ts.
   // Only config files are exempt from the comment rules; tests are not
-  // (0509#7469, Nish 2026-10-14).
+  // (0509#7469, Nish 2026-10-14). **/*.config.ts covers the per-Worker
+  // cloudflare.config.ts files under workers/, which carry the comments their
+  // wrangler.jsonc predecessors held (0509#7916).
   {
-    files: ["*.config.ts"],
+    files: ["**/*.config.ts"],
     rules: {
       "no-inline-comments": "off",
       "no-warning-comments": "off",
+      "no-comments/disallowComments": "off",
     },
   },
 

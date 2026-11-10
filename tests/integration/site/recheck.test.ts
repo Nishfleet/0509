@@ -8,7 +8,7 @@ import { checkPage } from "../../../app/lib/site/check-page.server";
 import { planSiteSweep, publishSiteChange } from "../../../app/lib/site/sweep.server";
 import { formatDate } from "../../../workers/delivery/brief-template";
 import { deliverIncident } from "../../../workers/delivery/consumer";
-import fixtureWorker from "../../../workers/fixture-site";
+import fixtureWorker from "../../../workers/fixture-site/index";
 
 const USER = "user-recheck";
 const WS = "ws-recheck";
@@ -304,6 +304,7 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
     expect(await readNotices(self.pageId)).toHaveLength(1);
 
     expect((await flip("off")).status).toBe(200);
+    jevAnswers.noul.set("own_site_breakage", 0.05);
     expect(await runCheck("recheck-fixed")).toEqual({ pages: 1, opened: 0, closed: 1, failed: 0, missed: [] });
     const [closed] = await readIncident();
     if (closed?.closed_at == null) throw new Error("expected closed_at to be set");

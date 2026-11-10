@@ -44,7 +44,7 @@ async function seed(): Promise<string> {
     mention(`sig-low-${suffix}`, onId, "Zephyrwear ticker line", "https://news.example/ticker"),
     mention(`sig-off-${suffix}`, offId, "Paused brand mention", "https://news.example/paused"),
     verdict(`jev-high-${suffix}`, `sig-high-${suffix}`, onId, 0.95),
-    verdict(`jev-mid-${suffix}`, `sig-mid-${suffix}`, onId, 0.42),
+    verdict(`jev-mid-${suffix}`, `sig-mid-${suffix}`, onId, 0.6),
     verdict(`jev-low-${suffix}`, `sig-low-${suffix}`, onId, 0.05),
     verdict(`jev-off-${suffix}`, `sig-off-${suffix}`, offId, 0.99),
   ]);

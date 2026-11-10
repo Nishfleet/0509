@@ -2,7 +2,7 @@
 
 ## What happened
 
-After #7686 the 03:00Z nightly still raised `site.rivals_silent` for 3 rivals: 2 with "deferred: browser budget refused escalation (thin-text)" and 1 with "escalation-failed". All three are e2e test workspaces (`ws_e2e-kept-*`) watching one blocked site (the browser answers 422), so no customer was affected. Evidence: `ci/journeys-round3-answers.md`.
+After #7686 the 03:00Z nightly still raised `site.rivals_silent` for 3 rivals: 2 with "deferred: browser budget refused escalation (thin-text)" and 1 with "escalation-failed". All three are e2e fixture workspaces watching one blocked site (the browser answers 422), so no customer was affected. Evidence: `ci/journeys-round3-answers.md`.
 
 ## Causes
 

@@ -31,7 +31,7 @@ function kindTail(kind: string): string {
 const COPY = {
   openSubject: (site: string, kind: string) => `${site} looks broken${kindTail(kind)}`,
   seen: (opened_at: string, timezone: string) => `Seen at ${formatDate(opened_at, timezone, true)}.`,
-  mark: (mark: string) => `What changed: ${mark}`,
+  mark: (mark: string) => `What we saw: ${mark}`,
   recheck: (recheck_at: string, timezone: string) =>
     `We re-check at ${formatDate(recheck_at, timezone, true)} and email you once when it is fixed.`,
   openLink: (link: string) => `See it in Five to Nine: ${link}`,

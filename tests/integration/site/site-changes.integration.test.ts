@@ -32,6 +32,7 @@ async function seedChange(input: {
   signal: string;
   observedAt: string;
   existing?: boolean;
+  noteworthy?: number;
 }): Promise<void> {
   const watch = `watch-${input.entity}`;
   const page = `page-${input.entity}`;
@@ -94,6 +95,21 @@ async function seedChange(input: {
       input.observedAt,
     )
     .run();
+  await env.DB.prepare(
+    `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, choice, decided_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?8, 'act', ?7)`,
+  )
+    .bind(
+      `vd-${input.signal}`,
+      input.ws,
+      D3_QUESTION_ID,
+      `hd-${input.signal}`,
+      input.signal,
+      input.entity,
+      input.observedAt,
+      input.noteworthy ?? 0.95,
+    )
+    .run();
   await env.SNAPSHOTS.put(`${prefix}/${input.signal}-before.png`, `before-${input.signal}`, {
     httpMetadata: { contentType: "image/png" },
   });
@@ -144,6 +160,7 @@ describe("site changes a customer can see", () => {
       state: "off",
       signal: "sig-paused",
       observedAt: "2026-09-23T02:10:00.000Z",
+      noteworthy: 0.2,
     });
     await seedChange({
       ws: "ws-mine",

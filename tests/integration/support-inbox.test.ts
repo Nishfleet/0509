@@ -1,7 +1,7 @@
 import { createExecutionContext, createScheduledController, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import worker from "../../workers/support-inbox";
+import worker from "../../workers/support-inbox/index";
 
 type EmailMessage = Parameters<typeof worker.email>[0];
 type InboxEnv = Parameters<typeof worker.email>[1];

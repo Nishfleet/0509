@@ -1,12 +1,12 @@
 import type { BriefPayload } from "./brief-payload";
 import type { BriefSchedule } from "./brief-schedule";
 import { nextBriefAt } from "./brief-schedule";
-import { firstSiteSweepAt } from "./onboarding/arrival-estimate";
+import { sweepWindowLabel } from "./cadence";
+import { firstSiteSweepWindow } from "./onboarding/arrival-estimate";
 import type { SiteChangeView } from "./site-change";
 import { sourceName } from "./source-name";
 import type { SourceKind } from "./source-kind";
 import { APP_LOCALE } from "./locale";
-import { zoneName } from "./timezone";
 
 export interface HomeEntity {
   id: string;
@@ -105,6 +105,7 @@ export interface HomeView {
   standing: HomeStanding;
   chips: readonly HomeChip[];
   footer: string;
+  setUp: string | null;
 }
 
 export function nextHour(now: Date): Date {
@@ -155,14 +156,25 @@ function dayAndTime(timezone: string, at: Date): string {
   return `${day} ${hourAndMinute(timezone, at)}`;
 }
 
-export function arrivalAround(timezone: string, at: Date): string {
-  const date = new Intl.DateTimeFormat(APP_LOCALE, {
+function dateLabel(timezone: string, at: Date): string {
+  return new Intl.DateTimeFormat(APP_LOCALE, {
     timeZone: timezone,
     weekday: "long",
     day: "numeric",
     month: "long",
-  }).format(at);
-  return `${date.replace(",", "")}, around ${hourAndMinute(timezone, at)} ${zoneName(timezone, at)}`;
+  })
+    .format(at)
+    .replace(",", "");
+}
+
+export function arrivalWindow(timezone: string, startsAt: Date): string {
+  return `${dateLabel(timezone, startsAt)}, ${sweepWindowLabel(timezone, startsAt)}`;
+}
+
+export function homeBriefLink(hasBrief: boolean): { to: string; label: string } {
+  return hasBrief
+    ? { to: "/app/brief", label: "Read this week's brief" }
+    : { to: "/app/brief-preview", label: "See this week's brief so far" };
 }
 
 function todayEyebrow(timezone: string, now: Date): string {
@@ -280,14 +292,15 @@ interface HomeStandingInput {
   counts: readonly HomeCount[];
   moves: readonly SiteChangeView[];
   now: Date;
+  firstRun?: boolean;
 }
 
 function gatheringStanding(input: HomeStandingInput, brandsOn: number): HomeStanding {
-  const at = firstSiteSweepAt({ now: input.now, sources: input.sources, brandsOn });
+  const window = firstSiteSweepWindow({ now: input.now, sources: input.sources, brandsOn });
   return {
     kind: "gathering",
     briefAt: dayAndTime(input.schedule.timezone, nextBriefAt(input.schedule, input.now)),
-    firstSweepAt: at === null ? null : arrivalAround(input.schedule.timezone, at),
+    firstSweepAt: window === null ? null : arrivalWindow(input.schedule.timezone, window.startsAt),
     brands: brandsOn,
   };
 }
@@ -342,12 +355,21 @@ export function homeChips(entities: readonly HomeEntity[]): readonly HomeChip[] 
   }));
 }
 
+const OWN_SITE_LINE = "your own site is re-checked every hour";
+
+function setUpLine(standing: HomeStanding, input: HomeStandingInput, briefTime: string): string | null {
+  if (input.firstRun !== true || standing.kind !== "gathering") return null;
+  const window = firstSiteSweepWindow({ now: input.now, sources: input.sources, brandsOn: standing.brands });
+  const news = window === null ? briefTime : dateLabel(input.schedule.timezone, window.startsAt);
+  return `You're set up. Nothing to do. First news: ${news}.`;
+}
+
 export function homeView(input: HomeStandingInput): HomeView {
   const onCount = input.entities.filter((entity) => entity.state === "on").length;
   const brandWord = onCount === 1 ? "brand" : "brands";
-  const recheckTime = hourAndMinute(input.schedule.timezone, nextHour(input.now));
   const briefTime = dayAndTime(input.schedule.timezone, nextBriefAt(input.schedule, input.now));
-  const footer = `Checked ${String(onCount)} ${brandWord} this week · next brief ${briefTime} · your site is checked again at ${recheckTime}`;
+  const checked = input.firstRun === true ? "Next check tonight" : `Checked ${String(onCount)} ${brandWord} this week`;
+  const footer = `${checked} · next brief ${briefTime} · ${OWN_SITE_LINE}`;
   const standing = homeStanding(input);
   return {
     eyebrow: todayEyebrow(input.schedule.timezone, input.now),
@@ -355,5 +377,6 @@ export function homeView(input: HomeStandingInput): HomeView {
     standing,
     chips: homeChips(input.entities),
     footer,
+    setUp: setUpLine(standing, input, briefTime),
   };
 }

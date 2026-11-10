@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { PIPELINE_SIGNALS, SHOWN_SIGNALS } from "./customer-ready";
 import { ABOUT_BRAND_KEEP_AT, ACT_AT, changeActsSql } from "./jev/thresholds";
 import { CHANGE_HAS_STORED_EVIDENCE, changeJudgedSql } from "./site-change";
 import { D3_QUESTION_ID, D3S_QUESTION_ID, reliabilitySchema, scoreBucketSchema } from "./standing-score";
@@ -15,7 +16,7 @@ export const COUNT_BUCKETS = `SELECT s.entity_id AS entity_id,
   END AS bucket,
   src.reliability AS reliability,
   COUNT(*) AS n
-FROM signal s
+FROM ${SHOWN_SIGNALS} s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
 JOIN source src ON src.id = s.source_id
 LEFT JOIN jev_verdict v ON v.signal_id = s.id
@@ -25,7 +26,7 @@ GROUP BY s.entity_id, bucket, src.reliability
 HAVING bucket IS NOT NULL`;
 
 const COUNT_UNJUDGED_INPUTS = `SELECT COUNT(*) AS n
-FROM signal s
+FROM ${PIPELINE_SIGNALS} s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
 WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.is_tombstoned = 0
   AND s.kind = 'change' AND (e.role <> 'self' OR ${CHANGE_HAS_STORED_EVIDENCE})

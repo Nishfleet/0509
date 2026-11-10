@@ -86,16 +86,21 @@ jobs:
       - run: git config --global --add safe.directory "$GITHUB_WORKSPACE" && gitleaks git . --config .github/gitleaks-private-detail.toml --redact --exit-code 1 --log-opts "$RANGE"
 
   semgrep:
-    # The rollover catch-up call-site rule (0509#5661) and the fleet no-glue rule (fleet-ops#8459).
+    # The rollover catch-up call-site rule (0509#5661), the fleet no-glue rule (fleet-ops#8459), and the
+    # latest-row tie-break rule (0509#7863), which fails only new sites (--baseline-commit) until the old ones are fixed.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     container:
       image: semgrep/semgrep:1.170.0@sha256:c98f8829eea377274ee4b10656458b078b88232469b2ff913f091c2317347c9d
+    env:
+      BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: {persist-credentials: false}
+        with: {persist-credentials: false, fetch-depth: 0}
       - run: semgrep scan --config p/typescript --config p/security-audit --config .semgrep/rollover-catch-up.yml --config https://raw.githubusercontent.com/Nishfleet/fleet-ops/59f43b2bdc2a07ae1a5909117c4bad17a3666abe/.semgrep/no-glue.yml --error
       - run: semgrep scan --test --config .semgrep/rollover-catch-up.yml .semgrep/rollover-catch-up.ts
+      - run: semgrep scan --test --config .semgrep/latest-row-tie-break.yml .semgrep/latest-row-tie-break.ts
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE" && semgrep scan --config .semgrep/latest-row-tie-break.yml --baseline-commit "$BASE" --error
 
   preview-build:
     # Owner acceptance (fleet-ops#10935): every pull request gets a preview link on staging data.
@@ -144,13 +149,6 @@ jobs:
           echo "Preview: $url" >> "$GITHUB_STEP_SUMMARY"
       - if: env.UPLOAD != 'true'
         run: echo "No upload on $GITHUB_EVENT_NAME; the preview needs a same-repo, non-Dependabot pull request."
-
-  base-fresh:
-    # Kept only while ruleset 21391031 still requires this context (docs/incidents/2026-10-07-stale-base-queue-ejections.md).
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - run: echo "The merge queue tests the merge result, so a stale base cannot land."
 
   dependency-review:
     # GitHub's own check: fails a PR that adds a dependency with a known vulnerability.

@@ -61,6 +61,7 @@ export interface CompetitorRailProps {
   sweepClock?: string;
   unreadable?: boolean;
   notFound?: boolean;
+  awaiting?: boolean;
 }
 
 export function verdictWords(choice: string): string | null {
@@ -109,8 +110,12 @@ function Peers({ entityId, peers }: { entityId: string; peers: readonly RailPeer
   );
 }
 
+function labelledFacts(facts: readonly RailFact[]): string[] {
+  return facts.map((fact) => factLabel(fact.kind, fact.count)).filter((label) => label !== null);
+}
+
 function Facts({ facts }: { facts: readonly RailFact[] }): ReactElement {
-  const labelled = facts.map((fact) => factLabel(fact.kind, fact.count)).filter((label) => label !== null);
+  const labelled = labelledFacts(facts);
   if (labelled.length === 0) {
     return <EmptyState sentence="Nothing new from them in the last 30 days." />;
   }
@@ -132,7 +137,7 @@ function homepageLine(state: {
   if (state.notFound) return "We couldn't find the homepage. Check the address. We try again every night.";
   if (state.unreadable) return "We couldn't read the homepage. We try again every night.";
   return state.lastChecked === null
-    ? `Homepage, read every night. First read tonight at ${state.sweepClock}.`
+    ? `Homepage, read every night. First read tonight ${state.sweepClock}.`
     : `Homepage, read every night. Last read ${state.lastChecked}.`;
 }
 
@@ -186,6 +191,30 @@ function StillCompetitor({ verdict }: { verdict: RailVerdict | null }): ReactEle
   );
 }
 
+function RailSection({
+  name,
+  labelId,
+  title,
+  show = true,
+  children,
+}: {
+  name: string;
+  labelId: string;
+  title: string;
+  show?: boolean;
+  children: ReactElement;
+}): ReactElement | null {
+  if (!show) return null;
+  return (
+    <section data-section={name} aria-labelledby={labelId} className="min-w-0">
+      <h2 id={labelId} className={HEADING}>
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
 export function CompetitorRail({
   entityId,
   peers,
@@ -197,25 +226,23 @@ export function CompetitorRail({
   sweepClock = SITE_SWEEP_UTC_LABEL,
   unreadable = false,
   notFound = false,
+  awaiting = false,
 }: CompetitorRailProps): ReactElement {
+  const hasVerdict = verdict !== null && verdictWords(verdict.choice) !== null;
   return (
     <aside data-slot="competitor-rail" className="flex min-w-0 flex-col gap-10">
-      <section data-section="peers" aria-labelledby="competitor-peers" className="min-w-0">
-        <h2 id="competitor-peers" className={HEADING}>
-          How you rank
-        </h2>
+      <RailSection name="peers" labelId="competitor-peers" title="How you rank" show={!awaiting || peers.length > 0}>
         <Peers entityId={entityId} peers={peers} />
-      </section>
-      <section data-section="facts" aria-labelledby="competitor-facts" className="min-w-0">
-        <h2 id="competitor-facts" className={HEADING}>
-          Last 30 days
-        </h2>
+      </RailSection>
+      <RailSection
+        name="facts"
+        labelId="competitor-facts"
+        title="Last 30 days"
+        show={!awaiting || labelledFacts(facts).length > 0}
+      >
         <Facts facts={facts} />
-      </section>
-      <section data-section="sources" aria-labelledby="competitor-sources" className="min-w-0">
-        <h2 id="competitor-sources" className={HEADING}>
-          What we watch here
-        </h2>
+      </RailSection>
+      <RailSection name="sources" labelId="competitor-sources" title="What we watch here">
         <Sources
           sources={sources}
           lastChecked={lastChecked}
@@ -224,13 +251,15 @@ export function CompetitorRail({
           unreadable={unreadable}
           notFound={notFound}
         />
-      </section>
-      <section data-section="still-competitor" aria-labelledby="competitor-still" className="min-w-0">
-        <h2 id="competitor-still" className={HEADING}>
-          Still a competitor?
-        </h2>
+      </RailSection>
+      <RailSection
+        name="still-competitor"
+        labelId="competitor-still"
+        title="Still a competitor?"
+        show={!awaiting || hasVerdict}
+      >
         <StillCompetitor verdict={verdict} />
-      </section>
+      </RailSection>
     </aside>
   );
 }

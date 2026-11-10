@@ -5,7 +5,7 @@ import { Link, redirect } from "react-router";
 import { BriefView } from "../components/brief-view";
 import { PAGE, PageHeading } from "../components/page-heading";
 import { formatBriefAt } from "../lib/brief-settings";
-import { previewBrief } from "../lib/brief-preview.server";
+import { previewBrief, previewFirstRun } from "../lib/brief-preview.server";
 import { readBriefScheduleForOwner } from "../lib/data/workspace.server";
 import { onboardedContext } from "../lib/require-onboarded.server";
 
@@ -19,9 +19,12 @@ export async function loader({ context }: Route.LoaderArgs) {
   const owned = await readBriefScheduleForOwner(session.user.id);
   if (owned === null) throw redirect("/onboarding");
   const payload = await previewBrief(workspaceId, owned.schedule, new Date());
+  const firstRun = await previewFirstRun(workspaceId, payload);
+  const sendsAt = formatBriefAt(new Date(payload.period_end), owned.schedule.timezone);
   return {
     payload,
-    sendsAt: formatBriefAt(new Date(payload.period_end), owned.schedule.timezone),
+    sendsAt,
+    firstRun: firstRun === null ? undefined : { arrivesAt: sendsAt, names: firstRun.names },
     paused: owned.schedule.pausedAt !== null,
   };
 }
@@ -42,7 +45,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           : `This is your brief as it would read today. The real one goes out ${loaderData.sendsAt}, and by then it may have more in it.`}
       </p>
       <div className="mt-6">
-        <BriefView payload={loaderData.payload} />
+        <BriefView payload={loaderData.payload} firstRun={loaderData.firstRun} />
       </div>
       <p className="mt-10">
         <Link className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4" to="/app/brief">

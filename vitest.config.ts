@@ -83,21 +83,18 @@ export default defineConfig({
         ],
         test: {
           name: "workers",
-          include: [
-            "tests/integration/**/*.integration.test.ts",
-            // #4180's acceptance names this file verbatim, without the
-            // .integration infix; it still needs real workerd + real D1.
-            "tests/integration/migration-rollback.test.ts",
-            // #3994's acceptance names this file verbatim.
-            "tests/integration/identity/tail.test.ts",
-            // #4047's acceptance names this file verbatim.
-            "tests/integration/site/recheck.test.ts",
-            "tests/unit/site/**/*.test.ts",
-            "tests/perf/**/*.test.ts",
+          // A glob, never a file list: a listed-by-name project let
+          // redirect-guard.test.ts run nowhere (0509#7885).
+          include: ["tests/integration/**/*.test.ts", "tests/unit/site/**/*.test.ts", "tests/perf/**/*.test.ts"],
+          // entity-fk applies the chain itself, in two steps, so it can seed
+          // rows before 0021. The other four run in their own projects below.
+          exclude: [
+            "tests/integration/entity-workspace-fk*.integration.test.ts",
+            "tests/integration/e2e-inbox.test.ts",
+            "tests/integration/support-inbox.test.ts",
+            "tests/integration/fixture-site.test.ts",
+            "tests/integration/transport.test.ts",
           ],
-          // Applies the chain itself, in two steps, so it can seed rows
-          // before 0021. The workers setup would apply 0021 first.
-          exclude: ["tests/integration/entity-workspace-fk*.integration.test.ts"],
           setupFiles: ["./tests/integration/apply-migrations.ts"],
           testTimeout: 30_000,
         },

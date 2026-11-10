@@ -109,12 +109,12 @@ describe("defaultFetchText", () => {
     expect(timeoutSpy).toHaveBeenCalledWith(8_000);
   });
 
-  it("logs discovery.hn_fetch_failed from the hn generator's default fetch", async () => {
+  it("logs discovery.hn_fetch_failed for each of the hn generator's two tries", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     stubRejectingFetch();
 
     await expect(hnGenerator(SUBJECT)).rejects.toThrow("hn generator fetch failed with status 0");
-    expect(loggedEvents(errorSpy)).toEqual(["discovery.hn_fetch_failed"]);
+    expect(loggedEvents(errorSpy)).toEqual(["discovery.hn_fetch_failed", "discovery.hn_fetch_failed"]);
   });
 
   it("gives the hn generator's default fetch a five second timeout", async () => {

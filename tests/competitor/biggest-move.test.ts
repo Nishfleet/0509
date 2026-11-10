@@ -233,13 +233,13 @@ describe("quietWeekSentence", () => {
 
   it("says the first read lands tonight when the brand was never checked", () => {
     expect(quietWeekSentence([], null)).toBe(
-      "Nothing worth scoring for this competitor in the last 7 days. We watch its website; our first read is tonight at 21:00 UTC.",
+      "Nothing worth scoring for this competitor in the last 7 days. We watch its website; our first read is tonight between 21:00 and 23:00 UTC.",
     );
   });
 
   it("uses the workspace sweep clock instead of a UTC-only label", () => {
-    expect(quietWeekSentence([], null, "07:30 GMT+5:30")).toBe(
-      "Nothing worth scoring for this competitor in the last 7 days. We watch its website; our first read is tonight at 07:30 GMT+5:30.",
+    expect(quietWeekSentence([], null, "between 07:30 and 09:30 GMT+5:30")).toBe(
+      "Nothing worth scoring for this competitor in the last 7 days. We watch its website; our first read is tonight between 07:30 and 09:30 GMT+5:30.",
     );
   });
 });

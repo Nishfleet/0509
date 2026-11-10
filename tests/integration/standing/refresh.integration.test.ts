@@ -94,7 +94,7 @@ async function seed(): Promise<Seeded> {
       "INSERT INTO source (id, key, kind, platform, plugin_key, reliability) VALUES (?1, ?2, 'ads', ?3, ?4, 'best_effort')",
     ).bind(sourceAds, `refresh-t-src-ads-${run}`, `refresh-t-pf-ads-${run}`, `refresh-t-pl-ads-${run}`),
     env.DB.prepare(
-      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, canonical_url, url_hash, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?7, ?8)",
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, canonical_url, url_hash, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'mention', 'Mention', ?5, ?6, ?7, ?8)",
     ).bind(
       signalMentionHigh,
       workspaceId,
@@ -106,7 +106,7 @@ async function seed(): Promise<Seeded> {
       "2026-09-16T10:00:00.000Z",
     ),
     env.DB.prepare(
-      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, canonical_url, url_hash, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?7, ?8)",
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, canonical_url, url_hash, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'mention', 'Mention', ?5, ?6, ?7, ?8)",
     ).bind(
       signalMentionLow,
       workspaceId,
@@ -118,7 +118,7 @@ async function seed(): Promise<Seeded> {
       "2026-09-17T10:00:00.000Z",
     ),
     env.DB.prepare(
-      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, ?6)",
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', 'Designer', 'https://example.test/jobs', ?5, ?6)",
     ).bind(
       signalHiring,
       workspaceId,
@@ -128,7 +128,7 @@ async function seed(): Promise<Seeded> {
       "2026-09-18T10:00:00.000Z",
     ),
     env.DB.prepare(
-      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, ?6)",
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', 'Designer', 'https://example.test/jobs', ?5, ?6)",
     ).bind(
       signalHiringOutside,
       workspaceId,
@@ -138,10 +138,10 @@ async function seed(): Promise<Seeded> {
       "2026-09-10T10:00:00.000Z",
     ),
     env.DB.prepare(
-      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'change', 'copy', ?5, ?6)",
+      'INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, payload_json, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, \'change\', \'copy\', \'{"before":{"textKey":"b.txt"},"after":{"textKey":"a.txt"}}\', ?5, ?6)',
     ).bind(signalChange, workspaceId, entityB, sourceSite, `refresh-t-dedup-change-${run}`, "2026-09-19T10:00:00.000Z"),
     env.DB.prepare(
-      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, published_at, observed_at) VALUES (?1, ?2, ?3, ?4, 'ad', ?5, ?6, ?7)",
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, dedup_key, published_at, observed_at) VALUES (?1, ?2, ?3, ?4, 'ad', 'Ad', ?5, ?6, ?7)",
     ).bind(
       signalAd,
       workspaceId,
@@ -152,7 +152,7 @@ async function seed(): Promise<Seeded> {
       "2026-09-20T10:00:00.000Z",
     ),
     env.DB.prepare(
-      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, ?6)",
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', 'Designer', 'https://example.test/jobs', ?5, ?6)",
     ).bind(
       signalHiringOff,
       workspaceId,
