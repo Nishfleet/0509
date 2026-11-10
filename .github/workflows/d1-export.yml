@@ -1,0 +1,88 @@
+# Weekly sealed SQL dump of the 0509 D1 database, kept off Cloudflare
+# (0509#7946; the same weekly backup drive's d1-export.yml proved green
+# 2026-11-09, fleet-ops#10594). D1 Time Travel covers 30 days (docs/RESTORE.md);
+# this dump is the copy that survives a dropped database.
+#
+# The dump is sealed with age before upload because this repository is public
+# and its artifacts are downloadable; the recipient is the backup key's public
+# half, read from the repo's AGE_RECIPIENT variable, so a dump without the
+# private key is noise. The one approved Wrangler use here is `wrangler d1
+# export` (Cloudflare D1 docs, "Import and export data"); its output stays in
+# $RUNNER_TEMP because the export prints a signed download URL.
+name: D1 weekly backup
+on:
+  schedule:
+    - cron: "37 5 * * 1"
+  workflow_dispatch: {} # a manual run for the first export and restore drills
+concurrency:
+  group: d1-export
+  cancel-in-progress: false # a backup never kills a backup
+permissions:
+  contents: read
+jobs:
+  export:
+    name: export 0509
+    runs-on: ubuntu-latest
+    # The repo's export credential lives here, next to deploy-production's
+    # (infra/cloudflare-tokens, the 0509-deploy token in the production environment).
+    environment: production
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      AGE_RECIPIENT: ${{ vars.AGE_RECIPIENT }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Check the backup recipient variable
+        run: |
+          test -n "$AGE_RECIPIENT" || {
+            echo "::error::AGE_RECIPIENT is unset. Add it as a repo variable: the backup key's public age recipient (drive's d1-export.yml reads the same one)."
+            exit 1
+          }
+      - name: Install age, pinned by digest (fleet convention)
+        env:
+          AGE_VERSION: v1.3.2
+          AGE_LINUX_AMD64_SHA256: cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/age.tar.gz" \
+            "https://github.com/FiloSottile/age/releases/download/$AGE_VERSION/age-$AGE_VERSION-linux-amd64.tar.gz"
+          echo "$AGE_LINUX_AMD64_SHA256  $RUNNER_TEMP/age.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/age-bin"
+          tar -xzf "$RUNNER_TEMP/age.tar.gz" -C "$RUNNER_TEMP/age-bin" --strip-components=1 age/age
+          test -x "$RUNNER_TEMP/age-bin/age"
+      - name: Dump and seal 0509
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/d1-export"
+          dump="$RUNNER_TEMP/d1-export/0509-$(date -u +%Y%m%d).sql"
+          npx --yes wrangler@4.144.0 d1 export 0509 --remote \
+            --output "$dump" --skip-confirmation \
+            > "$RUNNER_TEMP/d1-export.log" 2>&1 \
+            || {
+              echo "::error::wrangler d1 export failed; scrubbed tail follows"
+              sed -E 's#https://[^[:space:]]+#<scrubbed>#g;
+                      s/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/<id>/g;
+                      s/\b[0-9a-f]{32}\b/<id>/g' "$RUNNER_TEMP/d1-export.log" | tail -10 || true
+              exit 1
+            }
+          test -s "$dump" || { echo "::error::the dump is empty"; exit 1; }
+          "$RUNNER_TEMP/age-bin/age" -r "$AGE_RECIPIENT" -o "$dump.age" "$dump" \
+            || { echo "::error::the age encryption failed"; exit 1; }
+          rm -f "$dump"
+          sha256sum "$dump.age"
+      - name: Upload the sealed dump off Cloudflare
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: d1-backup-0509
+          path: ${{ runner.temp }}/d1-export/*.sql.age
+          retention-days: 90
+          if-no-files-found: error
