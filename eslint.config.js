@@ -1149,8 +1149,8 @@ export default tseslint.config(
     // The writer rule fires on the DML statement text, not a call shape: this
     // repo keeps its SQL in module constants (0509#4313), so matching only a
     // prepare(<literal>) argument would stay green while a second writer
-    // exists. app/lib/data/** is the paved path. workers/e2e-inbox.ts and
-    // workers/fixture-site.ts write their own Durable Object sqlite via
+    // exists. app/lib/data/** is the paved path. workers/e2e-inbox/index.ts and
+    // workers/fixture-site/index.ts write their own Durable Object sqlite via
     // ctx.storage.sql — never env.DB — so they sit outside this rule's scope by
     // kind, not by exemption. The
     // selector covers INSERT OR <conflict> INTO, REPLACE INTO and WITH-led
@@ -1160,7 +1160,7 @@ export default tseslint.config(
     // array — which is why this array restates BANNED_SYNTAX instead of
     // appending.
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
-    ignores: ["app/lib/data/**", "workers/e2e-inbox.ts", "workers/fixture-site.ts"],
+    ignores: ["app/lib/data/**", "workers/e2e-inbox/index.ts", "workers/fixture-site/index.ts"],
     plugins: FORM_RULES_PLUGIN,
     rules: {
       "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, RAW_DML_WRITER, FEED_STATE_LITERAL],
@@ -1245,7 +1245,7 @@ export default tseslint.config(
       "app/lib/hiring/discover-board.server.ts",
       "app/lib/site/own-site.server.ts",
       "app/lib/agent/redirect-uri.ts",
-      "workers/support-inbox.ts",
+      "workers/support-inbox/index.ts",
     ],
     rules: {
       "no-restricted-syntax": [
@@ -1690,9 +1690,9 @@ export default tseslint.config(
       "**/*.config.{ts,js,mjs,cjs}",
       "eslint.config.js",
       "workers/app.ts",
-      "workers/fixture-site.ts",
-      "workers/e2e-inbox.ts",
-      "workers/support-inbox.ts",
+      "workers/fixture-site/index.ts",
+      "workers/e2e-inbox/index.ts",
+      "workers/support-inbox/index.ts",
     ],
     rules: { "import-x/no-default-export": "off" },
   },
@@ -1880,12 +1880,15 @@ export default tseslint.config(
 
   // 0509#7073 / #7233: type-aware lint is on for e2e, tests and *.config.ts.
   // Only config files are exempt from the comment rules; tests are not
-  // (0509#7469, Nish 2026-10-14).
+  // (0509#7469, Nish 2026-10-14). **/*.config.ts covers the per-Worker
+  // cloudflare.config.ts files under workers/, which carry the comments their
+  // wrangler.jsonc predecessors held (0509#7916).
   {
-    files: ["*.config.ts"],
+    files: ["**/*.config.ts"],
     rules: {
       "no-inline-comments": "off",
       "no-warning-comments": "off",
+      "no-comments/disallowComments": "off",
     },
   },
 

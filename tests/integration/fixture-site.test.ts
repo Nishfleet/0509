@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { computeBreakageEvidence } from "../../app/lib/site/breakage-evidence";
 import { extractPageText } from "../../app/lib/site/extract-text";
-import worker from "../../workers/fixture-site";
+import worker from "../../workers/fixture-site/index";
 import { FIXTURE_HEALTHY_TEXT, FIXTURE_SOFT_TEXT } from "../fixtures/fixture-page-texts";
 
 const TOKEN = "integration-token";

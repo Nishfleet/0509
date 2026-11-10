@@ -12,16 +12,22 @@
     "workers/app.ts",
     // The e2e inbox Worker's front door is its own wrangler config
     // (workers/e2e-inbox.wrangler.jsonc), which knip does not read — the file
-    // is an entry by name.
-    "workers/e2e-inbox.ts",
+    // is an entry by name. Its cf config (workers/e2e-inbox/cloudflare.config.ts)
+    // builds it the same way cf builds the staging Worker from the root config.
+    "workers/e2e-inbox/index.ts",
+    "workers/e2e-inbox/cloudflare.config.ts",
     // The support inbox Worker's front door is its own wrangler config
     // (workers/support-inbox.wrangler.jsonc), which knip does not read — the
-    // file is an entry by name.
-    "workers/support-inbox.ts",
+    // file is an entry by name. Its cf config is
+    // workers/support-inbox/cloudflare.config.ts.
+    "workers/support-inbox/index.ts",
+    "workers/support-inbox/cloudflare.config.ts",
     // The fixture-site Worker's front door is its own wrangler config
     // (workers/fixture-site.wrangler.jsonc), which knip does not read — the
-    // file is an entry by name.
-    "workers/fixture-site.ts",
+    // file is an entry by name. Its cf config is
+    // workers/fixture-site/cloudflare.config.ts.
+    "workers/fixture-site/index.ts",
+    "workers/fixture-site/cloudflare.config.ts",
     // The hosted staging Worker is built and deployed from this file by `cf`,
     // which knip does not run — the file is an entry by name.
     "cloudflare.config.ts",
