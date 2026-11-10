@@ -1,6 +1,5 @@
 import { env, introspectWorkflow } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
-import { afterEach } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import type { BriefSchedule } from "../../../app/lib/brief-schedule";
 import { nextBriefAt, rolloverInstance } from "../../../app/lib/brief-schedule";

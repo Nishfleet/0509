@@ -7,6 +7,7 @@ function isWorkflow(value: unknown): value is Workflow {
   return (
     typeof value === "object" &&
     value !== null &&
+    !("fetch" in value) &&
     "get" in value &&
     typeof value.get === "function" &&
     "create" in value &&
@@ -50,17 +51,25 @@ function patch(workflow: Workflow, entry: Started): Patch {
     create: Object.getOwnPropertyDescriptor(workflow, "create"),
     createBatch: Object.getOwnPropertyDescriptor(workflow, "createBatch"),
   };
-  workflow.create = async (options) => {
+  const wrappedCreate: Workflow["create"] = async (options) => {
     const instance = (await Reflect.apply(create, workflow, [options])) as WorkflowInstance;
     entry.ids.add(instance.id);
     return instance;
   };
-  workflow.createBatch = async (batch) => {
+  const wrappedCreateBatch: Workflow["createBatch"] = async (batch) => {
     const instances = (await Reflect.apply(createBatch, workflow, [batch])) as WorkflowInstance[];
     for (const instance of instances) entry.ids.add(instance.id);
     return instances;
   };
-  return previous;
+  workflow.create = wrappedCreate;
+  workflow.createBatch = wrappedCreateBatch;
+  if (workflow.create === wrappedCreate && workflow.createBatch === wrappedCreateBatch) return previous;
+  restore(previous);
+  throw new Error(
+    `${entry.binding} did not keep the Workflow guard's create and createBatch wrappers, ` +
+      "so its instances would go unrecorded and a leaking test would pass. " +
+      "docs/incidents/2026-10-09-vitest-shard-2-stall.md",
+  );
 }
 
 function restore({ workflow, create, createBatch }: Patch): void {
