@@ -281,10 +281,11 @@ describe("an AI app signing in to 0509", () => {
 
   it("refuses a streamed registration body over 1 MiB that declares no length", async () => {
     const chunk = new TextEncoder().encode("x".repeat(65_536));
+    const offered = 8 * REGISTER_OVERSIZE;
     let sent = 0;
     const body = new ReadableStream<Uint8Array>({
       pull(controller) {
-        if (sent > REGISTER_OVERSIZE) {
+        if (sent >= offered) {
           controller.close();
           return;
         }
