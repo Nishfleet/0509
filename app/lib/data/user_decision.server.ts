@@ -3,6 +3,7 @@ import { z } from "zod";
 import { env } from "cloudflare:workers";
 
 import { DRAFT_FIELDS, type DraftField } from "../identity/card-fields";
+import { PIPELINE_SIGNALS } from "../customer-ready";
 
 export type SubjectVerdict = "public_subject:confirmed" | "public_subject:refused";
 
@@ -102,7 +103,7 @@ WHERE workspace_id = ?1 AND signal_id = ?2 AND verdict IN ('change_feedback:usef
 
 const INSERT_CHANGE_FEEDBACK = `INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at)
 SELECT ?1, s.workspace_id, ?3, s.id, s.entity_id, ?4, NULL, ?5
-FROM signal s
+FROM ${PIPELINE_SIGNALS} s
 WHERE s.id = ?2 AND s.workspace_id = ?6 AND s.kind = 'change' AND EXISTS (SELECT 1 FROM "user" WHERE id = ?3)`;
 
 export async function recordChangeFeedback(row: {
@@ -128,7 +129,7 @@ export async function recordChangeFeedback(row: {
 const OWN_SITE_CHANGE_MEANT = "own_site_change:meant";
 
 const SELECT_OWN_SITE_ALERT_CHANGE = `SELECT a.signal_id, a.incident_id, s.payload_json
-FROM alert a JOIN signal s ON s.id = a.signal_id
+FROM alert a JOIN ${PIPELINE_SIGNALS} s ON s.id = a.signal_id
 WHERE a.workspace_id = ?1 AND a.id = ?2 AND a.kind = 'own_site_broken'`;
 
 const ownSiteAlertChangeRow = z.object({
@@ -147,7 +148,7 @@ export async function readOwnSiteAlertChange(workspaceId: string, alertId: strin
 
 const INSERT_MEANT_CHANGE = `INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at)
 SELECT ?1, s.workspace_id, ?3, s.id, s.entity_id, ?4, ?5, ?6
-FROM signal s
+FROM ${PIPELINE_SIGNALS} s
 WHERE s.id = ?2 AND s.workspace_id = ?7 AND EXISTS (SELECT 1 FROM "user" WHERE id = ?3)`;
 
 export async function recordMeantChange(row: {

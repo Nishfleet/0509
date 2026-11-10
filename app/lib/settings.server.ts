@@ -94,6 +94,7 @@ function result(fields: Partial<SettingsResult>): SettingsResult {
 
 const NO_WORKSPACE_SETTINGS = {
   ownSiteAlerts: true,
+  ownSiteAlertsIncluded: true,
   changeAlerts: true,
   slackConnected: false,
   slackRevoked: false,
@@ -105,24 +106,29 @@ const NO_WORKSPACE_SETTINGS = {
   countLine: null,
 };
 
-async function readCountLine(workspaceId: string): Promise<string | null> {
+async function readPlanUsage(
+  workspaceId: string,
+): Promise<{ countLine: string | null; ownSiteAlertsIncluded: boolean }> {
   try {
     const [{ competitors }, entitlements] = await Promise.all([
       readCompetitors(workspaceId),
       readEntitlements(workspaceId),
     ]);
     const watching = competitors.filter((competitor) => competitor.state === "on").length;
-    return competitorCountLine(watching, entitlements.competitors);
+    return {
+      countLine: competitorCountLine(watching, entitlements.competitors),
+      ownSiteAlertsIncluded: entitlements.own_site_alerts,
+    };
   } catch (error) {
     console.warn(
       JSON.stringify({ event: "settings.count_line_failed", error: error instanceof Error ? error.name : "unknown" }),
     );
-    return null;
+    return { countLine: null, ownSiteAlertsIncluded: true };
   }
 }
 
 async function readWorkspaceSettings(workspaceId: string) {
-  const [ownSiteAlerts, changeAlerts, slackTarget, slackRevoked, slackBrief, dismissed, plan, teammates, countLine] =
+  const [ownSiteAlerts, changeAlerts, slackTarget, slackRevoked, slackBrief, dismissed, plan, teammates, usage] =
     await Promise.all([
       readOwnSiteAlerts(workspaceId),
       readChangeAlerts(workspaceId),
@@ -132,11 +138,12 @@ async function readWorkspaceSettings(workspaceId: string) {
       readUserDismissed(workspaceId),
       readPlanSummary(workspaceId),
       readTeammates(workspaceId),
-      readCountLine(workspaceId),
+      readPlanUsage(workspaceId),
     ]);
   const returning = await returningForGate(workspaceId, plan);
   return {
     ownSiteAlerts,
+    ownSiteAlertsIncluded: usage.ownSiteAlertsIncluded,
     changeAlerts,
     slackConnected: slackTarget !== null,
     slackRevoked,
@@ -145,7 +152,7 @@ async function readWorkspaceSettings(workspaceId: string) {
     teammates,
     plan,
     returning,
-    countLine,
+    countLine: usage.countLine,
   };
 }
 
@@ -168,6 +175,7 @@ export async function readSettings(user: SettingsUser) {
   ]);
   const {
     ownSiteAlerts,
+    ownSiteAlertsIncluded,
     changeAlerts,
     slackConnected,
     slackRevoked,
@@ -182,6 +190,7 @@ export async function readSettings(user: SettingsUser) {
     email: user.email,
     schedule,
     ownSiteAlerts,
+    ownSiteAlertsIncluded,
     changeAlerts,
     slackConnected,
     slackRevoked,

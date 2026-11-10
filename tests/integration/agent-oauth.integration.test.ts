@@ -434,4 +434,63 @@ describe("an AI app signing in to 0509", () => {
     const body: { error: string } = await token.json();
     expect(body.error).toBe("invalid_grant");
   });
+
+  it("rotates the refresh token and refuses a spent one once a newer refresh has been used", async () => {
+    const exchange = async (body: URLSearchParams): Promise<Response> =>
+      send(
+        new Request(`${ORIGIN}/oauth/token`, {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body,
+        }),
+      );
+    const allow = async (): Promise<string> => {
+      const decided = await decideConsent(helpers, new Request(authorizeUrl, { method: "POST" }), {
+        userId: "u_oauth",
+        allow: true,
+      });
+      return new URL((decided as Response).headers.get("location") ?? "").searchParams.get("code") ?? "";
+    };
+    const code = await allow();
+    const first = await exchange(
+      new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: REDIRECT,
+        client_id: clientId,
+        code_verifier: VERIFIER,
+        resource: `${ORIGIN}/mcp`,
+      }),
+    );
+    expect(first.status).toBe(200);
+    const issued: { access_token: string; refresh_token: string } = await first.json();
+
+    const form = (refreshToken: string): URLSearchParams =>
+      new URLSearchParams({
+        grant_type: "refresh_token",
+        client_id: clientId,
+        refresh_token: refreshToken,
+        resource: `${ORIGIN}/mcp`,
+      });
+    const rotated = await exchange(form(issued.refresh_token));
+    expect(rotated.status).toBe(200);
+    const once: { access_token: string; refresh_token: string } = await rotated.json();
+    expect(once.refresh_token).not.toBe(issued.refresh_token);
+
+    const again = await exchange(form(once.refresh_token));
+    expect(again.status).toBe(200);
+    const next: { refresh_token: string } = await again.json();
+
+    const reused = await exchange(form(issued.refresh_token));
+    expect(reused.status).toBe(400);
+    const refused: { error: string } = await reused.json();
+    expect(refused.error).toBe("invalid_grant");
+
+    const spent = await exchange(form(next.refresh_token));
+    expect(spent.status).toBe(200);
+    const live: { access_token: string } = await spent.json();
+    const mcp = await send(new Request(`${ORIGIN}/mcp`, { headers: { authorization: `Bearer ${live.access_token}` } }));
+    expect(mcp.status).toBe(200);
+    expect(await mcp.json()).toEqual({ userId: "u_oauth", clientId });
+  });
 });

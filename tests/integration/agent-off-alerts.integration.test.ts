@@ -22,8 +22,8 @@ async function seedCompetitorChange(input: { entityId: string; domain: string; s
   const diffKey = `snapshot/site/${watchId}/site-change.diff.json`;
   const payload = {
     page: { role: "pricing", url },
-    before: { snapshotId: beforeSnapshotId, screenshotKey: null },
-    after: { snapshotId: afterSnapshotId, screenshotKey: null },
+    before: { snapshotId: beforeSnapshotId, screenshotKey: null, textKey: `${watchId}/before.txt` },
+    after: { snapshotId: afterSnapshotId, screenshotKey: null, textKey: `${watchId}/after.txt` },
     diffKey,
     wordsAdded: 3,
     wordsRemoved: 2,
@@ -55,6 +55,10 @@ async function seedCompetitorChange(input: { entityId: string; domain: string; s
       JSON.stringify(payload),
       CHANGE_SEEN_AT,
     ),
+    env.DB.prepare(
+      `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at)
+       VALUES (?1, ?2, 'noteworthy_change', ?3, ?4, ?5, 0.95, ?6)`,
+    ).bind(`v_${input.signalId}`, WORKSPACE_ID, `h_${input.signalId}`, input.signalId, input.entityId, NOW),
   ]);
   await env.SNAPSHOTS.put(
     diffKey,

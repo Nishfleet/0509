@@ -1,13 +1,13 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-import type { CardDraft, DraftField } from "./card-fields";
+import { ABOUT_MAX, NAME_MAX, type CardDraft, type DraftField } from "./card-fields";
 import { normaliseSubject } from "./normalise";
 import { PROBE_TTL_SECONDS } from "./probe-cache.server";
 
 const DRAFT_FIELD_MAX: Record<DraftField, number> = {
-  name: 120,
-  description: 500,
+  name: NAME_MAX,
+  description: ABOUT_MAX,
 };
 
 const DRAFT_SCHEMA = z.object({

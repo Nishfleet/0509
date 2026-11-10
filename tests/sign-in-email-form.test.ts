@@ -3,13 +3,20 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
-import { SIGN_IN_ERROR_ID, SignInEmailForm } from "../app/components/sign-in-email-form";
+import {
+  CAPTCHA_PENDING_MESSAGE,
+  SIGN_IN_ERROR_ID,
+  SignInEmailForm,
+  nextPhase,
+  type SendPhase,
+} from "../app/components/sign-in-email-form";
 
 const SITE_KEY = "1x00000000000000000000BB";
 const PATH = "/login";
 
-function render(props: { busy: boolean; error: string }): string {
-  const form = () => createElement(SignInEmailForm, { turnstileSiteKey: SITE_KEY, ...props });
+function render(props: { busy: boolean; error: string; phase?: SendPhase }): string {
+  const { phase = "ready", ...rest } = props;
+  const form = () => createElement(SignInEmailForm, { turnstileSiteKey: SITE_KEY, initialPhase: phase, ...rest });
   const router = createMemoryRouter([{ id: "login", path: PATH, Component: form }], { initialEntries: [PATH] });
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
@@ -63,6 +70,52 @@ describe("SignInEmailForm (app/components/sign-in-email-form.tsx)", () => {
 
     expect(button).toContain("Sending…");
     expect(isDisabled(button)).toBe(true);
+  });
+
+  it("keeps the send button tappable while the human check is still loading", () => {
+    const button = submitButton(render({ busy: false, error: "", phase: "checking" }));
+
+    expect(button).toContain("Send sign-in link");
+    expect(isDisabled(button)).toBe(false);
+    expect(button).not.toContain('aria-disabled="true"');
+  });
+
+  it("says why it is waiting after a tap with no token, and stays in the tab order", () => {
+    const button = submitButton(render({ busy: false, error: "", phase: "waiting" }));
+
+    expect(button).toContain("Checking you&#x27;re a person…");
+    expect(button).toContain('aria-disabled="true"');
+    expect(isDisabled(button)).toBe(false);
+    expect(button).not.toContain("Send sign-in link");
+  });
+
+  it("lets the person send once the check has stopped waiting for a token", () => {
+    const button = submitButton(render({ busy: false, error: "", phase: "unavailable" }));
+
+    expect(button).toContain("Send sign-in link");
+    expect(isDisabled(button)).toBe(false);
+  });
+
+  it("does not post a tap with no token, and waits for the token instead", () => {
+    expect(nextPhase("checking", "tap")).toBe("waiting");
+    expect(nextPhase("waiting", "tap")).toBe("waiting");
+    expect(nextPhase("ready", "tap")).toBe("ready");
+    expect(nextPhase("unavailable", "tap")).toBe("unavailable");
+  });
+
+  it("moves with the widget and keeps a waiting tap waiting", () => {
+    expect(nextPhase("checking", "ready")).toBe("ready");
+    expect(nextPhase("waiting", "ready")).toBe("ready");
+    expect(nextPhase("waiting", "unavailable")).toBe("unavailable");
+    expect(nextPhase("waiting", "checking")).toBe("waiting");
+    expect(nextPhase("ready", "checking")).toBe("checking");
+  });
+
+  it("does not mark the email invalid for the human-check message", () => {
+    const input = emailInput(render({ busy: false, error: CAPTCHA_PENDING_MESSAGE }));
+
+    expect(input).not.toContain("aria-invalid");
+    expect(input).toContain(`aria-describedby="${SIGN_IN_ERROR_ID}"`);
   });
 
   it("posts through a form that labels the email input", () => {

@@ -27,10 +27,12 @@ import {
   PRICING_ACT_AT,
   REJECT_AT,
 } from "../jev/thresholds";
+import { normaliseSubject } from "../identity/normalise";
 import { markFromHunks, parseDiffHunks, parseSiteChangePayload, type SiteChangePayload } from "../site-change";
 import { daysBefore } from "../site-changes.server";
 import { sha256Hex } from "../sha256";
 import { computeBreakageEvidence, type BreakageEvidence } from "./breakage-evidence";
+import { breakageConfirmed, readFreshEvidence } from "./breakage-recheck.server";
 import { openLateBreakage } from "./late-breakage.server";
 
 const CHANGE_VERDICT_ROWS_PER_BRAND_PER_DAY = 6;
@@ -240,6 +242,28 @@ async function usedBudget(entityId: string, now: Date, questionIds: readonly str
   return countVerdictsSince(entityId, todayStartIso(now), questionIds);
 }
 
+export async function breakageRepaired(
+  page: { workspaceId: string; url: string; role: string },
+  beforeKey: string | null,
+): Promise<boolean> {
+  const fresh = await readFreshEvidence(page.url, beforeKey);
+  const subject = normaliseSubject(page.url);
+  if (fresh === null || fresh === "unreachable" || fresh.httpError || !subject.ok || subject.subject.kind !== "domain")
+    return false;
+  const state = changeState(
+    {
+      isSelf: true,
+      subject: { name: null, domain: subject.subject.registrable },
+      pageUrl: page.url,
+      pageRole: page.role,
+      hunks: [],
+      evidence: fresh,
+    },
+    [],
+  );
+  return breakageBandOf((await askNoul(page.workspaceId, D3S_BREAKAGE, state)).p) === "clear";
+}
+
 async function judgeSelfBreakage(
   input: JudgeInput,
   state: ChangeStateValue,
@@ -419,13 +443,22 @@ async function judgeInputFromStored(row: UnjudgedChange): Promise<JudgeInput | n
   };
 }
 
+async function lateBreakageConfirmed(row: UnjudgedChange, input: JudgeInput): Promise<boolean> {
+  const beforeKey = parseSiteChangePayload(row.payloadJson)?.before.textKey;
+  return beforeKey !== undefined && (await breakageConfirmed(input.evidence, input.pageUrl, beforeKey));
+}
+
 async function rejudgeStoredChange(row: UnjudgedChange): Promise<boolean> {
   const input = await judgeInputFromStored(row);
   if (input === null) return false;
   const judged = await judgeChange(input);
   const band = judged.selfBreakage?.band;
-  if (row.entityRole === "self" && (band === "alert" || band === "check")) {
-    await openLateBreakage(row, band, new Date());
+  if (
+    row.entityRole === "self" &&
+    (band === "alert" || band === "check") &&
+    (await lateBreakageConfirmed(row, input))
+  ) {
+    await openLateBreakage(row, { band, evidence: input.evidence }, new Date());
   }
   if (judged.verdictIds.length > 0) {
     await linkVerdictsStatement({

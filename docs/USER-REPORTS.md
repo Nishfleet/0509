@@ -66,7 +66,7 @@ and a support mail about the same failure can be linked by hand.
 
 ## The door, end to end
 
-1. **Worker** `workers/support-inbox.ts` + `workers/support-inbox.wrangler.jsonc`,
+1. **Worker** `workers/support-inbox/index.ts` + `workers/support-inbox.wrangler.jsonc`,
    deployed by `deploy-production.yml` after the app smoke like the e2e inbox.
    `email()` handler: parse, store, open the issue via the GitHub REST API with
    a fine-grained token scoped to issues on this repo, stored as a Worker

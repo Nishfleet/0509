@@ -3,10 +3,16 @@ import { env } from "cloudflare:workers";
 import { insertIncidentAlertStatement } from "../data/alert.server";
 import { openIncidentStatement } from "../data/incident.server";
 import { markSignalBreakageStatement, type UnjudgedChange } from "../data/signal.server";
+import { breakageProof, type BreakageEvidence } from "./breakage-evidence";
 
 const LATE_BREAKAGE_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 
-export async function openLateBreakage(row: UnjudgedChange, band: "alert" | "check", now: Date): Promise<void> {
+export async function openLateBreakage(
+  row: UnjudgedChange,
+  breakage: { band: "alert" | "check"; evidence: BreakageEvidence },
+  now: Date,
+): Promise<void> {
+  const { band, evidence } = breakage;
   if (row.pageId === null || now.getTime() - Date.parse(row.observedAt) > LATE_BREAKAGE_MAX_AGE_MS) return;
   const incidentId = crypto.randomUUID();
   const at = now.toISOString();
@@ -28,8 +34,8 @@ export async function openLateBreakage(row: UnjudgedChange, band: "alert" | "che
       signalId: row.id,
       incidentId,
       severity: band === "alert" ? "high" : "normal",
-      title: `${row.entityDomain} looks broken: breakage`,
-      body: null,
+      title: `${row.entityDomain} looks broken`,
+      body: breakageProof(evidence),
       createdAt: at,
     }),
   ]);

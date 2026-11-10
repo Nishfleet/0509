@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import type { BriefPayload } from "../brief-payload";
 import { readBriefPayload } from "../brief-payload";
+import { SHOWN_SIGNALS } from "../customer-ready";
 
 const INSERT_DELIVERY_FAILED = `INSERT INTO alert (id, workspace_id, kind, severity, title, body, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`;
 
@@ -215,7 +216,7 @@ export type SignalAlert = z.infer<typeof signalAlertRow>;
 
 const SELECT_SIGNAL_ALERTS = `SELECT a.id, a.kind, a.title, a.body, s.url, a.created_at
 FROM alert a
-JOIN signal s ON s.id = a.signal_id AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL
+JOIN ${SHOWN_SIGNALS} s ON s.id = a.signal_id
 JOIN entity e ON e.id = a.entity_id AND e.state = 'on'
 WHERE a.workspace_id = ? AND a.kind IN ('mention', 'ad')
 ORDER BY a.created_at DESC

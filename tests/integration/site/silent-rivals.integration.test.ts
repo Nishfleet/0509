@@ -73,7 +73,7 @@ describe("checkSilentRivals", () => {
     await seedRival({ id: "multi", discoveredAt: LONG_AGO, paid: true, reason: null });
     await env.DB.batch([
       env.DB.prepare(
-        "INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('p-multi-root', 'e-multi', 'https://multi.example/root', 'home', ?1)",
+        "INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('p-multi-root', 'e-multi', 'https://multi.example/root', 'other', ?1)",
       ).bind(LONG_AGO),
       env.DB.prepare(
         "INSERT INTO snapshot (id, watch_id, page_id, fetched_at, payload_hash) VALUES ('s-multi', 'w-multi', 'p-multi-root', ?1, 'h')",

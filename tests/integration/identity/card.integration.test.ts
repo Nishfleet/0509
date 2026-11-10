@@ -817,7 +817,7 @@ describe("confirmCard", () => {
     await settledTail();
   });
 
-  it("refuses a card with no name, and a second confirm keeps the first", async () => {
+  it("refuses a card with no name, and a second confirm replaces the first", async () => {
     stubWeb(() => new Response(gym, { status: 200, headers: { "content-type": "text/html" } }));
     await answerHomepage();
     expect(await confirmCard("ws-1", "u1", form({ subject: "gymshark.com", name: "  ", description: "" }))).toBe(false);
@@ -828,7 +828,7 @@ describe("confirmCard", () => {
       true,
     );
     const { results } = await env.DB.prepare("SELECT name FROM entity").all();
-    expect(results).toEqual([{ name: "First" }]);
+    expect(results).toEqual([{ name: "Second" }]);
     await settledTail();
   });
 

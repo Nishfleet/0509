@@ -159,7 +159,7 @@ async function seedHiring(): Promise<{ workspaceId: string; hiredEntity: string 
 
   await env.DB.batch([
     env.DB.prepare(
-      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, ?6, ?7)",
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, 'https://hiring.example/jobs', ?6, ?7)",
     ).bind(
       `sig_hiring_a_${run}`,
       workspaceId,
@@ -170,7 +170,7 @@ async function seedHiring(): Promise<{ workspaceId: string; hiredEntity: string 
       "2026-09-15T10:00:00.000Z",
     ),
     env.DB.prepare(
-      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, ?6, ?7)",
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, 'https://hiring.example/jobs', ?6, ?7)",
     ).bind(
       `sig_hiring_b_${run}`,
       workspaceId,
@@ -181,7 +181,7 @@ async function seedHiring(): Promise<{ workspaceId: string; hiredEntity: string 
       "2026-09-18T10:00:00.000Z",
     ),
     env.DB.prepare(
-      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, ?6, ?7)",
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, 'https://hiring.example/jobs', ?6, ?7)",
     ).bind(
       `sig_hiring_old_${run}`,
       workspaceId,
@@ -392,8 +392,29 @@ describe("the running total of changes reaches the brief, through real D1", () =
     await env.DB.batch(
       times.map((observedAt, index) =>
         env.DB.prepare(
-          "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, aspect, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'change', 'Page changed', 'pricing', ?1, ?5)",
-        ).bind(`sig_total_${workspaceId}_${String(index)}`, workspaceId, entityId, sourceId, observedAt),
+          "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, aspect, payload_json, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'change', 'Page changed', 'pricing', ?6, ?1, ?5)",
+        ).bind(
+          `sig_total_${workspaceId}_${String(index)}`,
+          workspaceId,
+          entityId,
+          sourceId,
+          observedAt,
+          JSON.stringify({ before: { textKey: "before.txt" }, after: { textKey: "after.txt" } }),
+        ),
+      ),
+    );
+    await env.DB.batch(
+      times.map((observedAt, index) =>
+        env.DB.prepare(
+          "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at) VALUES (?1, ?2, 'noteworthy_change', ?3, ?4, ?5, 0.95, ?6)",
+        ).bind(
+          `jv_total_${workspaceId}_${String(index)}`,
+          workspaceId,
+          `jh_total_${workspaceId}_${String(index)}`,
+          `sig_total_${workspaceId}_${String(index)}`,
+          entityId,
+          observedAt,
+        ),
       ),
     );
   };

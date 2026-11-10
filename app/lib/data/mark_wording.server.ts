@@ -2,9 +2,10 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { markFromHunks, parseDiffHunks, type ChangeMark } from "../site-change";
+import { SHOWN_SIGNALS } from "../customer-ready";
 
 const SELECT_DIFF_KEYS = `SELECT s.id AS id, json_extract(s.payload_json, '$.diffKey') AS diff_key
-FROM signal s
+FROM ${SHOWN_SIGNALS} s
 WHERE s.workspace_id = ?1 AND s.kind = 'change' AND json_valid(s.payload_json) AND s.id IN (SELECT value FROM json_each(?2))`;
 
 const MAX_DIFF_BYTES = 512 * 1024;

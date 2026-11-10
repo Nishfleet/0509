@@ -1,7 +1,12 @@
+import path from "node:path";
+
 import { experimental_readRawConfig } from "wrangler";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import cloudflareConfig from "../cloudflare.config";
+import e2eInboxConfig from "../workers/e2e-inbox/cloudflare.config";
+import fixtureSiteConfig from "../workers/fixture-site/cloudflare.config";
+import supportInboxConfig from "../workers/support-inbox/cloudflare.config";
 
 interface Binding {
   type: string;
@@ -405,6 +410,116 @@ describe("cloudflare.config.ts staging mode", () => {
     expect(staging.env.ACCESS_AUD?.value).toBe("4d713d09a17fe8acfcbee861f29b743a0158892737e95ec52c0b659f7362dd7f");
     expect(staging.env.ACCESS_AUD?.value).not.toBe(prod.env.ACCESS_AUD?.value);
     expect(staging.env.LANDING_WORKSPACE_ID?.value).toBe("");
+  });
+});
+
+interface SideWorkerConfig {
+  worker: {
+    name: string;
+    compatibilityDate: string;
+    entrypoint: string;
+    workersDev?: boolean;
+    observability: { enabled: boolean };
+    domains?: string[];
+    triggers?: { type: string; schedule?: string }[];
+    env: Record<string, { type: string; name?: string; id?: string; worker?: string; exportName?: string }>;
+    exports?: Record<string, { type: string; storage?: string }>;
+  };
+}
+
+interface SideWranglerConfig {
+  name: string;
+  main: string;
+  compatibility_date: string;
+  workers_dev?: boolean;
+  observability: { enabled: boolean };
+  routes?: { pattern: string; custom_domain: boolean }[];
+  triggers?: { crons: string[] };
+  d1_databases?: { binding: string; database_name: string; database_id: string }[];
+  durable_objects?: { bindings: { name: string; class_name: string }[] };
+  migrations?: { tag: string; new_sqlite_classes?: string[] }[];
+}
+
+describe.each([
+  {
+    label: "support-inbox",
+    config: supportInboxConfig as unknown as SideWorkerConfig,
+    wrangler: "workers/support-inbox.wrangler.jsonc",
+  },
+  {
+    label: "e2e-inbox",
+    config: e2eInboxConfig as unknown as SideWorkerConfig,
+    wrangler: "workers/e2e-inbox.wrangler.jsonc",
+  },
+  {
+    label: "fixture-site",
+    config: fixtureSiteConfig as unknown as SideWorkerConfig,
+    wrangler: "workers/fixture-site.wrangler.jsonc",
+  },
+])("cloudflare.config.ts in workers/$label matches its wrangler config", ({ label, config, wrangler }) => {
+  const cf = config.worker;
+  const raw = (experimental_readRawConfig({ config: wrangler }) as unknown as { rawConfig: SideWranglerConfig })
+    .rawConfig;
+  const entry = (from: string, relative: string) => path.resolve(path.dirname(from), relative);
+
+  it("declares the same Worker, entry module, runtime and observability", () => {
+    expect(cf.name).toBe(raw.name);
+    expect(entry(`workers/${label}/cloudflare.config.ts`, cf.entrypoint)).toBe(entry(wrangler, raw.main));
+    expect(cf.compatibilityDate).toBe(raw.compatibility_date);
+    expect(cf.observability).toEqual({ enabled: raw.observability.enabled });
+    expect(cf.workersDev ?? true).toBe(raw.workers_dev ?? true);
+  });
+
+  it("serves the same custom domains", () => {
+    expect(raw.routes?.every((route) => route.custom_domain) ?? true).toBe(true);
+    expect(cf.domains ?? []).toEqual((raw.routes ?? []).map((route) => route.pattern));
+  });
+
+  it("runs the same crons in the same order", () => {
+    const schedules = (cf.triggers ?? [])
+      .filter((trigger) => trigger.type === "scheduled")
+      .map((trigger) => trigger.schedule);
+    expect(schedules).toEqual(raw.triggers?.crons ?? []);
+  });
+
+  it("declares exactly the bindings the wrangler config declares", () => {
+    const wranglerBindingNames = [
+      ...(raw.d1_databases ?? []).map((database) => database.binding),
+      ...(raw.durable_objects?.bindings ?? []).map((object) => object.name),
+    ].sort();
+    expect(Object.keys(cf.env).sort()).toEqual(wranglerBindingNames);
+  });
+
+  it("points every storage binding at the same resource", () => {
+    const d1 = Object.fromEntries(
+      Object.entries(cf.env)
+        .filter(([, binding]) => binding.type === "d1")
+        .map(([name, binding]) => [name, [binding.name, binding.id]]),
+    );
+    expect(d1).toEqual(
+      Object.fromEntries(
+        (raw.d1_databases ?? []).map((database) => [database.binding, [database.database_name, database.database_id]]),
+      ),
+    );
+  });
+
+  it("keeps the same Durable Object classes with the same one-time creation history", () => {
+    expect(
+      Object.fromEntries(
+        Object.entries(cf.env)
+          .filter(([, binding]) => binding.type === "durable-object")
+          .map(([name, binding]) => [name, [binding.worker, binding.exportName]]),
+      ),
+    ).toEqual(
+      Object.fromEntries(
+        (raw.durable_objects?.bindings ?? []).map((object) => [object.name, [raw.name, object.class_name]]),
+      ),
+    );
+    const created = (raw.migrations ?? []).flatMap((migration) => migration.new_sqlite_classes ?? []);
+    for (const name of created) {
+      expect(cf.exports?.[name]).toEqual({ type: "durable-object", storage: "sqlite" });
+    }
+    expect(Object.keys(cf.exports ?? {}).sort()).toEqual([...new Set(created)].sort());
   });
 });
 

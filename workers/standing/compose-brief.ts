@@ -18,6 +18,7 @@ import { readBrandMoves } from "./brand-moves";
 import { redactEmailShaped } from "../../app/lib/auth/redact-email-shaped";
 import { required } from "../../app/lib/required";
 import { readMarkWording } from "../../app/lib/data/mark_wording.server";
+import { SENDABLE_SIGNALS } from "../../app/lib/customer-ready";
 
 const RANKED_BRANDS = `SELECT s.entity_id AS entity_id,
        COALESCE(e.name, e.domain) AS name,
@@ -42,19 +43,19 @@ const SIGNAL_COUNTS = `SELECT s.entity_id AS entity_id,
        SUM(CASE WHEN s.kind = 'mention' THEN 1 ELSE 0 END) AS mentions,
        SUM(CASE WHEN s.kind = 'change' THEN 1 ELSE 0 END) AS site_changes,
        SUM(CASE WHEN s.kind = 'hiring' THEN 1 ELSE 0 END) AS new_roles
-FROM signal s
+FROM ${SENDABLE_SIGNALS} s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
 WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL
 GROUP BY s.entity_id`;
 
 const TOTAL_CHANGES = `SELECT count(*) AS total
-FROM signal s
+FROM ${SENDABLE_SIGNALS} s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1
 WHERE s.workspace_id = ?1 AND s.kind = 'change' AND s.observed_at < ?2 AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL`;
 
 const EARLIER_RANK = `SELECT rank, week_start_at FROM standing
 WHERE workspace_id = ?1 AND entity_id = ?2 AND rank IS NOT NULL AND week_start_at <= ?3
-ORDER BY week_start_at DESC LIMIT 1`;
+ORDER BY week_start_at DESC, id DESC LIMIT 1`;
 
 const NEW_RIVAL = `SELECT COALESCE(NULLIF(candidate_name, ''), candidate_domain) AS name, candidate_domain AS domain, verdict_reason AS reason
 FROM suggestion
@@ -91,9 +92,9 @@ ORDER BY state_changed_at ASC`;
 const PICKED_SIGNALS = `SELECT s.id AS signal_id, s.entity_id AS entity_id, COALESCE(NULLIF(e.name, ''), e.domain) AS entity_name,
        s.title AS title, s.summary AS summary, s.url AS url, s.observed_at AS observed_at,
        ${effectiveKindSql("src")} AS source_kind, src.platform AS source_platform,
-       (SELECT v.reason FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id IN ('noteworthy_change', 'mention_matters') AND v.reason IS NOT NULL ORDER BY v.decided_at DESC LIMIT 1) AS verdict_reason,
-       (SELECT k.choice FROM jev_verdict k WHERE k.signal_id = s.id AND k.question_id = 'change_kind' AND k.choice IS NOT NULL ORDER BY k.decided_at DESC LIMIT 1) AS change_kind
-FROM signal s
+       (SELECT v.reason FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id IN ('noteworthy_change', 'mention_matters') AND v.reason IS NOT NULL ORDER BY v.decided_at DESC, v.id DESC LIMIT 1) AS verdict_reason,
+       (SELECT k.choice FROM jev_verdict k WHERE k.signal_id = s.id AND k.question_id = 'change_kind' AND k.choice IS NOT NULL ORDER BY k.decided_at DESC, k.id DESC LIMIT 1) AS change_kind
+FROM ${SENDABLE_SIGNALS} s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1
 JOIN source src ON src.id = s.source_id
 WHERE s.workspace_id = ?1 AND s.id IN (SELECT value FROM json_each(?2))`;
