@@ -145,6 +145,13 @@ test("J13: a full workspace sees the plan gate without pressing Add, and the pag
   await page.setExtraHTTPHeaders({ cookie });
   await page.goto("/app/competitors?upgraded=starter");
   await expect(page.getByText(/Confirming your Starter plan/)).toBeVisible();
+  await expect(page.getByText(/Watching 5 of 5 competitors\. Your plan is full\./)).toBeVisible();
+  const addPosts: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && (request.postData() ?? "").includes("intent=add")) addPosts.push(request.url());
+  });
+  await page.getByLabel("Add a competitor we missed").fill("j13-enter.example");
+  await page.getByLabel("Add a competitor we missed").press("Enter");
 
   await expect(page.getByRole("button", { name: "Add", exact: true })).toHaveAttribute("aria-disabled", "true");
   const upgrade = page.getByRole("button", { name: /^Upgrade to Starter\s*€46\/month$/ });
@@ -152,6 +159,7 @@ test("J13: a full workspace sees the plan gate without pressing Add, and the pag
   await expect(page.getByText("Starter watches up to 15 competitors.")).toBeVisible();
   await upgrade.click();
   await expect(page.getByRole("alert").filter({ hasText: "You can't switch plans right now" })).toBeVisible();
+  expect(addPosts).toEqual([]);
 
   await page.evaluate(() => {
     Object.assign(window, { j13NoReload: true });

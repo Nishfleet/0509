@@ -221,7 +221,7 @@ export function AddCompetitor({
   const formRef = useClearedAfterAdd(adding, message);
   return (
     <div className="mt-8">
-      <Form method="post" ref={formRef}>
+      <Form method="post" ref={formRef} onSubmit={planFull ? holdSubmit : undefined}>
         <input type="hidden" name="intent" value="add" />
         <label htmlFor="add-competitor" className={BLOCK_HEADING}>
           Add a competitor we missed
