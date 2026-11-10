@@ -12,16 +12,25 @@ const reportedWeeks = new Set<string>();
 interface SampleReport {
   readonly event: "landing.sample_stale" | "landing.sample_unavailable";
   readonly workspaceId: string;
-  readonly weekStartAt: string;
+  readonly weekStartAt?: string;
   readonly error?: string;
 }
 
 function reportOnce(report: SampleReport): void {
   const { event, workspaceId, weekStartAt: week, error } = report;
-  if (reportedWeeks.has(week)) return;
-  reportedWeeks.add(week);
+  const key = week ?? event;
+  if (reportedWeeks.has(key)) return;
+  reportedWeeks.add(key);
   console.warn(
-    JSON.stringify(error === undefined ? { event, workspaceId, week } : { event, workspaceId, week, error }),
+    JSON.stringify(
+      error === undefined
+        ? week === undefined
+          ? { event, workspaceId }
+          : { event, workspaceId, week }
+        : week === undefined
+          ? { event, workspaceId, error }
+          : { event, workspaceId, week, error },
+    ),
   );
 }
 
@@ -37,7 +46,13 @@ async function readCard(key: string): Promise<string | null> {
 export async function readLandingSample(now: number): Promise<LandingSample | null> {
   const workspaceId = landingWorkspaceId();
   if (workspaceId === null) return null;
-  const weekStartAt = await readLatestStandingWeek(env.DB, workspaceId);
+  let weekStartAt: string | null;
+  try {
+    weekStartAt = await readLatestStandingWeek(env.DB, workspaceId);
+  } catch (error) {
+    reportOnce({ event: "landing.sample_unavailable", workspaceId, error: String(error).slice(0, 300) });
+    return null;
+  }
   if (weekStartAt === null) return null;
   if (isStaleLandingSample(weekStartAt, now)) {
     reportOnce({ event: "landing.sample_stale", workspaceId, weekStartAt });

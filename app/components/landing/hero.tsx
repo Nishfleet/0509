@@ -1,11 +1,10 @@
 import type { ReactElement } from "react";
 
-import { LandingSampleFallback } from "../card/landing-sample";
 import { OneInput } from "../one-input";
 import { eyebrow, pageWidth } from "./section";
 import { StartWatchingLabel } from "./start-button";
 
-export function Hero({ nouns, proof }: { nouns: string; proof?: ReactElement }): ReactElement {
+export function Hero({ nouns, proof }: { nouns: string; proof: ReactElement }): ReactElement {
   return (
     <section id="hero" aria-labelledby="hero-title">
       <div
@@ -37,7 +36,7 @@ export function Hero({ nouns, proof }: { nouns: string; proof?: ReactElement }):
             One box to fill in. About a minute to see who’s gaining on you.
           </p>
         </div>
-        {proof ?? <LandingSampleFallback />}
+        {proof}
       </div>
     </section>
   );

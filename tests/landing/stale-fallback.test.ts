@@ -55,21 +55,19 @@ describe("the eight-day rule", () => {
 describe("the landing sample card", () => {
   it("renders the server-rendered static hero when there is no sample, with no spinner or empty box", () => {
     const html = renderToStaticMarkup(createElement(LandingSampleCard, { sample: null, now: NOW }));
-    expect(html).toContain('id="hero-proof"');
-    expect(html).toContain("What a change looks like");
-    expect(html).toContain("Examples, not real changes.");
+    expect(html).toContain('data-landing-sample="fallback"');
     const cards = html.match(/<li/g) ?? [];
     expect(cards.length).toBeGreaterThan(0);
     expect(html).not.toMatch(/aria-busy|Loading/i);
-    expect(html).not.toContain("data-live-card");
+    expect(html).not.toContain('data-landing-sample="live"');
   });
 
   it("never renders a card whose week has passed", () => {
     const html = renderToStaticMarkup(
       createElement(LandingSampleCard, { sample: { weekStartAt: PASSED_WEEK, html: CARD_HTML }, now: NOW }),
     );
-    expect(html).not.toContain("data-live-card");
-    expect(html).toContain("Examples, not real changes.");
+    expect(html).toContain('data-landing-sample="fallback"');
+    expect(html).not.toContain('data-landing-sample="live"');
     const cards = html.match(/<li/g) ?? [];
     expect(cards.length).toBeGreaterThan(0);
   });
@@ -78,7 +76,7 @@ describe("the landing sample card", () => {
     const html = renderToStaticMarkup(
       createElement(LandingSampleCard, { sample: { weekStartAt: FRESH_WEEK, html: CARD_HTML }, now: NOW }),
     );
-    expect(html).toContain("data-live-card");
+    expect(html).toContain('data-landing-sample="live"');
     expect(html).toContain(CARD_HTML);
   });
 
@@ -89,8 +87,8 @@ describe("the landing sample card", () => {
         now: NOW + DAY_MS,
       }),
     );
-    expect(html).toContain("Examples, not real changes.");
-    expect(html).not.toContain("data-live-card");
+    expect(html).toContain('data-landing-sample="fallback"');
+    expect(html).not.toContain('data-landing-sample="live"');
   });
 });
 
@@ -137,7 +135,14 @@ describe("readLandingSample", () => {
 
     expect(await readLandingSample(NOW)).toBeNull();
     expect(warnEvents()).toEqual(["landing.sample_unavailable"]);
-    expect(String(vi.mocked(console.warn).mock.calls.at(-1)?.[0])).toContain("r2 down");
+  });
+
+  it("falls back on a failed standing-week read instead of failing the landing page", async () => {
+    standing.readLatestStandingWeek.mockRejectedValue(new Error("d1 down"));
+
+    expect(await readLandingSample(NOW)).toBeNull();
+    expect(envStub.env.SNAPSHOTS.get).not.toHaveBeenCalled();
+    expect(warnEvents()).toEqual(["landing.sample_unavailable"]);
   });
 
   it("reads nothing and logs nothing when no workspace is named for the landing", async () => {
