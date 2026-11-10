@@ -35,6 +35,7 @@ export default defineConfig({
       // without the trigger a dependabot.yml-only PR reruns nothing.
       "**/.github/dependabot.yml",
       "**/tests/integration/apply-migrations.ts",
+      "**/tests/integration/workflow-guard.ts",
       // tests/agents-md-canonical.test.ts and tests/migration-gate-docs.test.ts
       // read these from disk (0509#7005, 0509#7003); without the trigger a
       // doc-only PR reruns nothing and the false-lock verdict is left to the
@@ -95,7 +96,7 @@ export default defineConfig({
             "tests/integration/fixture-site.test.ts",
             "tests/integration/transport.test.ts",
           ],
-          setupFiles: ["./tests/integration/apply-migrations.ts"],
+          setupFiles: ["./tests/integration/apply-migrations.ts", "./tests/integration/workflow-guard.ts"],
           testTimeout: 30_000,
         },
       },

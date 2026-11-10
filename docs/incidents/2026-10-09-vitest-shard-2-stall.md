@@ -100,3 +100,18 @@ That file started real Workflow instances it never observed:
 On 12 of 12 local runs of the unchanged file, that nightly instance printed its `fixture_reaper.run` line after the file's last test had finished. So a Workflow was still running while the pool disposed the file's Miniflare, the mechanism proven on 2026-10-12. None of the 12 runs hung locally, so the hang itself was not reproduced here.
 
 Fix: each of those tests holds an introspector (`introspectWorkflow(env.ACCOUNT_DELETE)`, `introspectWorkflowInstance(env.FIXTURE_REAPER_WORKFLOW, …)`) and waits for every instance it started to complete before it ends. This is the cleanup the Workers Vitest docs prescribe (https://developers.cloudflare.com/workers/testing/vitest-integration/test-apis/). After the fix, 12 of 12 local runs passed with nothing printed after the last test.
+
+## 2026-11-10: a workers test that leaves a Workflow running now fails (0509#7890)
+
+`tests/integration/workflow-guard.ts` is a setup file on the `workers` project. It finds every Workflow binding on `env` by shape (`get`, `create`, `createBatch`), so a new Workflow is covered without a list, and wraps `create` and `createBatch` before each test to record the instance ids the test starts, including successors a Workflow starts for itself. Its `afterEach` reads each instance's status and fails the test when one is not `complete`, `errored` or `terminated`, naming the binding and every live id:
+
+```
+Workflow instances were still running when the test ended:
+  ACCOUNT_DELETE: fixture-reaper-u-bulk-00 is running, …
+```
+
+The guard terminates the instances it reports, so a test that leaks one fails instead of stalling the shard on dispose. Five files deliberately end a test with a live instance (`account-delete`, `identity/tail`, `identity/retry`, `standing/rollover`, `standing/reschedule`); their own `afterEach` calls `terminateRunningWorkflows()` from the same file, which is the cleanup, not an exemption from the check.
+
+Proof against the pre-#7886 `fixture-reaper.integration.test.ts` at `9a1f56498`: three tests fail and the messages name `ACCOUNT_DELETE` (30 instances in the bulk test) and `FIXTURE_REAPER_WORKFLOW` (the on-demand nightly instance). The current file passes.
+
+Cost measured on the 12 workflow-heaviest workers files (114 tests): 131 s without the guard, 130 s and 142 s with it. The same subset's cumulative setup time varied 209 s to 227 s across those runs, so the guard adds no measurable suite time. The full 266-file workers suite was not repeated locally: the repo asks contributors not to run the full suite locally because CI runs it sharded at the PR head, and the subset above carries every Workflow-starting test path.

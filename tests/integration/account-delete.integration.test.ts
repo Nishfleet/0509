@@ -1,7 +1,7 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { env, introspectWorkflowInstance } from "cloudflare:test";
 import { RouterContextProvider } from "react-router";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAuth, deleteSignedInUser, hasFreshSession } from "../../app/lib/auth.server";
 import { nextBriefAt, rolloverInstance } from "../../app/lib/brief-schedule";
@@ -14,10 +14,13 @@ import {
   sealAccountDeleteInstanceId,
 } from "../../app/lib/account-delete.server";
 import { loader as loginLoader } from "../../app/routes/login";
+import { terminateRunningWorkflows } from "./workflow-guard";
 
 const ORIGIN = "http://localhost:8787";
 const ADDRESS = "leaving@0509.io";
 const links: string[] = [];
+
+afterEach(terminateRunningWorkflows);
 
 const authEnv = {
   DB: env.DB,

@@ -12,6 +12,7 @@ import {
 } from "../../../app/lib/brief-schedule";
 import { nightlyCatchUpInstance, runNightlyStanding } from "../../../workers/standing/nightly";
 import { loadNightlyPlan } from "../../../workers/standing/rollover-plan";
+import { terminateRunningWorkflows } from "../workflow-guard";
 
 let runs = 0;
 let WS = "";
@@ -149,6 +150,8 @@ interface StubRequest {
 afterEach(() => {
   Reflect.deleteProperty(env, "AI");
 });
+
+afterEach(terminateRunningWorkflows);
 
 beforeEach(() => {
   runs += 1;
