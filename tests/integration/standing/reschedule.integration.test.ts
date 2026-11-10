@@ -1,5 +1,6 @@
-import { env } from "cloudflare:test";
-import { afterEach, describe, expect, it } from "vitest";
+import { env, introspectWorkflow } from "cloudflare:test";
+import { describe, expect, it } from "vitest";
+import { afterEach } from "vitest";
 
 import type { BriefSchedule } from "../../../app/lib/brief-schedule";
 import { nextBriefAt, rolloverInstance } from "../../../app/lib/brief-schedule";
@@ -18,8 +19,15 @@ function workspace(): string {
 
 const LIVE = ["queued", "running", "waiting"];
 
+async function waitForTerminated(id: string): Promise<void> {
+  await expect
+    .poll(async () => (await (await env.STANDING_ROLLOVER.get(id)).status()).status, { timeout: 20_000 })
+    .toBe("terminated");
+}
+
 describe("rescheduleRollover against the real Workflows binding (0509#5161)", () => {
   it("terminates the sleeping instance and creates the new one", async () => {
+    await using _introspector = await introspectWorkflow(env.STANDING_ROLLOVER);
     const ws = workspace();
     const now = new Date();
     const previous = scheduleOffsetFromToday(2, 8);
@@ -43,9 +51,12 @@ describe("rescheduleRollover against the real Workflows binding (0509#5161)", ()
       .poll(async () => (await (await env.STANDING_ROLLOVER.get(stale.id)).status()).status, { timeout: 20_000 })
       .toBe("terminated");
     expect(LIVE).toContain((await (await env.STANDING_ROLLOVER.get(fresh.id)).status()).status);
+    await (await env.STANDING_ROLLOVER.get(fresh.id)).terminate();
+    await waitForTerminated(fresh.id);
   });
 
   it("creates the new instance when no stale one exists", async () => {
+    await using _introspector = await introspectWorkflow(env.STANDING_ROLLOVER);
     const ws = workspace();
     const now = new Date();
     const previous = scheduleOffsetFromToday(2, 8);
@@ -62,6 +73,8 @@ describe("rescheduleRollover against the real Workflows binding (0509#5161)", ()
     const fresh = rolloverInstance(ws, nextBriefAt(next, now), "scheduled");
     expect(result).toEqual({ cancelledId: null, createdId: fresh.id });
     expect(LIVE).toContain((await (await env.STANDING_ROLLOVER.get(fresh.id)).status()).status);
+    await (await env.STANDING_ROLLOVER.get(fresh.id)).terminate();
+    await waitForTerminated(fresh.id);
   });
 
   it("an unchanged time touches nothing", async () => {

@@ -8,7 +8,7 @@ import { checkPage } from "../../../app/lib/site/check-page.server";
 import { planSiteSweep, publishSiteChange } from "../../../app/lib/site/sweep.server";
 import { formatDate } from "../../../workers/delivery/brief-template";
 import { deliverIncident } from "../../../workers/delivery/consumer";
-import fixtureWorker from "../../../workers/fixture-site";
+import fixtureWorker from "../../../workers/fixture-site/index";
 
 const USER = "user-recheck";
 const WS = "ws-recheck";

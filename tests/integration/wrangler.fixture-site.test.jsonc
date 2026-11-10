@@ -4,7 +4,7 @@
 {
   "name": "0509-fixture-site-test",
   "compatibility_date": "2026-09-16",
-  "main": "../../workers/fixture-site.ts",
+  "main": "../../workers/fixture-site/index.ts",
   "durable_objects": {
     "bindings": [{ "name": "STATE", "class_name": "FixtureState" }],
   },

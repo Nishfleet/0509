@@ -125,3 +125,66 @@ export async function recordChangeFeedback(row: {
     ),
   ]);
 }
+
+const OWN_SITE_CHANGE_MEANT = "own_site_change:meant";
+
+const SELECT_OWN_SITE_ALERT_CHANGE = `SELECT a.signal_id, a.incident_id, s.payload_json
+FROM alert a JOIN ${PIPELINE_SIGNALS} s ON s.id = a.signal_id
+WHERE a.workspace_id = ?1 AND a.id = ?2 AND a.kind = 'own_site_broken'`;
+
+const ownSiteAlertChangeRow = z.object({
+  signal_id: z.string(),
+  incident_id: z.string().nullable(),
+  payload_json: z.string(),
+});
+
+export type OwnSiteAlertChange = z.infer<typeof ownSiteAlertChangeRow>;
+
+export async function readOwnSiteAlertChange(workspaceId: string, alertId: string): Promise<OwnSiteAlertChange | null> {
+  return ownSiteAlertChangeRow
+    .nullable()
+    .parse(await env.DB.prepare(SELECT_OWN_SITE_ALERT_CHANGE).bind(workspaceId, alertId).first());
+}
+
+const INSERT_MEANT_CHANGE = `INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at)
+SELECT ?1, s.workspace_id, ?3, s.id, s.entity_id, ?4, ?5, ?6
+FROM ${PIPELINE_SIGNALS} s
+WHERE s.id = ?2 AND s.workspace_id = ?7 AND EXISTS (SELECT 1 FROM "user" WHERE id = ?3)`;
+
+export async function recordMeantChange(row: {
+  workspaceId: string;
+  userId: string;
+  signalId: string;
+  fingerprint: string | null;
+  decidedAt: string;
+}): Promise<void> {
+  await env.DB.prepare(INSERT_MEANT_CHANGE)
+    .bind(
+      crypto.randomUUID(),
+      row.signalId,
+      row.userId,
+      OWN_SITE_CHANGE_MEANT,
+      row.fingerprint,
+      row.decidedAt,
+      row.workspaceId,
+    )
+    .run();
+}
+
+const SELECT_MEANT_CHANGE = `SELECT COUNT(*) AS n FROM user_decision
+WHERE workspace_id = ?1 AND entity_id = ?2 AND verdict = ?3 AND note = ?4`;
+
+const meantChangeCountRow = z.object({ n: z.number() });
+
+export async function ownerMeantChange(change: {
+  workspaceId: string;
+  entityId: string;
+  fingerprint: string;
+}): Promise<boolean> {
+  const row = meantChangeCountRow.parse(
+    await env.DB.prepare(SELECT_MEANT_CHANGE)
+      .bind(change.workspaceId, change.entityId, OWN_SITE_CHANGE_MEANT, change.fingerprint)
+      .first(),
+  );
+  return row.n > 0;
+}

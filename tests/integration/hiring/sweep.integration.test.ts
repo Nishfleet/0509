@@ -122,7 +122,7 @@ describe("nightly hiring sweep workflow", () => {
       failed: 0,
     });
     expect(await hiringSignals()).toEqual([]);
-    expect(calls.filter((url) => url.includes("paused.com"))).toEqual([]);
+    expect(calls.filter((url) => new URL(url).hostname === "paused.com")).toEqual([]);
   });
 
   it("files exactly one hiring signal the night a new role appears, and never touches the paused entity", async () => {
@@ -135,6 +135,6 @@ describe("nightly hiring sweep workflow", () => {
     const signals = await hiringSignals();
     expect(signals).toHaveLength(1);
     expect(signals[0]).toMatchObject({ kind: "hiring", entity_id: "ent-rival", title: "Data Scientist" });
-    expect(calls.filter((url) => url.includes("paused.com"))).toEqual([]);
+    expect(calls.filter((url) => new URL(url).hostname === "paused.com")).toEqual([]);
   });
 });

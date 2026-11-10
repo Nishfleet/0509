@@ -5,7 +5,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
-const CONFIG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".github", "dependabot.yml");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const CONFIG = path.join(ROOT, ".github", "dependabot.yml");
+const NPMRC = path.join(ROOT, ".npmrc");
 
 const TIME_OF_DAY = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -70,5 +72,11 @@ describe(".github/dependabot.yml npm updates", () => {
     expect(scheduled(actions)?.day).toBe("monday");
     expect(scheduled(actions)?.time).toMatch(TIME_OF_DAY);
     expect(scheduled(actions)?.timezone).toBe("Asia/Kolkata");
+  });
+});
+
+describe(".npmrc", () => {
+  it("lets npm 10 install the lockfile Dependabot writes", () => {
+    expect(readFileSync(NPMRC, "utf8")).toMatch(/^legacy-peer-deps=true$/m);
   });
 });
