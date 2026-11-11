@@ -1,9 +1,12 @@
 import { env, introspectWorkflow } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import type { BriefSchedule } from "../../../app/lib/brief-schedule";
 import { nextBriefAt, rolloverInstance } from "../../../app/lib/brief-schedule";
 import { rescheduleRollover } from "../../../app/lib/standing/reschedule";
+import { terminateRunningWorkflows } from "../workflow-guard";
+
+afterEach(terminateRunningWorkflows);
 
 function scheduleOffsetFromToday(days: number, hour: number): BriefSchedule {
   return { timezone: "UTC", weekday: (new Date().getUTCDay() + days) % 7, hour };

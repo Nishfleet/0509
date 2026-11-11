@@ -134,3 +134,24 @@ name, and terminate their fresh sleeper and poll it to `terminated` — the devi
 unchanged: the tests still prove `cancelRollover` announces fresh live
 instances, `LIVE` is read before the terminate. Six runs of the fixed file under
 the same contention passed with no survivor.
+
+## 2026-11-10: a workers test that leaves a Workflow running now fails (0509#7890)
+
+`tests/integration/workflow-guard.ts` is a setup file on the `workers` project. It finds every Workflow binding on `env` by shape (`get`, `create`, `createBatch`), so a new Workflow is covered without a list, and wraps `create` and `createBatch` before each test to record the instance ids the test starts, including successors a Workflow starts for itself. Its `afterEach` reads each instance's status and fails the test when one is not `complete`, `errored` or `terminated`, naming the binding and every live id:
+
+```
+Workflow instances were still running when the test ended:
+  ACCOUNT_DELETE: fixture-reaper-u-bulk-00 is running, …
+```
+
+The guard terminates the instances it reports, so a test that leaks one fails instead of stalling the shard on dispose. Five files deliberately end a test with a live instance (`account-delete`, `identity/tail`, `identity/retry`, `standing/rollover`, `standing/reschedule`); their own `afterEach` calls `terminateRunningWorkflows()` from the same file, which is the cleanup, not an exemption from the check.
+
+Proof against the pre-#7886 `fixture-reaper.integration.test.ts` at `9a1f56498`: three tests fail and the messages name `ACCOUNT_DELETE` (30 instances in the bulk test) and `FIXTURE_REAPER_WORKFLOW` (the on-demand nightly instance). The current file passes.
+
+Cost measured on the 12 workflow-heaviest workers files (114 tests): 131 s without the guard, 130 s and 142 s with it. The same subset's cumulative setup time varied 209 s to 227 s across those runs, so the guard adds no measurable suite time.
+
+Successors are recorded: with `afterEach(terminateRunningWorkflows)` removed from `identity/tail.test.ts`, its first test fails with `DISCOVERY: discovery-ws-tail-1-2026-11-10 is running`, an instance started inside `workers/identity-tail-workflow.ts` that the test never creates itself.
+
+The guard is not built on the Workers Vitest introspectors, and a global guard cannot be. `introspectWorkflow` allows one active introspection session per Workflow name: the session has to stay open across the test body to see the successors, and then the file's own `introspectWorkflow` call throws `Workflow "identity-tail-test" already has an active introspection session for binding "IDENTITY_TAIL"`. That was reproduced by giving `identity/tail.test.ts` a `beforeEach` that introspects `env.IDENTITY_TAIL`; 28 call sites in 11 test files open that session themselves. An instance introspector exposes no instance id and no status either — `modify`, `waitForStepResult`, `waitForStatus`, `getOutput`, `getError`, `dispose` — so it cannot say which instance is still running, which is what the failure has to name. The binding's `create` and `createBatch` are the only point where the id exists before the instance starts, so that is where the guard sits. It reads both wrappers back after assigning them, and fails the test by binding name when one is not kept, so a binding that drops the wrapper cannot pass unguarded. Two bindings the vitest plugin puts on `env` answer the same shape and are not Workflows: `__VITEST_POOL_WORKERS_SELF_SERVICE` and `__VITEST_POOL_WORKERS_LOOPBACK_SERVICE` keep a wrapper on a file's first test and drop it on the next, so the shape check also requires that a binding has no `fetch`, which holds for all 12 Workflow bindings in `tests/integration/wrangler.test.jsonc` and for neither of those two.
+
+Coverage: the whole non-node suite — 266 files (260 in the `workers` project, the two `entity-fk` files and the four single-file projects) — ran unsharded at this head on a 12-core host on 2026-11-10: 266 files passed, 1994 tests passed, 1 expected fail, 0 failed, in 24m32s. That is every file the guard applies to, not a chosen subset, so no file outside the five leaves an instance live at the end of a test. The gate is global on purpose, because a leak in any file stalls whichever shard runs it, and the gate change is called out on the PR for the owner to confirm.
