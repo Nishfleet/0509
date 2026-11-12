@@ -1,8 +1,11 @@
 import { MINIMUM_AGE, OPERATOR, type LegalDocument } from "./document";
 
+export const PRIVACY_UPDATED = "2026-11-03";
+
 export const PRIVACY: LegalDocument = {
   path: "/privacy",
   title: "Privacy policy",
+  updated: PRIVACY_UPDATED,
   description:
     "What Five to Nine collects about customers and about the brands it tracks, who helps run it, how long it keeps each thing, and how to have it deleted or be removed.",
   intro:
@@ -168,7 +171,7 @@ export const PRIVACY: LegalDocument = {
         },
         {
           term: "Emails you send us",
-          details: ["Our own copy is deleted after 90 days. The support inbox keeps them while we help you."],
+          details: ["We delete support emails 36 months after we receive them."],
         },
         {
           term: "Screenshots and copies of public pages",
