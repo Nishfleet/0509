@@ -7,6 +7,11 @@ name: answer
 on:
   pull_request_review:
     types: [submitted]
+  # The workflow_run arm proves itself after this merge, not before: a workflow_run
+  # workflow runs from the default branch ("This event will only trigger a workflow
+  # run if the workflow file exists on the default branch"), so no run on this branch
+  # can show it, and this arm is not on main until it merges. The live proof is a red
+  # CI run on an agent/issue-* pull request and the answer run it starts, both on main.
   workflow_run: # zizmor: ignore[dangerous-triggers] the called lane reads the event and dispatches agent.yml@main; nothing from the pull request is checked out or run
     workflows: [CI]
     types: [completed]
