@@ -227,7 +227,8 @@ rejection**, not a review comment. The row format is asserted by
 GitHub's own gate only: ruleset `main-merge-queue` (id 21391031, empty bypass
 list), the merge queue, and required checks. `.github/workflows/ci.yml` runs on
 GitHub-hosted runners and each job there names the incident or rule behind it.
-The ruleset requires `ci-ok`, which needs every job in `ci.yml` and accepts only
+The ruleset requires `ci-ok`, which needs every gate job in `ci.yml` (not the
+two preview jobs, which stay visible but do not gate) and accepts only
 `success`, so a skipped or cancelled job fails it
 (`docs/incidents/2026-10-05-ci-ok-passed-with-gates-cancelled.md`). No job
 carries a job-level `if:`; conditions sit on steps. The merge queue tests the
