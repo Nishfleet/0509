@@ -1,17 +1,29 @@
 name: answer
-# A change request from the reviewer bot on an agent PR goes back to the fleet's worker
-# lane, which lives in fleet-ops. The stub needs its own trigger, because "the github
-# context is always associated with the caller workflow":
+# A change request from the reviewer bot on an agent PR, or a red CI run on one, goes back
+# to the fleet's worker lane, which lives in fleet-ops. The stub needs its own trigger,
+# because "the github context is always associated with the caller workflow":
 # https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations
 on:
   pull_request_review:
     types: [submitted]
-  workflow_run: # zizmor: ignore[dangerous-triggers] nothing from the pull request is checked out or run
+  workflow_run: # zizmor: ignore[dangerous-triggers] the job below is one reusable-workflow call: no checkout, no run step, no event string interpolated anywhere in this file
     workflows: [CI]
     types: [completed]
 permissions: {}
 jobs:
   answer:
+    # Reviews keep the old path. A workflow_run payload carries no review, so the CI path
+    # fires only for a red run on an agent PR the payload can resolve: `pull_requests` is
+    # empty for fork PRs, and the fleet's worker PRs come from `agent/issue-*` branches.
+    # The lane re-reads the PR number and head from the payload with its own token before
+    # it dispatches agent.yml.
+    if: >-
+      github.event_name == 'pull_request_review'
+      || (
+        github.event.workflow_run.conclusion == 'failure'
+        && github.event.workflow_run.pull_requests[0].number
+        && startsWith(github.event.workflow_run.head_branch, 'agent/')
+      )
     # The lane's job dispatches agent.yml on main with the issue and the PR. A called
     # workflow can only lower the caller's GITHUB_TOKEN permissions, never raise them.
     permissions: {actions: write}
