@@ -4,6 +4,7 @@ import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { Hero } from "../../app/components/landing/hero";
+import { LandingSampleCard } from "../../app/components/card/landing-sample";
 import { Marks } from "../../app/components/landing/marks";
 import { pickLandingMarks, type SiteChangeView } from "../../app/lib/site-change";
 
@@ -131,8 +132,13 @@ describe("landing marks", () => {
   });
 
   it("names the hero's three literal pairs as examples, so a live mark is never mistaken for one", () => {
-    const hero = inRouter(createElement(Hero));
-    expect(hero).toContain("Examples, not real changes.");
+    const hero = inRouter(
+      createElement(Hero, {
+        nouns: "",
+        proof: createElement(LandingSampleCard, { sample: null, now: Date.parse(NOW) }),
+      }),
+    );
+    expect(hero).toContain('data-landing-sample="fallback"');
     expect(hero).not.toContain("screenshot");
   });
 });

@@ -5,6 +5,7 @@ import type { Route } from "./+types/landing";
 import { env } from "cloudflare:workers";
 
 import { Footer } from "../components/footer";
+import { LandingSampleCard } from "../components/card/landing-sample";
 import { Agents } from "../components/landing/agents";
 import { Faq } from "../components/landing/faq";
 import { Header } from "../components/landing/header";
@@ -19,6 +20,7 @@ import { readSiteChanges } from "../lib/data/signal.server";
 import { readRegistrySources } from "../lib/data/source.server";
 import { FAQ } from "../lib/faq";
 import { landingSources } from "../lib/landing-sources";
+import { readLandingSample } from "../lib/landing-sample.server";
 import { daysBefore, readLandingMarks } from "../lib/site-changes.server";
 import { MAIN_CONTENT_ID, SkipLink } from "../components/skip-link";
 import {
@@ -69,15 +71,16 @@ export async function loader(_: Route.LoaderArgs) {
   const sources = landingSources(registry, now);
   const claims = watchedClaims(registry, now);
   const marks = await readLandingMarks(new Date(now));
+  const sample = await readLandingSample(now);
   const id: unknown = env.LANDING_WORKSPACE_ID;
-  if (typeof id !== "string" || id.trim() === "") return { ticker: [], marks, sources, claims, now };
+  if (typeof id !== "string" || id.trim() === "") return { ticker: [], marks, sources, claims, now, sample };
   const rows = await readSiteChanges({
     workspaceId: id.trim(),
     entityId: null,
     since: daysBefore(new Date(now), 7),
     limit: 24,
   });
-  return { ticker: tickerItems(rows, new Date(now)), marks, sources, claims, now };
+  return { ticker: tickerItems(rows, new Date(now)), marks, sources, claims, now, sample };
 }
 
 export default function Landing({ loaderData }: Route.ComponentProps) {
@@ -88,7 +91,10 @@ export default function Landing({ loaderData }: Route.ComponentProps) {
       <Ticker items={loaderData.ticker} />
       <Header signedIn={signedIn} />
       <main id={MAIN_CONTENT_ID} tabIndex={-1}>
-        <Hero nouns={loaderData.claims.nouns} />
+        <Hero
+          nouns={loaderData.claims.nouns}
+          proof={<LandingSampleCard sample={loaderData.sample} now={loaderData.now} />}
+        />
         <Marks marks={loaderData.marks} now={loaderData.now} />
         <HowItWorks />
         <WhatWeWatch sources={loaderData.sources} now={loaderData.now} />
