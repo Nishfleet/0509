@@ -1,20 +1,35 @@
 name: answer
 # A change request from the reviewer bot on an agent PR, and a failed CI run on one, go
 # back to the fleet's worker lane, which lives in fleet-ops. The stub needs its own
-# trigger, because "the github
-# context is always associated with the caller workflow":
+# trigger, because "the github context is always associated with the caller workflow":
 # https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations
+# https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run
 on:
   pull_request_review:
     types: [submitted]
-  workflow_run: # zizmor: ignore[dangerous-triggers] nothing from the pull request is checked out or run
+  workflow_run: # zizmor: ignore[dangerous-triggers] the called lane reads the event and dispatches agent.yml@main; nothing from the pull request is checked out or run
     workflows: [CI]
     types: [completed]
 permissions: {}
 jobs:
   answer:
+    # The lane's dispatch job applies the same gate (Nishfleet/fleet-ops answer.yml@main);
+    # the stub repeats it, so a completed CI run that is not a red run on the head of an
+    # agent PR never starts a call at all. The review arm stays open here: the lane
+    # itself requires a changes_requested review from the approver bot or the owner.
+    if: >-
+      github.event_name == 'pull_request_review' ||
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      startsWith(github.event.workflow_run.head_branch, 'agent/issue-') &&
+      github.event.workflow_run.pull_requests[0].number > 0
     # The lane's job dispatches agent.yml on main with the issue and the PR. A called
     # workflow can only lower the caller's GITHUB_TOKEN permissions, never raise them.
     permissions: {actions: write}
+    # The lane declares no workflow_call inputs, so there is no with: here. It reads the
+    # PR number itself from the caller's event, github.event.workflow_run.pull_requests[0].number
+    # or github.event.pull_request.number, the context rule quoted in the header, and
+    # dispatches agent.yml with it.
     # @main, not a SHA, the same as the agent stub.
     uses: Nishfleet/fleet-ops/.github/workflows/answer.yml@main
