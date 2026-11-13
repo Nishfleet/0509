@@ -15,14 +15,16 @@ jobs:
     # Reviews keep the old path. A workflow_run payload carries no review, so the CI path
     # fires only for a red run on an agent PR the payload can resolve: `pull_requests` is
     # empty for fork PRs, and the fleet's worker PRs come from `agent/issue-*` branches.
-    # The lane re-reads the PR number and head from the payload with its own token before
-    # it dispatches agent.yml.
+    # The lane is Nishfleet/fleet-ops's answer.yml, the `uses:` target; this repo pins only
+    # the receiving end, agent.yml's workflow_dispatch `issue` and `pr` inputs. GitHub
+    # delivers workflow_run from the default branch only, so the first red run on an agent
+    # PR after merge is the proof the CI path starts a fix round.
     if: >-
       github.event_name == 'pull_request_review'
       || (
         github.event.workflow_run.conclusion == 'failure'
         && github.event.workflow_run.pull_requests[0].number
-        && startsWith(github.event.workflow_run.head_branch, 'agent/')
+        && startsWith(github.event.workflow_run.head_branch, 'agent/issue-')
       )
     # The lane's job dispatches agent.yml on main with the issue and the PR. A called
     # workflow can only lower the caller's GITHUB_TOKEN permissions, never raise them.
