@@ -1,17 +1,42 @@
 import { useEffect, useState } from "react";
 import { useFetcher, useRevalidator } from "react-router";
 
-import { monthlyPrice, NO_TRIAL_TERMS, PLANS, TRIAL_TERMS, type PlanId } from "../lib/billing/plans";
+import { planIncludes } from "../lib/billing/plan-includes";
+import { monthlyPrice, NO_TRIAL_TERMS, PLANS, TRIAL_DAYS, TRIAL_TERMS, type PlanId } from "../lib/billing/plans";
 import { Button } from "./ui/button";
+
+function PlanDetails({ plan, first }: { plan: (typeof PLANS)[number]; first: boolean }) {
+  if (!first) {
+    return (
+      <p className="text-body-sm text-ink-soft">
+        {plan.name} watches up to {String(plan.limits.competitors)} competitors.
+      </p>
+    );
+  }
+  return (
+    <ul className="text-body-sm text-ink-soft">
+      {planIncludes(plan.id).map((line) => (
+        <li key={line}>{line}</li>
+      ))}
+    </ul>
+  );
+}
+
+function PlanTerms({ first, returning }: { first: boolean; returning: boolean }) {
+  if (first) return null;
+  return <p className="mt-2 text-body-sm text-ink-soft">{returning ? NO_TRIAL_TERMS : TRIAL_TERMS}</p>;
+}
 
 export function PlanGate({
   planId,
   action = "/app/upgrade",
   returning = false,
+  first = false,
 }: {
   planId: PlanId;
   action?: string;
   returning?: boolean;
+  first?: boolean;
 }) {
   const fetcher = useFetcher<{ message: string }>();
   const plan = PLANS.find((entry) => entry.id === planId);
@@ -20,16 +45,18 @@ export function PlanGate({
   return (
     <fetcher.Form method="post" action={action} className="mt-4">
       <input type="hidden" name="plan" value={plan.id} />
-      <p className="text-body-sm text-ink-soft">
-        {plan.name} watches up to {String(plan.limits.competitors)} competitors.
-      </p>
+      <PlanDetails plan={plan} first={first} />
       <Button type="submit" size="lg" className="mt-3" disabled={submitting}>
-        {submitting ? "Opening checkout…" : `Upgrade to ${plan.name}`}
+        {submitting
+          ? "Opening checkout…"
+          : first
+            ? `Start ${String(TRIAL_DAYS)}-day ${plan.name} trial`
+            : `Upgrade to ${plan.name}`}
         <span className="font-mono text-[0.78rem] font-medium tracking-[0.04em] opacity-80">
           {monthlyPrice(plan.monthlyPriceEur)}
         </span>
       </Button>
-      <p className="mt-2 text-body-sm text-ink-soft">{returning ? NO_TRIAL_TERMS : TRIAL_TERMS}</p>
+      <PlanTerms first={first} returning={returning} />
       {fetcher.data?.message ? (
         <p role="alert" className="mt-2 text-[0.95rem]">
           {fetcher.data.message}

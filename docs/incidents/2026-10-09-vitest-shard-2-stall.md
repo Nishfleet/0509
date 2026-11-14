@@ -100,3 +100,58 @@ That file started real Workflow instances it never observed:
 On 12 of 12 local runs of the unchanged file, that nightly instance printed its `fixture_reaper.run` line after the file's last test had finished. So a Workflow was still running while the pool disposed the file's Miniflare, the mechanism proven on 2026-10-12. None of the 12 runs hung locally, so the hang itself was not reproduced here.
 
 Fix: each of those tests holds an introspector (`introspectWorkflow(env.ACCOUNT_DELETE)`, `introspectWorkflowInstance(env.FIXTURE_REAPER_WORKFLOW, …)`) and waits for every instance it started to complete before it ends. This is the cleanup the Workers Vitest docs prescribe (https://developers.cloudflare.com/workers/testing/vitest-integration/test-apis/). After the fix, 12 of 12 local runs passed with nothing printed after the last test.
+
+## 2026-11-05: the audit closes the class — `standing/reschedule` still left live instances
+
+The 2026-11-01 eject (run 41308739603, the `fixture-reaper` leak above) led to a
+full audit of every workerd test that reaches a real Workflows binding: ten
+bindings in `tests/integration/wrangler.test.jsonc`. Every file that starts
+instances awaits their terminal status or terminates its sleepers first — expect
+`tests/integration/standing/reschedule.integration.test.ts`, the file behind
+0509#5161. Its first two tests call `rescheduleRollover`, which `createBatch`es
+its fresh (and, with no prior brief in the row, its catch-up) instance
+scheduled a weekday away. The tests assert the fresh instance is still live and
+then end, so a sleeping instance sat under
+`step.sleepUntil("until-brief", <thursday>)` while the pool called
+`Miniflare.dispose()` — the exact zone of every stall in this incident, and
+never observed: `expect(LIVE)` is the last line of both tests.
+
+Local evidence (0509#7843, 2026-11-05 23:15Z to 23:44Z): the unchanged file
+passed 6 of 6 runs under four busy CPU loops with no surviving `workerd`, so the
+hang itself was not reproduced here either, but every run left the fresh and
+catch-up instances running until process exit; three probe copies (one test
+each) put the names on it — test 1 (its stale sleeper is terminated through
+`cancelRollover`) printed two `Aborting engine: User called terminate` uncaughts,
+test 2 (no terminate at all) printed `Engine was never started` twice and
+`instance.not_found` once, test 3 (creates nothing) printed none. The noise is
+not the signal: `account-delete`, the file that already terminates sleepers and
+awaits terminal status, prints 68 of these lines and leaves no `workerd`.
+
+Fix: both creating tests hold `introspectWorkflow(env.STANDING_ROLLOVER)` for
+the session, so its disposer aborts the catch-up instance the test code cannot
+name, and terminate their fresh sleeper and poll it to `terminated` — the device
+`account-delete` uses for the same sleeper (0509#7191). The assertions are
+unchanged: the tests still prove `cancelRollover` announces fresh live
+instances, `LIVE` is read before the terminate. Six runs of the fixed file under
+the same contention passed with no survivor.
+
+## 2026-11-10: a workers test that leaves a Workflow running now fails (0509#7890)
+
+`tests/integration/workflow-guard.ts` is a setup file on the `workers` project. It finds every Workflow binding on `env` by shape (`get`, `create`, `createBatch`), so a new Workflow is covered without a list, and wraps `create` and `createBatch` before each test to record the instance ids the test starts, including successors a Workflow starts for itself. Its `afterEach` reads each instance's status and fails the test when one is not `complete`, `errored` or `terminated`, naming the binding and every live id:
+
+```
+Workflow instances were still running when the test ended:
+  ACCOUNT_DELETE: fixture-reaper-u-bulk-00 is running, …
+```
+
+The guard terminates the instances it reports, so a test that leaks one fails instead of stalling the shard on dispose. Five files deliberately end a test with a live instance (`account-delete`, `identity/tail`, `identity/retry`, `standing/rollover`, `standing/reschedule`); their own `afterEach` calls `terminateRunningWorkflows()` from the same file, which is the cleanup, not an exemption from the check.
+
+Proof against the pre-#7886 `fixture-reaper.integration.test.ts` at `9a1f56498`: three tests fail and the messages name `ACCOUNT_DELETE` (30 instances in the bulk test) and `FIXTURE_REAPER_WORKFLOW` (the on-demand nightly instance). The current file passes.
+
+Cost measured on the 12 workflow-heaviest workers files (114 tests): 131 s without the guard, 130 s and 142 s with it. The same subset's cumulative setup time varied 209 s to 227 s across those runs, so the guard adds no measurable suite time.
+
+Successors are recorded: with `afterEach(terminateRunningWorkflows)` removed from `identity/tail.test.ts`, its first test fails with `DISCOVERY: discovery-ws-tail-1-2026-11-10 is running`, an instance started inside `workers/identity-tail-workflow.ts` that the test never creates itself.
+
+The guard is not built on the Workers Vitest introspectors, and a global guard cannot be. `introspectWorkflow` allows one active introspection session per Workflow name: the session has to stay open across the test body to see the successors, and then the file's own `introspectWorkflow` call throws `Workflow "identity-tail-test" already has an active introspection session for binding "IDENTITY_TAIL"`. That was reproduced by giving `identity/tail.test.ts` a `beforeEach` that introspects `env.IDENTITY_TAIL`; 28 call sites in 11 test files open that session themselves. An instance introspector exposes no instance id and no status either — `modify`, `waitForStepResult`, `waitForStatus`, `getOutput`, `getError`, `dispose` — so it cannot say which instance is still running, which is what the failure has to name. The binding's `create` and `createBatch` are the only point where the id exists before the instance starts, so that is where the guard sits. It reads both wrappers back after assigning them, and fails the test by binding name when one is not kept, so a binding that drops the wrapper cannot pass unguarded. Two bindings the vitest plugin puts on `env` answer the same shape and are not Workflows: `__VITEST_POOL_WORKERS_SELF_SERVICE` and `__VITEST_POOL_WORKERS_LOOPBACK_SERVICE` keep a wrapper on a file's first test and drop it on the next, so the shape check also requires that a binding has no `fetch`, which holds for all 12 Workflow bindings in `tests/integration/wrangler.test.jsonc` and for neither of those two.
+
+Coverage: the whole non-node suite — 266 files (260 in the `workers` project, the two `entity-fk` files and the four single-file projects) — ran unsharded at this head on a 12-core host on 2026-11-10: 266 files passed, 1994 tests passed, 1 expected fail, 0 failed, in 24m32s. That is every file the guard applies to, not a chosen subset, so no file outside the five leaves an instance live at the end of a test. The gate is global on purpose, because a leak in any file stalls whichever shard runs it, and the gate change is called out on the PR for the owner to confirm.

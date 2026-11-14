@@ -1,8 +1,8 @@
 import { createExecutionContext, env as workerdEnv, runInDurableObject, waitOnExecutionContext } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
-import worker from "../../workers/e2e-inbox";
-import type { InboxMailbox } from "../../workers/e2e-inbox";
+import worker from "../../workers/e2e-inbox/index";
+import type { InboxMailbox } from "../../workers/e2e-inbox/index";
 
 type EmailMessage = Parameters<typeof worker.email>[0];
 

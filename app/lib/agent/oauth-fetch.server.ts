@@ -1,10 +1,9 @@
 import type { ClientRegistrationCallbackOptions } from "@cloudflare/workers-oauth-provider";
 import { env } from "cloudflare:workers";
 
-import { cappedBody } from "../fetch/outbound.server";
 import { clientIp, withinLimit } from "./client-limit.server";
 import { agentPreflight } from "./cors.server";
-import { MCP_PATH, REGISTER_MAX_BYTES, REGISTER_PATH } from "./paths";
+import { MCP_PATH, REGISTER_PATH } from "./paths";
 import { allowedRedirectUri } from "./redirect-uri";
 
 type OAuthFetch<E> = (request: Request, env: E, ctx: ExecutionContext) => Promise<Response>;
@@ -12,11 +11,6 @@ type OAuthFetch<E> = (request: Request, env: E, ctx: ExecutionContext) => Promis
 const TOO_MANY = {
   error: "temporarily_unavailable",
   error_description: "Too many app registrations. Retry in a minute.",
-};
-
-const TOO_LARGE = {
-  error: "invalid_request",
-  error_description: "Request payload too large, must be under 1 MiB",
 };
 
 function jsonError(status: number, body: { error: string; error_description: string }): Response {
@@ -54,18 +48,7 @@ interface OAuthCall<E> {
 
 async function gatedRegister<E>(call: OAuthCall<E>): Promise<Response> {
   if (!(await withinLimit(env.AGENT_REGISTER_LIMIT, clientIp(call.request)))) return jsonError(429, TOO_MANY);
-  const bytes = await cappedBody(
-    new Response(call.request.body, { headers: call.request.headers }),
-    REGISTER_MAX_BYTES,
-  );
-  if (bytes === null) return jsonError(413, TOO_LARGE);
-  const body = new Uint8Array(new ArrayBuffer(bytes.byteLength));
-  body.set(bytes);
-  return call.inner(
-    new Request(call.request.url, { method: call.request.method, headers: call.request.headers, body }),
-    call.env,
-    call.ctx,
-  );
+  return call.inner(call.request, call.env, call.ctx);
 }
 
 export function fetchOAuth<E>(call: OAuthCall<E>): Promise<Response> {

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { confirmCard } from "../../../app/lib/identity/confirm.server";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { probeKey } from "../../../app/lib/identity/probe-cache.server";
+import { terminateRunningWorkflows } from "../workflow-guard";
 
 const DOMAIN = "gymshark.com";
 const GREENHOUSE_JOBS = "https://boards-api.greenhouse.io/v1/boards/gymshark/jobs";
@@ -137,6 +138,8 @@ afterEach(async () => {
   await env.DB.prepare("DELETE FROM source WHERE id = 'src_ads_meta_tail'").run();
   await env.DB.prepare("UPDATE source SET is_enabled = 0 WHERE id = 'src_hiring_greenhouse'").run();
 });
+
+afterEach(terminateRunningWorkflows);
 
 describe("IdentityTailWorkflow site-fill retry", () => {
   it("fills the card on a later hourly attempt", async () => {

@@ -10,6 +10,7 @@ import { confirmCard, confirmCardLater } from "../../../app/lib/identity/confirm
 import { extractIdentity } from "../../../app/lib/identity/extract";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { probeKey } from "../../../app/lib/identity/probe-cache.server";
+import { terminateRunningWorkflows } from "../workflow-guard";
 import {
   identityTailInstanceId,
   persistTail,
@@ -119,6 +120,8 @@ afterEach(async () => {
   await env.DB.prepare("DELETE FROM source WHERE id = 'src_ads_meta_tail'").run();
   await env.DB.prepare("UPDATE source SET is_enabled = 0 WHERE id = 'src_hiring_greenhouse'").run();
 });
+
+afterEach(terminateRunningWorkflows);
 
 describe("IdentityTailWorkflow", () => {
   it("persists the card, seeds watches, starts discovery and queues the first sweep", async () => {

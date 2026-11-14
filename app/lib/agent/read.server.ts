@@ -14,7 +14,7 @@ import type { AlertsResult, BriefResult, CompetitorResult, CompetitorsResult, St
 
 const SELECT_LATEST_BRIEF = `SELECT payload_json FROM digest
 WHERE workspace_id = ? AND kind = 'weekly'
-ORDER BY period_end DESC
+ORDER BY period_end DESC, id DESC
 LIMIT 1`;
 
 const SELECT_OFF_ENTITIES = `SELECT id FROM entity WHERE workspace_id = ? AND state = 'off'`;

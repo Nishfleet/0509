@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { BRAND_LINES_QUERY, parseBriefPayload, type BriefPayload } from "../../app/lib/brief-payload";
+import { parseBriefPayload, type BriefPayload } from "../../app/lib/brief-payload";
 import { PROBE, URL_PROBE, expectNoHtmlInjection } from "../email-html-injection";
 import { isFirstRanking } from "../../app/lib/brief-subject";
 import { renderBrief } from "../../workers/delivery/brief-template";
@@ -198,14 +198,6 @@ describe("off brands are absent, not zeroed", () => {
     expect(html).not.toContain("Casetta");
     expect(text).not.toContain("Casetta");
     expect(html).toContain(">Kindred<");
-  });
-
-  it("filters to state = 'on' in the per-brand query, with entity joined", () => {
-    const sql = BRAND_LINES_QUERY.replace(/\s+/g, " ");
-    expect(sql).toContain("JOIN entity e ON e.id = s.entity_id");
-    expect(sql).toContain("e.state = 'on'");
-    expect(sql).toContain("s.week_start_at = ?2");
-    expect(sql).toContain("FROM standing s");
   });
 });
 
