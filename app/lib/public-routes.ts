@@ -4,6 +4,7 @@ import { TRIAL_DAYS, TRIAL_TERMS } from "./billing/plans";
 import { LIVE_COVERAGE, PLAN_NOTE } from "./coverage";
 import { FAQ } from "./faq";
 import { LEGAL_UPDATED } from "./legal/document";
+import { PRIVACY_UPDATED } from "./legal/privacy";
 import { SECURITY_UPDATED } from "./legal/security";
 import { planNames, planPriceList } from "./pricing-page";
 import { plainSourceReason } from "./source-status-words";
@@ -18,7 +19,7 @@ export interface LlmsTxtSource {
 export const PUBLIC_PATHS = ["/", "/pricing", "/privacy", "/terms", "/security", "/status"] as const;
 export const SITEMAP_PATHS = ["/", "/pricing", "/privacy", "/terms", "/security", "/status", "/llms.txt"] as const;
 export const SITEMAP_LASTMOD: Readonly<Record<string, string>> = {
-  "/privacy": LEGAL_UPDATED,
+  "/privacy": PRIVACY_UPDATED,
   "/terms": LEGAL_UPDATED,
   "/security": SECURITY_UPDATED,
 };
