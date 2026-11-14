@@ -66,7 +66,7 @@ function ExampleCard({ example }: { example: Example }): ReactElement {
   );
 }
 
-export function LandingSampleFallback(): ReactElement {
+function LandingSampleFallback(): ReactElement {
   return (
     <aside aria-labelledby="hero-proof" className="min-w-0" data-landing-sample="fallback">
       <p id="hero-proof" className={`${eyebrow} text-green-ink`}>

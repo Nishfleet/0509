@@ -3,12 +3,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
+import { LandingSampleCard } from "../../app/components/card/landing-sample";
 import { Hero } from "../../app/components/landing/hero";
 import { WATCHED_NOUNS } from "../../app/lib/coverage";
 
 const HEADLINE = "Know where you stand. And who’s gaining on you.";
 const SENTENCE = `We watch ${WATCHED_NOUNS} across your market. We find your competitors for you, so you don't need to know who they are.`;
 const MICROCOPY = "One box to fill in. About a minute to see who’s gaining on you.";
+const NOW = Date.parse("2026-09-25T06:00:00.000Z");
 
 function inRouter(element: ReactElement): string {
   const Stub = createRoutesStub([{ path: "/", Component: () => element }]);
@@ -16,7 +18,12 @@ function inRouter(element: ReactElement): string {
 }
 
 function markup(): string {
-  return inRouter(createElement(Hero, { nouns: WATCHED_NOUNS }));
+  return inRouter(
+    createElement(Hero, {
+      nouns: WATCHED_NOUNS,
+      proof: createElement(LandingSampleCard, { sample: null, now: NOW }),
+    }),
+  );
 }
 
 describe("landing hero", () => {
