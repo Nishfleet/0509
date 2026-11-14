@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { expectSendRecord, PROVIDER_ID } from "./send-record";
 import { sendWelcomes } from "../../workers/delivery/welcome";
 
 const lookup = { tester: false as boolean | null };
@@ -17,7 +18,7 @@ const envWith = (sent: EmailMessageBuilder[]): Env =>
     EMAIL: {
       send(message: EmailMessageBuilder) {
         sent.push(message);
-        return Promise.resolve({} as EmailSendResult);
+        return Promise.resolve({ messageId: PROVIDER_ID });
       },
     },
   }) as Env;
@@ -78,6 +79,7 @@ describe("welcome email", () => {
     expect(sent[0]?.subject).toBe("We're watching Acme");
     expect(sent[0]?.text).toContain("We read each site every night.");
     expect(sent[0]?.text).toContain("Monday 19 October");
+    await expectSendRecord("welcome", sent[0]?.subject);
   });
 
   it("welcomes the owner, never an older confirmed teammate", async () => {
