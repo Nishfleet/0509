@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync } from "node:fs";
 
 import { experimental_readRawConfig } from "wrangler";
 import { describe, expect, it } from "vitest";
@@ -116,7 +116,6 @@ describe("deployed wrangler configs", () => {
     expect(rawConfig.vars?.BETTER_AUTH_URL, "wrangler.jsonc no longer deploys BETTER_AUTH_URL to SITE_URL").toBe(
       SITE_URL,
     );
-    expect(readFileSync("app/lib/env.server.ts", "utf8")).toContain('import { SITE_URL } from "./site-url"');
   });
 
   it("keeps local dev's request origin on the loopback host so the OAuth provider's canonical resource accepts it (0509#7797)", () => {

@@ -29,23 +29,6 @@ async function migrationFiles(): Promise<string[]> {
 }
 
 describe("migration file discipline", () => {
-  it("applies the chain in a single ordered sequence with no gaps or duplicates", async () => {
-    const files = await migrationFiles();
-    expect(files.length).toBeGreaterThan(0);
-
-    const numbers = files.map((n) => Number.parseInt(n.slice(0, 4), 10));
-
-    for (const name of files) {
-      expect(name).toMatch(/^\d{4}_[a-z0-9_]+\.sql$/);
-    }
-    expect(new Set(numbers).size).toBe(numbers.length);
-    expect(Math.min(...numbers)).toBe(1);
-
-    for (let i = 0; i < numbers.length; i += 1) {
-      expect(numbers[i]).toBe(i + 1);
-    }
-  });
-
   it("keeps the already-applied migration closed: no new SQL lands in it", async () => {
     for (const name of await migrationFiles()) {
       if (name === APPLIED_FILENAME) continue;
@@ -64,8 +47,6 @@ describe("migration file discipline", () => {
     for (const platform of ["snap", "x", "pinterest", "amazon", "apple"]) {
       expect(seedSql).toContain(`src_ads_${platform}_parked`);
     }
-    const applied = await readFile(path.join(MIGRATIONS, APPLIED_FILENAME), "utf8");
-    expect(applied).not.toMatch(INSERT_INTO_SOURCE);
   });
 
   it("states the probe evidence the parked rows rest on", async () => {

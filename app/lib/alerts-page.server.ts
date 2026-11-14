@@ -17,11 +17,14 @@ import { readWorkspaceContent, readWorkspaceHiring } from "./data/signal.server"
 import { readCompetitors } from "./data/entity.server";
 import { readMentionFeed } from "./data/mention.server";
 import { readWorkspaceMentionSources } from "./data/source.server";
+import { closeIncident } from "./data/incident.server";
+import { readOwnSiteAlertChange, recordMeantChange } from "./data/user_decision.server";
 import { readWorkspaceIdForOwner, readWorkspaceTimezone } from "./data/workspace.server";
 import { daysAgoLabel } from "./delivery-alert";
 import { nextHour } from "./home-standing";
 import { mentionAlertWhen, withoutMentionAlerts } from "./mention-feed";
 import { offBrandsSentence } from "./off-brands";
+import { storedChangeFingerprint } from "./site/judge.server";
 import { daysBefore, readSiteChangeViews } from "./site-changes.server";
 import { APP_LOCALE } from "./locale";
 
@@ -242,5 +245,12 @@ export async function loadAlertsPage(workspaceId: string | null) {
 export async function acknowledgeOwnSiteIncident(userId: string, alertId: string): Promise<void> {
   const workspaceId = await readWorkspaceIdForOwner(userId);
   if (workspaceId === null) return;
-  await acknowledgeIncidentAlert(env.DB, { workspaceId, alertId, at: new Date().toISOString() });
+  const at = new Date().toISOString();
+  const change = await readOwnSiteAlertChange(workspaceId, alertId);
+  if (change !== null) {
+    const fingerprint = await storedChangeFingerprint(change.payload_json);
+    await recordMeantChange({ workspaceId, userId, signalId: change.signal_id, fingerprint, decidedAt: at });
+    if (change.incident_id !== null) await closeIncident(change.incident_id, at);
+  }
+  await acknowledgeIncidentAlert(env.DB, { workspaceId, alertId, at });
 }

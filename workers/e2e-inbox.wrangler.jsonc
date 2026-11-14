@@ -10,7 +10,7 @@
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "0509-e2e-inbox",
-  "main": "./e2e-inbox.ts",
+  "main": "./e2e-inbox/index.ts",
   "compatibility_date": "2026-09-16",
   "observability": {
     "enabled": true,

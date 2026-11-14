@@ -3,6 +3,7 @@ import { env as workerEnv } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SiteSweepTarget } from "../../../app/lib/data/watch.server";
+import { acknowledgeOwnSiteIncident } from "../../../app/lib/alerts-page.server";
 import type { CheckPageResult } from "../../../app/lib/site/check-page.server";
 import { checkSitePage, planSiteSweep, publishSiteChange, type SweepTick } from "../../../app/lib/site/sweep.server";
 
@@ -51,6 +52,7 @@ const BEFORE_HTML = `<!doctype html><html><body><h1>MyBrand</h1>
 <p>Plans start at $29 a month for the starter tier and $99 a month for the growth tier, both billed yearly or monthly, with every seat covered by the same uptime promise and the same thirty-day refund window for every workspace.</p>
 </body></html>`;
 const BROKEN_HTML = `<!doctype html><html><body><h1>MyBrand</h1><p>Something went wrong.</p></body></html>`;
+const OTHER_BROKEN_HTML = `<!doctype html><html><body><h1>MyBrand</h1><p>This page is under maintenance.</p></body></html>`;
 
 const holder = { html: "" };
 
@@ -111,6 +113,7 @@ let send: ReturnType<typeof vi.spyOn>;
 
 describe("own-site alert in one sweep pass", () => {
   beforeEach(async () => {
+    await env.DB.exec("DELETE FROM user_decision");
     await env.DB.exec("DELETE FROM alert");
     await env.DB.exec("DELETE FROM incident");
     await env.DB.exec("DELETE FROM jev_verdict");
@@ -216,6 +219,56 @@ describe("own-site alert in one sweep pass", () => {
 
     expect(send).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledWith({ incident_id: incident.id });
+  });
+
+  it("after 'I meant to do this', the same own-site change alerts no more, and a different change still does", async () => {
+    const self = (await planSiteSweep(NOW)).find((target) => target.entityId === SELF);
+    if (self === undefined) throw new Error("expected the self homepage target");
+    const sweepTo = async (html: string, breakage: number, name: string): Promise<void> => {
+      holder.html = html;
+      jevAnswers.noul.set("own_site_breakage", breakage);
+      expect((await sweepOnePage(self, await tick(name))).outcome).toBe("changed");
+    };
+    const ownAlerts = async () =>
+      (
+        await env.DB.prepare(
+          "SELECT a.id, a.status, a.signal_id, i.closed_at FROM alert a JOIN incident i ON i.id = a.incident_id WHERE a.workspace_id = ? AND a.kind = 'own_site_broken' ORDER BY a.created_at",
+        )
+          .bind(WS)
+          .all<{ id: string; status: string; signal_id: string; closed_at: string | null }>()
+      ).results;
+
+    await sweepOnePage(self, await tick("baseline"));
+    await sweepTo(BROKEN_HTML, 0.8, "broken");
+    const [first] = await ownAlerts();
+    if (first === undefined) throw new Error("expected the own-site alert");
+    expect(send).toHaveBeenCalledTimes(1);
+
+    await acknowledgeOwnSiteIncident(USER, first.id);
+
+    const decisions = await env.DB.prepare(
+      "SELECT signal_id, entity_id, verdict, note FROM user_decision WHERE workspace_id = ?",
+    )
+      .bind(WS)
+      .all<{ signal_id: string; entity_id: string; verdict: string; note: string | null }>();
+    expect(decisions.results).toEqual([
+      { signal_id: first.signal_id, entity_id: SELF, verdict: "own_site_change:meant", note: expect.any(String) },
+    ]);
+    expect(await ownAlerts()).toEqual([{ ...first, status: "acknowledged", closed_at: expect.any(String) }]);
+
+    await sweepTo(BEFORE_HTML, 0.1, "reverted");
+    const callsBefore = jevAnswers.calls;
+    await sweepTo(BROKEN_HTML, 0.8, "same-change-again");
+    expect(jevAnswers.calls).toBe(callsBefore);
+    expect(await ownAlerts()).toHaveLength(1);
+    expect(send).toHaveBeenCalledTimes(1);
+
+    await sweepTo(BEFORE_HTML, 0.1, "reverted-again");
+    await sweepTo(OTHER_BROKEN_HTML, 0.8, "different-change");
+    const alerts = await ownAlerts();
+    expect(alerts).toHaveLength(2);
+    expect(alerts[1]).toMatchObject({ status: "unread", closed_at: null });
+    expect(send).toHaveBeenCalledTimes(2);
   });
 
   it("a high breakage guess on a page that still has its text and prices opens no incident and sends no email", async () => {

@@ -1,40 +1,10 @@
-import { type PlanId, PLANS, TRIAL_TERMS } from "../../lib/billing/plans";
-import { type CoverageId, isLive } from "../../lib/coverage";
+import { PLANS, TRIAL_TERMS } from "../../lib/billing/plans";
+import { planIncludes } from "../../lib/billing/plan-includes";
 import { planStartHref, type StartSource } from "../../lib/pricing-page";
 import { cn } from "../../lib/utils";
 import { buttonVariants } from "../ui/button";
 import { eyebrow, Section } from "./section";
 import { StartButton } from "./start-button";
-
-const INCLUDES: Record<PlanId, readonly (string | { line: string; needs: CoverageId })[]> = {
-  scout: [
-    "5 competitors watched at once",
-    { line: "Homepage changes", needs: "site.home" },
-    { line: "Pricing page changes", needs: "site.pricing" },
-    "90 days of before-and-afters",
-    "4 weeks of standing history",
-    "Read-only API and MCP",
-  ],
-  starter: [
-    "Everything in Scout, plus",
-    "15 competitors watched at once",
-    { line: "Every page we find, checked for changes", needs: "site.all" },
-    { line: "Alerts the moment your own site breaks", needs: "own.breakage" },
-    { line: "Google Search results and LinkedIn ads", needs: "ads.linkedin" },
-    "A year of before-and-afters and standing",
-  ],
-  agency: [
-    "Everything in Starter, plus",
-    "50 competitors per workspace",
-    "Unlimited client brands (fair use 25, more on request)",
-  ],
-};
-
-function includes(plan: PlanId): string[] {
-  return INCLUDES[plan].flatMap((entry) =>
-    typeof entry === "string" ? [entry] : isLive(entry.needs) ? [entry.line] : [],
-  );
-}
 
 function PlanName({ page, children }: { page: boolean; children: string }) {
   const Tag = page ? "h2" : "h3";
@@ -59,7 +29,7 @@ export function Price({ source = null, page = false }: { source?: StartSource | 
               <span className="ml-1 font-mono text-meta font-normal tracking-[0.06em] text-ink-soft">/month</span>
             </p>
             <ul className="mt-5 border-t border-line">
-              {includes(plan.id).map((line) => (
+              {planIncludes(plan.id).map((line) => (
                 <li key={line} className="border-b border-line py-2.5 text-body-sm">
                   {line}
                 </li>

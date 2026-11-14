@@ -16,7 +16,7 @@ import { PAGE, PageHeading } from "../components/page-heading";
 import { RetireQuestions } from "../components/retire-questions";
 import { isPlanId } from "../lib/billing/plans";
 import { reconcileCheckoutReturn } from "../lib/billing/reconcile.server";
-import { handleCompetitorIntent } from "../lib/competitors.server";
+import { handleCompetitorIntent, fullPlanOffer } from "../lib/competitors.server";
 import { isAiOnlyLine } from "../lib/discovery/evidence-line";
 import type { CompetitorRow } from "../lib/data/entity.server";
 import { readCompetitors } from "../lib/data/entity.server";
@@ -45,14 +45,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     readEntitlements(workspaceId),
   ]);
   const watching = competitors.competitors.filter((competitor) => competitor.state === "on").length;
+  const planFull = watching >= entitlements.competitors;
   return {
+    ...(planFull ? await fullPlanOffer(workspaceId) : { upgradePlanId: null, returning: false }),
     ...competitors,
     competitors: competitors.competitors.map((competitor) =>
       isAiOnlyLine(competitor.reason) ? { ...competitor, reason: null } : competitor,
     ),
     tier,
     countLine: competitorCountLine(watching, entitlements.competitors),
-    planFull: watching >= entitlements.competitors,
+    planFull,
     wanted: isPlanId(wanted) ? wanted : null,
     removed: new URL(request.url).searchParams.get("removed") === "1",
   };
@@ -107,7 +109,8 @@ function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
-  const { competitors, maybes, questions, tier, wanted, countLine, planFull, removed } = loaderData;
+  const { competitors, maybes, questions, tier, wanted, countLine, planFull, removed, upgradePlanId, returning } =
+    loaderData;
   return (
     <main className={PAGE}>
       <PageHeading
@@ -118,9 +121,10 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       {removed ? <CompetitorRemoved /> : null}
       <UpgradeStatus tier={tier} wanted={wanted} />
       <AddCompetitor
+        planFull={planFull}
         message={actionData?.message}
-        upgradePlanId={actionData?.upgradePlanId}
-        returning={actionData?.returning}
+        upgradePlanId={actionData?.upgradePlanId ?? upgradePlanId}
+        returning={actionData?.returning ?? returning}
         added={actionData?.added}
         unreachable={actionData?.unreachable}
       />
@@ -136,7 +140,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         </ul>
       )}
       <RetireQuestions questions={questions} />
-      <CompetitorMaybes maybes={maybes} />
+      <CompetitorMaybes maybes={maybes} planFull={planFull} />
     </main>
   );
 }

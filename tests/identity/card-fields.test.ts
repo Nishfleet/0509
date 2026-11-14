@@ -1,13 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { creatorRows, editedFields } from "../../app/lib/identity/card-fields";
-import { normaliseSubject, type Subject } from "../../app/lib/identity/normalise";
-
-function subject(input: string): Subject {
-  const result = normaliseSubject(input);
-  if (!result.ok) throw new Error(`${input} did not normalise: ${result.reason}`);
-  return result.subject;
-}
+import { editedFields } from "../../app/lib/identity/card-fields";
 
 describe("editedFields", () => {
   it("reports no edited field for an empty draft", () => {
@@ -24,15 +17,5 @@ describe("editedFields", () => {
 
   it("treats an explicit undefined value as not edited", () => {
     expect(editedFields({ description: undefined })).toEqual([]);
-  });
-});
-
-describe("creatorRows", () => {
-  it("adds no creator rows for a domain subject", () => {
-    expect(creatorRows(subject("gymshark.com"))).toBeNull();
-  });
-
-  it("names the platform and the handle for a youtube channel subject", () => {
-    expect(creatorRows(subject("https://www.youtube.com/@x"))).toEqual({ channel: "YouTube", handle: "@x" });
   });
 });

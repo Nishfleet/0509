@@ -75,19 +75,6 @@ async function seedPreviewWorkspace(
 
 const PREVIEW_STARTER_PRODUCT = "pdt_preview_starter";
 
-async function addUntilCap(page: Page): Promise<void> {
-  const cap = page.getByText(/Your plan watches up to 5 competitors/);
-  const list = page.getByRole("list", { name: "Competitors", exact: true });
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    if (await cap.isVisible()) return;
-    const domain = `j13${crypto.randomUUID().replaceAll("-", "").slice(0, 10)}.com`;
-    await page.getByLabel("Add a competitor we missed").fill(domain);
-    await page.getByRole("button", { name: "Add", exact: true }).click();
-    await expect(list.getByRole("link", { name: domain }).or(cap)).toBeVisible();
-  }
-  await expect(cap).toBeVisible();
-}
-
 async function watchOneCompetitor(page: Page): Promise<void> {
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   createdEmail = email;
@@ -138,7 +125,7 @@ async function deliverPreviewWebhook(page: Page, workspaceId: string): Promise<v
   expect(response.status()).toBe(200);
 }
 
-test("J13: the plan gate upgrades a workspace and the page flips without a reload @own-signin", async ({
+test("J13: a full workspace sees the plan gate without pressing Add, and the page flips without a reload @own-signin", async ({
   page,
 }, testInfo) => {
   test.setTimeout(240_000);
@@ -146,7 +133,7 @@ test("J13: the plan gate upgrades a workspace and the page flips without a reloa
   if (!isLocalLane()) {
     await watchOneCompetitor(page);
     await expect(page.getByRole("heading", { name: "Start your trial" })).toBeVisible();
-    await page.getByRole("button", { name: /^Upgrade to Starter\s*€46\/month$/ }).click();
+    await page.getByRole("button", { name: /^Start 7-day Starter trial\s*€46\/month$/ }).click();
     await page.waitForURL(/checkout\.dodopayments\.com/, { timeout: 30_000 });
     console.log(
       `J13 stopped at Dodo hosted checkout from /onboarding/plan, no payment made: ${new URL(page.url()).origin}`,
@@ -158,11 +145,21 @@ test("J13: the plan gate upgrades a workspace and the page flips without a reloa
   await page.setExtraHTTPHeaders({ cookie });
   await page.goto("/app/competitors?upgraded=starter");
   await expect(page.getByText(/Confirming your Starter plan/)).toBeVisible();
+  await expect(page.getByText(/Watching 5 of 5 competitors\. Your plan is full\./)).toBeVisible();
+  const addPosts: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && (request.postData() ?? "").includes("intent=add")) addPosts.push(request.url());
+  });
+  await page.getByLabel("Add a competitor we missed").fill("j13-enter.example");
+  await page.getByLabel("Add a competitor we missed").press("Enter");
 
-  await addUntilCap(page);
+  await expect(page.getByRole("button", { name: "Add", exact: true })).toHaveAttribute("aria-disabled", "true");
   const upgrade = page.getByRole("button", { name: /^Upgrade to Starter\s*€46\/month$/ });
   await expect(upgrade).toBeVisible();
   await expect(page.getByText("Starter watches up to 15 competitors.")).toBeVisible();
+  await upgrade.click();
+  await expect(page.getByRole("alert").filter({ hasText: "You can't switch plans right now" })).toBeVisible();
+  expect(addPosts).toEqual([]);
 
   await page.evaluate(() => {
     Object.assign(window, { j13NoReload: true });
@@ -172,6 +169,7 @@ test("J13: the plan gate upgrades a workspace and the page flips without a reloa
     timeout: 15_000,
   });
   expect(await page.evaluate(() => "j13NoReload" in window)).toBe(true);
+  await expect(upgrade).toHaveCount(0);
 
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

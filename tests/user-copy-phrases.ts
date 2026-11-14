@@ -33,6 +33,6 @@ export const EXEMPT_PATHS: readonly { readonly path: string; readonly why: strin
   { path: "app/components/ui/", why: "stock shadcn class strings, never read by people" },
   { path: "app/components/turnstile-widget.tsx", why: "its only not-statement is an internal error message" },
   { path: "app/lib/fetch/transport.server.ts", why: "matches other sites' bot-wall pages, never shown" },
-  { path: "workers/fixture-site.ts", why: "serves a fake bot-wall page to the sweep tests" },
+  { path: "workers/fixture-site/index.ts", why: "serves a fake bot-wall page to the sweep tests" },
   { path: "app/lib/legal/", why: "legal text keeps its formal register" },
 ];

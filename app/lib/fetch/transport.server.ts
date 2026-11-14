@@ -176,6 +176,25 @@ async function cappedText(res: Response): Promise<string> {
   return new TextDecoder().decode(bytes);
 }
 
+async function browserRefusalCause(res: Response): Promise<string> {
+  const base = `browser answered ${String(res.status)}`;
+  let body: unknown;
+  try {
+    body = JSON.parse(await cappedText(res));
+  } catch {
+    return base;
+  }
+  const errors = readField(body, "errors");
+  if (!Array.isArray(errors) || errors.length === 0) return base;
+  const first: unknown = errors[0];
+  const parts: string[] = [];
+  const code = readField(first, "code");
+  if (typeof code === "number" || typeof code === "string") parts.push(String(code));
+  const message = readField(first, "message");
+  if (typeof message === "string") parts.push(message.slice(0, 200));
+  return parts.length > 0 ? `${base}: ${parts.join(" ")}` : base;
+}
+
 function invalidUrlFailure(url: string): ReadUrlFailure | null {
   let target: URL;
   try {
@@ -291,7 +310,7 @@ async function escalate(
   const browserMsUsed = parseBrowserMs(res);
   logEscalation(browserMsUsed, reason);
 
-  if (!res.ok) return { result: null, cause: `browser answered ${String(res.status)}` };
+  if (!res.ok) return { result: null, cause: await browserRefusalCause(res) };
 
   let html: string;
   let status: number;

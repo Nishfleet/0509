@@ -3,14 +3,14 @@ import {
   countRecentIssues,
   deleteExpiredIssues,
   releaseIssueSlot,
-} from "../app/lib/data/support_issue.server";
+} from "../../app/lib/data/support_issue.server";
 import {
   countSupportReports,
   deleteExpiredSupportReports,
   insertSupportReport,
-} from "../app/lib/data/support_report.server";
-import { fetchOutbound } from "../app/lib/fetch/outbound.server";
-import { sha256Hex } from "../app/lib/sha256";
+} from "../../app/lib/data/support_report.server";
+import { fetchOutbound } from "../../app/lib/fetch/outbound.server";
+import { sha256Hex } from "../../app/lib/sha256";
 
 const FORWARD_TO = "nishant345@gmail.com";
 const ISSUES_URL = "https://api.github.com/repos/Nishfleet/0509/issues";
