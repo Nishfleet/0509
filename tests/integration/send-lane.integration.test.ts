@@ -2,7 +2,10 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { deliver, handleBatch, type DigestMessage } from "../../workers/delivery/consumer";
-import { sendOrThrow } from "../../workers/delivery/send";
+import { isAddressSuppressed } from "../../app/lib/data/email_suppression.server";
+import { confirmDeliveryAddress } from "../../app/lib/verify-delivery-address.server";
+import { sha256Hex } from "../../app/lib/sha256";
+import { sendMessage, sendOrThrow } from "../../workers/delivery/send";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 
 interface Recorder {
@@ -805,5 +808,65 @@ describe("send lane (0509#3979)", () => {
     const good = recorder();
     await sendOrThrow(bindingFor(good), { to: TARGET, from: "hello@0509.io", subject: "Sign in", text: "link" });
     expect(good.sent).toHaveLength(1);
+  });
+
+  it("(bounce) a send the sender refuses as suppressed puts the address on the do-not-email list for every kind", async () => {
+    const rec = recorder();
+    rec.fail = Object.assign(new Error("recipient suppressed"), { code: "E_RECIPIENT_SUPPRESSED" });
+    const result = await sendMessage(bindingFor(rec), {
+      to: "Bounced@0509.io",
+      from: "hello@0509.io",
+      subject: "Brief",
+      text: "hi",
+    });
+    expect(result.outcome).toBe("failed");
+    expect(await isAddressSuppressed("bounced@0509.io", "brief")).toBe(true);
+    expect(await isAddressSuppressed("bounced@0509.io", "alerts")).toBe(true);
+    const row = await env.DB.prepare("SELECT reason FROM email_suppression WHERE address = 'bounced@0509.io'").first();
+    expect(row).toEqual({ reason: "bounce" });
+  });
+
+  it("(bounce) any other send failure leaves the address alone", async () => {
+    const rec = recorder();
+    rec.fail = Object.assign(new Error("rate limited"), { code: "E_RATE_LIMIT" });
+    const result = await sendMessage(bindingFor(rec), {
+      to: TARGET,
+      from: "hello@0509.io",
+      subject: "Brief",
+      text: "hi",
+    });
+    expect(result.outcome).toBe("failed");
+    expect(await isAddressSuppressed(TARGET, "brief")).toBe(false);
+  });
+
+  it("(bounce) a failure on a multi-recipient send suppresses neither address", async () => {
+    const rec = recorder();
+    rec.fail = Object.assign(new Error("recipient suppressed"), { code: "E_RECIPIENT_SUPPRESSED" });
+    const result = await sendMessage(bindingFor(rec), {
+      to: ["one@0509.io", "two@0509.io"],
+      from: "hello@0509.io",
+      subject: "Brief",
+      text: "hi",
+    });
+    expect(result.outcome).toBe("failed");
+    expect(await isAddressSuppressed("one@0509.io", "brief")).toBe(false);
+    expect(await isAddressSuppressed("two@0509.io", "brief")).toBe(false);
+  });
+
+  it("(bounce) confirming the address again lifts the bounce suppression", async () => {
+    const token = "confirm-token-7652";
+    await env.DB.prepare("UPDATE send_target SET verify_token = ?, verify_token_expires_at = ? WHERE id = ?")
+      .bind(await sha256Hex(token), "2099-01-01T00:00:00Z", TARGET_ID)
+      .run();
+    const rec = recorder();
+    rec.fail = Object.assign(new Error("recipient suppressed"), { code: "E_RECIPIENT_SUPPRESSED" });
+    await sendMessage(bindingFor(rec), { to: TARGET, from: "hello@0509.io", subject: "Brief", text: "hi" });
+    expect(await isAddressSuppressed(TARGET, "brief")).toBe(true);
+
+    expect(await confirmDeliveryAddress(token)).toBe(true);
+
+    expect(await isAddressSuppressed(TARGET, "brief")).toBe(false);
+    const row = await env.DB.prepare("SELECT reason FROM email_suppression WHERE address = ?").bind(TARGET).first();
+    expect(row).toBeNull();
   });
 });
