@@ -67,6 +67,17 @@ const readLatestPeersRow = z.object({
   rank: z.number(),
 });
 
+const SELECT_LATEST_STANDING_WEEK = `SELECT MAX(week_start_at) AS week_start_at FROM standing WHERE workspace_id = ?1 AND rank IS NOT NULL`;
+
+const latestStandingWeekRow = z.object({
+  week_start_at: z.string().nullable(),
+});
+
+export async function readLatestStandingWeek(db: D1Database, workspaceId: string): Promise<string | null> {
+  const { results } = await db.prepare(SELECT_LATEST_STANDING_WEEK).bind(workspaceId).all();
+  return z.array(latestStandingWeekRow).parse(results).at(0)?.week_start_at ?? null;
+}
+
 export async function readLatestPeers(db: D1Database, workspaceId: string): Promise<readonly PeerRow[]> {
   const { results } = await db.prepare(SELECT_LATEST_PEERS).bind(workspaceId).all();
   return z
